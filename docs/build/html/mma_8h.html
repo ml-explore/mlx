@@ -90,7 +90,8 @@ $(function(){ initResizable(false); });
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
-<a href="#namespaces">Namespaces</a>  </div>
+<a href="#namespaces">Namespaces</a> &#124;
+<a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">mma.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
@@ -99,11 +100,18 @@ $(function(){ initResizable(false); });
 <code>#include &lt;metal_stdlib&gt;</code><br />
 <code>#include &quot;<a class="el" href="steel_2defines_8h_source.html">mlx/backend/metal/kernels/steel/defines.h</a>&quot;</code><br />
 <code>#include &quot;<a class="el" href="backend_2metal_2kernels_2steel_2gemm_2transforms_8h_source.html">mlx/backend/metal/kernels/steel/gemm/transforms.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="integral__constant_8h_source.html">mlx/backend/metal/kernels/steel/utils/integral_constant.h</a>&quot;</code><br />
 </div>
 <p><a href="mma_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag&lt; T, kFragRows_, kFragCols_ &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html">mlx::steel::BaseMMAFrag&lt; T, 8, 8 &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">mlx::steel::MMATile&lt; T, kTileRows_, kTileCols_, MMAFrag_ &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
@@ -113,6 +121,12 @@ Namespaces</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1steel.html">mlx::steel</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ad583e6038efc119542410f43b603d4ad" id="r_ad583e6038efc119542410f43b603d4ad"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , int M, int N, int K&gt; </td></tr>
+<tr class="memitem:ad583e6038efc119542410f43b603d4ad"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1steel.html#ad583e6038efc119542410f43b603d4ad">mlx::steel::tile_matmad</a> (thread <a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; T, M, N &gt; &amp;D, thread <a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; U, M, K &gt; &amp;A, thread <a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; U, K, N &gt; &amp;B, thread <a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; T, M, N &gt; &amp;C)</td></tr>
+<tr class="separator:ad583e6038efc119542410f43b603d4ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

@@ -1,6 +1,8 @@
 var searchData=
 [
-  ['templatearg_0',['TemplateArg',['../namespacemlx_1_1core_1_1fast.html#a9390693ff7be931f3ef3428e2ea4c3f9',1,'mlx::core::fast']]],
-  ['thread_5fsort_5ft_1',['thread_sort_t',['../struct_block_merge_sort.html#ad2474d16721f4ceb954125728a0e2ea2',1,'BlockMergeSort']]],
-  ['type_2',['type',['../structpocketfft_1_1detail_1_1add__vec.html#a7568dc83136c1b41eb71dcb78527227e',1,'pocketfft::detail::add_vec::type'],['../structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4.html#a257b1c81fb9f559c48ee90497013494e',1,'pocketfft::detail::add_vec&lt; cmplx&lt; T &gt; &gt;::type']]]
+  ['safetensorsload_0',['SafetensorsLoad',['../namespacemlx_1_1core.html#a688cd7917b1365065e8059e9964c3d45',1,'mlx::core']]],
+  ['shape_5ft_1',['shape_t',['../namespacepocketfft_1_1detail.html#a885ee37fcf564a268a5c8ca9ea8603e1',1,'pocketfft::detail']]],
+  ['simplevalueandgradfn_2',['SimpleValueAndGradFn',['../namespacemlx_1_1core.html#a2689b8f1181648cb1685204fea9f3066',1,'mlx::core']]],
+  ['streamordevice_3',['StreamOrDevice',['../namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58',1,'mlx::core']]],
+  ['stride_5ft_4',['stride_t',['../namespacepocketfft_1_1detail.html#afb987c919e9424a996d0fc8b3c23cc84',1,'pocketfft::detail']]]
 ];

@@ -5,5 +5,6 @@ var searchData=
   ['instantiate_5fkernel_2',['instantiate_kernel',['../defines_8h.html#a0cc4a821c1090d4183ff3a31da7e9f7b',1,'defines.h']]],
   ['instantiate_5fmetal_5fmath_5ffuncs_3',['instantiate_metal_math_funcs',['../bf16__math_8h.html#a9e9f0fdd6e304522bc88acd22c576842',1,'bf16_math.h']]],
   ['instantiate_5fmetal_5fsimd_5fcomm_5ffuncs_4',['instantiate_metal_simd_comm_funcs',['../bf16__math_8h.html#aecc11cb898846d01bfc9faa109fcf791',1,'bf16_math.h']]],
-  ['instantiate_5fmetal_5fsimd_5freduction_5ffuncs_5',['instantiate_metal_simd_reduction_funcs',['../bf16__math_8h.html#a51688bc24fc9292aaec5f54a58eaa2d0',1,'bf16_math.h']]]
+  ['instantiate_5fmetal_5fsimd_5freduction_5ffuncs_5',['instantiate_metal_simd_reduction_funcs',['../bf16__math_8h.html#a51688bc24fc9292aaec5f54a58eaa2d0',1,'bf16_math.h']]],
+  ['integral_5fconst_5fbinop_6',['integral_const_binop',['../integral__constant_8h.html#ab28d2705f6fd4f54faccbb78fd5ddfb6',1,'integral_constant.h']]]
 ];

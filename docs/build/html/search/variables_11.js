@@ -28,8 +28,7 @@ var searchData=
   ['real_25',['real',['../structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e',1,'complex64_t']]],
   ['reduce_5fn_5freads_26',['REDUCE_N_READS',['../defines_8h.html#a2ad505864a2ab786147766900bc18c21',1,'defines.h']]],
   ['reduce_5fn_5fwrites_27',['REDUCE_N_WRITES',['../defines_8h.html#a68c33274e15a2f163f7631a36280d82f',1,'defines.h']]],
-  ['results_28',['results',['../structmlx_1_1steel_1_1_block_m_m_a.html#a6dfb5ff1f174951ad7c0630ff190c95a',1,'mlx::steel::BlockMMA']]],
-  ['rms_5flooped_5flimit_29',['RMS_LOOPED_LIMIT',['../defines_8h.html#a717a175676c3f96d74adfde7e751a541',1,'defines.h']]],
-  ['rms_5fn_5freads_30',['RMS_N_READS',['../defines_8h.html#a89c0a33ba39a881ad3458ffdde62a24f',1,'defines.h']]],
-  ['row_5fcontiguous_31',['row_contiguous',['../structmlx_1_1core_1_1array_1_1_flags.html#a3170fa381dc7a90f6eabcc029bdf9bfd',1,'mlx::core::array::Flags']]]
+  ['rms_5flooped_5flimit_28',['RMS_LOOPED_LIMIT',['../defines_8h.html#a717a175676c3f96d74adfde7e751a541',1,'defines.h']]],
+  ['rms_5fn_5freads_29',['RMS_N_READS',['../defines_8h.html#a89c0a33ba39a881ad3458ffdde62a24f',1,'defines.h']]],
+  ['row_5fcontiguous_30',['row_contiguous',['../structmlx_1_1core_1_1array_1_1_flags.html#a3170fa381dc7a90f6eabcc029bdf9bfd',1,'mlx::core::array::Flags::row_contiguous'],['../struct_indices.html#a255e340a39c6ac28ef2c232b106f85d1',1,'Indices::row_contiguous']]]
 ];

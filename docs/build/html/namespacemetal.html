@@ -87,6 +87,7 @@ $(function(){ initResizable(false); });
   <div class="summary">
 <a href="#namespaces">Namespaces</a> &#124;
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">metal Namespace Reference</div></div>
 </div><!--header-->
@@ -103,6 +104,31 @@ Namespaces</h2></td></tr>
 Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html">_numeric_limits_impl&lt; bfloat16_t &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1is__empty.html">is_empty</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1is__static.html">is_static</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1make__void.html">make_void</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1pointer__element.html">pointer_element</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1pointer__element_3_01constant_01_t_01_5_01_4.html">pointer_element&lt; constant T * &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1pointer__element_3_01device_01_t_01_5_01_4.html">pointer_element&lt; device T * &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1pointer__element_3_01thread_01_t_01_5_01_4.html">pointer_element&lt; thread T * &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmetal_1_1pointer__element_3_01threadgroup_01_t_01_5_01_4.html">pointer_element&lt; threadgroup T * &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a192322c772aa8b168d59edc55fb806f1" id="r_a192322c772aa8b168d59edc55fb806f1"><td class="memTemplParams" colspan="2">template&lt;typename... Ts&gt; </td></tr>
+<tr class="memitem:a192322c772aa8b168d59edc55fb806f1"><td class="memTemplItemLeft" align="right" valign="top">using&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a192322c772aa8b168d59edc55fb806f1">void_t</a> = typename <a class="el" href="structmetal_1_1make__void.html">make_void</a>&lt;Ts...&gt;::type</td></tr>
+<tr class="separator:a192322c772aa8b168d59edc55fb806f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac82ee6c3fbe9ec5c78c07329424aaec9" id="r_ac82ee6c3fbe9ec5c78c07329424aaec9"><td class="memTemplParams" colspan="2">template&lt;typename T &gt; </td></tr>
+<tr class="memitem:ac82ee6c3fbe9ec5c78c07329424aaec9"><td class="memTemplItemLeft" align="right" valign="top">using&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac82ee6c3fbe9ec5c78c07329424aaec9">pointer_element_t</a> = typename <a class="el" href="structmetal_1_1pointer__element.html">pointer_element</a>&lt;remove_cv_t&lt;T&gt;&gt;::type</td></tr>
+<tr class="separator:ac82ee6c3fbe9ec5c78c07329424aaec9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -251,6 +277,39 @@ Functions</h2></td></tr>
 <tr class="memitem:a1308decbf2d5c33d34d6be523ea1c30f" id="r_a1308decbf2d5c33d34d6be523ea1c30f"><td class="memItemLeft" align="right" valign="top">METAL_FUNC <a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1308decbf2d5c33d34d6be523ea1c30f">simd_xor</a> (<a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> data)</td></tr>
 <tr class="separator:a1308decbf2d5c33d34d6be523ea1c30f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Typedef Documentation</h2>
+<a id="ac82ee6c3fbe9ec5c78c07329424aaec9" name="ac82ee6c3fbe9ec5c78c07329424aaec9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac82ee6c3fbe9ec5c78c07329424aaec9">&#9670;&#160;</a></span>pointer_element_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="#ac82ee6c3fbe9ec5c78c07329424aaec9">metal::pointer_element_t</a> = typename <a class="el" href="structmetal_1_1pointer__element.html">pointer_element</a>&lt;remove_cv_t&lt;T&gt;&gt;::type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a192322c772aa8b168d59edc55fb806f1" name="a192322c772aa8b168d59edc55fb806f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a192322c772aa8b168d59edc55fb806f1">&#9670;&#160;</a></span>void_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename... Ts&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="#a192322c772aa8b168d59edc55fb806f1">metal::void_t</a> = typename <a class="el" href="structmetal_1_1make__void.html">make_void</a>&lt;Ts...&gt;::type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="a87c5122c60f9a12afceb9925a5b78ffb" name="a87c5122c60f9a12afceb9925a5b78ffb"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a87c5122c60f9a12afceb9925a5b78ffb">&#9670;&#160;</a></span>abs()</h2>

@@ -89,6 +89,7 @@ $(function(){ initResizable(false); });
 <div id="doc-content">
 <div class="header">
   <div class="summary">
+<a href="#pub-types">Public Types</a> &#124;
 <a href="#pub-methods">Public Member Functions</a> &#124;
 <a href="#pub-attribs">Public Attributes</a> &#124;
 <a href="structmlx_1_1steel_1_1_block_m_m_a-members.html">List of all members</a>  </div>
@@ -98,16 +99,21 @@ $(function(){ initResizable(false); });
 
 <p><code>#include &lt;<a class="el" href="mma_8h_source.html">mma.h</a>&gt;</code></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:ae2c42cb6d0dde785859164c195f4d13c" id="r_ae2c42cb6d0dde785859164c195f4d13c"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a> = <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">BaseMMAFrag</a>&lt;AccumType, <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a>, <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a>&gt;</td></tr>
+<tr class="separator:ae2c42cb6d0dde785859164c195f4d13c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:aa14406b7298456ac45d23dd3c4642dd8" id="r_aa14406b7298456ac45d23dd3c4642dd8"><td class="memItemLeft" align="right" valign="top">METAL_FUNC&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa14406b7298456ac45d23dd3c4642dd8">BlockMMA</a> (ushort simd_group_id, ushort simd_lane_id)</td></tr>
 <tr class="separator:aa14406b7298456ac45d23dd3c4642dd8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6a2c2a6d5e767d52c41b42a9d36086b0" id="r_a6a2c2a6d5e767d52c41b42a9d36086b0"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6a2c2a6d5e767d52c41b42a9d36086b0">mma</a> (const threadgroup T *As, const threadgroup T *Bs)</td></tr>
 <tr class="separator:a6a2c2a6d5e767d52c41b42a9d36086b0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a85c57ad4092079f068683cb525fb08ee" id="r_a85c57ad4092079f068683cb525fb08ee"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a85c57ad4092079f068683cb525fb08ee">store_result</a> (device U *D, const int ldd) const</td></tr>
-<tr class="separator:a85c57ad4092079f068683cb525fb08ee"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af94bafeb285c240051e86418fccb89fe" id="r_af94bafeb285c240051e86418fccb89fe"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af94bafeb285c240051e86418fccb89fe">store_result_safe</a> (device U *D, const int ldd, short2 dst_tile_dims) const</td></tr>
-<tr class="separator:af94bafeb285c240051e86418fccb89fe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0461451ffb5041b6a916ea17ed34288b" id="r_a0461451ffb5041b6a916ea17ed34288b"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a0461451ffb5041b6a916ea17ed34288b">store_result</a> (device U *D, const int ldd)</td></tr>
+<tr class="separator:a0461451ffb5041b6a916ea17ed34288b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a081ba538d30d1d02498a7f341e6bd611" id="r_a081ba538d30d1d02498a7f341e6bd611"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a081ba538d30d1d02498a7f341e6bd611">store_result_safe</a> (device U *D, const int ldd, short2 dst_tile_dims)</td></tr>
+<tr class="separator:a081ba538d30d1d02498a7f341e6bd611"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af653c0808ba4fa9a25286f1febb7baff" id="r_af653c0808ba4fa9a25286f1febb7baff"><td class="memTemplParams" colspan="2">template&lt;typename UnaryEpilogue &gt; </td></tr>
 <tr class="memitem:af653c0808ba4fa9a25286f1febb7baff"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#af653c0808ba4fa9a25286f1febb7baff">apply_epilogue</a> (thread const UnaryEpilogue &amp;epilogue_op)</td></tr>
 <tr class="separator:af653c0808ba4fa9a25286f1febb7baff"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -124,36 +130,34 @@ Public Member Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:a5b0029866f493363942133b55bff7307" id="r_a5b0029866f493363942133b55bff7307"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5b0029866f493363942133b55bff7307">TM_stride</a> = 8 * WM</td></tr>
+<tr class="memitem:aee8caec45c1f9e4428586effbfe6137d" id="r_aee8caec45c1f9e4428586effbfe6137d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> = 8</td></tr>
+<tr class="separator:aee8caec45c1f9e4428586effbfe6137d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5b0029866f493363942133b55bff7307" id="r_a5b0029866f493363942133b55bff7307"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5b0029866f493363942133b55bff7307">TM_stride</a> = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * WM</td></tr>
 <tr class="separator:a5b0029866f493363942133b55bff7307"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8b3690b383afd26563efb38f9c375e50" id="r_a8b3690b383afd26563efb38f9c375e50"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8b3690b383afd26563efb38f9c375e50">TN_stride</a> = 8 * WN</td></tr>
+<tr class="memitem:a8b3690b383afd26563efb38f9c375e50" id="r_a8b3690b383afd26563efb38f9c375e50"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8b3690b383afd26563efb38f9c375e50">TN_stride</a> = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * WN</td></tr>
 <tr class="separator:a8b3690b383afd26563efb38f9c375e50"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aba5f749fdf32d8bd9d9e29f2a9ae4591" id="r_aba5f749fdf32d8bd9d9e29f2a9ae4591"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a> = BM / <a class="el" href="#a5b0029866f493363942133b55bff7307">TM_stride</a></td></tr>
 <tr class="separator:aba5f749fdf32d8bd9d9e29f2a9ae4591"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a706ae779c1f8d2eb18f19c248567d424" id="r_a706ae779c1f8d2eb18f19c248567d424"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a> = BN / <a class="el" href="#a8b3690b383afd26563efb38f9c375e50">TN_stride</a></td></tr>
 <tr class="separator:a706ae779c1f8d2eb18f19c248567d424"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab52d2644053c5bb28ab9b24fab8b194a" id="r_ab52d2644053c5bb28ab9b24fab8b194a"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab52d2644053c5bb28ab9b24fab8b194a">simd_stride_a</a></td></tr>
-<tr class="separator:ab52d2644053c5bb28ab9b24fab8b194a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af5c60b04602f72b705192911ed8749da" id="r_af5c60b04602f72b705192911ed8749da"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af5c60b04602f72b705192911ed8749da">simd_stride_b</a></td></tr>
-<tr class="separator:af5c60b04602f72b705192911ed8749da"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad8b58bbedaa0ed06bc2a65a6a100eea2" id="r_ad8b58bbedaa0ed06bc2a65a6a100eea2"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad8b58bbedaa0ed06bc2a65a6a100eea2">jump_a</a> = {transpose_a ? lda_tgp : 1}</td></tr>
-<tr class="separator:ad8b58bbedaa0ed06bc2a65a6a100eea2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a33bcd7c2ccd83fd1b16c3aa64f9be4ec" id="r_a33bcd7c2ccd83fd1b16c3aa64f9be4ec"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a33bcd7c2ccd83fd1b16c3aa64f9be4ec">jump_b</a> = {transpose_b ? ldb_tgp : 1}</td></tr>
-<tr class="separator:a33bcd7c2ccd83fd1b16c3aa64f9be4ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8fddaa78913cdc8eea5e1cf7d2776330" id="r_a8fddaa78913cdc8eea5e1cf7d2776330"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8fddaa78913cdc8eea5e1cf7d2776330">tile_stride_a</a> = {transpose_a ? 8 * lda_tgp : 8}</td></tr>
+<tr class="memitem:ab9c7f5386594497f5f4df7e59670b877" id="r_ab9c7f5386594497f5f4df7e59670b877"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab9c7f5386594497f5f4df7e59670b877">A_str_m</a> = transpose_a ? 1 : lda_tgp</td></tr>
+<tr class="separator:ab9c7f5386594497f5f4df7e59670b877"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a257287702dc849d0d8a078fced453142" id="r_a257287702dc849d0d8a078fced453142"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a257287702dc849d0d8a078fced453142">A_str_k</a> = transpose_a ? lda_tgp : 1</td></tr>
+<tr class="separator:a257287702dc849d0d8a078fced453142"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa71400922babd388177f228c2c82b211" id="r_aa71400922babd388177f228c2c82b211"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa71400922babd388177f228c2c82b211">B_str_k</a> = transpose_b ? 1 : ldb_tgp</td></tr>
+<tr class="separator:aa71400922babd388177f228c2c82b211"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a49538190209e522ddbef45fe95563d17" id="r_a49538190209e522ddbef45fe95563d17"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a49538190209e522ddbef45fe95563d17">B_str_n</a> = transpose_b ? ldb_tgp : 1</td></tr>
+<tr class="separator:a49538190209e522ddbef45fe95563d17"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8fddaa78913cdc8eea5e1cf7d2776330" id="r_a8fddaa78913cdc8eea5e1cf7d2776330"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8fddaa78913cdc8eea5e1cf7d2776330">tile_stride_a</a> = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * <a class="el" href="#a257287702dc849d0d8a078fced453142">A_str_k</a></td></tr>
 <tr class="separator:a8fddaa78913cdc8eea5e1cf7d2776330"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae3f35453b3afbaac9df64ad5966b34a4" id="r_ae3f35453b3afbaac9df64ad5966b34a4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae3f35453b3afbaac9df64ad5966b34a4">tile_stride_b</a> = {transpose_b ? 8 : 8 * ldb_tgp}</td></tr>
+<tr class="memitem:ae3f35453b3afbaac9df64ad5966b34a4" id="r_ae3f35453b3afbaac9df64ad5966b34a4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae3f35453b3afbaac9df64ad5966b34a4">tile_stride_b</a> = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * <a class="el" href="#aa71400922babd388177f228c2c82b211">B_str_k</a></td></tr>
 <tr class="separator:ae3f35453b3afbaac9df64ad5966b34a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a92ac4b483cb58c361d7a657e0738c070" id="r_a92ac4b483cb58c361d7a657e0738c070"><td class="memItemLeft" align="right" valign="top">simdgroup_matrix&lt; AccumType, 8, 8 &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a92ac4b483cb58c361d7a657e0738c070">Asimd</a> [<a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>]</td></tr>
-<tr class="separator:a92ac4b483cb58c361d7a657e0738c070"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3de506004b428d3487bae05ad9e757e6" id="r_a3de506004b428d3487bae05ad9e757e6"><td class="memItemLeft" align="right" valign="top">simdgroup_matrix&lt; AccumType, 8, 8 &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3de506004b428d3487bae05ad9e757e6">Bsimd</a> [<a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>]</td></tr>
-<tr class="separator:a3de506004b428d3487bae05ad9e757e6"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6dfb5ff1f174951ad7c0630ff190c95a" id="r_a6dfb5ff1f174951ad7c0630ff190c95a"><td class="memItemLeft" align="right" valign="top">simdgroup_matrix&lt; AccumType, 8, 8 &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6dfb5ff1f174951ad7c0630ff190c95a">results</a> [<a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a> *<a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>]</td></tr>
-<tr class="separator:a6dfb5ff1f174951ad7c0630ff190c95a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab84d70540d09ce115794f343849f016f" id="r_ab84d70540d09ce115794f343849f016f"><td class="memItemLeft" align="right" valign="top">const short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab84d70540d09ce115794f343849f016f">tm</a></td></tr>
-<tr class="separator:ab84d70540d09ce115794f343849f016f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad7a2033983cfbb474c50c2878057d8f1" id="r_ad7a2033983cfbb474c50c2878057d8f1"><td class="memItemLeft" align="right" valign="top">const short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad7a2033983cfbb474c50c2878057d8f1">tn</a></td></tr>
-<tr class="separator:ad7a2033983cfbb474c50c2878057d8f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af1a138c5e118147dc46475e4a5557e7c" id="r_af1a138c5e118147dc46475e4a5557e7c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; AccumType, <a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>, 1, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af1a138c5e118147dc46475e4a5557e7c">Atile</a></td></tr>
+<tr class="separator:af1a138c5e118147dc46475e4a5557e7c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a19abba19edeb37018da4bd31e01c8e26" id="r_a19abba19edeb37018da4bd31e01c8e26"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; AccumType, 1, <a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a19abba19edeb37018da4bd31e01c8e26">Btile</a></td></tr>
+<tr class="separator:a19abba19edeb37018da4bd31e01c8e26"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a81838da5d81e62d372d581be599c5a88" id="r_a81838da5d81e62d372d581be599c5a88"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt; AccumType, <a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>, <a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a81838da5d81e62d372d581be599c5a88">Ctile</a></td></tr>
+<tr class="separator:a81838da5d81e62d372d581be599c5a88"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa85451edf6900fd6af164d4d50889ae3" id="r_aa85451edf6900fd6af164d4d50889ae3"><td class="memItemLeft" align="right" valign="top">short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa85451edf6900fd6af164d4d50889ae3">sm</a></td></tr>
 <tr class="separator:aa85451edf6900fd6af164d4d50889ae3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ade420e8b811d597345783c324c23a34a" id="r_ade420e8b811d597345783c324c23a34a"><td class="memItemLeft" align="right" valign="top">short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ade420e8b811d597345783c324c23a34a">sn</a></td></tr>
@@ -163,6 +167,23 @@ Public Attributes</h2></td></tr>
 <tr class="memitem:a92f6aeee432f53638447eac842f43eca" id="r_a92f6aeee432f53638447eac842f43eca"><td class="memItemLeft" align="right" valign="top">short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a92f6aeee432f53638447eac842f43eca">Bs_offset</a></td></tr>
 <tr class="separator:a92f6aeee432f53638447eac842f43eca"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Member Typedef Documentation</h2>
+<a id="ae2c42cb6d0dde785859164c195f4d13c" name="ae2c42cb6d0dde785859164c195f4d13c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2c42cb6d0dde785859164c195f4d13c">&#9670;&#160;</a></span>MMAFrag_acc_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::MMAFrag_acc_t = <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">BaseMMAFrag</a>&lt;AccumType, <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a>, <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a>&gt;</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="aa14406b7298456ac45d23dd3c4642dd8" name="aa14406b7298456ac45d23dd3c4642dd8"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa14406b7298456ac45d23dd3c4642dd8">&#9670;&#160;</a></span>BlockMMA()</h2>
@@ -347,8 +368,8 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="a85c57ad4092079f068683cb525fb08ee" name="a85c57ad4092079f068683cb525fb08ee"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a85c57ad4092079f068683cb525fb08ee">&#9670;&#160;</a></span>store_result() <span class="overload">[1/2]</span></h2>
+<a id="a0461451ffb5041b6a916ea17ed34288b" name="a0461451ffb5041b6a916ea17ed34288b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0461451ffb5041b6a916ea17ed34288b">&#9670;&#160;</a></span>store_result() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -366,7 +387,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>ldd</em></span>&#160;) const</td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>ldd</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -485,8 +506,8 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="af94bafeb285c240051e86418fccb89fe" name="af94bafeb285c240051e86418fccb89fe"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af94bafeb285c240051e86418fccb89fe">&#9670;&#160;</a></span>store_result_safe() <span class="overload">[2/2]</span></h2>
+<a id="a081ba538d30d1d02498a7f341e6bd611" name="a081ba538d30d1d02498a7f341e6bd611"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a081ba538d30d1d02498a7f341e6bd611">&#9670;&#160;</a></span>store_result_safe() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -509,7 +530,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">short2</td>          <td class="paramname"><span class="paramname"><em>dst_tile_dims</em></span>&#160;) const</td>
+          <td class="paramtype">short2</td>          <td class="paramname"><span class="paramname"><em>dst_tile_dims</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -522,6 +543,38 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 </div>
 </div>
 <h2 class="groupheader">Member Data Documentation</h2>
+<a id="a257287702dc849d0d8a078fced453142" name="a257287702dc849d0d8a078fced453142"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a257287702dc849d0d8a078fced453142">&#9670;&#160;</a></span>A_str_k</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::A_str_k = transpose_a ? lda_tgp : 1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab9c7f5386594497f5f4df7e59670b877" name="ab9c7f5386594497f5f4df7e59670b877"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9c7f5386594497f5f4df7e59670b877">&#9670;&#160;</a></span>A_str_m</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::A_str_m = transpose_a ? 1 : lda_tgp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a138ed1bbad2ca88d3a3c7d162cd36562" name="a138ed1bbad2ca88d3a3c7d162cd36562"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a138ed1bbad2ca88d3a3c7d162cd36562">&#9670;&#160;</a></span>As_offset</h2>
 
@@ -538,8 +591,8 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="a92ac4b483cb58c361d7a657e0738c070" name="a92ac4b483cb58c361d7a657e0738c070"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a92ac4b483cb58c361d7a657e0738c070">&#9670;&#160;</a></span>Asimd</h2>
+<a id="af1a138c5e118147dc46475e4a5557e7c" name="af1a138c5e118147dc46475e4a5557e7c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af1a138c5e118147dc46475e4a5557e7c">&#9670;&#160;</a></span>Atile</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -547,7 +600,39 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">simdgroup_matrix&lt;AccumType, 8, 8&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::Asimd[<a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>]</td>
+          <td class="memname"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt;AccumType, <a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>, 1, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::Atile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa71400922babd388177f228c2c82b211" name="aa71400922babd388177f228c2c82b211"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa71400922babd388177f228c2c82b211">&#9670;&#160;</a></span>B_str_k</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::B_str_k = transpose_b ? 1 : ldb_tgp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a49538190209e522ddbef45fe95563d17" name="a49538190209e522ddbef45fe95563d17"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a49538190209e522ddbef45fe95563d17">&#9670;&#160;</a></span>B_str_n</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::B_str_n = transpose_b ? ldb_tgp : 1</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -570,8 +655,8 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="a3de506004b428d3487bae05ad9e757e6" name="a3de506004b428d3487bae05ad9e757e6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3de506004b428d3487bae05ad9e757e6">&#9670;&#160;</a></span>Bsimd</h2>
+<a id="a19abba19edeb37018da4bd31e01c8e26" name="a19abba19edeb37018da4bd31e01c8e26"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19abba19edeb37018da4bd31e01c8e26">&#9670;&#160;</a></span>Btile</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -579,15 +664,15 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">simdgroup_matrix&lt;AccumType, 8, 8&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::Bsimd[<a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>]</td>
+          <td class="memname"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt;AccumType, 1, <a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::Btile</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="ad8b58bbedaa0ed06bc2a65a6a100eea2" name="ad8b58bbedaa0ed06bc2a65a6a100eea2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad8b58bbedaa0ed06bc2a65a6a100eea2">&#9670;&#160;</a></span>jump_a</h2>
+<a id="a81838da5d81e62d372d581be599c5a88" name="a81838da5d81e62d372d581be599c5a88"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a81838da5d81e62d372d581be599c5a88">&#9670;&#160;</a></span>Ctile</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -595,15 +680,15 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::jump_a = {transpose_a ? lda_tgp : 1}</td>
+          <td class="memname"><a class="el" href="structmlx_1_1steel_1_1_m_m_a_tile.html">MMATile</a>&lt;AccumType, <a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a>, <a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>, <a class="el" href="#ae2c42cb6d0dde785859164c195f4d13c">MMAFrag_acc_t</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::Ctile</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a33bcd7c2ccd83fd1b16c3aa64f9be4ec" name="a33bcd7c2ccd83fd1b16c3aa64f9be4ec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a33bcd7c2ccd83fd1b16c3aa64f9be4ec">&#9670;&#160;</a></span>jump_b</h2>
+<a id="aee8caec45c1f9e4428586effbfe6137d" name="aee8caec45c1f9e4428586effbfe6137d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee8caec45c1f9e4428586effbfe6137d">&#9670;&#160;</a></span>kFragSize</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -611,67 +696,11 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::jump_b = {transpose_b ? ldb_tgp : 1}</td>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::kFragSize = 8</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-</div>
-</div>
-<a id="a6dfb5ff1f174951ad7c0630ff190c95a" name="a6dfb5ff1f174951ad7c0630ff190c95a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6dfb5ff1f174951ad7c0630ff190c95a">&#9670;&#160;</a></span>results</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">simdgroup_matrix&lt;AccumType, 8, 8&gt; <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::results[<a class="el" href="#aba5f749fdf32d8bd9d9e29f2a9ae4591">TM</a> *<a class="el" href="#a706ae779c1f8d2eb18f19c248567d424">TN</a>]</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<b>Initial value:</b><div class="fragment"><div class="line">= {</div>
-<div class="line">      simdgroup_matrix&lt;AccumType, 8, 8&gt;(0)}</div>
-</div><!-- fragment -->
-</div>
-</div>
-<a id="ab52d2644053c5bb28ab9b24fab8b194a" name="ab52d2644053c5bb28ab9b24fab8b194a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab52d2644053c5bb28ab9b24fab8b194a">&#9670;&#160;</a></span>simd_stride_a</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::simd_stride_a</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<b>Initial value:</b><div class="fragment"><div class="line">= {</div>
-<div class="line">      transpose_a ? <a class="code hl_variable" href="#a5b0029866f493363942133b55bff7307">TM_stride</a> : <a class="code hl_variable" href="#a5b0029866f493363942133b55bff7307">TM_stride</a> * lda_tgp}</div>
-<div class="ttc" id="astructmlx_1_1steel_1_1_block_m_m_a_html_a5b0029866f493363942133b55bff7307"><div class="ttname"><a href="#a5b0029866f493363942133b55bff7307">mlx::steel::BlockMMA::TM_stride</a></div><div class="ttdeci">STEEL_CONST short TM_stride</div><div class="ttdef"><b>Definition</b> mma.h:37</div></div>
-</div><!-- fragment -->
-</div>
-</div>
-<a id="af5c60b04602f72b705192911ed8749da" name="af5c60b04602f72b705192911ed8749da"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af5c60b04602f72b705192911ed8749da">&#9670;&#160;</a></span>simd_stride_b</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::simd_stride_b</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<b>Initial value:</b><div class="fragment"><div class="line">= {</div>
-<div class="line">      transpose_b ? <a class="code hl_variable" href="#a8b3690b383afd26563efb38f9c375e50">TN_stride</a> * ldb_tgp : <a class="code hl_variable" href="#a8b3690b383afd26563efb38f9c375e50">TN_stride</a>}</div>
-<div class="ttc" id="astructmlx_1_1steel_1_1_block_m_m_a_html_a8b3690b383afd26563efb38f9c375e50"><div class="ttname"><a href="#a8b3690b383afd26563efb38f9c375e50">mlx::steel::BlockMMA::TN_stride</a></div><div class="ttdeci">STEEL_CONST short TN_stride</div><div class="ttdef"><b>Definition</b> mma.h:39</div></div>
-</div><!-- fragment -->
 </div>
 </div>
 <a id="aa85451edf6900fd6af164d4d50889ae3" name="aa85451edf6900fd6af164d4d50889ae3"></a>
@@ -715,7 +744,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tile_stride_a = {transpose_a ? 8 * lda_tgp : 8}</td>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tile_stride_a = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * <a class="el" href="#a257287702dc849d0d8a078fced453142">A_str_k</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -731,7 +760,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tile_stride_b = {transpose_b ? 8 : 8 * ldb_tgp}</td>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tile_stride_b = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * <a class="el" href="#aa71400922babd388177f228c2c82b211">B_str_k</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -754,22 +783,6 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="ab84d70540d09ce115794f343849f016f" name="ab84d70540d09ce115794f343849f016f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab84d70540d09ce115794f343849f016f">&#9670;&#160;</a></span>tm</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">const short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tm</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="a5b0029866f493363942133b55bff7307" name="a5b0029866f493363942133b55bff7307"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a5b0029866f493363942133b55bff7307">&#9670;&#160;</a></span>TM_stride</h2>
 
@@ -779,7 +792,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::TM_stride = 8 * WM</td>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::TM_stride = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * WM</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -802,22 +815,6 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<a id="ad7a2033983cfbb474c50c2878057d8f1" name="ad7a2033983cfbb474c50c2878057d8f1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad7a2033983cfbb474c50c2878057d8f1">&#9670;&#160;</a></span>tn</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">const short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::tn</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="a8b3690b383afd26563efb38f9c375e50" name="a8b3690b383afd26563efb38f9c375e50"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8b3690b383afd26563efb38f9c375e50">&#9670;&#160;</a></span>TN_stride</h2>
 
@@ -827,7 +824,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::TN_stride = 8 * WN</td>
+          <td class="memname"><a class="el" href="steel_2defines_8h.html#a90b91c866313ffa46eff6d9cc944ad2b">STEEL_CONST</a> short <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::TN_stride = <a class="el" href="#aee8caec45c1f9e4428586effbfe6137d">kFragSize</a> * WN</td>
         </tr>
       </table>
 </div><div class="memdoc">
