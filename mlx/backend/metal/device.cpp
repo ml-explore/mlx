@@ -181,6 +181,7 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
+  arch_ = std::string(device_->architecture()->name()->utf8String());
 }
 
 Device::~Device() {
