@@ -4,7 +4,6 @@
 #include <cassert>
 #include <numeric>
 #include <sstream>
-#include <iostream>
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -149,22 +148,12 @@ void steel_matmul_regular(
     std::vector<array>& copies) {
   using namespace mlx::steel;
 
-  std::cout << d.mtl_device()->architecture()->name()->utf8String()[12] << std::endl;
-
   // Determine dispatch kernel
   int bm = 64, bn = 64, bk = 16;
   int wm = 2, wn = 2;
 
-  if ((size_t)batch_size_out * M * N >= 1ul << 20) {
-    if (!transpose_a && transpose_b) {
-      bm = 64;
-      bn = (out.dtype() == float32) ? 64 : 32;
-      bk = (out.dtype() == float32) ? 16 : 32;
-    } else {
-      bm = 64;
-      bn = 64;
-    }
-  }
+  char devc = d.get_architecture().back();
+  GEMM_TPARAM_MACRO(devc)
 
   // Prepare kernel name
   std::ostringstream kname;
@@ -943,19 +932,11 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Regular addmm dispatch
 
   // Determine dispatch kernel
-  int bm = 32, bn = 32, bk = 16;
+  int bm = 64, bn = 64, bk = 16;
   int wm = 2, wn = 2;
 
-  if ((size_t)batch_size_out * M * N >= 1ul << 20) {
-    if (!transpose_a && transpose_b) {
-      bm = 64;
-      bn = (out.dtype() == float32) ? 64 : 32;
-      bk = (out.dtype() == float32) ? 16 : 32;
-    } else {
-      bm = 64;
-      bn = 64;
-    }
-  }
+  char devc = d.get_architecture().back();
+  GEMM_TPARAM_MACRO(devc)
 
   // Prepare kernel name
   std::ostringstream kname;
@@ -1707,19 +1688,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Regular kernel dispatch
 
   // Determine dispatch kernel
-  int bm = 32, bn = 32, bk = 16;
+  int bm = 64, bn = 64, bk = 16;
   int wm = 2, wn = 2;
 
-  if ((size_t)batch_size_out * M * N >= 1ul << 20) {
-    if (!transpose_a && transpose_b) {
-      bm = 64;
-      bn = (out.dtype() == float32) ? 64 : 32;
-      bk = (out.dtype() == float32) ? 16 : 32;
-    } else {
-      bm = 64;
-      bn = 64;
-    }
-  }
+  char devc = d.get_architecture().back();
+  GEMM_TPARAM_MACRO(devc)
 
   // Prepare kernel name
   std::ostringstream kname;
