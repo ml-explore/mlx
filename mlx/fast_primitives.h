@@ -262,11 +262,11 @@ class CustomKernel : public Primitive {
       bool ensure_row_contiguous,
       std::optional<float> init_value)
       : Primitive(stream),
-        source_(source),
-        name_(name),
+        source_(std::move(source)),
+        name_(std::move(name)),
         grid_(grid),
         threadgroup_(threadgroup),
-        shape_infos_(shape_infos),
+        shape_infos_(std::move(shape_infos)),
         ensure_row_contiguous_(ensure_row_contiguous),
         init_value_(init_value) {}
 

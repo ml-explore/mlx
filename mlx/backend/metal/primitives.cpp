@@ -4,12 +4,14 @@
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/load.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
+#include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -197,7 +199,32 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto read_task = [out = out,
+                    offset = offset_,
+                    reader = reader_,
+                    swap_endianness = swap_endianness_]() mutable {
+    load(out, offset, reader, swap_endianness);
+  };
+
+  // Limit the size that the command buffer will wait on to avoid timing out
+  // on the event (<4 seconds).
+  if (out.nbytes() > (1 << 28)) {
+    read_task();
+    return;
+  }
+  auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
+  auto signal_task = [out = out, fut = std::move(fut)]() {
+    fut.wait();
+    out.event().signal();
+  };
+  scheduler::enqueue(io_stream(), std::move(signal_task));
+  auto& d = metal::device(stream().device);
+  d.end_encoding(stream().index);
+  auto command_buffer = d.get_command_buffer(stream().index);
+  command_buffer->encodeWait(
+      static_cast<MTL::Event*>(out.event().raw_event().get()),
+      out.event().value());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -246,7 +273,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   // organize into grid nkeys x elem_per_key
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  MTL::Size group_dims = MTL::Size(1, thread_group_size, 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   compute_encoder.set_input_array(keys, 0);
@@ -372,6 +399,12 @@ void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
 void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error(
       "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
+}
+
+void Eigh::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[Eigvalsh::eval_gpu] Metal Eigh NYI.");
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {

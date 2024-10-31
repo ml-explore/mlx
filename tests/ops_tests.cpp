@@ -228,7 +228,7 @@ TEST_CASE("test slice") {
   CHECK(array_equal(out, array({0, 2, 4, 6}, {2, 2})).item<bool>());
 
   // Check contiguity preservation
-  x = ones({10, 10}) * 2;
+  x = ones({10, 10});
   eval(x);
   CHECK(x.flags().row_contiguous);
   CHECK(!x.flags().col_contiguous);
@@ -252,6 +252,59 @@ TEST_CASE("test slice") {
   eval(out);
   CHECK(!out.flags().row_contiguous);
   CHECK(!out.flags().col_contiguous);
+
+  x = ones({6, 4, 10});
+  out = slice(x, {0, 0, 0}, {6, 4, 10}, {2, 1, 2});
+  eval(out);
+  CHECK(!out.flags().contiguous);
+  CHECK(!out.flags().row_contiguous);
+  CHECK(!out.flags().col_contiguous);
+
+  // Check data size correctness
+  x = ones({4});
+  out = slice(x, {0}, {2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 2);
+
+  out = slice(x, {2}, {4});
+  eval(out);
+  CHECK_EQ(out.data_size(), 2);
+
+  out = slice(x, {0}, {4}, {2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 4);
+
+  x = ones({4, 4});
+  out = slice(x, {0, 0}, {2, 4});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  out = slice(x, {0, 0}, {1, 2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 2);
+
+  out = slice(x, {0, 1}, {4, 4});
+  eval(out);
+  CHECK_EQ(out.data_size(), 15);
+
+  out = slice(x, {1, 2}, {3, 4});
+  eval(out);
+  CHECK_EQ(out.data_size(), 6);
+
+  x = ones({4, 4, 4});
+  out = slice(x, {0, 0, 0}, {4, 2, 2});
+  eval(out);
+  CHECK_EQ(out.data_size(), 54);
+
+  x = ones({4, 4, 4});
+  out = slice(x, {2, 2, 2}, {3, 3, 3});
+  eval(out);
+  CHECK_EQ(out.data_size(), 1);
+
+  x = ones({4, 4, 4});
+  out = slice(x, {2, 2, 2}, {3, 4, 3});
+  eval(out);
+  CHECK_EQ(out.data_size(), 5);
 }
 
 TEST_CASE("test slice update") {
@@ -947,12 +1000,50 @@ TEST_CASE("test reduction ops") {
 
   // Test softmax
   {
-    auto x = array({0., 0., 0., 0.});
-    auto y = array({0.25, 0.25, 0.25, 0.25});
-    CHECK(array_equal(y, softmax(x)).item<bool>());
-    CHECK(array_equal(y, softmax(x, -1)).item<bool>());
-    CHECK(array_equal(y, softmax(x, std::vector<int>{-1})).item<bool>());
-    CHECK(array_equal(y, softmax(x, std::vector<int>{0})).item<bool>());
+    for (auto t : {float16, bfloat16, float32}) {
+      const auto rtol = t == float32 ? 1e-5 : 1e-2;
+      auto x = array({}, t);
+      CHECK(array_equal(x, softmax(x)).item<bool>());
+
+      // all zeros
+      x = array({0., 0., 0., 0.}, t);
+      auto y = array({0.25, 0.25, 0.25, 0.25}, t);
+      CHECK(array_equal(y, softmax(x)).item<bool>());
+      CHECK(array_equal(y, softmax(x, -1)).item<bool>());
+      CHECK(array_equal(y, softmax(x, std::vector<int>{-1})).item<bool>());
+      CHECK(array_equal(y, softmax(x, std::vector<int>{0})).item<bool>());
+
+      auto ones = array(1.0f, t);
+      CHECK(array_equal(ones, sum(softmax(x))).item<bool>());
+
+      // all ones
+      x = array({1., 1., 1., 1.}, t);
+      CHECK(array_equal(y, softmax(x)).item<bool>());
+      CHECK(array_equal(ones, sum(softmax(x))).item<bool>());
+
+      // negative values
+      x = array({-1., -2., -3., -4.}, t);
+      y = array({0.643914, 0.236883, 0.0871443, 0.0320586}, t);
+      CHECK(allclose(y, softmax(x), rtol).item<bool>());
+      CHECK(allclose(ones, sum(softmax(x)), rtol).item<bool>());
+
+      // positive and negative values
+      x = array({1., 0., -1., 0.}, t);
+      y = array({0.534447, 0.196612, 0.0723295, 0.196612}, t);
+      CHECK(allclose(y, softmax(x), rtol).item<bool>());
+      CHECK(allclose(ones, sum(softmax(x)), rtol).item<bool>());
+
+      // large positive values
+      x = array({1000., 1000., 1000.}, t);
+      y = array({0.333333, 0.333333, 0.333333}, t);
+      CHECK(allclose(y, softmax(x)).item<bool>());
+      CHECK(array_equal(ones, sum(softmax(x))).item<bool>());
+
+      // large negative values
+      x = negative(x);
+      CHECK(allclose(y, softmax(x)).item<bool>());
+      CHECK(array_equal(ones, sum(softmax(x))).item<bool>());
+    }
   }
 }
 
@@ -1892,6 +1983,12 @@ TEST_CASE("test take") {
   CHECK(array_equal(out, zeros({1, 1, 1})).item<bool>());
   out = take(a, array({0, 1}), 1);
   CHECK(array_equal(out, zeros({1, 2, 1})).item<bool>());
+
+  // Indices have wrong shape
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(take(a, zeros({1, 3, 4}), 1));
+  CHECK_THROWS(take(a, zeros({2, 3, 7}), 1));
+  CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 }
 
 TEST_CASE("test take along axis") {
@@ -1909,12 +2006,6 @@ TEST_CASE("test take along axis") {
   CHECK_EQ(out.item<int>(), 1);
   out = take_along_axis(a, array({1}), -1);
   CHECK_EQ(out.item<int>(), 1);
-
-  // Indices have wrong shape
-  a = zeros({2, 3, 4});
-  CHECK_THROWS(take(a, zeros({1, 3, 4}), 1));
-  CHECK_THROWS(take(a, zeros({2, 3, 7}), 1));
-  CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 
   // Empty arrays
   a = reshape(array({}), {1, 0});
@@ -1964,6 +2055,48 @@ TEST_CASE("test take along axis") {
   out = take_along_axis(a, inds, 2);
   CHECK(array_equal(out, array({0, 1, 2, 2, 5, 4, 6, 7}, {2, 2, 2}))
             .item<bool>());
+}
+
+TEST_CASE("test put along axis") {
+  // No zero dim arrays
+  auto a = array(1);
+  auto v = array(1);
+  CHECK_THROWS(put_along_axis(a, array(0), v, 0));
+
+  // Index and array size mismatches
+  a = arange(5);
+  CHECK_THROWS(put_along_axis(a, array({1}), array({0}), 1));
+  CHECK_THROWS(put_along_axis(a, array({1}, {1, 1}), array({0}), 0));
+  CHECK_THROWS(put_along_axis(a, array(1), array(0), -1));
+
+  auto expected = array({0, 0, 2, 3, 4});
+  auto out = put_along_axis(a, array({1}), array({0}), 0);
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Empty arrays
+  a = reshape(array({}), {1, 0});
+  CHECK_THROWS(put_along_axis(a, array({1}), array({0}), 0));
+
+  auto inds = reshape(astype(array({}), int32), {1, 0});
+  out = take_along_axis(a, inds, 0);
+  eval(out); // Make sure it runs
+  CHECK_EQ(out.shape(), std::vector<int>{1, 0});
+
+  a = array({1, 2, 3, 4}, {2, 2});
+  inds = array({0, 1}, {1, 2});
+  out = put_along_axis(a, inds, array({0}), 0);
+  expected = array({0, 2, 3, 0}, {2, 2});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  inds = array({0, 0, 1, 1}, {2, 2}, int32);
+  auto values = array({2, 3, 4, 5}, {2, 2}, int32);
+  out = put_along_axis(a, inds, values, 0);
+  CHECK(array_equal(out, array({2, 3, 4, 5}, {2, 2})).item<bool>());
+
+  inds = array({0, 1}, {2, 1});
+  out = put_along_axis(a, inds, array({0}), 1);
+  expected = array({0, 2, 3, 0}, {2, 2});
+  CHECK(array_equal(out, expected).item<bool>());
 }
 
 TEST_CASE("test scatter") {
@@ -2372,6 +2505,28 @@ TEST_CASE("test pad") {
   CHECK_EQ(pad(x, 1).shape(), std::vector<int>{3, 4, 5});
   CHECK_EQ(pad(x, {0, 1}).shape(), std::vector<int>{2, 3, 4});
   CHECK_EQ(pad(x, {{1, 1}, {1, 2}, {3, 1}}).shape(), std::vector<int>{3, 5, 7});
+
+  x = array({1.0f, 2.0f, 3.0f, 4.0f}, {2, 2});
+  auto padded_x = pad(x, 1);
+  auto expected = array(
+      {0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       3.0f,
+       4.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f},
+      {4, 4});
+  CHECK(array_equal(padded_x, expected).item<bool>());
 }
 
 TEST_CASE("test power") {
@@ -2398,6 +2553,13 @@ TEST_CASE("test power") {
   auto out = (power(array(a), array(b))).item<complex64_t>();
   CHECK(abs(out.real() - expected.real()) < 1e-7);
   CHECK(abs(out.imag() - expected.imag()) < 1e-7);
+
+  a = complex64_t{-1.2, 0.1};
+  b = complex64_t{2.2, 0.0};
+  expected = std::pow(a, b);
+  out = (power(array(a), array(b))).item<complex64_t>();
+  CHECK(abs(out.real() - expected.real()) < 1e-6);
+  CHECK(abs(out.imag() - expected.imag()) < 1e-6);
 }
 
 TEST_CASE("test where") {
@@ -3552,4 +3714,36 @@ TEST_CASE("test view") {
   in = array({1, 2, 3, 4}, int64);
   auto out = view(in, int32);
   CHECK(array_equal(out, array({1, 0, 2, 0, 3, 0, 4, 0})).item<bool>());
+}
+
+TEST_CASE("test roll") {
+  auto x = reshape(arange(10), {2, 5});
+
+  auto y = roll(x, 2);
+  CHECK(array_equal(y, array({8, 9, 0, 1, 2, 3, 4, 5, 6, 7}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, -2);
+  CHECK(array_equal(y, array({2, 3, 4, 5, 6, 7, 8, 9, 0, 1}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 2, 1);
+  CHECK(array_equal(y, array({3, 4, 0, 1, 2, 8, 9, 5, 6, 7}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, -2, 1);
+  CHECK(array_equal(y, array({2, 3, 4, 0, 1, 7, 8, 9, 5, 6}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 2, {0, 0, 0});
+  CHECK(array_equal(y, array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 1, {1, 1, 1});
+  CHECK(array_equal(y, array({2, 3, 4, 0, 1, 7, 8, 9, 5, 6}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, {1, 2}, {0, 1});
+  CHECK(array_equal(y, array({8, 9, 5, 6, 7, 3, 4, 0, 1, 2}, {2, 5}))
+            .item<bool>());
 }

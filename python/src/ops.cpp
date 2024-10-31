@@ -1308,8 +1308,8 @@ void init_ops(nb::module_& m) {
       "start"_a,
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def arange(start : Union[int, float], stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
@@ -1323,10 +1323,7 @@ void init_ops(nb::module_& m) {
           start (float or int, optional): Starting value which defaults to ``0``.
           stop (float or int): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
-          dtype (Dtype, optional): Specifies the data type of the output.
-            If unspecified will default to ``float32`` if any of ``start``,
-            ``stop``, or ``step`` are ``float``. Otherwise will default to
-            ``int32``.
+          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``.
 
       Returns:
           array: The range of values.
@@ -1356,11 +1353,11 @@ void init_ops(nb::module_& m) {
       },
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arange(stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
+          "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
   m.def(
       "linspace",
       [](Scalar start,
@@ -1398,13 +1395,15 @@ void init_ops(nb::module_& m) {
   m.def(
       "take",
       [](const array& a,
-         const array& indices,
+         const std::variant<int, array>& indices,
          const std::optional<int>& axis,
          StreamOrDevice s) {
-        if (axis.has_value()) {
-          return take(a, indices, axis.value(), s);
+        if (auto pv = std::get_if<int>(&indices); pv) {
+          return axis ? take(a, *pv, axis.value(), s) : take(a, *pv, s);
         } else {
-          return take(a, indices, s);
+          auto indices_ = std::get<array>(indices);
+          return axis ? take(a, indices_, axis.value(), s)
+                      : take(a, indices_, s);
         }
       },
       nb::arg(),
@@ -1413,7 +1412,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def take(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def take(a: array, /, indices: Union[int, array], axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Take elements along an axis.
 
@@ -1425,7 +1424,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             a (array): Input array.
-            indices (array): Input array with integral type.
+            indices (int or array): Integer index or input array with integral type.
             axis (int, optional): Axis along which to perform the take. If unspecified
               the array is treated as a flattened 1-D vector.
 
@@ -1463,7 +1462,48 @@ void init_ops(nb::module_& m) {
               operation.
 
         Returns:
-            array: The output array with the specified shape and values.
+            array: The output array.
+      )pbdoc");
+  m.def(
+      "put_along_axis",
+      [](const array& a,
+         const array& indices,
+         const array& values,
+         const std::optional<int>& axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return put_along_axis(a, indices, values, axis.value(), s);
+        } else {
+          return reshape(
+              put_along_axis(reshape(a, {-1}, s), indices, values, 0, s),
+              a.shape(),
+              s);
+        }
+      },
+      nb::arg(),
+      "indices"_a,
+      "values"_a,
+      "axis"_a.none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def put_along_axis(a: array, /, indices: array, values: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Put values along an axis at the specified indices.
+
+        Args:
+            a (array): Destination array.
+            indices (array): Indices array. These should be broadcastable with
+              the input array excluding the `axis` dimension.
+            values (array): Values array. These should be broadcastable with
+              the indices.
+
+            axis (int or None): Axis in the destination to put the values to. If
+              ``axis == None`` the destination is flattened prior to the put
+              operation.
+
+        Returns:
+            array: The output array.
       )pbdoc");
   m.def(
       "full",
@@ -2695,7 +2735,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def concatenate(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def concatenate(arrays: list[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Concatenate the arrays along the given axis.
 
@@ -2723,7 +2763,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def concat(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def concat(arrays: list[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         See :func:`concatenate`.
       )pbdoc");
@@ -2743,7 +2783,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def stack(arrays: list[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Stacks the arrays along a new axis.
 
@@ -2770,7 +2810,7 @@ void init_ops(nb::module_& m) {
       "indexing"_a = "xy",
       "stream"_a = nb::none(),
       nb::sig(
-          "def meshgrid(*arrays: array, sparse: Optional[bool] = false, indexing: Optional[str] = 'xy', stream: Union[None, Stream, Device] = None) -> array"),
+          "def meshgrid(*arrays: array, sparse: Optional[bool] = False, indexing: Optional[str] = 'xy', stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Generate multidimensional coordinate grids from 1-D coordinate arrays
 
@@ -2827,10 +2867,10 @@ void init_ops(nb::module_& m) {
         std::optional<array> min_ = std::nullopt;
         std::optional<array> max_ = std::nullopt;
         if (min) {
-          min_ = to_array(min.value());
+          min_ = to_arrays(a, min.value()).second;
         }
         if (max) {
-          max_ = to_array(max.value());
+          max_ = to_arrays(a, max.value()).second;
         }
         return clip(a, min_, max_, s);
       },
@@ -2889,7 +2929,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def pad(a: array, pad_width: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], mode: Literal['constant', 'edge'] = 'constant', constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def pad(a: array, pad_width: Union[int, tuple[int], tuple[int, int], list[tuple[int, int]]], mode: Literal['constant', 'edge'] = 'constant', constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Pad an array with a constant value
 
@@ -3238,12 +3278,12 @@ void init_ops(nb::module_& m) {
         1D convolution over an input with several channels
 
         Args:
-            input (array): input array of shape (``N``, ``H``, ``C_in``)
-            weight (array): weight array of shape (``C_out``, ``H``, ``C_in``)
-            stride (int, optional): kernel stride. Default: ``1``.
-            padding (int, optional): input padding. Default: ``0``.
-            dilation (int, optional): kernel dilation. Default: ``1``.
-            groups (int, optional): input feature groups. Default: ``1``.
+            input (array): Input array of shape ``(N, H, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            stride (int, optional): Kernel stride. Default: ``1``.
+            padding (int, optional): Input padding. Default: ``0``.
+            dilation (int, optional): Kernel dilation. Default: ``1``.
+            groups (int, optional): Input feature groups. Default: ``1``.
 
         Returns:
             array: The convolved array.
@@ -3291,13 +3331,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conv2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def conv2d(input: array, weight: array, /, stride: Union[int, tuple[int, int]] = 1, padding: Union[int, tuple[int, int]] = 0, dilation: Union[int, tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         2D convolution over an input with several channels
 
         Args:
-            input (array): input array of shape ``(N, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, H, W, C_in)``
+            input (array): Input array of shape ``(N, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3361,15 +3401,180 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conv3d(input: array, weight: array, /, stride: Union[int, Tuple[int, int, int]] = 1, padding: Union[int, Tuple[int, int, int]] = 0, dilation: Union[int, Tuple[int, int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def conv3d(input: array, weight: array, /, stride: Union[int, tuple[int, int, int]] = 1, padding: Union[int, tuple[int, int, int]] = 0, dilation: Union[int, tuple[int, int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         3D convolution over an input with several channels
 
         Note: Only the default ``groups=1`` is currently supported.
 
         Args:
-            input (array): input array of shape ``(N, D, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, D, H, W, C_in)``
+            input (array): Input array of shape ``(N, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
+            stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                kernel strides. All spatial dimensions get the same stride if
+                only one number is specified. Default: ``1``.
+            padding (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                symmetric input padding. All spatial dimensions get the same
+                padding if only one number is specified. Default: ``0``.
+            dilation (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                kernel dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            groups (int, optional): input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
+      "conv_transpose1d",
+      &conv_transpose1d,
+      nb::arg(),
+      nb::arg(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "dilation"_a = 1,
+      "groups"_a = 1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conv_transpose1d(input: array, weight: array, /, stride: int = 1, padding: int = 0, dilation: int = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        1D transposed convolution over an input with several channels
+
+        Args:
+            input (array): Input array of shape ``(N, H, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            stride (int, optional): Kernel stride. Default: ``1``.
+            padding (int, optional): Input padding. Default: ``0``.
+            dilation (int, optional): Kernel dilation. Default: ``1``.
+            groups (int, optional): Input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
+      "conv_transpose2d",
+      [](const array& input,
+         const array& weight,
+         const std::variant<int, std::pair<int, int>>& stride,
+         const std::variant<int, std::pair<int, int>>& padding,
+         const std::variant<int, std::pair<int, int>>& dilation,
+         int groups,
+         StreamOrDevice s) {
+        std::pair<int, int> stride_pair{1, 1};
+        std::pair<int, int> padding_pair{0, 0};
+        std::pair<int, int> dilation_pair{1, 1};
+
+        if (auto pv = std::get_if<int>(&stride); pv) {
+          stride_pair = std::pair<int, int>{*pv, *pv};
+        } else {
+          stride_pair = std::get<std::pair<int, int>>(stride);
+        }
+
+        if (auto pv = std::get_if<int>(&padding); pv) {
+          padding_pair = std::pair<int, int>{*pv, *pv};
+        } else {
+          padding_pair = std::get<std::pair<int, int>>(padding);
+        }
+
+        if (auto pv = std::get_if<int>(&dilation); pv) {
+          dilation_pair = std::pair<int, int>{*pv, *pv};
+        } else {
+          dilation_pair = std::get<std::pair<int, int>>(dilation);
+        }
+
+        return conv_transpose2d(
+            input, weight, stride_pair, padding_pair, dilation_pair, groups, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "dilation"_a = 1,
+      "groups"_a = 1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conv_transpose2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        2D transposed convolution over an input with several channels
+
+        Note: Only the default ``groups=1`` is currently supported.
+
+        Args:
+            input (array): Input array of shape ``(N, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
+            stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
+                kernel strides. All spatial dimensions get the same stride if
+                only one number is specified. Default: ``1``.
+            padding (int or tuple(int), optional): :obj:`tuple` of size 2 with
+                symmetric input padding. All spatial dimensions get the same
+                padding if only one number is specified. Default: ``0``.
+            dilation (int or tuple(int), optional): :obj:`tuple` of size 2 with
+                kernel dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            groups (int, optional): input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
+      "conv_transpose3d",
+      [](const array& input,
+         const array& weight,
+         const std::variant<int, std::tuple<int, int, int>>& stride,
+         const std::variant<int, std::tuple<int, int, int>>& padding,
+         const std::variant<int, std::tuple<int, int, int>>& dilation,
+         int groups,
+         StreamOrDevice s) {
+        std::tuple<int, int, int> stride_tuple{1, 1, 1};
+        std::tuple<int, int, int> padding_tuple{0, 0, 0};
+        std::tuple<int, int, int> dilation_tuple{1, 1, 1};
+
+        if (auto pv = std::get_if<int>(&stride); pv) {
+          stride_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          stride_tuple = std::get<std::tuple<int, int, int>>(stride);
+        }
+
+        if (auto pv = std::get_if<int>(&padding); pv) {
+          padding_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          padding_tuple = std::get<std::tuple<int, int, int>>(padding);
+        }
+
+        if (auto pv = std::get_if<int>(&dilation); pv) {
+          dilation_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          dilation_tuple = std::get<std::tuple<int, int, int>>(dilation);
+        }
+
+        return conv_transpose3d(
+            input,
+            weight,
+            stride_tuple,
+            padding_tuple,
+            dilation_tuple,
+            groups,
+            s);
+      },
+      nb::arg(),
+      nb::arg(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "dilation"_a = 1,
+      "groups"_a = 1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conv_transpose3d(input: array, weight: array, /, stride: Union[int, Tuple[int, int, int]] = 1, padding: Union[int, Tuple[int, int, int]] = 0, dilation: Union[int, Tuple[int, int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        3D transposed convolution over an input with several channels
+
+        Note: Only the default ``groups=1`` is currently supported.
+
+        Args:
+            input (array): Input array of shape ``(N, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3460,13 +3665,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conv_general(input: array, weight: array, /, stride: Union[int, Sequence[int]] = 1, padding: Union[int, Sequence[int], Tuple[Sequence[int], Sequence[int]]] = 0, kernel_dilation: Union[int, Sequence[int]] = 1, input_dilation: Union[int, Sequence[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def conv_general(input: array, weight: array, /, stride: Union[int, Sequence[int]] = 1, padding: Union[int, Sequence[int], tuple[Sequence[int], Sequence[int]]] = 0, kernel_dilation: Union[int, Sequence[int]] = 1, input_dilation: Union[int, Sequence[int]] = 1, groups: int = 1, flip: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         General convolution over an input with several channels
 
         Args:
-            input (array): Input array of shape ``(N, ..., C_in)``
-            weight (array): Weight array of shape ``(C_out, ..., C_in)``
+            input (array): Input array of shape ``(N, ..., C_in)``.
+            weight (array): Weight array of shape ``(C_out, ..., C_in)``.
             stride (int or list(int), optional): :obj:`list` with kernel strides.
                 All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3560,7 +3765,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]"),
+          "def load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, dict[str, array]]"),
       R"pbdoc(
         Load array(s) from a binary file.
 
@@ -3594,7 +3799,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_safetensors(file: str, arrays: Dict[str, array], metadata: Optional[Dict[str, str]] = None)"),
+          "def save_safetensors(file: str, arrays: dict[str, array], metadata: Optional[dict[str, str]] = None)"),
       R"pbdoc(
         Save array(s) to a binary file in ``.safetensors`` format.
 
@@ -3615,7 +3820,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, str, List[str]]])"),
+          "def save_gguf(file: str, arrays: dict[str, array], metadata: dict[str, Union[array, str, list[str]]])"),
       R"pbdoc(
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -3769,7 +3974,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
+          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
       R"pbdoc(
         Quantize the matrix ``w`` using ``bits`` bits per element.
 
@@ -3924,7 +4129,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tensordot(a: array, b: array, /, axes: Union[int, List[Sequence[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def tensordot(a: array, b: array, /, axes: Union[int, list[Sequence[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Compute the tensor dot product along the specified axes.
 
@@ -4046,7 +4251,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def block_masked_mm(a: array, b: array, /, block_size: int = 64, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def block_masked_mm(a: array, b: array, /, block_size: int = 64, mask_out: Optional[array] = None, mask_lhs: Optional[array] = None, mask_rhs: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Matrix multiplication with block masking.
 
@@ -4189,7 +4394,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def trace(a: array, /, offset: int = 0, axis1: int = 0, axis2: int = 1, dtype = Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def trace(a: array, /, offset: int = 0, axis1: int = 0, axis2: int = 1, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the sum along a specified diagonal in the given array.
 
@@ -4218,7 +4423,7 @@ void init_ops(nb::module_& m) {
       "arys"_a,
       "stream"_a = nb::none(),
       nb::sig(
-          "def atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
+          "def atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, list[array]]"),
       R"pbdoc(
         Convert all arrays to have at least one dimension.
 
@@ -4240,7 +4445,7 @@ void init_ops(nb::module_& m) {
       "arys"_a,
       "stream"_a = nb::none(),
       nb::sig(
-          "def atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
+          "def atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, list[array]]"),
       R"pbdoc(
         Convert all arrays to have at least two dimensions.
 
@@ -4262,7 +4467,7 @@ void init_ops(nb::module_& m) {
       "arys"_a,
       "stream"_a = nb::none(),
       nb::sig(
-          "def atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
+          "def atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, list[array]]"),
       R"pbdoc(
         Convert all arrays to have at least three dimensions.
 
@@ -4511,7 +4716,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def hadamard_transform(a: array, Optional[float] scale = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def hadamard_transform(a: array, scale: Optional[float] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the Walsh-Hadamard transform along the final axis.
 
@@ -4575,7 +4780,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def einsum(subscripts: str, *operands, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def einsum(subscripts: str, *operands, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
 
       Perform the Einstein summation convention on the operands.
@@ -4587,4 +4792,92 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The output array.
     )pbdoc");
+  m.def(
+      "roll",
+      [](const array& a,
+         const IntOrVec& shift,
+         const IntOrVec& axis,
+         StreamOrDevice s) {
+        return std::visit(
+            [&](auto sh, auto ax) -> array {
+              using T = decltype(ax);
+              using V = decltype(sh);
+
+              if constexpr (std::is_same_v<V, std::monostate>) {
+                throw std::invalid_argument(
+                    "[roll] Expected two arguments but only one was given.");
+              } else {
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                  return roll(a, sh, s);
+                } else {
+                  return roll(a, sh, ax, s);
+                }
+              }
+            },
+            shift,
+            axis);
+      },
+      nb::arg(),
+      "shift"_a,
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def roll(a: array, shift: Union[int, Tuple[int]], axis: Union[None, int, Tuple[int]] = None, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Roll array elements along a given axis.
+
+        Elements that are rolled beyond the end of the array are introduced at
+        the beggining and vice-versa.
+
+        If the axis is not provided the array is flattened, rolled and then the
+        shape is restored.
+
+        Args:
+          a (array): Input array
+          shift (int or tuple(int)): The number of places by which elements
+            are shifted. If positive the array is rolled to the right, if
+            negative it is rolled to the left. If an int is provided but the
+            axis is a tuple then the same value is used for all axes.
+          axis (int or tuple(int), optional): The axis or axes along which to
+            roll the elements.
+      )pbdoc");
+  m.def(
+      "real",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::real(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def real(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Returns the real part of a complex array.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The real part of ``a``.
+      )pbdoc");
+  m.def(
+      "imag",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::imag(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def imag(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Returns the imaginary part of a complex array.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The imaginary part of ``a``.
+      )pbdoc");
 }

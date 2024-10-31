@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,13 +45,13 @@ struct CommandEncoder {
 
   struct ConcurrentContext {
     ConcurrentContext(CommandEncoder& enc) : enc(enc) {
-      enc.concurrent = true;
+      enc.concurrent_ = true;
     }
     ~ConcurrentContext() {
-      enc.concurrent = false;
-      enc.outputs.insert(
-          enc.concurrent_outputs.begin(), enc.concurrent_outputs.end());
-      enc.concurrent_outputs.clear();
+      enc.concurrent_ = false;
+      enc.outputs_.insert(
+          enc.concurrent_outputs_.begin(), enc.concurrent_outputs_.end());
+      enc.concurrent_outputs_.clear();
     }
 
    private:
@@ -58,7 +59,7 @@ struct CommandEncoder {
   };
 
   MTL::ComputeCommandEncoder* operator->() {
-    return enc;
+    return enc_;
   }
 
   void set_input_array(const array& a, int idx, int64_t offset = 0);
@@ -69,18 +70,59 @@ struct CommandEncoder {
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
-
   ~CommandEncoder();
 
- private:
-  void maybe_split();
+  // Inputs to all kernels in the encoder including temporaries
+  std::unordered_set<const void*>& inputs() {
+    return all_inputs_;
+  };
 
-  int num_dispatches{0};
-  MTL::CommandBuffer* cbuf;
-  MTL::ComputeCommandEncoder* enc;
-  bool concurrent{false};
-  std::unordered_set<MTL::Resource*> outputs;
-  std::unordered_set<MTL::Resource*> concurrent_outputs;
+  // Outputs of all kernels in the encoder including temporaries
+  std::unordered_set<const void*> outputs() {
+    return all_outputs_;
+  };
+
+ private:
+  MTL::ComputeCommandEncoder* enc_;
+  bool concurrent_{false};
+  std::unordered_set<MTL::Resource*> outputs_;
+  std::unordered_set<MTL::Resource*> concurrent_outputs_;
+  std::unordered_set<const void*> all_inputs_;
+  std::unordered_set<const void*> all_outputs_;
+};
+
+struct Fence {
+  Fence(MTL::Fence* fence) : fence(fence) {}
+  ~Fence() {
+    fence->release();
+  }
+  MTL::Fence* fence;
+};
+
+struct DeviceStream {
+  DeviceStream(MTL::CommandQueue* queue) : queue(queue) {};
+  ~DeviceStream() {
+    queue->release();
+    if (buffer != nullptr) {
+      buffer->release();
+    }
+  };
+  MTL::CommandQueue* queue;
+  // A map of prior command encoder outputs to their corresponding fence
+  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
+  // Used to allow thread-safe access to the outputs map
+  std::mutex fence_mtx;
+
+  // The buffer and buffer op count are updated
+  // between command buffers
+  MTL::CommandBuffer* buffer{nullptr};
+  int buffer_ops{0};
+
+  // The command encoder, fence, and temporaries are updated between command
+  // encoders
+  std::unique_ptr<CommandEncoder> encoder{nullptr};
+  std::shared_ptr<Fence> fence;
+  std::vector<array> temporaries;
 };
 
 class Device {
@@ -93,6 +135,10 @@ class Device {
   MTL::Device* mtl_device() {
     return device_;
   };
+
+  const std::string& get_architecture() {
+    return arch_;
+  }
 
   void new_queue(int index);
   MTL::CommandBuffer* get_command_buffer(int index);
@@ -114,29 +160,9 @@ class Device {
     }
   }
 
-  MTL::Library* get_library(const std::string& name);
-
   MTL::Library* get_library(
       const std::string& name,
-      const std::string& source_string,
-      bool cache = true);
-
-  MTL::Library* get_library(
-      const std::string& name,
-      const MTL::StitchedLibraryDescriptor* desc,
-      bool cache = true);
-
-  MTL::Function* get_function(
-      const std::string& base_name,
-      MTL::Library* mtl_lib,
-      const std::string& specialized_name = "",
-      const MTLFCList& func_consts = {});
-
-  MTL::Function* get_function(
-      const std::string& base_name,
-      const std::string& lib_name = "mlx",
-      const std::string& specialized_name = "",
-      const MTLFCList& func_consts = {});
+      const std::function<std::string(void)>& builder);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
@@ -155,11 +181,20 @@ class Device {
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
+  // Record temporary arrays for the given stream index
+  void add_temporary(array arr, int index);
+  void add_temporaries(std::vector<array> arrays, int index);
+
+  void set_residency_set(const MTL::ResidencySet* residency_set);
+
  private:
+  DeviceStream& get_stream_(int index) {
+    return stream_map_.find(index)->second;
+  }
   MTL::Library* get_library_cache_(const std::string& name);
 
-  MTL::Library* get_library_(const std::string& source_string);
-  MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
+  MTL::Library* get_library_(const std::string& name);
+  MTL::Library* build_library_(const std::string& source_string);
 
   MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
 
@@ -181,13 +216,23 @@ class Device {
       const MTL::Function* mtl_function,
       const MTL::LinkedFunctions* linked_functions);
 
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& base_name,
+      MTL::Library* mtl_lib,
+      const std::string& hash_name,
+      const MTLFCList& func_consts = {},
+      const std::vector<MTL::Function*>& linked_functions = {});
+
   MTL::Device* device_;
-  std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
-  std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
-  std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
+  std::unordered_map<int32_t, DeviceStream> stream_map_;
+
+  std::shared_mutex kernel_mtx_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
+
+  std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
-  std::mutex mtx_;
+  const MTL::ResidencySet* residency_set_{nullptr};
+  std::string arch_;
 };
 
 Device& device(mlx::core::Device);

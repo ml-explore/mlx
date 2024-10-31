@@ -20,8 +20,8 @@ void RMSNorm::eval_gpu(
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) -> const array& {
-    bool no_copy = x.strides()[x.ndim() - 1] == 1;
-    if (x.ndim() > 1) {
+    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
+    if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
@@ -91,8 +91,8 @@ void RMSNorm::eval_gpu(
     compute_encoder->setThreadgroupMemoryLength(simd_size * sizeof(float), 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void RMSNormVJP::eval_gpu(
@@ -109,6 +109,12 @@ void RMSNormVJP::eval_gpu(
     if (x.flags().row_contiguous) {
       return x;
     }
+    // Make sure we 'll only ever allocate once. The point of that goes beyond
+    // the minor optimization. We need to ensure that there will be no
+    // reallocation such that the references won't change when we
+    // push_back(...). So tl;dr 3 possible copies x, g and gw_temp.
+    copies.reserve(3);
+
     copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
     copy_gpu(x, copies.back(), CopyType::General, s);
     return copies.back();
@@ -194,8 +200,7 @@ void RMSNormVJP::eval_gpu(
   strided_reduce_general_dispatch(
       gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void LayerNorm::eval_gpu(
@@ -208,8 +213,8 @@ void LayerNorm::eval_gpu(
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) -> const array& {
-    bool no_copy = x.strides()[x.ndim() - 1] == 1;
-    if (x.ndim() > 1) {
+    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
+    if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
@@ -280,8 +285,8 @@ void LayerNorm::eval_gpu(
     compute_encoder->setBytes(&b_stride, sizeof(uint32_t), 7);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void LayerNormVJP::eval_gpu(
@@ -298,6 +303,12 @@ void LayerNormVJP::eval_gpu(
     if (x.flags().row_contiguous) {
       return x;
     }
+    // Make sure we 'll only ever allocate once. The point of that goes beyond
+    // the minor optimization. We need to ensure that there will be no
+    // reallocation such that the references won't change when we
+    // push_back(...). So tl;dr 3 possible copies x, g and gw_temp.
+    copies.reserve(3);
+
     copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
     copy_gpu(x, copies.back(), CopyType::General, s);
     return copies.back();
@@ -403,8 +414,7 @@ void LayerNormVJP::eval_gpu(
         gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
   }
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core::fast

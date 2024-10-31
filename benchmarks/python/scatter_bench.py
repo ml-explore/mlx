@@ -9,7 +9,7 @@ from time_utils import measure_runtime
 
 def benchmark_scatter_mlx(dst_shape, x_shape, idx_shapes):
     def scatter(dst, x, idx):
-        dst[*idx] = x
+        dst[tuple(idx)] = x
         mx.eval(dst)
 
     idx = []
@@ -23,8 +23,8 @@ def benchmark_scatter_mlx(dst_shape, x_shape, idx_shapes):
 
 
 def benchmark_scatter_torch(dst_shape, x_shape, idx_shapes, device):
-    def gather(dst, x, idx, device):
-        dst[*idx] = x
+    def scatter(dst, x, idx, device):
+        dst[tuple(idx)] = x
         if device == torch.device("mps"):
             torch.mps.synchronize()
 
@@ -34,7 +34,7 @@ def benchmark_scatter_torch(dst_shape, x_shape, idx_shapes, device):
     x = torch.randn(x_shape, dtype=torch.float32).to(device)
     dst = torch.randn(dst_shape, dtype=torch.float32).to(device)
 
-    runtime = measure_runtime(gather, dst=dst, x=x, idx=idx, device=device)
+    runtime = measure_runtime(scatter, dst=dst, x=x, idx=idx, device=device)
     print(f"PyTorch: {runtime:.3f}ms")
 
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
         (100_000, 64),
         (1_000_000, 64),
         (100_000,),
-        (2_000_00,),
+        (200_000,),
         (20_000_000,),
         (10000, 64),
         (100, 64),
@@ -91,6 +91,6 @@ if __name__ == "__main__":
 
     for dst_shape, x_shape, idx_shape in zip(dst_shapes, x_shapes, idx_shapes):
         print("=" * 20)
-        print(f"X {x_shape}, Indices {idx_shape}")
+        print(f"Dst: {dst_shape}, X {x_shape}, Indices {idx_shape}")
         benchmark_scatter_mlx(dst_shape, x_shape, idx_shape)
         benchmark_scatter_torch(dst_shape, x_shape, idx_shape, device=device)

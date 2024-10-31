@@ -719,6 +719,75 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = fn()
         self.assertTrue(mx.array_equal(expected, out))
 
+    def test_dtypes(self):
+        x = mx.array([0, 1, 2, 3])
+        dtypes = [mx.bool_, mx.int8, mx.uint8, mx.int16, mx.uint16]
+        for dtype in dtypes:
+            x = x.astype(dtype)
+            mx.eval(x)
+
+            def fn(x):
+                return x * 1 + 0
+
+            out = mx.compile(fn)(x)
+            expected = fn(x)
+            self.assertTrue(mx.array_equal(expected, out))
+
+    def test_compile_without_captured_inputs(self):
+        x = mx.array([1, 2, 3]) + 2
+
+        def fn(a):
+            y = x + 1
+            return a + y
+
+        with self.assertRaises(ValueError):
+            y = mx.compile(fn)(x)
+
+        x = mx.array([1.0, 2.0]) + mx.array([1.0, 2.0])
+        y = None
+
+        def fn(x):
+            nonlocal y
+            if y is None:
+                y = mx.array([1.0, 2.0])
+
+            y = y + x
+            return y
+
+        fn(x)
+        with self.assertRaises(ValueError):
+            y = mx.compile(fn)(x)
+
+    def test_compile_dynamic_dims(self):
+        a = mx.random.uniform(shape=(2,) * 10)
+        b = mx.random.uniform(shape=(2,) * 10)
+        a = a.T
+        mx.eval(a, b)
+
+        def fn(a, b):
+            return mx.abs(a + b)
+
+        out = mx.compile(fn)(a, b)
+        expected = fn(a, b)
+        self.assertTrue(mx.allclose(out, expected))
+
+    def test_compile_many_inputs(self):
+        inputs = [mx.ones((2, 2, 2, 2)) for _ in range(20)]
+        inputs[0] = inputs[0].T
+
+        @mx.compile
+        def fun(*inputs):
+            x = inputs[0]
+            for y in inputs[1:10]:
+                x = x + y
+            a = inputs[10]
+            for b in inputs[11:]:
+                a = a + b
+            return x + a
+
+        out = fun(*inputs)
+        self.assertTrue(mx.allclose(out, mx.full((2, 2), 20)))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,7 @@
 
 namespace mlx::core {
 
-constexpr int MAX_COPY_SPECIALIZED_DIMS = 5;
+constexpr int MAX_COPY_SPECIALIZED_DIMS = 3;
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
@@ -59,13 +59,25 @@ void copy_gpu_inplace(
   }
 
   // Try to collapse contiguous dims
-  auto [shape, strides] = collapse_contiguous_dims(
-      data_shape, std::vector{strides_in_pre, strides_out_pre});
-  auto& strides_in_ = strides[0];
-  auto& strides_out_ = strides[1];
+  auto maybe_collapse =
+      [ctype, &data_shape, &strides_in_pre, &strides_out_pre]() {
+        if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+          auto [shape, strides] = collapse_contiguous_dims(
+              data_shape,
+              std::vector{strides_in_pre, strides_out_pre},
+              /* size_cap = */ INT32_MAX);
+          return std::make_tuple(shape, strides[0], strides[1]);
+        } else {
+          std::vector<stride_t> e;
+          return std::make_tuple(std::vector<int>{}, e, e);
+        }
+      };
+  auto [shape, strides_in_, strides_out_] = maybe_collapse();
+  int ndim = shape.size();
 
   bool use_2d = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
+  int work_per_thread = 1;
   std::string kernel_name;
   {
     std::ostringstream kname;
@@ -83,9 +95,13 @@ void copy_gpu_inplace(
         kname << "gg";
         break;
     }
-    if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
-        shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
-      kname << shape.size();
+    if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+      if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
+        kname << shape.size();
+      } else {
+        work_per_thread = 4;
+        kname << "n4";
+      }
     }
     kname << "_copy";
     kname << type_to_name(in) << type_to_name(out);
@@ -104,21 +120,16 @@ void copy_gpu_inplace(
   compute_encoder.set_input_array(donate_in ? out : in, 0, inp_offset);
   compute_encoder.set_output_array(out, 1, out_offset);
 
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    int ndim = shape.size();
     std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
     std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
-
     if (ndim > 3) {
       set_vector_bytes(compute_encoder, shape, ndim, 2);
     }
     set_vector_bytes(compute_encoder, strides_in, ndim, 3);
     if (ctype == CopyType::GeneralGeneral) {
       set_vector_bytes(compute_encoder, strides_out, ndim, 4);
-    }
-
-    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
-      compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 
     int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
@@ -129,8 +140,12 @@ void copy_gpu_inplace(
       data_size *= s;
     int rest = data_size / (dim0 * dim1);
 
+    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
+      compute_encoder->setBytes(&ndim, sizeof(int), 5);
+      dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+    }
+
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::copy] Must use 1024 sized block");
     }
@@ -140,13 +155,12 @@ void copy_gpu_inplace(
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t nthreads = out.data_size();
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
@@ -156,6 +170,7 @@ void copy_gpu_inplace(
     array& out,
     CopyType ctype,
     const Stream& s) {
+  assert(in.shape() == out.shape());
   return copy_gpu_inplace(
       in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
 }
@@ -167,9 +182,37 @@ void copy_gpu_inplace(
     int64_t ioffset,
     CopyType ctype,
     const Stream& s) {
+  assert(in.shape() == out.shape());
   std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
   return copy_gpu_inplace(
       in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
+}
+
+void fill_gpu(const array& val, array& out, const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  bool use_2d = out.data_size() > UINT32_MAX;
+  auto& d = metal::device(s.device);
+  std::string kernel_name = std::string(use_2d ? "s2" : "s") + "_copy" +
+      type_to_name(val) + type_to_name(out);
+  auto kernel = get_copy_kernel(d, kernel_name, val, out);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder->setComputePipelineState(kernel);
+
+  compute_encoder.set_input_array(val, 0);
+  compute_encoder.set_output_array(out, 1);
+
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  size_t nthreads = out.data_size();
+  if (thread_group_size > nthreads) {
+    thread_group_size = nthreads;
+  }
+  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                               : MTL::Size(nthreads, 1, 1);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 } // namespace mlx::core

@@ -20,7 +20,6 @@ namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
 constexpr int MAX_BUFFERS_PER_QUEUE = 12;
-constexpr int MAX_DISPATCHES_PER_ENCODER = 2;
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
@@ -121,33 +120,34 @@ MTL::Library* load_library(
 
 } // namespace
 
-CommandEncoder::CommandEncoder(MTL::CommandBuffer* cbuf) : cbuf(cbuf) {
-  enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
-  enc->retain();
+CommandEncoder::CommandEncoder(MTL::CommandBuffer* cbuf) {
+  enc_ = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
+  enc_->retain();
 }
 
 CommandEncoder::~CommandEncoder() {
-  enc->endEncoding();
-  enc->release();
+  enc_->endEncoding();
+  enc_->release();
 }
 
 void CommandEncoder::set_input_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
+  all_inputs_.insert(a.buffer().ptr());
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
-  if (auto it = outputs.find(r_buf); it != outputs.end()) {
+  if (auto it = outputs_.find(r_buf); it != outputs_.end()) {
     // Insert a barrier
-    enc->memoryBarrier(&r_buf, 1);
+    enc_->memoryBarrier(&r_buf, 1);
 
     // Remove the output
-    outputs.erase(it);
+    outputs_.erase(it);
   }
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
   auto base_offset = a.data<char>() -
       static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
   base_offset += offset;
-  enc->setBuffer(a_buf, base_offset, idx);
+  enc_->setBuffer(a_buf, base_offset, idx);
 }
 
 void CommandEncoder::set_output_array(
@@ -156,55 +156,36 @@ void CommandEncoder::set_output_array(
     int64_t offset /* = 0 */) {
   // Add barriers before adding the output to the output set
   set_input_array(a, idx, offset);
+  all_outputs_.insert(a.buffer().ptr());
   auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-  if (concurrent) {
-    concurrent_outputs.insert(buf);
+  if (concurrent_) {
+    concurrent_outputs_.insert(buf);
   } else {
-    outputs.insert(buf);
+    outputs_.insert(buf);
   }
 }
 
 void CommandEncoder::dispatchThreadgroups(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
-  num_dispatches++;
-  enc->dispatchThreadgroups(grid_dims, group_dims);
-  maybe_split();
+  enc_->dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void CommandEncoder::dispatchThreads(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
-  num_dispatches++;
-  enc->dispatchThreads(grid_dims, group_dims);
-  maybe_split();
-}
-
-void CommandEncoder::maybe_split() {
-  if (num_dispatches > MAX_DISPATCHES_PER_ENCODER && !concurrent) {
-    enc->endEncoding();
-    enc->release();
-    num_dispatches = 0;
-    outputs.clear();
-    enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
-    enc->retain();
-  }
+  enc_->dispatchThreads(grid_dims, group_dims);
 }
 
 Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
+  arch_ = std::string(device_->architecture()->name()->utf8String());
 }
 
 Device::~Device() {
   auto pool = new_scoped_memory_pool();
-  for (auto& q : queue_map_) {
-    q.second->release();
-  }
-  for (auto& b : buffer_map_) {
-    b.second.second->release();
-  }
   for (auto& k : kernel_map_) {
     k.second->release();
   }
@@ -219,69 +200,134 @@ void Device::new_queue(int index) {
 
   // Multiple threads can ask the device for queues
   // We lock this as a critical section for safety
-  const std::lock_guard<std::mutex> lock(mtx_);
   auto q = device_->newCommandQueue(MAX_BUFFERS_PER_QUEUE);
   debug_set_stream_queue_label(q, index);
   if (!q) {
     throw std::runtime_error(
         "[metal::Device] Failed to make new command queue.");
   }
-  queue_map_.insert({index, q});
+  stream_map_.emplace(index, q);
+  if (residency_set_ != nullptr) {
+    q->addResidencySet(residency_set_);
+  }
 }
 
 int Device::get_command_buffer_ops(int index) {
-  auto bit = buffer_map_.find(index);
-  return bit->second.first;
+  return get_stream_(index).buffer_ops;
 }
 
 void Device::increment_command_buffer_ops(int index) {
-  auto bit = buffer_map_.find(index);
-  bit->second.first++;
+  get_stream_(index).buffer_ops++;
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
-  auto bit = buffer_map_.find(index);
-  if (bit == buffer_map_.end()) {
-    auto qit = queue_map_.find(index);
-    if (qit == queue_map_.end()) {
-      throw std::runtime_error(
-          "[metal::Device] Attempting to get command buffer for invalid queue.");
-    }
-
-    auto cb = qit->second->commandBufferWithUnretainedReferences();
-
-    if (!cb) {
+  auto& stream = get_stream_(index);
+  if (stream.buffer == nullptr) {
+    stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
+    if (!stream.buffer) {
       throw std::runtime_error(
           "[metal::Device] Unable to create new command buffer");
     }
-
     // Increment ref count so the buffer is not garbage collected
-    cb->retain();
-
-    bit = buffer_map_.insert({index, {0, cb}}).first;
+    stream.buffer->retain();
   }
-  return bit->second.second;
+  return stream.buffer;
 }
 
 void Device::commit_command_buffer(int index) {
-  auto bit = buffer_map_.find(index);
-  bit->second.second->commit();
-  bit->second.second->release();
-  buffer_map_.erase(bit);
+  auto& stream = get_stream_(index);
+  stream.buffer->commit();
+  stream.buffer->release();
+  stream.buffer = nullptr;
+  stream.buffer_ops = 0;
+}
+
+void Device::add_temporary(array arr, int index) {
+  get_stream_(index).temporaries.push_back(std::move(arr));
+}
+
+void Device::add_temporaries(std::vector<array> arrays, int index) {
+  if (arrays.empty()) {
+    return;
+  }
+  auto& stream = get_stream_(index);
+  stream.temporaries.insert(
+      stream.temporaries.end(),
+      std::make_move_iterator(arrays.begin()),
+      std::make_move_iterator(arrays.end()));
 }
 
 void Device::end_encoding(int index) {
-  encoder_map_.erase(index);
+  auto& stream = get_stream_(index);
+  if (stream.encoder != nullptr) {
+    // Each command encoder has a unique fence. We also store a map of
+    // all previous outputs of command encoders to their corresponding fence.
+    // - The command encoder records its inputs and outputs.
+    // - Wait on a fence if any inputs in the encoder are outputs of a previous
+    //   encoder.
+    // - Update the map of outputs to include this command encoder's outputs.
+    // - Always signal this command encoders fence.
+    // - Add a completion handler for this command encoder that removes outputs
+    //   from the map to limit the growth of the map and avoid unecessary waits
+    // - Temporaries are a special case as they do not cross command encoder
+    //   boundaries. These can be removed early from the encoders inputs and
+    //   outputs since they don't need synchronization.
+    auto& enc = *stream.encoder;
+    // Remove temporaries from inputs and outputs
+    for (auto& t : stream.temporaries) {
+      if (t.data<void>() != nullptr) {
+        enc.outputs().erase(t.buffer().ptr());
+        enc.inputs().erase(t.buffer().ptr());
+      }
+    }
+
+    // Keep references to the fences we waited on and put them
+    // in the completion handler so they are not prematurely released
+    std::unordered_set<std::shared_ptr<Fence>> waiting_on;
+    {
+      std::lock_guard<std::mutex> lk(stream.fence_mtx);
+      for (auto in : enc.inputs()) {
+        if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
+          // If we've already waited on a fence, don't wait on it again.
+          if (waiting_on.find(it->second) == waiting_on.end()) {
+            enc->waitForFence(it->second->fence);
+            waiting_on.insert(it->second);
+          }
+        }
+      }
+      for (auto out : enc.outputs()) {
+        stream.outputs[out] = stream.fence;
+      }
+    }
+    enc->updateFence(stream.fence->fence);
+    stream.buffer->addCompletedHandler(
+        [&stream,
+         waiting_on = std::move(waiting_on),
+         fence = std::move(stream.fence),
+         outputs = std::move(enc.outputs()),
+         temporaries =
+             std::move(stream.temporaries)](MTL::CommandBuffer*) mutable {
+          temporaries.clear();
+          std::lock_guard<std::mutex> lk(stream.fence_mtx);
+          for (auto o : outputs) {
+            if (auto it = stream.outputs.find(o); it != stream.outputs.end()) {
+              if (it->second == fence) {
+                stream.outputs.erase(it);
+              }
+            }
+          }
+        });
+  }
+  stream.encoder = nullptr;
 }
 
 CommandEncoder& Device::get_command_encoder(int index) {
-  auto eit = encoder_map_.find(index);
-  if (eit == encoder_map_.end()) {
-    auto cb = get_command_buffer(index);
-    eit =
-        encoder_map_.emplace(index, std::make_unique<CommandEncoder>(cb)).first;
+  auto& stream = get_stream_(index);
+  if (stream.encoder == nullptr) {
+    stream.encoder = std::make_unique<CommandEncoder>(stream.buffer);
+    stream.fence = std::make_shared<Fence>(device_->newFence());
   }
-  return *(eit->second);
+  return *stream.encoder;
 }
 
 void Device::register_library(
@@ -293,20 +339,7 @@ void Device::register_library(
   }
 }
 
-MTL::Library* Device::get_library_cache_(const std::string& lib_name) {
-  // Search for cached metal lib
-  MTL::Library* mtl_lib;
-  if (auto it = library_map_.find(lib_name); it != library_map_.end()) {
-    mtl_lib = it->second;
-  } else { // Look for metallib alongside library
-    register_library(lib_name, get_colocated_mtllib_path(lib_name));
-    mtl_lib = library_map_[lib_name];
-  }
-
-  return mtl_lib;
-}
-
-MTL::Library* Device::get_library_(const std::string& source_string) {
+MTL::Library* Device::build_library_(const std::string& source_string) {
   auto pool = new_scoped_memory_pool();
 
   auto ns_code =
@@ -322,26 +355,7 @@ MTL::Library* Device::get_library_(const std::string& source_string) {
   // Throw error if unable to compile library
   if (!mtl_lib) {
     std::ostringstream msg;
-    msg << "[metal::Device] Unable to build metal library from source" << "\n";
-    if (error) {
-      msg << error->localizedDescription()->utf8String() << "\n";
-    }
-    throw std::runtime_error(msg.str());
-  }
-
-  return mtl_lib;
-}
-
-MTL::Library* Device::get_library_(const MTL::StitchedLibraryDescriptor* desc) {
-  auto pool = new_scoped_memory_pool();
-
-  NS::Error* error = nullptr;
-  auto mtl_lib = device_->newLibrary(desc, &error);
-
-  // Throw error if unable to compile library
-  if (!mtl_lib) {
-    std::ostringstream msg;
-    msg << "[metal::Device] Unable to build stitched metal library" << "\n";
+    msg << "[metal::Device] Unable to build metal library from source\n";
     if (error) {
       msg << error->localizedDescription()->utf8String() << "\n";
     }
@@ -465,66 +479,30 @@ MTL::ComputePipelineState* Device::get_kernel_(
   return kernel;
 }
 
-MTL::Library* Device::get_library(const std::string& name) {
+MTL::Library* Device::get_library_(const std::string& name) {
+  std::shared_lock lock(library_mtx_);
   auto it = library_map_.find(name);
   return (it != library_map_.end()) ? it->second : nullptr;
 }
 
 MTL::Library* Device::get_library(
     const std::string& name,
-    const std::string& source,
-    bool cache /* = true */) {
-  if (cache) {
+    const std::function<std::string(void)>& builder) {
+  {
+    std::shared_lock rlock(library_mtx_);
     if (auto it = library_map_.find(name); it != library_map_.end()) {
       return it->second;
     }
   }
 
-  auto mtl_lib = get_library_(source);
-
-  if (cache) {
-    library_map_.insert({name, mtl_lib});
+  std::unique_lock wlock(library_mtx_);
+  if (auto it = library_map_.find(name); it != library_map_.end()) {
+    return it->second;
   }
 
+  auto mtl_lib = build_library_(builder());
+  library_map_.insert({name, mtl_lib});
   return mtl_lib;
-}
-
-MTL::Library* Device::get_library(
-    const std::string& name,
-    const MTL::StitchedLibraryDescriptor* desc,
-    bool cache /* = true */) {
-  if (cache) {
-    if (auto it = library_map_.find(name); it != library_map_.end()) {
-      return it->second;
-    }
-  }
-
-  auto mtl_lib = get_library_(desc);
-
-  if (cache) {
-    library_map_.insert({name, mtl_lib});
-  }
-
-  return mtl_lib;
-}
-
-MTL::Function* Device::get_function(
-    const std::string& base_name,
-    MTL::Library* mtl_lib,
-    const std::string& specialized_name /* = "" */,
-    const MTLFCList& func_consts /* = {} */) {
-  return get_function_(base_name, specialized_name, func_consts, mtl_lib);
-}
-
-MTL::Function* Device::get_function(
-    const std::string& base_name,
-    const std::string& lib_name /* = "mlx" */,
-    const std::string& specialized_name /*  = "" */,
-    const MTLFCList& func_consts /* = {} */) {
-  // Search for cached metal lib
-  MTL::Library* mtl_lib = get_library_cache_(lib_name);
-
-  return get_function(base_name, mtl_lib, specialized_name, func_consts);
 }
 
 MTL::LinkedFunctions* Device::get_linked_functions_(
@@ -547,34 +525,55 @@ MTL::LinkedFunctions* Device::get_linked_functions_(
   return lfuncs;
 }
 
+MTL::ComputePipelineState* Device::get_kernel_(
+    const std::string& base_name,
+    MTL::Library* mtl_lib,
+    const std::string& hash_name,
+    const MTLFCList& func_consts /* = {} */,
+    const std::vector<MTL::Function*>& linked_functions /* = {} */) {
+  // Single writer allowed
+  std::unique_lock wlock(kernel_mtx_);
+
+  // Try loading again to avoid loading twice
+  if (auto it = kernel_map_.find(hash_name); it != kernel_map_.end()) {
+    return it->second;
+  }
+
+  auto pool = new_scoped_memory_pool();
+
+  // Pull kernel from library
+  auto mtl_function = get_function_(base_name, hash_name, func_consts, mtl_lib);
+
+  // Compile kernel to compute pipeline
+  auto mtl_linked_funcs = get_linked_functions_(linked_functions);
+  auto kernel = get_kernel_(hash_name, mtl_function, mtl_linked_funcs);
+
+  mtl_function->release();
+  mtl_linked_funcs->release();
+
+  // Add kernel to cache
+  auto inserted = kernel_map_.insert({hash_name, kernel});
+
+  return kernel;
+}
+
 MTL::ComputePipelineState* Device::get_kernel(
     const std::string& base_name,
     MTL::Library* mtl_lib,
     const std::string& hash_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
     const std::vector<MTL::Function*>& linked_functions /* = {} */) {
-  auto pool = new_scoped_memory_pool();
-
-  // Look for cached kernel
   const auto& kname = hash_name.empty() ? base_name : hash_name;
-  if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-    return it->second;
+  {
+    // Multiple readers allowed
+    std::shared_lock lock(kernel_mtx_);
+
+    // Look for cached kernel
+    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
+      return it->second;
+    }
   }
-
-  // Pull kernel from library
-  auto mtl_function = get_function_(base_name, kname, func_consts, mtl_lib);
-
-  // Compile kernel to compute pipeline
-  auto mtl_linked_funcs = get_linked_functions_(linked_functions);
-  auto kernel = get_kernel_(kname, mtl_function, mtl_linked_funcs);
-
-  mtl_function->release();
-  mtl_linked_funcs->release();
-
-  // Add kernel to cache
-  kernel_map_.insert({kname, kernel});
-
-  return kernel;
+  return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
 MTL::ComputePipelineState* Device::get_kernel(
@@ -583,16 +582,34 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& hash_name /*  = "" */,
     const MTLFCList& func_consts /*  = {} */,
     const std::vector<MTL::Function*>& linked_functions /*  = {} */) {
-  // Look for cached kernel
   const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
-  if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-    return it->second;
+  {
+    // Multiple readers allowed
+    std::shared_lock lock(kernel_mtx_);
+
+    // Look for cached kernel
+    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
+      return it->second;
+    }
   }
-
   // Search for cached metal lib
-  MTL::Library* mtl_lib = get_library_cache_(lib_name);
+  MTL::Library* mtl_lib = get_library_(lib_name);
+  return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
+}
 
-  return get_kernel(base_name, mtl_lib, kname, func_consts, linked_functions);
+void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
+  if (residency_set_ != nullptr) {
+    throw std::runtime_error(
+        "[Device::set_residency_set] Can only be set once.");
+  }
+  if (residency_set == nullptr) {
+    return;
+  }
+  residency_set_ = residency_set;
+  // Attach residency set to existing command queues
+  for (auto& [_, stream] : stream_map_) {
+    stream.queue->addResidencySet(residency_set_);
+  }
 }
 
 Device& device(mlx::core::Device) {

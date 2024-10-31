@@ -13,5 +13,8 @@ Linear Algebra
     norm
     cholesky
     cholesky_inv
+    cross
     qr
     svd
+    eigvalsh
+    eigh

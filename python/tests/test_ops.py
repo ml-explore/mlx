@@ -1059,6 +1059,13 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a_npy_taken.shape, a_mlx_taken.shape)
         self.assertListEqual(a_npy_taken.tolist(), a_mlx_taken.tolist())
 
+        # Take with integer index
+        a = mx.arange(8).reshape(2, 4)
+        out = mx.take(a, 1, axis=0)
+        self.assertTrue(mx.array_equal(out, mx.array([4, 5, 6, 7])))
+        out = mx.take(a, 1, axis=1)
+        self.assertTrue(mx.array_equal(out, mx.array([1, 5])))
+
     def test_take_along_axis(self):
         a_np = np.arange(8).reshape(2, 2, 2)
         a_mlx = mx.array(a_np)
@@ -1074,6 +1081,33 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.take_along_axis(a_np, idx_np.reshape(shape), axis=ax)
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
+
+    def test_put_along_axis(self):
+        for ax in [None, 0, 1, 2]:
+
+            a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
+            a_mlx = mx.array(a_np)
+
+            if ax == None:
+                idx_np = np.random.permutation(a_np.size)
+                values_np = np.random.randint(low=0, high=100, size=(16,))
+            else:
+                shape = list(a_np.shape)
+                shape[ax] = 2
+                idx_np = np.random.choice(a_np.shape[ax], replace=False, size=(2,))
+                idx_np = np.expand_dims(idx_np, list(range(1, 2 - ax + 1)))
+                idx_np = np.broadcast_to(idx_np, shape)
+                values_np = np.random.randint(low=0, high=100, size=shape)
+
+            idx_np.astype(np.int32)
+            values_np.astype(a_np.dtype)
+
+            idx_mlx = mx.array(idx_np)
+            values_mlx = mx.array(values_np)
+
+            np.put_along_axis(a_np, idx_np, values_np, axis=ax)
+            out_mlx = mx.put_along_axis(a_mlx, idx_mlx, values_mlx, axis=ax)
+            self.assertTrue(np.array_equal(a_np, out_mlx))
 
     def test_split(self):
         a = mx.array([1, 2, 3])
@@ -1535,6 +1569,11 @@ class TestOps(mlx_tests.MLXTestCase):
             out = mx.softmax(a, axis=-1, precise=True)
             self.assertTrue(mx.allclose(out_expect, out))
 
+        # All Infs give NaNs
+        for n in [127, 128, 129]:
+            x = mx.full((n,), vals=-float("inf"))
+            self.assertTrue(mx.all(mx.isnan(mx.softmax(x))))
+
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)
@@ -1720,6 +1759,18 @@ class TestOps(mlx_tests.MLXTestCase):
                 c_npy = npop(a_npy, axis=axis)
                 c_mlx = mxop(a_mlx, axis=axis)
                 self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
+        a_mlx = mx.random.randint(shape=(32, 32, 32), low=-100, high=100)
+        for dt in [mx.int32, mx.int64]:
+            mxx = a_mlx.astype(dt)
+            npx = np.array(mxx)
+            for op in ["cumsum", "cumprod"]:
+                npop = getattr(np, op)
+                mxop = getattr(mx, op)
+                for axis in (None, 0, 1, 2):
+                    c_npy = npop(npx, axis=axis, dtype=npx.dtype)
+                    c_mlx = mxop(mxx, axis=axis)
+                    self.assertTrue(np.array_equal(c_npy, c_mlx))
 
         a_mlx = mx.random.randint(shape=(32, 32, 32), low=-100, high=100)
         for op in ["cumsum", "cumprod", "cummax", "cummin"]:
@@ -1922,6 +1973,17 @@ class TestOps(mlx_tests.MLXTestCase):
                             M = top_k_mx.shape[axis or 0]
                             self.assertEqual(M, (kth + N) % N)
 
+    def test_argpartition(self):
+        x = mx.broadcast_to(mx.array([1, 2, 3]), (2, 3))
+        out = mx.argpartition(x, kth=1, axis=0)
+        expected = mx.array([[0, 0, 0], [1, 1, 1]])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        x = mx.array([[1, 2], [3, 4]]).T
+        out = mx.argpartition(x, kth=1, axis=0)
+        expected = mx.array([[0, 0], [1, 1]])
+        self.assertTrue(mx.array_equal(out, expected))
+
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,
         "This test requires a lot of memory",
@@ -2007,6 +2069,22 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.clip(a, mins, maxs)
         clipped = mx.clip(mx.array(a), mx.array(mins), mx.array(maxs))
         self.assertTrue(np.array_equal(clipped, expected))
+
+        # Check clip output types
+        a = mx.array([1, 2, 3], mx.int16)
+        out_t = mx.clip(a, a_min=0, a_max=5).dtype
+        self.assertEqual(out_t, mx.int16)
+
+        out_t = mx.clip(a, a_min=0.0, a_max=5).dtype
+        self.assertEqual(out_t, mx.float32)
+
+        a = mx.array([1, 2, 3], mx.float16)
+        out_t = mx.clip(a, a_min=0.0, a_max=5).dtype
+        self.assertEqual(out_t, mx.float16)
+
+        a = mx.array([1, 2, 3], mx.float16)
+        out_t = mx.clip(a, a_min=0.0, a_max=mx.array(1.0)).dtype
+        self.assertEqual(out_t, mx.float32)
 
     def test_linspace(self):
         # Test default num = 50
@@ -2581,6 +2659,55 @@ class TestOps(mlx_tests.MLXTestCase):
                 out = vht(xb)
                 out_t = vht_t(xb)
                 np.testing.assert_allclose(out, out_t, atol=1e-4)
+
+    def test_roll(self):
+        x = mx.arange(10).reshape(2, 5)
+
+        for s in [-2, -1, 0, 1, 2]:
+            y1 = np.roll(x, s)
+            y2 = mx.roll(x, s)
+            self.assertTrue(mx.array_equal(y1, y2).item())
+
+            y1 = np.roll(x, (s, s, s))
+            y2 = mx.roll(x, (s, s, s))
+            self.assertTrue(mx.array_equal(y1, y2).item())
+
+        shifts = [
+            1,
+            2,
+            -1,
+            -2,
+            (1, 1),
+            (-1, 2),
+            (33, 33),
+        ]
+        axes = [
+            0,
+            1,
+            (1, 0),
+            (0, 1),
+            (0, 0),
+            (1, 1),
+        ]
+        for s, a in product(shifts, axes):
+            y1 = np.roll(x, s, a)
+            y2 = mx.roll(x, s, a)
+            self.assertTrue(mx.array_equal(y1, y2).item())
+
+    def test_real_imag(self):
+        x = mx.random.uniform(shape=(4, 4))
+        out = mx.real(x)
+        self.assertTrue(mx.array_equal(x, out))
+
+        out = mx.imag(x)
+        self.assertTrue(mx.array_equal(mx.zeros_like(x), out))
+
+        y = mx.random.uniform(shape=(4, 4))
+        z = x + 1j * y
+        self.assertEqual(mx.real(z).dtype, mx.float32)
+        self.assertTrue(mx.array_equal(mx.real(z), x))
+        self.assertEqual(mx.imag(z).dtype, mx.float32)
+        self.assertTrue(mx.array_equal(mx.imag(z), y))
 
 
 if __name__ == "__main__":

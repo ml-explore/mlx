@@ -12,7 +12,7 @@ def quantize(
     model: Module,
     group_size: int = 64,
     bits: int = 4,
-    class_predicate: Optional[callable] = None,
+    class_predicate: Optional[Callable] = None,
 ):
     """Quantize the sub-modules of a module according to a predicate.
 

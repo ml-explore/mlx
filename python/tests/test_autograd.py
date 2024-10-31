@@ -496,6 +496,16 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = mx.array([0.0, 0.0, 0.0, 9.0, 1.0])
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_topk_grad(self):
+        a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
+
+        def fun(x):
+            return mx.topk(x, 2)
+
+        out = mx.vjp(fun, (a,), (mx.ones((2, 2)),))[1][0]
+        expected = mx.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], mx.float32)
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_custom_function(self):
         # Make a custom function
         my_exp = mx.custom_function(mx.exp)
@@ -579,6 +589,21 @@ class TestAutograd(mlx_tests.MLXTestCase):
         out2, dout2 = mx.jvp(outer_f, inputs, tans)
         self.assertTrue(mx.allclose(out1[0], out2[0]))
         self.assertTrue(mx.allclose(dout1[0] + 1, dout2[0]))
+
+    def test_complex_vjps(self):
+        def fun(x):
+            return (2.0 * mx.real(x)).sum()
+
+        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = mx.grad(fun)(x)
+        self.assertTrue(mx.allclose(dfdx, 2 * mx.ones_like(x)))
+
+        def fun(x):
+            return (2.0 * mx.imag(x)).sum()
+
+        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = mx.grad(fun)(x)
+        self.assertTrue(mx.allclose(dfdx, -2j * mx.ones_like(x)))
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 #include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/backend/metal/resident.h"
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
@@ -140,6 +141,7 @@ void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
 
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
+      residency_set_(device_),
       buffer_cache_(device_) {
   auto memsize = std::get<size_t>(device_info()["memory_size"]);
   block_limit_ =
@@ -148,6 +150,8 @@ MetalAllocator::MetalAllocator()
       static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()),
       block_limit_);
   max_pool_size_ = block_limit_;
+  device(mlx::core::Device::gpu)
+      .set_residency_set(residency_set_.mtl_residency_set());
 }
 
 size_t MetalAllocator::set_cache_limit(size_t limit) {
@@ -161,6 +165,12 @@ size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
   gc_limit_ = std::min(
       block_limit_,
       static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()));
+  return limit;
+};
+
+size_t MetalAllocator::set_wired_limit(size_t limit) {
+  std::swap(limit, wired_limit_);
+  residency_set_.resize(wired_limit_);
   return limit;
 };
 
@@ -205,7 +215,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
     // Allocate new buffer if needed
     size_t res_opt = MTL::ResourceStorageModeShared;
-    res_opt |= MTL::ResourceHazardTrackingModeTracked;
+    res_opt |= MTL::ResourceHazardTrackingModeUntracked;
     lk.unlock();
     buf = device_->newBuffer(size, res_opt);
     lk.lock();
@@ -220,6 +230,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
 
+  residency_set_.insert(buf);
+
   return Buffer{static_cast<void*>(buf)};
 }
 
@@ -231,6 +243,7 @@ void MetalAllocator::clear_cache() {
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
   std::unique_lock lk(mutex_);
+  residency_set_.erase(buf);
   active_memory_ -= buf->length();
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
@@ -241,16 +254,14 @@ void MetalAllocator::free(Buffer buffer) {
   }
 }
 
+size_t MetalAllocator::size(Buffer buffer) const {
+  return static_cast<MTL::Buffer*>(buffer.ptr())->length();
+}
+
 MetalAllocator& allocator() {
-  // By creating the |allocator_| on heap, the destructor of MetalAllocator will
-  // not be called on exit and all the buffers will be leaked. This is necessary
-  // because releasing buffers can take more than 30sec when the program holds a
-  // lot of RAM (for example inferencing a LLM), and it would feel frozen to
-  // users when exiting.
-  // TODO(zcbenz): Consider using the `base::NoDestructor` class from Chromium
-  // when applying this pattern to more places, or when introducing sanitizers
-  // to MLX.
-  // https://source.chromium.org/chromium/chromium/src/+/main:base/no_destructor.h
+  // By creating the |allocator_| on heap, the destructor of MetalAllocator
+  // will not be called on exit and buffers in the cache will be leaked. This
+  // can save some time at program exit.
   static MetalAllocator* allocator_ = new MetalAllocator;
   return *allocator_;
 }
@@ -260,6 +271,15 @@ size_t set_cache_limit(size_t limit) {
 }
 size_t set_memory_limit(size_t limit, bool relaxed /* = true */) {
   return allocator().set_memory_limit(limit, relaxed);
+}
+size_t set_wired_limit(size_t limit) {
+  if (limit >
+      std::get<size_t>(device_info()["max_recommended_working_set_size"])) {
+    throw std::invalid_argument(
+        "[metal::set_wired_limit] Setting a wired limit larger than "
+        "the maximum working set size is not allowed.");
+  }
+  return allocator().set_wired_limit(limit);
 }
 size_t get_active_memory() {
   return allocator().get_active_memory();

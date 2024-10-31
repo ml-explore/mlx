@@ -24,8 +24,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) -> const array& {
-    bool no_copy = x.strides()[x.ndim() - 1] == 1;
-    if (x.ndim() > 1) {
+    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
+    if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
@@ -88,8 +88,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&axis_size, sizeof(int), 2);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core

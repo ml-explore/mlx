@@ -64,7 +64,7 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
     memcpy(
         buffer.raw_ptr(),
         tensor->weights_data,
-        tensor->num_weights * equivalent_dtype.value().size);
+        tensor->num_weights * equivalent_dtype.value().size());
     return {buffer, equivalent_dtype.value()};
   }
   // Otherwise, we convert to float16.

@@ -74,7 +74,7 @@ std::function<void()> make_task(array arr, bool signal) {
       arr.detach();
     }
     for (auto& out : outputs) {
-      out.set_status(array::Status::available);
+      out.set_status(array::Status::evaluated);
     }
 
     if (signal || d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {

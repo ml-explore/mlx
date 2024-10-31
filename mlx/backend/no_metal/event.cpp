@@ -36,4 +36,11 @@ void Event::signal() {
   ec->cv.notify_all();
 }
 
+bool Event::is_signaled() const {
+  auto ec = static_cast<EventCounter*>(raw_event().get());
+  {
+    std::lock_guard<std::mutex> lk(ec->mtx);
+    return (ec->value > value());
+  }
+}
 } // namespace mlx::core

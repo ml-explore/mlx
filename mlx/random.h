@@ -254,4 +254,17 @@ inline array laplace(
   return laplace(shape, float32, 0.0, 1.0, key, s);
 }
 
+/* Randomly permute the elements of x along the given axis. */
+array permutation(
+    const array& x,
+    int axis = 0,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {});
+
+/* A random permutation of `arange(x)` */
+array permutation(
+    int x,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::random

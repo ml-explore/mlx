@@ -273,6 +273,10 @@ void Full::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
+void Imag::eval_cpu(const std::vector<array>& inputs, array& out) {
+  unary_op<complex64_t, float>(inputs[0], out, detail::Imag());
+}
+
 void Log::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
@@ -398,6 +402,10 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Real::eval_cpu(const std::vector<array>& inputs, array& out) {
+  unary_op<complex64_t, float>(inputs[0], out, detail::Real());
+}
+
 void Reshape::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
@@ -406,16 +414,7 @@ void Reshape::eval(const std::vector<array>& inputs, array& out) {
 
   if (copy_necessary) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    auto out_strides = make_contiguous_strides<size_t>(in.shape());
-    copy_inplace<size_t>(
-        in,
-        out,
-        in.shape(),
-        in.strides(),
-        out_strides,
-        0,
-        0,
-        CopyType::General);
+    copy_inplace(in, out, CopyType::General);
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }
@@ -505,8 +504,16 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
         /* int64_t o_offset = */ 0,
         /* CopyType ctype = */ CopyType::General);
   } else {
+    size_t data_end = 1;
+    for (int i = 0; i < end_indices_.size(); ++i) {
+      if (in.shape()[i] > 1) {
+        auto end_idx = start_indices_[i] + out.shape()[i] * strides_[i] - 1;
+        data_end += end_idx * in.strides()[i];
+      }
+    }
+    size_t data_size = data_end - data_offset;
     std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
-    shared_buffer_slice(in, ostrides, data_offset, out);
+    shared_buffer_slice(in, ostrides, data_offset, data_size, out);
   }
 }
 
@@ -604,11 +611,18 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
       strides[i] /= obytes;
     }
     out.copy_shared_buffer(
-        in, strides, in.flags(), in.data_size() * obytes / ibytes);
+        in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
-    auto tmp = array(in.shape(), in.dtype(), nullptr, {});
+    auto tmp = array(
+        in.shape(), in.dtype() == bool_ ? uint8 : in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
-    copy_inplace(in, tmp, CopyType::General);
+    if (in.dtype() == bool_) {
+      auto in_tmp = array(in.shape(), uint8, nullptr, {});
+      in_tmp.copy_shared_buffer(in);
+      copy_inplace(in_tmp, tmp, CopyType::General);
+    } else {
+      copy_inplace(in, tmp, CopyType::General);
+    }
 
     auto flags = out.flags();
     flags.contiguous = true;

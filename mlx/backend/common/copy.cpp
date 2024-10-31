@@ -26,290 +26,115 @@ void copy_vector(const array& src, array& dst) {
   std::copy(src_ptr, src_ptr + src.data_size(), dst_ptr);
 }
 
-template <typename SrcT, typename DstT, typename stride_t>
-void copy_general_dim1(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    int64_t i_offset) {
-  const SrcT* src_ptr = src.data<SrcT>();
-  DstT* dst_ptr = dst.data<DstT>();
-  stride_t src_idx = i_offset;
-  stride_t dst_idx = 0;
-  for (int i = 0; i < data_shape[0]; ++i) {
-    dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
-    src_idx += i_strides[0];
-  }
-}
+template <typename SrcT, typename DstT, typename StrideT, int D>
+inline void copy_dims(
+    const SrcT* src,
+    DstT* dst,
+    const std::vector<int>& shape,
+    const std::vector<StrideT>& i_strides,
+    const std::vector<StrideT>& o_strides,
+    int axis) {
+  auto stride_src = i_strides[axis];
+  auto stride_dst = o_strides[axis];
+  auto N = shape[axis];
 
-template <typename SrcT, typename DstT>
-inline void copy_general_dim1(const array& src, array& dst) {
-  return copy_general_dim1<SrcT, DstT, size_t>(
-      src, dst, src.shape(), src.strides(), 0);
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
-void copy_general_dim2(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    int64_t i_offset) {
-  const SrcT* src_ptr = src.data<SrcT>();
-  DstT* dst_ptr = dst.data<DstT>();
-  stride_t src_idx = i_offset;
-  stride_t dst_idx = 0;
-  for (int i = 0; i < data_shape[0]; ++i) {
-    for (int j = 0; j < data_shape[1]; ++j) {
-      dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
-      src_idx += i_strides[1];
+  for (int i = 0; i < N; i++) {
+    if constexpr (D > 1) {
+      copy_dims<SrcT, DstT, StrideT, D - 1>(
+          src, dst, shape, i_strides, o_strides, axis + 1);
+    } else {
+      *dst = static_cast<DstT>(*src);
     }
-    src_idx += i_strides[0] - i_strides[1] * data_shape[1];
+    src += stride_src;
+    dst += stride_dst;
   }
 }
 
-template <typename SrcT, typename DstT>
-inline void copy_general_dim2(const array& src, array& dst) {
-  return copy_general_dim2<SrcT, DstT, size_t>(
-      src, dst, src.shape(), src.strides(), 0);
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
-void copy_general_dim3(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    int64_t i_offset) {
-  const SrcT* src_ptr = src.data<SrcT>();
-  DstT* dst_ptr = dst.data<DstT>();
-  stride_t src_idx = i_offset;
-  stride_t dst_idx = 0;
-  for (int i = 0; i < data_shape[0]; ++i) {
-    for (int j = 0; j < data_shape[1]; ++j) {
-      for (int k = 0; k < data_shape[2]; ++k) {
-        dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
-        src_idx += i_strides[2];
-      }
-      src_idx += i_strides[1] - i_strides[2] * data_shape[2];
-    }
-    src_idx += i_strides[0] - i_strides[1] * data_shape[1];
-  }
-}
-
-template <typename SrcT, typename DstT>
-inline void copy_general_dim3(const array& src, array& dst) {
-  return copy_general_dim3<SrcT, DstT, size_t>(
-      src, dst, src.shape(), src.strides(), 0);
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
-void copy_general_dim4(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    int64_t i_offset) {
-  const SrcT* src_ptr = src.data<SrcT>();
-  DstT* dst_ptr = dst.data<DstT>();
-  stride_t src_idx = i_offset;
-  stride_t dst_idx = 0;
-  for (int i = 0; i < data_shape[0]; ++i) {
-    for (int j = 0; j < data_shape[1]; ++j) {
-      for (int k = 0; k < data_shape[2]; ++k) {
-        for (int ii = 0; ii < data_shape[3]; ++ii) {
-          dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
-          src_idx += i_strides[3];
-        }
-        src_idx += i_strides[2] - i_strides[3] * data_shape[3];
-      }
-      src_idx += i_strides[1] - i_strides[2] * data_shape[2];
-    }
-    src_idx += i_strides[0] - i_strides[1] * data_shape[1];
-  }
-}
-
-template <typename SrcT, typename DstT>
-inline void copy_general_dim4(const array& src, array& dst) {
-  return copy_general_dim4<SrcT, DstT, size_t>(
-      src, dst, src.shape(), src.strides(), 0);
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
-void copy_general(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    int64_t i_offset) {
-  auto [new_shape, new_strides] = collapse_contiguous_dims(
-      data_shape, std::vector<std::vector<stride_t>>{i_strides});
-  switch (new_shape.size()) {
-    case 1:
-      copy_general_dim1<SrcT, DstT, stride_t>(
-          src, dst, new_shape, new_strides[0], i_offset);
-      return;
-    case 2:
-      copy_general_dim2<SrcT, DstT, stride_t>(
-          src, dst, new_shape, new_strides[0], i_offset);
-      return;
-    case 3:
-      copy_general_dim3<SrcT, DstT, stride_t>(
-          src, dst, new_shape, new_strides[0], i_offset);
-      return;
-    case 4:
-      copy_general_dim4<SrcT, DstT, stride_t>(
-          src, dst, new_shape, new_strides[0], i_offset);
-      return;
-  }
-
-  auto src_ptr = src.data<SrcT>() + i_offset;
-  auto dst_ptr = dst.data<DstT>();
-  for (size_t i = 0; i < dst.size(); ++i) {
-    stride_t src_elem = elem_to_loc(i, new_shape, new_strides[0]);
-    dst_ptr[i] = static_cast<DstT>(src_ptr[src_elem]);
-  }
-}
-
-template <typename SrcT, typename DstT>
-inline void copy_general(const array& src, array& dst) {
-  return copy_general<SrcT, DstT, size_t>(
-      src, dst, src.shape(), src.strides(), 0);
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
-inline void copy_general(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    const std::vector<stride_t>& o_strides,
-    int64_t i_offset,
-    int64_t o_offset) {
-  return copy_general<SrcT, DstT, stride_t>(
-      src, dst, data_shape, i_strides, i_offset);
-}
-
-template <typename SrcT, typename DstT, typename stride_t, int D>
-inline void copy_general_general_dims(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    const std::vector<stride_t>& o_strides,
-    int64_t i_offset,
-    int64_t o_offset) {
-  if constexpr (D > 1) {
-    int axis = data_shape.size() - D;
-    auto stride_src = i_strides[axis];
-    auto stride_dst = o_strides[axis];
-    auto N = data_shape[axis];
-    for (int i = 0; i < N; i++) {
-      copy_general_general_dims<SrcT, DstT, stride_t, D - 1>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
-      i_offset += stride_src;
-      o_offset += stride_dst;
-    }
-  } else {
-    int axis = data_shape.size() - 1;
-    auto stride_src = i_strides[axis];
-    auto stride_dst = o_strides[axis];
-    auto N = data_shape[axis];
-    const SrcT* src_ptr = src.data<SrcT>() + i_offset;
-    DstT* dst_ptr = dst.data<DstT>() + o_offset;
-    for (int i = 0; i < N; i++) {
-      *dst_ptr = static_cast<DstT>(*src_ptr);
-      src_ptr += stride_src;
-      dst_ptr += stride_dst;
-    }
-  }
-}
-
-template <typename SrcT, typename DstT, typename stride_t>
+template <typename SrcT, typename DstT, typename StrideT>
 void copy_general_general(
     const array& src,
     array& dst,
     const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    const std::vector<stride_t>& o_strides,
+    const std::vector<StrideT>& i_strides,
+    const std::vector<StrideT>& o_strides,
     int64_t i_offset,
     int64_t o_offset) {
-  auto [new_shape, new_strides] = collapse_contiguous_dims(
-      data_shape, std::vector<std::vector<stride_t>>{i_strides, o_strides});
-  switch (new_shape.size()) {
-    case 1:
-      copy_general_general_dims<SrcT, DstT, stride_t, 1>(
-          src,
-          dst,
-          new_shape,
-          new_strides[0],
-          new_strides[1],
-          i_offset,
-          o_offset);
-      return;
-    case 2:
-      copy_general_general_dims<SrcT, DstT, stride_t, 2>(
-          src,
-          dst,
-          new_shape,
-          new_strides[0],
-          new_strides[1],
-          i_offset,
-          o_offset);
-      return;
-    case 3:
-      copy_general_general_dims<SrcT, DstT, stride_t, 3>(
-          src,
-          dst,
-          new_shape,
-          new_strides[0],
-          new_strides[1],
-          i_offset,
-          o_offset);
-      return;
-    case 4:
-      copy_general_general_dims<SrcT, DstT, stride_t, 4>(
-          src,
-          dst,
-          new_shape,
-          new_strides[0],
-          new_strides[1],
-          i_offset,
-          o_offset);
-      return;
-    case 5:
-      copy_general_general_dims<SrcT, DstT, stride_t, 5>(
-          src,
-          dst,
-          new_shape,
-          new_strides[0],
-          new_strides[1],
-          i_offset,
-          o_offset);
-      return;
+  if (data_shape.empty()) {
+    auto val = static_cast<DstT>(*(src.data<SrcT>() + i_offset));
+    auto dst_ptr = dst.data<DstT>() + o_offset;
+    *dst_ptr = val;
+    return;
   }
-
-  int size = std::accumulate(
-      new_shape.end() - 5, new_shape.end(), 1, std::multiplies<int>());
-  for (int i = 0; i < src.size(); i += size) {
-    stride_t src_offset = i_offset + elem_to_loc(i, new_shape, new_strides[0]);
-    stride_t dst_offset = o_offset + elem_to_loc(i, new_shape, new_strides[1]);
-    copy_general_general_dims<SrcT, DstT, stride_t, 5>(
-        src,
-        dst,
-        new_shape,
-        new_strides[0],
-        new_strides[1],
-        src_offset,
-        dst_offset);
+  auto [shape, strides] = collapse_contiguous_dims(
+      data_shape, std::vector<std::vector<StrideT>>{i_strides, o_strides});
+  auto src_ptr = src.data<SrcT>() + i_offset;
+  auto dst_ptr = dst.data<DstT>() + o_offset;
+  int ndim = shape.size();
+  if (ndim == 1) {
+    copy_dims<SrcT, DstT, StrideT, 1>(
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    return;
+  } else if (ndim == 2) {
+    copy_dims<SrcT, DstT, StrideT, 2>(
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    return;
+  } else if (ndim == 3) {
+    copy_dims<SrcT, DstT, StrideT, 3>(
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    return;
+  }
+  ContiguousIterator<StrideT> in(shape, strides[0], ndim - 3);
+  ContiguousIterator<StrideT> out(shape, strides[1], ndim - 3);
+  StrideT stride = std::accumulate(
+      shape.end() - 3, shape.end(), 1, std::multiplies<StrideT>());
+  for (StrideT elem = 0; elem < src.size(); elem += stride) {
+    copy_dims<SrcT, DstT, StrideT, 3>(
+        src_ptr + in.loc,
+        dst_ptr + out.loc,
+        shape,
+        strides[0],
+        strides[1],
+        ndim - 3);
+    in.step();
+    out.step();
   }
 }
 
 template <typename SrcT, typename DstT>
 inline void copy_general_general(const array& src, array& dst) {
-  return copy_general_general<SrcT, DstT, size_t>(
+  copy_general_general<SrcT, DstT, size_t>(
       src, dst, src.shape(), src.strides(), dst.strides(), 0, 0);
+}
+
+template <typename SrcT, typename DstT, typename StrideT>
+void copy_general(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<StrideT>& i_strides,
+    const std::vector<StrideT>&,
+    int64_t i_offset,
+    int64_t o_offset) {
+  copy_general_general<SrcT, DstT, StrideT>(
+      src,
+      dst,
+      data_shape,
+      i_strides,
+      make_contiguous_strides<StrideT>(data_shape),
+      i_offset,
+      o_offset);
+}
+
+template <typename SrcT, typename DstT>
+inline void copy_general(const array& src, array& dst) {
+  copy_general_general<SrcT, DstT, size_t>(
+      src,
+      dst,
+      src.shape(),
+      src.strides(),
+      make_contiguous_strides<size_t>(src.shape()),
+      0,
+      0);
 }
 
 template <typename SrcT, typename DstT, typename... Args>
@@ -326,6 +151,7 @@ void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
       return;
     case CopyType::GeneralGeneral:
       copy_general_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
+      return;
   }
 }
 
@@ -426,7 +252,7 @@ inline void copy_inplace_dispatch(
 } // namespace
 
 void copy_inplace(const array& src, array& dst, CopyType ctype) {
-  return copy_inplace_dispatch(src, dst, ctype);
+  copy_inplace_dispatch(src, dst, ctype);
 }
 
 void copy(const array& src, array& dst, CopyType ctype) {
@@ -456,20 +282,20 @@ void copy(const array& src, array& dst, CopyType ctype) {
   copy_inplace(src, dst, ctype);
 }
 
-template <typename stride_t>
+template <typename StrideT>
 void copy_inplace(
     const array& src,
     array& dst,
     const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    const std::vector<stride_t>& o_strides,
+    const std::vector<StrideT>& i_strides,
+    const std::vector<StrideT>& o_strides,
     int64_t i_offset,
     int64_t o_offset,
     CopyType ctype) {
   switch (ctype) {
     case CopyType::General:
     case CopyType::GeneralGeneral:
-      return copy_inplace_dispatch(
+      copy_inplace_dispatch(
           src,
           dst,
           ctype,
@@ -478,10 +304,10 @@ void copy_inplace(
           o_strides,
           i_offset,
           o_offset);
-
+      break;
     case CopyType::Scalar:
     case CopyType::Vector:
-      return copy_inplace_dispatch(src, dst, ctype);
+      copy_inplace_dispatch(src, dst, ctype);
   }
 }
 

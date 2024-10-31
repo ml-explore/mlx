@@ -348,3 +348,128 @@ TEST_CASE("test matrix cholesky") {
   CHECK(allclose(matmul(transpose(U), U), A, /* rtol = */ 0, /* atol = */ 1e-6)
             .item<bool>());
 }
+
+TEST_CASE("test matrix pseudo-inverse") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::pinv(array(0.0), Device::cpu));
+  CHECK_THROWS(linalg::pinv(array({0.0, 1.0}), Device::cpu));
+
+  // Unsupported types throw
+  CHECK_THROWS(linalg::pinv(array({0, 1}, {1, 2}), Device::cpu));
+
+  { // Square m == n
+    const auto A = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+  }
+  { // Rectangular matrix m < n
+    const auto prng_key = random::key(42);
+    const auto A = random::normal({4, 5}, prng_key);
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto zeros = zeros_like(A_pinv, Device::cpu);
+    CHECK_FALSE(allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
+                    .item<bool>());
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+  }
+  { // Rectangular matrix m > n
+    const auto prng_key = random::key(10);
+    const auto A = random::normal({6, 5}, prng_key);
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto zeros2 = zeros_like(A_pinv, Device::cpu);
+    CHECK_FALSE(allclose(zeros2, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
+                    .item<bool>());
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+  }
+}
+
+TEST_CASE("test cross product") {
+  using namespace mlx::core::linalg;
+
+  // Test for vectors of length 3
+  array a = array({1.0, 2.0, 3.0});
+  array b = array({4.0, 5.0, 6.0});
+
+  array expected = array(
+      {2.0 * 6.0 - 3.0 * 5.0, 3.0 * 4.0 - 1.0 * 6.0, 1.0 * 5.0 - 2.0 * 4.0});
+
+  array result = cross(a, b);
+  CHECK(allclose(result, expected).item<bool>());
+
+  // Test for vectors of length 3 with negative values
+  a = array({-1.0, -2.0, -3.0});
+  b = array({4.0, -5.0, 6.0});
+
+  expected = array(
+      {-2.0 * 6.0 - (-3.0 * -5.0),
+       -3.0 * 4.0 - (-1.0 * 6.0),
+       -1.0 * -5.0 - (-2.0 * 4.0)});
+
+  result = cross(a, b);
+  CHECK(allclose(result, expected).item<bool>());
+
+  // Test for incorrect vector size (should throw)
+  b = array({1.0, 2.0});
+  expected = array(
+      {-2.0 * 0.0 - (-3.0 * 2.0),
+       -3.0 * 1.0 - (-1.0 * 0.0),
+       -1.0 * 2.0 - (-2.0 * 1.0)});
+
+  result = cross(a, b);
+  CHECK(allclose(result, expected).item<bool>());
+
+  // Test for vectors of length 3 with integer values
+  a = array({1, 2, 3});
+  b = array({4, 5, 6});
+
+  expected = array({2 * 6 - 3 * 5, 3 * 4 - 1 * 6, 1 * 5 - 2 * 4});
+
+  result = cross(a, b);
+  CHECK(allclose(result, expected).item<bool>());
+}
+
+TEST_CASE("test matrix eigh") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::eigh(array(0.0)));
+  CHECK_THROWS(linalg::eigh(array({0.0, 1.0})));
+  CHECK_THROWS(linalg::eigvalsh(array(0.0)));
+  CHECK_THROWS(linalg::eigvalsh(array({0.0, 1.0})));
+
+  // Unsupported types throw
+  CHECK_THROWS(linalg::eigh(array({0, 1}, {1, 2})));
+
+  // Non-square throws
+  CHECK_THROWS(linalg::eigh(array({1, 2, 3, 4, 5, 6}, {2, 3})));
+
+  // Test a simple 2x2 symmetric matrix
+  array A = array({1.0, 2.0, 2.0, 4.0}, {2, 2}, float32);
+  auto [eigvals, eigvecs] = linalg::eigh(A, "L", Device::cpu);
+
+  // Expected eigenvalues
+  array expected_eigvals = array({0.0, 5.0});
+  CHECK(allclose(
+            eigvals,
+            expected_eigvals,
+            /* rtol = */ 1e-5,
+            /* atol = */ 1e-5)
+            .item<bool>());
+
+  // Verify orthogonality of eigenvectors
+  CHECK(allclose(
+            matmul(eigvecs, transpose(eigvecs)),
+            eye(2),
+            /* rtol = */ 1e-5,
+            /* atol = */ 1e-5)
+            .item<bool>());
+
+  // Verify eigendecomposition
+  CHECK(allclose(matmul(A, eigvecs), eigvals * eigvecs).item<bool>());
+}

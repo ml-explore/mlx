@@ -1,26 +1,24 @@
 target_sources(
   mlx
-  PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/einsum.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h
-)
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/einsum.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
 
-if (MLX_BUILD_CPU)
+if(MLX_BUILD_CPU)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_cpu)
@@ -28,17 +26,15 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/distributed)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
-if (MLX_BUILD_ACCELERATE)
+if(MLX_BUILD_ACCELERATE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
 elseif(MLX_BUILD_CPU)
   target_sources(
     mlx
-    PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/backend/common/default_primitives.cpp
-  )
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/backend/common/default_primitives.cpp)
 endif()
 
-if (MLX_BUILD_METAL)
+if(MLX_BUILD_METAL)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/metal)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_metal)

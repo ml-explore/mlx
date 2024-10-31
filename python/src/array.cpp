@@ -9,6 +9,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/typing.h>
 
 #include "mlx/backend/metal/metal.h"
 #include "python/src/buffer.h"
@@ -96,7 +97,8 @@ void init_array(nb::module_& m) {
       See the :ref:`list of types <data_types>` for more details
       on available data types.
       )pbdoc")
-      .def_ro("size", &Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
+      .def_prop_ro(
+          "size", &Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
       .def(
           "__repr__",
           [](const Dtype& t) {
@@ -111,8 +113,9 @@ void init_array(nb::module_& m) {
             return nb::isinstance<Dtype>(other) && t == nb::cast<Dtype>(other);
           })
       .def("__hash__", [](const Dtype& t) {
-        return static_cast<int64_t>(t.val);
+        return static_cast<int64_t>(t.val());
       });
+
   m.attr("bool_") = nb::cast(bool_);
   m.attr("uint8") = nb::cast(uint8);
   m.attr("uint16") = nb::cast(uint16);
@@ -177,7 +180,7 @@ void init_array(nb::module_& m) {
       .export_values();
   nb::class_<ArrayAt>(
       m,
-      "_ArrayAt",
+      "ArrayAt",
       R"pbdoc(
       A helper object to apply updates at specific indices.
       )pbdoc")
@@ -195,7 +198,7 @@ void init_array(nb::module_& m) {
 
   nb::class_<ArrayPythonIterator>(
       m,
-      "_ArrayIterator",
+      "ArrayIterator",
       R"pbdoc(
       A helper object to iterate over the 1st dimension of an array.
       )pbdoc")
@@ -843,6 +846,23 @@ void init_array(nb::module_& m) {
       .def("__int__", [](array& a) { return nb::int_(to_scalar(a)); })
       .def("__float__", [](array& a) { return nb::float_(to_scalar(a)); })
       .def(
+          "__format__",
+          [](array& a, nb::object format_spec) {
+            if (nb::len(nb::str(format_spec)) > 0 && a.ndim() > 0) {
+              throw nb::type_error(
+                  "unsupported format string passed to mx.array.__format__");
+            } else if (a.ndim() == 0) {
+              auto obj = to_scalar(a);
+              return nb::cast<std::string>(
+                  nb::handle(PyObject_Format(obj.ptr(), format_spec.ptr())));
+            } else {
+              nb::gil_scoped_release nogil;
+              std::ostringstream os;
+              os << a;
+              return os.str();
+            }
+          })
+      .def(
           "flatten",
           [](const array& a,
              int start_axis,
@@ -1113,6 +1133,22 @@ void init_array(nb::module_& m) {
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`mean`.")
+      .def(
+          "std",
+          [](const array& a,
+             const IntOrVec& axis,
+             bool keepdims,
+             int ddof,
+             StreamOrDevice s) {
+            return mlx::core::std(
+                a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+          },
+          "axis"_a = nb::none(),
+          "keepdims"_a = false,
+          "ddof"_a = 0,
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "See :func:`std`.")
       .def(
           "var",
           [](const array& a,

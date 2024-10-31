@@ -504,7 +504,20 @@ array squeeze(
       shape.push_back(a.shape(i));
     }
   }
-  return reshape(a, shape, s);
+  return reshape(a, std::move(shape), s);
+}
+
+array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  int ax = axis < 0 ? axis + a.ndim() : axis;
+  if (ax < 0 || ax >= a.ndim()) {
+    std::ostringstream msg;
+    msg << "[squeeze] Invalid axis " << axis << " for array with " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto shape = a.shape();
+  shape.erase(shape.begin() + ax);
+  return reshape(a, std::move(shape), s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -615,6 +628,10 @@ inline auto normalize_slice(
 
       out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
     }
+    // Simplify the stride if it's unused
+    if (out_shape[i] == 1) {
+      strides[i] = 1;
+    }
   }
 
   return std::make_pair(has_neg_strides, out_shape);
@@ -653,10 +670,15 @@ array slice(
 
 array slice(
     const array& a,
-    const std::vector<int>& start,
-    const std::vector<int>& stop,
+    std::vector<int> start,
+    std::vector<int> stop,
     StreamOrDevice s /* = {} */) {
-  return slice(a, start, stop, std::vector<int>(a.ndim(), 1), to_stream(s));
+  return slice(
+      a,
+      std::move(start),
+      std::move(stop),
+      std::vector<int>(a.ndim(), 1),
+      to_stream(s));
 }
 
 /** Update a slice from the source array */
@@ -834,7 +856,7 @@ array clip(
   if (!a_min.has_value() && !a_max.has_value()) {
     throw std::invalid_argument("At most one of a_min and a_max may be None");
   }
-  array result = astype(a, a.dtype(), s);
+  array result = a;
   if (a_min.has_value()) {
     result = maximum(result, a_min.value(), s);
   }
@@ -1421,8 +1443,8 @@ array where(
 array nan_to_num(
     const array& a,
     float nan /* = 0.0f */,
-    const std::optional<float>& posinf_ /* = std::nullopt */,
-    const std::optional<float>& neginf_ /* = std::nullopt */,
+    const std::optional<float> posinf_ /* = std::nullopt */,
+    const std::optional<float> neginf_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   Dtype dtype = a.dtype();
   if (!issubdtype(dtype, inexact)) {
@@ -2711,11 +2733,41 @@ array take(
   // Squeeze the axis we take over
   std::vector<int> out_shape = out.shape();
   out_shape.erase(out_shape.begin() + indices.ndim() + axis);
-  return reshape(out, out_shape, s);
+  return reshape(out, std::move(out_shape), s);
 }
 
 array take(const array& a, const array& indices, StreamOrDevice s /* = {} */) {
   return take(reshape(a, {-1}, s), indices, 0, s);
+}
+
+array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
+  // Check for valid axis
+  if (axis + static_cast<int>(a.ndim()) < 0 ||
+      axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << "[take] Received invalid axis " << axis << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Check for valid take
+  if (a.size() == 0) {
+    throw std::invalid_argument(
+        "[take] Cannot do a non-empty take from an array with zero elements.");
+  }
+
+  // Handle negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  std::vector<int> starts(a.ndim(), 0);
+  std::vector<int> stops = a.shape();
+  starts[axis] = index;
+  stops[axis] = index + 1;
+  return squeeze(slice(a, std::move(starts), std::move(stops), s), axis, s);
+}
+
+array take(const array& a, int index, StreamOrDevice s /* = {} */) {
+  return take(reshape(a, {-1}, s), index, 0, s);
 }
 
 array take_along_axis(
@@ -2760,7 +2812,54 @@ array take_along_axis(
   // Squeeze out the slice shape
   std::vector<int> out_shape(
       out.shape().begin(), out.shape().begin() + a.ndim());
-  return reshape(out, out_shape, s);
+  return reshape(out, std::move(out_shape), s);
+}
+
+array put_along_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Received invalid axis " << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (indices.ndim() != a.ndim()) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Indices of dimension " << indices.ndim()
+        << " does not match array of dimension " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Allow negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  std::vector<array> nd_indices;
+  std::vector<int> index_shape(a.ndim(), 1);
+  for (int i = 0; i < a.ndim(); ++i) {
+    if (i == axis) {
+      nd_indices.push_back(indices);
+    } else {
+      // Reshape so they can be broadcast
+      index_shape[i] = a.shape(i);
+      nd_indices.push_back(reshape(arange(a.shape(i), s), index_shape, s));
+      index_shape[i] = 1;
+    }
+  }
+
+  auto update = astype(broadcast_to(values, indices.shape(), s), a.dtype(), s);
+  {
+    auto update_shape = update.shape();
+    update_shape.resize(update_shape.size() + a.ndim(), 1);
+    update = reshape(update, std::move(update_shape), s);
+  }
+  std::vector<int> dims(a.ndim());
+  std::iota(dims.begin(), dims.end(), 0);
+  return scatter(a, nd_indices, update, dims, s);
 }
 
 /** Scatter updates to given indices */
@@ -2849,7 +2948,6 @@ array scatter(
   }
 
   inputs.insert(inputs.begin(), a);
-  // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
 
   return array(
@@ -2927,6 +3025,10 @@ array softmax(
     const std::vector<int>& axes,
     bool precise /* = false */,
     StreamOrDevice s /* = {}*/) {
+  if (a.size() == 0) {
+    return a;
+  }
+
   if (axes.size() == 1 && (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
     auto dtype = at_least_float(a.dtype());
     return array(
@@ -3290,6 +3392,93 @@ array conv3d(
       s);
 }
 
+// Helper function for transposed convolutions
+array conv_transpose_general(
+    const array& input,
+    const array& weight,
+    std::vector<int> stride,
+    std::vector<int> padding,
+    std::vector<int> dilation,
+    int groups,
+    StreamOrDevice s) {
+  std::vector<int> padding_lo(padding.size());
+  std::vector<int> padding_hi(padding.size());
+  for (int i = 0; i < padding.size(); ++i) {
+    int wt_size = 1 + dilation[i] * (weight.shape(1 + i) - 1);
+    padding_lo[i] = wt_size - padding[i] - 1;
+
+    int conv_output_shape = (input.shape(i + 1) - 1) * stride[i] -
+        2 * padding[i] + dilation[i] * (weight.shape(i + 1) - 1) + 1;
+
+    int in_size = 1 + (conv_output_shape - 1);
+    int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
+    padding_hi[i] = in_size - out_size + padding[i];
+  }
+
+  return conv_general(
+      /* const array& input = */ input,
+      /* const array& weight = */ weight,
+      /* std::vector<int> stride = */ std::vector(stride.size(), 1),
+      /* std::vector<int> padding_lo = */ std::move(padding_lo),
+      /* std::vector<int> padding_hi = */ std::move(padding_hi),
+      /* std::vector<int> kernel_dilation = */ std::move(dilation),
+      /* std::vector<int> input_dilation = */ std::move(stride),
+      /* int groups = */ groups,
+      /* bool flip = */ true,
+      s);
+}
+
+/** 1D transposed convolution with a filter */
+array conv_transpose1d(
+    const array& in_,
+    const array& wt_,
+    int stride /* = 1 */,
+    int padding /* = 0 */,
+    int dilation /* = 1 */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_transpose_general(
+      in_, wt_, {stride}, {padding}, {dilation}, groups, s);
+}
+
+/** 2D transposed convolution with a filter */
+array conv_transpose2d(
+    const array& in_,
+    const array& wt_,
+    const std::pair<int, int>& stride /* = {1, 1} */,
+    const std::pair<int, int>& padding /* = {0, 0} */,
+    const std::pair<int, int>& dilation /* = {1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_transpose_general(
+      in_,
+      wt_,
+      {stride.first, stride.second},
+      {padding.first, padding.second},
+      {dilation.first, dilation.second},
+      groups,
+      s);
+}
+
+/** 3D transposed convolution with a filter */
+array conv_transpose3d(
+    const array& in_,
+    const array& wt_,
+    const std::tuple<int, int, int>& stride /* = {1, 1, 1} */,
+    const std::tuple<int, int, int>& padding /* = {0, 0, 0} */,
+    const std::tuple<int, int, int>& dilation /* = {1, 1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_transpose_general(
+      in_,
+      wt_,
+      {std::get<0>(stride), std::get<1>(stride), std::get<2>(stride)},
+      {std::get<0>(padding), std::get<1>(padding), std::get<2>(padding)},
+      {std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)},
+      groups,
+      s);
+}
+
 /** General convolution with a filter */
 array conv_general(
     array in,
@@ -3403,10 +3592,10 @@ array conv_general(
 }
 
 array quantized_matmul(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
+    array x,
+    array w,
+    array scales,
+    array biases,
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
@@ -3415,11 +3604,27 @@ array quantized_matmul(
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  if (w.ndim() != 2) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
-        << "received w with shape " << w.shape();
-    throw std::invalid_argument(msg.str());
+  // QuantizedMatmul handles w.ndim == 2 case.
+  if (x.ndim() > 2 && w.ndim() > 2) {
+    std::vector<int> bsx_x(x.shape().begin(), x.shape().end() - 2);
+    std::vector<int> bsx_w(w.shape().begin(), w.shape().end() - 2);
+    auto inner_shape = broadcast_shapes(bsx_x, bsx_w);
+
+    // Broadcast x
+    inner_shape.push_back(x.shape(-2));
+    inner_shape.push_back(x.shape(-1));
+    x = broadcast_to(x, inner_shape, s);
+
+    // Broadcast w
+    *(inner_shape.end() - 2) = w.shape(-2);
+    *(inner_shape.end() - 1) = w.shape(-1);
+    w = broadcast_to(w, inner_shape, s);
+
+    *(inner_shape.end() - 1) = scales.shape(-1);
+    scales = broadcast_to(scales, inner_shape, s);
+
+    *(inner_shape.end() - 1) = biases.shape(-1);
+    biases = broadcast_to(biases, inner_shape, s);
   }
 
   auto dtype = result_type(x, scales, biases);
@@ -4376,6 +4581,110 @@ array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {
   }
   return array(
       out_shape, dtype, std::make_shared<View>(to_stream(s), dtype), {a});
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
+
+  if (shift.size() < axes.size()) {
+    std::ostringstream msg;
+    msg << "[roll] At least one shift value per axis is required, "
+        << shift.size() << " provided for " << axes.size() << " axes.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  std::vector<array> parts;
+  array result = a;
+  for (int i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    if (ax < 0) {
+      ax += a.ndim();
+    }
+    if (ax < 0 || ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+
+    int sh = shift[i];
+    int split_index =
+        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+
+    parts = split(result, std::vector<int>{split_index}, ax, s);
+    std::swap(parts[0], parts[1]);
+    result = concatenate(parts, ax, s);
+  }
+
+  return result;
+}
+
+array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
+  auto shape = a.shape();
+  return reshape(
+      roll(
+          reshape(a, std::vector<int>{-1}, s),
+          std::vector<int>{shift},
+          std::vector<int>{0},
+          s),
+      std::move(shape),
+      s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, total_shift, s);
+}
+
+array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
+  return roll(a, std::vector<int>{shift}, std::vector<int>{axis}, s);
+}
+
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  std::vector<int> shifts(axes.size(), shift);
+  return roll(a, shifts, axes, s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, std::vector<int>{total_shift}, std::vector<int>{axis}, s);
+}
+
+array real(const array& a, StreamOrDevice s /* = {} */) {
+  if (!issubdtype(a.dtype(), complexfloating)) {
+    return a;
+  }
+  return array(a.shape(), float32, std::make_shared<Real>(to_stream(s)), {a});
+}
+
+array imag(const array& a, StreamOrDevice s /* = {} */) {
+  if (!issubdtype(a.dtype(), complexfloating)) {
+    return zeros_like(a);
+  }
+  return array(a.shape(), float32, std::make_shared<Imag>(to_stream(s)), {a});
 }
 
 } // namespace mlx::core

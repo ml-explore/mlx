@@ -3,18 +3,14 @@
 import array
 import reprlib
 
-
-class FixedRepr(reprlib.Repr):
-    """Only route python array instances to repr_array."""
-
-    def repr_array(self, x, maxlevel):
-        if isinstance(x, array.array):
-            return super().repr_array(x, maxlevel)
-        else:
-            return self.repr_instance(x, maxlevel)
+_old_repr_array = reprlib.Repr.repr_array
 
 
-# We need to monkey-patch reprlib so that we can use the debugger without
-# renaming the array to something else
-fixed_repr = FixedRepr()
-reprlib.repr = fixed_repr.repr
+def repr_array(self, x, maxlevel):
+    if isinstance(x, array.array):
+        return _old_repr_array(self, x, maxlevel)
+    else:
+        return self.repr_instance(x, maxlevel)
+
+
+reprlib.Repr.repr_array = repr_array

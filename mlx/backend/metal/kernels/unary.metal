@@ -5,26 +5,30 @@
 #include "mlx/backend/metal/kernels/unary_ops.h"
 #include "mlx/backend/metal/kernels/unary.h"
 
-#define instantiate_unary_all(op, tname, type)            \
-  instantiate_kernel("v" #op #tname, unary_v, type, op)   \
-  instantiate_kernel("v2" #op #tname, unary_v2, type, op) \
-  instantiate_kernel("g" #op #tname, unary_g, type, op)
+#define instantiate_unary_all(op, in_tname, out_tname, in_type, out_type)                 \
+  instantiate_kernel("v_" #op #in_tname #out_tname, unary_v, in_type, out_type, op)       \
+  instantiate_kernel("v2_" #op #in_tname #out_tname, unary_v2, in_type, out_type, op)     \
+  instantiate_kernel("gn4_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
+
+
+#define instantiate_unary_all_same(op, tname, type)   \
+  instantiate_unary_all(op, tname, tname, type, type)
 
 #define instantiate_unary_float(op)               \
-  instantiate_unary_all(op, float16, half)        \
-  instantiate_unary_all(op, float32, float)       \
-  instantiate_unary_all(op, bfloat16, bfloat16_t)
+  instantiate_unary_all_same(op, float16, half)        \
+  instantiate_unary_all_same(op, float32, float)       \
+  instantiate_unary_all_same(op, bfloat16, bfloat16_t)
 
 #define instantiate_unary_types(op)           \
-  instantiate_unary_all(op, bool_, bool)      \
-  instantiate_unary_all(op, uint8, uint8_t)   \
-  instantiate_unary_all(op, uint16, uint16_t) \
-  instantiate_unary_all(op, uint32, uint32_t) \
-  instantiate_unary_all(op, uint64, uint64_t) \
-  instantiate_unary_all(op, int8, int8_t)     \
-  instantiate_unary_all(op, int16, int16_t)   \
-  instantiate_unary_all(op, int32, int32_t)   \
-  instantiate_unary_all(op, int64, int64_t)   \
+  instantiate_unary_all_same(op, bool_, bool)      \
+  instantiate_unary_all_same(op, uint8, uint8_t)   \
+  instantiate_unary_all_same(op, uint16, uint16_t) \
+  instantiate_unary_all_same(op, uint32, uint32_t) \
+  instantiate_unary_all_same(op, uint64, uint64_t) \
+  instantiate_unary_all_same(op, int8, int8_t)     \
+  instantiate_unary_all_same(op, int16, int16_t)   \
+  instantiate_unary_all_same(op, int32, int32_t)   \
+  instantiate_unary_all_same(op, int64, int64_t)   \
   instantiate_unary_float(op)
 
 instantiate_unary_types(Abs)
@@ -58,17 +62,19 @@ instantiate_unary_float(Tan)
 instantiate_unary_float(Tanh)
 instantiate_unary_float(Round)
 
-instantiate_unary_all(Abs, complex64, complex64_t)
-instantiate_unary_all(Conjugate, complex64, complex64_t)
-instantiate_unary_all(Cos, complex64, complex64_t)
-instantiate_unary_all(Cosh, complex64, complex64_t)
-instantiate_unary_all(Exp, complex64, complex64_t)
-instantiate_unary_all(Negative, complex64, complex64_t)
-instantiate_unary_all(Sign, complex64, complex64_t)
-instantiate_unary_all(Sin, complex64, complex64_t)
-instantiate_unary_all(Sinh, complex64, complex64_t)
-instantiate_unary_all(Tan, complex64, complex64_t)
-instantiate_unary_all(Tanh, complex64, complex64_t)
-instantiate_unary_all(Round, complex64, complex64_t)
+instantiate_unary_all_same(Abs, complex64, complex64_t)
+instantiate_unary_all_same(Conjugate, complex64, complex64_t)
+instantiate_unary_all_same(Cos, complex64, complex64_t)
+instantiate_unary_all_same(Cosh, complex64, complex64_t)
+instantiate_unary_all_same(Exp, complex64, complex64_t)
+instantiate_unary_all_same(Negative, complex64, complex64_t)
+instantiate_unary_all_same(Sign, complex64, complex64_t)
+instantiate_unary_all_same(Sin, complex64, complex64_t)
+instantiate_unary_all_same(Sinh, complex64, complex64_t)
+instantiate_unary_all_same(Tan, complex64, complex64_t)
+instantiate_unary_all_same(Tanh, complex64, complex64_t)
+instantiate_unary_all_same(Round, complex64, complex64_t)
+instantiate_unary_all(Real, complex64, float32, complex64_t, float)
+instantiate_unary_all(Imag, complex64, float32, complex64_t, float)
 
-instantiate_unary_all(LogicalNot, bool_, bool) // clang-format on
+instantiate_unary_all_same(LogicalNot, bool_, bool) // clang-format on

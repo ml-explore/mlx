@@ -3,13 +3,8 @@
 #include <cassert>
 #include <numeric>
 
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <cblas.h>
-#endif
-
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -684,6 +679,32 @@ void dispatch_slow_conv_3D(
 // Explicit gemm conv
 ///////////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+void flip_spatial_dims_inplace(array& wt) {
+  T* x = wt.data<T>();
+  size_t out_channels = wt.shape(0);
+  size_t in_channels = wt.shape(-1);
+
+  // Calculate the total size of the spatial dimensions
+  int spatial_size = 1;
+  for (int d = 1; d < wt.ndim() - 1; ++d) {
+    spatial_size *= wt.shape(d);
+  }
+
+  for (size_t i = 0; i < out_channels; i++) {
+    T* top = x + i * spatial_size * in_channels;
+    T* bottom =
+        x + i * spatial_size * in_channels + (spatial_size - 1) * in_channels;
+    for (size_t j = 0; j < spatial_size / 2; j++) {
+      for (size_t k = 0; k < in_channels; k++) {
+        std::swap(top[k], bottom[k]);
+      }
+      top += in_channels;
+      bottom -= in_channels;
+    }
+  }
+}
+
 void explicit_gemm_conv_1D_cpu(
     const array& in,
     const array& wt,
@@ -910,7 +931,8 @@ void explicit_gemm_conv_ND_cpu(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const bool flip) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const auto iDim = std::vector<int>(
       in.shape().begin() + 1, in.shape().end() - 1); // Input spatial dim
@@ -1000,6 +1022,14 @@ void explicit_gemm_conv_ND_cpu(
     copy(wt, gemm_wt, ctype);
   }
 
+  if (flip) {
+    auto gemm_wt_ = array(gemm_wt.shape(), float32, nullptr, {});
+    copy(gemm_wt, gemm_wt_, CopyType::Vector);
+
+    flip_spatial_dims_inplace<float>(gemm_wt_);
+    gemm_wt = gemm_wt_;
+  }
+
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
@@ -1042,9 +1072,14 @@ void conv_1D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
   if (wt_dilation[0] == 1 && in_dilation[0] == 1 && !flip) {
     return explicit_gemm_conv_1D_cpu(
         in, wt, out, padding, wt_strides, wt_dilation);
+  }
+  if (wt_dilation[0] == 1 && in_dilation[0] == 1 && groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
   }
 
   return dispatch_slow_conv_1D(
@@ -1060,6 +1095,13 @@ void conv_2D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
+  if (wt_dilation[0] == 1 && wt_dilation[1] == 1 && in_dilation[0] == 1 &&
+      in_dilation[1] == 1 && groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
+  }
+
   return dispatch_slow_conv_2D(
       in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
@@ -1073,6 +1115,14 @@ void conv_3D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
+  if (wt_dilation[0] == 1 && wt_dilation[1] == 1 && wt_dilation[2] == 1 &&
+      in_dilation[0] == 1 && in_dilation[1] == 1 && in_dilation[2] == 1 &&
+      groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
+  }
+
   return dispatch_slow_conv_3D(
       in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
@@ -1125,7 +1175,7 @@ void Convolution::eval(const std::vector<array>& inputs, array& out) {
   else {
     std::ostringstream msg;
     msg << "[Convolution::eval] Convolution currently only supports"
-        << " 1D and 2D convolutions. Got inputs with " << in.ndim() - 2
+        << " 1D, 2D and 3D convolutions. Got inputs with " << in.ndim() - 2
         << " spatial dimensions";
     throw std::invalid_argument(msg.str());
   }

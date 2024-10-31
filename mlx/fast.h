@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <map>
 #include <optional>
 
 #include "mlx/utils.h"
@@ -39,7 +38,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::optional<array>& mask = std::nullopt,
-    const std::optional<int>& memory_efficient_threshold = std::nullopt,
+    const std::optional<int> memory_efficient_threshold = std::nullopt,
     StreamOrDevice s = {});
 
 std::tuple<array, array, array> affine_quantize(
@@ -66,34 +65,25 @@ array affine_dequantize(
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
 
-class MetalKernel {
- public:
-  MetalKernel(
-      const std::string& name,
-      const std::string& source,
-      bool ensure_row_contiguous,
-      bool atomic_outputs)
-      : name_(name),
-        source_(source),
-        ensure_row_contiguous_(ensure_row_contiguous),
-        atomic_outputs_(atomic_outputs) {}
+typedef std::function<std::vector<array>(
+    const std::vector<array>&,
+    const std::vector<std::vector<int>>&,
+    const std::vector<Dtype>&,
+    std::tuple<int, int, int>,
+    std::tuple<int, int, int>,
+    std::vector<std::pair<std::string, TemplateArg>>,
+    std::optional<float>,
+    bool,
+    StreamOrDevice)>
+    MetalKernelFunction;
 
-  std::map<std::string, array> operator()(
-      std::map<std::string, array>& inputs,
-      std::map<std::string, std::vector<int>> output_shapes,
-      std::map<std::string, Dtype> output_dtypes,
-      std::tuple<int, int, int> grid,
-      std::tuple<int, int, int> threadgroup,
-      std::optional<std::map<std::string, TemplateArg>> template_args =
-          std::nullopt,
-      std::optional<float> init_value = std::nullopt,
-      bool verbose = false,
-      StreamOrDevice s = {});
+MetalKernelFunction metal_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    bool atomic_outputs = false);
 
- private:
-  std::string name_;
-  std::string source_;
-  bool ensure_row_contiguous_ = true;
-  bool atomic_outputs_ = false;
-};
 } // namespace mlx::core::fast

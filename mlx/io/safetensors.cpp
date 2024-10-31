@@ -7,6 +7,7 @@
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 
 using json = nlohmann::json;
 
@@ -58,6 +59,8 @@ std::string dtype_to_safetensor_str(Dtype t) {
       return ST_BOOL;
     case complex64:
       return ST_C64;
+    default:
+      throw std::runtime_error("[save_safetensors] received invalid dtype.");
   }
 }
 
@@ -147,7 +150,7 @@ SafetensorsLoad load_safetensors(
 }
 
 SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
-  return load_safetensors(std::make_shared<io::FileReader>(file), s);
+  return load_safetensors(std::make_shared<io::ParallelFileReader>(file), s);
 }
 
 void save_safetensors(
@@ -169,9 +172,18 @@ void save_safetensors(
     _metadata[key] = value;
   }
   parent["__metadata__"] = _metadata;
+
+  {
+    std::vector<array> to_eval;
+    to_eval.reserve(a.size());
+    for (auto& [_, arr] : a) {
+      to_eval.push_back(arr);
+    }
+    eval(std::move(to_eval));
+  }
+
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    arr.eval();
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
           "[save_safetensors] cannot serialize an empty array key: " + key);

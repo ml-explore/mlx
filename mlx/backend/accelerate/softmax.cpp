@@ -33,8 +33,8 @@ namespace {
  * Note: The implementation below is a general fast exp. There could be faster
  *       implementations for numbers strictly < 0.
  */
-inline simd_float16 simd_fast_exp(simd_float16 x) {
-  x *= 1.442695; // multiply with log_2(e)
+inline simd_float16 simd_fast_exp(simd_float16 x_init) {
+  auto x = x_init * 1.442695; // multiply with log_2(e)
   simd_float16 ipart, fpart;
   simd_int16 epart;
   x = simd_clamp(x, -80, 80);
@@ -53,7 +53,9 @@ inline simd_float16 simd_fast_exp(simd_float16 x) {
   // bitshifting
   epart = (simd_int(ipart) + 127) << 23;
 
-  return (*(simd_float16*)&epart) * x;
+  // Avoid supressing NaNs
+  simd_int16 eq = (x_init == x_init);
+  return simd_bitselect(x_init, (*(simd_float16*)&epart) * x, eq);
 }
 
 #if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
@@ -69,7 +71,6 @@ inline float16x8_t neon_fast_exp(float16x8_t x) {
   float16x8_t fpart = vsubq_f16(x, ipart);
 
   x = vdupq_n_f16(float16_t(1.535336188319500e-4f));
-  x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
   x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
   x = vfmaq_f16(vdupq_n_f16(float16_t(9.618437357674640e-3f)), x, fpart);
   x = vfmaq_f16(vdupq_n_f16(float16_t(5.550332471162809e-2f)), x, fpart);
