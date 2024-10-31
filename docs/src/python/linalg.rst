@@ -18,4 +18,7 @@ Linear Algebra
     svd
     eigvalsh
     eigh
+    lu
+    lu_factor
     solve
+    solve_triangular

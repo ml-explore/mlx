@@ -82,7 +82,7 @@ DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
 DEFAULT_MULTI(Eigh)
-DEFAULT_MULTI(Solve)
+DEFAULT_MULTI(LUF)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

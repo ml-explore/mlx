@@ -111,7 +111,7 @@ DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
 DEFAULT_MULTI(Eigh)
-DEFAULT_MULTI(Solve)
+DEFAULT_MULTI(LUF)
 
 namespace {
 
