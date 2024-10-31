@@ -13,5 +13,6 @@ var searchData=
   ['cond_10',['cond',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a4ffd524d6a5bedd1a303b63bdde6701c',1,'mlx::core::scheduler::StreamThread']]],
   ['contiguous_11',['contiguous',['../structmlx_1_1core_1_1array_1_1_flags.html#afd0ab11e7a486a2a8e50ee84b971ac8a',1,'mlx::core::array::Flags']]],
   ['cosine_12',['cosine',['../structpocketfft_1_1detail_1_1_exec_dcst.html#a185023fc1e386cc8f233b79c49c1fd8a',1,'pocketfft::detail::ExecDcst']]],
-  ['cpu_13',['cpu',['../structmlx_1_1core_1_1_device.html#a69ee81924251dec96f1945c9d91506fd',1,'mlx::core::Device']]]
+  ['cpu_13',['cpu',['../structmlx_1_1core_1_1_device.html#a69ee81924251dec96f1945c9d91506fd',1,'mlx::core::Device']]],
+  ['ctile_14',['Ctile',['../structmlx_1_1steel_1_1_block_m_m_a.html#a81838da5d81e62d372d581be599c5a88',1,'mlx::steel::BlockMMA']]]
 ];
