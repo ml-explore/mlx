@@ -88,41 +88,81 @@ inline auto collapse_batches(const array& a, const array& b, const array& c) {
 // Steel matmul fallback
 ///////////////////////////////////////////////////////////////////////////////
 
-#define GEMM_TPARAM_MACRO(devc) \
-  if(devc == 'g') { /* Small device */ \
-    if (!transpose_a && transpose_b) { /* nt */ \
-      bm = 64; bn = 32; bk = 32; wm = 2; wn = 2; \
-    } else if (out.dtype() != float32) { /* half and bfloat */ \
-      bm = 64; bn = 64; bk = 16; wm = 1; wn = 2; \
-    } \
-  } else if (devc == 'd') { /* Large device */ \
-    if((size_t)batch_size_out * M * N >= 1ul << 20) { /* large matmul */ \
-      if (out.dtype() != float32) { /* half and bfloat */ \
-        if( 2 * std::max(M, N) > K) { /* Reasonable K */ \
-          bm = 64; bn = 64; bk = 16; wm = 1; wn = 2; \
-        } else if (!transpose_a && transpose_b) { /* nt with large k */ \
-          bm = 64; bn = 32; bk = 32; wm = 2; wn = 2; \
-        } else { /* nn with large K */ \
-          bm = 32; bn = 64; bk = 16; wm = 1; wn = 2; \
-        } \
-      } /* float takes default */ \
-    } else { /* smaller matmul */ \
-      if(out.dtype() != float32) { /* half and bfloat */ \
-        if (!transpose_a && transpose_b) { /* nt */ \
-          bm = 64; bn = 32; bk = 32; wm = 2; wn = 2; \
-        } else { /* nn */ \
-          bm = 64; bn = 64; bk = 16; wm = 1; wn = 2; \
-        } \
-      } else { /* floats */ \
-        if (!transpose_a && transpose_b) { /* nt */ \
-          bm = 32; bn = 64; bk = 16; wm = 1; wn = 2; \
-        } else { /* nn */ \
-          bm = 64; bn = 32; bk = 32; wm = 2; wn = 2; \
-        } \
-      } \
-    } \
-  } else { /* Medium device */ \
-    bm = 64; bn = 64; bk = 16; wm = 2; wn = 2; \
+#define GEMM_TPARAM_MACRO(devc)                                           \
+  if (devc == 'g') { /* Small device */                                   \
+    if (!transpose_a && transpose_b) { /* nt */                           \
+      bm = 64;                                                            \
+      bn = 32;                                                            \
+      bk = 32;                                                            \
+      wm = 2;                                                             \
+      wn = 2;                                                             \
+    } else if (out.dtype() != float32) { /* half and bfloat */            \
+      bm = 64;                                                            \
+      bn = 64;                                                            \
+      bk = 16;                                                            \
+      wm = 1;                                                             \
+      wn = 2;                                                             \
+    }                                                                     \
+  } else if (devc == 'd') { /* Large device */                            \
+    if ((size_t)batch_size_out * M * N >= 1ul << 20) { /* large matmul */ \
+      if (out.dtype() != float32) { /* half and bfloat */                 \
+        if (2 * std::max(M, N) > K) { /* Reasonable K */                  \
+          bm = 64;                                                        \
+          bn = 64;                                                        \
+          bk = 16;                                                        \
+          wm = 1;                                                         \
+          wn = 2;                                                         \
+        } else if (!transpose_a && transpose_b) { /* nt with large k */   \
+          bm = 64;                                                        \
+          bn = 32;                                                        \
+          bk = 32;                                                        \
+          wm = 2;                                                         \
+          wn = 2;                                                         \
+        } else { /* nn with large K */                                    \
+          bm = 32;                                                        \
+          bn = 64;                                                        \
+          bk = 16;                                                        \
+          wm = 1;                                                         \
+          wn = 2;                                                         \
+        }                                                                 \
+      } /* float takes default */                                         \
+    } else { /* smaller matmul */                                         \
+      if (out.dtype() != float32) { /* half and bfloat */                 \
+        if (!transpose_a && transpose_b) { /* nt */                       \
+          bm = 64;                                                        \
+          bn = 32;                                                        \
+          bk = 32;                                                        \
+          wm = 2;                                                         \
+          wn = 2;                                                         \
+        } else { /* nn */                                                 \
+          bm = 64;                                                        \
+          bn = 64;                                                        \
+          bk = 16;                                                        \
+          wm = 1;                                                         \
+          wn = 2;                                                         \
+        }                                                                 \
+      } else { /* floats */                                               \
+        if (!transpose_a && transpose_b) { /* nt */                       \
+          bm = 32;                                                        \
+          bn = 64;                                                        \
+          bk = 16;                                                        \
+          wm = 1;                                                         \
+          wn = 2;                                                         \
+        } else { /* nn */                                                 \
+          bm = 64;                                                        \
+          bn = 32;                                                        \
+          bk = 32;                                                        \
+          wm = 2;                                                         \
+          wn = 2;                                                         \
+        }                                                                 \
+      }                                                                   \
+    }                                                                     \
+  } else { /* Medium device */                                            \
+    bm = 64;                                                              \
+    bn = 64;                                                              \
+    bk = 16;                                                              \
+    wm = 2;                                                               \
+    wn = 2;                                                               \
   }
 
 void steel_matmul_regular(
