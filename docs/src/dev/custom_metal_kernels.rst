@@ -1,3 +1,5 @@
+.. _custom_metal_kernels:
+
 Custom Metal Kernels
 ====================
 
@@ -78,6 +80,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
 Note: ``grid`` and ``threadgroup`` are parameters to the Metal `dispatchThreads <https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/2866532-dispatchthreads>`_ function.
 This means we will launch ``mx.prod(grid)`` threads, subdivided into ``threadgroup`` size threadgroups.
+For optimal performance, each thread group dimension should be less than or equal to the corresponding grid dimension.
 
 Passing ``verbose=True`` to ``mx.fast.metal_kernel.__call__`` will print the generated code for debugging purposes.
 
