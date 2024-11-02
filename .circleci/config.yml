@@ -349,7 +349,7 @@ workflows:
               ignore: /.*/
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12"]
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["15.0.0", "15.2.0"]
               build_env: ["PYPI_RELEASE=1"]
       - build_documentation:
@@ -386,7 +386,7 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12"]
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["15.0.0", "15.2.0"]
   weekly_build:
     when:
@@ -397,7 +397,7 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12"]
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
@@ -409,5 +409,5 @@ workflows:
       - build_linux_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12"]
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               extra_env: ["PYPI_RELEASE=1"]
