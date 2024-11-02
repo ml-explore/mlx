@@ -805,7 +805,8 @@ auto mlx_slice_update(
 
   // Remove extra leading singletons dimensions from the update
   int s = 0;
-  for (; s < upd.ndim() && upd.shape(s) == 1 && (upd.ndim() - s) > src.ndim(); s++) {
+  for (; s < upd.ndim() && upd.shape(s) == 1 && (upd.ndim() - s) > src.ndim();
+       s++) {
   };
   auto up_shape = std::vector<int>(upd.shape().begin() + s, upd.shape().end());
   up_shape = up_shape.empty() ? std::vector{1} : up_shape;
