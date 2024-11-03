@@ -936,6 +936,7 @@ instantiate_fast_inference_self_attention_kernel(half, half, 16, 16, 128, 2, 2);
       const constant int& gqa_factor,                                        \
       const constant int& N,                                                 \
       const constant size_t& k_stride,                                       \
+      const constant size_t& v_stride,                                       \
       const constant float& scale,                                           \
       uint3 tid [[threadgroup_position_in_grid]],                            \
       uint simd_gid [[simdgroup_index_in_threadgroup]],                      \
