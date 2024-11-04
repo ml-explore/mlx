@@ -49,7 +49,7 @@ struct CommandEncoder {
     }
     ~ConcurrentContext() {
       enc.concurrent_ = false;
-      enc.outputs_.insert(
+      enc.prev_outputs_.insert(
           enc.concurrent_outputs_.begin(), enc.concurrent_outputs_.end());
       enc.concurrent_outputs_.clear();
     }
@@ -66,6 +66,7 @@ struct CommandEncoder {
   void set_output_array(array& a, int idx, int64_t offset = 0);
   void dispatchThreadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatchThreads(MTL::Size grid_dims, MTL::Size group_dims);
+  void maybeInsertBarrier();
 
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
@@ -84,8 +85,10 @@ struct CommandEncoder {
 
  private:
   MTL::ComputeCommandEncoder* enc_;
+  bool needs_barrier_{false};
   bool concurrent_{false};
-  std::unordered_set<MTL::Resource*> outputs_;
+  std::unordered_set<MTL::Resource*> prev_outputs_;
+  std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
