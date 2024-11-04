@@ -581,8 +581,8 @@ void strided_reduce_longcolumn(
 
   // Make the 2nd pass arguments and grid_dims
   ColReduceArgs second_args(intermediate);
-  second_args.reduce_shape.push_back(args.reduction_size);
-  second_args.reduce_strides.push_back(args.reduction_stride);
+  second_args.reduce_shape.push_back(outer_blocks);
+  second_args.reduce_strides.push_back(out.size());
   second_args.reduce_ndim++;
   int BN = 32;
   grid_dims = MTL::Size(256 * ((out.size() + BN - 1) / BN), 1, 1);
@@ -706,8 +706,8 @@ void strided_reduce_2pass(
 
   // Make the 2nd pass arguments and grid_dims
   ColReduceArgs second_args(intermediate);
-  second_args.reduce_shape.push_back(args.reduction_size);
-  second_args.reduce_strides.push_back(args.reduction_stride);
+  second_args.reduce_shape.push_back(outer_blocks);
+  second_args.reduce_strides.push_back(out.size());
   second_args.reduce_ndim++;
   grid_dims = MTL::Size(threadgroup_size * ((out.size() + BN - 1) / BN), 1, 1);
 
