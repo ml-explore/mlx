@@ -85,6 +85,7 @@ void init_stream(nb::module_& m) {
       "new_stream",
       &new_stream,
       "device"_a,
+      "threads"_a = 1,
       R"pbdoc(Make a new stream on the given device.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(

@@ -186,14 +186,23 @@ array eval_impl(std::vector<array> outputs, bool async) {
     auto stream = arr.primitive().stream();
 
     // Lookup corresponding event and increment counter
-    auto e = events.find(stream.index);
-    if (e == events.end()) {
-      e = events.emplace(stream.index, Event{stream}).first;
-    }
-    e->second.set_value(e->second.value() + 1);
-    arr.attach_event(e->second);
-    for (auto& s : arr.siblings()) {
-      s.attach_event(e->second);
+    if (stream.threads > 1) {
+      auto e = Event(stream);
+      e.set_value(e.value() + 1);
+      arr.attach_event(e);
+      for (auto& s : arr.siblings()) {
+        s.attach_event(e);
+      }
+    } else {
+      auto e = events.find(stream.index);
+      if (e == events.end()) {
+        e = events.emplace(stream.index, Event{stream}).first;
+      }
+      e->second.set_value(e->second.value() + 1);
+      arr.attach_event(e->second);
+      for (auto& s : arr.siblings()) {
+        s.attach_event(e->second);
+      }
     }
 
     // Set the status of the array and siblings.
@@ -213,8 +222,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     } else {
       auto task = [arr = std::move(arr), stream, signal]() mutable {
         for (auto& input : arr.inputs()) {
-          if (input.event().valid() &&
-              input.event().stream() != arr.primitive().stream()) {
+          if (input.event().valid()) {
             input.event().wait();
           }
         }

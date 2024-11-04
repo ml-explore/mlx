@@ -21,16 +21,12 @@ void set_default_stream(Stream s) {
   return scheduler::scheduler().set_default_stream(s);
 }
 
-Stream new_stream(Device d) {
+Stream new_stream(Device d, int threads /* = 1 */) {
   if (!metal::is_available() && d == Device::gpu) {
     throw std::invalid_argument(
         "[new_stream] Cannot make gpu stream without gpu backend.");
   }
-  return scheduler::scheduler().new_stream(d);
-}
-
-Stream new_stream() {
-  return scheduler::scheduler().new_stream(default_device());
+  return scheduler::scheduler().new_stream(d, threads);
 }
 
 void synchronize(Stream s) {

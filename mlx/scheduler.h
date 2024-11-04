@@ -21,11 +21,14 @@ struct StreamThread {
   std::condition_variable cond;
   bool stop;
   Stream stream;
-  std::thread thread;
+  std::vector<std::thread> threads;
 
-  StreamThread(Stream stream)
-      : stop(false), stream(stream), thread(&StreamThread::thread_fn, this) {
+  StreamThread(Stream stream, int num_threads = 1)
+      : stop(false), stream(stream) {
     metal::new_stream(stream);
+    for (int i = 0; i < num_threads; ++i) {
+      threads.emplace_back(&StreamThread::thread_fn, this);
+    }
   }
 
   ~StreamThread() {
@@ -34,8 +37,10 @@ struct StreamThread {
       std::lock_guard<std::mutex> lk(mtx);
       stop = true;
     }
-    cond.notify_one();
-    thread.join();
+    cond.notify_all();
+    for (auto& t : threads) {
+      t.join();
+    }
   }
 
   void thread_fn() {
@@ -84,9 +89,9 @@ class Scheduler {
   Scheduler& operator=(const Scheduler&) = delete;
   Scheduler& operator=(Scheduler&&) = delete;
 
-  Stream new_stream(const Device& d) {
-    auto stream = Stream(streams_.size(), d);
-    streams_.push_back(new StreamThread{stream});
+  Stream new_stream(const Device& d, int threads = 1) {
+    auto stream = Stream(streams_.size(), d, threads);
+    streams_.push_back(new StreamThread{stream, threads});
     return stream;
   }
 
