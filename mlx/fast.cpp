@@ -69,6 +69,14 @@ array rms_norm(
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+  if (weight.size() != x.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[rms_norm] weight must have the same size as the last dimension of"
+           " x but has "
+        << weight.size() << " elements.";
+    throw std::invalid_argument(msg.str());
+  }
+
   auto out_type = result_type(x, weight);
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
