@@ -164,7 +164,7 @@ void CommandEncoder::maybeInsertBarrier() {
   if (needs_barrier_) {
     enc_->memoryBarrier(MTL::BarrierScopeBuffers);
     needs_barrier_ = false;
-    prev_outputs_ = next_outputs_;
+    prev_outputs_ = std::move(next_outputs_);
   } else {
     prev_outputs_.insert(next_outputs_.begin(), next_outputs_.end());
   }
