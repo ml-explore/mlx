@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/metal/copy.h"
@@ -485,39 +486,11 @@ void strided_reduce_small(
   // Figure out the grid dims
   MTL::Size grid_dims, group_dims;
 
-  // Case 1: Small row small column
-  if (args.reduction_size * args.non_col_reductions < 64 &&
-      args.reduction_stride < 32) {
-    grid_dims = output_grid_for_col_reduce(out, args);
-    int threadgroup_size = (grid_dims.width > 128) ? 128 : grid_dims.width;
-    group_dims = MTL::Size(threadgroup_size, 1, 1);
-  }
+  // Prepare the arguments for the kernel
+  args.reduce_shape.push_back(args.reduction_size);
+  args.reduce_strides.push_back(args.reduction_stride);
+  args.reduce_ndim++;
 
-  // Case 2: Long row small column
-  else if (args.reduction_size * args.non_col_reductions < 32) {
-    auto out_grid_dims = output_grid_for_col_reduce(out, args);
-    int threads_x =
-        (args.reduction_stride + REDUCE_N_READS - 1) / REDUCE_N_READS;
-    int threadgroup_x = std::min(threads_x, 128);
-    grid_dims = MTL::Size(threads_x, out_grid_dims.width, out_grid_dims.height);
-    group_dims = MTL::Size(threadgroup_x, 1, 1);
-  }
-
-  // Case 3: Long row medium column
-  else {
-    args.reduce_shape.push_back(args.reduction_size);
-    args.reduce_strides.push_back(args.reduction_stride);
-    args.reduce_ndim++;
-    int simdgroups =
-        (args.reduction_stride + REDUCE_N_READS - 1) / REDUCE_N_READS;
-    int threadgroup_size = simdgroups * 32;
-    auto out_grid_dims = output_grid_for_col_reduce(out, args);
-    grid_dims =
-        MTL::Size(threadgroup_size, out_grid_dims.width, out_grid_dims.height);
-    group_dims = MTL::Size(threadgroup_size, 1, 1);
-  }
-
-  // Set the kernel
   int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   std::ostringstream kname;
   const std::string func_name = "col_reduce_small";
@@ -526,11 +499,27 @@ void strided_reduce_small(
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
   compute_encoder->setComputePipelineState(kernel);
 
+  const int n_reads = 4;
+  size_t reduction_stride_blocks =
+      (args.reduction_stride + n_reads - 1) / n_reads;
+  size_t total = args.reduction_size * args.non_col_reductions;
+  size_t threadgroup_x = std::min(reduction_stride_blocks, 32ul);
+  size_t threadgroup_y = std::min(
+      8ul,
+      std::min(kernel->maxTotalThreadsPerThreadgroup() / threadgroup_x, total));
+
+  group_dims = MTL::Size(threadgroup_x, threadgroup_y, 1);
+  grid_dims = output_grid_for_col_reduce(out, args);
+  grid_dims = MTL::Size(
+      (reduction_stride_blocks + threadgroup_x - 1) / threadgroup_x,
+      grid_dims.width,
+      grid_dims.height);
+
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void strided_reduce_looped(
@@ -669,8 +658,7 @@ void strided_reduce_general_dispatch(
   // Prepare the arguments for the kernel
   ColReduceArgs args(in, plan, axes);
 
-  if (args.reduction_stride < 32 ||
-      args.reduction_size * args.non_col_reductions < 32) {
+  if (args.reduction_size * args.non_col_reductions < 32) {
     return strided_reduce_small(in, out, op_name, args, compute_encoder, d, s);
   }
 
