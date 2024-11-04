@@ -113,9 +113,12 @@ instantiate_reduce_from_types(instantiate_all_reduce, or, bool, Or<bool>)
 // special case bool with larger output type
 instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
 
-#define instantiate_col_reduce_small(name, itype, otype, op, dim) \
-  instantiate_kernel("col_reduce_small_" #dim "_reduce_" #name,   \
-                     col_reduce_small,                            \
+#define instantiate_col_reduce_small(name, itype, otype, op, dim)      \
+  instantiate_kernel("col_reduce_small_" #dim "_reduce_" #name,        \
+                     col_reduce_small,                                 \
+                     itype, otype, op, dim)                            \
+  instantiate_kernel("col_reduce_longcolumn_" #dim "_reduce_" #name,   \
+                     col_reduce_longcolumn,                            \
                      itype, otype, op, dim)
 
 #define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn)  \

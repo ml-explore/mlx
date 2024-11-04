@@ -93,6 +93,53 @@ template <typename T, typename U, typename Op, int NDIMS>
   }
 }
 
+template <typename T, typename U, typename Op, int NDIMS>
+[[kernel]] void col_reduce_longcolumn(
+    const device T* in [[buffer(0)]],
+    device U* out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& reduction_stride [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    const constant int* reduce_shape [[buffer(7)]],
+    const constant size_t* reduce_strides [[buffer(8)]],
+    const constant int& reduce_ndim [[buffer(9)]],
+    const constant size_t& non_col_reductions [[buffer(10)]],
+    const constant size_t& out_size [[buffer(11)]],
+    uint3 gid [[threadgroup_position_in_grid]],
+    uint3 gsize [[threadgroups_per_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 lsize [[threads_per_threadgroup]]) {
+  Op op;
+  looped_elem_to_loc<NDIMS> loop;
+  const device T* row;
+
+  size_t out_idx = gid.x + gsize.x * size_t(gid.y);
+  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  in += in_idx + lid.x;
+
+  U total = Op::init;
+  size_t total_rows = non_col_reductions * reduction_size;
+  loop.next(gid.z * lsize.y + lid.y, reduce_shape, reduce_strides);
+  for (size_t r = gid.z * lsize.y + lid.y; r < total_rows;
+       r += lsize.y * gsize.z) {
+    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+    total = op(static_cast<U>(*row), total);
+    loop.next(lsize.y * gsize.z, reduce_shape, reduce_strides);
+  }
+
+  threadgroup U shared_vals[32 * 32];
+  shared_vals[lid.y * lsize.x + lid.x] = total;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (lid.y == 0) {
+    for (uint i = 1; i < lsize.y; i++) {
+      total = op(total, shared_vals[i * lsize.x + lid.x]);
+    }
+    out[gid.z * out_size + out_idx * reduction_stride + lid.x] = total;
+  }
+}
+
 /**
  * Our approach is the following simple looped approach:
  *  1. Each thread keeps running totals for BN / n_simdgroups outputs.
