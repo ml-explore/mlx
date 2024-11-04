@@ -530,10 +530,16 @@ void strided_reduce_longcolumn(
     metal::Device& d,
     const Stream& s,
     std::vector<array>& copies) {
+  size_t total_reduction_size = args.reduction_size * args.non_col_reductions;
+  size_t outer_blocks = 32;
+  if (total_reduction_size >= 32768) {
+    outer_blocks = 128;
+  }
+
   // Prepare the temporary accumulator
   std::vector<int> intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
-  intermediate_shape.push_back(32);
+  intermediate_shape.push_back(outer_blocks);
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out.dtype(), nullptr, {});
@@ -547,7 +553,6 @@ void strided_reduce_longcolumn(
 
   // Figure out the grid dims
   size_t out_size = out.size();
-  size_t outer_blocks = 32;
   size_t threadgroup_x = args.reduction_stride;
   size_t threadgroup_y =
       (args.non_col_reductions * args.reduction_size + outer_blocks - 1) /
@@ -747,7 +752,7 @@ void strided_reduce_general_dispatch(
 
   // Long column but small row
   if (args.reduction_stride < 32 &&
-      args.reduction_size * args.non_col_reductions > 1024) {
+      args.reduction_size * args.non_col_reductions >= 1024) {
     return strided_reduce_longcolumn(
         in, out, op_name, args, compute_encoder, d, s, copies);
   }
