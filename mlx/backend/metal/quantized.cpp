@@ -123,10 +123,10 @@ void qvm_split_k(
     int O,
     int B,
     int N,
+    int split_k,
     const Stream& s) {
   int bo = 64;
   int bd = 32;
-  int split_k = 32;
 
   // Split the k
   int split_D = (D + split_k - 1) / split_k;
@@ -365,13 +365,15 @@ void qmm_op(
         template_def = get_template_definition(
             kname.str(), name, type_string, group_size, bits, batched);
       }
-    } else if (B == 1 && D > 8192 && !gather) {
+    } else if (B == 1 && D >= 1024 && !gather) {
+      int split_k = D > 4096 ? 32 : 16;
       name += "qvm_split_k";
       kname << name << "_" << type_string << "_gs_" << group_size << "_b_"
-            << bits;
+            << bits << "_spk_" << split_k;
       template_def = get_template_definition(
-          kname.str(), name, type_string, group_size, bits);
-      return qvm_split_k(inputs, out, kname.str(), template_def, D, O, B, N, s);
+          kname.str(), name, type_string, group_size, bits, split_k);
+      return qvm_split_k(
+          inputs, out, kname.str(), template_def, D, O, B, N, split_k, s);
     } else {
       name += "qvm";
       kname << name << "_" << type_string << "_gs_" << group_size << "_b_"
