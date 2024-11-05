@@ -16,8 +16,7 @@ void all_reduce_dispatch(
     const std::string& op_name,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies);
+    const Stream& s);
 
 void row_reduce_general_dispatch(
     const array& in,
@@ -37,7 +36,6 @@ void strided_reduce_general_dispatch(
     const std::vector<int>& axes,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies);
+    const Stream& s);
 
 } // namespace mlx::core

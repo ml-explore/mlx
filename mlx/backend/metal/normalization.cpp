@@ -198,7 +198,7 @@ void RMSNormVJP::eval_gpu(
   ReductionPlan plan(
       ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
   strided_reduce_general_dispatch(
-      gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s, copies);
+      gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
 
   d.add_temporaries(std::move(copies), s.index);
 }
@@ -364,8 +364,7 @@ void LayerNormVJP::eval_gpu(
         {0},
         compute_encoder,
         d,
-        s,
-        copies);
+        s);
   }
 
   const int simd_size = 32;
@@ -412,7 +411,7 @@ void LayerNormVJP::eval_gpu(
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     strided_reduce_general_dispatch(
-        gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s, copies);
+        gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
   }
 
   d.add_temporaries(std::move(copies), s.index);

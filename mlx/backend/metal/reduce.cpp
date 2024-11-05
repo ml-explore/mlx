@@ -267,8 +267,7 @@ void all_reduce_dispatch(
     const std::string& op_name,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies) {
+    const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
   const std::string func_name = "all_reduce";
@@ -309,7 +308,7 @@ void all_reduce_dispatch(
     // Allocate an intermediate tensor to hold results if needed
     array intermediate({n_rows}, out.dtype(), nullptr, {});
     intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-    copies.push_back(intermediate);
+    d.add_temporary(intermediate, s.index);
 
     // 1st pass
     size_t row_size = (in_size + n_rows - 1) / n_rows;
@@ -528,8 +527,7 @@ void strided_reduce_longcolumn(
     ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies) {
+    const Stream& s) {
   size_t total_reduction_size = args.reduction_size * args.non_col_reductions;
   size_t outer_blocks = 32;
   if (total_reduction_size >= 32768) {
@@ -544,7 +542,7 @@ void strided_reduce_longcolumn(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-  copies.push_back(intermediate);
+  d.add_temporary(intermediate, s.index);
 
   // Prepare the arguments for the kernel
   args.reduce_shape.push_back(args.reduction_size);
@@ -657,8 +655,7 @@ void strided_reduce_2pass(
     ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies) {
+    const Stream& s) {
   // Prepare the temporary accumulator
   std::vector<int> intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
@@ -667,7 +664,7 @@ void strided_reduce_2pass(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-  copies.push_back(intermediate);
+  d.add_temporary(intermediate, s.index);
 
   // Prepare the arguments for the kernel
   args.reduce_shape.push_back(args.reduction_size);
@@ -740,8 +737,7 @@ void strided_reduce_general_dispatch(
     const std::vector<int>& axes,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s,
-    std::vector<array>& copies) {
+    const Stream& s) {
   // Prepare the arguments for the kernel
   ColReduceArgs args(in, plan, axes);
 
@@ -754,13 +750,12 @@ void strided_reduce_general_dispatch(
   if (args.reduction_stride < 32 &&
       args.reduction_size * args.non_col_reductions >= 1024) {
     return strided_reduce_longcolumn(
-        in, out, op_name, args, compute_encoder, d, s, copies);
+        in, out, op_name, args, compute_encoder, d, s);
   }
 
   if (args.reduction_size * args.non_col_reductions > 256 &&
       out.size() / 32 < 1024) {
-    return strided_reduce_2pass(
-        in, out, op_name, args, compute_encoder, d, s, copies);
+    return strided_reduce_2pass(in, out, op_name, args, compute_encoder, d, s);
   }
 
   return strided_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
@@ -808,7 +803,6 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Reduce
   if (in.size() > 0) {
-    std::vector<array> copies;
     ReductionPlan plan = get_reduction_plan(in, axes_);
 
     // If it is a general reduce then copy the input to a contiguous array and
@@ -820,7 +814,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (plan.type == GeneralReduce) {
       array in_copy(in.shape(), in.dtype(), nullptr, {});
       copy_gpu(in, in_copy, CopyType::General, s);
-      copies.push_back(in_copy);
+      d.add_temporary(in_copy, s.index);
       in = in_copy;
       plan = get_reduction_plan(in, axes_);
     }
@@ -828,7 +822,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Reducing over everything and the data is all there no broadcasting or
     // slicing etc.
     if (plan.type == ContiguousAllReduce) {
-      all_reduce_dispatch(in, out, op_name, compute_encoder, d, s, copies);
+      all_reduce_dispatch(in, out, op_name, compute_encoder, d, s);
     }
 
     // At least the last dimension is row contiguous and we are reducing over
@@ -845,10 +839,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
         plan.type == ContiguousStridedReduce ||
         plan.type == GeneralStridedReduce) {
       strided_reduce_general_dispatch(
-          in, out, op_name, plan, axes_, compute_encoder, d, s, copies);
+          in, out, op_name, plan, axes_, compute_encoder, d, s);
     }
-
-    d.add_temporaries(std::move(copies), s.index);
   }
 
   // Nothing to reduce just initialize the output
