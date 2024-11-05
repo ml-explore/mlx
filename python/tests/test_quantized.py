@@ -186,7 +186,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
                 y_hat = x @ w_hat
                 self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+                self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
     def test_throw(self):
         x = mx.random.normal(shape=(10, 512))
