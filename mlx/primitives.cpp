@@ -1706,6 +1706,11 @@ std::pair<std::vector<array>, std::vector<int>> Gather::vmap(
   int idx_dims = indices.empty() ? 0 : indices[0].ndim();
 
   if (src_vmapped) {
+    for (auto& ax : gather_axes) {
+      if (ax >= axes[0]) {
+        ax++;
+      }
+    }
     if (indices_vmapped) {
       // Make a new index array for the vmapped dimension
       auto vmap_inds = arange(0, src.shape(axes[0]), stream());
@@ -1717,16 +1722,11 @@ std::pair<std::vector<array>, std::vector<int>> Gather::vmap(
       }
       // Update gather axes and slice sizes accordingly
       slice_sizes.insert(slice_sizes.begin() + axes[0], 1);
-      for (auto& ax : gather_axes) {
-        if (ax >= axes[0]) {
-          ax++;
-        }
-      }
       gather_axes.push_back(axes[0]);
       indices.push_back(vmap_inds);
     } else {
-      slice_sizes.insert(slice_sizes.begin() + axes[0], src.shape(axes[0]));
-      out_ax = idx_dims + axes[0];
+      slice_sizes.insert(slice_sizes.begin() + out_ax, src.shape(out_ax));
+      out_ax += idx_dims;
     }
   }
   auto out = gather(src, indices, gather_axes, slice_sizes, stream());
