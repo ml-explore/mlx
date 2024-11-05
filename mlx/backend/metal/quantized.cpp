@@ -365,8 +365,8 @@ void qmm_op(
         template_def = get_template_definition(
             kname.str(), name, type_string, group_size, bits, batched);
       }
-    } else if (B == 1 && D >= 1024 && !gather) {
-      int split_k = D > 4096 ? 32 : 16;
+    } else if (D >= 1024 && !gather) {
+      int split_k = D > 8192 ? 32 : 8;
       name += "qvm_split_k";
       kname << name << "_" << type_string << "_gs_" << group_size << "_b_"
             << bits << "_spk_" << split_k;
