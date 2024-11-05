@@ -22,5 +22,6 @@ var searchData=
   ['quantizedmatmul_19',['QuantizedMatmul',['../classmlx_1_1core_1_1_quantized_matmul.html#a5bd164d038d9dc21919f7e0bfdeaa25c',1,'mlx::core::QuantizedMatmul']]],
   ['quiet_5fnan_20',['quiet_NaN',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#aebeb07c01984be246bc2d1b8f8e4ac7b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
   ['qvm_21',['qvm',['../quantized_8h.html#ad84f7d5ab9e32dbbe3ca759ae5d5d5c5',1,'quantized.h']]],
-  ['qvm_5fimpl_22',['qvm_impl',['../quantized_8h.html#a4a8c8db7d5d480733726fd6d1a645e12',1,'quantized.h']]]
+  ['qvm_5fimpl_22',['qvm_impl',['../quantized_8h.html#a1546533c5b925b2fbb3bec870ec7487a',1,'quantized.h']]],
+  ['qvm_5fsplit_5fk_23',['qvm_split_k',['../quantized_8h.html#ab8243818512d6078d23e6ffb65fd7bb8',1,'quantized.h']]]
 ];
