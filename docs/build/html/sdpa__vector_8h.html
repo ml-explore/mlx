@@ -99,13 +99,13 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a6f0d7918430064bab910bdaa6c64e927" id="r_a6f0d7918430064bab910bdaa6c64e927"><td class="memTemplParams" colspan="2">template&lt;typename T , int D&gt; </td></tr>
-<tr class="memitem:a6f0d7918430064bab910bdaa6c64e927"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6f0d7918430064bab910bdaa6c64e927">sdpa_vector</a> (const device T *queries, const device T *keys, const device T *values, device T *out, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a6f0d7918430064bab910bdaa6c64e927"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4bf36f16e16c1c62d9b243573568e5ae" id="r_a4bf36f16e16c1c62d9b243573568e5ae"><td class="memTemplParams" colspan="2">template&lt;typename T , int D&gt; </td></tr>
+<tr class="memitem:a4bf36f16e16c1c62d9b243573568e5ae"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4bf36f16e16c1c62d9b243573568e5ae">sdpa_vector</a> (const device T *queries, const device T *keys, const device T *values, device T *out, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant size_t &amp;v_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a4bf36f16e16c1c62d9b243573568e5ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a6f0d7918430064bab910bdaa6c64e927" name="a6f0d7918430064bab910bdaa6c64e927"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6f0d7918430064bab910bdaa6c64e927">&#9670;&#160;</a></span>sdpa_vector()</h2>
+<a id="a4bf36f16e16c1c62d9b243573568e5ae" name="a4bf36f16e16c1c62d9b243573568e5ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4bf36f16e16c1c62d9b243573568e5ae">&#9670;&#160;</a></span>sdpa_vector()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -146,6 +146,11 @@ template&lt;typename T , int D&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>k_stride</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>v_stride</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

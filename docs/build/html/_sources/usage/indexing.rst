@@ -77,7 +77,7 @@ from the GPU. Performing bounds checking for array indices before launching the
 kernel would be extremely inefficient.
 
 Indexing with boolean masks is something that MLX may support in the future. In
-general, MLX has limited support for operations for which outputs
+general, MLX has limited support for operations for which output
 *shapes* are dependent on input *data*. Other examples of these types of
 operations which MLX does not yet support include :func:`numpy.nonzero` and the
 single input version of :func:`numpy.where`.
