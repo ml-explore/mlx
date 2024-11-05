@@ -109,7 +109,7 @@ Here is a concrete example:
 
 An important behavior to be aware of is when the graph will be implicitly
 evaluated. Anytime you ``print`` an array, convert it to an
-:obj:`numpy.ndarray`, or otherwise access it's memory via :obj:`memoryview`,
+:obj:`numpy.ndarray`, or otherwise access its memory via :obj:`memoryview`,
 the graph will be evaluated. Saving arrays via :func:`save` (or any other MLX
 saving functions) will also evaluate the array.
 
