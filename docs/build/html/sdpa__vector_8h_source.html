@@ -99,7 +99,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span> </div>
 <div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keywordtype">int</span> D&gt;</div>
 <div class="foldopen" id="foldopen00008" data-start="{" data-end="}">
-<div class="line"><a id="l00008" name="l00008"></a><span class="lineno"><a class="line" href="sdpa__vector_8h.html#a6f0d7918430064bab910bdaa6c64e927">    8</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="sdpa__vector_8h.html#a6f0d7918430064bab910bdaa6c64e927">sdpa_vector</a>(</div>
+<div class="line"><a id="l00008" name="l00008"></a><span class="lineno"><a class="line" href="sdpa__vector_8h.html#a4bf36f16e16c1c62d9b243573568e5ae">    8</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="sdpa__vector_8h.html#a4bf36f16e16c1c62d9b243573568e5ae">sdpa_vector</a>(</div>
 <div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span>    <span class="keyword">const</span> device T* queries [[buffer(0)]],</div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span>    <span class="keyword">const</span> device T* keys [[buffer(1)]],</div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span>    <span class="keyword">const</span> device T* values [[buffer(2)]],</div>
@@ -107,113 +107,114 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; gqa_factor,</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; N,</div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; k_stride,</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    <span class="keyword">const</span> constant <span class="keywordtype">float</span>&amp; scale,</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    uint3 tid [[threadgroup_position_in_grid]],</div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint simd_gid [[simdgroup_index_in_threadgroup]],</div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    uint simd_lid [[thread_index_in_simdgroup]]) {</div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> BN = 32;</div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> BD = 32;</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> elem_per_thread = D / BD;</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> stride = BN * D;</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>  <span class="keyword">typedef</span> <span class="keywordtype">float</span> U;</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>  thread U q[elem_per_thread];</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>  thread U k[elem_per_thread];</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>  thread U o[elem_per_thread];</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>  threadgroup U outputs[BN * BD];</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>  threadgroup U max_scores[BN];</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>  threadgroup U sum_exp_scores[BN];</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>  <span class="comment">// Adjust positions</span></div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> head_idx = tid.y;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> kv_head_idx = head_idx / gqa_factor;</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  queries += head_idx * D + simd_lid * elem_per_thread;</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>  keys += kv_head_idx * k_stride + simd_gid * D + simd_lid * elem_per_thread;</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>  values += kv_head_idx * k_stride + simd_gid * D + simd_lid * elem_per_thread;</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>  out += head_idx * D + simd_gid * elem_per_thread;</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span> </div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>  <span class="comment">// Read the query and 0 the output accumulator</span></div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    q[i] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(scale) * queries[i];</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  }</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    o[i] = 0;</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>  }</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span> </div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>  U max_score = -INFINITY;</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>  U sum_exp_score = 0;</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span> </div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>  <span class="comment">// For each key</span></div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = simd_gid; i &lt; N; i += BN) {</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="comment">// Read the key</span></div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>      k[i] = keys[i];</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    }</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span> </div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="comment">// Compute the i-th score</span></div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    U score = 0;</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>      score += q[i] * k[i];</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    }</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    score = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(score);</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span> </div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <span class="comment">// Update the accumulators</span></div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    U new_max = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>(max_score, score);</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    U factor = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(max_score - new_max);</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    U exp_score = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(score - new_max);</div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span> </div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    max_score = new_max;</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    sum_exp_score = sum_exp_score * factor + exp_score;</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span> </div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="comment">// Update the output accumulator</span></div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>      o[i] = o[i] * factor + exp_score * values[i];</div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    }</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span> </div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <span class="comment">// Move the pointers to the next kv</span></div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    keys += stride;</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    values += stride;</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>  }</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>  threadgroup_barrier(mem_flags::mem_threadgroup);</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span> </div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>  <span class="comment">// Each thread has a partial part of the output so we need to combine them.</span></div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span> </div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>  <span class="comment">// First let&#39;s communicate the max and sum_exp</span></div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>  <span class="keywordflow">if</span> (simd_lid == 0) {</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    max_scores[simd_gid] = max_score;</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    sum_exp_scores[simd_gid] = sum_exp_score;</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>  }</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>  threadgroup_barrier(mem_flags::mem_threadgroup);</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>  max_score = max_scores[simd_lid];</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>  U new_max = <a class="code hl_function" href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">simd_max</a>(max_score);</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>  U factor = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(max_score - new_max);</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>  sum_exp_score = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(sum_exp_scores[simd_lid] * factor);</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span> </div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>  <span class="comment">// Now we need to aggregate all the outputs</span></div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    outputs[simd_lid * BD + simd_gid] = o[i];</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    threadgroup_barrier(mem_flags::mem_threadgroup);</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    o[i] = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(outputs[simd_gid * BD + simd_lid] * factor) / sum_exp_score;</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    threadgroup_barrier(mem_flags::mem_threadgroup);</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>  }</div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span> </div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>  <span class="comment">// And write the output</span></div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  <span class="keywordflow">if</span> (simd_lid == 0) {</div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>      out[i] = <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(o[i]);</div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    }</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>  }</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>}</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; v_stride,</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    <span class="keyword">const</span> constant <span class="keywordtype">float</span>&amp; scale,</div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint3 tid [[threadgroup_position_in_grid]],</div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    uint simd_gid [[simdgroup_index_in_threadgroup]],</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    uint simd_lid [[thread_index_in_simdgroup]]) {</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> BN = 32;</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> BD = 32;</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> elem_per_thread = D / BD;</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> stride = BN * D;</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>  <span class="keyword">typedef</span> <span class="keywordtype">float</span> U;</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>  thread U q[elem_per_thread];</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>  thread U k[elem_per_thread];</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>  thread U o[elem_per_thread];</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span> </div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>  threadgroup U outputs[BN * BD];</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>  threadgroup U max_scores[BN];</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>  threadgroup U sum_exp_scores[BN];</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>  <span class="comment">// Adjust positions</span></div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> head_idx = tid.y;</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> kv_head_idx = head_idx / gqa_factor;</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>  queries += head_idx * D + simd_lid * elem_per_thread;</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>  keys += kv_head_idx * k_stride + simd_gid * D + simd_lid * elem_per_thread;</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>  values += kv_head_idx * v_stride + simd_gid * D + simd_lid * elem_per_thread;</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>  out += head_idx * D + simd_gid * elem_per_thread;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="comment">// Read the query and 0 the output accumulator</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    q[i] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(scale) * queries[i];</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>  }</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    o[i] = 0;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>  }</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span> </div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>  U max_score = -INFINITY;</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>  U sum_exp_score = 0;</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span> </div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>  <span class="comment">// For each key</span></div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = simd_gid; i &lt; N; i += BN) {</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="comment">// Read the key</span></div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>      k[i] = keys[i];</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    }</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span> </div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <span class="comment">// Compute the i-th score</span></div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    U score = 0;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>      score += q[i] * k[i];</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    }</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    score = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(score);</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span> </div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="comment">// Update the accumulators</span></div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    U new_max = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>(max_score, score);</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    U factor = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(max_score - new_max);</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    U exp_score = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(score - new_max);</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span> </div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    max_score = new_max;</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    sum_exp_score = sum_exp_score * factor + exp_score;</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span> </div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    <span class="comment">// Update the output accumulator</span></div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>      o[i] = o[i] * factor + exp_score * values[i];</div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    }</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span> </div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    <span class="comment">// Move the pointers to the next kv</span></div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    keys += stride;</div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    values += stride;</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>  }</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>  threadgroup_barrier(mem_flags::mem_threadgroup);</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span> </div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>  <span class="comment">// Each thread has a partial part of the output so we need to combine them.</span></div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span> </div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>  <span class="comment">// First let&#39;s communicate the max and sum_exp</span></div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>  <span class="keywordflow">if</span> (simd_lid == 0) {</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    max_scores[simd_gid] = max_score;</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    sum_exp_scores[simd_gid] = sum_exp_score;</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>  }</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>  threadgroup_barrier(mem_flags::mem_threadgroup);</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>  max_score = max_scores[simd_lid];</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>  U new_max = <a class="code hl_function" href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">simd_max</a>(max_score);</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>  U factor = <a class="code hl_function" href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">fast::exp</a>(max_score - new_max);</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>  sum_exp_score = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(sum_exp_scores[simd_lid] * factor);</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span> </div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>  <span class="comment">// Now we need to aggregate all the outputs</span></div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    outputs[simd_lid * BD + simd_gid] = o[i];</div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    threadgroup_barrier(mem_flags::mem_threadgroup);</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    o[i] = <a class="code hl_function" href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">simd_sum</a>(outputs[simd_gid * BD + simd_lid] * factor) / sum_exp_score;</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    threadgroup_barrier(mem_flags::mem_threadgroup);</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>  }</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span> </div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  <span class="comment">// And write the output</span></div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>  <span class="keywordflow">if</span> (simd_lid == 0) {</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; elem_per_thread; i++) {</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>      out[i] = <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(o[i]);</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>    }</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>  }</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>}</div>
 </div>
 <div class="ttc" id="anamespacemetal_1_1fast_html_ad3dbd387b63373c29e3449609f763ede"><div class="ttname"><a href="namespacemetal_1_1fast.html#ad3dbd387b63373c29e3449609f763ede">metal::fast::exp</a></div><div class="ttdeci">METAL_FUNC bfloat16_t exp(bfloat16_t x)</div><div class="ttdef"><b>Definition</b> bf16_math.h:242</div></div>
 <div class="ttc" id="anamespacemetal_html"><div class="ttname"><a href="namespacemetal.html">metal</a></div><div class="ttdef"><b>Definition</b> bf16.h:265</div></div>
 <div class="ttc" id="anamespacemetal_html_a048cad0aca52cb737ebf103e76bd1c49"><div class="ttname"><a href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">metal::simd_max</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_max(bfloat16_t data)</div><div class="ttdef"><b>Definition</b> bf16_math.h:392</div></div>
 <div class="ttc" id="anamespacemetal_html_a85181e37a00cb4a4217f1bb25389bce5"><div class="ttname"><a href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">metal::simd_sum</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_sum(bfloat16_t data)</div><div class="ttdef"><b>Definition</b> bf16_math.h:392</div></div>
 <div class="ttc" id="anamespacemetal_html_a853c80479ab2264d9c4587c7bcac767b"><div class="ttname"><a href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">metal::max</a></div><div class="ttdeci">METAL_FUNC bfloat16_t max(bfloat16_t x, bfloat16_t y)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
-<div class="ttc" id="asdpa__vector_8h_html_a6f0d7918430064bab910bdaa6c64e927"><div class="ttname"><a href="sdpa__vector_8h.html#a6f0d7918430064bab910bdaa6c64e927">sdpa_vector</a></div><div class="ttdeci">void sdpa_vector(const device T *queries, const device T *keys, const device T *values, device T *out, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> sdpa_vector.h:8</div></div>
+<div class="ttc" id="asdpa__vector_8h_html_a4bf36f16e16c1c62d9b243573568e5ae"><div class="ttname"><a href="sdpa__vector_8h.html#a4bf36f16e16c1c62d9b243573568e5ae">sdpa_vector</a></div><div class="ttdeci">void sdpa_vector(const device T *queries, const device T *keys, const device T *values, device T *out, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant size_t &amp;v_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> sdpa_vector.h:8</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
