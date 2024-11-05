@@ -95,7 +95,6 @@
 
 #define instantiate_quantized_all_splitk(type, group_size, bits)   \
   instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 8)   \
-  instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 16)  \
   instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 32)
 
 #define instantiate_quantized_funcs(type, group_size, bits) \
