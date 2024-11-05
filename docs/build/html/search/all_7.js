@@ -67,7 +67,7 @@ var searchData=
   ['get_5fpool_64',['get_pool',['../namespacepocketfft_1_1detail_1_1threading.html#a7ec2b3f99232bd0f15f7b022c59d139a',1,'pocketfft::detail::threading']]],
   ['get_5fprimitive_5fstring_65',['get_primitive_string',['../namespacemlx_1_1core.html#ad4be35b310a252edd80d9cf04f094a60',1,'mlx::core']]],
   ['get_5fquantized_5fkernel_66',['get_quantized_kernel',['../namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e',1,'mlx::core']]],
-  ['get_5freduce_5finit_5fkernel_67',['get_reduce_init_kernel',['../namespacemlx_1_1core.html#a51c4bb09230348bd0252e22bfdc9bc89',1,'mlx::core']]],
+  ['get_5freduce_5finit_5fkernel_67',['get_reduce_init_kernel',['../namespacemlx_1_1core.html#a3bd386cb6db09f636963ce66ceaf8647',1,'mlx::core']]],
   ['get_5freduce_5fkernel_68',['get_reduce_kernel',['../namespacemlx_1_1core.html#a7aa91fcfe8b9caa42d60a957f11bfe6b',1,'mlx::core']]],
   ['get_5freduction_5fplan_69',['get_reduction_plan',['../namespacemlx_1_1core.html#ac97b5a6f009ca3d99854ce9512c20dba',1,'mlx::core']]],
   ['get_5fscan_5fkernel_70',['get_scan_kernel',['../namespacemlx_1_1core.html#aeefaff208444d3fa61ecc0946fe1de5f',1,'mlx::core']]],
