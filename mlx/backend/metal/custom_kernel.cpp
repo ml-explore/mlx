@@ -75,7 +75,7 @@ void CustomKernel::eval_gpu(
   MTL::Size group_dims = MTL::Size(tx, ty, tz);
   const auto [gx, gy, gz] = grid_;
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }

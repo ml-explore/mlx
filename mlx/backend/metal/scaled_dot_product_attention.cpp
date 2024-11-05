@@ -139,7 +139,7 @@ void sdpa_full_self_attention_metal(
   MTL::Size grid_dims = MTL::Size(1, tm, batch_size_out);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
 
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void sdpa_vector(

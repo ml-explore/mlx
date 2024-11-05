@@ -144,7 +144,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     MTL::Size group_dims = MTL::Size(1, threads_per, 1);
     MTL::Size grid_dims = MTL::Size(batch_size, threads_per, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   };
 
   if (m > 1) {
