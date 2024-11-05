@@ -113,9 +113,12 @@ instantiate_reduce_from_types(instantiate_all_reduce, or, bool, Or<bool>)
 // special case bool with larger output type
 instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
 
-#define instantiate_col_reduce_small(name, itype, otype, op, dim) \
-  instantiate_kernel("col_reduce_small_" #dim "_reduce_" #name,   \
-                     col_reduce_small,                            \
+#define instantiate_col_reduce_small(name, itype, otype, op, dim)      \
+  instantiate_kernel("col_reduce_small_" #dim "_reduce_" #name,        \
+                     col_reduce_small,                                 \
+                     itype, otype, op, dim)                            \
+  instantiate_kernel("col_reduce_longcolumn_" #dim "_reduce_" #name,   \
+                     col_reduce_longcolumn,                            \
                      itype, otype, op, dim)
 
 #define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn)  \
@@ -123,9 +126,14 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
                      col_reduce_looped,                                          \
                      itype, otype, op, dim, bm, bn)
 
+#define instantiate_col_reduce_2pass_tile(name, itype, otype, op, dim, bm, bn)  \
+  instantiate_kernel("col_reduce_2pass_" #dim "_" #bm "_" #bn "_reduce_" #name, \
+                     col_reduce_2pass,                                          \
+                     itype, otype, op, dim, bm, bn)
+
 #define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
-  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 8, 128) \
-  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
+  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32) \
+  instantiate_col_reduce_2pass_tile(name, itype, otype, op, dim, 32, 32)
 
 #define instantiate_col_reduce_general(name, itype, otype, op) \
   instantiate_col_reduce_small(name, itype, otype, op, 0)      \

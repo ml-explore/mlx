@@ -319,16 +319,18 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
 MTL::ComputePipelineState* get_reduce_init_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& func_name,
+    const std::string& op_name,
     const array& out) {
   auto lib = d.get_library(kernel_name, [&]() {
     std::ostringstream kernel_source;
-    std::string op_type = op_name(out);
-    op_type[0] = std::toupper(op_name(out)[0]);
+    std::string op_type = op_name;
+    op_type[0] = std::toupper(op_name[0]);
     auto out_type = get_type_string(out.dtype());
     std::string op = op_type + "<" + out_type + ">";
     kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
     kernel_source << get_template_definition(
-        kernel_name, "init_reduce", out_type, op);
+        kernel_name, func_name, out_type, op);
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib);
