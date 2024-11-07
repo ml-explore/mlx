@@ -26,7 +26,7 @@ int bfs_max_width() {
       return 10;
     }
   };
-  static int bfs_max_width_ get_val();
+  static int bfs_max_width_ = get_val();
   return bfs_max_width_;
 }
 
