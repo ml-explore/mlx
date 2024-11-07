@@ -67,17 +67,14 @@ struct RowReduceArgs {
       strides.push_back(0);
     }
 
-    compute_encoder->setBytes(&row_size, sizeof(size_t), 2);
-    compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
-    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-    compute_encoder->setBytes(
-        strides.data(), strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
-    compute_encoder->setBytes(
-        reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
-    compute_encoder->setBytes(
-        reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
-    compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+    compute_encoder.set_bytes(row_size, 2);
+    compute_encoder.set_bytes(non_row_reductions, 3);
+    compute_encoder.set_vector_bytes(shape, 4);
+    compute_encoder.set_vector_bytes(strides, 5);
+    compute_encoder.set_bytes(ndim, 6);
+    compute_encoder.set_vector_bytes(reduce_shape, 7);
+    compute_encoder.set_vector_bytes(reduce_strides, 8);
+    compute_encoder.set_bytes(reduce_ndim, 9);
 
     if (reduce_ndim == 0) {
       reduce_shape.pop_back();
@@ -166,18 +163,15 @@ struct ColReduceArgs {
       strides.push_back(0);
     }
 
-    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
-    compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
-    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-    compute_encoder->setBytes(
-        strides.data(), strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
-    compute_encoder->setBytes(
-        reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
-    compute_encoder->setBytes(
-        reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
-    compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
-    compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 10);
+    compute_encoder.set_bytes(reduction_size, 2);
+    compute_encoder.set_bytes(reduction_stride, 3);
+    compute_encoder.set_vector_bytes(shape, 4);
+    compute_encoder.set_vector_bytes(strides, 5);
+    compute_encoder.set_bytes(ndim, 6);
+    compute_encoder.set_vector_bytes(reduce_shape, 7);
+    compute_encoder.set_vector_bytes(reduce_strides, 8);
+    compute_encoder.set_bytes(reduce_ndim, 9);
+    compute_encoder.set_bytes(non_col_reductions, 10);
 
     if (reduce_ndim == 0) {
       reduce_shape.pop_back();
@@ -256,7 +250,7 @@ void init_reduce(
     thread_group_size = nthreads;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_output_array(out, 0);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
@@ -273,7 +267,7 @@ void all_reduce_dispatch(
   const std::string func_name = "all_reduce";
   kname << func_name << "_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), func_name, op_name, in, out);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   size_t in_size = in.size();
 
@@ -285,8 +279,8 @@ void all_reduce_dispatch(
 
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
-    compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-    compute_encoder->setBytes(&in_size, sizeof(size_t), 3);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(in_size, 3);
     compute_encoder.dispatchThreads(grid_dims, grid_dims);
   }
 
@@ -319,8 +313,8 @@ void all_reduce_dispatch(
     MTL::Size group_dims(threadgroup_size, 1, 1);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(intermediate, 1);
-    compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-    compute_encoder->setBytes(&row_size, sizeof(size_t), 3);
+    compute_encoder.set_bytes(in_size, 2);
+    compute_encoder.set_bytes(row_size, 3);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     // 2nd pass
@@ -328,14 +322,14 @@ void all_reduce_dispatch(
     kname_2nd_pass << func_name << "_" << op_name << type_to_name(intermediate);
     auto kernel_2nd_pass = get_reduce_kernel(
         d, kname_2nd_pass.str(), func_name, op_name, intermediate, out);
-    compute_encoder->setComputePipelineState(kernel_2nd_pass);
+    compute_encoder.set_compute_pipeline_state(kernel_2nd_pass);
     size_t intermediate_size = n_rows;
     grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
     group_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
     compute_encoder.set_input_array(intermediate, 0);
     compute_encoder.set_output_array(out, 1);
-    compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
-    compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 3);
+    compute_encoder.set_bytes(intermediate_size, 2);
+    compute_encoder.set_bytes(intermediate_size, 3);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
@@ -355,7 +349,7 @@ void row_reduce_small(
   kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid dims
   MTL::Size grid_dims;
@@ -391,7 +385,7 @@ void row_reduce_simple(
   const std::string func_name = "row_reduce_simple";
   kname << func_name << "_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), func_name, op_name, in, out);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid dims
   size_t row_size = args.row_size;
@@ -410,8 +404,8 @@ void row_reduce_simple(
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&row_size, sizeof(size_t), 2);
-  compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+  compute_encoder.set_bytes(row_size, 2);
+  compute_encoder.set_bytes(out_size, 3);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
@@ -430,7 +424,7 @@ void row_reduce_looped(
   kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid
   auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
@@ -495,7 +489,7 @@ void strided_reduce_small(
   kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   const int n_reads = 4;
   size_t reduction_stride_blocks =
@@ -568,13 +562,13 @@ void strided_reduce_longcolumn(
   kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(intermediate, 1);
   args.encode(compute_encoder);
-  compute_encoder->setBytes(&out_size, sizeof(size_t), 11);
+  compute_encoder.set_bytes(out_size, 11);
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
   // Make the 2nd pass arguments and grid_dims
@@ -599,7 +593,7 @@ void strided_reduce_longcolumn(
       1,
       32,
       32);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);
@@ -639,7 +633,7 @@ void strided_reduce_looped(
         << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n, BM, BN);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
   compute_encoder.set_input_array(in, 0);
@@ -692,13 +686,13 @@ void strided_reduce_2pass(
         << op_name << type_to_name(in);
   auto kernel =
       get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n, BM, BN);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(intermediate, 1);
   args.encode(compute_encoder);
-  compute_encoder->setBytes(&out_size, sizeof(size_t), 11);
+  compute_encoder.set_bytes(out_size, 11);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   // Make the 2nd pass arguments and grid_dims
@@ -721,7 +715,7 @@ void strided_reduce_2pass(
       1,
       32,
       32);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);

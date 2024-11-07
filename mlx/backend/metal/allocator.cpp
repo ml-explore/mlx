@@ -242,6 +242,9 @@ void MetalAllocator::clear_cache() {
 
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
+  if (buf == nullptr) {
+    return;
+  }
   std::unique_lock lk(mutex_);
   residency_set_.erase(buf);
   active_memory_ -= buf->length();

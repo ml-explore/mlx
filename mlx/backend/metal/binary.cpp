@@ -92,7 +92,7 @@ void binary_op_gpu_inplace(
       ? get_binary_two_kernel(d, kernel_name, a.dtype(), out.dtype(), op)
       : get_binary_kernel(d, kernel_name, a.dtype(), out.dtype(), op);
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // - If a is donated it goes to the first output
   // - If b is donated it goes to the first output if a was not donated
@@ -117,19 +117,15 @@ void binary_op_gpu_inplace(
     size_t rest = out.size() / (dim0 * dim1);
 
     if (ndim > 3) {
-      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), arg_idx++);
-      compute_encoder->setBytes(
-          strides_a.data(), ndim * sizeof(size_t), arg_idx++);
-      compute_encoder->setBytes(
-          strides_b.data(), ndim * sizeof(size_t), arg_idx++);
-      compute_encoder->setBytes(&ndim, sizeof(int), arg_idx++);
+      compute_encoder.set_vector_bytes(shape, arg_idx++);
+      compute_encoder.set_vector_bytes(strides_a, arg_idx++);
+      compute_encoder.set_vector_bytes(strides_b, arg_idx++);
+      compute_encoder.set_bytes<int>(ndim, arg_idx++);
       dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     } else {
       // The shape is implicit in the grid for <= 3D
-      compute_encoder->setBytes(
-          strides_a.data(), ndim * sizeof(size_t), arg_idx++);
-      compute_encoder->setBytes(
-          strides_b.data(), ndim * sizeof(size_t), arg_idx++);
+      compute_encoder.set_vector_bytes(strides_a, arg_idx++);
+      compute_encoder.set_vector_bytes(strides_b, arg_idx++);
     }
 
     if (thread_group_size != 1024) {

@@ -373,7 +373,7 @@ void Compiled::eval_gpu(
   }
   auto kernel = d.get_kernel(kernel_name, lib);
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   // Put the inputs in
   int cnt = 0;
@@ -394,8 +394,7 @@ void Compiled::eval_gpu(
     }
   }
   if (!in_strides.empty()) {
-    compute_encoder->setBytes(
-        in_strides.data(), in_strides.size() * sizeof(size_t), cnt++);
+    compute_encoder.set_vector_bytes(in_strides, cnt++);
   }
 
   compiled_allocate_outputs(
@@ -408,14 +407,13 @@ void Compiled::eval_gpu(
 
   // Put the output shape and strides in
   if (!contiguous) {
-    compute_encoder->setBytes(
-        strides[0].data(), strides[0].size() * sizeof(size_t), cnt++);
-    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), cnt++);
+    compute_encoder.set_vector_bytes(strides[0], cnt++);
+    compute_encoder.set_vector_bytes(shape, cnt++);
   }
 
   // Put the number of dims in if it is dynamic
   if (dynamic) {
-    compute_encoder->setBytes(&ndim, sizeof(int), cnt++);
+    compute_encoder.set_bytes(ndim, cnt++);
   }
 
   // Launch the kernel

@@ -49,7 +49,7 @@ void unary_op_gpu_inplace(
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(
       in.data_shared_ptr() == nullptr ? out : in, 0);
   compute_encoder.set_output_array(out, 1);
@@ -58,9 +58,9 @@ void unary_op_gpu_inplace(
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
     size_t rest = out.size() / (dim0 * dim1);
-    compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 2);
-    compute_encoder->setBytes(strides.data(), ndim * sizeof(size_t), 3);
-    compute_encoder->setBytes(&ndim, sizeof(int), 4);
+    compute_encoder.set_vector_bytes(shape, 2);
+    compute_encoder.set_vector_bytes(strides, 3);
+    compute_encoder.set_bytes(ndim, 4);
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::unary] Must use 1024 sized block");
     }

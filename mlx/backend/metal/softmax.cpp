@@ -81,11 +81,11 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       group_dims = MTL::Size(threadgroup_size, 1, 1);
     }
 
-    compute_encoder->setComputePipelineState(kernel);
+    compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(
         in.data_shared_ptr() == nullptr ? out : in, 0);
     compute_encoder.set_output_array(out, 1);
-    compute_encoder->setBytes(&axis_size, sizeof(int), 2);
+    compute_encoder.set_bytes(axis_size, 2);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 

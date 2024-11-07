@@ -17,10 +17,10 @@
 namespace mlx::core {
 
 template <typename T>
-void arange_set_scalars(T start, T next, CommandEncoder& enc) {
-  enc->setBytes(&start, sizeof(T), 0);
+void arange_set_scalars(T start, T next, metal::CommandEncoder& enc) {
+  enc.set_bytes(start, 0);
   T step = next - start;
-  enc->setBytes(&step, sizeof(T), 1);
+  enc.set_bytes(step, 1);
 }
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -37,7 +37,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   MTL::Size group_dims = MTL::Size(
       std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
   switch (out.dtype()) {
     case bool_: // unsupported
@@ -129,24 +129,24 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     size_t n_threads = out.size() * thread_group_size;
     MTL::Size grid_dims = MTL::Size(n_threads, 1, 1);
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->setComputePipelineState(kernel);
+    compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     if (ndim == 0) {
       // Pass place holders so metal doesn't complain
       int shape_ = 0;
       size_t stride_ = 0;
-      compute_encoder->setBytes(&shape_, sizeof(int), 2);
-      compute_encoder->setBytes(&stride_, sizeof(size_t), 3);
-      compute_encoder->setBytes(&stride_, sizeof(size_t), 4);
+      compute_encoder.set_bytes(shape_, 2);
+      compute_encoder.set_bytes(stride_, 3);
+      compute_encoder.set_bytes(stride_, 4);
     } else {
-      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 2);
-      compute_encoder->setBytes(in_strides.data(), ndim * sizeof(size_t), 3);
-      compute_encoder->setBytes(out_strides.data(), ndim * sizeof(size_t), 4);
+      compute_encoder.set_vector_bytes(shape, 2);
+      compute_encoder.set_vector_bytes(in_strides, 3);
+      compute_encoder.set_vector_bytes(out_strides, 4);
     }
-    compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
-    compute_encoder->setBytes(&axis_stride, sizeof(size_t), 6);
-    compute_encoder->setBytes(&axis_size, sizeof(size_t), 7);
+    compute_encoder.set_bytes(ndim, 5);
+    compute_encoder.set_bytes(axis_stride, 6);
+    compute_encoder.set_bytes(axis_size, 7);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
@@ -275,19 +275,17 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   MTL::Size group_dims = MTL::Size(1, thread_group_size, 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(keys, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&odd, sizeof(bool), 2);
-  compute_encoder->setBytes(&bytes_per_key, sizeof(size_t), 3);
+  compute_encoder.set_bytes(odd, 2);
+  compute_encoder.set_bytes(bytes_per_key, 3);
 
   if (!keys.flags().row_contiguous) {
     int ndim = keys.ndim();
-    compute_encoder->setBytes(&ndim, sizeof(int), 4);
-    compute_encoder->setBytes(
-        keys.shape().data(), keys.ndim() * sizeof(int), 5);
-    compute_encoder->setBytes(
-        keys.strides().data(), keys.ndim() * sizeof(size_t), 6);
+    compute_encoder.set_bytes(ndim, 4);
+    compute_encoder.set_vector_bytes(keys.shape(), 5);
+    compute_encoder.set_vector_bytes(keys.strides(), 6);
   }
 
   compute_encoder.dispatchThreads(grid_dims, group_dims);
