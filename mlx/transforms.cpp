@@ -1,5 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
+#include <cstdlib>
+#include <deque>
 #include <future>
 #include <numeric>
 #include <set>
@@ -15,6 +17,18 @@
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
+
+int bfs_max_width() {
+  auto get_val = []() {
+    if (const char* buff_str = std::getenv("MLX_BFS_MAX_WIDTH")) {
+      return atoi(buff_str);
+    } else {
+      return 10;
+    }
+  };
+  static int bfs_max_width_ get_val();
+  return bfs_max_width_;
+}
 
 namespace mlx::core {
 
@@ -40,7 +54,7 @@ int detail::InTracing::tracing_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
-  std::vector<array> tape;
+  std::deque<array> tape;
 
   // stream events to use for synchronization
   std::unordered_map<uint32_t, Event> events;
@@ -72,6 +86,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     while (!dfs.empty()) {
       auto& [a_ref, idx] = dfs.top();
       auto& a = a_ref.get();
+
       if (idx < a.inputs().size()) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
@@ -130,14 +145,32 @@ array eval_impl(std::vector<array> outputs, bool async) {
       dfs.pop();
     }
 
-    // Build the tape in BFS order
+    // Build the tape in BFS order with a width limit
+    int max_width = bfs_max_width();
+    dfs = std::stack<std::pair<std::reference_wrapper<array>, int>>();
     tape.push_back(synchronizer);
-    for (int i = 0; !cache.empty() && i < tape.size(); ++i) {
-      auto& a = tape[i];
-      for (auto& in : a.inputs()) {
+    for (int i = 0; !cache.empty() && (i < tape.size() || !dfs.empty());) {
+      auto& a = (i >= tape.size()) ? dfs.top().first.get() : tape[i];
+      int j = 0;
+      if (i >= tape.size()) {
+        j = dfs.top().second;
+        dfs.pop();
+      } else {
+        i++;
+      }
+      for (; j < a.inputs().size(); ++j) {
+        auto& in = a.inputs()[j];
         if (in.status() != array::Status::unscheduled) {
           continue;
         }
+
+        // If the width limit is exceeded, push the array on the stack
+        // and go down a level
+        if ((tape.size() - i) >= max_width) {
+          dfs.emplace(a, j);
+          break;
+        }
+
         auto it = cache.find(in.id());
         it->second -= 1;
 
