@@ -185,24 +185,24 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
     auto stream = arr.primitive().stream();
 
-    // Lookup corresponding event and increment counter
+    Event e;
     if (stream.threads > 1) {
-      auto e = Event(stream);
-      e.set_value(e.value() + 1);
-      arr.attach_event(e);
-      for (auto& s : arr.siblings()) {
-        s.attach_event(e);
-      }
+      // Use unique events for multi-threaded streams
+      e = Event(stream);
+      e.set_value(1);
     } else {
-      auto e = events.find(stream.index);
-      if (e == events.end()) {
-        e = events.emplace(stream.index, Event{stream}).first;
+      // Share events for single-threaded streams
+      auto e_it = events.find(stream.index);
+      if (e_it == events.end()) {
+        e_it = events.emplace(stream.index, Event{stream}).first;
       }
-      e->second.set_value(e->second.value() + 1);
-      arr.attach_event(e->second);
-      for (auto& s : arr.siblings()) {
-        s.attach_event(e->second);
-      }
+      e_it->second.set_value(e_it->second.value() + 1);
+      e = e_it->second;
+    }
+    // Increment event counter and attach to the array and siblings
+    arr.attach_event(e);
+    for (auto& s : arr.siblings()) {
+      s.attach_event(e);
     }
 
     // Set the status of the array and siblings.
@@ -212,7 +212,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     std::vector<std::shared_future<void>> arr_deps;
-    bool signal = needs_signal.find(arr.id()) != needs_signal.end();
+    bool signal =
+        stream.threads > 1 || needs_signal.find(arr.id()) != needs_signal.end();
 
     if (arr.primitive().device() == Device::gpu) {
       if (!metal::is_available()) {
@@ -222,7 +223,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
     } else {
       auto task = [arr = std::move(arr), stream, signal]() mutable {
         for (auto& input : arr.inputs()) {
-          if (input.event().valid()) {
+          if (input.event().valid() &&
+              (stream.threads > 1 ||
+               input.event().stream() != arr.primitive().stream())) {
             input.event().wait();
           }
         }

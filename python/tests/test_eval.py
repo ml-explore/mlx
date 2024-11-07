@@ -137,6 +137,18 @@ class TestEval(mlx_tests.MLXTestCase):
             mx.async_eval(x)
             mx.eval(a + b)
 
+    def test_multithreaded_stream(self):
+        arrays = [mx.random.uniform(shape=(4, 4)) for _ in range(8)]
+        mx.eval(arrays)
+        s = mx.new_stream(mx.cpu, threads=2)
+        with mx.stream(s):
+            outputs = [mx.exp(-mx.abs(x)) for x in arrays]
+            out_multi = sum(outputs)
+
+        outputs = [mx.exp(-mx.abs(x)) for x in arrays]
+        out = sum(outputs)
+        self.assertTrue(mx.allclose(out, out_multi))
+
 
 if __name__ == "__main__":
     unittest.main()
