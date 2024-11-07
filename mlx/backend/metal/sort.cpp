@@ -90,7 +90,7 @@ void single_block_sort(
   MTL::Size group_dims = MTL::Size(bn, 1, 1);
   MTL::Size grid_dims = MTL::Size(1, n_rows, 1);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
 void multi_block_sort(
@@ -166,7 +166,7 @@ void multi_block_sort(
     MTL::Size group_dims = MTL::Size(bn, 1, 1);
     MTL::Size grid_dims = MTL::Size(n_blocks, n_rows, 1);
 
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   }
 
   // Do merges
@@ -205,7 +205,7 @@ void multi_block_sort(
       MTL::Size group_dims = MTL::Size(n_thr_per_group, 1, 1);
       MTL::Size grid_dims = MTL::Size(1, n_rows, 1);
 
-      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+      compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
     }
 
     // Do merge
@@ -230,7 +230,7 @@ void multi_block_sort(
       MTL::Size group_dims = MTL::Size(bn, 1, 1);
       MTL::Size grid_dims = MTL::Size(n_blocks, n_rows, 1);
 
-      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+      compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
     }
   }
 

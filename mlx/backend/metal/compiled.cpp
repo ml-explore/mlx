@@ -425,7 +425,7 @@ void Compiled::eval_gpu(
     MTL::Size grid_dims = use_2d
         ? get_2d_grid_dims(outputs[0].shape(), outputs[0].strides())
         : MTL::Size(nthreads, 1, 1);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
@@ -443,7 +443,7 @@ void Compiled::eval_gpu(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest, pow2);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
 

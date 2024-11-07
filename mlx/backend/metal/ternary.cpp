@@ -99,7 +99,7 @@ void ternary_op_gpu_inplace(
     }
     MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     // Launch a 1D or 2D grid of threads
     size_t nthreads = out.data_size();
@@ -109,7 +109,7 @@ void ternary_op_gpu_inplace(
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
                                  : MTL::Size(nthreads, 1, 1);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
 

@@ -252,7 +252,7 @@ void init_reduce(
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_output_array(out, 0);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void all_reduce_dispatch(
@@ -281,7 +281,7 @@ void all_reduce_dispatch(
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(in_size, 2);
     compute_encoder.set_bytes(in_size, 3);
-    compute_encoder.dispatchThreads(grid_dims, grid_dims);
+    compute_encoder.dispatch_threads(grid_dims, grid_dims);
   }
 
   // We need multiple threadgroups so we 'll do it in 2 passes.
@@ -315,7 +315,7 @@ void all_reduce_dispatch(
     compute_encoder.set_output_array(intermediate, 1);
     compute_encoder.set_bytes(in_size, 2);
     compute_encoder.set_bytes(row_size, 3);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
 
     // 2nd pass
     std::ostringstream kname_2nd_pass;
@@ -330,7 +330,7 @@ void all_reduce_dispatch(
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(intermediate_size, 2);
     compute_encoder.set_bytes(intermediate_size, 3);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
 
@@ -369,7 +369,7 @@ void row_reduce_small(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void row_reduce_simple(
@@ -406,7 +406,7 @@ void row_reduce_simple(
   compute_encoder.set_output_array(out, 1);
   compute_encoder.set_bytes(row_size, 2);
   compute_encoder.set_bytes(out_size, 3);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void row_reduce_looped(
@@ -437,7 +437,7 @@ void row_reduce_looped(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void row_reduce_general_dispatch(
@@ -511,7 +511,7 @@ void strided_reduce_small(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
 void strided_reduce_longcolumn(
@@ -569,7 +569,7 @@ void strided_reduce_longcolumn(
   compute_encoder.set_output_array(intermediate, 1);
   args.encode(compute_encoder);
   compute_encoder.set_bytes(out_size, 11);
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   // Make the 2nd pass arguments and grid_dims
   ColReduceArgs second_args(intermediate);
@@ -598,7 +598,7 @@ void strided_reduce_longcolumn(
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);
   second_args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void strided_reduce_looped(
@@ -639,7 +639,7 @@ void strided_reduce_looped(
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
   args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void strided_reduce_2pass(
@@ -693,7 +693,7 @@ void strided_reduce_2pass(
   compute_encoder.set_output_array(intermediate, 1);
   args.encode(compute_encoder);
   compute_encoder.set_bytes(out_size, 11);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   // Make the 2nd pass arguments and grid_dims
   ColReduceArgs second_args(intermediate);
@@ -720,7 +720,7 @@ void strided_reduce_2pass(
   compute_encoder.set_input_array(intermediate, 0);
   compute_encoder.set_output_array(out, 1);
   second_args.encode(compute_encoder);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void strided_reduce_general_dispatch(

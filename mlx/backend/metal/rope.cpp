@@ -108,7 +108,7 @@ void RoPE::eval_gpu(
   } else {
     compute_encoder.set_bytes(base, 10);
   }
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 } // namespace mlx::core::fast

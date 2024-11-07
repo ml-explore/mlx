@@ -171,14 +171,14 @@ void CommandEncoder::maybeInsertBarrier() {
   next_outputs_.clear();
 }
 
-void CommandEncoder::dispatchThreadgroups(
+void CommandEncoder::dispatch_threadgroups(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
   maybeInsertBarrier();
   enc_->dispatchThreadgroups(grid_dims, group_dims);
 }
 
-void CommandEncoder::dispatchThreads(
+void CommandEncoder::dispatch_threads(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
   maybeInsertBarrier();

@@ -95,7 +95,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size grid_dims(
         thread_group_size, tmp_grid_dims.width, tmp_grid_dims.height);
     MTL::Size group_dims(thread_group_size, 1, 1);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder.set_compute_pipeline_state(kernel);
@@ -125,7 +125,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size grid_dims(
         thread_group_size, tmp_grid_dims.width, tmp_grid_dims.height);
     MTL::Size group_dims(thread_group_size, 1, 1);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   d.add_temporaries(std::move(copies), s.index);

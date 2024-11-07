@@ -86,7 +86,7 @@ void RMSNorm::eval_gpu(
     compute_encoder.set_bytes(eps_, 3);
     compute_encoder.set_bytes(axis_size, 4);
     compute_encoder.set_bytes(w_stride, 5);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   d.add_temporaries(std::move(copies), s.index);
@@ -189,7 +189,7 @@ void RMSNormVJP::eval_gpu(
     compute_encoder.set_bytes(eps_, 5);
     compute_encoder.set_bytes(axis_size, 6);
     compute_encoder.set_bytes(w_stride, 7);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   ReductionPlan plan(
@@ -280,7 +280,7 @@ void LayerNorm::eval_gpu(
     compute_encoder.set_bytes(axis_size, 5);
     compute_encoder.set_bytes(w_stride, 6);
     compute_encoder.set_bytes(b_stride, 7);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   d.add_temporaries(std::move(copies), s.index);
@@ -401,7 +401,7 @@ void LayerNormVJP::eval_gpu(
     compute_encoder.set_bytes(eps_, 5);
     compute_encoder.set_bytes(axis_size, 6);
     compute_encoder.set_bytes(w_stride, 7);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   if (gw.ndim() == 1 && gw.size() == axis_size) {

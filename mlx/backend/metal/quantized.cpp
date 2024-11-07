@@ -145,7 +145,7 @@ void launch_qmm(
     compute_encoder.set_vector_bytes(rhs_strides, offset + 13);
   }
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   d.add_temporaries(std::move(copies), s.index);
 }
 
@@ -256,7 +256,7 @@ void qvm_split_k(
   compute_encoder.set_vector_bytes(b_strides, 14);
   compute_encoder.set_bytes(final_block_size, 15);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   d.add_temporaries(std::move(copies), s.index);
 
   int axis = intermediate.ndim() - 3;
@@ -471,7 +471,7 @@ void fast::AffineQuantize::eval_gpu(
   }
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
                                : MTL::Size(nthreads, 1, 1);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }

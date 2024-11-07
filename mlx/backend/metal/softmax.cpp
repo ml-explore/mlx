@@ -86,7 +86,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
         in.data_shared_ptr() == nullptr ? out : in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(axis_size, 2);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
   d.add_temporaries(std::move(copies), s.index);

@@ -152,7 +152,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Launch grid
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -375,7 +375,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error("[Scatter::eval_gpu] Invalid number of threads");
   }
   MTL::Size group_dims = get_block_dims(upd_size, grid_y, 1);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
 } // namespace mlx::core

@@ -293,7 +293,7 @@ void steel_matmul_regular(
   compute_encoder.set_vector_bytes(batch_shape, 6);
   compute_encoder.set_vector_bytes(batch_strides, 7);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   // Record copies
   d.add_temporaries(std::move(copies), s.index);
@@ -417,7 +417,7 @@ void steel_matmul(
     compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder.set_bytes(params, 3);
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     // Do accum kernel
     {
@@ -439,7 +439,7 @@ void steel_matmul(
       MTL::Size grid_dims = MTL::Size(N, M, 1);
       MTL::Size group_dims = MTL::Size(std::min(1024, N * M), 1, 1);
 
-      compute_encoder.dispatchThreads(grid_dims, group_dims);
+      compute_encoder.dispatch_threads(grid_dims, group_dims);
     }
 
     d.add_temporaries(std::move(copies), s.index);
@@ -640,7 +640,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_vector_bytes(batch_strides_vec, 11);
     compute_encoder.set_vector_bytes(batch_strides_mat, 12);
 
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     d.add_temporaries(std::move(copies), s.index);
     return;
@@ -845,7 +845,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     int bias_stride = c.strides()[c.ndim() - 1];
     compute_encoder.set_bytes(bias_stride, 14);
 
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     d.add_temporaries(std::move(copies), s.index);
     return;
@@ -930,7 +930,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder.set_bytes(params, 3);
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     // Do accum kernel
     {
@@ -957,7 +957,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       MTL::Size grid_dims = MTL::Size(N, M, 1);
       MTL::Size group_dims = MTL::Size(std::min(1024, N * M), 1, 1);
 
-      compute_encoder.dispatchThreads(grid_dims, group_dims);
+      compute_encoder.dispatch_threads(grid_dims, group_dims);
     }
 
     d.add_temporaries(std::move(copies), s.index);
@@ -1085,7 +1085,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_vector_bytes(batch_shape, 6);
   compute_encoder.set_vector_bytes(batch_strides, 7);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }
@@ -1379,7 +1379,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_vector_bytes(mask_strides, 23);
     compute_encoder.set_vector_bytes(mask_batch_strides, 24);
 
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     d.add_temporaries(std::move(copies), s.index);
     return;
@@ -1489,7 +1489,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   compute_encoder.set_vector_bytes(mask_strides, 13);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }
@@ -1714,7 +1714,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_input_array(lhs_indices, 18 + int(!is_b_matrix));
     compute_encoder.set_input_array(rhs_indices, 18 + int(is_b_matrix));
 
-    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
     d.add_temporaries(std::move(copies), s.index);
     return;
@@ -1845,7 +1845,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_vector_bytes(operand_strides, 14);
   compute_encoder.set_vector_bytes(operand_batch_ndim, 15);
 
-  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }
