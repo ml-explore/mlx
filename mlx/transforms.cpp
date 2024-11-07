@@ -23,7 +23,7 @@ int bfs_max_width() {
     if (const char* buff_str = std::getenv("MLX_BFS_MAX_WIDTH")) {
       return atoi(buff_str);
     } else {
-      return 10;
+      return 50;
     }
   };
   static int bfs_max_width_ = get_val();
