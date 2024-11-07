@@ -738,7 +738,7 @@ void fft_op(
     auto group_dims = MTL::Size(1, threadgroup_batch_size, threads_per_fft);
     auto grid_dims =
         MTL::Size(batch_size, threadgroup_batch_size, threads_per_fft);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
   d.add_temporaries(std::move(copies), s.index);
