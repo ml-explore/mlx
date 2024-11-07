@@ -26,6 +26,10 @@ Stream new_stream(Device d, int threads /* = 1 */) {
     throw std::invalid_argument(
         "[new_stream] Cannot make gpu stream without gpu backend.");
   }
+  if (d == Device::gpu && threads > 1) {
+    throw std::invalid_argument(
+        "[new_stream] Cannot make multi-threaded gpu stream.");
+  }
   return scheduler::scheduler().new_stream(d, threads);
 }
 
