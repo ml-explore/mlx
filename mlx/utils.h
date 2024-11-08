@@ -120,4 +120,20 @@ inline int next_power_of_2(int n) {
   return pow(2, std::ceil(std::log2(n)));
 }
 
+namespace env {
+
+int get_var(const char* name, int default_value);
+
+inline int bfs_max_width() {
+  static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);
+  return bfs_max_width_;
+}
+
+inline int max_ops_per_buffer() {
+  static int max_ops_per_buffer_ = get_var("MLX_MAX_OPS_PER_BUFFER", 10);
+  return max_ops_per_buffer_;
+}
+
+} // namespace env
+
 } // namespace mlx::core
