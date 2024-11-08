@@ -58,15 +58,42 @@ struct CommandEncoder {
     CommandEncoder& enc;
   };
 
-  MTL::ComputeCommandEncoder* operator->() {
-    return enc_;
-  }
-
   void set_input_array(const array& a, int idx, int64_t offset = 0);
   void set_output_array(array& a, int idx, int64_t offset = 0);
-  void dispatchThreadgroups(MTL::Size grid_dims, MTL::Size group_dims);
-  void dispatchThreads(MTL::Size grid_dims, MTL::Size group_dims);
+  void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
+  void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
+
+  void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
+    enc_->setComputePipelineState(kernel);
+  }
+
+  void wait_for_fence(MTL::Fence* fence) {
+    enc_->waitForFence(fence);
+  }
+
+  void update_fence(MTL::Fence* fence) {
+    enc_->updateFence(fence);
+  }
+
+  template <typename T>
+  void set_vector_bytes(const std::vector<T>& vec, size_t nelems, int idx) {
+    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
+  }
+  template <typename T>
+  void set_vector_bytes(const std::vector<T>& vec, int idx) {
+    return set_vector_bytes(vec, vec.size(), idx);
+  }
+
+  template <typename T>
+  void set_bytes(const T* v, int n, int idx) {
+    return enc_->setBytes(v, n * sizeof(T), idx);
+  }
+
+  template <typename T>
+  void set_bytes(const T& v, int idx) {
+    return enc_->setBytes(&v, sizeof(T), idx);
+  }
 
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);

@@ -171,14 +171,14 @@ void CommandEncoder::maybeInsertBarrier() {
   next_outputs_.clear();
 }
 
-void CommandEncoder::dispatchThreadgroups(
+void CommandEncoder::dispatch_threadgroups(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
   maybeInsertBarrier();
   enc_->dispatchThreadgroups(grid_dims, group_dims);
 }
 
-void CommandEncoder::dispatchThreads(
+void CommandEncoder::dispatch_threads(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
   maybeInsertBarrier();
@@ -298,7 +298,7 @@ void Device::end_encoding(int index) {
         if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
           // If we've already waited on a fence, don't wait on it again.
           if (waiting_on.find(it->second) == waiting_on.end()) {
-            enc->waitForFence(it->second->fence);
+            enc.wait_for_fence(it->second->fence);
             waiting_on.insert(it->second);
           }
         }
@@ -307,7 +307,7 @@ void Device::end_encoding(int index) {
         stream.outputs[out] = stream.fence;
       }
     }
-    enc->updateFence(stream.fence->fence);
+    enc.update_fence(stream.fence->fence);
     stream.buffer->addCompletedHandler(
         [&stream,
          waiting_on = std::move(waiting_on),

@@ -43,7 +43,7 @@ void CustomKernel::eval_gpu(
       d.get_library(lib_name, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_compute_pipeline_state(kernel);
   int index = 0;
   for (int i = 0; i < checked_inputs.size(); i++) {
     const array& in = checked_inputs[i];
@@ -53,15 +53,15 @@ void CustomKernel::eval_gpu(
     if (in.ndim() > 0) {
       int ndim = in.ndim();
       if (shape_info.shape) {
-        set_vector_bytes(compute_encoder, in.shape(), ndim, index);
+        compute_encoder.set_vector_bytes(in.shape(), ndim, index);
         index++;
       }
       if (shape_info.strides) {
-        set_vector_bytes(compute_encoder, in.strides(), ndim, index);
+        compute_encoder.set_vector_bytes(in.strides(), ndim, index);
         index++;
       }
       if (shape_info.ndim) {
-        compute_encoder->setBytes(&ndim, sizeof(int), index);
+        compute_encoder.set_bytes(ndim, index);
         index++;
       }
     }
@@ -75,7 +75,7 @@ void CustomKernel::eval_gpu(
   MTL::Size group_dims = MTL::Size(tx, ty, tz);
   const auto [gx, gy, gz] = grid_;
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   d.add_temporaries(std::move(copies), s.index);
 }

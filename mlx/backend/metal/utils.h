@@ -8,23 +8,6 @@
 
 namespace mlx::core {
 
-using metal::CommandEncoder;
-
-template <typename T>
-inline void set_vector_bytes(
-    CommandEncoder& enc,
-    const std::vector<T>& vec,
-    size_t nelems,
-    int idx) {
-  enc->setBytes(vec.data(), nelems * sizeof(T), idx);
-}
-
-template <typename T>
-inline void
-set_vector_bytes(CommandEncoder& enc, const std::vector<T>& vec, int idx) {
-  return set_vector_bytes(enc, vec, vec.size(), idx);
-}
-
 std::string type_to_name(const array& a);
 
 // Compute the thread block dimensions which fit the given
