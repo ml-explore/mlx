@@ -1,9 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
+#include <cstdlib>
 #include <sstream>
 #include <vector>
 
-#include "utils.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -335,5 +336,17 @@ std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v) {
   os << ")";
   return os;
 }
+
+namespace env {
+
+int get_var(const char* name, int default_value) {
+  if (const char* buff_str = std::getenv(name)) {
+    return atoi(buff_str);
+  } else {
+    return default_value;
+  }
+}
+
+} // namespace env
 
 } // namespace mlx::core

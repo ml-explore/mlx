@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
-#include <cstdlib>
 #include <deque>
 #include <future>
 #include <numeric>
@@ -17,18 +16,6 @@
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
-
-int bfs_max_width() {
-  auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_BFS_MAX_WIDTH")) {
-      return atoi(buff_str);
-    } else {
-      return 50;
-    }
-  };
-  static int bfs_max_width_ = get_val();
-  return bfs_max_width_;
-}
 
 namespace mlx::core {
 
@@ -146,7 +133,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     // Build the tape in BFS order with a width limit
-    int max_width = bfs_max_width();
+    int max_width = env::bfs_max_width();
     dfs = std::stack<std::pair<std::reference_wrapper<array>, int>>();
     tape.push_back(synchronizer);
     for (int i = 0; !cache.empty() && (i < tape.size() || !dfs.empty());) {
