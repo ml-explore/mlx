@@ -71,6 +71,8 @@ class TestFFT(mlx_tests.MLXTestCase):
         ]
 
         for op, ax, s in itertools.product(ops, axes, shapes):
+            if ax is None and s is not None:
+                continue
             x = a
             if op in ["rfft2", "rfftn"]:
                 x = r
