@@ -628,10 +628,12 @@ METAL_FUNC void qmv_impl(
       const device T* sl = scales + row * in_vec_size_g;
       const device T* bl = biases + row * in_vec_size_g;
 
-      U s = sl[0];
-      U b = bl[0];
-      result[row] += qdot_safe<U, values_per_thread, bits>(
-          wl, x_thread, s, b, sum, remaining);
+      if (remaining > 0) {
+        U s = sl[0];
+        U b = bl[0];
+        result[row] += qdot_safe<U, values_per_thread, bits>(
+            wl, x_thread, s, b, sum, remaining);
+      }
     }
 
     for (int row = 0; row < results_per_simdgroup; row++) {
