@@ -228,9 +228,7 @@ class AffineQuantize : public Custom {
         dequantize_(dequantize) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    throw std::runtime_error("NYI");
-  }
+      override;
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;

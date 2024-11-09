@@ -2,7 +2,9 @@
 
 #include <cassert>
 
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/ops.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -402,6 +404,105 @@ void GatherQMM::eval(const std::vector<array>& inputs, array& out) {
       group_size_,
       bits_,
       transpose_);
+}
+
+template <typename T>
+void quantize(
+    const array& w_,
+    array& out_,
+    array& scales_,
+    array& biases_,
+    int bits,
+    int group_size,
+    bool compute_scale_bias) {
+  const T* w = w_.data<T>();
+  T* scales = scales_.data<T>();
+  T* biases = biases_.data<T>();
+  auto out = out_.data<uint32_t>();
+
+  T n_bins = (1 << bits) - 1;
+  T eps = 1e-7;
+  int el_per_int = 32 / bits;
+  int int_per_group = group_size / el_per_int;
+  size_t n_groups = w_.size() / group_size;
+
+  for (size_t i = 0; i < n_groups; ++i) {
+    size_t w_idx = i * group_size;
+    if (compute_scale_bias) {
+      T w_min = std::numeric_limits<float>::infinity();
+      T w_max = -w_min;
+      for (int j = 0; j < group_size; ++j) {
+        w_max = std::max(w_max, w[w_idx + j]);
+        w_min = std::min(w_min, w[w_idx + j]);
+      }
+      bool mask = std::abs(w_min) > std::abs(w_max);
+      T scale = std::max(T((w_max - w_min) / n_bins), eps);
+      scale = mask ? scale : -scale;
+
+      auto edge = mask ? w_min : w_max;
+      auto q0 = std::rint(edge / scale);
+      if (q0 == 0) {
+        scales[i] = scale;
+        biases[i] = 0;
+      } else {
+        scales[i] = edge / q0;
+        biases[i] = edge;
+      }
+    }
+    size_t out_idx = i * int_per_group;
+    for (int j = 0; j < int_per_group; ++j) {
+      uint32_t out_el = 0;
+      for (int k = 0; k < el_per_int; ++k) {
+        T w_el = w[w_idx + j * el_per_int + k];
+        w_el = std::rint((w_el - biases[i]) / scales[i]);
+        w_el = std::min(std::max(w_el, T(0)), n_bins);
+        out_el |= static_cast<uint32_t>(w_el) << (k * bits);
+      }
+      out[out_idx + j] = out_el;
+    }
+  }
+}
+
+void fast::AffineQuantize::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  bool compute_scale_bias = inputs.size() == 1;
+
+  auto ensure_row_contiguous = [](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy(arr, arr_copy, CopyType::General);
+      return arr_copy;
+    }
+  };
+  auto w = ensure_row_contiguous(inputs[0]);
+
+  auto& out = outputs[0];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  auto& scales =
+      compute_scale_bias ? outputs[1] : const_cast<array&>(inputs[1]);
+  auto& biases =
+      compute_scale_bias ? outputs[2] : const_cast<array&>(inputs[2]);
+  if (compute_scale_bias) {
+    scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
+    biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
+  }
+  if (w.dtype() == float16) {
+    quantize<float16_t>(
+        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+  } else if (w.dtype() == bfloat16) {
+    quantize<bfloat16_t>(
+        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+  } else if (w.dtype() == float32) {
+    quantize<float>(
+        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+  } else {
+    throw std::runtime_error(
+        "[fast::AffineQuantize::eval_cpu] Only supports floating point inputs");
+  }
 }
 
 } // namespace mlx::core
