@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/primitives.h"
+#include "mlx/fast_primitives.h"
 
 #define NO_CPU_MULTI(func)                                             \
   void func::eval_cpu(                                                 \
@@ -111,5 +112,9 @@ NO_CPU(Tanh)
 NO_CPU(Transpose)
 NO_CPU(Inverse)
 NO_CPU(View)
+
+namespace fast {
+NO_CPU_MULTI(AffineQuantize)
+} // namespace fast
 
 } // namespace mlx::core
