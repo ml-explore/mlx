@@ -4,7 +4,7 @@ import math
 import mlx.core as mx
 from time_utils import time_fn
 
-L = 1024
+L = 16384
 H = 32
 H_k = 32 // 4
 D = 128
