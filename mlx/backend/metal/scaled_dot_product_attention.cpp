@@ -208,8 +208,8 @@ void sdpa_vector_2pass(
   int B = q.shape(0) * q.shape(1);
   size_t k_stride = k.strides()[1];
   size_t v_stride = v.strides()[1];
-  MTL::Size group_dims(1024, 1, 1);
-  MTL::Size grid_dims(1, blocks, B);
+  MTL::Size group_dims(8 * 32, 1, 1);
+  MTL::Size grid_dims(1, B, blocks);
 
   // Allocate the intermediates
   std::vector<int> intermediate_shape;
