@@ -6,8 +6,6 @@
 using namespace metal;
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/softmax.h"
 

@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "mlx/backend/metal/kernels/bf16.h"
-
 ///////////////////////////////////////////////////////////////////////////////
 // Metal math for bfloat16
 ///////////////////////////////////////////////////////////////////////////////
@@ -368,18 +366,6 @@ instantiate_metal_math_funcs(
   METAL_FUNC otype simd_xor(itype data) {                                      \
     return static_cast<otype>(__metal_simd_xor(static_cast<ctype>(data)));     \
   }
-
-#if (MLX_METAL_VERSION >= 310) || (__METAL_VERSION__ >= 310)
-
-#define bfloat16_to_uint16(x) as_type<uint16_t>(x)
-#define uint16_to_bfloat16(x) as_type<bfloat16_t>(x)
-
-#else
-
-#define bfloat16_to_uint16(x) x.bits_
-#define uint16_to_bfloat16(x) _MLX_BFloat16(x, _MLX_BFloat16::bits_to_bfloat())
-
-#endif
 
 namespace metal {
 

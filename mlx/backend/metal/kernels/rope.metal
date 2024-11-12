@@ -2,7 +2,6 @@
 
 #include <metal_math>
 
-#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
 template <typename T, bool traditional, bool forward>
 void rope_single_impl(

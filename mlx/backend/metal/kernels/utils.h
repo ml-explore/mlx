@@ -3,7 +3,11 @@
 #pragma once
 
 #include <metal_math>
-#include "mlx/backend/metal/kernels/bf16.h"
+
+// bf16.h is conditionally included based on the metal version
+#include "bf16.h"
+
+#include "mlx/backend/metal/kernels/bf16_math.h"
 #include "mlx/backend/metal/kernels/complex.h"
 #include "mlx/backend/metal/kernels/defines.h"
 

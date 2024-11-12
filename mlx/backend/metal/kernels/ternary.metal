@@ -4,7 +4,6 @@
 #include <metal_math>
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/ternary_ops.h"
 #include "mlx/backend/metal/kernels/ternary.h"
