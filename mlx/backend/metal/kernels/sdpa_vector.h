@@ -147,13 +147,16 @@ template <typename T, int D>
   threadgroup U sum_exp_scores[BN];
 
   // Adjust positions
-  const int block_idx = tid.y;
-  const int head_idx = tid.z;
+  const int block_idx = tid.z;
+  const int head_idx = tid.y;
   const int kv_head_idx = head_idx / gqa_factor;
+  const int N_per_block = (N + blocks - 1) / blocks;
+  const int N_start = block_idx * N_per_block;
+  const int N_stop = min(N, N_start + N_per_block);
   queries += head_idx * D + simd_lid * elem_per_thread;
-  keys += kv_head_idx * k_stride + (block_idx * BN + simd_gid) * D +
+  keys += kv_head_idx * k_stride + (N_start + simd_gid) * D +
       simd_lid * elem_per_thread;
-  values += kv_head_idx * v_stride + (block_idx * BN + simd_gid) * D +
+  values += kv_head_idx * v_stride + (N_start + simd_gid) * D +
       simd_lid * elem_per_thread;
   out += head_idx * blocks * D + block_idx * D + simd_gid * elem_per_thread;
   sums += head_idx * blocks + block_idx;
@@ -171,7 +174,7 @@ template <typename T, int D>
   U sum_exp_score = 0;
 
   // For each key
-  for (int i = block_idx * BN + simd_gid; i < N; i += blocks * BN) {
+  for (int i = N_start + simd_gid; i < N_stop; i += BN) {
     // Read the key
     for (int i = 0; i < elem_per_thread; i++) {
       k[i] = keys[i];
@@ -198,8 +201,8 @@ template <typename T, int D>
     }
 
     // Move the pointers to the next kv
-    keys += blocks * stride;
-    values += blocks * stride;
+    keys += stride;
+    values += stride;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
