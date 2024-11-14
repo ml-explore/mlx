@@ -28,10 +28,19 @@ endif()
 if (@MLX_BUILD_METAL@)
     set(MLX_BUILD_METAL @MLX_BUILD_METAL@)
     set(MLX_CXX_FLAGS ${MLX_CXX_FLAGS} -D_METAL_)
-    set_and_check(MLX_INCLUDE_DIRS 
-        ${MLX_INCLUDE_DIRS} 
+    set(MLX_INCLUDE_DIRS 
+        "${MLX_INCLUDE_DIRS};"
         @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/metal_cpp
     )
+    if(@MLX_METAL_VERSION@ GREATER_EQUAL 310)
+      set(MLX_INCLUDE_DIRS
+        "${MLX_INCLUDE_DIRS};"
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/mlx/backend/metal/kernels/metal_3_1)
+    else()
+      set_and_check(MLX_INCLUDE_DIRS
+        "${MLX_INCLUDE_DIRS};"
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/mlx/backend/metal/kernels/metal_3_0)
+    endif()
 endif()
 
 set_target_properties(mlx PROPERTIES
