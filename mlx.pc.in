@@ -37,7 +37,7 @@ if (@MLX_BUILD_METAL@)
         "${MLX_INCLUDE_DIRS};"
         @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/mlx/backend/metal/kernels/metal_3_1)
     else()
-      set_and_check(MLX_INCLUDE_DIRS
+      set(MLX_INCLUDE_DIRS
         "${MLX_INCLUDE_DIRS};"
         @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/mlx/backend/metal/kernels/metal_3_0)
     endif()
