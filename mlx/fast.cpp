@@ -600,7 +600,7 @@ array scaled_dot_product_attention(
    * * dtype is not fp32 or fp16
    */
 
-  int threshold = 1e6;
+  int threshold = 1024; // TODO: Fix after dev
   if (memory_efficient_threshold.has_value()) {
     threshold = std::max(1, memory_efficient_threshold.value());
   }

@@ -68,6 +68,22 @@ set(STEEL_HEADERS
     steel/utils/type_traits.h
     steel/utils/integral_constant.h)
 
+set(STEEL_ATTN_HEADERS
+    steel/defines.h
+    steel/utils.h
+    steel/gemm/gemm.h
+    steel/gemm/mma.h
+    steel/gemm/loader.h
+    steel/gemm/transforms.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h
+    steel/attn/attn.h
+    steel/attn/loader.h
+    steel/attn/mma.h
+    steel/attn/params.h
+    steel/attn/transforms.h
+    steel/attn/kernels/steel_attention.h)
+
 if(NOT MLX_METAL_JIT)
   build_kernel(arange arange.h)
   build_kernel(binary binary.h binary_ops.h)
@@ -93,6 +109,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_fused ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
+  build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
 endif()
 

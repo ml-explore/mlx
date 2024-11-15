@@ -7,6 +7,9 @@
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
+#include "mlx/backend/metal/kernels/steel/attn/params.h"
+#include "mlx/backend/metal/kernels/steel/gemm/params.h"
+#include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
 
@@ -19,122 +22,57 @@ void sdpa_full_self_attention_metal(
     const array& q,
     const array& k,
     const array& v,
-    const float alpha,
-    array& out) {
-  std::ostringstream kname_self_attention;
-  kname_self_attention << "steel_gemm_attention_";
+    const float scale,
+    array& o) {
+  using namespace mlx::steel;
 
-  constexpr const int bm = 16;
-  constexpr const int bn = 16;
-  const int bk = q.shape(-1); // already forced to be 64 or 128
+  int wm = 2;
+  int wn = 2;
 
-  if (bk != 64 && bk != 128) {
-    throw std::runtime_error(
-        "[ScaledDotProductAttention::eval_gpu]: hidden dim: expected either 64, 128");
-  }
+  int bq = 16;
+  int bk = 16;
+  int bd = 64;
 
-  constexpr const int wm = 2;
-  constexpr const int wn = 2;
-
-  std::string delimiter = "_";
-
-  kname_self_attention << "bm_" + std::to_string(bm) + delimiter;
-  kname_self_attention << "bn_" + std::to_string(bn) + delimiter;
-  kname_self_attention << "bk_" + std::to_string(bk) + delimiter;
-
-  for (const auto& arr : {k, v, out}) {
-    if (arr.dtype() != q.dtype()) {
-      throw std::runtime_error(
-          "[ScaledDotProductAttention::eval_gpu]: expected matching dtypes for q,k,v,o");
-    }
-  }
-
-  if (q.dtype() == float32) {
-    kname_self_attention << "itype" + delimiter + "float";
-  } else if (q.dtype() == float16) {
-    kname_self_attention << "itype" + delimiter + "half";
-  } else {
-    throw std::runtime_error(
-        "[ScaledDotProductAttention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
-  }
+  std::ostringstream kname;
+  kname << "steel_attention_" << type_to_name(q) << "_bq" << bq << "_bk" << bk
+        << "_bd" << bd << "_wm" << wm << "_wn" << wn;
 
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname_self_attention.str());
+  auto kernel = d.get_kernel(kname.str());
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  uint hidden_dim = q.shape(-1);
-  uint qseq = q.shape(-2);
-  uint qheads = q.shape(-3);
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int L = q.shape(2);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
 
-  const uint64_t KV_sequence_length = k.shape(-2);
-  const uint query_sequence_length = q.shape(-2);
-  const uint n_q_heads = q.shape(1);
-  const uint n_kv_heads = k.shape(1);
+  int NQ = (L + bq - 1) / bq;
+  int NK = (L + bk - 1) / bk;
 
-  const int M = q.shape(-2);
-  const int N = M;
-  const int K = q.shape(-1);
-  const size_t batch_size_out = q.shape(0) * q.shape(1);
+  AttnParams params{
+      /* int B = */ B,
+      /* int H = */ H,
+      /* int L = */ L,
+      /* int D = */ D,
+      /* int gqa_factor = */ gqa_factor,
+      /* float scale = */ scale,
 
-  const std::vector<int> batch_shape = {q.shape(0) * q.shape(1)};
-  const int dk = q.shape(-1);
-  const int ldq = dk;
-  const int ldk = dk;
-  const int ldv = dk;
-  const int lds = bn;
-  const int ldo = dk;
+      /* int NQ = */ NQ,
+      /* int NK = */ NK,
 
-  int tn = 1;
-  int tm = (M + bm - 1) / bm;
-
-  const int batch_stride_q = dk * query_sequence_length;
-  const int batch_stride_k = dk * query_sequence_length;
-  const int batch_stride_v = dk * query_sequence_length;
-  const int batch_stride_o = dk * query_sequence_length;
-  const int swizzle_log = 0;
-  const int gemm_n_iterations_aligned = (N + bn - 1) / bn;
-  const int gemm_k_iterations_aligned = (K + bk - 1) / bk;
-  const int gemm_sv_m_block_iterations = (M + bm - 1) / bm;
-  const int batch_ndim = int(batch_shape.size());
-
-  MLXFastAttentionParams params{
-      (int)M,
-      (int)N,
-      (int)K,
-      ldq,
-      ldk,
-      ldv,
-      lds,
-      ldo,
-      tn,
-      tm,
-      batch_stride_q,
-      batch_stride_k,
-      batch_stride_v,
-      batch_stride_o,
-      swizzle_log,
-      gemm_n_iterations_aligned,
-      gemm_k_iterations_aligned,
-      gemm_sv_m_block_iterations,
-      batch_ndim,
-      alpha};
-
-  const std::vector<size_t> batch_strides = {
-      (size_t)batch_stride_q,
-      (size_t)batch_stride_k,
-      (size_t)batch_stride_v,
-      (size_t)batch_stride_o};
+      /* size_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
+      /* size_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
+      /* size_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
+      /* size_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
 
   compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
   compute_encoder.set_input_array(v, 2);
-  compute_encoder.set_output_array(out, 3);
-
+  compute_encoder.set_output_array(o, 3);
   compute_encoder.set_bytes(params, 4);
-  compute_encoder.set_vector_bytes(batch_shape, 6);
-  compute_encoder.set_vector_bytes(batch_strides, 7);
 
-  MTL::Size grid_dims = MTL::Size(1, tm, batch_size_out);
+  MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
