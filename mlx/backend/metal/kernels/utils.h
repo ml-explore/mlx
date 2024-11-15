@@ -83,44 +83,45 @@ struct Limits<complex64_t> {
 ///////////////////////////////////////////////////////////////////////////////
 // Single Array with generic dims
 
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc(
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc(
     uint elem,
     constant const int* shape,
-    constant const stride_t* strides,
+    constant const StrideT* strides,
     int ndim) {
-  stride_t loc = 0;
+  IdxT loc = 0;
   for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
-    loc += (elem % shape[i]) * strides[i];
+    loc += (elem % shape[i]) * IdxT(strides[i]);
     elem /= shape[i];
   }
   return loc;
 }
 
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc(
-    stride_t elem,
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc(
+    StrideT elem,
     constant const int* shape,
-    constant const stride_t* strides,
+    constant const StrideT* strides,
     int ndim) {
-  stride_t loc = 0;
+  IdxT loc = 0;
   for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
-    loc += (elem % shape[i]) * strides[i];
+    loc += (elem % shape[i]) * IdxT(strides[i]);
     elem /= shape[i];
   }
   return loc;
 }
 
 // Non templated version to handle arbitrary dims
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc(
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc(
     uint3 elem,
     constant const int* shape,
-    constant const stride_t* strides,
+    constant const StrideT* strides,
     int ndim) {
-  stride_t loc = elem.x * strides[ndim - 1] + elem.y * strides[ndim - 2];
+  IdxT loc =
+      elem.x * IdxT(strides[ndim - 1]) + elem.y * IdxT(strides[ndim - 2]);
   for (int d = ndim - 3; d >= 0; --d) {
-    loc += (elem.z % shape[d]) * strides[d];
+    loc += (elem.z % shape[d]) * IdxT(strides[d]);
     elem.z /= shape[d];
   }
   return loc;
@@ -129,61 +130,61 @@ METAL_FUNC stride_t elem_to_loc(
 ///////////////////////////////////////////////////////////////////////////////
 // Single Array with fixed N dims
 
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc_1(uint elem, constant const stride_t& stride) {
-  return elem * stride;
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc_1(uint elem, constant const StrideT& stride) {
+  return elem * IdxT(stride);
 }
 
-template <typename stride_t>
-METAL_FUNC stride_t
-elem_to_loc_2(uint2 elem, constant const stride_t strides[2]) {
-  return elem.x * strides[1] + elem.y * strides[0];
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc_2(uint2 elem, constant const StrideT strides[2]) {
+  return elem.x * IdxT(strides[1]) + elem.y * IdxT(strides[0]);
 }
 
-template <typename stride_t>
-METAL_FUNC stride_t
-elem_to_loc_3(uint3 elem, constant const stride_t strides[3]) {
-  return elem.x * strides[2] + elem.y * strides[1] + elem.z * strides[0];
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC IdxT elem_to_loc_3(uint3 elem, constant const StrideT strides[3]) {
+  return elem.x * IdxT(strides[2]) + elem.y * IdxT(strides[1]) +
+      elem.z * IdxT(strides[0]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Multiple Arrays with generic dims
 
-template <typename stride_t>
-METAL_FUNC ulong2 elem_to_loc_2_nd(
+template <typename StrideT, typename IdxT = StrideT>
+METAL_FUNC vec<IdxT, 2> elem_to_loc_2_nd(
     uint3 elem,
     constant const int* shape,
-    constant const stride_t* a_strides,
-    constant const stride_t* b_strides,
+    constant const StrideT* a_strides,
+    constant const StrideT* b_strides,
     int ndim) {
-  ulong2 loc = {
-      ulong(elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2]),
-      ulong(elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2])};
+  vec<IdxT, 2> loc = {
+      elem.x * IdxT(a_strides[ndim - 1]) + elem.y * IdxT(a_strides[ndim - 2]),
+      elem.x * IdxT(b_strides[ndim - 1]) + elem.y * IdxT(b_strides[ndim - 2])};
   for (int d = ndim - 3; d >= 0; --d) {
     uint l = elem.z % shape[d];
-    loc.x += l * a_strides[d];
-    loc.y += l * b_strides[d];
+    loc.x += l * IdxT(a_strides[d]);
+    loc.y += l * IdxT(b_strides[d]);
     elem.z /= shape[d];
   }
   return loc;
 }
 
-METAL_FUNC ulong3 elem_to_loc_3_nd(
+template <typename IdxT = size_t>
+METAL_FUNC vec<IdxT, 3> elem_to_loc_3_nd(
     uint3 elem,
     constant const int* shape,
     constant const size_t* a_strides,
     constant const size_t* b_strides,
     constant const size_t* c_strides,
     int ndim) {
-  ulong3 loc = {
-      elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2],
-      elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2],
-      elem.x * c_strides[ndim - 1] + elem.y * c_strides[ndim - 2]};
+  vec<IdxT, 3> loc = {
+      elem.x * IdxT(a_strides[ndim - 1]) + elem.y * IdxT(a_strides[ndim - 2]),
+      elem.x * IdxT(b_strides[ndim - 1]) + elem.y * IdxT(b_strides[ndim - 2]),
+      elem.x * IdxT(c_strides[ndim - 1]) + elem.y * IdxT(c_strides[ndim - 2])};
   for (int d = ndim - 3; d >= 0; --d) {
     uint l = elem.z % shape[d];
-    loc.x += l * a_strides[d];
-    loc.y += l * b_strides[d];
-    loc.z += l * c_strides[d];
+    loc.x += l * IdxT(a_strides[d]);
+    loc.y += l * IdxT(b_strides[d]);
+    loc.z += l * IdxT(c_strides[d]);
     elem.z /= shape[d];
   }
   return loc;

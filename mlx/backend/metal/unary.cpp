@@ -35,14 +35,17 @@ void unary_op_gpu_inplace(
   };
   auto [shape, strides] = maybe_collapse();
   int ndim = shape.size();
-  int work_per_thread = !contig ? 4 : 1;
   size_t nthreads = contig ? in.data_size() : in.size();
-  bool use_2d = nthreads > UINT32_MAX;
+  bool large = nthreads > UINT32_MAX;
+  int work_per_thread = !contig && large ? 4 : 1;
   std::string kernel_name;
   if (contig) {
-    kernel_name = (use_2d ? "v2" : "v");
+    kernel_name = (large ? "v2" : "v");
   } else {
-    kernel_name = (work_per_thread == 4 ? "gn4" : "g");
+    kernel_name = "gn" + std::to_string(work_per_thread);
+    if (large) {
+      kernel_name += "_large";
+    }
   }
   kernel_name += "_" + op + type_to_name(in) + type_to_name(out);
   auto kernel = get_unary_kernel(d, kernel_name, in.dtype(), out.dtype(), op);
@@ -73,8 +76,8 @@ void unary_op_gpu_inplace(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
+                                : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
