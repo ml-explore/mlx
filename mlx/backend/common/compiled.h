@@ -54,7 +54,7 @@ inline bool is_scalar(const array& x) {
 }
 
 // Check if we can use a contiguous operation given inputs and the output shape
-bool compiled_check_contiguity(
+std::pair<bool, std::vector<uint8_t>> compiled_check_contiguity(
     const std::vector<array>& inputs,
     const std::vector<int>& shape);
 

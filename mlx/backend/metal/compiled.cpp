@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -67,6 +66,7 @@ inline void build_kernel(
   if (add_indices) {
     os << "    constant const size_t* in_strides [[buffer(" << cnt++
        << ")]],\n";
+    os << "    constant const uint8_t* cflags [[buffer(" << cnt++ << ")]],\n";
   }
 
   // Add the output arguments
@@ -127,26 +127,22 @@ inline void build_kernel(
   // Initialize the indices for non-contiguous inputs
   for (int i = 0; i < nc_inputs.size(); ++i) {
     auto& xname = namer.get_name(nc_inputs[i]);
+    os << "  size_t index_" << xname << " = cflags[" << i << "] ? index : ";
     if (ndim == 1) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_1(pos.x, "
-         << "in_strides[" << offset << "]);\n";
+      os << "elem_to_loc_1(pos.x, in_strides[" << offset << "]);\n";
     } else if (ndim == 2) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_2({pos.x, pos.y}, "
-         << "in_strides + " << offset << ");\n";
+      os << "elem_to_loc_2({pos.x, pos.y}, in_strides + " << offset << ");\n";
     } else if (ndim == 3) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_3(pos, "
-         << "in_strides + " << offset << ");\n";
+      os << "elem_to_loc_3(pos, in_strides + " << offset << ");\n";
     } else if (!dynamic_dims) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides["
-         << offset + ndim - 1 << "]"
+      os << "N_ * pos.x * in_strides[" << offset + ndim - 1 << "]"
          << " + pos.y * in_strides[" << offset + ndim - 2 << "];\n";
     } else {
-      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides[ndim * "
-         << i << " + ndim - 1]"
+      os << "N_ * pos.x * in_strides[ndim * " << i << " + ndim - 1]"
          << " + pos.y * in_strides[ndim * " << i << " + ndim - 2];\n";
     }
   }
@@ -301,7 +297,7 @@ void Compiled::eval_gpu(
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
-  bool contiguous = compiled_check_contiguity(inputs, output_shape);
+  auto [contiguous, cflags] = compiled_check_contiguity(inputs, output_shape);
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
@@ -395,6 +391,7 @@ void Compiled::eval_gpu(
   }
   if (!in_strides.empty()) {
     compute_encoder.set_vector_bytes(in_strides, cnt++);
+    compute_encoder.set_vector_bytes(cflags, cnt++);
   }
 
   compiled_allocate_outputs(
