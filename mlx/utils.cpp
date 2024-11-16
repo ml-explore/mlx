@@ -142,7 +142,7 @@ std::ostream& operator<<(std::ostream& os, const Device& d) {
 std::ostream& operator<<(std::ostream& os, const Stream& s) {
   os << "Stream(";
   os << s.device;
-  os << ", " << s.index << ")";
+  os << ", index=" << s.index << ", threads=" << s.threads << ")";
   return os;
 }
 

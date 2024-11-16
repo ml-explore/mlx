@@ -184,10 +184,6 @@ void init_array(nb::module_& m) {
       R"pbdoc(
       A helper object to apply updates at specific indices.
       )pbdoc")
-      .def(
-          nb::init<const array&>(),
-          "x"_a,
-          nb::sig("def __init__(self, x: array)"))
       .def("__getitem__", &ArrayAt::set_indices, "indices"_a.none())
       .def("add", &ArrayAt::add, "value"_a)
       .def("subtract", &ArrayAt::subtract, "value"_a)
@@ -202,10 +198,6 @@ void init_array(nb::module_& m) {
       R"pbdoc(
       A helper object to iterate over the 1st dimension of an array.
       )pbdoc")
-      .def(
-          nb::init<const array&>(),
-          "x"_a,
-          nb::sig("def __init__(self, x: array)"))
       .def("__next__", &ArrayPythonIterator::next)
       .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
 

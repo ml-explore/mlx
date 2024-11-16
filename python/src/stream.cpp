@@ -47,6 +47,8 @@ void init_stream(nb::module_& m) {
       "Stream",
       R"pbdoc(
       A stream for running operations on a given device.
+
+      Use :func:`new_stream` to create new streams.
       )pbdoc")
       .def(nb::init<int, Device>(), "index"_a, "device"_a)
       .def_ro("device", &Stream::device)
@@ -79,12 +81,13 @@ void init_stream(nb::module_& m) {
         streams device. It will not change the default device.
 
         Args:
-          stream (stream): Stream to make the default.
+          stream (Stream): Stream to make the default.
       )pbdoc");
   m.def(
       "new_stream",
       &new_stream,
       "device"_a,
+      "threads"_a = 1,
       R"pbdoc(Make a new stream on the given device.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
