@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/load.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
@@ -343,7 +344,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& upd = inputs[1];
 
   if (upd.size() == 0) {
-    out.copy_shared_buffer(in);
+    move_or_copy(in, out);
     return;
   }
 
@@ -420,8 +421,8 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }
-    out.copy_shared_buffer(
-        in, strides, in.flags(), in.data_size() * ibytes / obytes);
+    move_or_copy((
+        in, out, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
