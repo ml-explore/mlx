@@ -84,7 +84,7 @@ void append_binary_kernels(
 
   for (auto& [name, func] : kernel_types) {
     kernel_source +=
-        get_template_definition(name + "_" + lib_name, in_t, out_t func, op);
+        get_template_definition(name + "_" + lib_name, in_t, out_t, func, op);
   }
   kernel_source += get_template_definition(
       "g2_" + lib_name, "binary_g_nd2", in_t, out_t, op, "uint");
@@ -158,7 +158,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
         "gn2_" + lib_name, "ternary_g", t_str, op, 2, "uint");
     kernel_source += get_template_definition(
         "gn4large_" + lib_name, "ternary_g", t_str, op, 4);
-    return kernel_source.str();
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
