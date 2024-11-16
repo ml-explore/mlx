@@ -292,6 +292,9 @@ array::ArrayDesc::~ArrayDesc() {
     auto top = std::move(for_deletion.back());
     for_deletion.pop_back();
     append_deletable_inputs(*top);
+
+    // Clear out possible siblings to break circular references
+    top->siblings.clear();
   }
 }
 

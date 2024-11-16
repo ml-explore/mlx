@@ -1943,7 +1943,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
         t()
         expected = get_mem()
-        for _ in range(10):
+        for _ in range(100):
             t()
         used = get_mem()
         self.assertEqual(expected, used)
