@@ -76,15 +76,15 @@ void append_binary_kernels(
       {"sv2", "binary_sv2"},
       {"vv2", "binary_vv2"},
       {"g1", "binary_g_nd1"},
-      {"g2large", "binary_g_nd1"},
-      {"g3large", "binary_g_nd1"},
+      {"g2large", "binary_g_nd2"},
+      {"g3large", "binary_g_nd3"},
   }};
   auto in_t = get_type_string(in_type);
   auto out_t = get_type_string(out_type);
 
   for (auto& [name, func] : kernel_types) {
     kernel_source +=
-        get_template_definition(name + "_" + lib_name, in_t, out_t, func, op);
+        get_template_definition(name + "_" + lib_name, func, in_t, out_t, op);
   }
   kernel_source += get_template_definition(
       "g2_" + lib_name, "binary_g_nd2", in_t, out_t, op, "uint");
