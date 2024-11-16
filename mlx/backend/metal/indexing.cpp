@@ -53,27 +53,31 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int idx_ndim = nidx ? inputs[1].ndim() : 0;
   size_t ndim = src.ndim();
 
-  std::string lib_name;
-  std::string kernel_name;
+  bool large_index = nidx && inputs[1].size() > UINT32_MAX;
+  bool large_src = src.size() > UINT32_MAX;
+  bool large_out = out.size() > UINT32_MAX;
+  bool large = large_index || large_src || large_out;
+
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
-  {
-    std::ostringstream kname;
-    kname << "gather" << type_to_name(out) << idx_type_name << "_" << nidx
-          << "_" << idx_ndim;
-    lib_name = kname.str();
-    kernel_name = lib_name;
-  }
+  std::string kernel_name = fmt::format(
+      "gather{0}{1}_{2}_{3}_{4}",
+      type_to_name(out),
+      idx_type_name,
+      nidx,
+      idx_ndim,
+      large ? "size_t" : "uint");
+  std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::gather();
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::gather();
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str =
         nidx ? get_type_string(inputs[1].dtype()) : "bool";
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 
     // Index dimension specializations
-    kernel_source << fmt::format(
+    kernel_source += fmt::format(
         gather_kernels,
         type_to_name(out) + idx_type_name,
         out_type_str,
@@ -81,8 +85,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         nidx,
         idx_args,
         idx_arr,
-        idx_ndim);
-    return kernel_source.str();
+        idx_ndim,
+        large ? "size_t" : "uint");
+    return kernel_source;
   });
 
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -209,8 +214,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     nwork = 32;
   }
 
-  std::string lib_name;
-  std::string kernel_name;
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
   std::string op_name;
   switch (reduce_type_) {
@@ -231,18 +234,24 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       break;
   }
   auto upd_contig = upd.flags().row_contiguous;
-  {
-    std::ostringstream kname;
-    kname << "scatter" << type_to_name(out) << idx_type_name;
-    kname << "_" << op_name << "_" << nidx << "_"
-          << (upd_contig ? "updc_true" : "updc_false") << "_nwork" << nwork;
-    lib_name = kname.str();
-    kernel_name = kname.str();
-  }
+  bool large_out = out.size() > UINT32_MAX;
+  bool large_idx = nidx && (inputs[1].size() > UINT32_MAX);
+  bool large_upd = upd.size() > UINT32_MAX;
+  bool large = large_out || large_idx || large_upd;
+  std::string kernel_name = fmt::format(
+      "scatter{0}{1}_{2}_{3}_{4}_nwork{5}_{6}",
+      type_to_name(out),
+      idx_type_name,
+      op_name,
+      nidx,
+      upd_contig ? "updc_true" : "updc_false",
+      nwork,
+      large ? "size_t" : "uint");
+  std::string lib_name = kernel_name;
+
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduce_utils()
-                  << metal::scatter();
+    std::string kernel_source = metal::utils();
+    concatenate(kernel_source, metal::reduce_utils(), metal::scatter());
 
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str =
@@ -270,7 +279,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 
-    kernel_source << fmt::format(
+    kernel_source += fmt::format(
         scatter_kernels,
         type_to_name(out) + idx_type_name + "_" + op_name,
         out_type_str,
@@ -280,8 +289,9 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_args,
         idx_arr,
         upd_contig,
-        nwork);
-    return kernel_source.str();
+        nwork,
+        large ? "size_t" : "uint");
+    return kernel_source;
   });
 
   auto& compute_encoder = d.get_command_encoder(s.index);
