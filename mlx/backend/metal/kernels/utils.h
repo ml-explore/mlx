@@ -157,8 +157,12 @@ METAL_FUNC vec<IdxT, 2> elem_to_loc_2_nd(
     constant const StrideT* b_strides,
     int ndim) {
   vec<IdxT, 2> loc = {
-      elem.x * IdxT(a_strides[ndim - 1]) + elem.y * IdxT(a_strides[ndim - 2]),
-      elem.x * IdxT(b_strides[ndim - 1]) + elem.y * IdxT(b_strides[ndim - 2])};
+      IdxT(
+          elem.x * IdxT(a_strides[ndim - 1]) +
+          IdxT(elem.y) * IdxT(a_strides[ndim - 2])),
+      IdxT(
+          elem.x * IdxT(b_strides[ndim - 1]) +
+          elem.y * IdxT(b_strides[ndim - 2]))};
   for (int d = ndim - 3; d >= 0; --d) {
     uint l = elem.z % shape[d];
     loc.x += l * IdxT(a_strides[d]);

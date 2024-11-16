@@ -42,36 +42,36 @@ template <typename T, typename U>
     device U* dst [[buffer(1)]],
     constant const int64_t& src_stride [[buffer(3)]],
     uint index [[thread_position_in_grid]]) {
-  auto src_idx = elem_to_loc_1(index, src_stride);
+  auto src_idx = elem_to_loc_1<int64_t, int>(index, src_stride);
   dst[index] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename IdxT = int64_t>
 [[kernel]] void copy_g_nd2(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
     constant const int64_t* src_strides [[buffer(3)]],
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto src_idx = elem_to_loc_2(index, src_strides);
-  int64_t dst_idx = index.x + (int64_t)grid_dim.x * index.y;
+  auto src_idx = elem_to_loc_2<int64_t, IdxT>(index, src_strides);
+  IdxT dst_idx = index.x + IdxT(grid_dim.x) * index.y;
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename IdxT = int64_t>
 [[kernel]] void copy_g_nd3(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
     constant const int64_t* src_strides [[buffer(3)]],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto src_idx = elem_to_loc_3(index, src_strides);
-  int64_t dst_idx =
-      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
+  auto src_idx = elem_to_loc_3<int64_t, IdxT>(index, src_strides);
+  IdxT dst_idx =
+      index.x + IdxT(grid_dim.x) * (index.y + IdxT(grid_dim.y) * index.z);
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U, int N = 1>
+template <typename T, typename U, int N = 1, typename IdxT = int64_t>
 [[kernel]] void copy_g(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
@@ -80,17 +80,16 @@ template <typename T, typename U, int N = 1>
     constant const int& ndim [[buffer(5)]],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto src_idx = elem_to_loc(
+  auto src_idx = elem_to_loc<int64_t, IdxT>(
       {N * index.x, index.y, index.z}, src_shape, src_strides, ndim);
   if (N == 1) {
-    int64_t dst_idx =
-        index.x + grid_dim.x * (index.y + int64_t(grid_dim.y) * index.z);
+    IdxT dst_idx =
+        index.x + grid_dim.x * (index.y + IdxT(grid_dim.y) * index.z);
     dst[dst_idx] = static_cast<U>(src[src_idx]);
     return;
   }
   auto xshape = src_shape[ndim - 1];
-  int64_t dst_idx =
-      N * index.x + xshape * (index.y + int64_t(grid_dim.y) * index.z);
+  IdxT dst_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
   auto src_xstride = src_strides[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     dst[dst_idx + i] = static_cast<U>(src[src_idx]);
@@ -105,36 +104,36 @@ template <typename T, typename U>
     constant const int64_t& src_stride [[buffer(3)]],
     constant const int64_t& dst_stride [[buffer(4)]],
     uint index [[thread_position_in_grid]]) {
-  auto src_idx = elem_to_loc_1(index, src_stride);
-  auto dst_idx = elem_to_loc_1(index, dst_stride);
+  auto src_idx = elem_to_loc_1<int64_t, int>(index, src_stride);
+  auto dst_idx = elem_to_loc_1<int64_t, int>(index, dst_stride);
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename IdxT = int64_t>
 [[kernel]] void copy_gg_nd2(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
     constant const int64_t* src_strides [[buffer(3)]],
     constant const int64_t* dst_strides [[buffer(4)]],
     uint2 index [[thread_position_in_grid]]) {
-  auto src_idx = elem_to_loc_2(index, src_strides);
-  auto dst_idx = elem_to_loc_2(index, dst_strides);
+  auto src_idx = elem_to_loc_2<int64_t, IdxT>(index, src_strides);
+  auto dst_idx = elem_to_loc_2<int64_t, IdxT>(index, dst_strides);
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename IdxT = int64_t>
 [[kernel]] void copy_gg_nd3(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
     constant const int64_t* src_strides [[buffer(3)]],
     constant const int64_t* dst_strides [[buffer(4)]],
     uint3 index [[thread_position_in_grid]]) {
-  auto src_idx = elem_to_loc_3(index, src_strides);
-  auto dst_idx = elem_to_loc_3(index, dst_strides);
+  auto src_idx = elem_to_loc_3<int64_t, IdxT>(index, src_strides);
+  auto dst_idx = elem_to_loc_3<int64_t, IdxT>(index, dst_strides);
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U, int N = 1>
+template <typename T, typename U, int N = 1, typename IdxT = int64_t>
 [[kernel]] void copy_gg(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],
@@ -143,7 +142,7 @@ template <typename T, typename U, int N = 1>
     constant const int64_t* dst_strides [[buffer(4)]],
     constant const int& ndim [[buffer(5)]],
     uint3 index [[thread_position_in_grid]]) {
-  auto idx = elem_to_loc_2_nd(
+  auto idx = elem_to_loc_2_nd<int64_t, IdxT>(
       {N * index.x, index.y, index.z},
       src_shape,
       src_strides,
@@ -153,8 +152,8 @@ template <typename T, typename U, int N = 1>
     dst[idx.y] = static_cast<U>(src[idx.x]);
     return;
   }
-  auto src_xstride = src_strides[ndim - 1];
-  auto dst_xstride = dst_strides[ndim - 1];
+  IdxT src_xstride = src_strides[ndim - 1];
+  IdxT dst_xstride = dst_strides[ndim - 1];
   auto xshape = src_shape[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     dst[idx.y] = static_cast<U>(src[idx.x]);

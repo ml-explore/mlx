@@ -22,37 +22,37 @@ std::string get_kernel_name(
     BinaryOpType bopt,
     const std::string& op,
     const array& a,
-    bool use_2d,
+    bool large,
     int ndim,
     int work_per_thread) {
-  std::ostringstream kname;
+  std::string kname;
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
-      kname << "ss";
+      kname = "ss";
       break;
     case BinaryOpType::ScalarVector:
-      kname << (use_2d ? "sv2" : "sv");
+      kname = (large ? "sv2" : "sv");
       break;
     case BinaryOpType::VectorScalar:
-      kname << (use_2d ? "vs2" : "vs");
+      kname = (large ? "vs2" : "vs");
       break;
     case BinaryOpType::VectorVector:
-      kname << (use_2d ? "vv2" : "vv");
+      kname = (large ? "vv2" : "vv");
       break;
     case BinaryOpType::General:
-      kname << "g";
+      kname = "g";
       if (ndim <= 3) {
-        kname << ndim;
+        kname += std::to_string(ndim);
       } else {
-        kname << "n";
-        if (work_per_thread > 1) {
-          kname << work_per_thread;
-        }
+        concatenate(kname, "n", std::to_string(work_per_thread));
+      }
+      if (large) {
+        kname += "large";
       }
       break;
   }
-  kname << "_" << op << type_to_name(a);
-  return kname.str();
+  concatenate(kname, "_", op, type_to_name(a));
+  return kname;
 }
 
 void binary_op_gpu_inplace(
@@ -81,11 +81,16 @@ void binary_op_gpu_inplace(
   };
   auto [shape, strides_a, strides_b, strides_out] = maybe_collapse();
 
-  bool use_2d = out.data_size() > UINT32_MAX;
+  bool large = out.data_size() > UINT32_MAX;
   auto ndim = shape.size();
-  int work_per_thread = (bopt == BinaryOpType::General) ? 4 : 1;
+  int work_per_thread;
+  if (bopt == BinaryOpType::General) {
+    work_per_thread = large ? 4 : 2;
+  } else {
+    work_per_thread = 1;
+  }
   std::string kernel_name =
-      get_kernel_name(bopt, op, a, use_2d, shape.size(), work_per_thread);
+      get_kernel_name(bopt, op, a, large, shape.size(), work_per_thread);
   auto& d = metal::device(s.device);
 
   auto kernel = outputs.size() == 2
@@ -141,8 +146,8 @@ void binary_op_gpu_inplace(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
+                                : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }

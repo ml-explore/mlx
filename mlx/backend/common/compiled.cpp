@@ -128,7 +128,7 @@ std::string build_lib_name(
   return os.str();
 }
 
-std::pair<bool, std::vector<uint8_t>> compiled_check_contiguity(
+bool compiled_check_contiguity(
     const std::vector<array>& inputs,
     const std::vector<int>& shape) {
   bool contiguous = true;
@@ -136,7 +136,6 @@ std::pair<bool, std::vector<uint8_t>> compiled_check_contiguity(
   bool all_row_contig = true;
   bool all_col_contig = true;
   int non_scalar_inputs = 0;
-  std::vector<uint8_t> cflags;
   for (const auto& x : inputs) {
     if (is_scalar(x)) {
       continue;
@@ -145,7 +144,6 @@ std::pair<bool, std::vector<uint8_t>> compiled_check_contiguity(
     bool shape_eq = x.shape() == shape;
     all_contig &= (x.flags().contiguous && shape_eq);
     all_row_contig &= (x.flags().row_contiguous && shape_eq);
-    cflags.push_back(x.flags().row_contiguous && shape_eq);
     all_col_contig &= (x.flags().col_contiguous && shape_eq);
   }
   if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
@@ -155,7 +153,7 @@ std::pair<bool, std::vector<uint8_t>> compiled_check_contiguity(
   } else if (non_scalar_inputs == 0 && !shape.empty()) {
     contiguous = false;
   }
-  return {contiguous, cflags};
+  return contiguous;
 }
 
 void compiled_allocate_outputs(

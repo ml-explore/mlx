@@ -279,7 +279,7 @@ void Compiled::eval_cpu(
 
   // Figure out which kernel we are using
   auto& shape = outputs[0].shape();
-  auto [contiguous, _] = compiled_check_contiguity(inputs, shape);
+  auto contiguous = compiled_check_contiguity(inputs, shape);
 
   // Handle all broadcasting and collect function input arguments
   std::vector<void*> args;
@@ -329,7 +329,7 @@ void Compiled::eval_cpu(
   }
 
   // Get the function
-  auto fn_ptr = compile(kernel_name, [&, contiguous = contiguous]() {
+  auto fn_ptr = compile(kernel_name, [&]() {
     std::ostringstream kernel;
     kernel << get_kernel_preamble() << std::endl;
     kernel << "extern \"C\"  {" << std::endl;

@@ -47,7 +47,7 @@ void unary_op_gpu_inplace(
       kernel_name += "_large";
     }
   }
-  kernel_name += "_" + op + type_to_name(in) + type_to_name(out);
+  concatenate(kernel_name, "_", op, type_to_name(in), type_to_name(out));
   auto kernel = get_unary_kernel(d, kernel_name, in.dtype(), out.dtype(), op);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();

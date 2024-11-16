@@ -35,7 +35,7 @@ template <
   auto idx = elem_to_loc<size_t, IdxT>(
       {N * index.x, index.y, index.z}, in_shape, in_strides, ndim);
   auto xshape = in_shape[ndim - 1];
-  auto xstride = in_strides[ndim - 1];
+  IdxT xstride = in_strides[ndim - 1];
   IdxT out_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     out[out_idx++] = Op()(in[idx]);

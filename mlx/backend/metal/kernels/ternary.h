@@ -32,13 +32,13 @@ template <typename T, typename Op>
     constant const size_t& b_strides,
     constant const size_t& c_strides,
     uint index [[thread_position_in_grid]]) {
-  auto a_idx = elem_to_loc_1(index, a_strides);
-  auto b_idx = elem_to_loc_1(index, b_strides);
-  auto c_idx = elem_to_loc_1(index, c_strides);
+  auto a_idx = elem_to_loc_1<size_t, uint>(index, a_strides);
+  auto b_idx = elem_to_loc_1<size_t, uint>(index, b_strides);
+  auto c_idx = elem_to_loc_1<size_t, uint>(index, c_strides);
   d[index] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 
-template <typename T, typename Op>
+template <typename T, typename Op, typename IdxT = size_t>
 [[kernel]] void ternary_g_nd2(
     device const bool* a,
     device const T* b,
@@ -49,14 +49,14 @@ template <typename T, typename Op>
     constant const size_t c_strides[2],
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto a_idx = elem_to_loc_2(index, a_strides);
-  auto b_idx = elem_to_loc_2(index, b_strides);
-  auto c_idx = elem_to_loc_2(index, c_strides);
-  size_t out_idx = index.x + size_t(grid_dim.x) * index.y;
+  auto a_idx = elem_to_loc_2<size_t, IdxT>(index, a_strides);
+  auto b_idx = elem_to_loc_2<size_t, IdxT>(index, b_strides);
+  auto c_idx = elem_to_loc_2<size_t, IdxT>(index, c_strides);
+  IdxT out_idx = index.x + IdxT(grid_dim.x) * index.y;
   d[out_idx] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 
-template <typename T, typename Op>
+template <typename T, typename Op, typename IdxT = size_t>
 [[kernel]] void ternary_g_nd3(
     device const bool* a,
     device const T* b,
@@ -67,15 +67,14 @@ template <typename T, typename Op>
     constant const size_t c_strides[3],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto a_idx = elem_to_loc_3(index, a_strides);
-  auto b_idx = elem_to_loc_3(index, b_strides);
-  auto c_idx = elem_to_loc_3(index, c_strides);
-  size_t out_idx =
-      index.x + grid_dim.x * (index.y + size_t(grid_dim.y) * index.z);
+  auto a_idx = elem_to_loc_3<size_t, IdxT>(index, a_strides);
+  auto b_idx = elem_to_loc_3<size_t, IdxT>(index, b_strides);
+  auto c_idx = elem_to_loc_3<size_t, IdxT>(index, c_strides);
+  IdxT out_idx = index.x + grid_dim.x * (index.y + IdxT(grid_dim.y) * index.z);
   d[out_idx] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 
-template <typename T, typename Op, int N = 1>
+template <typename T, typename Op, int N = 1, typename IdxT = size_t>
 [[kernel]] void ternary_g(
     device const bool* a,
     device const T* b,
@@ -88,7 +87,7 @@ template <typename T, typename Op, int N = 1>
     constant const int& ndim,
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto idx = elem_to_loc_3_nd(
+  auto idx = elem_to_loc_3_nd<IdxT>(
       {N * index.x, index.y, index.z},
       shape,
       a_strides,
@@ -96,11 +95,10 @@ template <typename T, typename Op, int N = 1>
       c_strides,
       ndim);
   auto xshape = shape[ndim - 1];
-  size_t out_idx =
-      N * index.x + xshape * (index.y + size_t(grid_dim.y) * index.z);
-  auto a_xstride = a_strides[ndim - 1];
-  auto b_xstride = b_strides[ndim - 1];
-  auto c_xstride = c_strides[ndim - 1];
+  IdxT out_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
+  IdxT a_xstride = a_strides[ndim - 1];
+  IdxT b_xstride = b_strides[ndim - 1];
+  IdxT c_xstride = c_strides[ndim - 1];
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     d[out_idx++] = Op()(a[idx.x], b[idx.y], c[idx.z]);
     idx.x += a_xstride;
