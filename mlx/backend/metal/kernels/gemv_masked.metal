@@ -4,8 +4,6 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/gemv_masked.h"

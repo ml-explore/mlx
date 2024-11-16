@@ -11,12 +11,12 @@ SRC_DIR=$3
 SRC_FILE=$4
 CFLAGS=$5
 SRC_NAME=$(basename -- "${SRC_FILE}")
+JIT_INCLUDES=${SRC_DIR}/mlx/backend/metal/kernels/jit
 INPUT_FILE=${SRC_DIR}/mlx/backend/metal/kernels/${SRC_FILE}.h
 OUTPUT_FILE=${OUTPUT_DIR}/${SRC_NAME}.cpp
 
 mkdir -p "$OUTPUT_DIR"
-
-CONTENT=$($CC -I "$SRC_DIR" -DMLX_METAL_JIT -E -P "$INPUT_FILE" $CFLAGS 2>/dev/null)
+CONTENT=$($CC -I"$SRC_DIR" -I"$JIT_INCLUDES" -DMLX_METAL_JIT -E -P "$INPUT_FILE" $CFLAGS 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
 namespace mlx::core::metal {

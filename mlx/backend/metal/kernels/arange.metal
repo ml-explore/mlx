@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
+#include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/arange.h"
 
 #define instantiate_arange(tname, type)                                 \

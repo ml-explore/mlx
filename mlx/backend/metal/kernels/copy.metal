@@ -2,7 +2,6 @@
 
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
-#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/copy.h"
 
 #define instantiate_copy_all(tname, itype, otype)    \

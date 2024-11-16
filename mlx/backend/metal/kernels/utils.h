@@ -3,7 +3,13 @@
 #pragma once
 
 #include <metal_math>
-#include "mlx/backend/metal/kernels/bf16.h"
+
+// The correct bf16.h is included based on the metal version
+// by giving the correct path to -I during compilation
+// e.g. mlx/backend/metal/kernels/metal_3_0/ for Metal 3.0
+#include "bf16.h"
+
+#include "mlx/backend/metal/kernels/bf16_math.h"
 #include "mlx/backend/metal/kernels/complex.h"
 #include "mlx/backend/metal/kernels/defines.h"
 

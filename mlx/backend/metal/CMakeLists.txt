@@ -21,7 +21,14 @@ function(make_jit_source SRC_FILE)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/jit/${SRC_NAME}.cpp)
 endfunction(make_jit_source)
 
-make_jit_source(utils kernels/bf16.h kernels/complex.h kernels/defines.h)
+make_jit_source(
+  utils
+  kernels/jit/bf16.h
+  kernels/metal_3_0/bf16.h
+  kernels/metal_3_1/bf16.h
+  kernels/bf16_math.h
+  kernels/complex.h
+  kernels/defines.h)
 make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h)
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)

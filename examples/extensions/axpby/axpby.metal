@@ -2,7 +2,6 @@
 
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 template <typename T>

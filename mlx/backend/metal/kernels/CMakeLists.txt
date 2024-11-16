@@ -1,13 +1,27 @@
-set(BASE_HEADERS bf16.h bf16_math.h complex.h defines.h expm1f.h utils.h)
+set(BASE_HEADERS
+    metal_3_1/bf16.h
+    metal_3_0/bf16.h
+    bf16_math.h
+    complex.h
+    defines.h
+    expm1f.h
+    utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
   set(METAL_FLAGS -Wall -Wextra -fno-fast-math)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()
+  if(MLX_METAL_VERSION GREATER_EQUAL 310)
+    set(VERSION_INCLUDES
+        ${PROJECT_SOURCE_DIR}/mlx/backend/metal/kernels/metal_3_1)
+  else()
+    set(VERSION_INCLUDES
+        ${PROJECT_SOURCE_DIR}/mlx/backend/metal/kernels/metal_3_0)
+  endif()
   add_custom_command(
     COMMAND xcrun -sdk macosx metal ${METAL_FLAGS} -c ${SRCFILE}
-            -I${PROJECT_SOURCE_DIR} -o ${TARGET}.air
+            -I${PROJECT_SOURCE_DIR} -I${VERSION_INCLUDES} -o ${TARGET}.air
     DEPENDS ${SRCFILE} ${DEPS} ${BASE_HEADERS}
     OUTPUT ${TARGET}.air
     COMMENT "Building ${TARGET}.air"

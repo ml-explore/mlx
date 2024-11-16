@@ -23,14 +23,18 @@ constexpr int MAX_BUFFERS_PER_QUEUE = 12;
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
-constexpr auto get_metal_version() {
-#if (MLX_METAL_VERSION >= 320)
-  return MTL::LanguageVersion3_2;
-#elif (MLX_METAL_VERSION >= 310)
-  return MTL::LanguageVersion3_1;
-#else
-  return MTL::LanguageVersion3_0;
-#endif
+auto get_metal_version() {
+  auto get_metal_version_ = []() {
+    if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
+      return MTL::LanguageVersion3_2;
+    } else if (__builtin_available(macOS 14, iOS 17, tvOS 17, visionOS 1, *)) {
+      return MTL::LanguageVersion3_1;
+    } else {
+      return MTL::LanguageVersion3_0;
+    }
+  };
+  static auto metal_version_ = get_metal_version_();
+  return metal_version_;
 }
 
 auto load_device() {

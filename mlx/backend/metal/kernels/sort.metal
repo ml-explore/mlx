@@ -3,8 +3,6 @@
 #include <metal_stdlib>
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/sort.h"
 

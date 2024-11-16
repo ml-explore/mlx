@@ -4,8 +4,8 @@
 #include <metal_simdgroup_matrix>
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/steel/conv/params.h"
+#include "mlx/backend/metal/kernels/utils.h"
 
 #define MLX_MTL_CONST static constant constexpr const
 
