@@ -89,14 +89,14 @@ elseif(MLX_BUILD_METAL)
   # Throw an error if xcrun not found
   execute_process(
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
-    OUTPUT_VARIABLE MACOS_VERSION COMMAND_ERROR_IS_FATAL ANY)
+    OUTPUT_VARIABLE MACOS_SDK_VERSION COMMAND_ERROR_IS_FATAL ANY)
 
-  if(${MACOS_VERSION} LESS 14.0)
+  if(${MACOS_SDK_VERSION} LESS 14.0)
     message(
       FATAL_ERROR
         "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
   endif()
-  message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
+  message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 
   set(METAL_CPP_URL
       https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18-beta.zip
