@@ -14,7 +14,7 @@ function(make_jit_source SRC_FILE)
     COMMAND
       /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
       ${CMAKE_CURRENT_BINARY_DIR}/jit ${CMAKE_C_COMPILER} ${PROJECT_SOURCE_DIR}
-      ${SRC_FILE} "-DMLX_METAL_VERSION=${MLX_METAL_VERSION}"
+      ${SRC_FILE}
     DEPENDS make_compiled_preamble.sh kernels/${SRC_FILE}.h ${ARGN})
   add_custom_target(${SRC_NAME} DEPENDS jit/${SRC_NAME}.cpp)
   add_dependencies(mlx ${SRC_NAME})

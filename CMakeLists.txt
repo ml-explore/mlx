@@ -101,13 +101,20 @@ elseif(MLX_BUILD_METAL)
   set(METAL_CPP_URL
       https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18-beta.zip
   )
-  # Get the metal version
-  execute_process(
-    COMMAND
-      zsh "-c"
-      "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal -E -x metal -P - | tail -1 | tr -d '\n'"
-    OUTPUT_VARIABLE MLX_METAL_VERSION COMMAND_ERROR_IS_FATAL ANY)
+  # Get the metal version. The mapping is maintained in section 1.6.10 of the
+  # Metal Shading Language Specification.
+  # https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+  if(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 15.0)
+    set(MLX_METAL_VERSION "3.2")
+  elseif(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 14.0)
+    set(MLX_METAL_VERSION "3.1")
+  elseif(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 13.5)
+    set(MLX_METAL_VERSION "3.0")
+  else()
+    message(FATAL_ERROR "MLX requires macOS 13.5 or higher to build.")
+  endif()
 
+  message(STATUS "METAL VERSION" ${MLX_METAL_VERSION})
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
 
   FetchContent_MakeAvailable(metal_cpp)
