@@ -122,8 +122,6 @@ elseif(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
-
-  add_compile_definitions("MLX_METAL_VERSION=${MLX_METAL_VERSION}")
 endif()
 
 if(MLX_BUILD_CPU)
