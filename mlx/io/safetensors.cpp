@@ -110,7 +110,8 @@ SafetensorsLoad load_safetensors(
   }
 
   uint64_t jsonHeaderLength = 0;
-  constexpr uint64_t kMaxJsonHeaderLength = 1ULL << 30;
+  // This is the same limit as in the original Rust Safetensors code.
+  constexpr uint64_t kMaxJsonHeaderLength = 100000000;
   in_stream->read(reinterpret_cast<char*>(&jsonHeaderLength), 8);
   if (jsonHeaderLength <= 0 || jsonHeaderLength >= kMaxJsonHeaderLength) {
     throw std::runtime_error(
