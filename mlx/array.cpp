@@ -214,6 +214,8 @@ array::~array() {
     if (do_detach) {
       for (auto& s : siblings()) {
         for (auto& ss : s.siblings()) {
+          // Set to null here to avoid descending into array destructor
+          // for siblings
           ss.array_desc_ = nullptr;
         }
         s.array_desc_->siblings.clear();
@@ -294,6 +296,11 @@ array::ArrayDesc::~ArrayDesc() {
     append_deletable_inputs(*top);
 
     // Clear out possible siblings to break circular references
+    for (auto& s : top->siblings) {
+      // Set to null here to avoid descending into top-level
+      // array destructor for siblings
+      s.array_desc_ = nullptr;
+    }
     top->siblings.clear();
   }
 }
