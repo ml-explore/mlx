@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 //
 #include <json.hpp>
+#include <memory>
 #include <stack>
 
 #include "mlx/io.h"
@@ -109,15 +110,16 @@ SafetensorsLoad load_safetensors(
   }
 
   uint64_t jsonHeaderLength = 0;
+  constexpr uint64_t kMaxJsonHeaderLength = 1ULL << 30;
   in_stream->read(reinterpret_cast<char*>(&jsonHeaderLength), 8);
-  if (jsonHeaderLength <= 0) {
+  if (jsonHeaderLength <= 0 || jsonHeaderLength >= kMaxJsonHeaderLength) {
     throw std::runtime_error(
         "[load_safetensors] Invalid json header length " + in_stream->label());
   }
   // Load the json metadata
-  char rawJson[jsonHeaderLength];
-  in_stream->read(rawJson, jsonHeaderLength);
-  auto metadata = json::parse(rawJson, rawJson + jsonHeaderLength);
+  auto rawJson = std::make_unique<char[]>(jsonHeaderLength);
+  in_stream->read(rawJson.get(), jsonHeaderLength);
+  auto metadata = json::parse(rawJson.get(), rawJson.get() + jsonHeaderLength);
   // Should always be an object on the top-level
   if (!metadata.is_object()) {
     throw std::runtime_error(
