@@ -4,6 +4,28 @@
 
 namespace mlx::core {
 
+void move_or_copy(const array& in, array& out) {
+  if (in.is_donatable()) {
+    out.move_shared_buffer(in);
+  } else {
+    out.copy_shared_buffer(in);
+  }
+}
+
+void move_or_copy(
+    const array& in,
+    array& out,
+    const std::vector<size_t>& strides,
+    array::Flags flags,
+    size_t data_size,
+    size_t offset /* = 0 */) {
+  if (in.is_donatable()) {
+    out.move_shared_buffer(in, strides, flags, data_size, offset);
+  } else {
+    out.copy_shared_buffer(in, strides, flags, data_size, offset);
+  }
+}
+
 template <typename StrideT>
 std::tuple<std::vector<int>, std::vector<std::vector<StrideT>>>
 collapse_contiguous_dims_impl(

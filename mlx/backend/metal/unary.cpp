@@ -161,7 +161,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
     unary_op_gpu(inputs, out, get_primitive_string(this));
   } else {
     // No-op integer types
-    out.copy_shared_buffer(in);
+    move_or_copy(in, out);
   }
 }
 

@@ -178,4 +178,13 @@ inline bool is_donatable(const array& in, const array& out) {
       in.buffer_size() <= out.nbytes() + donation_extra;
 }
 
+void move_or_copy(const array& in, array& out);
+void move_or_copy(
+    const array& in,
+    array& out,
+    const std::vector<size_t>& strides,
+    array::Flags flags,
+    size_t data_size,
+    size_t offset = 0);
+
 } // namespace mlx::core
