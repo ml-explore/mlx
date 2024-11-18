@@ -273,11 +273,6 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-inline int sdpa_2pass_limit() {
-  static int limit_ = env::get_var("MLX_SDPA_VECTOR_2PASS", 2048);
-  return limit_;
-}
-
 } // namespace
 
 void ScaledDotProductAttention::eval_gpu(
@@ -344,10 +339,15 @@ void ScaledDotProductAttention::eval_gpu(
       o.set_data(allocator::malloc_or_wait(o.nbytes()));
     }
 
-    if (k.shape(2) < sdpa_2pass_limit()) {
-      sdpa_vector(s, d, q, k, v, o, scale_);
-    } else {
+    // We route to the 2 pass fused attention if
+    // - The device is large and the sequence length long
+    // - The sequence length is even longer and we have gqa
+    char devc = d.get_architecture().back();
+    if ((devc == 'd' && k.shape(2) >= 1024) ||
+        (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_);
+    } else {
+      sdpa_vector(s, d, q, k, v, o, scale_);
     }
   }
 
