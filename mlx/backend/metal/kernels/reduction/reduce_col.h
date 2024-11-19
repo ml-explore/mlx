@@ -1,6 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
-template <typename T, typename U, typename Op, int NDIMS>
+template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
 [[kernel]] void col_reduce_small(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -19,7 +19,7 @@ template <typename T, typename U, typename Op, int NDIMS>
     uint3 lsize [[threads_per_threadgroup]]) {
   constexpr int n_reads = 4;
   Op op;
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
   const device T* row;
 
   U totals[n_reads];
@@ -27,20 +27,20 @@ template <typename T, typename U, typename Op, int NDIMS>
     totals[i] = Op::init;
   }
 
-  size_t column = size_t(gid.x) * lsize.x * n_reads + lid.x * n_reads;
+  IdxT column = IdxT(gid.x) * lsize.x * n_reads + lid.x * n_reads;
   if (column >= reduction_stride) {
     return;
   }
   bool safe = column + n_reads <= reduction_stride;
 
-  size_t out_idx = gid.y + gsize.y * size_t(gid.z);
-  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
+  IdxT in_idx = elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
   in += in_idx + column;
 
-  size_t total_rows = non_col_reductions * reduction_size;
+  IdxT total_rows = IdxT(non_col_reductions) * IdxT(reduction_size);
   loop.next(lid.y, reduce_shape, reduce_strides);
-  for (size_t r = lid.y; r < total_rows; r += lsize.y) {
-    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+  for (IdxT r = lid.y; r < total_rows; r += lsize.y) {
+    row = in + loop.location();
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(static_cast<U>(row[i]), totals[i]);
@@ -80,7 +80,7 @@ template <typename T, typename U, typename Op, int NDIMS>
   }
 
   if (lid.y == 0) {
-    out += out_idx * reduction_stride + column;
+    out += out_idx * IdxT(reduction_stride) + column;
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
         out[i] = totals[i];
@@ -93,7 +93,7 @@ template <typename T, typename U, typename Op, int NDIMS>
   }
 }
 
-template <typename T, typename U, typename Op, int NDIMS>
+template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
 [[kernel]] void col_reduce_longcolumn(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -112,19 +112,19 @@ template <typename T, typename U, typename Op, int NDIMS>
     uint3 lid [[thread_position_in_threadgroup]],
     uint3 lsize [[threads_per_threadgroup]]) {
   Op op;
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
   const device T* row;
 
-  size_t out_idx = gid.x + gsize.x * size_t(gid.y);
-  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  IdxT out_idx = gid.x + gsize.x * IdxT(gid.y);
+  IdxT in_idx = elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
   in += in_idx + lid.x;
 
   U total = Op::init;
-  size_t total_rows = non_col_reductions * reduction_size;
+  IdxT total_rows = IdxT(non_col_reductions) * IdxT(reduction_size);
   loop.next(gid.z * lsize.y + lid.y, reduce_shape, reduce_strides);
-  for (size_t r = gid.z * lsize.y + lid.y; r < total_rows;
+  for (IdxT r = gid.z * lsize.y + lid.y; r < total_rows;
        r += lsize.y * gsize.z) {
-    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+    row = in + loop.location();
     total = op(static_cast<U>(*row), total);
     loop.next(lsize.y * gsize.z, reduce_shape, reduce_strides);
   }
@@ -136,7 +136,8 @@ template <typename T, typename U, typename Op, int NDIMS>
     for (uint i = 1; i < lsize.y; i++) {
       total = op(total, shared_vals[i * lsize.x + lid.x]);
     }
-    out[gid.z * out_size + out_idx * reduction_stride + lid.x] = total;
+    out[gid.z * IdxT(out_size) + out_idx * IdxT(reduction_stride) + lid.x] =
+        total;
   }
 }
 
@@ -151,7 +152,14 @@ template <typename T, typename U, typename Op, int NDIMS>
  *     totals with a loop.
  *  7. Write them to the output
  */
-template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
+template <
+    typename T,
+    typename U,
+    typename Op,
+    typename IdxT,
+    int NDIMS,
+    int BM,
+    int BN>
 [[kernel]] void col_reduce_looped(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -176,7 +184,7 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
   threadgroup U shared_vals[BN * BM];
   U totals[n_reads];
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
   const device T* row;
 
   for (int i = 0; i < n_reads; i++) {
@@ -185,17 +193,17 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  size_t column = BN * gid.x + offset.x;
+  IdxT column = BN * gid.x + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
-  size_t out_idx = gid.y + gsize.y * size_t(gid.z);
-  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
+  IdxT in_idx = elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
   in += in_idx + column;
 
-  size_t total = non_col_reductions * reduction_size;
+  IdxT total = IdxT(non_col_reductions) * IdxT(reduction_size);
   loop.next(offset.y, reduce_shape, reduce_strides);
-  for (size_t r = offset.y; r < total; r += BM) {
-    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+  for (IdxT r = offset.y; r < total; r += BM) {
+    row = in + loop.location();
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
@@ -235,8 +243,8 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
     // Write the output.
     if (simd_lane_id == 0) {
-      size_t out_column = BN * gid.x + out_offset.x;
-      out += out_idx * reduction_stride + out_column;
+      IdxT out_column = BN * gid.x + out_offset.x;
+      out += out_idx * IdxT(reduction_stride) + out_column;
       if (out_column + n_outputs <= reduction_stride) {
         for (int i = 0; i < n_outputs; i++) {
           out[i] = totals[i];
@@ -269,7 +277,7 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
     // Write the output.
     if (offset.y == 0) {
-      out += out_idx * reduction_stride + column;
+      out += out_idx * IdxT(reduction_stride) + column;
       if (safe) {
         for (int i = 0; i < n_reads; i++) {
           out[i] = totals[i];
@@ -283,7 +291,14 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
   }
 }
 
-template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
+template <
+    typename T,
+    typename U,
+    typename Op,
+    typename IdxT,
+    int NDIMS,
+    int BM,
+    int BN>
 [[kernel]] void col_reduce_2pass(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -312,7 +327,7 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
   threadgroup U shared_vals[BN * BM];
   U totals[n_reads];
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS> loop(reduce_ndim);
   const device T* row;
 
   for (int i = 0; i < n_reads; i++) {
@@ -321,20 +336,19 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  size_t column = BN * gid.x + offset.x;
+  IdxT column = BN * gid.x + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
-  size_t full_idx = gid.y + gsize.y * size_t(gid.z);
-  size_t block_idx = full_idx / out_size;
-  size_t out_idx = full_idx % out_size;
-  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  IdxT full_idx = gid.y + gsize.y * IdxT(gid.z);
+  IdxT block_idx = full_idx / IdxT(out_size);
+  IdxT out_idx = full_idx % IdxT(out_size);
+  IdxT in_idx = elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
   in += in_idx + column;
 
-  size_t total = non_col_reductions * reduction_size;
+  IdxT total = IdxT(non_col_reductions) * IdxT(reduction_size);
   loop.next(offset.y + block_idx * BM, reduce_shape, reduce_strides);
-  for (size_t r = offset.y + block_idx * BM; r < total;
-       r += outer_blocks * BM) {
-    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+  for (IdxT r = offset.y + block_idx * BM; r < total; r += outer_blocks * BM) {
+    row = in + loop.location();
 
     if (safe) {
       for (int i = 0; i < n_reads; i++) {
@@ -369,8 +383,8 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
 
   // Write the output.
   if (simd_lane_id == 0) {
-    size_t out_column = BN * gid.x + out_offset.x;
-    out += full_idx * reduction_stride + out_column;
+    IdxT out_column = BN * gid.x + out_offset.x;
+    out += full_idx * IdxT(reduction_stride) + out_column;
     if (out_column + n_outputs <= reduction_stride) {
       for (int i = 0; i < n_outputs; i++) {
         out[i] = totals[i];

@@ -193,6 +193,7 @@ template <
     typename T,
     typename U,
     typename Op,
+    typename IdxT,
     int NDIMS,
     int N_READS = REDUCE_N_READS>
 [[kernel]] void row_reduce_small(
@@ -214,20 +215,20 @@ template <
   Op op;
 
   U total_val = Op::init;
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
 
   // Precompute some row reduction numbers
   const device T* row;
-  int blocks = row_size / N_READS;
-  int extra = row_size % N_READS;
+  int blocks = IdxT(row_size) / N_READS;
+  int extra = IdxT(row_size) % N_READS;
 
   if ((non_row_reductions < 32 && row_size <= 8) || non_row_reductions <= 8) {
     // Simple loop over non_row_reductions and reduce the row in the thread.
-    size_t out_idx = tid.x + tsize.y * size_t(tid.y);
-    in += elem_to_loc(out_idx, shape, strides, ndim);
+    IdxT out_idx = tid.x + tsize.y * IdxT(tid.y);
+    in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
 
     for (uint r = 0; r < non_row_reductions; r++) {
-      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+      row = in + loop.location();
       thread_reduce<T, U, Op, N_READS>(total_val, row, blocks, extra);
       loop.next(reduce_shape, reduce_strides);
     }
@@ -236,13 +237,13 @@ template <
   } else {
     // Collaboratively reduce over non_row_reductions in the simdgroup. Each
     // thread reduces every 32nd row and then a simple simd reduce.
-    size_t out_idx = gid.y + gsize.y * size_t(gid.z);
-    in += elem_to_loc(out_idx, shape, strides, ndim);
+    IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
+    in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
 
     loop.next(simd_lane_id, reduce_shape, reduce_strides);
 
     for (uint r = simd_lane_id; r < non_row_reductions; r += simd_size) {
-      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+      row = in + loop.location();
       thread_reduce<T, U, Op, N_READS>(total_val, row, blocks, extra);
       loop.next(simd_size, reduce_shape, reduce_strides);
     }
@@ -259,6 +260,7 @@ template <
     typename T,
     typename U,
     typename Op,
+    typename IdxT = size_t,
     int N_READS = REDUCE_N_READS,
     int N_WRITES = REDUCE_N_WRITES>
 [[kernel]] void row_reduce_simple(
@@ -277,15 +279,15 @@ template <
   U totals[N_WRITES];
 
   // Move to the row
-  size_t out_idx = N_WRITES * (gid.y + gsize.y * size_t(gid.z));
+  IdxT out_idx = N_WRITES * (gid.y + gsize.y * IdxT(gid.z));
   if (out_idx + N_WRITES > out_size) {
     out_idx = out_size - N_WRITES;
   }
-  in += out_idx * reduction_size;
+  in += out_idx * IdxT(reduction_size);
   out += out_idx;
 
   // Each thread reduces across the row
-  int blocks = reduction_size / (lsize.x * N_READS);
+  int blocks = IdxT(reduction_size) / (lsize.x * N_READS);
   int extra = reduction_size - blocks * (lsize.x * N_READS);
   per_thread_row_reduce<T, U, Op, N_READS, N_WRITES>(
       totals, in, reduction_size, blocks, extra, lsize.x, lid.x);
@@ -306,6 +308,7 @@ template <
     typename T,
     typename U,
     typename Op,
+    typename IdxT,
     int NDIMS,
     int N_READS = REDUCE_N_READS>
 [[kernel]] void row_reduce_looped(
@@ -330,19 +333,20 @@ template <
   threadgroup U shared_vals[simd_size];
   U total = Op::init;
 
-  size_t out_idx = gid.y + gsize.y * size_t(gid.z);
+  IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
 
   // lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it
   // needs a small refactor.
-  in += elem_to_loc(out_idx, shape, strides, ndim) + lid.x * N_READS;
+  in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim) +
+      lid.x * N_READS;
 
-  looped_elem_to_loc<NDIMS> loop;
+  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
   const device T* row;
-  int blocks = row_size / (lsize.x * N_READS);
+  int blocks = IdxT(row_size) / (lsize.x * N_READS);
   int extra = row_size - blocks * (lsize.x * N_READS);
 
-  for (size_t i = 0; i < non_row_reductions; i++) {
-    row = in + loop.location(i, reduce_shape, reduce_strides, reduce_ndim);
+  for (IdxT i = 0; i < non_row_reductions; i++) {
+    row = in + loop.location();
 
     // Each thread reduces across the row
     U row_total;
