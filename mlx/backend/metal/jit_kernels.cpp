@@ -46,25 +46,27 @@ MTL::ComputePipelineState* get_unary_kernel(
   auto lib = d.get_library(lib_name, [&]() {
     auto in_t = get_type_string(in_type);
     auto out_t = get_type_string(out_type);
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::unary_ops() << metal::unary();
-    kernel_source << get_template_definition(
-        "v_" + lib_name, "unary_v", in_t, out_t, op);
-    kernel_source << get_template_definition(
-        "v2_" + lib_name, "unary_v2", in_t, out_t, op);
-    kernel_source << get_template_definition(
-        "gn4_" + lib_name, "unary_g", in_t, out_t, op, 4);
-    return kernel_source.str();
+    std::string kernel_source = metal::utils();
+    concatenate(kernel_source, metal::unary_ops(), metal::unary());
+    kernel_source +=
+        get_template_definition("v_" + lib_name, "unary_v", in_t, out_t, op);
+    kernel_source +=
+        get_template_definition("v2_" + lib_name, "unary_v2", in_t, out_t, op);
+    kernel_source += get_template_definition(
+        "gn1_" + lib_name, "unary_g", in_t, out_t, op, 1, "uint");
+    kernel_source += get_template_definition(
+        "gn4large_" + lib_name, "unary_g", in_t, out_t, op, 4);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
 
-void add_binary_kernels(
+void append_binary_kernels(
     const std::string lib_name,
     Dtype in_type,
     Dtype out_type,
     const std::string op,
-    std::ostringstream& kernel_source) {
+    std::string& kernel_source) {
   const std::array<std::pair<std::string, std::string>, 10> kernel_types = {{
       {"ss", "binary_ss"},
       {"vs", "binary_vs"},
@@ -74,26 +76,24 @@ void add_binary_kernels(
       {"sv2", "binary_sv2"},
       {"vv2", "binary_vv2"},
       {"g1", "binary_g_nd1"},
-      {"g2", "binary_g_nd2"},
-      {"g3", "binary_g_nd3"},
+      {"g2large", "binary_g_nd2"},
+      {"g3large", "binary_g_nd3"},
   }};
+  auto in_t = get_type_string(in_type);
+  auto out_t = get_type_string(out_type);
+
   for (auto& [name, func] : kernel_types) {
-    std::string template_def;
-    template_def = get_template_definition(
-        name + "_" + lib_name,
-        func,
-        get_type_string(in_type),
-        get_type_string(out_type),
-        op);
-    kernel_source << template_def;
+    kernel_source +=
+        get_template_definition(name + "_" + lib_name, func, in_t, out_t, op);
   }
-  kernel_source << get_template_definition(
-      "gn4_" + lib_name,
-      "binary_g",
-      get_type_string(in_type),
-      get_type_string(out_type),
-      op,
-      4);
+  kernel_source += get_template_definition(
+      "g2_" + lib_name, "binary_g_nd2", in_t, out_t, op, "uint");
+  kernel_source += get_template_definition(
+      "g3_" + lib_name, "binary_g_nd3", in_t, out_t, op, "uint");
+  kernel_source += get_template_definition(
+      "gn2_" + lib_name, "binary_g", in_t, out_t, op, 2, "uint");
+  kernel_source += get_template_definition(
+      "gn4large_" + lib_name, "binary_g", in_t, out_t, op, 4);
 }
 
 MTL::ComputePipelineState* get_binary_kernel(
@@ -104,10 +104,11 @@ MTL::ComputePipelineState* get_binary_kernel(
     const std::string op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::binary_ops() << metal::binary();
-    add_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
-    return kernel_source.str();
+    std::string kernel_source;
+    kernel_source = metal::utils();
+    concatenate(kernel_source, metal::binary_ops(), metal::binary());
+    append_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
@@ -120,11 +121,10 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     const std::string op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::binary_ops()
-                  << metal::binary_two();
-    add_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
-    return kernel_source.str();
+    std::string kernel_source = metal::utils();
+    concatenate(kernel_source, metal::binary_ops(), metal::binary_two());
+    append_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
@@ -136,24 +136,29 @@ MTL::ComputePipelineState* get_ternary_kernel(
     const std::string op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
+    auto t_str = get_type_string(type);
+    std::string kernel_source = metal::utils();
+    concatenate(kernel_source, metal::ternary_ops(), metal::ternary());
     const std::array<std::pair<std::string, std::string>, 5> kernel_types = {{
         {"v", "ternary_v"},
         {"v2", "ternary_v2"},
         {"g1", "ternary_g_nd1"},
-        {"g2", "ternary_g_nd2"},
-        {"g3", "ternary_g_nd3"},
+        {"g2large", "ternary_g_nd2"},
+        {"g3large", "ternary_g_nd3"},
     }};
-    kernel_source << metal::utils() << metal::ternary_ops() << metal::ternary();
     for (auto& [name, func] : kernel_types) {
-      std::string template_def;
-      template_def = get_template_definition(
-          name + "_" + lib_name, func, get_type_string(type), op);
-      kernel_source << template_def;
+      kernel_source +=
+          get_template_definition(name + "_" + lib_name, func, t_str, op);
     }
-    kernel_source << get_template_definition(
-        "gn4_" + lib_name, "ternary_g", get_type_string(type), op, 4);
-    return kernel_source.str();
+    kernel_source += get_template_definition(
+        "g2_" + lib_name, "ternary_g_nd2", t_str, op, "uint");
+    kernel_source += get_template_definition(
+        "g3_" + lib_name, "ternary_g_nd3", t_str, op, "uint");
+    kernel_source += get_template_definition(
+        "gn2_" + lib_name, "ternary_g", t_str, op, 2, "uint");
+    kernel_source += get_template_definition(
+        "gn4large_" + lib_name, "ternary_g", t_str, op, 4);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
@@ -165,31 +170,43 @@ MTL::ComputePipelineState* get_copy_kernel(
     const array& out) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::copy();
     auto in_type = get_type_string(in.dtype());
     auto out_type = get_type_string(out.dtype());
-    kernel_source << metal::utils() << metal::copy()
-                  << get_template_definition(
-                         "s_" + lib_name, "copy_s", in_type, out_type)
-                  << get_template_definition(
-                         "v_" + lib_name, "copy_v", in_type, out_type)
-                  << get_template_definition(
-                         "g1_" + lib_name, "copy_g_nd1", in_type, out_type)
-                  << get_template_definition(
-                         "g2_" + lib_name, "copy_g_nd2", in_type, out_type)
-                  << get_template_definition(
-                         "g3_" + lib_name, "copy_g_nd3", in_type, out_type)
-                  << get_template_definition(
-                         "gn4_" + lib_name, "copy_g", in_type, out_type, 4)
-                  << get_template_definition(
-                         "gg1_" + lib_name, "copy_gg_nd1", in_type, out_type)
-                  << get_template_definition(
-                         "gg2_" + lib_name, "copy_gg_nd2", in_type, out_type)
-                  << get_template_definition(
-                         "gg3_" + lib_name, "copy_gg_nd3", in_type, out_type)
-                  << get_template_definition(
-                         "ggn4_" + lib_name, "copy_gg", in_type, out_type, 4);
-    return kernel_source.str();
+    kernel_source +=
+        get_template_definition("s_" + lib_name, "copy_s", in_type, out_type);
+    kernel_source +=
+        get_template_definition("v_" + lib_name, "copy_v", in_type, out_type);
+    kernel_source += get_template_definition(
+        "g1_" + lib_name, "copy_g_nd1", in_type, out_type);
+    kernel_source += get_template_definition(
+        "g2_" + lib_name, "copy_g_nd2", in_type, out_type, "int");
+    kernel_source += get_template_definition(
+        "g3_" + lib_name, "copy_g_nd3", in_type, out_type, "int");
+    kernel_source += get_template_definition(
+        "gn2_" + lib_name, "copy_g", in_type, out_type, 2, "int");
+    kernel_source += get_template_definition(
+        "gg1_" + lib_name, "copy_gg_nd1", in_type, out_type);
+    kernel_source += get_template_definition(
+        "gg2_" + lib_name, "copy_gg_nd2", in_type, out_type, "int");
+    kernel_source += get_template_definition(
+        "gg3_" + lib_name, "copy_gg_nd3", in_type, out_type, "int");
+    kernel_source += get_template_definition(
+        "ggn2_" + lib_name, "copy_gg", in_type, out_type, 2, "int");
+    kernel_source += get_template_definition(
+        "g2large_" + lib_name, "copy_g_nd2", in_type, out_type);
+    kernel_source += get_template_definition(
+        "g3large_" + lib_name, "copy_g_nd3", in_type, out_type);
+    kernel_source += get_template_definition(
+        "gn4large_" + lib_name, "copy_g", in_type, out_type, 4);
+    kernel_source += get_template_definition(
+        "gg2large_" + lib_name, "copy_gg_nd2", in_type, out_type);
+    kernel_source += get_template_definition(
+        "gg3large_" + lib_name, "copy_gg_nd3", in_type, out_type);
+    kernel_source += get_template_definition(
+        "ggn4large_" + lib_name, "copy_gg", in_type, out_type, 4);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }

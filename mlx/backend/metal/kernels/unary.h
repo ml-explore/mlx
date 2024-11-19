@@ -18,7 +18,12 @@ template <typename T, typename U, typename Op>
   out[offset] = Op()(in[offset]);
 }
 
-template <typename T, typename U, typename Op, int N = 1>
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int N = 1,
+    typename IdxT = size_t>
 [[kernel]] void unary_g(
     device const T* in,
     device U* out,
@@ -27,12 +32,11 @@ template <typename T, typename U, typename Op, int N = 1>
     device const int& ndim,
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto idx =
-      elem_to_loc({N * index.x, index.y, index.z}, in_shape, in_strides, ndim);
+  auto idx = elem_to_loc<size_t, IdxT>(
+      {N * index.x, index.y, index.z}, in_shape, in_strides, ndim);
   auto xshape = in_shape[ndim - 1];
-  auto xstride = in_strides[ndim - 1];
-  size_t out_idx =
-      N * index.x + xshape * (index.y + size_t(grid_dim.y) * index.z);
+  IdxT xstride = in_strides[ndim - 1];
+  IdxT out_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
   for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     out[out_idx++] = Op()(in[idx]);
     idx += xstride;

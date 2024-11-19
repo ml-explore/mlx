@@ -14,7 +14,7 @@ struct Indices {
 };
 
 template <typename IdxT>
-METAL_FUNC size_t offset_neg_idx(IdxT idx, size_t size) {
+METAL_FUNC size_t offset_neg_idx(IdxT idx, int size) {
   if (is_unsigned_v<IdxT>) {
     return idx;
   } else {

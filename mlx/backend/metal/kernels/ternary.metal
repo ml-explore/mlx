@@ -8,13 +8,16 @@
 #include "mlx/backend/metal/kernels/ternary_ops.h"
 #include "mlx/backend/metal/kernels/ternary.h"
 
-#define instantiate_ternary_all(op, tname, type)                  \
-  instantiate_kernel("v_" #op #tname, ternary_v, type, op)        \
-  instantiate_kernel("v2_" #op #tname, ternary_v2, type, op)      \
-  instantiate_kernel("gn4_" #op #tname, ternary_g, type, op, 4)   \
-  instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op)   \
-  instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op)   \
-  instantiate_kernel("g3_" #op #tname, ternary_g_nd3, type, op)
+#define instantiate_ternary_all(op, tname, type)                       \
+  instantiate_kernel("v_" #op #tname, ternary_v, type, op)             \
+  instantiate_kernel("v2_" #op #tname, ternary_v2, type, op)           \
+  instantiate_kernel("gn2_" #op #tname, ternary_g, type, op, 1, uint)  \
+  instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op)        \
+  instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op, uint)  \
+  instantiate_kernel("g3_" #op #tname, ternary_g_nd3, type, op, uint)  \
+  instantiate_kernel("g2large_" #op #tname, ternary_g_nd2, type, op)   \
+  instantiate_kernel("g3large_" #op #tname, ternary_g_nd3, type, op)   \
+  instantiate_kernel("gn4large_" #op #tname, ternary_g, type, op, 4)   \
 
 #define instantiate_ternary_types(op)               \
   instantiate_ternary_all(op, bool_, bool)          \

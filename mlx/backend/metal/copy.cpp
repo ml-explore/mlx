@@ -74,40 +74,42 @@ void copy_gpu_inplace(
       };
   auto [shape, strides_in_, strides_out_] = maybe_collapse();
   int ndim = shape.size();
-
-  bool use_2d = out.data_size() > UINT32_MAX;
+  bool large;
+  if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+    // Allow for negative strides
+    large = out.data_size() > INT32_MAX;
+  } else {
+    large = out.data_size() > UINT32_MAX;
+  }
   auto& d = metal::device(s.device);
   int work_per_thread = 1;
   std::string kernel_name;
-  {
-    std::ostringstream kname;
-    switch (ctype) {
-      case CopyType::Scalar:
-        kname << (use_2d ? "s2" : "s");
-        break;
-      case CopyType::Vector:
-        kname << (use_2d ? "v2" : "v");
-        break;
-      case CopyType::General:
-        kname << "g";
-        break;
-      case CopyType::GeneralGeneral:
-        kname << "gg";
-        break;
-    }
-    if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-      if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
-        kname << shape.size();
-      } else {
-        work_per_thread = 4;
-        kname << "n4";
-      }
-    }
-    kname << "_copy";
-    kname << type_to_name(in) << type_to_name(out);
-    kernel_name = kname.str();
+  switch (ctype) {
+    case CopyType::Scalar:
+      kernel_name = (large ? "s2" : "s");
+      break;
+    case CopyType::Vector:
+      kernel_name = (large ? "v2" : "v");
+      break;
+    case CopyType::General:
+      kernel_name = "g";
+      break;
+    case CopyType::GeneralGeneral:
+      kernel_name = "gg";
+      break;
   }
-
+  if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+    if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
+      kernel_name += std::to_string(shape.size());
+    } else {
+      work_per_thread = large ? 4 : 2;
+      concatenate(kernel_name, "n", std::to_string(work_per_thread));
+    }
+    if (large) {
+      kernel_name += "large";
+    }
+  }
+  concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
   auto kernel = get_copy_kernel(d, kernel_name, in, out);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -159,8 +161,8 @@ void copy_gpu_inplace(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
+                                : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
@@ -193,9 +195,9 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
     return;
   }
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
-  bool use_2d = out.data_size() > UINT32_MAX;
+  bool large = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
-  std::string kernel_name = std::string(use_2d ? "s2" : "s") + "_copy" +
+  std::string kernel_name = std::string(large ? "s2" : "s") + "_copy" +
       type_to_name(val) + type_to_name(out);
   auto kernel = get_copy_kernel(d, kernel_name, val, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -210,8 +212,8 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
     thread_group_size = nthreads;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                               : MTL::Size(nthreads, 1, 1);
+  MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
+                              : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 

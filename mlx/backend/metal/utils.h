@@ -61,4 +61,15 @@ inline void debug_set_primitive_buffer_label(
 
 std::string get_primitive_string(Primitive* primitive);
 
+template <typename T>
+void concatenate(std::string& acc, T first) {
+  acc += first;
+}
+
+template <typename T, typename... Args>
+void concatenate(std::string& acc, T first, Args... args) {
+  acc += first;
+  concatenate(acc, args...);
+}
+
 } // namespace mlx::core

@@ -279,7 +279,7 @@ void Compiled::eval_cpu(
 
   // Figure out which kernel we are using
   auto& shape = outputs[0].shape();
-  bool contiguous = compiled_check_contiguity(inputs, shape);
+  auto contiguous = compiled_check_contiguity(inputs, shape);
 
   // Handle all broadcasting and collect function input arguments
   std::vector<void*> args;

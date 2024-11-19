@@ -5,11 +5,13 @@
 #include "mlx/backend/metal/kernels/unary_ops.h"
 #include "mlx/backend/metal/kernels/unary.h"
 
-#define instantiate_unary_all(op, in_tname, out_tname, in_type, out_type)                 \
-  instantiate_kernel("v_" #op #in_tname #out_tname, unary_v, in_type, out_type, op)       \
-  instantiate_kernel("v2_" #op #in_tname #out_tname, unary_v2, in_type, out_type, op)     \
-  instantiate_kernel("gn4_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
-
+#define instantiate_unary_all(op, in_tname, out_tname, in_type, out_type)             \
+  instantiate_kernel("v_" #op #in_tname #out_tname, unary_v, in_type, out_type, op)   \
+  instantiate_kernel("v2_" #op #in_tname #out_tname, unary_v2, in_type, out_type, op) \
+  instantiate_kernel(                                                                 \
+      "gn1_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 1, uint)       \
+  instantiate_kernel(                                                                 \
+      "gn4large" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
 
 #define instantiate_unary_all_same(op, tname, type)   \
   instantiate_unary_all(op, tname, tname, type, type)

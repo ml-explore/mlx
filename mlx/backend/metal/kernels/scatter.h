@@ -10,7 +10,8 @@ template <
     typename Op,
     int NIDX,
     bool UPD_ROW_CONTIG,
-    int NWORK>
+    int NWORK,
+    typename LocT>
 METAL_FUNC void scatter_impl(
     const device T* updates,
     device mlx_atomic<T>* out,
@@ -28,29 +29,31 @@ METAL_FUNC void scatter_impl(
   Op op;
 
   auto ind_idx = gid.y * NWORK;
-  size_t out_offset = 0;
+  LocT out_offset = 0;
   if (upd_size > 1) {
-    out_offset =
-        elem_to_loc(gid.x, upd_shape + indices.ndim, out_strides, out_ndim);
+    out_offset = elem_to_loc<size_t, LocT>(
+        gid.x, upd_shape + indices.ndim, out_strides, out_ndim);
   }
 
   for (int j = 0; j < NWORK && ind_idx < idx_size; ++j, ind_idx++) {
-    size_t out_idx = out_offset;
+    LocT out_idx = out_offset;
     for (int i = 0; i < NIDX; ++i) {
       auto idx_loc = indices.row_contiguous[i]
           ? ind_idx
-          : elem_to_loc(
+          : elem_to_loc<size_t, LocT>(
                 ind_idx,
                 &indices.shapes[indices.ndim * i],
                 &indices.strides[indices.ndim * i],
                 indices.ndim);
       auto ax = axes[i];
       auto idx_val = offset_neg_idx(indices.buffers[i][idx_loc], out_shape[ax]);
-      out_idx += idx_val * out_strides[ax];
+      out_idx +=
+          static_cast<LocT>(idx_val) * static_cast<LocT>(out_strides[ax]);
     }
-    auto upd_idx = ind_idx * upd_size + gid.x;
+    auto upd_idx = ind_idx * static_cast<LocT>(upd_size) + gid.x;
     if constexpr (!UPD_ROW_CONTIG) {
-      upd_idx = elem_to_loc(upd_idx, upd_shape, upd_strides, upd_ndim);
+      upd_idx =
+          elem_to_loc<size_t, LocT>(upd_idx, upd_shape, upd_strides, upd_ndim);
     }
     op.atomic_update(out, updates[upd_idx], out_idx);
   }

@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
-
+#include <fmt/format.h>
+#include <iostream> //TODO
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -11,12 +12,12 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
+using namespace fmt::literals;
+
 namespace mlx::core {
 
-constexpr int WORK_PER_THREAD = 4;
-
 inline void build_kernel(
-    std::ostream& os,
+    std::string& os,
     const std::string& kernel_name,
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
@@ -41,8 +42,8 @@ inline void build_kernel(
   int cnt = 0;
 
   // Start the kernel
-  os << "[[host_name(\"" << kernel_name << "\")]]\n"
-     << "[[kernel]] void " << kernel_name << "(\n";
+  os += fmt::format(
+      "[[host_name(\"{0}\")]]\n[[kernel]] void {0}(\n", kernel_name);
 
   // Add the input arguments
   for (auto& x : inputs) {
@@ -54,51 +55,61 @@ inline void build_kernel(
     }
 
     // Scalars and contiguous need no strides
-    if (is_scalar(x) || contiguous) {
-      os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << " [[buffer(" << cnt++ << ")]],\n";
-    } else {
+    if (!is_scalar(x) && !contiguous) {
       add_indices = true;
-      os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << " [[buffer(" << cnt++ << ")]],\n";
     }
+    os += fmt::format(
+        "    device const {0}* {1} [[buffer({2})]],\n",
+        get_type_string(x.dtype()),
+        xname,
+        cnt++);
   }
 
   if (add_indices) {
-    os << "    constant const size_t* in_strides [[buffer(" << cnt++
-       << ")]],\n";
+    os += fmt::format(
+        "    constant const size_t* in_strides [[buffer({0})]],\n", cnt++);
   }
 
   // Add the output arguments
   for (auto& x : outputs) {
-    os << "    device " << get_type_string(x.dtype()) << "* "
-       << namer.get_name(x) << " [[buffer(" << cnt++ << ")]],\n";
+    os += fmt::format(
+        "    device {0}* {1} [[buffer({2})]],\n",
+        get_type_string(x.dtype()),
+        namer.get_name(x),
+        cnt++);
   }
   // Add output strides and shape to extract the indices.
   if (!contiguous) {
-    os << "    constant const size_t* output_strides [[buffer(" << cnt++
-       << ")]],\n"
-       << "    constant const int* output_shape [[buffer(" << cnt++ << ")]],\n";
+    os += fmt::format(
+        "    constant const size_t* output_strides [[buffer({0})]],\n", cnt++);
+    os += fmt::format(
+        "    constant const int* output_shape [[buffer({0})]],\n", cnt++);
   }
   if (dynamic_dims) {
-    os << "    constant const int& ndim [[buffer(" << cnt++ << ")]],\n";
+    os += fmt::format("    constant const int& ndim [[buffer({0})]],\n", cnt++);
   }
 
   // The thread index in the whole grid
-  os << "    uint3 pos [[thread_position_in_grid]],\n"
-     << "    uint3 grid [[threads_per_grid]]) {\n";
+  os += "    uint3 pos [[thread_position_in_grid]],\n";
+  os += "    uint3 grid [[threads_per_grid]]) {\n";
 
-  if (use_big_index) {
+  std::string idx_type = use_big_index ? "size_t" : "uint";
+  if (contiguous && use_big_index) {
     // This is only used for contiguous kernels which don't have
     // a third grid dimension
-    os << "  size_t index = pos.x + grid.x * size_t(pos.y);\n";
+    os += "  size_t index = pos.x + grid.x * size_t(pos.y);\n";
   } else if (work_per_thread > 1) {
-    os << "  constexpr int N_ = " << std::to_string(work_per_thread) << ";\n"
-       << "  int xshape = output_shape["
-       << (dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1)) << "];\n"
-       << "  size_t index = N_ * pos.x + xshape * (pos.y + size_t(grid.y) * pos.z);\n";
+    os += fmt::format("  constexpr int N_ = {0};\n", work_per_thread);
+    os += fmt::format(
+        "  int xshape = output_shape[{0}];\n",
+        dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1));
+    os += fmt::format(
+        "  {0} index = N_ * pos.x + xshape * (pos.y + {0}(grid.y) * pos.z);\n",
+        idx_type);
   } else {
-    os << " size_t index = pos.x + grid.x * (pos.y + size_t(grid.y) * pos.z);\n";
+    os += fmt::format(
+        "  {0} index = pos.x + grid.x * (pos.y + {0}(grid.y) * pos.z);\n",
+        idx_type);
   }
 
   // Read constant / contiguous inputs in tmps
@@ -109,16 +120,19 @@ inline void build_kernel(
 
     if (is_constant(x)) {
       auto type_str = get_type_string(x.dtype());
-      os << "  auto tmp_" << xname << " = static_cast<"
-         << get_type_string(x.dtype()) << ">(";
-      print_constant(os, x);
-      os << ");\n";
+      std::ostringstream ss;
+      print_constant(ss, x);
+      os += fmt::format(
+          "  auto tmp_{0} = static_cast<{1}>({2});\n",
+          xname,
+          get_type_string(x.dtype()),
+          ss.str());
     } else if (is_scalar(x)) {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[0];\n";
+      os += fmt::format(
+          "  {0} tmp_{1} = {1}[0];\n", get_type_string(x.dtype()), xname);
     } else if (contiguous) {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[index];\n";
+      os += fmt::format(
+          "  {0} tmp_{1} = {1}[index];\n", get_type_string(x.dtype()), xname);
     } else {
       nc_inputs.push_back(x);
     }
@@ -127,83 +141,98 @@ inline void build_kernel(
   // Initialize the indices for non-contiguous inputs
   for (int i = 0; i < nc_inputs.size(); ++i) {
     auto& xname = namer.get_name(nc_inputs[i]);
+    os += fmt::format("  {0} index_{1} = ", idx_type, xname);
     if (ndim == 1) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_1(pos.x, "
-         << "in_strides[" << offset << "]);\n";
+      os += fmt::format(
+          "elem_to_loc_1<size_t, uint>(pos.x, in_strides[{0}]);\n", offset);
     } else if (ndim == 2) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_2({pos.x, pos.y}, "
-         << "in_strides + " << offset << ");\n";
+      os += fmt::format(
+          "elem_to_loc_2<size_t, {0}>({{pos.x, pos.y}}, in_strides + {1});\n",
+          idx_type,
+          offset);
     } else if (ndim == 3) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = elem_to_loc_3(pos, "
-         << "in_strides + " << offset << ");\n";
+      os += fmt::format(
+          "elem_to_loc_3<size_t, {0}>(pos, in_strides + {1});\n",
+          idx_type,
+          offset);
     } else if (!dynamic_dims) {
-      int offset = i * ndim;
-      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides["
-         << offset + ndim - 1 << "]"
-         << " + pos.y * in_strides[" << offset + ndim - 2 << "];\n";
+      int offset = (i + 1) * ndim;
+      os += fmt::format(
+          "N_ * pos.x * {0}(in_strides[{1}]) + pos.y * {0}(in_strides[{2}]);\n",
+          idx_type,
+          offset - 1,
+          offset - 2);
     } else {
-      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides[ndim * "
-         << i << " + ndim - 1]"
-         << " + pos.y * in_strides[ndim * " << i << " + ndim - 2];\n";
+      os += fmt::format(
+          "N_ * pos.x * {0}(in_strides[ndim * {1} + ndim - 1]) + pos.y * {0}(in_strides[ndim * {1} + ndim - 2]);\n",
+          idx_type,
+          i);
     }
   }
+
   if (!nc_inputs.empty() && (ndim > 3 || dynamic_dims)) {
-    os << "  uint zpos = pos.z;\n";
+    os += "  uint zpos = pos.z;\n";
     if (dynamic_dims) {
-      os << "  for (int d = ndim - 3; d >= 0; --d) {\n";
+      os += "  for (int d = ndim - 3; d >= 0; --d) {\n";
     } else {
-      os << "  for (int d = " << ndim - 3 << "; d >= 0; --d) {\n";
+      os += fmt::format("  for (int d = {0}; d >= 0; --d) {{\n", ndim - 3);
     }
-    os << "    uint l = zpos % output_shape[d];\n";
+    os += "    uint l = zpos % output_shape[d];\n";
     for (int i = 0; i < nc_inputs.size(); ++i) {
       auto& xname = namer.get_name(nc_inputs[i]);
-      os << "    index_" << xname << " += ";
+      os += fmt::format("    index_{0} += ", xname);
       if (dynamic_dims) {
-        os << "l * in_strides[" << i << " * ndim + d];\n";
+        os +=
+            fmt::format("l * {0}(in_strides[{1} * ndim + d]);\n", idx_type, i);
       } else {
-        os << "l * in_strides[" << i * ndim << " + d];\n";
+        os +=
+            fmt::format("l * {0}(in_strides[{1} + d]);\n", idx_type, i * ndim);
       }
     }
-    os << "    zpos /= output_shape[d];\n  }\n";
+    os += "    zpos /= output_shape[d];\n  }\n";
   }
 
   // Open per-thread loop
   if (work_per_thread > 1) {
-    os << "  for (int i = 0; i < N_ && (int(N_ * pos.x) + i) < xshape; ++i) {\n";
+    os +=
+        "  for (int i = 0; i < N_ && (int(N_ * pos.x) + i) < xshape; ++i) {\n";
   }
 
   // Read non-contiguous inputs into tmps
   for (int i = 0; i < nc_inputs.size(); ++i) {
     auto& x = nc_inputs[i];
     auto& xname = namer.get_name(x);
-    os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-       << xname << "[index_" << xname << "];\n";
+    os += fmt::format(
+        "  {0} tmp_{1} = {1}[index_{1}];\n", get_type_string(x.dtype()), xname);
   }
 
   // Actually write the computation
   for (auto& x : tape) {
-    os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(x)
-       << " = ";
+    os += fmt::format(
+        "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
     if (is_static_cast(x.primitive())) {
-      os << "static_cast<" << get_type_string(x.dtype()) << ">(tmp_"
-         << namer.get_name(x.inputs()[0]) << ");\n";
+      os += fmt::format(
+          "static_cast<{0}>(tmp_{1});\n",
+          get_type_string(x.dtype()),
+          namer.get_name(x.inputs()[0]));
     } else {
-      x.primitive().print(os);
-      os << "()(";
+      std::ostringstream ss;
+      x.primitive().print(ss);
+      os += ss.str();
+      os += "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
-        os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
+        os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
       }
-      os << "tmp_" << namer.get_name(x.inputs().back()) << ");\n";
+      os += fmt::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
     }
   }
 
   // Write the outputs from tmps
   for (auto& x : outputs) {
-    os << "  " << namer.get_name(x) << "[index] = tmp_" << namer.get_name(x)
-       << ";\n";
+    os += fmt::format("  {0}[index] = tmp_{0};\n", namer.get_name(x));
   }
   // Increment indices and close per thread loop
   if (work_per_thread > 1) {
@@ -211,18 +240,18 @@ inline void build_kernel(
       auto& x = nc_inputs[i];
       auto& xname = namer.get_name(x);
       if (!dynamic_dims) {
-        os << "  index_" << xname << " += "
-           << "in_strides[" << i * ndim + ndim - 1 << "];\n";
+        os += fmt::format(
+            "  index_{0} += in_strides[{1}];\n", xname, i * ndim + ndim - 1);
       } else {
-        os << "  index_" << xname << " += "
-           << "in_strides[" << i << " * ndim + ndim - 1];\n";
+        os += fmt::format(
+            "  index_{0} += in_strides[{1} * ndim + ndim - 1];\n", xname, i);
       }
     }
-    os << "  index++;\n  }\n";
+    os += "  index++;\n  }\n";
   }
 
   // Finish the kernel
-  os << "}\n";
+  os += "}\n";
 
   if (cnt > 31) {
     std::ostringstream msg;
@@ -246,9 +275,9 @@ void Compiled::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto lib = d.get_library(kernel_lib_, [&]() {
-    std::ostringstream kernel;
-    kernel << metal::utils() << metal::unary_ops() << metal::binary_ops()
-           << metal::ternary_ops();
+    std::string kernel = metal::utils();
+    concatenate(
+        kernel, metal::unary_ops(), metal::binary_ops(), metal::ternary_ops());
     build_kernel(
         kernel,
         kernel_lib_ + "_contiguous",
@@ -261,7 +290,7 @@ void Compiled::eval_gpu(
         /* dynamic_dims = */ false);
     build_kernel(
         kernel,
-        kernel_lib_ + "_contiguous_big",
+        kernel_lib_ + "_contiguous_large",
         inputs_,
         outputs_,
         tape_,
@@ -282,7 +311,21 @@ void Compiled::eval_gpu(
           /* ndim = */ i,
           /* dynamic_dims = */ false,
           /* use_big_index = */ false,
-          /* work_per_thread = */ i > 3 ? WORK_PER_THREAD : 1);
+          /* work_per_thread = */ i > 3 ? 2 : 1);
+      if (i > 1) {
+        build_kernel(
+            kernel,
+            kernel_lib_ + "_strided_" + std::to_string(i) + "_large",
+            inputs_,
+            outputs_,
+            tape_,
+            constant_ids_,
+            /* contiguous = */ false,
+            /* ndim = */ i,
+            /* dynamic_dims = */ false,
+            /* use_big_index = */ true,
+            /* work_per_thread = */ i > 3 ? 4 : 1);
+      }
     }
     build_kernel(
         kernel,
@@ -295,13 +338,25 @@ void Compiled::eval_gpu(
         /* ndim = */ 0,
         /* dynamic_dims = */ true,
         /* use_big_index = */ false,
-        /* work_per_thread = */ WORK_PER_THREAD);
-    return kernel.str();
+        /* work_per_thread = */ 2);
+    build_kernel(
+        kernel,
+        kernel_lib_ + "_strided_dynamic_large",
+        inputs_,
+        outputs_,
+        tape_,
+        constant_ids_,
+        /* contiguous = */ false,
+        /* ndim = */ 0,
+        /* dynamic_dims = */ true,
+        /* use_big_index = */ true,
+        /* work_per_thread = */ 4);
+    return kernel;
   });
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
-  bool contiguous = compiled_check_contiguity(inputs, output_shape);
+  auto contiguous = compiled_check_contiguity(inputs, output_shape);
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
@@ -349,13 +404,19 @@ void Compiled::eval_gpu(
         collapse_contiguous_dims(output_shape, initial_strides, INT32_MAX);
   }
 
-  bool use_2d = false;
+  bool large;
   if (contiguous) {
     size_t max_size = 0;
     for (auto& in : inputs) {
       max_size = std::max(max_size, in.data_size());
     }
-    use_2d = (max_size > UINT32_MAX);
+    large = (max_size > UINT32_MAX);
+  } else {
+    size_t max_size = 0;
+    for (auto& o : outputs) {
+      max_size = std::max(max_size, o.size());
+    }
+    large = (max_size > UINT32_MAX);
   }
 
   // Get the kernel from the lib
@@ -368,8 +429,9 @@ void Compiled::eval_gpu(
     } else {
       kernel_name += std::to_string(shape.size());
     }
-  } else if (use_2d) {
-    kernel_name += "_big";
+  }
+  if (large) {
+    kernel_name += "_large";
   }
   auto kernel = d.get_kernel(kernel_name, lib);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -422,7 +484,7 @@ void Compiled::eval_gpu(
     MTL::Size group_dims(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
 
-    MTL::Size grid_dims = use_2d
+    MTL::Size grid_dims = large
         ? get_2d_grid_dims(outputs[0].shape(), outputs[0].strides())
         : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
@@ -430,7 +492,7 @@ void Compiled::eval_gpu(
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
     size_t rest = outputs[0].size() / (dim0 * dim1);
-    int work_per_thread = ndim > 3 ? WORK_PER_THREAD : 1;
+    int work_per_thread = ndim > 3 ? (large ? 4 : 2) : 1;
     dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     int pow2;
