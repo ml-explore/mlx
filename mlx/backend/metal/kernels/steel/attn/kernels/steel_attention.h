@@ -29,6 +29,48 @@ struct TransformScale {
   }
 };
 
+struct MaxOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return metal::max(x, y);
+  }
+};
+
+struct SumOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return x + y;
+  }
+};
+
+struct MulOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return x * y;
+  }
+};
+
+struct SubOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return x - y;
+  }
+};
+
+struct ExpSubOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return fast::exp(x - y);
+  }
+};
+
+struct DivOp {
+  template <typename T>
+  METAL_FUNC static constexpr T apply(T x, T y) {
+    return x / y;
+  }
+};
+
 // clang-format off
 template <
     typename T,
@@ -130,11 +172,12 @@ template <
       BQ >= (kNWarps * kFragSize) && BQ % (kNWarps * kFragSize) == 0,
       "Each simdgroup must host atleast 1 simdgroup matrix along Q sequence.");
 
-  constexpr int TQ = BQ / (kNWarps * kFragSize); // Q seq frags per warp
-  constexpr int TK =
-      BK / kFragSize; // KV sequence frags (all warps load the same frags)
-  constexpr int TD =
-      BD / kFragSize; // HeadDim frags (all warps load the same frags)
+  // Q seq frags per warp
+  constexpr int TQ = BQ / (kNWarps * kFragSize);
+  // KV sequence frags (all warps load the same frags)
+  constexpr int TK = BK / kFragSize;
+  // HeadDim frags (all warps load the same frags)
+  constexpr int TD = BD / kFragSize;
 
   static_assert(TQ == 1, "Check TQ");
 
@@ -162,6 +205,16 @@ template <
 
   loader_q.load_unsafe();
   loader_q.apply_inplace_op(ts);
+
+  constexpr int kRowsPT = decltype(Stile)::kRowsPerThread;
+
+  AccumType max_score[kRowsPT];
+  AccumType sum_score[kRowsPT] = {0};
+
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < kRowsPT; ++i) {
+    max_score[i] = Limits<AccumType>::min;
+  }
 
   for (int kb = 0; kb < params->NK; kb++) {
     // Load Q and K blocks and apply scale
@@ -193,6 +246,43 @@ template <
 
     // Do softmax
 
+    // Row max
+    AccumType new_max[kRowsPT];
+    AccumType factor[kRowsPT];
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      new_max[i] = max_score[i];
+    }
+
+    Stile.template row_reduce<MaxOp>(new_max);
+
+    // exp(Si - rowmax(Si))
+    Stile.template row_bin_op<ExpSubOp>(new_max);
+
+    // Factor exp(rowmax(Si) - rowmax(Si-1))
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      factor[i] = fast::exp(max_score[i] - new_max[i]);
+    }
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      max_score[i] = new_max[i];
+    }
+
+    // Row Sum
+    AccumType sum_score_tmp[kRowsPT] = {0};
+    Stile.template row_reduce<SumOp>(sum_score_tmp);
+
+    // Update norm
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      sum_score[i] = sum_score[i] * factor[i] + sum_score_tmp[i];
+    }
+
+    // Update O
+    Otile.template row_bin_op<MulOp>(factor);
+
     // Do O = S @ V
     threadgroup_barrier(mem_flags::mem_threadgroup);
     Vtile.template load<T, 1, 1, LDV_tgp, 1>(&Vs[Vs_offset]);
@@ -207,6 +297,7 @@ template <
     loader_v.next();
   }
 
+  Otile.template row_bin_op<DivOp>(sum_score);
   threadgroup_barrier(mem_flags::mem_none);
 
   // Store results
