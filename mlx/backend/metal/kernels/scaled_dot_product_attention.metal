@@ -926,21 +926,10 @@ instantiate_fast_inference_self_attention_kernel(half, half, 16, 16, 64, 2, 2);
 instantiate_fast_inference_self_attention_kernel(half, half, 16, 16, 128, 2, 2);
 
 // SDPA vector instantiations
-#define instantiate_sdpa_vector(type, head_dim)                              \
-  template [[host_name("sdpa_vector_" #type "_" #head_dim)]]                 \
-  [[kernel]] void sdpa_vector<type, head_dim>(                               \
-      const device type* queries [[buffer(0)]],                              \
-      const device type* keys [[buffer(1)]],                                 \
-      const device type* values [[buffer(2)]],                               \
-      device type* out [[buffer(3)]],                                        \
-      const constant int& gqa_factor,                                        \
-      const constant int& N,                                                 \
-      const constant size_t& k_stride,                                       \
-      const constant size_t& v_stride,                                       \
-      const constant float& scale,                                           \
-      uint3 tid [[threadgroup_position_in_grid]],                            \
-      uint simd_gid [[simdgroup_index_in_threadgroup]],                      \
-      uint simd_lid [[thread_index_in_simdgroup]]);
+#define instantiate_sdpa_vector(type, head_dim)                                   \
+  instantiate_kernel("sdpa_vector_" #type "_" #head_dim, sdpa_vector, type, head_dim)          \
+  instantiate_kernel("sdpa_vector_2pass_1_" #type "_" #head_dim, sdpa_vector_2pass_1, type, head_dim)  \
+  instantiate_kernel("sdpa_vector_2pass_2_" #type "_" #head_dim, sdpa_vector_2pass_2, type, head_dim)
 
 #define instantiate_sdpa_vector_heads(type) \
   instantiate_sdpa_vector(type, 64)         \
