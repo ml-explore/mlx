@@ -26,10 +26,10 @@ void sdpa_full_self_attention_metal(
     array& o) {
   using namespace mlx::steel;
 
-  int wm = 2;
-  int wn = 2;
+  int wm = 4;
+  int wn = 1;
 
-  int bq = 16;
+  int bq = 32;
   int bk = 16;
   int bd = 64;
 

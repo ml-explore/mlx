@@ -19,6 +19,16 @@ constant bool do_gather [[function_constant(300)]];
 
 constant bool gather_bias = do_gather && use_out_source;
 
+template <typename T>
+struct TransformScale {
+  T scale;
+  METAL_FUNC TransformScale(T scale_) : scale(scale_) {}
+
+  METAL_FUNC T apply(T x) const {
+    return scale * x;
+  }
+};
+
 // clang-format off
 template <
     typename T,
@@ -55,11 +65,151 @@ template <
       tidl.y * params->O_strides[1] + // Head
       tidl.x * BQ * params->O_strides[2]; // Seqeunce
 
-  for (int i = simd_group_id * 32 + simd_lane_id; i < BQ * params->D;
-       i += WM * WN * 32) {
-    int r = i / params->D;
-    int c = i % params->D;
+  constexpr int padQ = 0; // 16 / sizeof(T);
+  constexpr int padK = 0; // 16 / sizeof(T);
+  constexpr int padV = 0; // 16 / sizeof(T);
 
-    O[params->O_strides[2] * r + c] = T(0);
+  // using QBlockSrcShape = CShape<BQ, BD>;
+  // using KBlockSrcShape = CShape<BK, BD>;
+  // using VBlockSrcShape = CShape<BK, BD>;
+
+  constexpr int LDQ_tgp = BD + padQ;
+  constexpr int LDK_tgp = BK + padK;
+  constexpr int LDV_tgp = BD + padV;
+
+  // using QBlockDstStrides = CShape<LDQ_tgp, 1>;
+  // using KBlockDstStrides = CShape<1, LDK_tgp>;
+  // using QBlockDstStrides = CShape<LDV_tgp, 1>;
+
+  threadgroup T Qs[BQ * (BD + padQ)];
+  threadgroup T Ks[(BK + padK) * BD];
+  threadgroup T Vs[BK * (BD + padV)];
+
+  using QBlockLoader = BlockLoaderT<
+      /* typename T = */ T,
+      /* short BROWS = */ BQ,
+      /* short BCOLS = */ BD,
+      /* short kDstStrRow = */ LDQ_tgp,
+      /* short kDstStrCol = */ 1,
+      /* short reduction_dim = */ 1,
+      /* short tgp_size = */ WM * WN * 32>;
+
+  using KBlockLoader = BlockLoaderT<
+      /* typename T = */ T,
+      /* short BROWS = */ BK,
+      /* short BCOLS = */ BD,
+      /* short kDstStrRow = */ 1,
+      /* short kDstStrCol = */ LDK_tgp,
+      /* short reduction_dim = */ 0,
+      /* short tgp_size = */ WM * WN * 32>;
+
+  using VBlockLoader = BlockLoaderT<
+      /* typename T = */ T,
+      /* short BROWS = */ BK,
+      /* short BCOLS = */ BD,
+      /* short kDstStrRow = */ LDV_tgp,
+      /* short kDstStrCol = */ 1,
+      /* short reduction_dim = */ 0,
+      /* short tgp_size = */ WM * WN * 32>;
+
+  QBlockLoader loader_q(
+      Q, params->Q_strides[2], Qs, simd_group_id, simd_lane_id);
+  KBlockLoader loader_k(
+      K, params->K_strides[2], Ks, simd_group_id, simd_lane_id);
+  VBlockLoader loader_v(
+      V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
+
+  TransformScale<T> ts(static_cast<T>(params->scale));
+
+  // MMAFrag size
+  constexpr short kFragSize = 8;
+  using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
+
+  constexpr int kNWarps = WM * WN;
+  static_assert(
+      BQ >= (kNWarps * kFragSize) && BQ % (kNWarps * kFragSize) == 0,
+      "Each simdgroup must host atleast 1 simdgroup matrix along Q sequence.");
+
+  constexpr int TQ = BQ / (kNWarps * kFragSize); // Q seq frags per warp
+  constexpr int TK =
+      BK / kFragSize; // KV sequence frags (all warps load the same frags)
+  constexpr int TD =
+      BD / kFragSize; // HeadDim frags (all warps load the same frags)
+
+  static_assert(TQ == 1, "Check TQ");
+
+  MMATile<AccumType, TQ, 1, MMAFrag_acc_t> Qtile;
+  MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
+  MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
+  MMATile<AccumType, TK, TD, MMAFrag_acc_t> Vtile;
+  MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
+
+  Otile.clear();
+
+  short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
+  short sm = simd_coord.y;
+  short sn = simd_coord.x;
+  short tm = kFragSize * TQ * simd_group_id;
+
+  short Qs_offset = (tm + sm) * LDQ_tgp + sn;
+  short Ks_offset = sm * LDK_tgp + sn;
+  short Vs_offset = sm * LDV_tgp + sn;
+
+  constexpr int Qs_tile_stride = kFragSize;
+  constexpr int Ks_tile_stride = kFragSize * LDK_tgp;
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  loader_q.load_unsafe();
+  loader_q.apply_inplace_op(ts);
+
+  for (int kb = 0; kb < params->NK; kb++) {
+    // Load Q and K blocks and apply scale
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    loader_k.load_unsafe();
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Do S = Q @ K.T
+    Stile.clear();
+
+    for (short dd = 0; dd < TD; dd++) {
+      simdgroup_barrier(mem_flags::mem_none);
+
+      Qtile.template load<T, 1, 1, LDQ_tgp, 1>(
+          &Qs[Qs_offset + dd * Qs_tile_stride]);
+      Ktile.template load<T, 1, 1, LDK_tgp, 1>(
+          &Ks[Ks_offset + dd * Ks_tile_stride]);
+
+      simdgroup_barrier(mem_flags::mem_none);
+
+      tile_matmad(Stile, Qtile, Ktile, Stile);
+    }
+
+    simdgroup_barrier(mem_flags::mem_none);
+
+    // Load V blocks
+    loader_v.load_unsafe();
+
+    // Do softmax
+
+    // Do O = S @ V
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    Vtile.template load<T, 1, 1, LDV_tgp, 1>(&Vs[Vs_offset]);
+
+    simdgroup_barrier(mem_flags::mem_none);
+
+    tile_matmad(Otile, Stile, Vtile, Otile);
+
+    // Prepare for next iteration
+    // loader_q.next();
+    loader_k.next();
+    loader_v.next();
   }
+
+  threadgroup_barrier(mem_flags::mem_none);
+
+  // Store results
+  O += (tm + sm) * params->O_strides[2] + sn;
+  Otile.template store<T, 1, 1>(O, params->O_strides[2]);
 }

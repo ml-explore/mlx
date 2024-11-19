@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
+// #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/steel/attn/attn.h"
@@ -21,11 +21,12 @@
       uint3 lid [[thread_position_in_threadgroup]]);
 
 #define instantiate_attn_shapes_helper(iname, itype) \
-    instantiate_attn(iname, itype, 16, 16, 64, 2, 2) \
+    instantiate_attn(iname, itype, 32, 32, 64, 4, 1) \
+    instantiate_attn(iname, itype, 32, 16, 64, 4, 1) \
 
 
 instantiate_attn_shapes_helper(float16, half);
-instantiate_attn_shapes_helper(bfloat16, bfloat16_t);
+// instantiate_attn_shapes_helper(bfloat16, bfloat16_t);
 
 instantiate_attn_shapes_helper(float32, float);
 // clang-format on

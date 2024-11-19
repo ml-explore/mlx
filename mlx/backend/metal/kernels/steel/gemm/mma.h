@@ -385,9 +385,9 @@ struct BlockMMA {
   STEEL_CONST short TN_stride = kFragSize * WN;
 
   // Warp tile size along M
-  STEEL_CONST short TM = BM / TM_stride;
+  STEEL_CONST short TM = BM / (kFragSize * WM);
   // Warp tile size along N
-  STEEL_CONST short TN = BN / TN_stride;
+  STEEL_CONST short TN = BN / (kFragSize * WN);
 
   // Threadgroup A strides
   STEEL_CONST short A_str_m = transpose_a ? 1 : lda_tgp; // M
