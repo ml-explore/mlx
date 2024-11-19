@@ -19,7 +19,7 @@ Buffer malloc(size_t size) {
 }
 
 void free(Buffer buffer) {
-  return allocator().free(buffer);
+  allocator().free(buffer);
 }
 
 Buffer CommonAllocator::malloc(size_t size, bool) {
