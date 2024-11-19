@@ -2532,6 +2532,10 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
     def test_view(self):
+        # Check scalar
+        out = mx.array(1, mx.int8).view(mx.uint8).item()
+        self.assertEqual(out, 1)
+
         a = mx.random.randint(shape=(4, 2, 4), low=-100, high=100)
         a_np = np.array(a)
 

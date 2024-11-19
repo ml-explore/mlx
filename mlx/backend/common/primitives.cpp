@@ -606,7 +606,7 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (ibytes == obytes || obytes < ibytes && in.strides().back() == 1 ||
       in.flags().row_contiguous) {
     auto strides = in.strides();
-    for (int i = 0; i < strides.size() - 1; ++i) {
+    for (int i = 0; i < static_cast<int>(strides.size()) - 1; ++i) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }

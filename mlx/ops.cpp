@@ -4587,7 +4587,7 @@ array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {
             " axis must be a multiple of the requested type size.");
       }
       out_shape.back() /= (obytes / ibytes);
-    } else {
+    } else if (ibytes > obytes) {
       // Type size ratios are always integers
       out_shape.back() *= (ibytes / obytes);
     }
