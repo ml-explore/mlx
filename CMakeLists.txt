@@ -89,25 +89,32 @@ elseif(MLX_BUILD_METAL)
   # Throw an error if xcrun not found
   execute_process(
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
-    OUTPUT_VARIABLE MACOS_VERSION COMMAND_ERROR_IS_FATAL ANY)
+    OUTPUT_VARIABLE MACOS_SDK_VERSION COMMAND_ERROR_IS_FATAL ANY)
 
-  if(${MACOS_VERSION} LESS 14.0)
+  if(${MACOS_SDK_VERSION} LESS 14.0)
     message(
       FATAL_ERROR
         "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
   endif()
-  message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
+  message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 
   set(METAL_CPP_URL
       https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18-beta.zip
   )
-  # Get the metal version
-  execute_process(
-    COMMAND
-      zsh "-c"
-      "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal -E -x metal -P - | tail -1 | tr -d '\n'"
-    OUTPUT_VARIABLE MLX_METAL_VERSION COMMAND_ERROR_IS_FATAL ANY)
+  # Get the metal version. The mapping is maintained in section 1.6.10 of the
+  # Metal Shading Language Specification.
+  # https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+  if(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 15.0)
+    set(MLX_METAL_VERSION "3.2")
+  elseif(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 14.0)
+    set(MLX_METAL_VERSION "3.1")
+  elseif(${CMAKE_OSX_DEPLOYMENT_TARGET} GREATER_EQUAL 13.5)
+    set(MLX_METAL_VERSION "3.0")
+  else()
+    message(FATAL_ERROR "MLX requires macOS 13.5 or higher to build.")
+  endif()
 
+  message(STATUS "METAL VERSION" ${MLX_METAL_VERSION})
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
 
   FetchContent_MakeAvailable(metal_cpp)
@@ -115,8 +122,6 @@ elseif(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
-
-  add_compile_definitions("MLX_METAL_VERSION=${MLX_METAL_VERSION}")
 endif()
 
 if(MLX_BUILD_CPU)
