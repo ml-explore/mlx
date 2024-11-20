@@ -12,14 +12,19 @@ namespace steel {
 struct AttnParams {
   int B; ///< Batch Size
   int H; ///< Heads
-  int L; ///< Sequence Length
   int D; ///< Head Dim
+
+  int qL; ///< Query Sequence Length
+  int kL; ///< Key Sequence Length
 
   int gqa_factor; ///< Group Query factor
   float scale; ///< Attention scale
 
   int NQ; ///< Number of query blocks
   int NK; ///< Number of key/value blocks
+
+  int NQ_aligned; ///< Number of full query blocks
+  int NK_aligned; ///< Number of full key/value blocks
 
   size_t Q_strides[3]; ///< Query  strides (B, H, L, D = 1)
   size_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)

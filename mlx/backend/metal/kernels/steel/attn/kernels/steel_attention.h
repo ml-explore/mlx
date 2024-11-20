@@ -6,18 +6,8 @@ using namespace mlx::steel;
 // GEMM kernels
 ///////////////////////////////////////////////////////////////////////////////
 
-constant bool has_batch [[function_constant(10)]];
-
-constant bool use_out_source [[function_constant(100)]];
-constant bool do_axpby [[function_constant(110)]];
-
-constant bool align_M [[function_constant(200)]];
-constant bool align_N [[function_constant(201)]];
-constant bool align_K [[function_constant(202)]];
-
-constant bool do_gather [[function_constant(300)]];
-
-constant bool gather_bias = do_gather && use_out_source;
+constant bool align_Q [[function_constant(200)]];
+constant bool align_K [[function_constant(201)]];
 
 template <typename T>
 struct TransformScale {
@@ -204,7 +194,11 @@ template <
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // Load Q blocks apply scale
-  loader_q.load_unsafe();
+  if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
+    loader_q.load_safe(short2(BD, params->qL - params->NQ_aligned * BQ));
+  } else {
+    loader_q.load_unsafe();
+  }
   loader_q.apply_inplace_op(ts);
 
   // Init row reduction variables
@@ -223,7 +217,11 @@ template <
   for (int kb = 0; kb < params->NK; kb++) {
     // Load K block and apply scale
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    loader_k.load_unsafe();
+    if (!align_K && kb == (params->NK_aligned)) {
+      loader_k.load_safe(short2(BD, params->kL - params->NK_aligned * BK));
+    } else {
+      loader_k.load_unsafe();
+    }
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -243,10 +241,36 @@ template <
       tile_matmad(Stile, Qtile, Ktile, Stile);
     }
 
+    // Mask out of length sequence
+    if (!align_K && kb == (params->NK_aligned)) {
+      using stile_t = decltype(Stile);
+      using selem_t = typename stile_t::elem_type;
+      constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
+      const short lim = params->kL - params->NK_aligned * BK;
+
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < stile_t::kTileRows; i++) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < stile_t::kTileCols; j++) {
+          short col_pos = sn + (j * stile_t::kFragCols);
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
+            if ((col_pos + jj) >= lim) {
+              Stile.frag_at(i, j)[jj] = neg_inf;
+            }
+          }
+        }
+      }
+    }
+
     simdgroup_barrier(mem_flags::mem_none);
 
     // Load V blocks
-    loader_v.load_unsafe();
+    if (!align_K && kb == (params->NK_aligned)) {
+      loader_v.load_safe(short2(BD, params->kL - params->NK_aligned * BK));
+    } else {
+      loader_v.load_unsafe();
+    }
 
     // Do softmax
 
@@ -309,5 +333,16 @@ template <
 
   // Store results
   O += (tm + sm) * params->O_strides[2] + sn;
-  Otile.template store<T, 1, 1>(O, params->O_strides[2]);
+
+  if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
+    auto dst_tile_dims =
+        short2(BD - sn, params->qL - BQ * params->NQ_aligned - (tm + sm));
+
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+
+    Otile.template store_safe<T, 1, 1>(O, params->O_strides[2], dst_tile_dims);
+  } else {
+    Otile.template store<T, 1, 1>(O, params->O_strides[2]);
+  }
 }

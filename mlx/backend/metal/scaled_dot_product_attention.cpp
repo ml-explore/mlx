@@ -33,33 +33,65 @@ void sdpa_full_self_attention_metal(
   int bk = 32;
   int bd = q.shape(-1);
 
-  std::ostringstream kname;
-  kname << "steel_attention_" << type_to_name(q) << "_bq" << bq << "_bk" << bk
-        << "_bd" << bd << "_wm" << wm << "_wn" << wn;
-
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
-  compute_encoder.set_compute_pipeline_state(kernel);
-
   int B = q.shape(0);
   int H = q.shape(1);
-  int L = q.shape(2);
   int D = q.shape(3);
   int gqa_factor = q.shape(1) / k.shape(1);
 
-  int NQ = (L + bq - 1) / bq;
-  int NK = (L + bk - 1) / bk;
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
+  const bool align_Q = (qL % bq) == 0;
+  const bool align_K = (kL % bk) == 0;
+
+  metal::MTLFCList func_consts = {
+      {&align_Q, MTL::DataType::DataTypeBool, 200},
+      {&align_K, MTL::DataType::DataTypeBool, 201},
+  };
+
+  std::ostringstream kname;
+  // clang-format off
+  kname << "steel_attention_" 
+        << type_to_name(q) 
+        << "_bq" << bq 
+        << "_bk" << bk
+        << "_bd" << bd 
+        << "_wm" << wm << "_wn" << wn; // clang-format on
+
+  std::string base_name = kname.str();
+
+  // clang-format off
+  kname << "_align_Q_" << (align_Q ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  const int NQ = (qL + bq - 1) / bq;
+  const int NK = (kL + bk - 1) / bk;
+
+  const int NQ_aligned = qL / bq;
+  const int NK_aligned = kL / bk;
 
   AttnParams params{
       /* int B = */ B,
       /* int H = */ H,
-      /* int L = */ L,
       /* int D = */ D,
+
+      /* int qL = */ qL,
+      /* int kL = */ kL,
+
       /* int gqa_factor = */ gqa_factor,
       /* float scale = */ scale,
 
       /* int NQ = */ NQ,
       /* int NK = */ NK,
+
+      /* int NQ_aligned = */ NQ_aligned,
+      /* int NK_aligned = */ NK_aligned,
 
       /* size_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* size_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
