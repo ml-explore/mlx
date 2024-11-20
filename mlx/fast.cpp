@@ -644,12 +644,11 @@ array scaled_dot_product_attention(
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128;
   const bool sdpa_full_supported_head_dim =
-      query_head_dim == 64 || query_head_dim == 80;
+      query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128;
 
   const bool supports_sdpa_full = query_sequence_length >= threshold &&
       !mask.has_value() && sdpa_full_supported_head_dim &&
-      n_q_heads == n_kv_heads && final_type != bfloat16 &&
-      stream.device == Device::gpu;
+      final_type != bfloat16 && stream.device == Device::gpu;
 
   const bool supports_sdpa_vector = query_sequence_length == 1 &&
       !mask.has_value() && sdpa_vector_supported_head_dim &&
