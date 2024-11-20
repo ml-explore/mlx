@@ -88,11 +88,9 @@ instantiate_init_min_max(max, Max)
 
 #define instantiate_col_reduce_general(name, itype, otype, op) \
   instantiate_col_reduce_small(name, itype, otype, op, 1)      \
-  instantiate_col_reduce_small(name, itype, otype, op, 2)      \
-  instantiate_col_reduce_small(name, itype, otype, op, 3)      \
+  instantiate_col_reduce_small(name, itype, otype, op, 5)      \
   instantiate_col_reduce_looped(name, itype, otype, op, 1)     \
-  instantiate_col_reduce_looped(name, itype, otype, op, 2)     \
-  instantiate_col_reduce_looped(name, itype, otype, op, 3)
+  instantiate_col_reduce_looped(name, itype, otype, op, 5)
 
 #define instantiate_row_reduce_small(name, itype, otype, op, dim)     \
   instantiate_kernel("row_reduce_small_" #dim "_reduce_" #name,       \
@@ -112,11 +110,9 @@ instantiate_init_min_max(max, Max)
 
 #define instantiate_row_reduce_general(name, itype, otype, op) \
   instantiate_row_reduce_small(name, itype, otype, op, 1)      \
-  instantiate_row_reduce_small(name, itype, otype, op, 2)      \
-  instantiate_row_reduce_small(name, itype, otype, op, 3)      \
+  instantiate_row_reduce_small(name, itype, otype, op, 5)      \
   instantiate_row_reduce_looped(name, itype, otype, op, 1)     \
-  instantiate_row_reduce_looped(name, itype, otype, op, 2)     \
-  instantiate_row_reduce_looped(name, itype, otype, op, 3)     \
+  instantiate_row_reduce_looped(name, itype, otype, op, 5)     \
   instantiate_kernel("row_reduce_simple_" #name,               \
                      row_reduce_simple,                        \
                      itype, otype, op)

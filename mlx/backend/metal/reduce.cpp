@@ -202,7 +202,7 @@ inline bool is_64b_dtype(Dtype dtype) {
 }
 
 inline int get_kernel_reduce_ndim(int reduce_ndim) {
-  return std::min(std::max(reduce_ndim, 1), 3);
+  return (reduce_ndim <= 1) ? 1 : 5;
 }
 
 inline int threadgroup_size_from_row_size(int row_size) {

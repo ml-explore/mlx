@@ -216,6 +216,9 @@ struct LoopedElemToLoc {
   void next(const constant int* shape, const constant size_t* strides) {
     index++;
     offset += OffsetT(strides[dim - 1]);
+    if (dim == 1) {
+      return;
+    }
 
     if (index >= shape[dim - 1]) {
       index = 0;
@@ -227,6 +230,9 @@ struct LoopedElemToLoc {
   void next(int n, const constant int* shape, const constant size_t* strides) {
     index += n;
     offset += n * OffsetT(strides[dim - 1]);
+    if (dim == 1) {
+      return;
+    }
 
     if (index >= shape[dim - 1]) {
       int extra = index - shape[dim - 1];
@@ -257,7 +263,7 @@ struct LoopedElemToLoc<1, OffsetT> {
     if (dim > 1) {
       offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
-      offset = index * strides[0];
+      offset += OffsetT(strides[0]);
     }
   }
 
@@ -266,7 +272,7 @@ struct LoopedElemToLoc<1, OffsetT> {
     if (dim > 1) {
       offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
-      offset = index * strides[0];
+      offset = index * OffsetT(strides[0]);
     }
   }
 
