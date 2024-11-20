@@ -6,9 +6,9 @@ using namespace mlx;
 
 namespace mlx::core {
 
-std::string type_to_name(const array& a) {
+std::string type_to_name(const Dtype& t) {
   std::string tname;
-  switch (a.dtype()) {
+  switch (t) {
     case bool_:
       tname = "bool_";
       break;
@@ -50,6 +50,10 @@ std::string type_to_name(const array& a) {
       break;
   }
   return tname;
+}
+
+std::string type_to_name(const array& a) {
+  return type_to_name(a.dtype());
 }
 
 MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 /* = 10 */) {

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <iostream> // TODO
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -203,7 +202,7 @@ inline bool is_64b_dtype(Dtype dtype) {
 }
 
 inline int get_kernel_reduce_ndim(int reduce_ndim) {
-  return std::min(std::max(reduce_ndim, 1), 5);
+  return std::min(std::max(reduce_ndim, 1), 3);
 }
 
 inline int threadgroup_size_from_row_size(int row_size) {
@@ -237,15 +236,47 @@ inline auto output_grid_for_col_reduce(
   return get_2d_grid_dims(out_shape, out_strides);
 }
 
+std::pair<Dtype, Dtype> remap_reduce_types(
+    const array& in,
+    const std::string& op_name) {
+  if (op_name == "sum" || op_name == "prod") {
+    if (issubdtype(in.dtype(), integer)) {
+      switch (in.dtype().size()) {
+        case 1:
+          return {int8, int8};
+        case 2:
+          return {int16, int16};
+        case 4:
+          return {int32, int32};
+        case 8:
+          return {int64, int64};
+      }
+    }
+    return {in.dtype(), in.dtype()};
+  } else if (op_name == "and" || op_name == "or") {
+    if (in.dtype().size() == 1) {
+      return {bool_, bool_};
+    } else if (in.dtype().size() == 2) {
+      return {int16, bool_};
+    } else if (in.dtype().size() == 4) {
+      return {int32, bool_};
+    } else {
+      return {int64, bool_};
+    }
+  }
+  return {in.dtype(), in.dtype()};
+}
+
 void init_reduce(
     array& out,
     const std::string& op_name,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [_, out_type] = remap_reduce_types(out, op_name);
   const std::string func_name = "init_reduce";
   std::string kname = func_name;
-  concatenate(kname, "_", op_name, type_to_name(out));
+  concatenate(kname, "_", op_name, type_to_name(out_type));
   auto kernel = get_reduce_init_kernel(d, kname, func_name, op_name, out);
   size_t nthreads = out.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
@@ -267,9 +298,10 @@ void all_reduce_dispatch(
     metal::Device& d,
     const Stream& s) {
   // Set the kernel
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "all_reduce";
   std::string kname = func_name;
-  concatenate(kname, "_", op_name, type_to_name(in));
+  concatenate(kname, "_", op_name, type_to_name(in_type));
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -304,7 +336,7 @@ void all_reduce_dispatch(
     }
 
     // Allocate an intermediate tensor to hold results if needed
-    array intermediate({n_rows}, out.dtype(), nullptr, {});
+    array intermediate({n_rows}, out_type, nullptr, {});
     intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
     d.add_temporary(intermediate, s.index);
 
@@ -348,13 +380,19 @@ void row_reduce_small(
     const Stream& s) {
   // Set the kernel
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_small";
   std::string kname = func_name;
   if (in.size() > UINT32_MAX) {
     kname += "_large";
   }
   concatenate(
-      kname, "_", std::to_string(n), "_reduce_", op_name, type_to_name(in));
+      kname,
+      "_",
+      std::to_string(n),
+      "_reduce_",
+      op_name,
+      type_to_name(in_type));
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -388,9 +426,10 @@ void row_reduce_simple(
     metal::Device& d,
     const Stream& s) {
   // Set the kernel
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_simple";
   std::string kname = func_name;
-  concatenate(kname, "_", op_name, type_to_name(in));
+  concatenate(kname, "_", op_name, type_to_name(in_type));
 
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -425,6 +464,8 @@ void row_reduce_looped(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
+
   // Set the kernel
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "row_reduce_looped";
@@ -433,8 +474,12 @@ void row_reduce_looped(
     kname += "_large";
   }
   concatenate(
-      kname, "_", std::to_string(n), "_reduce_", op_name, type_to_name(in));
-  std::cout << "LOOPED " << kname << std::endl;
+      kname,
+      "_",
+      std::to_string(n),
+      "_reduce_",
+      op_name,
+      type_to_name(in_type));
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -487,6 +532,8 @@ void strided_reduce_small(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
+
   // Figure out the grid dims
   MTL::Size grid_dims, group_dims;
 
@@ -502,7 +549,12 @@ void strided_reduce_small(
     kname += "_large";
   }
   concatenate(
-      kname, "_", std::to_string(n), "_reduce_", op_name, type_to_name(in));
+      kname,
+      "_",
+      std::to_string(n),
+      "_reduce_",
+      op_name,
+      type_to_name(in_type));
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -537,6 +589,7 @@ void strided_reduce_longcolumn(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
   size_t total_reduction_size = args.reduction_size * args.non_col_reductions;
   size_t outer_blocks = 32;
   if (total_reduction_size >= 32768) {
@@ -549,7 +602,7 @@ void strided_reduce_longcolumn(
   intermediate_shape.push_back(outer_blocks);
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
-  array intermediate(std::move(intermediate_shape), out.dtype(), nullptr, {});
+  array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
   intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
   d.add_temporary(intermediate, s.index);
 
@@ -578,7 +631,12 @@ void strided_reduce_longcolumn(
     kname += "_large";
   }
   concatenate(
-      kname, "_", std::to_string(n), "_reduce_", op_name, type_to_name(in));
+      kname,
+      "_",
+      std::to_string(n),
+      "_reduce_",
+      op_name,
+      type_to_name(in_type));
   auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -623,6 +681,8 @@ void strided_reduce_looped(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
+
   // Prepare the arguments for the kernel
   args.reduce_shape.push_back(args.reduction_size);
   args.reduce_strides.push_back(args.reduction_stride);
@@ -656,7 +716,7 @@ void strided_reduce_looped(
       std::to_string(BN),
       "_reduce_",
       op_name,
-      type_to_name(in));
+      type_to_name(in_type));
   auto kernel =
       get_reduce_kernel(d, kname, func_name, op_name, in, out, n, BM, BN);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -676,13 +736,15 @@ void strided_reduce_2pass(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
+
   // Prepare the temporary accumulator
   std::vector<int> intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
   intermediate_shape.push_back(32);
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
-  array intermediate(std::move(intermediate_shape), out.dtype(), nullptr, {});
+  array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
   intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
   d.add_temporary(intermediate, s.index);
 
@@ -721,7 +783,7 @@ void strided_reduce_2pass(
       std::to_string(BN),
       "_reduce_",
       op_name,
-      type_to_name(in));
+      type_to_name(in_type));
   auto kernel =
       get_reduce_kernel(d, kname, func_name, op_name, in, out, n, BM, BN);
   compute_encoder.set_compute_pipeline_state(kernel);
