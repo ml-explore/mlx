@@ -450,6 +450,7 @@ class AvgPool3d(_Pool3d):
         >>> pool = nn.AvgPool3d(kernel_size=2, stride=2)
         >>> pool(x)
     """
+
     def __init__(
         self,
         kernel_size: Union[int, Tuple[int, int, int]],
