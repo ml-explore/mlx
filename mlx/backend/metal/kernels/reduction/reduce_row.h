@@ -215,7 +215,7 @@ template <
   Op op;
 
   U total_val = Op::init;
-  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
 
   // Precompute some row reduction numbers
   const device T* row;
@@ -340,7 +340,7 @@ template <
   in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim) +
       lid.x * N_READS;
 
-  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
   int blocks = IdxT(row_size) / (lsize.x * N_READS);
   int extra = row_size - blocks * (lsize.x * N_READS);

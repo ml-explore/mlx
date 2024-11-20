@@ -202,7 +202,13 @@ inline bool is_64b_dtype(Dtype dtype) {
 }
 
 inline int get_kernel_reduce_ndim(int reduce_ndim) {
-  return (reduce_ndim <= 1) ? 1 : 5;
+  if (reduce_ndim <= 1) {
+    return 1;
+  } else if (reduce_ndim == 2) {
+    return 2;
+  } else {
+    return 5;
+  }
 }
 
 inline int threadgroup_size_from_row_size(int row_size) {

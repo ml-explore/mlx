@@ -19,7 +19,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
     uint3 lsize [[threads_per_threadgroup]]) {
   constexpr int n_reads = 4;
   Op op;
-  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
 
   U totals[n_reads];
@@ -112,7 +112,7 @@ template <typename T, typename U, typename Op, typename IdxT, int NDIMS>
     uint3 lid [[thread_position_in_threadgroup]],
     uint3 lsize [[threads_per_threadgroup]]) {
   Op op;
-  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
 
   IdxT out_idx = gid.x + gsize.x * IdxT(gid.y);
@@ -184,7 +184,7 @@ template <
 
   threadgroup U shared_vals[BN * BM];
   U totals[n_reads];
-  LoopedElemToLoc<NDIMS, IdxT> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
 
   for (int i = 0; i < n_reads; i++) {
@@ -327,7 +327,7 @@ template <
 
   threadgroup U shared_vals[BN * BM];
   U totals[n_reads];
-  LoopedElemToLoc<NDIMS> loop(reduce_ndim);
+  LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
 
   for (int i = 0; i < n_reads; i++) {
