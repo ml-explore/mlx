@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/jit/arange.h"
 #include "mlx/backend/metal/jit/gemv_masked.h"

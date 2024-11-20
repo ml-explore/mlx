@@ -140,15 +140,18 @@ void reduce_dispatch_sum_prod(
     const std::vector<int>& axes) {
   if (rtype == Reduce::Sum) {
     auto op = [](auto y, auto x) { (*y) = (*y) + x; };
-    if (out.dtype() == int32) {
-      // special case since the input type can be bool
+    if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t>(in, out, axes, 0, op);
     } else {
       reduction_op<InT, InT>(in, out, axes, 0, op);
     }
   } else {
     auto op = [](auto y, auto x) { (*y) *= x; };
-    reduction_op<InT, InT>(in, out, axes, 1, op);
+    if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
+      reduction_op<InT, int32_t>(in, out, axes, 0, op);
+    } else {
+      reduction_op<InT, InT>(in, out, axes, 1, op);
+    }
   }
 }
 

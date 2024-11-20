@@ -249,9 +249,9 @@ std::pair<Dtype, Dtype> remap_reduce_types(
     if (issubdtype(in.dtype(), integer)) {
       switch (in.dtype().size()) {
         case 1:
-          return {int8, int8};
+          return {int8, int32};
         case 2:
-          return {int16, int16};
+          return {int16, int32};
         case 4:
           return {int32, int32};
         case 8:
@@ -259,7 +259,7 @@ std::pair<Dtype, Dtype> remap_reduce_types(
       }
     }
     if (in.dtype() == bool_) {
-      return {in.dtype(), int32};
+      return {int8, int32};
     }
     return {in.dtype(), in.dtype()};
   } else if (op_name == "and" || op_name == "or") {
@@ -963,7 +963,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       op_name = "sum";
       break;
     case Reduce::Prod:
-      op_name = out.dtype() == bool_ ? "and" : "prod";
+      op_name = "prod";
       break;
     case Reduce::Min:
       op_name = out.dtype() == bool_ ? "and" : "min";
