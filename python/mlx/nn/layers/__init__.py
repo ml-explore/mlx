@@ -70,7 +70,14 @@ from mlx.nn.layers.normalization import (
     LayerNorm,
     RMSNorm,
 )
-from mlx.nn.layers.pooling import AvgPool1d, AvgPool2d, MaxPool1d, MaxPool2d
+from mlx.nn.layers.pooling import (
+    AvgPool1d,
+    AvgPool2d,
+    AvgPool3d,
+    MaxPool1d,
+    MaxPool2d,
+    MaxPool3d,
+)
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
 from mlx.nn.layers.quantized import QuantizedEmbedding, QuantizedLinear, quantize
 from mlx.nn.layers.recurrent import GRU, LSTM, RNN
