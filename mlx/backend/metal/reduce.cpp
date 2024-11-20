@@ -283,7 +283,7 @@ void init_reduce(
   const std::string func_name = "init_reduce";
   std::string kname = func_name;
   concatenate(kname, "_", op_name, type_to_name(out_type));
-  auto kernel = get_reduce_init_kernel(d, kname, func_name, op_name, out);
+  auto kernel = get_reduce_init_kernel(d, kname, func_name, op_name, out_type);
   size_t nthreads = out.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
@@ -308,7 +308,8 @@ void all_reduce_dispatch(
   const std::string func_name = "all_reduce";
   std::string kname = func_name;
   concatenate(kname, "_", op_name, type_to_name(in_type));
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out);
+  auto kernel = get_reduce_kernel(
+      d, kname, func_name, op_name, in_type, out_type, "int64_t");
   compute_encoder.set_compute_pipeline_state(kernel);
 
   size_t in_size = in.size();
@@ -363,7 +364,13 @@ void all_reduce_dispatch(
     std::string kname_2nd_pass = func_name;
     concatenate(kname_2nd_pass, "_", op_name, type_to_name(intermediate));
     auto kernel_2nd_pass = get_reduce_kernel(
-        d, kname_2nd_pass, func_name, op_name, intermediate, out);
+        d,
+        kname_2nd_pass,
+        func_name,
+        op_name,
+        intermediate.dtype(),
+        out_type,
+        "int64_t");
     compute_encoder.set_compute_pipeline_state(kernel_2nd_pass);
     size_t intermediate_size = n_rows;
     grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
@@ -389,7 +396,8 @@ void row_reduce_small(
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_small";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -399,7 +407,15 @@ void row_reduce_small(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid dims
@@ -437,7 +453,8 @@ void row_reduce_simple(
   std::string kname = func_name;
   concatenate(kname, "_", op_name, type_to_name(in_type));
 
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out);
+  auto kernel = get_reduce_kernel(
+      d, kname, func_name, op_name, in_type, out_type, "size_t");
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid dims
@@ -476,7 +493,8 @@ void row_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "row_reduce_looped";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -486,7 +504,15 @@ void row_reduce_looped(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Figure out the grid
@@ -551,7 +577,8 @@ void strided_reduce_small(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "col_reduce_small";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -561,7 +588,15 @@ void strided_reduce_small(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   const int n_reads = 4;
@@ -633,7 +668,8 @@ void strided_reduce_longcolumn(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_longcolumn";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -643,7 +679,15 @@ void strided_reduce_longcolumn(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel = get_reduce_kernel(d, kname, func_name, op_name, in, out, n);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
@@ -665,12 +709,22 @@ void strided_reduce_longcolumn(
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
   kname = func_name;
-  if (intermediate.size() > UINT32_MAX) {
+  large = intermediate.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(kname, "_1_32_32_reduce_", op_name, type_to_name(intermediate));
   kernel = get_reduce_kernel(
-      d, kname, func_name, op_name, intermediate, out, 1, 32, 32);
+      d,
+      kname,
+      func_name,
+      op_name,
+      intermediate.dtype(),
+      out_type,
+      large ? "size_t" : "uint",
+      1,
+      32,
+      32);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(intermediate, 0);
@@ -709,7 +763,8 @@ void strided_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_looped";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -723,8 +778,17 @@ void strided_reduce_looped(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel =
-      get_reduce_kernel(d, kname, func_name, op_name, in, out, n, BM, BN);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n,
+      BM,
+      BN);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
@@ -776,7 +840,8 @@ void strided_reduce_2pass(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_2pass";
   std::string kname = func_name;
-  if (in.size() > UINT32_MAX) {
+  bool large = in.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(
@@ -790,8 +855,17 @@ void strided_reduce_2pass(
       "_reduce_",
       op_name,
       type_to_name(in_type));
-  auto kernel =
-      get_reduce_kernel(d, kname, func_name, op_name, in, out, n, BM, BN);
+  auto kernel = get_reduce_kernel(
+      d,
+      kname,
+      func_name,
+      op_name,
+      in_type,
+      out_type,
+      large ? "size_t" : "uint",
+      n,
+      BM,
+      BN);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Launch
@@ -811,12 +885,22 @@ void strided_reduce_2pass(
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
   kname = func_name;
-  if (intermediate.size() > UINT32_MAX) {
+  large = intermediate.size() > UINT32_MAX;
+  if (large) {
     kname += "_large";
   }
   concatenate(kname, "_1_32_32_reduce_", op_name, type_to_name(intermediate));
   kernel = get_reduce_kernel(
-      d, kname, func_name, op_name, intermediate, out, 1, 32, 32);
+      d,
+      kname,
+      func_name,
+      op_name,
+      intermediate.dtype(),
+      out_type,
+      large ? "size_t" : "uint",
+      1,
+      32,
+      32);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(intermediate, 0);
