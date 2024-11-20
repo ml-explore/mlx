@@ -120,45 +120,50 @@ struct MinReduce {
 };
 
 template <typename InT>
-void reduce_dispatch_out(
+void reduce_dispatch_and_or(
     const array& in,
     array& out,
     Reduce::ReduceType rtype,
     const std::vector<int>& axes) {
-  switch (rtype) {
-    case Reduce::And: {
-      reduction_op<InT, bool>(in, out, axes, true, AndReduce());
-      break;
+  if (rtype == Reduce::And) {
+    reduction_op<InT, bool>(in, out, axes, true, AndReduce());
+  } else {
+    reduction_op<InT, bool>(in, out, axes, false, OrReduce());
+  }
+}
+
+template <typename InT>
+void reduce_dispatch_sum_prod(
+    const array& in,
+    array& out,
+    Reduce::ReduceType rtype,
+    const std::vector<int>& axes) {
+  if (rtype == Reduce::Sum) {
+    auto op = [](auto y, auto x) { (*y) = (*y) + x; };
+    if (out.dtype() == int32) {
+      // special case since the input type can be bool
+      reduction_op<InT, int32_t>(in, out, axes, 0, op);
+    } else {
+      reduction_op<InT, InT>(in, out, axes, 0, op);
     }
-    case Reduce::Or: {
-      reduction_op<InT, bool>(in, out, axes, false, OrReduce());
-      break;
-    }
-    case Reduce::Sum: {
-      auto op = [](auto y, auto x) { (*y) = (*y) + x; };
-      if (out.dtype() == int32) {
-        // special case since the input type can be bool
-        reduction_op<InT, int32_t>(in, out, axes, 0, op);
-      } else {
-        reduction_op<InT, InT>(in, out, axes, 0, op);
-      }
-      break;
-    }
-    case Reduce::Prod: {
-      auto op = [](auto y, auto x) { (*y) *= x; };
-      reduction_op<InT, InT>(in, out, axes, 1, op);
-      break;
-    }
-    case Reduce::Max: {
-      auto init = Limits<InT>::min;
-      reduction_op<InT, InT>(in, out, axes, init, MaxReduce());
-      break;
-    }
-    case Reduce::Min: {
-      auto init = Limits<InT>::max;
-      reduction_op<InT, InT>(in, out, axes, init, MinReduce());
-      break;
-    }
+  } else {
+    auto op = [](auto y, auto x) { (*y) *= x; };
+    reduction_op<InT, InT>(in, out, axes, 1, op);
+  }
+}
+
+template <typename InT>
+void reduce_dispatch_min_max(
+    const array& in,
+    array& out,
+    Reduce::ReduceType rtype,
+    const std::vector<int>& axes) {
+  if (rtype == Reduce::Max) {
+    auto init = Limits<InT>::min;
+    reduction_op<InT, InT>(in, out, axes, init, MaxReduce());
+  } else {
+    auto init = Limits<InT>::max;
+    reduction_op<InT, InT>(in, out, axes, init, MinReduce());
   }
 }
 
@@ -190,46 +195,114 @@ void nd_loop(
 void Reduce::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  switch (in.dtype()) {
-    case bool_:
-      reduce_dispatch_out<bool>(in, out, reduce_type_, axes_);
+  switch (reduce_type_) {
+    case Reduce::And:
+    case Reduce::Or: {
+      switch (in.dtype()) {
+        case bool_:
+        case uint8:
+        case int8:
+          reduce_dispatch_and_or<int8_t>(in, out, reduce_type_, axes_);
+          break;
+        case int16:
+        case uint16:
+        case float16:
+        case bfloat16:
+          reduce_dispatch_and_or<int16_t>(in, out, reduce_type_, axes_);
+          break;
+        case uint32:
+        case int32:
+        case float32:
+          reduce_dispatch_and_or<int32_t>(in, out, reduce_type_, axes_);
+          break;
+        case uint64:
+        case int64:
+        case complex64:
+          reduce_dispatch_and_or<int64_t>(in, out, reduce_type_, axes_);
+          break;
+      }
       break;
-    case uint8:
-      reduce_dispatch_out<uint8_t>(in, out, reduce_type_, axes_);
+    }
+    case Reduce::Sum:
+    case Reduce::Prod: {
+      switch (in.dtype()) {
+        case bool_:
+        case uint8:
+        case int8:
+          reduce_dispatch_sum_prod<int8_t>(in, out, reduce_type_, axes_);
+          break;
+        case int16:
+        case uint16:
+          reduce_dispatch_sum_prod<int16_t>(in, out, reduce_type_, axes_);
+          break;
+        case int32:
+        case uint32:
+          reduce_dispatch_sum_prod<int32_t>(in, out, reduce_type_, axes_);
+          break;
+        case int64:
+        case uint64:
+          reduce_dispatch_sum_prod<int64_t>(in, out, reduce_type_, axes_);
+          break;
+        case float16:
+          reduce_dispatch_sum_prod<float16_t>(in, out, reduce_type_, axes_);
+          break;
+        case bfloat16:
+          reduce_dispatch_sum_prod<bfloat16_t>(in, out, reduce_type_, axes_);
+          break;
+        case float32:
+          reduce_dispatch_sum_prod<float>(in, out, reduce_type_, axes_);
+          break;
+        case complex64:
+          reduce_dispatch_sum_prod<complex64_t>(in, out, reduce_type_, axes_);
+          break;
+      }
       break;
-    case uint16:
-      reduce_dispatch_out<uint16_t>(in, out, reduce_type_, axes_);
+    }
+    case Reduce::Max:
+    case Reduce::Min: {
+      switch (in.dtype()) {
+        case bool_:
+          reduce_dispatch_min_max<bool>(in, out, reduce_type_, axes_);
+          break;
+        case uint8:
+          reduce_dispatch_min_max<uint8_t>(in, out, reduce_type_, axes_);
+          break;
+        case uint16:
+          reduce_dispatch_min_max<uint16_t>(in, out, reduce_type_, axes_);
+          break;
+        case uint32:
+          reduce_dispatch_min_max<uint32_t>(in, out, reduce_type_, axes_);
+          break;
+        case uint64:
+          reduce_dispatch_min_max<uint64_t>(in, out, reduce_type_, axes_);
+          break;
+        case int8:
+          reduce_dispatch_min_max<uint8_t>(in, out, reduce_type_, axes_);
+          break;
+        case int16:
+          reduce_dispatch_min_max<uint16_t>(in, out, reduce_type_, axes_);
+          break;
+        case int32:
+          reduce_dispatch_min_max<int32_t>(in, out, reduce_type_, axes_);
+          break;
+        case int64:
+          reduce_dispatch_min_max<int64_t>(in, out, reduce_type_, axes_);
+          break;
+        case float16:
+          reduce_dispatch_min_max<float16_t>(in, out, reduce_type_, axes_);
+          break;
+        case float32:
+          reduce_dispatch_min_max<float>(in, out, reduce_type_, axes_);
+          break;
+        case bfloat16:
+          reduce_dispatch_min_max<bfloat16_t>(in, out, reduce_type_, axes_);
+          break;
+        case complex64:
+          reduce_dispatch_min_max<complex64_t>(in, out, reduce_type_, axes_);
+          break;
+      }
       break;
-    case uint32:
-      reduce_dispatch_out<uint32_t>(in, out, reduce_type_, axes_);
-      break;
-    case uint64:
-      reduce_dispatch_out<uint64_t>(in, out, reduce_type_, axes_);
-      break;
-    case int8:
-      reduce_dispatch_out<uint8_t>(in, out, reduce_type_, axes_);
-      break;
-    case int16:
-      reduce_dispatch_out<uint16_t>(in, out, reduce_type_, axes_);
-      break;
-    case int32:
-      reduce_dispatch_out<int32_t>(in, out, reduce_type_, axes_);
-      break;
-    case int64:
-      reduce_dispatch_out<int64_t>(in, out, reduce_type_, axes_);
-      break;
-    case float16:
-      reduce_dispatch_out<float16_t>(in, out, reduce_type_, axes_);
-      break;
-    case float32:
-      reduce_dispatch_out<float>(in, out, reduce_type_, axes_);
-      break;
-    case bfloat16:
-      reduce_dispatch_out<bfloat16_t>(in, out, reduce_type_, axes_);
-      break;
-    case complex64:
-      reduce_dispatch_out<complex64_t>(in, out, reduce_type_, axes_);
-      break;
+    }
   }
 }
 
