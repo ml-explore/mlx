@@ -257,7 +257,7 @@ struct LoopedElemToLoc<1, OffsetT> {
     if (dim > 1) {
       offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
-      offset += strides[0];
+      offset = index * strides[0];
     }
   }
 
@@ -266,7 +266,7 @@ struct LoopedElemToLoc<1, OffsetT> {
     if (dim > 1) {
       offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
-      offset += index * strides[0];
+      offset = index * strides[0];
     }
   }
 
