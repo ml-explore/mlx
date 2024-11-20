@@ -258,6 +258,9 @@ std::pair<Dtype, Dtype> remap_reduce_types(
           return {int64, int64};
       }
     }
+    if (in.dtype() == bool_) {
+      return {in.dtype(), int32};
+    }
     return {in.dtype(), in.dtype()};
   } else if (op_name == "and" || op_name == "or") {
     if (in.dtype().size() == 1) {
@@ -364,13 +367,7 @@ void all_reduce_dispatch(
     std::string kname_2nd_pass = func_name;
     concatenate(kname_2nd_pass, "_", op_name, type_to_name(intermediate));
     auto kernel_2nd_pass = get_reduce_kernel(
-        d,
-        kname_2nd_pass,
-        func_name,
-        op_name,
-        intermediate.dtype(),
-        out_type,
-        "int64_t");
+        d, kname_2nd_pass, func_name, op_name, out_type, out_type, "int64_t");
     compute_encoder.set_compute_pipeline_state(kernel_2nd_pass);
     size_t intermediate_size = n_rows;
     grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);

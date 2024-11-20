@@ -1,3 +1,4 @@
+// Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
