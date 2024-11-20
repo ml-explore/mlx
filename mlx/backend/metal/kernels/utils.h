@@ -246,24 +246,27 @@ struct LoopedElemToLoc {
 
 template <typename OffsetT>
 struct LoopedElemToLoc<1, OffsetT> {
-  OffsetT offset{0};
   int dim;
+  OffsetT offset{0};
+  uint index{0};
 
   LoopedElemToLoc(int dim) : dim(dim) {}
 
   void next(const constant int* shape, const constant size_t* strides) {
+    index++;
     if (dim > 1) {
-      offset = elem_to_loc<size_t, OffsetT>(offset + 1, shape, strides, dim);
+      offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
       offset += strides[0];
     }
   }
 
   void next(int n, const constant int* shape, const constant size_t* strides) {
+    index += n;
     if (dim > 1) {
-      offset = elem_to_loc<size_t, OffsetT>(offset + n, shape, strides, dim);
+      offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
     } else {
-      offset += n * strides[0];
+      offset += index * strides[0];
     }
   }
 
