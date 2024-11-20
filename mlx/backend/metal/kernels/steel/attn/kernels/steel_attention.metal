@@ -21,7 +21,7 @@
       uint3 lid [[thread_position_in_threadgroup]]);
 
 #define instantiate_attn_shapes_helper(iname, itype) \
-    instantiate_attn(iname, itype, 32, 32, 128, 4, 1) \
+    instantiate_attn(iname, itype, 32, 16, 128, 4, 1) \
     instantiate_attn(iname, itype, 32, 32,  80, 4, 1) \
     instantiate_attn(iname, itype, 32, 32,  64, 4, 1)
 

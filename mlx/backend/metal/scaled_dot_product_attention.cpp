@@ -29,9 +29,9 @@ void sdpa_full_self_attention_metal(
   int wm = 4;
   int wn = 1;
 
-  int bq = 32;
-  int bk = 32;
   int bd = q.shape(-1);
+  int bq = 32;
+  int bk = bd < 128 ? 32 : 16;
 
   int B = q.shape(0);
   int H = q.shape(1);
