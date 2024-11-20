@@ -4,7 +4,7 @@ template <
     typename T,
     typename U,
     typename Op,
-    typename IdxT = size_t,
+    typename IdxT = int64_t,
     int N_READS = REDUCE_N_READS>
 [[kernel]] void all_reduce(
     const device T* in [[buffer(0)]],
