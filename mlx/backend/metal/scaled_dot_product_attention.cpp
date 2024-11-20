@@ -30,8 +30,8 @@ void sdpa_full_self_attention_metal(
   int wn = 1;
 
   int bq = 32;
-  int bk = 16;
-  int bd = 64;
+  int bk = 32;
+  int bd = q.shape(-1);
 
   std::ostringstream kname;
   kname << "steel_attention_" << type_to_name(q) << "_bq" << bq << "_bk" << bk
