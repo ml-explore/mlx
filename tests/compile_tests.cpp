@@ -495,15 +495,15 @@ TEST_CASE("test compile tape with outside parents") {
   }
 }
 
-auto compile_accross_streams(const std::vector<array>& inputs) {
+auto compile_across_streams(const std::vector<array>& inputs) {
   auto s2 = new_stream(default_device());
   auto x = exp(abs(inputs[0]));
   auto y = exp(abs(x, s2), s2);
   return std::vector<array>{y};
 }
 
-TEST_CASE("test compile accross streams") {
-  auto cfun = compile(compile_accross_streams);
+TEST_CASE("test compile across streams") {
+  auto cfun = compile(compile_across_streams);
   auto x = array({2.0f});
   auto out = cfun({x})[0];
   auto& p1 = out.primitive();
