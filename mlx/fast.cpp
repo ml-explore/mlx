@@ -648,7 +648,7 @@ array scaled_dot_product_attention(
 
   const bool supports_sdpa_full = query_sequence_length >= threshold &&
       !mask.has_value() && sdpa_full_supported_head_dim &&
-      final_type != bfloat16 && stream.device == Device::gpu;
+      stream.device == Device::gpu;
 
   const bool supports_sdpa_vector = query_sequence_length == 1 &&
       !mask.has_value() && sdpa_vector_supported_head_dim &&
