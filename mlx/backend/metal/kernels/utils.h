@@ -391,3 +391,14 @@ inline complex64_t simd_shuffle(complex64_t data, uint16_t lane) {
   return complex64_t(
       simd_shuffle(data.real, lane), simd_shuffle(data.imag, lane));
 }
+
+// std::conditional is not included with Metal
+template <bool condition, typename T, typename U>
+struct ConditionalType {
+  using type = U;
+};
+
+template <typename T, typename U>
+struct ConditionalType<true, T, U> {
+  using type = T;
+};

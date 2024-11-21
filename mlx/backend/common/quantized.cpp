@@ -1,15 +1,39 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
+#include <type_traits>
 
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/ops.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
 namespace {
+
+template <typename T, int bits>
+void extract_bits(const uint8_t* w_in, T* w_out) {
+  assert(bits == 3 || bits == 6);
+  if (bits == 3) {
+    w_out[0] = static_cast<T>(w_in[0] & 0x7);
+    w_out[1] = static_cast<T>((w_in[0] & 0x38) >> 3);
+    w_out[2] = static_cast<T>(((w_in[0] & 0xc0) >> 6) + ((w_in[1] & 0x1) << 2));
+    w_out[3] = static_cast<T>((w_in[1] & 0xe) >> 1);
+    w_out[4] = static_cast<T>((w_in[1] & 0x70) >> 4);
+    w_out[5] = static_cast<T>(((w_in[1] & 0x80) >> 7) + ((w_in[2] & 0x3) << 1));
+    w_out[6] = static_cast<T>((w_in[2] & 0x1c) >> 2);
+    w_out[7] = static_cast<T>((w_in[2] & 0xe0) >> 5);
+  } else if (bits == 6) {
+    w_out[0] = static_cast<T>(w_in[0] & 0x3f);
+    w_out[1] =
+        static_cast<T>(((w_in[0] >> 6) & 0x03) + ((w_in[1] & 0x0f) << 2));
+    w_out[2] =
+        static_cast<T>(((w_in[1] >> 4) & 0x0f) + ((w_in[2] & 0x03) << 4));
+    w_out[3] = static_cast<T>((w_in[2] >> 2) & 0x3f);
+  }
+}
 
 template <typename T, int bits, int group_size>
 void _qmm(
@@ -22,13 +46,12 @@ void _qmm(
     int N,
     int K) {
   constexpr int bitmask = (1 << bits) - 1;
-  constexpr int pack_factor = 32 / bits;
+  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
+  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
   constexpr int packs_in_group = group_size / pack_factor;
-  const int Ng = N / group_size;
-  const int Nw = N / pack_factor;
 
   for (int m = 0; m < M; m++) {
-    const uint32_t* w_local = w;
+    const uint8_t* w_local = (const uint8_t*)w;
     const T* scales_local = scales;
     const T* biases_local = biases;
 
@@ -42,13 +65,25 @@ void _qmm(
         T scale = *scales_local++;
         T bias = *biases_local++;
         for (int ng = 0; ng < packs_in_group; ng++) {
-          uint32_t wi = *w_local++;
-
+          if (bits == 3 || bits == 6) {
+            T wl[pack_factor];
+            extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)
-          for (int p = 0; p < pack_factor; p++) {
-            (*result_local++) +=
-                xi * (scale * static_cast<T>(wi & bitmask) + bias);
-            wi >>= bits;
+            for (int p = 0; p < pack_factor; p++) {
+              (*result_local++) += xi * (scale * wl[p] + bias);
+            }
+            w_local += bytes_per_pack;
+
+          } else {
+            uint8_t wi = *w_local++;
+#pragma clang loop unroll(full)
+            for (int p = 0; p < pack_factor; p++) {
+              (*result_local++) +=
+                  xi * (scale * static_cast<T>(wi & bitmask) + bias);
+              if (bits != 8) {
+                wi >>= bits;
+              }
+            }
           }
         }
       }
@@ -69,13 +104,12 @@ void _qmm_t(
     int N,
     int K) {
   constexpr int bitmask = (1 << bits) - 1;
-  constexpr int pack_factor = 32 / bits;
+  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
+  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
   constexpr int packs_in_group = group_size / pack_factor;
-  const int Kg = K / group_size;
-  const int Kw = K / pack_factor;
 
   for (int m = 0; m < M; m++) {
-    const uint32_t* w_local = w;
+    const uint8_t* w_local = (const uint8_t*)w;
     const T* scales_local = scales;
     const T* biases_local = biases;
 
@@ -87,12 +121,26 @@ void _qmm_t(
         T bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw++) {
-          uint32_t wi = *w_local++;
-
+          if (bits == 3 || bits == 6) {
+            T wl[pack_factor];
+            extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)
-          for (int p = 0; p < pack_factor; p++) {
-            sum += (*x_local++) * (scale * static_cast<T>(wi & bitmask) + bias);
-            wi >>= bits;
+            for (int p = 0; p < pack_factor; p++) {
+              sum += x_local[p] * (scale * wl[p] + bias);
+            }
+            w_local += bytes_per_pack;
+            x_local += pack_factor;
+
+          } else {
+            uint8_t wi = *w_local++;
+#pragma clang loop unroll(full)
+            for (int p = 0; p < pack_factor; p++) {
+              sum +=
+                  (*x_local++) * (scale * static_cast<T>(wi & bitmask) + bias);
+              if (bits != 8) {
+                wi >>= bits;
+              }
+            }
           }
         }
       }
@@ -101,6 +149,55 @@ void _qmm_t(
     }
 
     x += K;
+  }
+}
+
+template <typename T, int bits, int group_size>
+void _qmm_dispatch_transpose(
+    T* result,
+    const T* x,
+    const uint32_t* w,
+    const T* scales,
+    const T* biases,
+    int M,
+    int N,
+    int K,
+    bool transposed_w) {
+  if (transposed_w) {
+    return _qmm_t<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+  } else {
+    return _qmm<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+  }
+}
+
+template <typename T, int bits>
+void _qmm_dispatch_group(
+    T* result,
+    const T* x,
+    const uint32_t* w,
+    const T* scales,
+    const T* biases,
+    int M,
+    int N,
+    int K,
+    int group_size,
+    bool transposed_w) {
+  switch (group_size) {
+    case 32:
+      _qmm_dispatch_transpose<T, bits, 32>(
+          result, x, w, scales, biases, M, N, K, transposed_w);
+      break;
+    case 64:
+      _qmm_dispatch_transpose<T, bits, 64>(
+          result, x, w, scales, biases, M, N, K, transposed_w);
+      break;
+    case 128:
+      _qmm_dispatch_transpose<T, bits, 128>(
+          result, x, w, scales, biases, M, N, K, transposed_w);
+      break;
+    default:
+      throw std::invalid_argument(
+          "Quantization group size must be 32, 64 or 128.");
   }
 }
 
@@ -118,79 +215,29 @@ void _qmm_dispatch_typed(
     int bits,
     bool transposed_w) {
   switch (bits) {
-    case 2: {
-      switch (group_size) {
-        case 32:
-          if (transposed_w) {
-            return _qmm_t<T, 2, 32>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 2, 32>(result, x, w, scales, biases, M, N, K);
-          }
-        case 64:
-          if (transposed_w) {
-            return _qmm_t<T, 2, 64>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 2, 64>(result, x, w, scales, biases, M, N, K);
-          }
-        case 128:
-          if (transposed_w) {
-            return _qmm_t<T, 2, 128>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 2, 128>(result, x, w, scales, biases, M, N, K);
-          }
-      }
-    }
-    case 4: {
-      switch (group_size) {
-        case 32:
-          if (transposed_w) {
-            return _qmm_t<T, 4, 32>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 4, 32>(result, x, w, scales, biases, M, N, K);
-          }
-        case 64:
-          if (transposed_w) {
-            return _qmm_t<T, 4, 64>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 4, 64>(result, x, w, scales, biases, M, N, K);
-          }
-        case 128:
-          if (transposed_w) {
-            return _qmm_t<T, 4, 128>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 4, 128>(result, x, w, scales, biases, M, N, K);
-          }
-      }
-    }
-    case 8: {
-      switch (group_size) {
-        case 32:
-          if (transposed_w) {
-            return _qmm_t<T, 8, 32>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 8, 32>(result, x, w, scales, biases, M, N, K);
-          }
-        case 64:
-          if (transposed_w) {
-            return _qmm_t<T, 8, 64>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 8, 64>(result, x, w, scales, biases, M, N, K);
-          }
-        case 128:
-          if (transposed_w) {
-            return _qmm_t<T, 8, 128>(result, x, w, scales, biases, M, N, K);
-          } else {
-            return _qmm<T, 8, 128>(result, x, w, scales, biases, M, N, K);
-          }
-      }
-    }
+    case 2:
+      _qmm_dispatch_group<T, 2>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    case 3:
+      _qmm_dispatch_group<T, 3>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    case 4:
+      _qmm_dispatch_group<T, 4>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    case 6:
+      _qmm_dispatch_group<T, 6>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    case 8:
+      _qmm_dispatch_group<T, 8>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    default:
+      throw std::invalid_argument("Quantization bits must be 2, 3, 4, 6 or 8.");
   }
-  std::ostringstream msg;
-  msg << "Quantization type not supported. Provided bits=" << bits
-      << " and group_size=" << group_size
-      << ". The supported options are bits in "
-      << "{2, 4, 8} and group_size in {64, 128}.";
-  throw std::invalid_argument(msg.str());
 }
 
 void _qmm_dispatch(
@@ -406,51 +453,52 @@ void GatherQMM::eval(const std::vector<array>& inputs, array& out) {
       transpose_);
 }
 
-template <typename T>
+template <typename T, typename U>
 void quantize(
     const array& w_,
     array& out_,
     array& scales_,
     array& biases_,
     int bits,
-    int group_size,
-    bool compute_scale_bias) {
+    int group_size) {
   const T* w = w_.data<T>();
+
+  auto out = out_.data<U>();
   T* scales = scales_.data<T>();
   T* biases = biases_.data<T>();
-  auto out = out_.data<uint32_t>();
 
   T n_bins = (1 << bits) - 1;
   T eps = 1e-7;
-  int el_per_int = 32 / bits;
-  int int_per_group = group_size / el_per_int;
+  bool power_of_2_bits = is_power_of_2(bits);
+  int el_per_int = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
+  // For 3/6 bits we read 3 uint8s at a time instead of 1 uint32
+  int bytes_per_pack = power_of_2_bits ? 1 : 3;
+  int int_per_group = group_size * bytes_per_pack / el_per_int;
   size_t n_groups = w_.size() / group_size;
 
   for (size_t i = 0; i < n_groups; ++i) {
     size_t w_idx = i * group_size;
-    if (compute_scale_bias) {
-      T w_min = std::numeric_limits<float>::infinity();
-      T w_max = -w_min;
-      for (int j = 0; j < group_size; ++j) {
-        w_max = std::max(w_max, w[w_idx + j]);
-        w_min = std::min(w_min, w[w_idx + j]);
-      }
-      bool mask = std::abs(w_min) > std::abs(w_max);
-      T scale = std::max(T((w_max - w_min) / n_bins), eps);
-      scale = mask ? scale : -scale;
+    T w_min = std::numeric_limits<float>::infinity();
+    T w_max = -w_min;
+    for (int j = 0; j < group_size; ++j) {
+      w_max = std::max(w_max, w[w_idx + j]);
+      w_min = std::min(w_min, w[w_idx + j]);
+    }
+    bool mask = std::abs(w_min) > std::abs(w_max);
+    T scale = std::max(T((w_max - w_min) / n_bins), eps);
+    scale = mask ? scale : -scale;
 
-      auto edge = mask ? w_min : w_max;
-      auto q0 = std::rint(edge / scale);
-      if (q0 == 0) {
-        scales[i] = scale;
-        biases[i] = 0;
-      } else {
-        scales[i] = edge / q0;
-        biases[i] = edge;
-      }
+    auto edge = mask ? w_min : w_max;
+    auto q0 = std::rint(edge / scale);
+    if (q0 == 0) {
+      scales[i] = scale;
+      biases[i] = 0;
+    } else {
+      scales[i] = edge / q0;
+      biases[i] = edge;
     }
     size_t out_idx = i * int_per_group;
-    for (int j = 0; j < int_per_group; ++j) {
+    for (int j = 0; j < int_per_group / bytes_per_pack; ++j) {
       uint32_t out_el = 0;
       for (int k = 0; k < el_per_int; ++k) {
         T w_el = w[w_idx + j * el_per_int + k];
@@ -458,7 +506,13 @@ void quantize(
         w_el = std::min(std::max(w_el, T(0)), n_bins);
         out_el |= static_cast<uint32_t>(w_el) << (k * bits);
       }
-      out[out_idx + j] = out_el;
+      if (power_of_2_bits) {
+        out[out_idx + j] = out_el;
+      } else {
+        out[out_idx + bytes_per_pack * j] = out_el & 0xff;
+        out[out_idx + bytes_per_pack * j + 1] = (out_el & 0xff00) >> 8;
+        out[out_idx + bytes_per_pack * j + 2] = (out_el & 0xff0000) >> 16;
+      }
     }
   }
 }
@@ -466,8 +520,6 @@ void quantize(
 void fast::AffineQuantize::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  bool compute_scale_bias = inputs.size() == 1;
-
   auto ensure_row_contiguous = [](const array& arr) {
     if (arr.flags().row_contiguous) {
       return arr;
@@ -482,23 +534,29 @@ void fast::AffineQuantize::eval_cpu(
   auto& out = outputs[0];
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-  auto& scales =
-      compute_scale_bias ? outputs[1] : const_cast<array&>(inputs[1]);
-  auto& biases =
-      compute_scale_bias ? outputs[2] : const_cast<array&>(inputs[2]);
-  if (compute_scale_bias) {
-    scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
-    biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
-  }
+  auto& scales = outputs[1];
+  auto& biases = outputs[2];
+  scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
+  biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
   if (w.dtype() == float16) {
-    quantize<float16_t>(
-        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+    if (is_power_of_2(bits_)) {
+      quantize<float16_t, uint32_t>(w, out, scales, biases, bits_, group_size_);
+    } else {
+      quantize<float16_t, uint8_t>(w, out, scales, biases, bits_, group_size_);
+    }
   } else if (w.dtype() == bfloat16) {
-    quantize<bfloat16_t>(
-        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+    if (is_power_of_2(bits_)) {
+      quantize<bfloat16_t, uint32_t>(
+          w, out, scales, biases, bits_, group_size_);
+    } else {
+      quantize<bfloat16_t, uint8_t>(w, out, scales, biases, bits_, group_size_);
+    }
   } else if (w.dtype() == float32) {
-    quantize<float>(
-        w, out, scales, biases, bits_, group_size_, compute_scale_bias);
+    if (is_power_of_2(bits_)) {
+      quantize<float, uint32_t>(w, out, scales, biases, bits_, group_size_);
+    } else {
+      quantize<float, uint8_t>(w, out, scales, biases, bits_, group_size_);
+    }
   } else {
     throw std::runtime_error(
         "[fast::AffineQuantize::eval_cpu] Only supports floating point inputs");

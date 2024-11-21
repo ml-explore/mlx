@@ -72,7 +72,6 @@
 
 #define instantiate_quantized_all_single(type, group_size, bits) \
   instantiate_quantized(affine_quantize, type, group_size, bits) \
-  instantiate_quantized(affine_quantize_scales_biases, type, group_size, bits) \
   instantiate_quantized(affine_dequantize, type, group_size, bits)     \
   instantiate_quantized(bs_qmv_fast, type, group_size, bits)     \
   instantiate_quantized(bs_qmv, type, group_size, bits)     \
