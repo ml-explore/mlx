@@ -2019,7 +2019,6 @@ template <typename T, const int group_size, const int bits>
     uint2 grid_dim [[threads_per_grid]]) {
   constexpr T eps = T(1e-7);
   constexpr int simd_size = 32;
-  constexpr int uint8_bits = 8;
   constexpr T n_bins = (1 << bits) - 1;
   constexpr int packs_per_int = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
   constexpr int values_per_reduce = group_size / simd_size;
