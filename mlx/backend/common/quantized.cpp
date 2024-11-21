@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
-#include <type_traits>
 
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/ops.h"

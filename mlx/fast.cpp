@@ -791,7 +791,7 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
   };
 
   auto wq_shape = w.shape();
-  wq_shape.back() = (w.shape(-1) * bits + 32 - 1) / 32;
+  wq_shape.back() = w.shape(-1) * bits / 32;
   auto sshape = w.shape();
   sshape.back() = w.shape(-1) / group_size;
   auto outputs = array::make_arrays(
@@ -811,7 +811,7 @@ array affine_dequantize(
     StreamOrDevice s_) {
   if (bits <= 0) {
     std::ostringstream msg;
-    msg << "[dequantize] loader_w value for bits: " << bits;
+    msg << "[dequantize] Invalid value for bits: " << bits;
     throw std::invalid_argument(msg.str());
   }
   if (group_size <= 0) {

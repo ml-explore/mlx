@@ -628,23 +628,20 @@ METAL_FUNC void qmv_fast_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
   constexpr int packs_per_thread = bits == 2 ? 1 : 2;
   constexpr int num_simdgroups = 2;
   constexpr int results_per_simdgroup = 4;
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
   constexpr int values_per_thread = pack_factor * packs_per_thread;
   constexpr int block_size = values_per_thread * SIMD_SIZE;
   constexpr int scale_step_per_thread = group_size / values_per_thread;
 
-  // Required for non power of two bits which lie across byte boundaries
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
-
-  // For non powers of two we need to compute pointers with uint8_t
-  // since the start of each pack won't always align with uint32_t.
-  // We still use uint32_t for powers of two because it's slightly faster.
+  // When bits is a power of two, read 1 uint32_t at a time
+  // When bits is 3 or 6, read 3 uint8_ts at a time
   using W_T =
-      typename ConditionalType<(bits == 3 || bits == 6), uint8_t, uint32_t>::
-          type;
+      typename ConditionalType<power_of_2_bits, uint32_t, uint8_t>::type;
   const device W_T* ws = (const device W_T*)w;
 
   typedef float U;
@@ -703,19 +700,20 @@ METAL_FUNC void qmv_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
   constexpr int num_simdgroups = 2;
   constexpr int results_per_simdgroup = 4;
   constexpr int packs_per_thread = 1;
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
   constexpr int values_per_thread = pack_factor * packs_per_thread;
   constexpr int block_size = values_per_thread * SIMD_SIZE;
   constexpr int scale_step_per_thread = group_size / values_per_thread;
-  // Required for non power of two bits which lie across byte boundaries
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
 
+  // When bits is a power of two, read 1 uint32_t at a time
+  // When bits is 3 or 6, read 3 uint8_ts at a time
   using W_T =
-      typename ConditionalType<(bits == 3 || bits == 6), uint8_t, uint32_t>::
-          type;
+      typename ConditionalType<power_of_2_bits, uint32_t, uint8_t>::type;
   const device W_T* ws = (const device W_T*)w;
 
   typedef float U;
@@ -861,15 +859,18 @@ METAL_FUNC void qvm_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
   constexpr int num_simdgroups = 2;
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
   constexpr int tn = 32 / pack_factor;
   constexpr int block_size = SIMD_SIZE;
 
+  // When bits is a power of two, read 1 uint32_t at a time
+  // When bits is 3 or 6, read 3 uint8_ts at a time
+  // When bits is 5, read 5 uint8_ts at a time
   using W_T =
-      typename ConditionalType<(bits == 3 || bits == 6), uint8_t, uint32_t>::
-          type;
+      typename ConditionalType<power_of_2_bits, uint32_t, uint8_t>::type;
   const device W_T* ws = (const device W_T*)w;
 
   typedef float U;
@@ -1115,7 +1116,8 @@ METAL_FUNC void qmm_n_impl(
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
   constexpr int BK_padded = (BK + 16 / sizeof(T));
   constexpr int BN_padded = (BN + 16 / sizeof(T));
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
 
   // Instantiate the appropriate BlockMMA and Loader
   using mma_t = mlx::steel::
@@ -2025,10 +2027,8 @@ template <typename T, const int group_size, const int bits>
   constexpr int writes_per_reduce = packs_per_int / values_per_reduce;
   constexpr int writes_per_pack =
       writes_per_reduce > 1 ? 1 : values_per_reduce / packs_per_int;
-  // For 3/6 bit we pack into 3 byte chunks.
-  // 8 values for 3 bit
-  // 4 values for 6 bit
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
 
   static_assert(
       group_size % simd_size == 0,
@@ -2036,9 +2036,9 @@ template <typename T, const int group_size, const int bits>
 
   size_t offset = index.x + grid_dim.x * size_t(index.y);
   size_t in_index = offset * values_per_reduce;
-  size_t out_index = (bits == 3 || bits == 6)
-      ? offset * bytes_per_pack / writes_per_reduce
-      : offset * writes_per_pack;
+  size_t out_index = power_of_2_bits
+      ? offset * writes_per_pack
+      : offset * bytes_per_pack / writes_per_reduce;
 
   T w_thread[values_per_reduce];
   T w_min = Limits<T>::max;
@@ -2073,8 +2073,7 @@ template <typename T, const int group_size, const int bits>
 
   // We accumulate 3 bytes worth for 3/6 bit so we need a uint32_t
   using OutT =
-      typename ConditionalType<(bits == 3 || bits == 6), uint32_t, uint8_t>::
-          type;
+      typename ConditionalType<power_of_2_bits, uint8_t, uint32_t>::type;
   OutT output = 0;
 
 #pragma clang loop unroll(full)
@@ -2119,11 +2118,9 @@ template <typename T, const int group_size, const int bits>
     device T* out [[buffer(3)]],
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  constexpr int uint8_bits = 8;
-  constexpr int packs_per_int = bits == 3 ? 8
-      : bits == 6                         ? 4
-                                          : uint8_bits / bits;
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+  constexpr int packs_per_int = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
 
   size_t offset = index.x + grid_dim.x * size_t(index.y);
   size_t oindex = offset * packs_per_int;

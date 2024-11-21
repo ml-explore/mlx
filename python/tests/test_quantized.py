@@ -118,7 +118,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [128, 64, 32],  # group_size
             [2, 3, 4, 6, 8],  # bits
             [512, 1024, 67],  # M
-            [512, 1024],  # N
+            [64, 128, 512, 1024],  # N
             [0, 1, 3, 8],  # B
         )
         for group_size, bits, M, N, B in tests:
