@@ -4700,4 +4700,15 @@ array imag(const array& a, StreamOrDevice s /* = {} */) {
   return array(a.shape(), float32, std::make_shared<Imag>(to_stream(s)), {a});
 }
 
+array contiguous(
+    const array& a,
+    bool allow_col_major /* = false */,
+    StreamOrDevice s /* = {} */) {
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Contiguous>(to_stream(s), allow_col_major),
+      {a});
+}
+
 } // namespace mlx::core

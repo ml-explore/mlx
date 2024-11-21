@@ -159,6 +159,17 @@ void Conjugate::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  if (in.flags().row_contiguous ||
+      (allow_col_major_ && in.flags().col_contiguous)) {
+    out.copy_shared_buffer(in);
+  } else {
+    copy(in, out, CopyType::General);
+  }
+}
+
 void Cos::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
