@@ -148,7 +148,7 @@ void reduce_dispatch_sum_prod(
   } else {
     auto op = [](auto y, auto x) { (*y) *= x; };
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
-      reduction_op<InT, int32_t>(in, out, axes, 0, op);
+      reduction_op<InT, int32_t>(in, out, axes, 1, op);
     } else {
       reduction_op<InT, InT>(in, out, axes, 1, op);
     }
