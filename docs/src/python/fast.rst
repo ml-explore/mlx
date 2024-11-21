@@ -11,4 +11,5 @@ Fast
   rms_norm
   layer_norm
   rope
+  scaled_dot_product_attention
   metal_kernel

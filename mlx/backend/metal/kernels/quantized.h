@@ -868,7 +868,6 @@ METAL_FUNC void qvm_impl(
 
   // When bits is a power of two, read 1 uint32_t at a time
   // When bits is 3 or 6, read 3 uint8_ts at a time
-  // When bits is 5, read 5 uint8_ts at a time
   using W_T =
       typename ConditionalType<power_of_2_bits, uint32_t, uint8_t>::type;
   const device W_T* ws = (const device W_T*)w;
