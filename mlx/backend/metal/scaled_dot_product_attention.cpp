@@ -6,9 +6,8 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
+
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
-#include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
@@ -326,7 +325,23 @@ void ScaledDotProductAttention::eval_gpu(
     const auto& q = copy_unless(is_matrix_contiguous, q_pre);
     const auto& k = copy_unless(is_matrix_contiguous, k_pre);
     const auto& v = copy_unless(is_matrix_contiguous, v_pre);
-    o.set_data(allocator::malloc_or_wait(o.nbytes()));
+
+    size_t str_oD = 1;
+    size_t str_oH = o.shape(3);
+    size_t str_oL = o.shape(1) * str_oH;
+    size_t str_oB = o.shape(2) * str_oL;
+
+    array::Flags flags{
+        /* bool contiguous = */ 1,
+        /* bool row_contiguous = */ 0,
+        /* bool col_contiguous = */ 0,
+    };
+
+    o.set_data(
+        allocator::malloc_or_wait(o.nbytes()),
+        o.data_size(),
+        {str_oB, str_oH, str_oL, str_oD},
+        flags);
 
     sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o);
   }
