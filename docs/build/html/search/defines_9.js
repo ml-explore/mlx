@@ -1,22 +1,10 @@
 var searchData=
 [
-  ['pocketfft_5fcache_5fsize_0',['POCKETFFT_CACHE_SIZE',['../pocketfft_8h.html#a9e604bcf20603d70b62b233d3f306714',1,'pocketfft.h']]],
-  ['pocketfft_5fno_5fvectors_1',['POCKETFFT_NO_VECTORS',['../pocketfft_8h.html#aa9cdaed0819c48f97fcd19f05c289160',1,'pocketfft.h']]],
-  ['pocketfft_5fnoinline_2',['POCKETFFT_NOINLINE',['../pocketfft_8h.html#a7020984e0ca1d6e565629ca6e7c1a7e0',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep11_3',['POCKETFFT_PARTSTEP11',['../pocketfft_8h.html#a1793d0d00f2e13101eb5ad0719c40817',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep11a_4',['POCKETFFT_PARTSTEP11a',['../pocketfft_8h.html#ac35e1aa5ae84d655256b7a0afd9051c2',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep11a0_5',['POCKETFFT_PARTSTEP11a0',['../pocketfft_8h.html#ab2df44457945ab625fb38a777a46af1b',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep3a_6',['POCKETFFT_PARTSTEP3a',['../pocketfft_8h.html#ac112b26e5130636ac1d91c2f0af45e0b',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep3b_7',['POCKETFFT_PARTSTEP3b',['../pocketfft_8h.html#a41e646e5535a3a1c6e0d0e67122382f5',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep5a_8',['POCKETFFT_PARTSTEP5a',['../pocketfft_8h.html#a078bc2bd38ab0ffb15b981878c9de03c',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep5b_9',['POCKETFFT_PARTSTEP5b',['../pocketfft_8h.html#ab8a5da142555e059c5e9c618f75b46fa',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep7_10',['POCKETFFT_PARTSTEP7',['../pocketfft_8h.html#af7de1f82911a973d8446cf3f40ff3044',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep7a_11',['POCKETFFT_PARTSTEP7a',['../pocketfft_8h.html#a2b27f6e1f0ee131765186870517255c6',1,'pocketfft.h']]],
-  ['pocketfft_5fpartstep7a0_12',['POCKETFFT_PARTSTEP7a0',['../pocketfft_8h.html#a9c2fc2de74a031c38e9d8a21249ae1cd',1,'pocketfft.h']]],
-  ['pocketfft_5fprep11_13',['POCKETFFT_PREP11',['../pocketfft_8h.html#a536d2ea61479d4b074bf52ce09fdbc3a',1,'pocketfft.h']]],
-  ['pocketfft_5fprep3_14',['POCKETFFT_PREP3',['../pocketfft_8h.html#ae2fd9d433c417f0768fe1b58145b2e59',1,'pocketfft.h']]],
-  ['pocketfft_5fprep5_15',['POCKETFFT_PREP5',['../pocketfft_8h.html#a73077c26d2a82754db2a9c48bc0e11a6',1,'pocketfft.h']]],
-  ['pocketfft_5fprep7_16',['POCKETFFT_PREP7',['../pocketfft_8h.html#ae7c4d0cda5b3824f84eac54addabd6ec',1,'pocketfft.h']]],
-  ['pocketfft_5frearrange_17',['POCKETFFT_REARRANGE',['../pocketfft_8h.html#acffdf2e1ab84f36a7a097e1b8b87a9f9',1,'pocketfft.h']]],
-  ['pocketfft_5frestrict_18',['POCKETFFT_RESTRICT',['../pocketfft_8h.html#abbe177c4872821b32d76d5ce08d6ce82',1,'pocketfft.h']]]
+  ['max_5foutput_5fsize_0',['MAX_OUTPUT_SIZE',['../backend_2metal_2kernels_2fft_8h.html#a28d683cf067736d76f867f30c066317e',1,'fft.h']]],
+  ['max_5fradix_1',['MAX_RADIX',['../backend_2metal_2kernels_2fft_8h.html#a7b6e56afa21f022c5e754b000955735a',1,'MAX_RADIX:&#160;fft.h'],['../readwrite_8h.html#a7b6e56afa21f022c5e754b000955735a',1,'MAX_RADIX:&#160;readwrite.h']]],
+  ['mlx_5flapack_5ffunc_2',['MLX_LAPACK_FUNC',['../lapack_8h.html#ae22db9704827bf013a0a61f21a47464b',1,'lapack.h']]],
+  ['mlx_5fmtl_5fconst_3',['MLX_MTL_CONST',['../kernels_2gemv__masked_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;gemv_masked.h'],['../quantized_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;quantized.h'],['../sort_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;sort.h']]],
+  ['mlx_5fmtl_5floop_5funroll_4',['MLX_MTL_LOOP_UNROLL',['../sort_8h.html#ad34b622323cebef136669fedd7229515',1,'sort.h']]],
+  ['mlx_5fmtl_5fpragma_5funroll_5',['MLX_MTL_PRAGMA_UNROLL',['../kernels_2gemv__masked_8h.html#a069b682d7d21827461544817d722bfd3',1,'MLX_MTL_PRAGMA_UNROLL:&#160;gemv_masked.h'],['../backend_2metal_2kernels_2utils_8h.html#a069b682d7d21827461544817d722bfd3',1,'MLX_MTL_PRAGMA_UNROLL:&#160;utils.h']]],
+  ['mtl_5fconst_6',['MTL_CONST',['../defines_8h.html#a767ed9f2604de22b259cee02c4ce1d22',1,'defines.h']]]
 ];
