@@ -9,5 +9,6 @@ var searchData=
   ['distprimitive_6',['DistPrimitive',['../classmlx_1_1core_1_1distributed_1_1_dist_primitive.html',1,'mlx::core::distributed']]],
   ['divide_7',['Divide',['../struct_divide.html',1,'Divide'],['../structmlx_1_1core_1_1detail_1_1_divide.html',1,'mlx::core::detail::Divide'],['../classmlx_1_1core_1_1_divide.html',1,'mlx::core::Divide']]],
   ['divmod_8',['DivMod',['../struct_div_mod.html',1,'DivMod'],['../classmlx_1_1core_1_1_div_mod.html',1,'mlx::core::DivMod']]],
-  ['dtype_9',['Dtype',['../structmlx_1_1core_1_1_dtype.html',1,'mlx::core']]]
+  ['divop_9',['DivOp',['../struct_div_op.html',1,'']]],
+  ['dtype_10',['Dtype',['../structmlx_1_1core_1_1_dtype.html',1,'mlx::core']]]
 ];

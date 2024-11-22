@@ -8,11 +8,12 @@ var searchData=
   ['bitwiseor_5',['BitwiseOr',['../struct_bitwise_or.html',1,'BitwiseOr'],['../structmlx_1_1core_1_1detail_1_1_bitwise_or.html',1,'mlx::core::detail::BitwiseOr']]],
   ['bitwisexor_6',['BitwiseXor',['../struct_bitwise_xor.html',1,'BitwiseXor'],['../structmlx_1_1core_1_1detail_1_1_bitwise_xor.html',1,'mlx::core::detail::BitwiseXor']]],
   ['blockloader_7',['BlockLoader',['../structmlx_1_1steel_1_1_block_loader.html',1,'mlx::steel']]],
-  ['blockmaskedmm_8',['BlockMaskedMM',['../classmlx_1_1core_1_1_block_masked_m_m.html',1,'mlx::core']]],
-  ['blockmergesort_9',['BlockMergeSort',['../struct_block_merge_sort.html',1,'']]],
-  ['blockmma_10',['BlockMMA',['../structmlx_1_1steel_1_1_block_m_m_a.html',1,'mlx::steel']]],
-  ['blockswizzle_11',['BlockSwizzle',['../structmlx_1_1steel_1_1_block_swizzle.html',1,'mlx::steel']]],
-  ['bool4_5for_5fuint_12',['bool4_or_uint',['../unionbool4__or__uint.html',1,'']]],
-  ['broadcast_13',['Broadcast',['../classmlx_1_1core_1_1_broadcast.html',1,'mlx::core']]],
-  ['buffer_14',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator']]]
+  ['blockloadert_8',['BlockLoaderT',['../structmlx_1_1steel_1_1_block_loader_t.html',1,'mlx::steel']]],
+  ['blockmaskedmm_9',['BlockMaskedMM',['../classmlx_1_1core_1_1_block_masked_m_m.html',1,'mlx::core']]],
+  ['blockmergesort_10',['BlockMergeSort',['../struct_block_merge_sort.html',1,'']]],
+  ['blockmma_11',['BlockMMA',['../structmlx_1_1steel_1_1_block_m_m_a.html',1,'mlx::steel']]],
+  ['blockswizzle_12',['BlockSwizzle',['../structmlx_1_1steel_1_1_block_swizzle.html',1,'mlx::steel']]],
+  ['bool4_5for_5fuint_13',['bool4_or_uint',['../unionbool4__or__uint.html',1,'']]],
+  ['broadcast_14',['Broadcast',['../classmlx_1_1core_1_1_broadcast.html',1,'mlx::core']]],
+  ['buffer_15',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator']]]
 ];

@@ -12,6 +12,7 @@ var searchData=
   ['transformadd_9',['TransformAdd',['../structmlx_1_1steel_1_1_transform_add.html',1,'mlx::steel']]],
   ['transformaxpby_10',['TransformAxpby',['../structmlx_1_1steel_1_1_transform_axpby.html',1,'mlx::steel']]],
   ['transformnone_11',['TransformNone',['../structmlx_1_1steel_1_1_transform_none.html',1,'mlx::steel']]],
-  ['transpose_12',['Transpose',['../classmlx_1_1core_1_1_transpose.html',1,'mlx::core']]],
-  ['typetodtype_13',['TypeToDtype',['../structmlx_1_1core_1_1_type_to_dtype.html',1,'mlx::core']]]
+  ['transformscale_12',['TransformScale',['../struct_transform_scale.html',1,'']]],
+  ['transpose_13',['Transpose',['../classmlx_1_1core_1_1_transpose.html',1,'mlx::core']]],
+  ['typetodtype_14',['TypeToDtype',['../structmlx_1_1core_1_1_type_to_dtype.html',1,'mlx::core']]]
 ];

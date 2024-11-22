@@ -110,7 +110,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span> </div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> IdxT&gt;</div>
 <div class="foldopen" id="foldopen00017" data-start="{" data-end="}">
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno"><a class="line" href="kernels_2indexing_8h.html#ab41167dc537c06fbdb4df100972393df">   17</a></span>METAL_FUNC <span class="keywordtype">size_t</span> <a class="code hl_function" href="kernels_2indexing_8h.html#ab41167dc537c06fbdb4df100972393df">offset_neg_idx</a>(IdxT idx, <span class="keywordtype">size_t</span> size) {</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno"><a class="line" href="kernels_2indexing_8h.html#a58a65ea6215999cd4ccb4fe757cc2dc8">   17</a></span>METAL_FUNC <span class="keywordtype">size_t</span> <a class="code hl_function" href="kernels_2indexing_8h.html#a58a65ea6215999cd4ccb4fe757cc2dc8">offset_neg_idx</a>(IdxT idx, <span class="keywordtype">int</span> size) {</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>  <span class="keywordflow">if</span> (is_unsigned_v&lt;IdxT&gt;) {</div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    <span class="keywordflow">return</span> idx;</div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>  } <span class="keywordflow">else</span> {</div>
@@ -118,7 +118,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>  }</div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>}</div>
 </div>
-<div class="ttc" id="akernels_2indexing_8h_html_ab41167dc537c06fbdb4df100972393df"><div class="ttname"><a href="kernels_2indexing_8h.html#ab41167dc537c06fbdb4df100972393df">offset_neg_idx</a></div><div class="ttdeci">METAL_FUNC size_t offset_neg_idx(IdxT idx, size_t size)</div><div class="ttdef"><b>Definition</b> indexing.h:17</div></div>
+<div class="ttc" id="akernels_2indexing_8h_html_a58a65ea6215999cd4ccb4fe757cc2dc8"><div class="ttname"><a href="kernels_2indexing_8h.html#a58a65ea6215999cd4ccb4fe757cc2dc8">offset_neg_idx</a></div><div class="ttdeci">METAL_FUNC size_t offset_neg_idx(IdxT idx, int size)</div><div class="ttdef"><b>Definition</b> indexing.h:17</div></div>
 <div class="ttc" id="astruct_indices_html"><div class="ttname"><a href="struct_indices.html">Indices</a></div><div class="ttdef"><b>Definition</b> indexing.h:8</div></div>
 <div class="ttc" id="astruct_indices_html_a255e340a39c6ac28ef2c232b106f85d1"><div class="ttname"><a href="struct_indices.html#a255e340a39c6ac28ef2c232b106f85d1">Indices::row_contiguous</a></div><div class="ttdeci">const constant bool * row_contiguous</div><div class="ttdef"><b>Definition</b> indexing.h:12</div></div>
 <div class="ttc" id="astruct_indices_html_a5ab170f1a77636180889ddfffd4f7d2f"><div class="ttname"><a href="struct_indices.html#a5ab170f1a77636180889ddfffd4f7d2f">Indices::shapes</a></div><div class="ttdeci">const constant int * shapes</div><div class="ttdef"><b>Definition</b> indexing.h:10</div></div>

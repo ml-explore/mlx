@@ -10,5 +10,6 @@ var searchData=
   ['exechartley_7',['ExecHartley',['../structpocketfft_1_1detail_1_1_exec_hartley.html',1,'pocketfft::detail']]],
   ['execr2r_8',['ExecR2R',['../structpocketfft_1_1detail_1_1_exec_r2_r.html',1,'pocketfft::detail']]],
   ['exp_9',['Exp',['../struct_exp.html',1,'Exp'],['../structmlx_1_1core_1_1detail_1_1_exp.html',1,'mlx::core::detail::Exp'],['../classmlx_1_1core_1_1_exp.html',1,'mlx::core::Exp']]],
-  ['expm1_10',['Expm1',['../struct_expm1.html',1,'Expm1'],['../structmlx_1_1core_1_1detail_1_1_expm1.html',1,'mlx::core::detail::Expm1'],['../classmlx_1_1core_1_1_expm1.html',1,'mlx::core::Expm1']]]
+  ['expm1_10',['Expm1',['../struct_expm1.html',1,'Expm1'],['../structmlx_1_1core_1_1detail_1_1_expm1.html',1,'mlx::core::detail::Expm1'],['../classmlx_1_1core_1_1_expm1.html',1,'mlx::core::Expm1']]],
+  ['expsubop_11',['ExpSubOp',['../struct_exp_sub_op.html',1,'']]]
 ];

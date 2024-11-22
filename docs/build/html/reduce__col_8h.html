@@ -98,28 +98,28 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a7c378443a2b6f4d9210db8a21a9ac4f5" id="r_a7c378443a2b6f4d9210db8a21a9ac4f5"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS&gt; </td></tr>
-<tr class="memitem:a7c378443a2b6f4d9210db8a21a9ac4f5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7c378443a2b6f4d9210db8a21a9ac4f5">col_reduce_small</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize)</td></tr>
-<tr class="separator:a7c378443a2b6f4d9210db8a21a9ac4f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5b4f4c4c247ad341ff8d31dcbbbce0eb" id="r_a5b4f4c4c247ad341ff8d31dcbbbce0eb"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS&gt; </td></tr>
-<tr class="memitem:a5b4f4c4c247ad341ff8d31dcbbbce0eb"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a5b4f4c4c247ad341ff8d31dcbbbce0eb">col_reduce_longcolumn</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize)</td></tr>
-<tr class="separator:a5b4f4c4c247ad341ff8d31dcbbbce0eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a11bfc6112ae2386ac03f5ea7b7d93385" id="r_a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </td></tr>
-<tr class="memitem:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a11bfc6112ae2386ac03f5ea7b7d93385">col_reduce_looped</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id)</td></tr>
-<tr class="memdesc:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="mdescLeft">&#160;</td><td class="mdescRight">Our approach is the following simple looped approach:  <br /></td></tr>
-<tr class="separator:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0e92fc74eeaa8ee2ceb83bafc6eb1d7d" id="r_a0e92fc74eeaa8ee2ceb83bafc6eb1d7d"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </td></tr>
-<tr class="memitem:a0e92fc74eeaa8ee2ceb83bafc6eb1d7d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0e92fc74eeaa8ee2ceb83bafc6eb1d7d">col_reduce_2pass</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id)</td></tr>
-<tr class="separator:a0e92fc74eeaa8ee2ceb83bafc6eb1d7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a82cd031d8014c02e61dc9a817ea6d4ec" id="r_a82cd031d8014c02e61dc9a817ea6d4ec"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS&gt; </td></tr>
+<tr class="memitem:a82cd031d8014c02e61dc9a817ea6d4ec"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a82cd031d8014c02e61dc9a817ea6d4ec">col_reduce_small</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize)</td></tr>
+<tr class="separator:a82cd031d8014c02e61dc9a817ea6d4ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa3287cd98e97123b67b5d3920d984ca2" id="r_aa3287cd98e97123b67b5d3920d984ca2"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS&gt; </td></tr>
+<tr class="memitem:aa3287cd98e97123b67b5d3920d984ca2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa3287cd98e97123b67b5d3920d984ca2">col_reduce_longcolumn</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize)</td></tr>
+<tr class="separator:aa3287cd98e97123b67b5d3920d984ca2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae8f9354e1c595142d05b33fe13988f02" id="r_ae8f9354e1c595142d05b33fe13988f02"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS, int BM, int BN&gt; </td></tr>
+<tr class="memitem:ae8f9354e1c595142d05b33fe13988f02"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae8f9354e1c595142d05b33fe13988f02">col_reduce_looped</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id)</td></tr>
+<tr class="memdesc:ae8f9354e1c595142d05b33fe13988f02"><td class="mdescLeft">&#160;</td><td class="mdescRight">Our approach is the following simple looped approach:  <br /></td></tr>
+<tr class="separator:ae8f9354e1c595142d05b33fe13988f02"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a7be400d810700b47fc1a998032ce29" id="r_a9a7be400d810700b47fc1a998032ce29"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS, int BM, int BN&gt; </td></tr>
+<tr class="memitem:a9a7be400d810700b47fc1a998032ce29"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9a7be400d810700b47fc1a998032ce29">col_reduce_2pass</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id)</td></tr>
+<tr class="separator:a9a7be400d810700b47fc1a998032ce29"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a0e92fc74eeaa8ee2ceb83bafc6eb1d7d" name="a0e92fc74eeaa8ee2ceb83bafc6eb1d7d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0e92fc74eeaa8ee2ceb83bafc6eb1d7d">&#9670;&#160;</a></span>col_reduce_2pass()</h2>
+<a id="a9a7be400d810700b47fc1a998032ce29" name="a9a7be400d810700b47fc1a998032ce29"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a7be400d810700b47fc1a998032ce29">&#9670;&#160;</a></span>col_reduce_2pass()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </div>
+template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS, int BM, int BN&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_2pass </td>
@@ -206,13 +206,13 @@ template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt
 
 </div>
 </div>
-<a id="a5b4f4c4c247ad341ff8d31dcbbbce0eb" name="a5b4f4c4c247ad341ff8d31dcbbbce0eb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5b4f4c4c247ad341ff8d31dcbbbce0eb">&#9670;&#160;</a></span>col_reduce_longcolumn()</h2>
+<a id="aa3287cd98e97123b67b5d3920d984ca2" name="aa3287cd98e97123b67b5d3920d984ca2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa3287cd98e97123b67b5d3920d984ca2">&#9670;&#160;</a></span>col_reduce_longcolumn()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS&gt; </div>
+template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_longcolumn </td>
@@ -299,13 +299,13 @@ template&lt;typename T , typename U , typename Op , int NDIMS&gt; </div>
 
 </div>
 </div>
-<a id="a11bfc6112ae2386ac03f5ea7b7d93385" name="a11bfc6112ae2386ac03f5ea7b7d93385"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a11bfc6112ae2386ac03f5ea7b7d93385">&#9670;&#160;</a></span>col_reduce_looped()</h2>
+<a id="ae8f9354e1c595142d05b33fe13988f02" name="ae8f9354e1c595142d05b33fe13988f02"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8f9354e1c595142d05b33fe13988f02">&#9670;&#160;</a></span>col_reduce_looped()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </div>
+template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS, int BM, int BN&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_looped </td>
@@ -396,13 +396,13 @@ template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt
 
 </div>
 </div>
-<a id="a7c378443a2b6f4d9210db8a21a9ac4f5" name="a7c378443a2b6f4d9210db8a21a9ac4f5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7c378443a2b6f4d9210db8a21a9ac4f5">&#9670;&#160;</a></span>col_reduce_small()</h2>
+<a id="a82cd031d8014c02e61dc9a817ea6d4ec" name="a82cd031d8014c02e61dc9a817ea6d4ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82cd031d8014c02e61dc9a817ea6d4ec">&#9670;&#160;</a></span>col_reduce_small()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS&gt; </div>
+template&lt;typename T , typename U , typename Op , typename IdxT , int NDIMS&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_small </td>

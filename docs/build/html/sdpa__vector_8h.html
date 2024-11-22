@@ -102,6 +102,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a4bf36f16e16c1c62d9b243573568e5ae" id="r_a4bf36f16e16c1c62d9b243573568e5ae"><td class="memTemplParams" colspan="2">template&lt;typename T , int D&gt; </td></tr>
 <tr class="memitem:a4bf36f16e16c1c62d9b243573568e5ae"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4bf36f16e16c1c62d9b243573568e5ae">sdpa_vector</a> (const device T *queries, const device T *keys, const device T *values, device T *out, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant size_t &amp;v_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
 <tr class="separator:a4bf36f16e16c1c62d9b243573568e5ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae070ec482c79c5b3bd19dd03ea42ec74" id="r_ae070ec482c79c5b3bd19dd03ea42ec74"><td class="memTemplParams" colspan="2">template&lt;typename T , int D&gt; </td></tr>
+<tr class="memitem:ae070ec482c79c5b3bd19dd03ea42ec74"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae070ec482c79c5b3bd19dd03ea42ec74">sdpa_vector_2pass_1</a> (const device T *queries, const device T *keys, const device T *values, device float *out, device float *sums, device float *maxs, const constant int &amp;gqa_factor, const constant int &amp;N, const constant size_t &amp;k_stride, const constant size_t &amp;v_stride, const constant float &amp;scale, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:ae070ec482c79c5b3bd19dd03ea42ec74"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1368cf3618a4e03dbf743b3463205efe" id="r_a1368cf3618a4e03dbf743b3463205efe"><td class="memTemplParams" colspan="2">template&lt;typename T , int D&gt; </td></tr>
+<tr class="memitem:a1368cf3618a4e03dbf743b3463205efe"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1368cf3618a4e03dbf743b3463205efe">sdpa_vector_2pass_2</a> (const device float *partials, const device float *sums, const device float *maxs, device T *out, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a1368cf3618a4e03dbf743b3463205efe"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="a4bf36f16e16c1c62d9b243573568e5ae" name="a4bf36f16e16c1c62d9b243573568e5ae"></a>
@@ -156,6 +162,137 @@ template&lt;typename T , int D&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant float &amp;</td>          <td class="paramname"><span class="paramname"><em>scale</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_gid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_lid</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae070ec482c79c5b3bd19dd03ea42ec74" name="ae070ec482c79c5b3bd19dd03ea42ec74"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae070ec482c79c5b3bd19dd03ea42ec74">&#9670;&#160;</a></span>sdpa_vector_2pass_1()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , int D&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void sdpa_vector_2pass_1 </td>
+          <td>(</td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>queries</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>keys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>values</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device float *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device float *</td>          <td class="paramname"><span class="paramname"><em>sums</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device float *</td>          <td class="paramname"><span class="paramname"><em>maxs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>gqa_factor</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>N</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>k_stride</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>v_stride</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant float &amp;</td>          <td class="paramname"><span class="paramname"><em>scale</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_gid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_lid</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1368cf3618a4e03dbf743b3463205efe" name="a1368cf3618a4e03dbf743b3463205efe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1368cf3618a4e03dbf743b3463205efe">&#9670;&#160;</a></span>sdpa_vector_2pass_2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , int D&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void sdpa_vector_2pass_2 </td>
+          <td>(</td>
+          <td class="paramtype">const device float *</td>          <td class="paramname"><span class="paramname"><em>partials</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device float *</td>          <td class="paramname"><span class="paramname"><em>sums</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device float *</td>          <td class="paramname"><span class="paramname"><em>maxs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

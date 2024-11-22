@@ -94,7 +94,7 @@ $(function(){ initResizable(false); });
 <a href="jit_2indexing_8h.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="comment">// Copyright © 2023-2024 Apple Inc.</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno"><a class="line" href="jit_2indexing_8h.html#a1a03318128191891a84707602b57b3cf">    3</a></span><span class="keyword">constexpr</span> std::string_view <a class="code hl_variable" href="jit_2indexing_8h.html#a1a03318128191891a84707602b57b3cf">gather_kernels</a> = R<span class="stringliteral">&quot;(</span></div>
-<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="stringliteral">[[kernel]] void gather{0}_{3}_{6}(</span></div>
+<div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span><span class="stringliteral">[[kernel]] void gather{0}_{3}_{6}_{7}(</span></div>
 <div class="line"><a id="l00005" name="l00005"></a><span class="lineno">    5</span><span class="stringliteral">    const device {1}* src [[buffer(0)]],</span></div>
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span><span class="stringliteral">    device {1}* out [[buffer(1)]],</span></div>
 <div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="stringliteral">    const constant int* src_shape [[buffer(2)]],</span></div>
@@ -112,7 +112,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="stringliteral">  Indices&lt;{2}, {3}&gt; idxs{{</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="stringliteral">    {{ {5} }}, idx_shapes, idx_strides, idx_contigs, idx_ndim}};</span></div>
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="stringliteral"></span> </div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="stringliteral">  return gather_impl&lt;{1}, {2}, {3}, {6}&gt;(</span></div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="stringliteral">  return gather_impl&lt;{1}, {2}, {3}, {6}, {7}&gt;(</span></div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span><span class="stringliteral">      src,</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="stringliteral">      out,</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="stringliteral">      src_shape,</span></div>
@@ -127,7 +127,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="stringliteral">)&quot;;</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="stringliteral"></span> </div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="jit_2indexing_8h.html#a768c949cd650a44c6b402fc1440c1a56">   36</a></span><span class="stringliteral"></span><span class="keyword">constexpr</span> std::string_view <a class="code hl_variable" href="jit_2indexing_8h.html#a768c949cd650a44c6b402fc1440c1a56">scatter_kernels</a> = R<span class="stringliteral">&quot;(</span></div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="stringliteral">[[kernel]] void scatter{0}_{4}_updc_{7}_nwork{8}(</span></div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="stringliteral">[[kernel]] void scatter{0}_{4}_updc_{7}_nwork{8}_{9}(</span></div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="stringliteral">    const device {1}* updates [[buffer(1)]],</span></div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="stringliteral">    device mlx_atomic&lt;{1}&gt;* out [[buffer(2)]],</span></div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="stringliteral">    const constant int* upd_shape [[buffer(3)]],</span></div>
@@ -147,7 +147,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="stringliteral">    uint2 gid [[thread_position_in_grid]]) {{</span></div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="stringliteral">  Indices&lt;{2}, {4}&gt; idxs{{ {{ {6} }}, idx_shapes, idx_strides, idx_contigs, idx_ndim}};</span></div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="stringliteral"></span> </div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="stringliteral">  return scatter_impl&lt;{1}, {2}, {3}, {4}, {7}, {8}&gt;(</span></div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="stringliteral">  return scatter_impl&lt;{1}, {2}, {3}, {4}, {7}, {8}, {9}&gt;(</span></div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="stringliteral">      updates,</span></div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="stringliteral">      out,</span></div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="stringliteral">      upd_shape,</span></div>

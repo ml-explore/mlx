@@ -98,18 +98,18 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a99ef48ae72b3e715c5f4d7ea07cd213d" id="r_a99ef48ae72b3e715c5f4d7ea07cd213d"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </td></tr>
-<tr class="memitem:a99ef48ae72b3e715c5f4d7ea07cd213d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a99ef48ae72b3e715c5f4d7ea07cd213d">all_reduce</a> (const device T *in, device U *out, const constant size_t &amp;in_size, const constant size_t &amp;row_size, uint3 gid, uint3 lid, uint3 lsize, uint simd_per_group, uint simd_lane_id, uint simd_group_id)</td></tr>
-<tr class="separator:a99ef48ae72b3e715c5f4d7ea07cd213d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9086a585eda5a887160ee24baae0a7b8" id="r_a9086a585eda5a887160ee24baae0a7b8"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , typename IdxT  = int64_t, int N_READS = REDUCE_N_READS&gt; </td></tr>
+<tr class="memitem:a9086a585eda5a887160ee24baae0a7b8"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9086a585eda5a887160ee24baae0a7b8">all_reduce</a> (const device T *in, device U *out, const constant size_t &amp;in_size, const constant size_t &amp;row_size, uint3 gid, uint3 lid, uint3 lsize, uint simd_per_group, uint simd_lane_id, uint simd_group_id)</td></tr>
+<tr class="separator:a9086a585eda5a887160ee24baae0a7b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a99ef48ae72b3e715c5f4d7ea07cd213d" name="a99ef48ae72b3e715c5f4d7ea07cd213d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a99ef48ae72b3e715c5f4d7ea07cd213d">&#9670;&#160;</a></span>all_reduce()</h2>
+<a id="a9086a585eda5a887160ee24baae0a7b8" name="a9086a585eda5a887160ee24baae0a7b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9086a585eda5a887160ee24baae0a7b8">&#9670;&#160;</a></span>all_reduce()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </div>
+template&lt;typename T , typename U , typename Op , typename IdxT  = int64_t, int N_READS = REDUCE_N_READS&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void all_reduce </td>

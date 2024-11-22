@@ -104,18 +104,18 @@ Functions</h2></td></tr>
 <tr class="memitem:a7c7690f0df9d2acc60b63be58d9c7777" id="r_a7c7690f0df9d2acc60b63be58d9c7777"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
 <tr class="memitem:a7c7690f0df9d2acc60b63be58d9c7777"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7c7690f0df9d2acc60b63be58d9c7777">unary_v2</a> (device const T *in, device U *out, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a7c7690f0df9d2acc60b63be58d9c7777"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac965f8d3ed62f8580dbfb645e83d4ae5" id="r_ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N = 1&gt; </td></tr>
-<tr class="memitem:ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac965f8d3ed62f8580dbfb645e83d4ae5">unary_g</a> (device const T *in, device U *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</td></tr>
-<tr class="separator:ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac2a85fee50af49620ff62c1a71e2575d" id="r_ac2a85fee50af49620ff62c1a71e2575d"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N = 1, typename IdxT  = size_t&gt; </td></tr>
+<tr class="memitem:ac2a85fee50af49620ff62c1a71e2575d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac2a85fee50af49620ff62c1a71e2575d">unary_g</a> (device const T *in, device U *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</td></tr>
+<tr class="separator:ac2a85fee50af49620ff62c1a71e2575d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="ac965f8d3ed62f8580dbfb645e83d4ae5" name="ac965f8d3ed62f8580dbfb645e83d4ae5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac965f8d3ed62f8580dbfb645e83d4ae5">&#9670;&#160;</a></span>unary_g()</h2>
+<a id="ac2a85fee50af49620ff62c1a71e2575d" name="ac2a85fee50af49620ff62c1a71e2575d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2a85fee50af49620ff62c1a71e2575d">&#9670;&#160;</a></span>unary_g()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int N = 1&gt; </div>
+template&lt;typename T , typename U , typename Op , int N = 1, typename IdxT  = size_t&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void unary_g </td>

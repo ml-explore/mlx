@@ -95,16 +95,16 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="gemm_2loader_8h_source.html">loader.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="attn_2loader_8h_source.html">loader.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:afbef88bfb901a71e8423de911b7c7347" id="r_afbef88bfb901a71e8423de911b7c7347"><td class="memItemLeft" align="right" valign="top">uint8_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#afbef88bfb901a71e8423de911b7c7347">v</a> [sizeof(T) *<a class="el" href="structmlx_1_1steel_1_1_block_loader.html#a58bdf9b9c81962733e22ecdeae28c092">vec_size</a>]</td></tr>
-<tr class="separator:afbef88bfb901a71e8423de911b7c7347"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a20963f7191251defca48bf8a843d019d" id="r_a20963f7191251defca48bf8a843d019d"><td class="memItemLeft" align="right" valign="top">uint8_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a20963f7191251defca48bf8a843d019d">v</a> [sizeof(T) *<a class="el" href="structmlx_1_1steel_1_1_block_loader.html#a58bdf9b9c81962733e22ecdeae28c092">vec_size</a>]</td></tr>
+<tr class="separator:a20963f7191251defca48bf8a843d019d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Data Documentation</h2>
-<a id="afbef88bfb901a71e8423de911b7c7347" name="afbef88bfb901a71e8423de911b7c7347"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afbef88bfb901a71e8423de911b7c7347">&#9670;&#160;</a></span>v</h2>
+<a id="a20963f7191251defca48bf8a843d019d" name="a20963f7191251defca48bf8a843d019d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a20963f7191251defca48bf8a843d019d">&#9670;&#160;</a></span>v</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -112,14 +112,15 @@ Public Attributes</h2></td></tr>
 template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">uint8_t <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::ReadVector::v[sizeof(T) *<a class="el" href="structmlx_1_1steel_1_1_block_loader.html#a58bdf9b9c81962733e22ecdeae28c092">vec_size</a>]</td>
+          <td class="memname">uint8_t <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::ReadVector::v</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="attn_2loader_8h_source.html">loader.h</a></li>
 <li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="gemm_2loader_8h_source.html">loader.h</a></li>
 </ul>
 </div><!-- contents -->
