@@ -198,7 +198,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  <span class="keyword">const</span> device T* inputs[N_WRITES];</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>  in += lid_x * N_READS;</div>
 <div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N_READS; i++) {</div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    inputs[i] = in + <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>(row_idx + i, shape, strides, ndim);</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    inputs[i] = in + <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc</a>(row_idx + i, shape, strides, ndim);</div>
 <div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>  }</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span> </div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>  <a class="code hl_function" href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce&lt;T, U, Op, N_READS, N_WRITES&gt;</a>(</div>
@@ -283,197 +283,199 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>    <span class="keyword">typename</span> T,</div>
 <div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>    <span class="keyword">typename</span> U,</div>
 <div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <span class="keyword">typename</span> Op,</div>
-<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keywordtype">int</span> NDIMS,</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>&gt;</div>
-<div class="foldopen" id="foldopen00198" data-start="{" data-end="}">
-<div class="line"><a id="l00198" name="l00198"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#a27e75312086e31f6bd1bbf4b366679da">  198</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#a27e75312086e31f6bd1bbf4b366679da">row_reduce_small</a>(</div>
-<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
-<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>    device U* out [[buffer(1)]],</div>
-<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; row_size [[buffer(2)]],</div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; non_row_reductions [[buffer(3)]],</div>
-<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* shape [[buffer(4)]],</div>
-<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* strides [[buffer(5)]],</div>
-<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; ndim [[buffer(6)]],</div>
-<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* reduce_shape [[buffer(7)]],</div>
-<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* reduce_strides [[buffer(8)]],</div>
-<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; reduce_ndim [[buffer(9)]],</div>
-<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
-<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
-<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>    uint3 gsize [[threadgroups_per_grid]],</div>
-<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>    uint3 tid [[thread_position_in_grid]],</div>
-<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>    uint3 tsize [[threads_per_grid]]) {</div>
-<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>  Op <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>;</div>
-<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span> </div>
-<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span>  U total_val = Op::init;</div>
-<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>  <a class="code hl_struct" href="structlooped__elem__to__loc.html">looped_elem_to_loc&lt;NDIMS&gt;</a> loop;</div>
-<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span> </div>
-<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span>  <span class="comment">// Precompute some row reduction numbers</span></div>
-<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span>  <span class="keyword">const</span> device T* row;</div>
-<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span>  <span class="keywordtype">int</span> blocks = row_size / N_READS;</div>
-<div class="line"><a id="l00222" name="l00222"></a><span class="lineno">  222</span>  <span class="keywordtype">int</span> extra = row_size % N_READS;</div>
-<div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span> </div>
-<div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span>  <span class="keywordflow">if</span> ((non_row_reductions &lt; 32 &amp;&amp; row_size &lt;= 8) || non_row_reductions &lt;= 8) {</div>
-<div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span>    <span class="comment">// Simple loop over non_row_reductions and reduce the row in the thread.</span></div>
-<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>    <span class="keywordtype">size_t</span> out_idx = tid.x + tsize.y * size_t(tid.y);</div>
-<div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>    in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>(out_idx, shape, strides, ndim);</div>
-<div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span> </div>
-<div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span>    <span class="keywordflow">for</span> (uint r = 0; r &lt; non_row_reductions; r++) {</div>
-<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>      row = in + loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#accc6d4957a8aeb38f5062754793b74d2">location</a>(r, reduce_shape, reduce_strides, reduce_ndim);</div>
-<div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span>      <a class="code hl_function" href="reduce__row_8h.html#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce&lt;T, U, Op, N_READS&gt;</a>(total_val, row, blocks, extra);</div>
-<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span>      loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#a05558dabba889ee0d80ed4b567d901ca">next</a>(reduce_shape, reduce_strides);</div>
-<div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span>    }</div>
-<div class="line"><a id="l00234" name="l00234"></a><span class="lineno">  234</span> </div>
-<div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span>    out[out_idx] = total_val;</div>
-<div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span>  } <span class="keywordflow">else</span> {</div>
-<div class="line"><a id="l00237" name="l00237"></a><span class="lineno">  237</span>    <span class="comment">// Collaboratively reduce over non_row_reductions in the simdgroup. Each</span></div>
-<div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span>    <span class="comment">// thread reduces every 32nd row and then a simple simd reduce.</span></div>
-<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    <span class="keywordtype">size_t</span> out_idx = gid.y + gsize.y * size_t(gid.z);</div>
-<div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>    in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>(out_idx, shape, strides, ndim);</div>
-<div class="line"><a id="l00241" name="l00241"></a><span class="lineno">  241</span> </div>
-<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span>    loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#a05558dabba889ee0d80ed4b567d901ca">next</a>(simd_lane_id, reduce_shape, reduce_strides);</div>
-<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span> </div>
-<div class="line"><a id="l00244" name="l00244"></a><span class="lineno">  244</span>    <span class="keywordflow">for</span> (uint r = simd_lane_id; r &lt; non_row_reductions; r += <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>) {</div>
-<div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span>      row = in + loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#accc6d4957a8aeb38f5062754793b74d2">location</a>(r, reduce_shape, reduce_strides, reduce_ndim);</div>
-<div class="line"><a id="l00246" name="l00246"></a><span class="lineno">  246</span>      <a class="code hl_function" href="reduce__row_8h.html#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce&lt;T, U, Op, N_READS&gt;</a>(total_val, row, blocks, extra);</div>
-<div class="line"><a id="l00247" name="l00247"></a><span class="lineno">  247</span>      loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#a05558dabba889ee0d80ed4b567d901ca">next</a>(<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>, reduce_shape, reduce_strides);</div>
-<div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span>    }</div>
-<div class="line"><a id="l00249" name="l00249"></a><span class="lineno">  249</span> </div>
-<div class="line"><a id="l00250" name="l00250"></a><span class="lineno">  250</span>    total_val = <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>.simd_reduce(total_val);</div>
-<div class="line"><a id="l00251" name="l00251"></a><span class="lineno">  251</span> </div>
-<div class="line"><a id="l00252" name="l00252"></a><span class="lineno">  252</span>    <span class="keywordflow">if</span> (simd_lane_id == 0) {</div>
-<div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span>      out[out_idx] = total_val;</div>
-<div class="line"><a id="l00254" name="l00254"></a><span class="lineno">  254</span>    }</div>
-<div class="line"><a id="l00255" name="l00255"></a><span class="lineno">  255</span>  }</div>
-<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>}</div>
+<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keyword">typename</span> IdxT,</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keywordtype">int</span> NDIMS,</div>
+<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>&gt;</div>
+<div class="foldopen" id="foldopen00199" data-start="{" data-end="}">
+<div class="line"><a id="l00199" name="l00199"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#aeb49e89f1163cb3093770bb710df9f5e">  199</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#aeb49e89f1163cb3093770bb710df9f5e">row_reduce_small</a>(</div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
+<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>    device U* out [[buffer(1)]],</div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; row_size [[buffer(2)]],</div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; non_row_reductions [[buffer(3)]],</div>
+<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* shape [[buffer(4)]],</div>
+<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* strides [[buffer(5)]],</div>
+<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; ndim [[buffer(6)]],</div>
+<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* reduce_shape [[buffer(7)]],</div>
+<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* reduce_strides [[buffer(8)]],</div>
+<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; reduce_ndim [[buffer(9)]],</div>
+<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
+<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
+<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>    uint3 gsize [[threadgroups_per_grid]],</div>
+<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>    uint3 tid [[thread_position_in_grid]],</div>
+<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>    uint3 tsize [[threads_per_grid]]) {</div>
+<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span>  Op <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>;</div>
+<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span> </div>
+<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>  U total_val = Op::init;</div>
+<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span>  <a class="code hl_struct" href="struct_looped_elem_to_loc.html">LoopedElemToLoc</a>&lt;NDIMS, IdxT, (NDIMS &gt; 2)&gt; loop(reduce_ndim);</div>
+<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span> </div>
+<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span>  <span class="comment">// Precompute some row reduction numbers</span></div>
+<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span>  <span class="keyword">const</span> device T* row;</div>
+<div class="line"><a id="l00222" name="l00222"></a><span class="lineno">  222</span>  <span class="keywordtype">int</span> blocks = IdxT(row_size) / N_READS;</div>
+<div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span>  <span class="keywordtype">int</span> extra = IdxT(row_size) % N_READS;</div>
+<div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span> </div>
+<div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span>  <span class="keywordflow">if</span> ((non_row_reductions &lt; 32 &amp;&amp; row_size &lt;= 8) || non_row_reductions &lt;= 8) {</div>
+<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>    <span class="comment">// Simple loop over non_row_reductions and reduce the row in the thread.</span></div>
+<div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>    IdxT out_idx = tid.x + tsize.y * IdxT(tid.y);</div>
+<div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span>    in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc&lt;size_t, IdxT&gt;</a>(out_idx, shape, strides, ndim);</div>
+<div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span> </div>
+<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>    <span class="keywordflow">for</span> (uint r = 0; r &lt; non_row_reductions; r++) {</div>
+<div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span>      row = in + loop.location();</div>
+<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span>      <a class="code hl_function" href="reduce__row_8h.html#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce&lt;T, U, Op, N_READS&gt;</a>(total_val, row, blocks, extra);</div>
+<div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span>      loop.next(reduce_shape, reduce_strides);</div>
+<div class="line"><a id="l00234" name="l00234"></a><span class="lineno">  234</span>    }</div>
+<div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span> </div>
+<div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span>    out[out_idx] = total_val;</div>
+<div class="line"><a id="l00237" name="l00237"></a><span class="lineno">  237</span>  } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span>    <span class="comment">// Collaboratively reduce over non_row_reductions in the simdgroup. Each</span></div>
+<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    <span class="comment">// thread reduces every 32nd row and then a simple simd reduce.</span></div>
+<div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>    IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);</div>
+<div class="line"><a id="l00241" name="l00241"></a><span class="lineno">  241</span>    in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc&lt;size_t, IdxT&gt;</a>(out_idx, shape, strides, ndim);</div>
+<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span> </div>
+<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>    loop.next(simd_lane_id, reduce_shape, reduce_strides);</div>
+<div class="line"><a id="l00244" name="l00244"></a><span class="lineno">  244</span> </div>
+<div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span>    <span class="keywordflow">for</span> (uint r = simd_lane_id; r &lt; non_row_reductions; r += <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>) {</div>
+<div class="line"><a id="l00246" name="l00246"></a><span class="lineno">  246</span>      row = in + loop.location();</div>
+<div class="line"><a id="l00247" name="l00247"></a><span class="lineno">  247</span>      <a class="code hl_function" href="reduce__row_8h.html#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce&lt;T, U, Op, N_READS&gt;</a>(total_val, row, blocks, extra);</div>
+<div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span>      loop.next(<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>, reduce_shape, reduce_strides);</div>
+<div class="line"><a id="l00249" name="l00249"></a><span class="lineno">  249</span>    }</div>
+<div class="line"><a id="l00250" name="l00250"></a><span class="lineno">  250</span> </div>
+<div class="line"><a id="l00251" name="l00251"></a><span class="lineno">  251</span>    total_val = <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>.simd_reduce(total_val);</div>
+<div class="line"><a id="l00252" name="l00252"></a><span class="lineno">  252</span> </div>
+<div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span>    <span class="keywordflow">if</span> (simd_lane_id == 0) {</div>
+<div class="line"><a id="l00254" name="l00254"></a><span class="lineno">  254</span>      out[out_idx] = total_val;</div>
+<div class="line"><a id="l00255" name="l00255"></a><span class="lineno">  255</span>    }</div>
+<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>  }</div>
+<div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span>}</div>
 </div>
-<div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span> </div>
-<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span><span class="keyword">template</span> &lt;</div>
-<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span>    <span class="keyword">typename</span> T,</div>
-<div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>    <span class="keyword">typename</span> U,</div>
-<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span>    <span class="keyword">typename</span> Op,</div>
-<div class="line"><a id="l00262" name="l00262"></a><span class="lineno">  262</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>,</div>
-<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span>    <span class="keywordtype">int</span> N_WRITES = <a class="code hl_variable" href="defines_8h.html#a68c33274e15a2f163f7631a36280d82f">REDUCE_N_WRITES</a>&gt;</div>
-<div class="foldopen" id="foldopen00264" data-start="{" data-end="}">
-<div class="line"><a id="l00264" name="l00264"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#ac01d30987668930c8b38900e47b8308b">  264</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#ac01d30987668930c8b38900e47b8308b">row_reduce_simple</a>(</div>
-<div class="line"><a id="l00265" name="l00265"></a><span class="lineno">  265</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
-<div class="line"><a id="l00266" name="l00266"></a><span class="lineno">  266</span>    device U* out [[buffer(1)]],</div>
-<div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; reduction_size [[buffer(2)]],</div>
-<div class="line"><a id="l00268" name="l00268"></a><span class="lineno">  268</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; out_size [[buffer(3)]],</div>
-<div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
-<div class="line"><a id="l00270" name="l00270"></a><span class="lineno">  270</span>    uint3 gsize [[threadgroups_per_grid]],</div>
-<div class="line"><a id="l00271" name="l00271"></a><span class="lineno">  271</span>    uint3 lid [[thread_position_in_threadgroup]],</div>
-<div class="line"><a id="l00272" name="l00272"></a><span class="lineno">  272</span>    uint3 lsize [[threads_per_threadgroup]],</div>
-<div class="line"><a id="l00273" name="l00273"></a><span class="lineno">  273</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
-<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>    uint simd_per_group [[simdgroups_per_threadgroup]],</div>
-<div class="line"><a id="l00275" name="l00275"></a><span class="lineno">  275</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
-<div class="line"><a id="l00276" name="l00276"></a><span class="lineno">  276</span>  threadgroup U shared_vals[<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> * N_WRITES];</div>
-<div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span>  U totals[N_WRITES];</div>
-<div class="line"><a id="l00278" name="l00278"></a><span class="lineno">  278</span> </div>
-<div class="line"><a id="l00279" name="l00279"></a><span class="lineno">  279</span>  <span class="comment">// Move to the row</span></div>
-<div class="line"><a id="l00280" name="l00280"></a><span class="lineno">  280</span>  <span class="keywordtype">size_t</span> out_idx = N_WRITES * (gid.y + gsize.y * size_t(gid.z));</div>
-<div class="line"><a id="l00281" name="l00281"></a><span class="lineno">  281</span>  <span class="keywordflow">if</span> (out_idx + N_WRITES &gt; out_size) {</div>
-<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span>    out_idx = out_size - N_WRITES;</div>
-<div class="line"><a id="l00283" name="l00283"></a><span class="lineno">  283</span>  }</div>
-<div class="line"><a id="l00284" name="l00284"></a><span class="lineno">  284</span>  in += out_idx * reduction_size;</div>
-<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span>  out += out_idx;</div>
-<div class="line"><a id="l00286" name="l00286"></a><span class="lineno">  286</span> </div>
-<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>  <span class="comment">// Each thread reduces across the row</span></div>
-<div class="line"><a id="l00288" name="l00288"></a><span class="lineno">  288</span>  <span class="keywordtype">int</span> blocks = reduction_size / (lsize.x * N_READS);</div>
-<div class="line"><a id="l00289" name="l00289"></a><span class="lineno">  289</span>  <span class="keywordtype">int</span> extra = reduction_size - blocks * (lsize.x * N_READS);</div>
-<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span>  <a class="code hl_function" href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce&lt;T, U, Op, N_READS, N_WRITES&gt;</a>(</div>
-<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span>      totals, in, reduction_size, blocks, extra, lsize.x, lid.x);</div>
-<div class="line"><a id="l00292" name="l00292"></a><span class="lineno">  292</span> </div>
-<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span>  <span class="comment">// Reduce across the threadgroup</span></div>
-<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span>  <a class="code hl_function" href="reduce__row_8h.html#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce&lt;T, U, Op, N_READS, N_WRITES&gt;</a>(</div>
-<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span>      totals, shared_vals, lid, simd_lane_id, simd_per_group, simd_group_id);</div>
-<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span> </div>
-<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span>  <span class="comment">// Write the output</span></div>
-<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span>  <span class="keywordflow">if</span> (lid.x == 0) {</div>
-<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N_WRITES; i++) {</div>
-<div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span>      out[i] = totals[i];</div>
-<div class="line"><a id="l00301" name="l00301"></a><span class="lineno">  301</span>    }</div>
-<div class="line"><a id="l00302" name="l00302"></a><span class="lineno">  302</span>  }</div>
-<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span>}</div>
+<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span> </div>
+<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span><span class="keyword">template</span> &lt;</div>
+<div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>    <span class="keyword">typename</span> T,</div>
+<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span>    <span class="keyword">typename</span> U,</div>
+<div class="line"><a id="l00262" name="l00262"></a><span class="lineno">  262</span>    <span class="keyword">typename</span> Op,</div>
+<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span>    <span class="keyword">typename</span> IdxT = size_t,</div>
+<div class="line"><a id="l00264" name="l00264"></a><span class="lineno">  264</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>,</div>
+<div class="line"><a id="l00265" name="l00265"></a><span class="lineno">  265</span>    <span class="keywordtype">int</span> N_WRITES = <a class="code hl_variable" href="defines_8h.html#a68c33274e15a2f163f7631a36280d82f">REDUCE_N_WRITES</a>&gt;</div>
+<div class="foldopen" id="foldopen00266" data-start="{" data-end="}">
+<div class="line"><a id="l00266" name="l00266"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#aef628dfccdb1361da5546f8b17c510bf">  266</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#aef628dfccdb1361da5546f8b17c510bf">row_reduce_simple</a>(</div>
+<div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
+<div class="line"><a id="l00268" name="l00268"></a><span class="lineno">  268</span>    device U* out [[buffer(1)]],</div>
+<div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; reduction_size [[buffer(2)]],</div>
+<div class="line"><a id="l00270" name="l00270"></a><span class="lineno">  270</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; out_size [[buffer(3)]],</div>
+<div class="line"><a id="l00271" name="l00271"></a><span class="lineno">  271</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
+<div class="line"><a id="l00272" name="l00272"></a><span class="lineno">  272</span>    uint3 gsize [[threadgroups_per_grid]],</div>
+<div class="line"><a id="l00273" name="l00273"></a><span class="lineno">  273</span>    uint3 lid [[thread_position_in_threadgroup]],</div>
+<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>    uint3 lsize [[threads_per_threadgroup]],</div>
+<div class="line"><a id="l00275" name="l00275"></a><span class="lineno">  275</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
+<div class="line"><a id="l00276" name="l00276"></a><span class="lineno">  276</span>    uint simd_per_group [[simdgroups_per_threadgroup]],</div>
+<div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
+<div class="line"><a id="l00278" name="l00278"></a><span class="lineno">  278</span>  threadgroup U shared_vals[<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> * N_WRITES];</div>
+<div class="line"><a id="l00279" name="l00279"></a><span class="lineno">  279</span>  U totals[N_WRITES];</div>
+<div class="line"><a id="l00280" name="l00280"></a><span class="lineno">  280</span> </div>
+<div class="line"><a id="l00281" name="l00281"></a><span class="lineno">  281</span>  <span class="comment">// Move to the row</span></div>
+<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span>  IdxT out_idx = N_WRITES * (gid.y + gsize.y * IdxT(gid.z));</div>
+<div class="line"><a id="l00283" name="l00283"></a><span class="lineno">  283</span>  <span class="keywordflow">if</span> (out_idx + N_WRITES &gt; out_size) {</div>
+<div class="line"><a id="l00284" name="l00284"></a><span class="lineno">  284</span>    out_idx = out_size - N_WRITES;</div>
+<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span>  }</div>
+<div class="line"><a id="l00286" name="l00286"></a><span class="lineno">  286</span>  in += out_idx * IdxT(reduction_size);</div>
+<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>  out += out_idx;</div>
+<div class="line"><a id="l00288" name="l00288"></a><span class="lineno">  288</span> </div>
+<div class="line"><a id="l00289" name="l00289"></a><span class="lineno">  289</span>  <span class="comment">// Each thread reduces across the row</span></div>
+<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span>  <span class="keywordtype">int</span> blocks = IdxT(reduction_size) / (lsize.x * N_READS);</div>
+<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span>  <span class="keywordtype">int</span> extra = reduction_size - blocks * (lsize.x * N_READS);</div>
+<div class="line"><a id="l00292" name="l00292"></a><span class="lineno">  292</span>  <a class="code hl_function" href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce&lt;T, U, Op, N_READS, N_WRITES&gt;</a>(</div>
+<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span>      totals, in, reduction_size, blocks, extra, lsize.x, lid.x);</div>
+<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span> </div>
+<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span>  <span class="comment">// Reduce across the threadgroup</span></div>
+<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span>  <a class="code hl_function" href="reduce__row_8h.html#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce&lt;T, U, Op, N_READS, N_WRITES&gt;</a>(</div>
+<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span>      totals, shared_vals, lid, simd_lane_id, simd_per_group, simd_group_id);</div>
+<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span> </div>
+<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span>  <span class="comment">// Write the output</span></div>
+<div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span>  <span class="keywordflow">if</span> (lid.x == 0) {</div>
+<div class="line"><a id="l00301" name="l00301"></a><span class="lineno">  301</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N_WRITES; i++) {</div>
+<div class="line"><a id="l00302" name="l00302"></a><span class="lineno">  302</span>      out[i] = totals[i];</div>
+<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span>    }</div>
+<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span>  }</div>
+<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span>}</div>
 </div>
-<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span> </div>
-<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span><span class="keyword">template</span> &lt;</div>
-<div class="line"><a id="l00306" name="l00306"></a><span class="lineno">  306</span>    <span class="keyword">typename</span> T,</div>
-<div class="line"><a id="l00307" name="l00307"></a><span class="lineno">  307</span>    <span class="keyword">typename</span> U,</div>
-<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>    <span class="keyword">typename</span> Op,</div>
-<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span>    <span class="keywordtype">int</span> NDIMS,</div>
-<div class="line"><a id="l00310" name="l00310"></a><span class="lineno">  310</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>&gt;</div>
-<div class="foldopen" id="foldopen00311" data-start="{" data-end="}">
-<div class="line"><a id="l00311" name="l00311"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#ad98332d74a6824aa7499df3e2f2246ae">  311</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#ad98332d74a6824aa7499df3e2f2246ae">row_reduce_looped</a>(</div>
-<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
-<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span>    device U* out [[buffer(1)]],</div>
-<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; row_size [[buffer(2)]],</div>
-<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; non_row_reductions [[buffer(3)]],</div>
-<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* shape [[buffer(4)]],</div>
-<div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* strides [[buffer(5)]],</div>
-<div class="line"><a id="l00318" name="l00318"></a><span class="lineno">  318</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; ndim [[buffer(6)]],</div>
-<div class="line"><a id="l00319" name="l00319"></a><span class="lineno">  319</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* reduce_shape [[buffer(7)]],</div>
-<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* reduce_strides [[buffer(8)]],</div>
-<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; reduce_ndim [[buffer(9)]],</div>
-<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
-<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span>    uint3 gsize [[threadgroups_per_grid]],</div>
-<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span>    uint3 lid [[thread_position_in_threadgroup]],</div>
-<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span>    uint3 lsize [[threads_per_threadgroup]],</div>
-<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
-<div class="line"><a id="l00327" name="l00327"></a><span class="lineno">  327</span>    uint simd_per_group [[simdgroups_per_threadgroup]],</div>
-<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
-<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span>  Op <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>;</div>
-<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span>  threadgroup U shared_vals[<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>];</div>
-<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>  U total = Op::init;</div>
-<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span> </div>
-<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>  <span class="keywordtype">size_t</span> out_idx = gid.y + gsize.y * size_t(gid.z);</div>
-<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span> </div>
-<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span>  <span class="comment">// lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it</span></div>
-<div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>  <span class="comment">// needs a small refactor.</span></div>
-<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span>  in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>(out_idx, shape, strides, ndim) + lid.x * N_READS;</div>
-<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span> </div>
-<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span>  <a class="code hl_struct" href="structlooped__elem__to__loc.html">looped_elem_to_loc&lt;NDIMS&gt;</a> loop;</div>
-<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>  <span class="keyword">const</span> device T* row;</div>
-<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span>  <span class="keywordtype">int</span> blocks = row_size / (lsize.x * N_READS);</div>
-<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span>  <span class="keywordtype">int</span> extra = row_size - blocks * (lsize.x * N_READS);</div>
-<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span> </div>
-<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>  <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; non_row_reductions; i++) {</div>
-<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span>    row = in + loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#accc6d4957a8aeb38f5062754793b74d2">location</a>(i, reduce_shape, reduce_strides, reduce_ndim);</div>
-<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span> </div>
-<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span>    <span class="comment">// Each thread reduces across the row</span></div>
-<div class="line"><a id="l00348" name="l00348"></a><span class="lineno">  348</span>    U row_total;</div>
-<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span>    <a class="code hl_function" href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce&lt;T, U, Op, N_READS, 1&gt;</a>(</div>
-<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span>        &amp;row_total, &amp;row, blocks, extra, lsize.x, lid.x);</div>
-<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span> </div>
-<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span>    <span class="comment">// Aggregate across rows</span></div>
-<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span>    total = <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>(total, row_total);</div>
-<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span> </div>
-<div class="line"><a id="l00355" name="l00355"></a><span class="lineno">  355</span>    loop.<a class="code hl_function" href="structlooped__elem__to__loc.html#a05558dabba889ee0d80ed4b567d901ca">next</a>(reduce_shape, reduce_strides);</div>
-<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span>  }</div>
-<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span> </div>
-<div class="line"><a id="l00358" name="l00358"></a><span class="lineno">  358</span>  <span class="comment">// Reduce across the threadgroup</span></div>
-<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span>  <a class="code hl_function" href="reduce__row_8h.html#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce&lt;T, U, Op, N_READS, 1&gt;</a>(</div>
-<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span>      &amp;total, shared_vals, lid, simd_lane_id, simd_per_group, simd_group_id);</div>
+<div class="line"><a id="l00306" name="l00306"></a><span class="lineno">  306</span> </div>
+<div class="line"><a id="l00307" name="l00307"></a><span class="lineno">  307</span><span class="keyword">template</span> &lt;</div>
+<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>    <span class="keyword">typename</span> T,</div>
+<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span>    <span class="keyword">typename</span> U,</div>
+<div class="line"><a id="l00310" name="l00310"></a><span class="lineno">  310</span>    <span class="keyword">typename</span> Op,</div>
+<div class="line"><a id="l00311" name="l00311"></a><span class="lineno">  311</span>    <span class="keyword">typename</span> IdxT,</div>
+<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>    <span class="keywordtype">int</span> NDIMS,</div>
+<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span>    <span class="keywordtype">int</span> N_READS = <a class="code hl_variable" href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a>&gt;</div>
+<div class="foldopen" id="foldopen00314" data-start="{" data-end="}">
+<div class="line"><a id="l00314" name="l00314"></a><span class="lineno"><a class="line" href="reduce__row_8h.html#afba85f5a1c935c124ef52e986d4b2c49">  314</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="reduce__row_8h.html#afba85f5a1c935c124ef52e986d4b2c49">row_reduce_looped</a>(</div>
+<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span>    <span class="keyword">const</span> device T* in [[buffer(0)]],</div>
+<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span>    device U* out [[buffer(1)]],</div>
+<div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; row_size [[buffer(2)]],</div>
+<div class="line"><a id="l00318" name="l00318"></a><span class="lineno">  318</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>&amp; non_row_reductions [[buffer(3)]],</div>
+<div class="line"><a id="l00319" name="l00319"></a><span class="lineno">  319</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* shape [[buffer(4)]],</div>
+<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* strides [[buffer(5)]],</div>
+<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; ndim [[buffer(6)]],</div>
+<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>* reduce_shape [[buffer(7)]],</div>
+<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span>    <span class="keyword">const</span> constant <span class="keywordtype">size_t</span>* reduce_strides [[buffer(8)]],</div>
+<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span>    <span class="keyword">const</span> constant <span class="keywordtype">int</span>&amp; reduce_ndim [[buffer(9)]],</div>
+<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span>    uint3 gid [[threadgroup_position_in_grid]],</div>
+<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span>    uint3 gsize [[threadgroups_per_grid]],</div>
+<div class="line"><a id="l00327" name="l00327"></a><span class="lineno">  327</span>    uint3 lid [[thread_position_in_threadgroup]],</div>
+<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span>    uint3 lsize [[threads_per_threadgroup]],</div>
+<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
+<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span>    uint simd_per_group [[simdgroups_per_threadgroup]],</div>
+<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
+<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span>  Op <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>;</div>
+<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>  threadgroup U shared_vals[<a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>];</div>
+<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span>  U total = Op::init;</div>
+<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span> </div>
+<div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>  IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);</div>
+<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span> </div>
+<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span>  <span class="comment">// lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it</span></div>
+<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span>  <span class="comment">// needs a small refactor.</span></div>
+<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>  in += <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc&lt;size_t, IdxT&gt;</a>(out_idx, shape, strides, ndim) +</div>
+<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span>      lid.x * N_READS;</div>
+<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span> </div>
+<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span>  <a class="code hl_struct" href="struct_looped_elem_to_loc.html">LoopedElemToLoc</a>&lt;NDIMS, IdxT, (NDIMS &gt; 2)&gt; loop(reduce_ndim);</div>
+<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>  <span class="keyword">const</span> device T* row;</div>
+<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span>  <span class="keywordtype">int</span> blocks = IdxT(row_size) / (lsize.x * N_READS);</div>
+<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span>  <span class="keywordtype">int</span> extra = row_size - blocks * (lsize.x * N_READS);</div>
+<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span> </div>
+<div class="line"><a id="l00348" name="l00348"></a><span class="lineno">  348</span>  <span class="keywordflow">for</span> (IdxT i = 0; i &lt; non_row_reductions; i++) {</div>
+<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span>    row = in + loop.location();</div>
+<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span> </div>
+<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span>    <span class="comment">// Each thread reduces across the row</span></div>
+<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span>    U row_total;</div>
+<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span>    <a class="code hl_function" href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce&lt;T, U, Op, N_READS, 1&gt;</a>(</div>
+<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span>        &amp;row_total, &amp;row, blocks, extra, lsize.x, lid.x);</div>
+<div class="line"><a id="l00355" name="l00355"></a><span class="lineno">  355</span> </div>
+<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span>    <span class="comment">// Aggregate across rows</span></div>
+<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span>    total = <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>(total, row_total);</div>
+<div class="line"><a id="l00358" name="l00358"></a><span class="lineno">  358</span> </div>
+<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span>    loop.next(reduce_shape, reduce_strides);</div>
+<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span>  }</div>
 <div class="line"><a id="l00361" name="l00361"></a><span class="lineno">  361</span> </div>
-<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span>  <span class="comment">// Write the output</span></div>
-<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span>  <span class="keywordflow">if</span> (lid.x == 0) {</div>
-<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span>    out[out_idx] = total;</div>
-<div class="line"><a id="l00365" name="l00365"></a><span class="lineno">  365</span>  }</div>
-<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span>}</div>
+<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span>  <span class="comment">// Reduce across the threadgroup</span></div>
+<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span>  <a class="code hl_function" href="reduce__row_8h.html#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce&lt;T, U, Op, N_READS, 1&gt;</a>(</div>
+<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span>      &amp;total, shared_vals, lid, simd_lane_id, simd_per_group, simd_group_id);</div>
+<div class="line"><a id="l00365" name="l00365"></a><span class="lineno">  365</span> </div>
+<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span>  <span class="comment">// Write the output</span></div>
+<div class="line"><a id="l00367" name="l00367"></a><span class="lineno">  367</span>  <span class="keywordflow">if</span> (lid.x == 0) {</div>
+<div class="line"><a id="l00368" name="l00368"></a><span class="lineno">  368</span>    out[out_idx] = total;</div>
+<div class="line"><a id="l00369" name="l00369"></a><span class="lineno">  369</span>  }</div>
+<div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span>}</div>
 </div>
 <div class="ttc" id="abackend_2metal_2kernels_2reduction_2ops_8h_html_a515b75d563a93d3c09ee677948dc83e3"><div class="ttname"><a href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a></div><div class="ttdeci">static constant constexpr const uint8_t simd_size</div><div class="ttdef"><b>Definition</b> ops.h:22</div></div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a8fd0c8fc6058e650fc99bca8b6acd7d1"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, constant const int *shape, constant const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:87</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a22eaa505dbc7dd2a63a895f2e16712f5"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc(uint elem, constant const int *shape, constant const StrideT *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:93</div></div>
 <div class="ttc" id="acommon_2binary_8h_html_a70228731d29946574b238d21fb4b360c"><div class="ttname"><a href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a></div><div class="ttdeci">Op op</div><div class="ttdef"><b>Definition</b> binary.h:129</div></div>
 <div class="ttc" id="adefines_8h_html_a2ad505864a2ab786147766900bc18c21"><div class="ttname"><a href="defines_8h.html#a2ad505864a2ab786147766900bc18c21">REDUCE_N_READS</a></div><div class="ttdeci">static constexpr int REDUCE_N_READS</div><div class="ttdef"><b>Definition</b> defines.h:12</div></div>
 <div class="ttc" id="adefines_8h_html_a68c33274e15a2f163f7631a36280d82f"><div class="ttname"><a href="defines_8h.html#a68c33274e15a2f163f7631a36280d82f">REDUCE_N_WRITES</a></div><div class="ttdeci">static constexpr int REDUCE_N_WRITES</div><div class="ttdef"><b>Definition</b> defines.h:13</div></div>
-<div class="ttc" id="areduce__row_8h_html_a27e75312086e31f6bd1bbf4b366679da"><div class="ttname"><a href="reduce__row_8h.html#a27e75312086e31f6bd1bbf4b366679da">row_reduce_small</a></div><div class="ttdeci">void row_reduce_small(const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint simd_lane_id, uint3 gid, uint3 gsize, uint3 tid, uint3 tsize)</div><div class="ttdef"><b>Definition</b> reduce_row.h:198</div></div>
 <div class="ttc" id="areduce__row_8h_html_a9d5e0049a2276f43702fc6907e74a35f"><div class="ttname"><a href="reduce__row_8h.html#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce</a></div><div class="ttdeci">METAL_FUNC void per_thread_row_reduce(thread U totals[N_WRITES], const device T *inputs[N_WRITES], int blocks, int extra, uint lsize_x, uint lid_x)</div><div class="ttdoc">The thread group collaboratively reduces across the rows with bounds checking.</div><div class="ttdef"><b>Definition</b> reduce_row.h:19</div></div>
 <div class="ttc" id="areduce__row_8h_html_aa146bb611069fd2892f03714fd1cc3cf"><div class="ttname"><a href="reduce__row_8h.html#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce</a></div><div class="ttdeci">METAL_FUNC void threadgroup_reduce(thread U totals[N_WRITES], threadgroup U *shared_vals, uint3 lid, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</div><div class="ttdoc">Reduce within the threadgroup.</div><div class="ttdef"><b>Definition</b> reduce_row.h:129</div></div>
-<div class="ttc" id="areduce__row_8h_html_ac01d30987668930c8b38900e47b8308b"><div class="ttname"><a href="reduce__row_8h.html#ac01d30987668930c8b38900e47b8308b">row_reduce_simple</a></div><div class="ttdeci">void row_reduce_simple(const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> reduce_row.h:264</div></div>
-<div class="ttc" id="areduce__row_8h_html_ad98332d74a6824aa7499df3e2f2246ae"><div class="ttname"><a href="reduce__row_8h.html#ad98332d74a6824aa7499df3e2f2246ae">row_reduce_looped</a></div><div class="ttdeci">void row_reduce_looped(const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> reduce_row.h:311</div></div>
+<div class="ttc" id="areduce__row_8h_html_aeb49e89f1163cb3093770bb710df9f5e"><div class="ttname"><a href="reduce__row_8h.html#aeb49e89f1163cb3093770bb710df9f5e">row_reduce_small</a></div><div class="ttdeci">void row_reduce_small(const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint simd_lane_id, uint3 gid, uint3 gsize, uint3 tid, uint3 tsize)</div><div class="ttdef"><b>Definition</b> reduce_row.h:199</div></div>
+<div class="ttc" id="areduce__row_8h_html_aef628dfccdb1361da5546f8b17c510bf"><div class="ttname"><a href="reduce__row_8h.html#aef628dfccdb1361da5546f8b17c510bf">row_reduce_simple</a></div><div class="ttdeci">void row_reduce_simple(const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> reduce_row.h:266</div></div>
+<div class="ttc" id="areduce__row_8h_html_afba85f5a1c935c124ef52e986d4b2c49"><div class="ttname"><a href="reduce__row_8h.html#afba85f5a1c935c124ef52e986d4b2c49">row_reduce_looped</a></div><div class="ttdeci">void row_reduce_looped(const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> reduce_row.h:314</div></div>
 <div class="ttc" id="areduce__row_8h_html_afd80a25fa84e6cc884dcc8698859ade1"><div class="ttname"><a href="reduce__row_8h.html#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce</a></div><div class="ttdeci">METAL_FUNC void thread_reduce(thread U &amp;total, const device T *row, int blocks, int extra)</div><div class="ttdef"><b>Definition</b> reduce_row.h:166</div></div>
-<div class="ttc" id="astructlooped__elem__to__loc_html"><div class="ttname"><a href="structlooped__elem__to__loc.html">looped_elem_to_loc</a></div><div class="ttdef"><b>Definition</b> utils.h:197</div></div>
-<div class="ttc" id="astructlooped__elem__to__loc_html_a05558dabba889ee0d80ed4b567d901ca"><div class="ttname"><a href="structlooped__elem__to__loc.html#a05558dabba889ee0d80ed4b567d901ca">looped_elem_to_loc::next</a></div><div class="ttdeci">void next(const constant int *shape, const constant size_t *strides)</div><div class="ttdef"><b>Definition</b> utils.h:202</div></div>
-<div class="ttc" id="astructlooped__elem__to__loc_html_accc6d4957a8aeb38f5062754793b74d2"><div class="ttname"><a href="structlooped__elem__to__loc.html#accc6d4957a8aeb38f5062754793b74d2">looped_elem_to_loc::location</a></div><div class="ttdeci">offset_t location(offset_t, const constant int *, const constant size_t *, int)</div><div class="ttdef"><b>Definition</b> utils.h:229</div></div>
+<div class="ttc" id="astruct_looped_elem_to_loc_html"><div class="ttname"><a href="struct_looped_elem_to_loc.html">LoopedElemToLoc</a></div><div class="ttdef"><b>Definition</b> utils.h:208</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
