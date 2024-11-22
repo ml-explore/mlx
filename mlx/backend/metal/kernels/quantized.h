@@ -638,8 +638,6 @@ METAL_FUNC void qmv_fast_impl(
   constexpr int block_size = values_per_thread * SIMD_SIZE;
   constexpr int scale_step_per_thread = group_size / values_per_thread;
 
-  // When bits is a power of two, read 4 uint8_ts at a time
-  // When bits is 3 or 6, read 3 uint8_ts at a time
   const device uint8_t* ws = (const device uint8_t*)w;
 
   typedef float U;
@@ -708,8 +706,6 @@ METAL_FUNC void qmv_impl(
   constexpr int block_size = values_per_thread * SIMD_SIZE;
   constexpr int scale_step_per_thread = group_size / values_per_thread;
 
-  // When bits is a power of two, read 1 uint32_t at a time
-  // When bits is 3 or 6, read 3 uint8_ts at a time
   const device uint8_t* ws = (const device uint8_t*)w;
 
   typedef float U;
@@ -862,8 +858,6 @@ METAL_FUNC void qvm_impl(
   constexpr int tn = 32 / pack_factor;
   constexpr int block_size = SIMD_SIZE;
 
-  // When bits is a power of two, read 1 uint32_t at a time
-  // When bits is 3 or 6, read 3 uint8_ts at a time
   const device uint8_t* ws = (const device uint8_t*)w;
 
   typedef float U;
