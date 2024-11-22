@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['pointer_5felement_5ft_0',['pointer_element_t',['../namespacemetal.html#ac82ee6c3fbe9ec5c78c07329424aaec9',1,'metal']]]
+  ['nomask_5ft_0',['nomask_t',['../kernels_2gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca',1,'gemv_masked.h']]]
 ];

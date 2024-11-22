@@ -144,43 +144,43 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    device U* dst [[buffer(1)]],</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    constant <span class="keyword">const</span> int64_t&amp; src_stride [[buffer(3)]],</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    uint index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a196a07022b812b241d4c06192c0fa83d">elem_to_loc_1</a>(index, src_stride);</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ac612d0ae30b8257198339debe04916a3">elem_to_loc_1&lt;int64_t, int&gt;</a>(index, src_stride);</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>  dst[index] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>}</div>
 </div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span> </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
 <div class="foldopen" id="foldopen00050" data-start="{" data-end="}">
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#aee678c7c31119f3e609685589f37490c">   50</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#aee678c7c31119f3e609685589f37490c">copy_g_nd2</a>(</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a39ec5b7b8351e4332b842982a2ee6260">   50</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a39ec5b7b8351e4332b842982a2ee6260">copy_g_nd2</a>(</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    device U* dst [[buffer(1)]],</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    uint2 index [[thread_position_in_grid]],</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    uint2 grid_dim [[threads_per_grid]]) {</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a>(index, src_strides);</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>  int64_t dst_idx = index.x + (int64_t)grid_dim.x * index.y;</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a43f33efc000962d6de881a3aab7458de">elem_to_loc_2&lt;int64_t, IdxT&gt;</a>(index, src_strides);</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>  IdxT dst_idx = index.x + IdxT(grid_dim.x) * index.y;</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>}</div>
 </div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span> </div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
 <div class="foldopen" id="foldopen00062" data-start="{" data-end="}">
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a821f8f3f3891159a295c66fc25aed1ff">   62</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a821f8f3f3891159a295c66fc25aed1ff">copy_g_nd3</a>(</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#aab82689380897ff4716b5eafd6ef3ecc">   62</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#aab82689380897ff4716b5eafd6ef3ecc">copy_g_nd3</a>(</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    device U* dst [[buffer(1)]],</div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    uint3 index [[thread_position_in_grid]],</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    uint3 grid_dim [[threads_per_grid]]) {</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a2c34ed54714c69e6e1b44344f9e6e330">elem_to_loc_3</a>(index, src_strides);</div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>  int64_t dst_idx =</div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a650f8ea8cf9f9519da9e301aad0308dc">elem_to_loc_3&lt;int64_t, IdxT&gt;</a>(index, src_strides);</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>  IdxT dst_idx =</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>      index.x + IdxT(grid_dim.x) * (index.y + IdxT(grid_dim.y) * index.z);</div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>}</div>
 </div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span> </div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keywordtype">int</span> N = 1&gt;</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keywordtype">int</span> N = 1, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
 <div class="foldopen" id="foldopen00075" data-start="{" data-end="}">
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a778ce2dbfbaa23b24bd5efbe68448c36">   75</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a778ce2dbfbaa23b24bd5efbe68448c36">copy_g</a>(</div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a71e4103db4689d90ef6f9d5ba93604cf">   75</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a71e4103db4689d90ef6f9d5ba93604cf">copy_g</a>(</div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    device U* dst [[buffer(1)]],</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>* src_shape [[buffer(2)]],</div>
@@ -188,114 +188,113 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim [[buffer(5)]],</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    uint3 index [[thread_position_in_grid]],</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    uint3 grid_dim [[threads_per_grid]]) {</div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>(</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc&lt;int64_t, IdxT&gt;</a>(</div>
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>      {N * index.x, index.y, index.z}, src_shape, src_strides, ndim);</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>  <span class="keywordflow">if</span> (N == 1) {</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    int64_t dst_idx =</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>        index.x + grid_dim.x * (index.y + int64_t(grid_dim.y) * index.z);</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    IdxT dst_idx =</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>        index.x + grid_dim.x * (index.y + IdxT(grid_dim.y) * index.z);</div>
 <div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <span class="keywordflow">return</span>;</div>
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>  }</div>
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>  <span class="keyword">auto</span> xshape = src_shape[ndim - 1];</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>  int64_t dst_idx =</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>      N * index.x + xshape * (index.y + int64_t(grid_dim.y) * index.z);</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>  <span class="keyword">auto</span> src_xstride = src_strides[ndim - 1];</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    dst[dst_idx + i] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    src_idx += src_xstride;</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>  }</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>}</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>  IdxT dst_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>  <span class="keyword">auto</span> src_xstride = src_strides[ndim - 1];</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    dst[dst_idx + i] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    src_idx += src_xstride;</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>  }</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>}</div>
 </div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span> </div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
-<div class="foldopen" id="foldopen00102" data-start="{" data-end="}">
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">  102</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">copy_gg_nd1</a>(</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    device U* dst [[buffer(1)]],</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    constant <span class="keyword">const</span> int64_t&amp; src_stride [[buffer(3)]],</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    constant <span class="keyword">const</span> int64_t&amp; dst_stride [[buffer(4)]],</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    uint index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a196a07022b812b241d4c06192c0fa83d">elem_to_loc_1</a>(index, src_stride);</div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a196a07022b812b241d4c06192c0fa83d">elem_to_loc_1</a>(index, dst_stride);</div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>}</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span> </div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
+<div class="foldopen" id="foldopen00101" data-start="{" data-end="}">
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">  101</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">copy_gg_nd1</a>(</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    device U* dst [[buffer(1)]],</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    constant <span class="keyword">const</span> int64_t&amp; src_stride [[buffer(3)]],</div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    constant <span class="keyword">const</span> int64_t&amp; dst_stride [[buffer(4)]],</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    uint index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ac612d0ae30b8257198339debe04916a3">elem_to_loc_1&lt;int64_t, int&gt;</a>(index, src_stride);</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ac612d0ae30b8257198339debe04916a3">elem_to_loc_1&lt;int64_t, int&gt;</a>(index, dst_stride);</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>}</div>
 </div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span> </div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
-<div class="foldopen" id="foldopen00114" data-start="{" data-end="}">
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a3e2d3cc7f34f56170409b6735f51a950">  114</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a3e2d3cc7f34f56170409b6735f51a950">copy_gg_nd2</a>(</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
-<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    device U* dst [[buffer(1)]],</div>
-<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
-<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    uint2 index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a>(index, src_strides);</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a>(index, dst_strides);</div>
-<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>}</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span> </div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
+<div class="foldopen" id="foldopen00113" data-start="{" data-end="}">
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#af0b06ac3a96852a64fa4274a94b58301">  113</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#af0b06ac3a96852a64fa4274a94b58301">copy_gg_nd2</a>(</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    device U* dst [[buffer(1)]],</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    uint2 index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a43f33efc000962d6de881a3aab7458de">elem_to_loc_2&lt;int64_t, IdxT&gt;</a>(index, src_strides);</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a43f33efc000962d6de881a3aab7458de">elem_to_loc_2&lt;int64_t, IdxT&gt;</a>(index, dst_strides);</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>}</div>
 </div>
-<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span> </div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U&gt;</div>
-<div class="foldopen" id="foldopen00126" data-start="{" data-end="}">
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a59f43b5bffed936d7559ceb06a10aabd">  126</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a59f43b5bffed936d7559ceb06a10aabd">copy_gg_nd3</a>(</div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
-<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    device U* dst [[buffer(1)]],</div>
-<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
-<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
-<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>    uint3 index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a2c34ed54714c69e6e1b44344f9e6e330">elem_to_loc_3</a>(index, src_strides);</div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a2c34ed54714c69e6e1b44344f9e6e330">elem_to_loc_3</a>(index, dst_strides);</div>
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
-<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>}</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span> </div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
+<div class="foldopen" id="foldopen00125" data-start="{" data-end="}">
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a3f3836ad0b6545ec9b9e1864224f7a13">  125</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a3f3836ad0b6545ec9b9e1864224f7a13">copy_gg_nd3</a>(</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    device U* dst [[buffer(1)]],</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
+<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    uint3 index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>  <span class="keyword">auto</span> src_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a650f8ea8cf9f9519da9e301aad0308dc">elem_to_loc_3&lt;int64_t, IdxT&gt;</a>(index, src_strides);</div>
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>  <span class="keyword">auto</span> dst_idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a650f8ea8cf9f9519da9e301aad0308dc">elem_to_loc_3&lt;int64_t, IdxT&gt;</a>(index, dst_strides);</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>  dst[dst_idx] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[src_idx]);</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>}</div>
 </div>
-<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span> </div>
-<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keywordtype">int</span> N = 1&gt;</div>
-<div class="foldopen" id="foldopen00138" data-start="{" data-end="}">
-<div class="line"><a id="l00138" name="l00138"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#a1e39c2683eeaf05955e7619fbd34aea5">  138</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#a1e39c2683eeaf05955e7619fbd34aea5">copy_gg</a>(</div>
-<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
-<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    device U* dst [[buffer(1)]],</div>
-<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>* src_shape [[buffer(2)]],</div>
-<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
-<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
-<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim [[buffer(5)]],</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    uint3 index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>  <span class="keyword">auto</span> idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a01c9309978a6c12f79b6e4108728a953">elem_to_loc_2_nd</a>(</div>
-<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>      {N * index.x, index.y, index.z},</div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>      src_shape,</div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>      src_strides,</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>      dst_strides,</div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>      ndim);</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>  <span class="keywordflow">if</span> (N == 1) {</div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    dst[idx.y] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[idx.x]);</div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keywordflow">return</span>;</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>  }</div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>  <span class="keyword">auto</span> src_xstride = src_strides[ndim - 1];</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>  <span class="keyword">auto</span> dst_xstride = dst_strides[ndim - 1];</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>  <span class="keyword">auto</span> xshape = src_shape[ndim - 1];</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
-<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    dst[idx.y] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[idx.x]);</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    idx.x += src_xstride;</div>
-<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    idx.y += dst_xstride;</div>
-<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>  }</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>}</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span> </div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keywordtype">int</span> N = 1, <span class="keyword">typename</span> IdxT = <span class="keywordtype">int</span>64_t&gt;</div>
+<div class="foldopen" id="foldopen00137" data-start="{" data-end="}">
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno"><a class="line" href="metal_2kernels_2copy_8h.html#ade9a9eea9b8262a854a11721fe2bb9fa">  137</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2copy_8h.html#ade9a9eea9b8262a854a11721fe2bb9fa">copy_gg</a>(</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>    device <span class="keyword">const</span> T* src [[buffer(0)]],</div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    device U* dst [[buffer(1)]],</div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>* src_shape [[buffer(2)]],</div>
+<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    constant <span class="keyword">const</span> int64_t* src_strides [[buffer(3)]],</div>
+<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    constant <span class="keyword">const</span> int64_t* dst_strides [[buffer(4)]],</div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim [[buffer(5)]],</div>
+<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    uint3 index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>  <span class="keyword">auto</span> idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a66a2d7eec0262b12db16cd6c781ccf9a">elem_to_loc_2_nd&lt;int64_t, IdxT&gt;</a>(</div>
+<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>      {N * index.x, index.y, index.z},</div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>      src_shape,</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>      src_strides,</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>      dst_strides,</div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>      ndim);</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>  <span class="keywordflow">if</span> (N == 1) {</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    dst[idx.y] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[idx.x]);</div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>  }</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>  IdxT src_xstride = src_strides[ndim - 1];</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>  IdxT dst_xstride = dst_strides[ndim - 1];</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>  <span class="keyword">auto</span> xshape = src_shape[ndim - 1];</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
+<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    dst[idx.y] = <span class="keyword">static_cast&lt;</span>U<span class="keyword">&gt;</span>(src[idx.x]);</div>
+<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    idx.x += src_xstride;</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    idx.y += dst_xstride;</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>  }</div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>}</div>
 </div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a01c9309978a6c12f79b6e4108728a953"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a01c9309978a6c12f79b6e4108728a953">elem_to_loc_2_nd</a></div><div class="ttdeci">METAL_FUNC ulong2 elem_to_loc_2_nd(uint3 elem, constant const int *shape, constant const stride_t *a_strides, constant const stride_t *b_strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:153</div></div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a196a07022b812b241d4c06192c0fa83d"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a196a07022b812b241d4c06192c0fa83d">elem_to_loc_1</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc_1(uint elem, constant const stride_t &amp;stride)</div><div class="ttdef"><b>Definition</b> utils.h:133</div></div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a2c34ed54714c69e6e1b44344f9e6e330"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a2c34ed54714c69e6e1b44344f9e6e330">elem_to_loc_3</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc_3(uint3 elem, constant const stride_t strides[3])</div><div class="ttdef"><b>Definition</b> utils.h:145</div></div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a8fd0c8fc6058e650fc99bca8b6acd7d1"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, constant const int *shape, constant const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:87</div></div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_ad6c45cacca97899cd362df49c06fea79"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc_2(uint2 elem, constant const stride_t strides[2])</div><div class="ttdef"><b>Definition</b> utils.h:139</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a1e39c2683eeaf05955e7619fbd34aea5"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a1e39c2683eeaf05955e7619fbd34aea5">copy_gg</a></div><div class="ttdeci">void copy_gg(device const T *src, device U *dst, constant const int *src_shape, constant const int64_t *src_strides, constant const int64_t *dst_strides, constant const int &amp;ndim, uint3 index)</div><div class="ttdef"><b>Definition</b> copy.h:138</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a3278d9c999718bee3ccbe2922f501bf1"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">copy_gg_nd1</a></div><div class="ttdeci">void copy_gg_nd1(device const T *src, device U *dst, constant const int64_t &amp;src_stride, constant const int64_t &amp;dst_stride, uint index)</div><div class="ttdef"><b>Definition</b> copy.h:102</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a3e2d3cc7f34f56170409b6735f51a950"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a3e2d3cc7f34f56170409b6735f51a950">copy_gg_nd2</a></div><div class="ttdeci">void copy_gg_nd2(device const T *src, device U *dst, constant const int64_t *src_strides, constant const int64_t *dst_strides, uint2 index)</div><div class="ttdef"><b>Definition</b> copy.h:114</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a59f43b5bffed936d7559ceb06a10aabd"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a59f43b5bffed936d7559ceb06a10aabd">copy_gg_nd3</a></div><div class="ttdeci">void copy_gg_nd3(device const T *src, device U *dst, constant const int64_t *src_strides, constant const int64_t *dst_strides, uint3 index)</div><div class="ttdef"><b>Definition</b> copy.h:126</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a778ce2dbfbaa23b24bd5efbe68448c36"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a778ce2dbfbaa23b24bd5efbe68448c36">copy_g</a></div><div class="ttdeci">void copy_g(device const T *src, device U *dst, constant const int *src_shape, constant const int64_t *src_strides, constant const int &amp;ndim, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:75</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a22eaa505dbc7dd2a63a895f2e16712f5"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc(uint elem, constant const int *shape, constant const StrideT *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:93</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a43f33efc000962d6de881a3aab7458de"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a43f33efc000962d6de881a3aab7458de">elem_to_loc_2</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc_2(uint2 elem, constant const StrideT strides[2])</div><div class="ttdef"><b>Definition</b> utils.h:145</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a650f8ea8cf9f9519da9e301aad0308dc"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a650f8ea8cf9f9519da9e301aad0308dc">elem_to_loc_3</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc_3(uint3 elem, constant const StrideT strides[3])</div><div class="ttdef"><b>Definition</b> utils.h:150</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a66a2d7eec0262b12db16cd6c781ccf9a"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a66a2d7eec0262b12db16cd6c781ccf9a">elem_to_loc_2_nd</a></div><div class="ttdeci">METAL_FUNC vec&lt; IdxT, 2 &gt; elem_to_loc_2_nd(uint3 elem, constant const int *shape, constant const StrideT *a_strides, constant const StrideT *b_strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:159</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_ac612d0ae30b8257198339debe04916a3"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#ac612d0ae30b8257198339debe04916a3">elem_to_loc_1</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc_1(uint elem, constant const StrideT &amp;stride)</div><div class="ttdef"><b>Definition</b> utils.h:140</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_a3278d9c999718bee3ccbe2922f501bf1"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a3278d9c999718bee3ccbe2922f501bf1">copy_gg_nd1</a></div><div class="ttdeci">void copy_gg_nd1(device const T *src, device U *dst, constant const int64_t &amp;src_stride, constant const int64_t &amp;dst_stride, uint index)</div><div class="ttdef"><b>Definition</b> copy.h:101</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_a39ec5b7b8351e4332b842982a2ee6260"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a39ec5b7b8351e4332b842982a2ee6260">copy_g_nd2</a></div><div class="ttdeci">void copy_g_nd2(device const T *src, device U *dst, constant const int64_t *src_strides, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:50</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_a3f3836ad0b6545ec9b9e1864224f7a13"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a3f3836ad0b6545ec9b9e1864224f7a13">copy_gg_nd3</a></div><div class="ttdeci">void copy_gg_nd3(device const T *src, device U *dst, constant const int64_t *src_strides, constant const int64_t *dst_strides, uint3 index)</div><div class="ttdef"><b>Definition</b> copy.h:125</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_a71e4103db4689d90ef6f9d5ba93604cf"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a71e4103db4689d90ef6f9d5ba93604cf">copy_g</a></div><div class="ttdeci">void copy_g(device const T *src, device U *dst, constant const int *src_shape, constant const int64_t *src_strides, constant const int &amp;ndim, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:75</div></div>
 <div class="ttc" id="ametal_2kernels_2copy_8h_html_a8023e9335cc5334847a8d315042be3a3"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a8023e9335cc5334847a8d315042be3a3">copy_s2</a></div><div class="ttdeci">void copy_s2(device const T *src, device U *dst, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:20</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_a821f8f3f3891159a295c66fc25aed1ff"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#a821f8f3f3891159a295c66fc25aed1ff">copy_g_nd3</a></div><div class="ttdeci">void copy_g_nd3(device const T *src, device U *dst, constant const int64_t *src_strides, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:62</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_aab82689380897ff4716b5eafd6ef3ecc"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#aab82689380897ff4716b5eafd6ef3ecc">copy_g_nd3</a></div><div class="ttdeci">void copy_g_nd3(device const T *src, device U *dst, constant const int64_t *src_strides, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:62</div></div>
 <div class="ttc" id="ametal_2kernels_2copy_8h_html_aba4530a7db6a61ca36f50e4f5e58fb77"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#aba4530a7db6a61ca36f50e4f5e58fb77">copy_g_nd1</a></div><div class="ttdeci">void copy_g_nd1(device const T *src, device U *dst, constant const int64_t &amp;src_stride, uint index)</div><div class="ttdef"><b>Definition</b> copy.h:40</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_ade9a9eea9b8262a854a11721fe2bb9fa"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#ade9a9eea9b8262a854a11721fe2bb9fa">copy_gg</a></div><div class="ttdeci">void copy_gg(device const T *src, device U *dst, constant const int *src_shape, constant const int64_t *src_strides, constant const int64_t *dst_strides, constant const int &amp;ndim, uint3 index)</div><div class="ttdef"><b>Definition</b> copy.h:137</div></div>
 <div class="ttc" id="ametal_2kernels_2copy_8h_html_ae26a13e0c8e6c15f7b10078e65970659"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#ae26a13e0c8e6c15f7b10078e65970659">copy_v</a></div><div class="ttdeci">void copy_v(device const T *src, device U *dst, uint index)</div><div class="ttdef"><b>Definition</b> copy.h:12</div></div>
 <div class="ttc" id="ametal_2kernels_2copy_8h_html_aee14a5326f53d9b30b0b38e27d180ef3"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#aee14a5326f53d9b30b0b38e27d180ef3">copy_v2</a></div><div class="ttdeci">void copy_v2(device const T *src, device U *dst, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:30</div></div>
-<div class="ttc" id="ametal_2kernels_2copy_8h_html_aee678c7c31119f3e609685589f37490c"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#aee678c7c31119f3e609685589f37490c">copy_g_nd2</a></div><div class="ttdeci">void copy_g_nd2(device const T *src, device U *dst, constant const int64_t *src_strides, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> copy.h:50</div></div>
 <div class="ttc" id="ametal_2kernels_2copy_8h_html_aef09f9b9475345b1bba121d037d222ea"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#aef09f9b9475345b1bba121d037d222ea">copy_s</a></div><div class="ttdeci">void copy_s(device const T *src, device U *dst, uint index)</div><div class="ttdef"><b>Definition</b> copy.h:4</div></div>
+<div class="ttc" id="ametal_2kernels_2copy_8h_html_af0b06ac3a96852a64fa4274a94b58301"><div class="ttname"><a href="metal_2kernels_2copy_8h.html#af0b06ac3a96852a64fa4274a94b58301">copy_gg_nd2</a></div><div class="ttdeci">void copy_gg_nd2(device const T *src, device U *dst, constant const int64_t *src_strides, constant const int64_t *dst_strides, uint2 index)</div><div class="ttdef"><b>Definition</b> copy.h:113</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

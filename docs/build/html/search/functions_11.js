@@ -18,7 +18,7 @@ var searchData=
   ['quantize_15',['quantize',['../group__ops.html#gab43cc28690da7cdd43b43065adbd31da',1,'mlx::core']]],
   ['quantized_16',['quantized',['../namespacemlx_1_1core_1_1metal.html#a949f029424218ab5c5588563d2e076f5',1,'mlx::core::metal']]],
   ['quantized_5fmatmul_17',['quantized_matmul',['../group__ops.html#gabfa4208fb1f9b1cdd0abc563b19175af',1,'mlx::core']]],
-  ['quantizedblockloader_18',['QuantizedBlockLoader',['../struct_quantized_block_loader.html#af59b054750a65e7e79c1cd05c4acac93',1,'QuantizedBlockLoader']]],
+  ['quantizedblockloader_18',['QuantizedBlockLoader',['../struct_quantized_block_loader.html#a60713ce7498aa683cbb2a0f19ab16589',1,'QuantizedBlockLoader']]],
   ['quantizedmatmul_19',['QuantizedMatmul',['../classmlx_1_1core_1_1_quantized_matmul.html#a5bd164d038d9dc21919f7e0bfdeaa25c',1,'mlx::core::QuantizedMatmul']]],
   ['quiet_5fnan_20',['quiet_NaN',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#aebeb07c01984be246bc2d1b8f8e4ac7b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
   ['qvm_21',['qvm',['../quantized_8h.html#ad84f7d5ab9e32dbbe3ca759ae5d5d5c5',1,'quantized.h']]],
