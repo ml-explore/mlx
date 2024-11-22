@@ -1486,6 +1486,12 @@ array real(const array& a, StreamOrDevice s = {});
 /* The imaginary part of a complex array. */
 array imag(const array& a, StreamOrDevice s = {});
 
+/* Ensure the array's underlying memory is contiguous. */
+array contiguous(
+    const array& a,
+    bool allow_col_major = false,
+    StreamOrDevice s = {});
+
 /** @} */
 
 } // namespace mlx::core

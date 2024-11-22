@@ -3747,3 +3747,17 @@ TEST_CASE("test roll") {
   CHECK(array_equal(y, array({8, 9, 5, 6, 7, 3, 4, 0, 1, 2}, {2, 5}))
             .item<bool>());
 }
+
+TEST_CASE("test contiguous") {
+  auto x = array({1, 2, 3});
+  x = contiguous(broadcast_to(x, {2, 2, 3}));
+  eval(x);
+  CHECK(x.flags().row_contiguous);
+  CHECK_EQ(x.strides(), decltype(x.strides()){6, 3, 1});
+
+  x = array({1, 2, 1, 2}, {2, 2});
+  x = contiguous(transpose(x), true);
+  eval(x);
+  CHECK(x.flags().col_contiguous);
+  CHECK_EQ(x.strides(), decltype(x.strides()){1, 2});
+}

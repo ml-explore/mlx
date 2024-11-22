@@ -179,8 +179,9 @@ void save_safetensors(
   {
     std::vector<array> to_eval;
     to_eval.reserve(a.size());
-    for (auto& [_, arr] : a) {
-      to_eval.push_back(arr);
+    for (auto& p : a) {
+      p.second = contiguous(p.second);
+      to_eval.push_back(p.second);
     }
     eval(std::move(to_eval));
   }
@@ -190,19 +191,6 @@ void save_safetensors(
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
           "[save_safetensors] cannot serialize an empty array key: " + key);
-    }
-
-    // Try to make it row contiguous
-    if (!arr.flags().row_contiguous) {
-      arr = reshape(flatten(arr), arr.shape());
-      arr.eval();
-    }
-
-    // Has to be row-major now but, check one more time in case
-    // any of the above change in the future
-    if (!arr.flags().row_contiguous) {
-      throw std::invalid_argument(
-          "[save_safetensors] can only serialize row-major arrays");
     }
 
     json child;

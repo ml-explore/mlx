@@ -107,20 +107,11 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
   ////////////////////////////////////////////////////////
   // Check array
 
+  a = contiguous(a, true);
   a.eval();
 
   if (a.nbytes() == 0) {
     throw std::invalid_argument("[save] cannot serialize an empty array");
-  }
-
-  if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
-    a = reshape(flatten(a), a.shape());
-    a.eval();
-  }
-  // Check once more in-case the above ops change
-  if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
-    throw std::invalid_argument(
-        "[save] can only serialize row or col contiguous arrays");
   }
 
   ////////////////////////////////////////////////////////
