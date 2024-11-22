@@ -277,7 +277,7 @@ class MaxPool2d(_Pool2d):
     where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
     :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
-    The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+    The parameters ``kernel_size``, ``stride``, and ``padding`` can either be:
 
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
@@ -326,7 +326,7 @@ class AvgPool2d(_Pool2d):
     where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
     :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
-    The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+    The parameters ``kernel_size``, ``stride``, and ``padding`` can either be:
 
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
@@ -359,8 +359,9 @@ class AvgPool2d(_Pool2d):
 
 
 class MaxPool3d(_Pool3d):
-    """
-        Assuming an input of shape :math:`(N, D, H, W, C)` and ``kernel_size`` is
+    r"""Applies 3-dimensional max pooling.
+
+    Assuming an input of shape :math:`(N, D, H, W, C)` and ``kernel_size`` is
     :math:`(k_D, k_H, k_W)`, the output is a tensor of shape :math:`(N, D_{out},
     H_{out}, W_{out}, C)`, given by:
 
@@ -373,16 +374,16 @@ class MaxPool3d(_Pool3d):
         \end{aligned}
 
     where :math:`D_{out} = \left\lfloor\frac{D + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-    :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`,
+    :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[1]} - \text{kernel\\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`,
     :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[2]} - \text{kernel\_size[2]}}{\text{stride[2]}}\right\rfloor + 1`.
 
-    The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+    The parameters ``kernel_size``, ``stride``, and ``padding`` can either be:
 
-        - a single ``int`` -- in which case the same value is used for the depth,
-        height and width axis;
-        - a ``tuple`` of three ``int`` s -- in which case, the first ``int`` is used
-        for the depth axis, the second ``int`` for the height axis, and the third
-        ``int`` for the width axis.
+    * a single ``int`` -- in which case the same value is used for the depth,
+      height and width axis;
+    * a ``tuple`` of three ``int`` s -- in which case, the first ``int`` is used
+      for the depth axis, the second ``int`` for the height axis, and the third
+      ``int`` for the width axis.
 
     Args:
         kernel_size (int or tuple(int, int, int)): The size of the pooling window.
@@ -410,45 +411,46 @@ class MaxPool3d(_Pool3d):
 
 
 class AvgPool3d(_Pool3d):
-    """
-        Assuming an input of shape :math:`(N, D, H, W, C)` and ``kernel_size`` is
-        :math:`(k_D, k_H, k_W)`, the output is a tensor of shape :math:`(N, D_{out},
-        H_{out}, W_{out}, C)`, given by:
+    r"""Applies 3-dimensional average pooling.
 
-        .. math::
-        \begin{aligned}
-            \text{out}(N_i, d, h, w, C_j) = & \frac{1}{k_D k_H k_W} \sum_{l=0, \ldots, k_D-1} \sum_{m=0, \ldots, k_H-1} \sum_{n=0, \ldots, k_W-1} \\
-                                    & \text{input}(N_i, \text{stride[0]} \times d + l,
-                                                \text{stride[1]} \times h + m,
-                                                \text{stride[2]} \times w + n, C_j),
-        \end{aligned}
+    Assuming an input of shape :math:`(N, D, H, W, C)` and ``kernel_size`` is
+    :math:`(k_D, k_H, k_W)`, the output is a tensor of shape :math:`(N, D_{out},
+    H_{out}, W_{out}, C)`, given by:
 
-        where :math:`D_{out} = \left\lfloor\frac{D + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-        :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`,
-        :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[2]} - \text{kernel\_size[2]}}{\text{stride[2]}}\right\rfloor + 1`.
+    .. math::
+    \begin{aligned}
+        \text{out}(N_i, d, h, w, C_j) = & \frac{1}{k_D k_H k_W} \sum_{l=0, \ldots, k_D-1} \sum_{m=0, \ldots, k_H-1} \sum_{n=0, \ldots, k_W-1} \\
+                                & \text{input}(N_i, \text{stride[0]} \times d + l,
+                                            \text{stride[1]} \times h + m,
+                                            \text{stride[2]} \times w + n, C_j),
+    \end{aligned}
 
-        The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+    where :math:`D_{out} = \left\lfloor\frac{D + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
+    :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`,
+    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[2]} - \text{kernel\_size[2]}}{\text{stride[2]}}\right\rfloor + 1`.
 
-        - a single ``int`` -- in which case the same value is used for the depth,
-            height and width axis;
-        - a ``tuple`` of three ``int`` s -- in which case, the first ``int`` is used
-            for the depth axis, the second ``int`` for the height axis, and the third
-            ``int`` for the width axis.
+    The parameters ``kernel_size``, ``stride``, and ``padding`` can either be:
 
-        Args:
-        kernel_size (int or tuple(int, int, int)): The size of the pooling window.
-        stride (int or tuple(int, int, int), optional): The stride of the pooling
-            window. Default: ``kernel_size``.
-        padding (int or tuple(int, int, int), optional): How much zero
-            padding to apply to the input. The padding is applied on both sides
-            of the depth, height and width axis. Default: ``0``.
+    - a single ``int`` -- in which case the same value is used for the depth,
+        height and width axis;
+    - a ``tuple`` of three ``int`` s -- in which case, the first ``int`` is used
+        for the depth axis, the second ``int`` for the height axis, and the third
+        ``int`` for the width axis.
 
-        Examples:
-        >>> import mlx.core as mx
-        >>> import mlx.nn.layers as nn
-        >>> x = mx.random.normal(shape=(8, 16, 32, 32, 4))
-        >>> pool = nn.AvgPool3d(kernel_size=2, stride=2)
-        >>> pool(x)
+    Args:
+    kernel_size (int or tuple(int, int, int)): The size of the pooling window.
+    stride (int or tuple(int, int, int), optional): The stride of the pooling
+        window. Default: ``kernel_size``.
+    padding (int or tuple(int, int, int), optional): How much zero
+        padding to apply to the input. The padding is applied on both sides
+        of the depth, height and width axis. Default: ``0``.
+
+    Examples:
+    >>> import mlx.core as mx
+    >>> import mlx.nn.layers as nn
+    >>> x = mx.random.normal(shape=(8, 16, 32, 32, 4))
+    >>> pool = nn.AvgPool3d(kernel_size=2, stride=2)
+    >>> pool(x)
     """
 
     def __init__(
