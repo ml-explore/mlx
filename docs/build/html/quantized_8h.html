@@ -194,9 +194,6 @@ Functions</h2></td></tr>
 <tr class="memitem:a47bcf4a14566e01e14bd3c155811db59" id="r_a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
 <tr class="memitem:a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a47bcf4a14566e01e14bd3c155811db59">affine_quantize</a> (const device T *w, device uint8_t *out, device T *scales, device T *biases, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a47bcf4a14566e01e14bd3c155811db59"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7561acefd7b55e7e2b25393be08bb99c" id="r_a7561acefd7b55e7e2b25393be08bb99c"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:a7561acefd7b55e7e2b25393be08bb99c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7561acefd7b55e7e2b25393be08bb99c">affine_quantize_scales_biases</a> (const device T *w, const device T *scales, const device T *biases, device uint8_t *out, uint2 index, uint2 grid_dim)</td></tr>
-<tr class="separator:a7561acefd7b55e7e2b25393be08bb99c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6076203615038eb06816158f7b3869c6" id="r_a6076203615038eb06816158f7b3869c6"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
 <tr class="memitem:a6076203615038eb06816158f7b3869c6"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6076203615038eb06816158f7b3869c6">affine_dequantize</a> (const device uint8_t *w, const device T *scales, const device T *biases, device T *out, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a6076203615038eb06816158f7b3869c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -500,49 +497,6 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a7561acefd7b55e7e2b25393be08bb99c" name="a7561acefd7b55e7e2b25393be08bb99c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7561acefd7b55e7e2b25393be08bb99c">&#9670;&#160;</a></span>affine_quantize_scales_biases()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , const int group_size, const int bits&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">void affine_quantize_scales_biases </td>
-          <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">device uint8_t *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
