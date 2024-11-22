@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['r_0',['r',['../structpocketfft_1_1detail_1_1cmplx.html#afc51cdf222d77690953a8cb8ce3ee692',1,'pocketfft::detail::cmplx']]],
+  ['r_0',['r',['../structpocketfft_1_1detail_1_1cmplx.html#afc51cdf222d77690953a8cb8ce3ee692',1,'pocketfft::detail::cmplx::r'],['../structmlx_1_1steel_1_1_shape2_d.html#a6e9e8d56782fc8772bc432c7f58393fe',1,'mlx::steel::Shape2D::r']]],
   ['r2h_1',['r2h',['../structpocketfft_1_1detail_1_1_exec_r2_r.html#a925b398c8e1868614ce9eaf381d02b7e',1,'pocketfft::detail::ExecR2R']]],
   ['rader_5f11_5fsteps_5f_2',['rader_11_steps_',['../backend_2metal_2kernels_2fft_8h.html#a1f3c377d05da52429172e64132dba750',1,'fft.h']]],
   ['rader_5f13_5fsteps_5f_3',['rader_13_steps_',['../backend_2metal_2kernels_2fft_8h.html#a20d24f3e040d3d226a70d4dd7c9ac6a9',1,'fft.h']]],

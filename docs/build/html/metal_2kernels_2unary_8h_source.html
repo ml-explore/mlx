@@ -115,32 +115,36 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>}</div>
 </div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> U, <span class="keyword">typename</span> Op, <span class="keywordtype">int</span> N = 1&gt;</div>
-<div class="foldopen" id="foldopen00022" data-start="{" data-end="}">
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno"><a class="line" href="metal_2kernels_2unary_8h.html#ac965f8d3ed62f8580dbfb645e83d4ae5">   22</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2unary_8h.html#ac965f8d3ed62f8580dbfb645e83d4ae5">unary_g</a>(</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    device <span class="keyword">const</span> T* in,</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    device U* out,</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>* in_shape,</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    constant <span class="keyword">const</span> <span class="keywordtype">size_t</span>* in_strides,</div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim,</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    uint3 index [[thread_position_in_grid]],</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    uint3 grid_dim [[threads_per_grid]]) {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>  <span class="keyword">auto</span> idx =</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>      <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a>({N * index.x, index.y, index.z}, in_shape, in_strides, ndim);</div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>  <span class="keyword">auto</span> xshape = in_shape[ndim - 1];</div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>  <span class="keyword">auto</span> xstride = in_strides[ndim - 1];</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>  <span class="keywordtype">size_t</span> out_idx =</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>      N * index.x + xshape * (index.y + size_t(grid_dim.y) * index.z);</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    out[out_idx++] = Op()(in[idx]);</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    idx += xstride;</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  }</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>}</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keyword">template</span> &lt;</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    <span class="keyword">typename</span> T,</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keyword">typename</span> U,</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    <span class="keyword">typename</span> Op,</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    <span class="keywordtype">int</span> N = 1,</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keyword">typename</span> IdxT = <span class="keywordtype">size_t</span>&gt;</div>
+<div class="foldopen" id="foldopen00027" data-start="{" data-end="}">
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="metal_2kernels_2unary_8h.html#ac2a85fee50af49620ff62c1a71e2575d">   27</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2unary_8h.html#ac2a85fee50af49620ff62c1a71e2575d">unary_g</a>(</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    device <span class="keyword">const</span> T* in,</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>    device U* out,</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>    constant <span class="keyword">const</span> <span class="keywordtype">int</span>* in_shape,</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>    constant <span class="keyword">const</span> <span class="keywordtype">size_t</span>* in_strides,</div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim,</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>    uint3 index [[thread_position_in_grid]],</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    uint3 grid_dim [[threads_per_grid]]) {</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>  <span class="keyword">auto</span> idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc&lt;size_t, IdxT&gt;</a>(</div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>      {N * index.x, index.y, index.z}, in_shape, in_strides, ndim);</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>  <span class="keyword">auto</span> xshape = in_shape[ndim - 1];</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>  IdxT xstride = in_strides[ndim - 1];</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  IdxT out_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N &amp;&amp; (int(N * index.x) + i) &lt; xshape; ++i) {</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    out[out_idx++] = Op()(in[idx]);</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    idx += xstride;</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>  }</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>}</div>
 </div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a8fd0c8fc6058e650fc99bca8b6acd7d1"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, constant const int *shape, constant const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:87</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a22eaa505dbc7dd2a63a895f2e16712f5"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC IdxT elem_to_loc(uint elem, constant const int *shape, constant const StrideT *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:93</div></div>
 <div class="ttc" id="ametal_2kernels_2unary_8h_html_a64e4f6737edddb72122e262977ee3014"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#a64e4f6737edddb72122e262977ee3014">unary_v</a></div><div class="ttdeci">void unary_v(device const T *in, device U *out, uint index)</div><div class="ttdef"><b>Definition</b> unary.h:4</div></div>
 <div class="ttc" id="ametal_2kernels_2unary_8h_html_a7c7690f0df9d2acc60b63be58d9c7777"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#a7c7690f0df9d2acc60b63be58d9c7777">unary_v2</a></div><div class="ttdeci">void unary_v2(device const T *in, device U *out, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> unary.h:12</div></div>
-<div class="ttc" id="ametal_2kernels_2unary_8h_html_ac965f8d3ed62f8580dbfb645e83d4ae5"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#ac965f8d3ed62f8580dbfb645e83d4ae5">unary_g</a></div><div class="ttdeci">void unary_g(device const T *in, device U *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> unary.h:22</div></div>
+<div class="ttc" id="ametal_2kernels_2unary_8h_html_ac2a85fee50af49620ff62c1a71e2575d"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#ac2a85fee50af49620ff62c1a71e2575d">unary_g</a></div><div class="ttdeci">void unary_g(device const T *in, device U *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</div><div class="ttdef"><b>Definition</b> unary.h:27</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

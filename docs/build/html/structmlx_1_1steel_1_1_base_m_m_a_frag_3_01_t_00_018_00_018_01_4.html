@@ -97,34 +97,62 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="mma_8h_source.html">mma.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="attn_2mma_8h_source.html">mma.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
-<tr class="memitem:a72054f003c695b90a4fe5101e19cbaa9" id="r_a72054f003c695b90a4fe5101e19cbaa9"><td class="memItemLeft" align="right" valign="top">typedef metal::simdgroup_matrix&lt; T, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a></td></tr>
-<tr class="separator:a72054f003c695b90a4fe5101e19cbaa9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af67c1b1aea594468e9426e1be0e31d0b" id="r_af67c1b1aea594468e9426e1be0e31d0b"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a></td></tr>
-<tr class="separator:af67c1b1aea594468e9426e1be0e31d0b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a958b6952cbd9462d7ae9f6e029631887" id="r_a958b6952cbd9462d7ae9f6e029631887"><td class="memItemLeft" align="right" valign="top">typedef metal::simdgroup_matrix&lt; T, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a></td></tr>
+<tr class="separator:a958b6952cbd9462d7ae9f6e029631887"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9f53a5e9b046b4f217e782b733941b0c" id="r_a9f53a5e9b046b4f217e782b733941b0c"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a></td></tr>
+<tr class="separator:a9f53a5e9b046b4f217e782b733941b0c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5ec2e40a8f5ad98c71b825544cdd878b" id="r_a5ec2e40a8f5ad98c71b825544cdd878b"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a76aa5aa690dbcc954e957d767fad661f">kElemRows</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5ec2e40a8f5ad98c71b825544cdd878b">row_frag_type</a></td></tr>
+<tr class="separator:a5ec2e40a8f5ad98c71b825544cdd878b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aab8dd1c6917247da41dd3a31139a665f" id="r_aab8dd1c6917247da41dd3a31139a665f"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a7c212200d86b4e93f274d99addf668bd">kElemCols</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aab8dd1c6917247da41dd3a31139a665f">col_frag_type</a></td></tr>
+<tr class="separator:aab8dd1c6917247da41dd3a31139a665f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a7331fff1d12f2f8b72b0006a3ad0dd83" id="r_a7331fff1d12f2f8b72b0006a3ad0dd83"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr short2&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7331fff1d12f2f8b72b0006a3ad0dd83">get_coord</a> (ushort simd_lane_id)</td></tr>
 <tr class="separator:a7331fff1d12f2f8b72b0006a3ad0dd83"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac73006b36fc710feda3a7c796e21415c" id="r_ac73006b36fc710feda3a7c796e21415c"><td class="memTemplParams" colspan="2">template&lt;typename SrcPtrType , typename StrX , typename StrY &gt; </td></tr>
-<tr class="memitem:ac73006b36fc710feda3a7c796e21415c"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac73006b36fc710feda3a7c796e21415c">load</a> (thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y)</td></tr>
+<tr class="memitem:ac73006b36fc710feda3a7c796e21415c"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac73006b36fc710feda3a7c796e21415c">load</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y)</td></tr>
 <tr class="separator:ac73006b36fc710feda3a7c796e21415c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad22aaee4a2938cbdd315b39eda84e07d" id="r_ad22aaee4a2938cbdd315b39eda84e07d"><td class="memTemplParams" colspan="2">template&lt;typename SrcPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </td></tr>
-<tr class="memitem:ad22aaee4a2938cbdd315b39eda84e07d"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad22aaee4a2938cbdd315b39eda84e07d">load_safe</a> (thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
+<tr class="memitem:ad22aaee4a2938cbdd315b39eda84e07d"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad22aaee4a2938cbdd315b39eda84e07d">load_safe</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
 <tr class="separator:ad22aaee4a2938cbdd315b39eda84e07d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa8f50ea8961ec5b35c1b81366d64f2cb" id="r_aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memTemplParams" colspan="2">template&lt;typename DstPtrType , typename StrX , typename StrY &gt; </td></tr>
-<tr class="memitem:aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa8f50ea8961ec5b35c1b81366d64f2cb">store</a> (const thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y)</td></tr>
+<tr class="memitem:aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa8f50ea8961ec5b35c1b81366d64f2cb">store</a> (const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y)</td></tr>
 <tr class="separator:aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328" id="r_a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplParams" colspan="2">template&lt;typename DstPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </td></tr>
-<tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1f0b00daad8eba2f855bb306e70d2328">store_safe</a> (const thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
+<tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1f0b00daad8eba2f855bb306e70d2328">store_safe</a> (const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
 <tr class="separator:a1f0b00daad8eba2f855bb306e70d2328"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8028512f5a3d2b6acaf966be529627a3" id="r_a8028512f5a3d2b6acaf966be529627a3"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8028512f5a3d2b6acaf966be529627a3">mma</a> (thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;D, thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;A, thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;B, thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;C)</td></tr>
+<tr class="memitem:a8028512f5a3d2b6acaf966be529627a3" id="r_a8028512f5a3d2b6acaf966be529627a3"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8028512f5a3d2b6acaf966be529627a3">mma</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;D, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;A, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;B, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;C)</td></tr>
 <tr class="separator:a8028512f5a3d2b6acaf966be529627a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1868f57d57c8adedab2c58492ec76946" id="r_a1868f57d57c8adedab2c58492ec76946"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1868f57d57c8adedab2c58492ec76946">mma</a> (thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;D, thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;A, thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;B, thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;C)</td></tr>
+<tr class="memitem:a1868f57d57c8adedab2c58492ec76946" id="r_a1868f57d57c8adedab2c58492ec76946"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1868f57d57c8adedab2c58492ec76946">mma</a> (thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;D, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;A, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;B, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;C)</td></tr>
+<tr class="separator:a1868f57d57c8adedab2c58492ec76946"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a51d662e4cff88b5ad17d7c44bb6b6970" id="r_a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memTemplParams" colspan="2">template&lt;typename Op &gt; </td></tr>
+<tr class="memitem:a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a51d662e4cff88b5ad17d7c44bb6b6970">row_reduce</a> (thread const <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;inp_vals, thread T *reduced_vals)</td></tr>
+<tr class="separator:a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a318c4279bdc7b39b7919f108b1cd8010" id="r_a318c4279bdc7b39b7919f108b1cd8010"><td class="memTemplParams" colspan="2">template&lt;typename Op &gt; </td></tr>
+<tr class="memitem:a318c4279bdc7b39b7919f108b1cd8010"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a318c4279bdc7b39b7919f108b1cd8010">row_bin_op</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;inp_vals, thread T *row_vals)</td></tr>
+<tr class="separator:a318c4279bdc7b39b7919f108b1cd8010"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7331fff1d12f2f8b72b0006a3ad0dd83" id="r_a7331fff1d12f2f8b72b0006a3ad0dd83"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr short2&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7331fff1d12f2f8b72b0006a3ad0dd83">get_coord</a> (ushort simd_lane_id)</td></tr>
+<tr class="separator:a7331fff1d12f2f8b72b0006a3ad0dd83"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac73006b36fc710feda3a7c796e21415c" id="r_ac73006b36fc710feda3a7c796e21415c"><td class="memTemplParams" colspan="2">template&lt;typename SrcPtrType , typename StrX , typename StrY &gt; </td></tr>
+<tr class="memitem:ac73006b36fc710feda3a7c796e21415c"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac73006b36fc710feda3a7c796e21415c">load</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y)</td></tr>
+<tr class="separator:ac73006b36fc710feda3a7c796e21415c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad22aaee4a2938cbdd315b39eda84e07d" id="r_ad22aaee4a2938cbdd315b39eda84e07d"><td class="memTemplParams" colspan="2">template&lt;typename SrcPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </td></tr>
+<tr class="memitem:ad22aaee4a2938cbdd315b39eda84e07d"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad22aaee4a2938cbdd315b39eda84e07d">load_safe</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;dst, SrcPtrType src, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
+<tr class="separator:ad22aaee4a2938cbdd315b39eda84e07d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8f50ea8961ec5b35c1b81366d64f2cb" id="r_aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memTemplParams" colspan="2">template&lt;typename DstPtrType , typename StrX , typename StrY &gt; </td></tr>
+<tr class="memitem:aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa8f50ea8961ec5b35c1b81366d64f2cb">store</a> (const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y)</td></tr>
+<tr class="separator:aa8f50ea8961ec5b35c1b81366d64f2cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328" id="r_a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplParams" colspan="2">template&lt;typename DstPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </td></tr>
+<tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1f0b00daad8eba2f855bb306e70d2328">store_safe</a> (const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
+<tr class="separator:a1f0b00daad8eba2f855bb306e70d2328"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8028512f5a3d2b6acaf966be529627a3" id="r_a8028512f5a3d2b6acaf966be529627a3"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8028512f5a3d2b6acaf966be529627a3">mma</a> (thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;D, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;A, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;B, thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;C)</td></tr>
+<tr class="separator:a8028512f5a3d2b6acaf966be529627a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1868f57d57c8adedab2c58492ec76946" id="r_a1868f57d57c8adedab2c58492ec76946"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1868f57d57c8adedab2c58492ec76946">mma</a> (thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;D, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;A, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;B, thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;C)</td></tr>
 <tr class="separator:a1868f57d57c8adedab2c58492ec76946"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
@@ -141,8 +169,8 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a7c212200d86b4e93f274d99addf668bd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Typedef Documentation</h2>
-<a id="af67c1b1aea594468e9426e1be0e31d0b" name="af67c1b1aea594468e9426e1be0e31d0b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af67c1b1aea594468e9426e1be0e31d0b">&#9670;&#160;</a></span>frag_type</h2>
+<a id="aab8dd1c6917247da41dd3a31139a665f" name="aab8dd1c6917247da41dd3a31139a665f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab8dd1c6917247da41dd3a31139a665f">&#9670;&#160;</a></span>col_frag_type</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -150,15 +178,15 @@ Public Attributes</h2></td></tr>
 template&lt;typename T &gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">metal::vec&lt;T, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::frag_type</td>
+          <td class="memname">metal::vec&lt;T, <a class="el" href="#a7c212200d86b4e93f274d99addf668bd">kElemCols</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::col_frag_type</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a72054f003c695b90a4fe5101e19cbaa9" name="a72054f003c695b90a4fe5101e19cbaa9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a72054f003c695b90a4fe5101e19cbaa9">&#9670;&#160;</a></span>mat_type</h2>
+<a id="a9f53a5e9b046b4f217e782b733941b0c" name="a9f53a5e9b046b4f217e782b733941b0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f53a5e9b046b4f217e782b733941b0c">&#9670;&#160;</a></span>frag_type</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -166,7 +194,39 @@ template&lt;typename T &gt; </div>
 template&lt;typename T &gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">metal::simdgroup_matrix&lt;T, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mat_type</td>
+          <td class="memname">typedef metal::vec&lt; T, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a> &gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::frag_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a958b6952cbd9462d7ae9f6e029631887" name="a958b6952cbd9462d7ae9f6e029631887"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a958b6952cbd9462d7ae9f6e029631887">&#9670;&#160;</a></span>mat_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef metal::simdgroup_matrix&lt; T, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a> &gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mat_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5ec2e40a8f5ad98c71b825544cdd878b" name="a5ec2e40a8f5ad98c71b825544cdd878b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ec2e40a8f5ad98c71b825544cdd878b">&#9670;&#160;</a></span>row_frag_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">metal::vec&lt;T, <a class="el" href="#a76aa5aa690dbcc954e957d767fad661f">kElemRows</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::row_frag_type</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -175,7 +235,34 @@ template&lt;typename T &gt; </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
 <a id="a7331fff1d12f2f8b72b0006a3ad0dd83" name="a7331fff1d12f2f8b72b0006a3ad0dd83"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7331fff1d12f2f8b72b0006a3ad0dd83">&#9670;&#160;</a></span>get_coord()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7331fff1d12f2f8b72b0006a3ad0dd83">&#9670;&#160;</a></span>get_coord() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr short2 <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::get_coord </td>
+          <td>(</td>
+          <td class="paramtype">ushort</td>          <td class="paramname"><span class="paramname"><em>simd_lane_id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7331fff1d12f2f8b72b0006a3ad0dd83" name="a7331fff1d12f2f8b72b0006a3ad0dd83"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7331fff1d12f2f8b72b0006a3ad0dd83">&#9670;&#160;</a></span>get_coord() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -202,7 +289,7 @@ template&lt;typename T &gt; </div>
 </div>
 </div>
 <a id="ac73006b36fc710feda3a7c796e21415c" name="ac73006b36fc710feda3a7c796e21415c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac73006b36fc710feda3a7c796e21415c">&#9670;&#160;</a></span>load()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac73006b36fc710feda3a7c796e21415c">&#9670;&#160;</a></span>load() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -217,7 +304,50 @@ template&lt;typename SrcPtrType , typename StrX , typename StrY &gt; </div>
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::load </td>
           <td>(</td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">SrcPtrType</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrX</td>          <td class="paramname"><span class="paramname"><em>str_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrY</td>          <td class="paramname"><span class="paramname"><em>str_y</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac73006b36fc710feda3a7c796e21415c" name="ac73006b36fc710feda3a7c796e21415c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac73006b36fc710feda3a7c796e21415c">&#9670;&#160;</a></span>load() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename SrcPtrType , typename StrX , typename StrY &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::load </td>
+          <td>(</td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -245,7 +375,7 @@ template&lt;typename SrcPtrType , typename StrX , typename StrY &gt; </div>
 </div>
 </div>
 <a id="ad22aaee4a2938cbdd315b39eda84e07d" name="ad22aaee4a2938cbdd315b39eda84e07d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad22aaee4a2938cbdd315b39eda84e07d">&#9670;&#160;</a></span>load_safe()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad22aaee4a2938cbdd315b39eda84e07d">&#9670;&#160;</a></span>load_safe() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -260,7 +390,70 @@ template&lt;typename SrcPtrType , typename StrX , typename StrY , typename LimX 
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::load_safe </td>
           <td>(</td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">SrcPtrType</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrX</td>          <td class="paramname"><span class="paramname"><em>str_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrY</td>          <td class="paramname"><span class="paramname"><em>str_y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">LimX</td>          <td class="paramname"><span class="paramname"><em>lim_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">LimY</td>          <td class="paramname"><span class="paramname"><em>lim_y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">OffX</td>          <td class="paramname"><span class="paramname"><em>off_x</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt;0&gt;{}</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">OffY</td>          <td class="paramname"><span class="paramname"><em>off_y</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt;0&gt;{}</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad22aaee4a2938cbdd315b39eda84e07d" name="ad22aaee4a2938cbdd315b39eda84e07d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad22aaee4a2938cbdd315b39eda84e07d">&#9670;&#160;</a></span>load_safe() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename SrcPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::load_safe </td>
+          <td>(</td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -308,7 +501,7 @@ template&lt;typename SrcPtrType , typename StrX , typename StrY , typename LimX 
 </div>
 </div>
 <a id="a8028512f5a3d2b6acaf966be529627a3" name="a8028512f5a3d2b6acaf966be529627a3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8028512f5a3d2b6acaf966be529627a3">&#9670;&#160;</a></span>mma() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8028512f5a3d2b6acaf966be529627a3">&#9670;&#160;</a></span>mma() <span class="overload">[1/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -321,22 +514,63 @@ template&lt;typename T &gt; </div>
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mma </td>
           <td>(</td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8028512f5a3d2b6acaf966be529627a3" name="a8028512f5a3d2b6acaf966be529627a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8028512f5a3d2b6acaf966be529627a3">&#9670;&#160;</a></span>mma() <span class="overload">[2/4]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mma </td>
+          <td>(</td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -349,7 +583,7 @@ template&lt;typename T &gt; </div>
 </div>
 </div>
 <a id="a1868f57d57c8adedab2c58492ec76946" name="a1868f57d57c8adedab2c58492ec76946"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1868f57d57c8adedab2c58492ec76946">&#9670;&#160;</a></span>mma() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1868f57d57c8adedab2c58492ec76946">&#9670;&#160;</a></span>mma() <span class="overload">[3/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -362,22 +596,129 @@ template&lt;typename T &gt; </div>
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mma </td>
           <td>(</td>
-          <td class="paramtype">thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a72054f003c695b90a4fe5101e19cbaa9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1868f57d57c8adedab2c58492ec76946" name="a1868f57d57c8adedab2c58492ec76946"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1868f57d57c8adedab2c58492ec76946">&#9670;&#160;</a></span>mma() <span class="overload">[4/4]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::mma </td>
+          <td>(</td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a958b6952cbd9462d7ae9f6e029631887">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a318c4279bdc7b39b7919f108b1cd8010" name="a318c4279bdc7b39b7919f108b1cd8010"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a318c4279bdc7b39b7919f108b1cd8010">&#9670;&#160;</a></span>row_bin_op()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename Op &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::row_bin_op </td>
+          <td>(</td>
+          <td class="paramtype">thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>inp_vals</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread T *</td>          <td class="paramname"><span class="paramname"><em>row_vals</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a51d662e4cff88b5ad17d7c44bb6b6970" name="a51d662e4cff88b5ad17d7c44bb6b6970"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51d662e4cff88b5ad17d7c44bb6b6970">&#9670;&#160;</a></span>row_reduce()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename Op &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::row_reduce </td>
+          <td>(</td>
+          <td class="paramtype">thread const <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>inp_vals</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread T *</td>          <td class="paramname"><span class="paramname"><em>reduced_vals</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -390,7 +731,7 @@ template&lt;typename T &gt; </div>
 </div>
 </div>
 <a id="aa8f50ea8961ec5b35c1b81366d64f2cb" name="aa8f50ea8961ec5b35c1b81366d64f2cb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa8f50ea8961ec5b35c1b81366d64f2cb">&#9670;&#160;</a></span>store()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8f50ea8961ec5b35c1b81366d64f2cb">&#9670;&#160;</a></span>store() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -405,7 +746,50 @@ template&lt;typename DstPtrType , typename StrX , typename StrY &gt; </div>
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::store </td>
           <td>(</td>
-          <td class="paramtype">const thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+          <td class="paramtype">const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">DstPtrType</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrX</td>          <td class="paramname"><span class="paramname"><em>str_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrY</td>          <td class="paramname"><span class="paramname"><em>str_y</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa8f50ea8961ec5b35c1b81366d64f2cb" name="aa8f50ea8961ec5b35c1b81366d64f2cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8f50ea8961ec5b35c1b81366d64f2cb">&#9670;&#160;</a></span>store() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename DstPtrType , typename StrX , typename StrY &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::store </td>
+          <td>(</td>
+          <td class="paramtype">const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -433,7 +817,7 @@ template&lt;typename DstPtrType , typename StrX , typename StrY &gt; </div>
 </div>
 </div>
 <a id="a1f0b00daad8eba2f855bb306e70d2328" name="a1f0b00daad8eba2f855bb306e70d2328"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1f0b00daad8eba2f855bb306e70d2328">&#9670;&#160;</a></span>store_safe()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f0b00daad8eba2f855bb306e70d2328">&#9670;&#160;</a></span>store_safe() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -448,7 +832,70 @@ template&lt;typename DstPtrType , typename StrX , typename StrY , typename LimX 
         <tr>
           <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::store_safe </td>
           <td>(</td>
-          <td class="paramtype">const thread <a class="el" href="#af67c1b1aea594468e9426e1be0e31d0b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+          <td class="paramtype">const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">DstPtrType</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrX</td>          <td class="paramname"><span class="paramname"><em>str_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">StrY</td>          <td class="paramname"><span class="paramname"><em>str_y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">LimX</td>          <td class="paramname"><span class="paramname"><em>lim_x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">LimY</td>          <td class="paramname"><span class="paramname"><em>lim_y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">OffX</td>          <td class="paramname"><span class="paramname"><em>off_x</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt;0&gt;{}</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">OffY</td>          <td class="paramname"><span class="paramname"><em>off_y</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt;0&gt;{}</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f0b00daad8eba2f855bb306e70d2328" name="a1f0b00daad8eba2f855bb306e70d2328"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f0b00daad8eba2f855bb306e70d2328">&#9670;&#160;</a></span>store_safe() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+<div class="memtemplate">
+template&lt;typename DstPtrType , typename StrX , typename StrY , typename LimX , typename LimY , typename OffX , typename OffY &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC constexpr void <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::store_safe </td>
+          <td>(</td>
+          <td class="paramtype">const thread <a class="el" href="#a9f53a5e9b046b4f217e782b733941b0c">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -576,8 +1023,9 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
-<li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="mma_8h_source.html">mma.h</a></li>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="attn_2mma_8h_source.html">mma.h</a></li>
+<li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="gemm_2mma_8h_source.html">mma.h</a></li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->

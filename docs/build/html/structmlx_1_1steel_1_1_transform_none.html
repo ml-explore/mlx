@@ -95,7 +95,7 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="backend_2metal_2kernels_2steel_2gemm_2transforms_8h_source.html">transforms.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="backend_2metal_2kernels_2steel_2attn_2transforms_8h_source.html">transforms.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
@@ -103,10 +103,41 @@ Static Public Member Functions</h2></td></tr>
 <tr class="separator:a84daa89be5b3348b5715bf8c5a01da75"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae4c397038f386b13eaa386638a0fce90" id="r_ae4c397038f386b13eaa386638a0fce90"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC OutT&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae4c397038f386b13eaa386638a0fce90">apply</a> (InT x, OutT)</td></tr>
 <tr class="separator:ae4c397038f386b13eaa386638a0fce90"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a84daa89be5b3348b5715bf8c5a01da75" id="r_a84daa89be5b3348b5715bf8c5a01da75"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC OutT&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a84daa89be5b3348b5715bf8c5a01da75">apply</a> (InT x)</td></tr>
+<tr class="separator:a84daa89be5b3348b5715bf8c5a01da75"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae4c397038f386b13eaa386638a0fce90" id="r_ae4c397038f386b13eaa386638a0fce90"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC OutT&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae4c397038f386b13eaa386638a0fce90">apply</a> (InT x, OutT)</td></tr>
+<tr class="separator:ae4c397038f386b13eaa386638a0fce90"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
 <a id="a84daa89be5b3348b5715bf8c5a01da75" name="a84daa89be5b3348b5715bf8c5a01da75"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a84daa89be5b3348b5715bf8c5a01da75">&#9670;&#160;</a></span>apply() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a84daa89be5b3348b5715bf8c5a01da75">&#9670;&#160;</a></span>apply() <span class="overload">[1/4]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename OutT , typename InT &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC OutT <a class="el" href="structmlx_1_1steel_1_1_transform_none.html">mlx::steel::TransformNone</a>&lt; OutT, InT &gt;::apply </td>
+          <td>(</td>
+          <td class="paramtype">InT</td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a84daa89be5b3348b5715bf8c5a01da75" name="a84daa89be5b3348b5715bf8c5a01da75"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a84daa89be5b3348b5715bf8c5a01da75">&#9670;&#160;</a></span>apply() <span class="overload">[2/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -133,7 +164,7 @@ template&lt;typename OutT , typename InT &gt; </div>
 </div>
 </div>
 <a id="ae4c397038f386b13eaa386638a0fce90" name="ae4c397038f386b13eaa386638a0fce90"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae4c397038f386b13eaa386638a0fce90">&#9670;&#160;</a></span>apply() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4c397038f386b13eaa386638a0fce90">&#9670;&#160;</a></span>apply() <span class="overload">[3/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -163,7 +194,39 @@ template&lt;typename OutT , typename InT &gt; </div>
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
+<a id="ae4c397038f386b13eaa386638a0fce90" name="ae4c397038f386b13eaa386638a0fce90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4c397038f386b13eaa386638a0fce90">&#9670;&#160;</a></span>apply() <span class="overload">[4/4]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename OutT , typename InT &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC OutT <a class="el" href="structmlx_1_1steel_1_1_transform_none.html">mlx::steel::TransformNone</a>&lt; OutT, InT &gt;::apply </td>
+          <td>(</td>
+          <td class="paramtype">InT</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">OutT</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="backend_2metal_2kernels_2steel_2attn_2transforms_8h_source.html">transforms.h</a></li>
 <li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="backend_2metal_2kernels_2steel_2gemm_2transforms_8h_source.html">transforms.h</a></li>
 </ul>
 </div><!-- contents -->

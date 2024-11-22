@@ -9,12 +9,13 @@ var searchData=
   ['mlx_3a_3acore_3a_3adetail_6',['detail',['../namespacemlx_1_1core_1_1detail.html',1,'mlx::core']]],
   ['mlx_3a_3acore_3a_3adistributed_7',['distributed',['../namespacemlx_1_1core_1_1distributed.html',1,'mlx::core']]],
   ['mlx_3a_3acore_3a_3adistributed_3a_3adetail_8',['detail',['../namespacemlx_1_1core_1_1distributed_1_1detail.html',1,'mlx::core::distributed']]],
-  ['mlx_3a_3acore_3a_3afast_9',['fast',['../namespacemlx_1_1core_1_1fast.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3afft_10',['fft',['../namespacemlx_1_1core_1_1fft.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3aio_11',['io',['../namespacemlx_1_1core_1_1io.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3alinalg_12',['linalg',['../namespacemlx_1_1core_1_1linalg.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3ametal_13',['metal',['../namespacemlx_1_1core_1_1metal.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3arandom_14',['random',['../namespacemlx_1_1core_1_1random.html',1,'mlx::core']]],
-  ['mlx_3a_3acore_3a_3ascheduler_15',['scheduler',['../namespacemlx_1_1core_1_1scheduler.html',1,'mlx::core']]],
-  ['mlx_3a_3asteel_16',['steel',['../namespacemlx_1_1steel.html',1,'mlx']]]
+  ['mlx_3a_3acore_3a_3aenv_9',['env',['../namespacemlx_1_1core_1_1env.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3afast_10',['fast',['../namespacemlx_1_1core_1_1fast.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3afft_11',['fft',['../namespacemlx_1_1core_1_1fft.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3aio_12',['io',['../namespacemlx_1_1core_1_1io.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3alinalg_13',['linalg',['../namespacemlx_1_1core_1_1linalg.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3ametal_14',['metal',['../namespacemlx_1_1core_1_1metal.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3arandom_15',['random',['../namespacemlx_1_1core_1_1random.html',1,'mlx::core']]],
+  ['mlx_3a_3acore_3a_3ascheduler_16',['scheduler',['../namespacemlx_1_1core_1_1scheduler.html',1,'mlx::core']]],
+  ['mlx_3a_3asteel_17',['steel',['../namespacemlx_1_1steel.html',1,'mlx']]]
 ];

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.fast.scaled_dot_product_attention &#8212; MLX 0.20.0 documentation</title>
+    <title>mlx.core.fast.scaled_dot_product_attention &#8212; MLX 0.21.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../../_static/documentation_options.js?v=eb97cb82"></script>
+    <script src="../../_static/documentation_options.js?v=174dfe6e"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -47,11 +47,11 @@
     <link rel="icon" href="../../_static/mlx_logo.png"/>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="mlx.core.fast.affine_quantize" href="mlx.core.fast.affine_quantize.html" />
+    <link rel="next" title="mlx.core.fast.metal_kernel" href="mlx.core.fast.metal_kernel.html" />
     <link rel="prev" title="mlx.core.fast.rope" href="mlx.core.fast.rope.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.20.0" />
+  <meta name="docsearch:version" content="0.21.0" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.20.0 documentation - Home"/>
-    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.20.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
   
   
 </a></div>
@@ -444,7 +444,6 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.core.fast.scaled_dot_product_attention</a></li>
-<li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </details></li>
@@ -521,6 +520,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.AvgPool3d.html">mlx.nn.AvgPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.BatchNorm.html">mlx.nn.BatchNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.CELU.html">mlx.nn.CELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
@@ -550,6 +550,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.MaxPool2d.html">mlx.nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.MaxPool3d.html">mlx.nn.MaxPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
@@ -877,14 +878,25 @@
 the input precision.</p>
 <p>Note: For Grouped Query Attention and Multi-Query Attention, the <code class="docutils literal notranslate"><span class="pre">k</span></code>
 and <code class="docutils literal notranslate"><span class="pre">v</span></code> inputs should not be pre-tiled to match <code class="docutils literal notranslate"><span class="pre">q</span></code>.</p>
+<p>In the following the dimensions are given by:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">B</span></code>: The batch size.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">N_q</span></code>: The number of query heads.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">N_kv</span></code>: The number of key and value heads.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_q</span></code>: The number of queries per example.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">T_kv</span></code>: The number of keys and values per example.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">D</span></code>: The per-head dimension.</p></li>
+</ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>q</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input query array.</p></li>
-<li><p><strong>k</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input keys array.</p></li>
-<li><p><strong>v</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input values array.</p></li>
+<li><p><strong>q</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Queries with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_q,</span> <span class="pre">T_q,</span> <span class="pre">D]</span></code>.</p></li>
+<li><p><strong>k</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Keys with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_kv,</span> <span class="pre">T_kv,</span> <span class="pre">D]</span></code>.</p></li>
+<li><p><strong>v</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Values with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_kv,</span> <span class="pre">T_kv,</span> <span class="pre">D]</span></code>.</p></li>
 <li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Scale for queries (typically <code class="docutils literal notranslate"><span class="pre">1.0</span> <span class="pre">/</span> <span class="pre">sqrt(q.shape(-1)</span></code>)</p></li>
-<li><p><strong>mask</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>, </em><em>optional</em>) – An additive mask to apply to the query-key scores.</p></li>
+<li><p><strong>mask</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>, </em><em>optional</em>) – An additive mask to apply to the query-key
+scores. The mask can have at most 4 dimensions and must be
+broadcast-compatible with the shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">T_q,</span> <span class="pre">T_kv]</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -919,11 +931,11 @@ and <code class="docutils literal notranslate"><span class="pre">v</span></code>
       </div>
     </a>
     <a class="right-next"
-       href="mlx.core.fast.affine_quantize.html"
+       href="mlx.core.fast.metal_kernel.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">mlx.core.fast.affine_quantize</p>
+        <p class="prev-next-title">mlx.core.fast.metal_kernel</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

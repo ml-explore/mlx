@@ -97,21 +97,26 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="gemm_8h_source.html">gemm.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="attn_8h_source.html">attn.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
-<tr class="memitem:aa8a04ed74d2259f99b337d4662c64d83" id="r_aa8a04ed74d2259f99b337d4662c64d83"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa8a04ed74d2259f99b337d4662c64d83">loader_a_t</a></td></tr>
-<tr class="separator:aa8a04ed74d2259f99b337d4662c64d83"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa98f32278b5fd98c93ae5483c3596395" id="r_aa98f32278b5fd98c93ae5483c3596395"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa98f32278b5fd98c93ae5483c3596395">loader_b_t</a></td></tr>
-<tr class="separator:aa98f32278b5fd98c93ae5483c3596395"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:add8c6a31011a4895667c2a94a5af3782" id="r_add8c6a31011a4895667c2a94a5af3782"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#add8c6a31011a4895667c2a94a5af3782">mma_t</a></td></tr>
-<tr class="separator:add8c6a31011a4895667c2a94a5af3782"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98b6ec692580510081e2aa887a61944b" id="r_a98b6ec692580510081e2aa887a61944b"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a98b6ec692580510081e2aa887a61944b">loader_a_t</a></td></tr>
+<tr class="separator:a98b6ec692580510081e2aa887a61944b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1a115d5af0fb6e260165adba2e377635" id="r_a1a115d5af0fb6e260165adba2e377635"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1a115d5af0fb6e260165adba2e377635">loader_b_t</a></td></tr>
+<tr class="separator:a1a115d5af0fb6e260165adba2e377635"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae52eb09c9478cd4f199662346ac0c83e" id="r_ae52eb09c9478cd4f199662346ac0c83e"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae52eb09c9478cd4f199662346ac0c83e">mma_t</a></td></tr>
+<tr class="separator:ae52eb09c9478cd4f199662346ac0c83e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a756d7bbcc96e2919cd65eec4bc135780" id="r_a756d7bbcc96e2919cd65eec4bc135780"><td class="memTemplParams" colspan="2">template&lt;bool M_aligned, bool N_aligned, bool K_aligned_&gt; </td></tr>
-<tr class="memitem:a756d7bbcc96e2919cd65eec4bc135780"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a756d7bbcc96e2919cd65eec4bc135780">gemm_loop</a> (threadgroup T *As, threadgroup T *Bs, const int gemm_k_iterations, thread <a class="el" href="#aa8a04ed74d2259f99b337d4662c64d83">loader_a_t</a> &amp;loader_a, thread <a class="el" href="#aa98f32278b5fd98c93ae5483c3596395">loader_b_t</a> &amp;loader_b, thread <a class="el" href="#add8c6a31011a4895667c2a94a5af3782">mma_t</a> &amp;mma_op, thread const short &amp;tgp_bm, thread const short &amp;tgp_bn, thread const short &amp;lbk, <a class="el" href="structmlx_1_1steel_1_1_loop_alignment.html">LoopAlignment</a>&lt; M_aligned, N_aligned, K_aligned_ &gt; l={})</td></tr>
+<tr class="memitem:a756d7bbcc96e2919cd65eec4bc135780"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a756d7bbcc96e2919cd65eec4bc135780">gemm_loop</a> (threadgroup T *As, threadgroup T *Bs, const int gemm_k_iterations, thread <a class="el" href="#a98b6ec692580510081e2aa887a61944b">loader_a_t</a> &amp;loader_a, thread <a class="el" href="#a1a115d5af0fb6e260165adba2e377635">loader_b_t</a> &amp;loader_b, thread <a class="el" href="#ae52eb09c9478cd4f199662346ac0c83e">mma_t</a> &amp;mma_op, thread const short &amp;tgp_bm, thread const short &amp;tgp_bn, thread const short &amp;lbk, <a class="el" href="structmlx_1_1steel_1_1_loop_alignment.html">LoopAlignment</a>&lt; M_aligned, N_aligned, K_aligned_ &gt; l={})</td></tr>
+<tr class="separator:a756d7bbcc96e2919cd65eec4bc135780"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a00e55d4a161758350ed7310817d2d2a5" id="r_a00e55d4a161758350ed7310817d2d2a5"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a00e55d4a161758350ed7310817d2d2a5">run</a> (const device T *A, const device T *B, device U *D, const constant <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_params.html">GEMMParams</a> *params, threadgroup T *As, threadgroup T *Bs, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 lid)</td></tr>
+<tr class="separator:a00e55d4a161758350ed7310817d2d2a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a756d7bbcc96e2919cd65eec4bc135780" id="r_a756d7bbcc96e2919cd65eec4bc135780"><td class="memTemplParams" colspan="2">template&lt;bool M_aligned, bool N_aligned, bool K_aligned_&gt; </td></tr>
+<tr class="memitem:a756d7bbcc96e2919cd65eec4bc135780"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a756d7bbcc96e2919cd65eec4bc135780">gemm_loop</a> (threadgroup T *As, threadgroup T *Bs, const int gemm_k_iterations, thread <a class="el" href="#a98b6ec692580510081e2aa887a61944b">loader_a_t</a> &amp;loader_a, thread <a class="el" href="#a1a115d5af0fb6e260165adba2e377635">loader_b_t</a> &amp;loader_b, thread <a class="el" href="#ae52eb09c9478cd4f199662346ac0c83e">mma_t</a> &amp;mma_op, thread const short &amp;tgp_bm, thread const short &amp;tgp_bn, thread const short &amp;lbk, <a class="el" href="structmlx_1_1steel_1_1_loop_alignment.html">LoopAlignment</a>&lt; M_aligned, N_aligned, K_aligned_ &gt; l={})</td></tr>
 <tr class="separator:a756d7bbcc96e2919cd65eec4bc135780"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a00e55d4a161758350ed7310817d2d2a5" id="r_a00e55d4a161758350ed7310817d2d2a5"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a00e55d4a161758350ed7310817d2d2a5">run</a> (const device T *A, const device T *B, device U *D, const constant <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_params.html">GEMMParams</a> *params, threadgroup T *As, threadgroup T *Bs, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 lid)</td></tr>
 <tr class="separator:a00e55d4a161758350ed7310817d2d2a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -132,8 +137,8 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a9058ddb73e30e83fb9c548ba22817d64"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Typedef Documentation</h2>
-<a id="aa8a04ed74d2259f99b337d4662c64d83" name="aa8a04ed74d2259f99b337d4662c64d83"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa8a04ed74d2259f99b337d4662c64d83">&#9670;&#160;</a></span>loader_a_t</h2>
+<a id="a98b6ec692580510081e2aa887a61944b" name="a98b6ec692580510081e2aa887a61944b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98b6ec692580510081e2aa887a61944b">&#9670;&#160;</a></span>loader_a_t</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -141,7 +146,7 @@ Public Attributes</h2></td></tr>
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, bool MN_aligned, bool K_aligned, typename AccumType  = typename AccumHelper&lt;T&gt;::accum_type, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::loader_a_t</td>
+          <td class="memname">typedef <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">BlockLoader</a>&lt; T, transpose_a ? BK :BM, transpose_a ? BM :BK, transpose_a ? BM+<a class="el" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a> :BK+<a class="el" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a>, !transpose_a, <a class="el" href="#a9058ddb73e30e83fb9c548ba22817d64">tgp_size</a> &gt; <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::loader_a_t</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -152,13 +157,13 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 <div class="line">      transpose_a ? BM + <a class="code hl_variable" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a> : BK + <a class="code hl_variable" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a>,</div>
 <div class="line">      !transpose_a,</div>
 <div class="line">      <a class="code hl_variable" href="#a9058ddb73e30e83fb9c548ba22817d64">tgp_size</a>&gt;</div>
-<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_a9058ddb73e30e83fb9c548ba22817d64"><div class="ttname"><a href="#a9058ddb73e30e83fb9c548ba22817d64">mlx::steel::GEMMKernel::tgp_size</a></div><div class="ttdeci">STEEL_CONST short tgp_size</div><div class="ttdef"><b>Definition</b> gemm.h:46</div></div>
-<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_ad547704ccbff6c2076abeffa6628c5a0"><div class="ttname"><a href="#ad547704ccbff6c2076abeffa6628c5a0">mlx::steel::GEMMKernel::tgp_padding_a</a></div><div class="ttdeci">STEEL_CONST short tgp_padding_a</div><div class="ttdef"><b>Definition</b> gemm.h:38</div></div>
+<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_a9058ddb73e30e83fb9c548ba22817d64"><div class="ttname"><a href="#a9058ddb73e30e83fb9c548ba22817d64">mlx::steel::GEMMKernel::tgp_size</a></div><div class="ttdeci">STEEL_CONST short tgp_size</div><div class="ttdef"><b>Definition</b> attn.h:47</div></div>
+<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_ad547704ccbff6c2076abeffa6628c5a0"><div class="ttname"><a href="#ad547704ccbff6c2076abeffa6628c5a0">mlx::steel::GEMMKernel::tgp_padding_a</a></div><div class="ttdeci">STEEL_CONST short tgp_padding_a</div><div class="ttdef"><b>Definition</b> attn.h:39</div></div>
 </div><!-- fragment -->
 </div>
 </div>
-<a id="aa98f32278b5fd98c93ae5483c3596395" name="aa98f32278b5fd98c93ae5483c3596395"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa98f32278b5fd98c93ae5483c3596395">&#9670;&#160;</a></span>loader_b_t</h2>
+<a id="a1a115d5af0fb6e260165adba2e377635" name="a1a115d5af0fb6e260165adba2e377635"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a115d5af0fb6e260165adba2e377635">&#9670;&#160;</a></span>loader_b_t</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -166,7 +171,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, bool MN_aligned, bool K_aligned, typename AccumType  = typename AccumHelper&lt;T&gt;::accum_type, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::loader_b_t</td>
+          <td class="memname">typedef <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">BlockLoader</a>&lt; T, transpose_b ? BN :BK, transpose_b ? BK :BN, transpose_b ? BK+<a class="el" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a> :BN+<a class="el" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a>, transpose_b, <a class="el" href="#a9058ddb73e30e83fb9c548ba22817d64">tgp_size</a> &gt; <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::loader_b_t</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -177,12 +182,12 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 <div class="line">      transpose_b ? BK + <a class="code hl_variable" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a> : BN + <a class="code hl_variable" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a>,</div>
 <div class="line">      transpose_b,</div>
 <div class="line">      <a class="code hl_variable" href="#a9058ddb73e30e83fb9c548ba22817d64">tgp_size</a>&gt;</div>
-<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_ad1b03941e869017558423c08b08bc094"><div class="ttname"><a href="#ad1b03941e869017558423c08b08bc094">mlx::steel::GEMMKernel::tgp_padding_b</a></div><div class="ttdeci">STEEL_CONST short tgp_padding_b</div><div class="ttdef"><b>Definition</b> gemm.h:39</div></div>
+<div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html_ad1b03941e869017558423c08b08bc094"><div class="ttname"><a href="#ad1b03941e869017558423c08b08bc094">mlx::steel::GEMMKernel::tgp_padding_b</a></div><div class="ttdeci">STEEL_CONST short tgp_padding_b</div><div class="ttdef"><b>Definition</b> attn.h:40</div></div>
 </div><!-- fragment -->
 </div>
 </div>
-<a id="add8c6a31011a4895667c2a94a5af3782" name="add8c6a31011a4895667c2a94a5af3782"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#add8c6a31011a4895667c2a94a5af3782">&#9670;&#160;</a></span>mma_t</h2>
+<a id="ae52eb09c9478cd4f199662346ac0c83e" name="ae52eb09c9478cd4f199662346ac0c83e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae52eb09c9478cd4f199662346ac0c83e">&#9670;&#160;</a></span>mma_t</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -190,7 +195,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, bool MN_aligned, bool K_aligned, typename AccumType  = typename AccumHelper&lt;T&gt;::accum_type, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::mma_t</td>
+          <td class="memname">typedef <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, transpose_a ? BM+<a class="el" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a> :BK+<a class="el" href="#ad547704ccbff6c2076abeffa6628c5a0">tgp_padding_a</a>, transpose_b ? BK+<a class="el" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a> :BN+<a class="el" href="#ad1b03941e869017558423c08b08bc094">tgp_padding_b</a>, AccumType, Epilogue &gt; <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::mma_t</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -213,7 +218,7 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
 <a id="a756d7bbcc96e2919cd65eec4bc135780" name="a756d7bbcc96e2919cd65eec4bc135780"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a756d7bbcc96e2919cd65eec4bc135780">&#9670;&#160;</a></span>gemm_loop()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a756d7bbcc96e2919cd65eec4bc135780">&#9670;&#160;</a></span>gemm_loop() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -243,17 +248,90 @@ template&lt;bool M_aligned, bool N_aligned, bool K_aligned_&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#aa8a04ed74d2259f99b337d4662c64d83">loader_a_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_a</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a98b6ec692580510081e2aa887a61944b">loader_a_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_a</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#aa98f32278b5fd98c93ae5483c3596395">loader_b_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_b</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a1a115d5af0fb6e260165adba2e377635">loader_b_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_b</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#add8c6a31011a4895667c2a94a5af3782">mma_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>mma_op</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#ae52eb09c9478cd4f199662346ac0c83e">mma_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>mma_op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread const short &amp;</td>          <td class="paramname"><span class="paramname"><em>tgp_bm</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread const short &amp;</td>          <td class="paramname"><span class="paramname"><em>tgp_bn</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread const short &amp;</td>          <td class="paramname"><span class="paramname"><em>lbk</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1steel_1_1_loop_alignment.html">LoopAlignment</a>&lt; M_aligned, N_aligned, K_aligned_ &gt;</td>          <td class="paramname"><span class="paramname"><em>l</em></span><span class="paramdefsep"> = </span><span class="paramdefval">{}</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a756d7bbcc96e2919cd65eec4bc135780" name="a756d7bbcc96e2919cd65eec4bc135780"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a756d7bbcc96e2919cd65eec4bc135780">&#9670;&#160;</a></span>gemm_loop() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, bool MN_aligned, bool K_aligned, typename AccumType  = typename AccumHelper&lt;T&gt;::accum_type, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+<div class="memtemplate">
+template&lt;bool M_aligned, bool N_aligned, bool K_aligned_&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::gemm_loop </td>
+          <td>(</td>
+          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>As</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>Bs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>gemm_k_iterations</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a98b6ec692580510081e2aa887a61944b">loader_a_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#a1a115d5af0fb6e260165adba2e377635">loader_b_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>loader_b</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread <a class="el" href="#ae52eb09c9478cd4f199662346ac0c83e">mma_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>mma_op</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -286,7 +364,78 @@ template&lt;bool M_aligned, bool N_aligned, bool K_aligned_&gt; </div>
 </div>
 </div>
 <a id="a00e55d4a161758350ed7310817d2d2a5" name="a00e55d4a161758350ed7310817d2d2a5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a00e55d4a161758350ed7310817d2d2a5">&#9670;&#160;</a></span>run()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a00e55d4a161758350ed7310817d2d2a5">&#9670;&#160;</a></span>run() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, bool MN_aligned, bool K_aligned, typename AccumType  = typename AccumHelper&lt;T&gt;::accum_type, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned, AccumType, Epilogue &gt;::run </td>
+          <td>(</td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>D</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant <a class="el" href="structmlx_1_1steel_1_1_g_e_m_m_params.html">GEMMParams</a> *</td>          <td class="paramname"><span class="paramname"><em>params</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>As</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>Bs</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_lane_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_group_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lid</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a00e55d4a161758350ed7310817d2d2a5" name="a00e55d4a161758350ed7310817d2d2a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00e55d4a161758350ed7310817d2d2a5">&#9670;&#160;</a></span>run() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -457,7 +606,8 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="attn_8h_source.html">attn.h</a></li>
 <li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="gemm_8h_source.html">gemm.h</a></li>
 </ul>
 </div><!-- contents -->

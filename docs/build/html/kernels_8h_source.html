@@ -169,175 +169,177 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keywordtype">int</span> bn,</div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <span class="keywordtype">int</span> tn);</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span> </div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a3bd386cb6db09f636963ce66ceaf8647">   79</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a3bd386cb6db09f636963ce66ceaf8647">get_reduce_init_kernel</a>(</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#ae0470605dc819efeb6510183619f0299">   79</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#ae0470605dc819efeb6510183619f0299">get_reduce_init_kernel</a>(</div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <span class="keyword">const</span> std::string&amp; func_name,</div>
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    <span class="keyword">const</span> std::string&amp; op_name,</div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out);</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keyword">const</span> <a class="code hl_struct" href="structmlx_1_1core_1_1_dtype.html">Dtype</a>&amp; out_type);</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span> </div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a7aa91fcfe8b9caa42d60a957f11bfe6b">   86</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a7aa91fcfe8b9caa42d60a957f11bfe6b">get_reduce_kernel</a>(</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a1be32ba7d67137dde7ac191dfe83ff49">   86</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a1be32ba7d67137dde7ac191dfe83ff49">get_reduce_kernel</a>(</div>
 <div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
 <div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <span class="keyword">const</span> std::string&amp; func_name,</div>
 <div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>    <span class="keyword">const</span> std::string&amp; op_name,</div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; in,</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    <span class="keywordtype">int</span> ndim = -1,</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keywordtype">int</span> bm = -1,</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordtype">int</span> bn = -1);</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span> </div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b">   97</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b">get_steel_gemm_fused_kernel</a>(</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keyword">const</span> std::string&amp; hash_name,</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">metal::MTLFCList</a>&amp; func_consts,</div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keywordtype">bool</span> transpose_a,</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keywordtype">bool</span> transpose_b,</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    <span class="keywordtype">int</span> bk,</div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    <span class="keywordtype">int</span> wm,</div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keywordtype">int</span> wn);</div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span> </div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5">  111</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5">get_steel_gemm_splitk_kernel</a>(</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; in,</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    <span class="keywordtype">bool</span> transpose_a,</div>
-<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    <span class="keywordtype">bool</span> transpose_b,</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    <span class="keywordtype">int</span> bk,</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    <span class="keywordtype">int</span> wm,</div>
-<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    <span class="keywordtype">int</span> wn,</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    <span class="keywordtype">bool</span> mn_aligned,</div>
-<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    <span class="keywordtype">bool</span> k_aligned);</div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span> </div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b">  126</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b">get_steel_gemm_splitk_accum_kernel</a>(</div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; in,</div>
-<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>    <span class="keywordtype">bool</span> axbpy);</div>
-<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span> </div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d">  133</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d">get_steel_gemm_masked_kernel</a>(</div>
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_out,</div>
-<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_op,</div>
-<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    <span class="keywordtype">bool</span> transpose_a,</div>
-<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    <span class="keywordtype">bool</span> transpose_b,</div>
-<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <span class="keywordtype">int</span> bk,</div>
-<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    <span class="keywordtype">int</span> wm,</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keywordtype">int</span> wn,</div>
-<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <span class="keywordtype">bool</span> mn_aligned,</div>
-<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="keywordtype">bool</span> k_aligned);</div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span> </div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4">  149</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4">get_steel_conv_kernel</a>(</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keywordtype">int</span> bk,</div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <span class="keywordtype">int</span> wm,</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <span class="keywordtype">int</span> wn,</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keywordtype">int</span> n_channel_specialization,</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <span class="keywordtype">bool</span> small_filter);</div>
-<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span> </div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818">  161</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818">get_gemv_masked_kernel</a>(</div>
-<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_out,</div>
-<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_op,</div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keywordtype">bool</span> transpose_mat,</div>
-<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    <span class="keywordtype">int</span> sm,</div>
-<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>    <span class="keywordtype">int</span> sn,</div>
-<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>    <span class="keywordtype">int</span> tm,</div>
-<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <span class="keywordtype">int</span> tn,</div>
-<div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span>    <span class="keywordtype">bool</span> contiguous);</div>
-<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span> </div>
-<div class="line"><a id="l00176" name="l00176"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d">  176</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d">get_steel_conv_general_kernel</a>(</div>
-<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
-<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>    <span class="keywordtype">int</span> bm,</div>
-<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>    <span class="keywordtype">int</span> bn,</div>
-<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>    <span class="keywordtype">int</span> bk,</div>
-<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>    <span class="keywordtype">int</span> wm,</div>
-<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    <span class="keywordtype">int</span> wn);</div>
-<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span> </div>
-<div class="line"><a id="l00186" name="l00186"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f">  186</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f">get_fft_kernel</a>(</div>
-<div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keyword">const</span> std::string&amp; hash_name,</div>
-<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">metal::MTLFCList</a>&amp; func_consts,</div>
-<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>    <span class="keyword">const</span> std::string&amp; template_def);</div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span> </div>
-<div class="line"><a id="l00193" name="l00193"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e">  193</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e">get_quantized_kernel</a>(</div>
-<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
-<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
-<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keyword">const</span> std::string&amp; template_def);</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span> </div>
-<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span><span class="comment">// Create a GPU kernel template definition for JIT compilation</span></div>
-<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span>... Args&gt;</div>
-<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>std::string</div>
-<div class="foldopen" id="foldopen00201" data-start="{" data-end="}">
-<div class="line"><a id="l00201" name="l00201"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">  201</a></span><a class="code hl_function" href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">get_template_definition</a>(std::string name, std::string func, Args... args) {</div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>  std::ostringstream s;</div>
-<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>  s &lt;&lt; func &lt;&lt; <span class="stringliteral">&quot;&lt;&quot;</span>;</div>
-<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>  <span class="keywordtype">bool</span> first = <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>  <span class="keyword">auto</span> add_arg = [&amp;s, &amp;first](<span class="keyword">const</span> <span class="keyword">auto</span>&amp; arg) {</div>
-<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>    <span class="keywordflow">if</span> (!first) {</div>
-<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>      s &lt;&lt; <span class="stringliteral">&quot;, &quot;</span>;</div>
-<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>    }</div>
-<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>    first = <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>    s &lt;&lt; arg;</div>
-<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>  };</div>
-<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>  (add_arg(args), ...);</div>
-<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>  s &lt;&lt; <span class="stringliteral">&quot;&gt;&quot;</span>;</div>
-<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>  <span class="keywordflow">return</span> fmt::format(</div>
-<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span>      <span class="stringliteral">&quot;\ntemplate [[host_name(\&quot;{0}\&quot;)]] [[kernel]] decltype({1}) {1};\n&quot;</span>,</div>
-<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span>      name,</div>
-<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>      s.str());</div>
-<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span>}</div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keyword">const</span> <a class="code hl_struct" href="structmlx_1_1core_1_1_dtype.html">Dtype</a>&amp; in_type,</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keyword">const</span> <a class="code hl_struct" href="structmlx_1_1core_1_1_dtype.html">Dtype</a>&amp; out_type,</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    <span class="keyword">const</span> std::string&amp; idx_t,</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keywordtype">int</span> ndim = -1,</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordtype">int</span> bm = -1,</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keywordtype">int</span> bn = -1);</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span> </div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b">   98</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b">get_steel_gemm_fused_kernel</a>(</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="keyword">const</span> std::string&amp; hash_name,</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">metal::MTLFCList</a>&amp; func_consts,</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keywordtype">bool</span> transpose_a,</div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    <span class="keywordtype">bool</span> transpose_b,</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    <span class="keywordtype">int</span> bk,</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keywordtype">int</span> wm,</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    <span class="keywordtype">int</span> wn);</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span> </div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5">  112</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5">get_steel_gemm_splitk_kernel</a>(</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; in,</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    <span class="keywordtype">bool</span> transpose_a,</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    <span class="keywordtype">bool</span> transpose_b,</div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    <span class="keywordtype">int</span> bk,</div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    <span class="keywordtype">int</span> wm,</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    <span class="keywordtype">int</span> wn,</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    <span class="keywordtype">bool</span> mn_aligned,</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    <span class="keywordtype">bool</span> k_aligned);</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span> </div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b">  127</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b">get_steel_gemm_splitk_accum_kernel</a>(</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; in,</div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>    <span class="keywordtype">bool</span> axbpy);</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span> </div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d">  134</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d">get_steel_gemm_masked_kernel</a>(</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_out,</div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_op,</div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    <span class="keywordtype">bool</span> transpose_a,</div>
+<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    <span class="keywordtype">bool</span> transpose_b,</div>
+<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    <span class="keywordtype">int</span> bk,</div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <span class="keywordtype">int</span> wm,</div>
+<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <span class="keywordtype">int</span> wn,</div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="keywordtype">bool</span> mn_aligned,</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <span class="keywordtype">bool</span> k_aligned);</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span> </div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4">  150</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4">get_steel_conv_kernel</a>(</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <span class="keywordtype">int</span> bk,</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <span class="keywordtype">int</span> wm,</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keywordtype">int</span> wn,</div>
+<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <span class="keywordtype">int</span> n_channel_specialization,</div>
+<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <span class="keywordtype">bool</span> small_filter);</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span> </div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818">  162</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818">get_gemv_masked_kernel</a>(</div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_out,</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">const</span> std::optional&lt;array&gt;&amp; mask_op,</div>
+<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <span class="keywordtype">bool</span> transpose_mat,</div>
+<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>    <span class="keywordtype">int</span> sm,</div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>    <span class="keywordtype">int</span> sn,</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <span class="keywordtype">int</span> tm,</div>
+<div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span>    <span class="keywordtype">int</span> tn,</div>
+<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="group__ops.html#ga8ab10aa6c41416d739791164a52b25d5">contiguous</a>);</div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span> </div>
+<div class="line"><a id="l00177" name="l00177"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d">  177</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d">get_steel_conv_general_kernel</a>(</div>
+<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>    <span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out,</div>
+<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>    <span class="keywordtype">int</span> bm,</div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>    <span class="keywordtype">int</span> bn,</div>
+<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>    <span class="keywordtype">int</span> bk,</div>
+<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    <span class="keywordtype">int</span> wm,</div>
+<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>    <span class="keywordtype">int</span> wn);</div>
+<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span> </div>
+<div class="line"><a id="l00187" name="l00187"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f">  187</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f">get_fft_kernel</a>(</div>
+<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keyword">const</span> std::string&amp; hash_name,</div>
+<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">metal::MTLFCList</a>&amp; func_consts,</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    <span class="keyword">const</span> std::string&amp; template_def);</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span> </div>
+<div class="line"><a id="l00194" name="l00194"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e">  194</a></span>MTL::ComputePipelineState* <a class="code hl_function" href="namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e">get_quantized_kernel</a>(</div>
+<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <a class="code hl_class" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a>&amp; d,</div>
+<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keyword">const</span> std::string&amp; kernel_name,</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keyword">const</span> std::string&amp; template_def);</div>
+<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span> </div>
+<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span><span class="comment">// Create a GPU kernel template definition for JIT compilation</span></div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span>... Args&gt;</div>
+<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>std::string</div>
+<div class="foldopen" id="foldopen00202" data-start="{" data-end="}">
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">  202</a></span><a class="code hl_function" href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">get_template_definition</a>(std::string name, std::string func, Args... args) {</div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>  std::ostringstream s;</div>
+<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>  s &lt;&lt; func &lt;&lt; <span class="stringliteral">&quot;&lt;&quot;</span>;</div>
+<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>  <span class="keywordtype">bool</span> first = <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>  <span class="keyword">auto</span> add_arg = [&amp;s, &amp;first](<span class="keyword">const</span> <span class="keyword">auto</span>&amp; arg) {</div>
+<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>    <span class="keywordflow">if</span> (!first) {</div>
+<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>      s &lt;&lt; <span class="stringliteral">&quot;, &quot;</span>;</div>
+<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>    }</div>
+<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>    first = <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>    s &lt;&lt; arg;</div>
+<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>  };</div>
+<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>  (add_arg(args), ...);</div>
+<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>  s &lt;&lt; <span class="stringliteral">&quot;&gt;&quot;</span>;</div>
+<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span>  <span class="keywordflow">return</span> fmt::format(</div>
+<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span>      <span class="stringliteral">&quot;\ntemplate [[host_name(\&quot;{0}\&quot;)]] [[kernel]] decltype({1}) {1};\n&quot;</span>,</div>
+<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>      name,</div>
+<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span>      s.str());</div>
+<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span>}</div>
 </div>
-<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span> </div>
-<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span>} <span class="comment">// namespace mlx::core</span></div>
+<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span> </div>
+<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span>} <span class="comment">// namespace mlx::core</span></div>
 <div class="ttc" id="aarray_8h_html"><div class="ttname"><a href="array_8h.html">array.h</a></div></div>
 <div class="ttc" id="abackend_2metal_2device_8h_html"><div class="ttname"><a href="backend_2metal_2device_8h.html">device.h</a></div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1array_html"><div class="ttname"><a href="classmlx_1_1core_1_1array.html">mlx::core::array</a></div><div class="ttdef"><b>Definition</b> array.h:20</div></div>
-<div class="ttc" id="aclassmlx_1_1core_1_1metal_1_1_device_html"><div class="ttname"><a href="classmlx_1_1core_1_1metal_1_1_device.html">mlx::core::metal::Device</a></div><div class="ttdef"><b>Definition</b> device.h:131</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1metal_1_1_device_html"><div class="ttname"><a href="classmlx_1_1core_1_1metal_1_1_device.html">mlx::core::metal::Device</a></div><div class="ttdef"><b>Definition</b> device.h:158</div></div>
 <div class="ttc" id="acommon_2binary_8h_html_a70228731d29946574b238d21fb4b360c"><div class="ttname"><a href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a></div><div class="ttdeci">Op op</div><div class="ttdef"><b>Definition</b> binary.h:129</div></div>
+<div class="ttc" id="agroup__ops_html_ga8ab10aa6c41416d739791164a52b25d5"><div class="ttname"><a href="group__ops.html#ga8ab10aa6c41416d739791164a52b25d5">mlx::core::contiguous</a></div><div class="ttdeci">array contiguous(const array &amp;a, bool allow_col_major=false, StreamOrDevice s={})</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1metal_html_a616e09a1ef321d527770721cef264c54"><div class="ttname"><a href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">mlx::core::metal::MTLFCList</a></div><div class="ttdeci">std::vector&lt; std::tuple&lt; const void *, MTL::DataType, NS::UInteger &gt; &gt; MTLFCList</div><div class="ttdef"><b>Definition</b> device.h:38</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html"><div class="ttname"><a href="namespacemlx_1_1core.html">mlx::core</a></div><div class="ttdef"><b>Definition</b> allocator.h:7</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a05a220cff45f12439fde775983c6df78"><div class="ttname"><a href="namespacemlx_1_1core.html#a05a220cff45f12439fde775983c6df78">mlx::core::get_copy_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_copy_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;in, const array &amp;out)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a195b86cad5bb99aa1bcd23952305af6b"><div class="ttname"><a href="namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b">mlx::core::get_steel_gemm_splitk_accum_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_gemm_splitk_accum_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;in, const array &amp;out, bool axbpy)</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_html_a1be32ba7d67137dde7ac191dfe83ff49"><div class="ttname"><a href="namespacemlx_1_1core.html#a1be32ba7d67137dde7ac191dfe83ff49">mlx::core::get_reduce_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_reduce_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;func_name, const std::string &amp;op_name, const Dtype &amp;in_type, const Dtype &amp;out_type, const std::string &amp;idx_t, int ndim=-1, int bm=-1, int bn=-1)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a1d4cffc3c78067b3d9a62d64f3fb686f"><div class="ttname"><a href="namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f">mlx::core::get_fft_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_fft_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;hash_name, const metal::MTLFCList &amp;func_consts, const std::string &amp;template_def)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a35a412f688d79eb47e42d20a7c8650ee"><div class="ttname"><a href="namespacemlx_1_1core.html#a35a412f688d79eb47e42d20a7c8650ee">mlx::core::get_softmax_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_softmax_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, bool precise, const array &amp;out)</div></div>
-<div class="ttc" id="anamespacemlx_1_1core_html_a3bd386cb6db09f636963ce66ceaf8647"><div class="ttname"><a href="namespacemlx_1_1core.html#a3bd386cb6db09f636963ce66ceaf8647">mlx::core::get_reduce_init_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_reduce_init_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;func_name, const std::string &amp;op_name, const array &amp;out)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a4decd4a07d91487e6903f6e3c8b7513a"><div class="ttname"><a href="namespacemlx_1_1core.html#a4decd4a07d91487e6903f6e3c8b7513a">mlx::core::get_binary_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_binary_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, Dtype in_type, Dtype out_type, const std::string op)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a4e809746f48e5dcf7fa63215d3f5e33e"><div class="ttname"><a href="namespacemlx_1_1core.html#a4e809746f48e5dcf7fa63215d3f5e33e">mlx::core::get_binary_two_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_binary_two_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, Dtype in_type, Dtype out_type, const std::string op)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a54eb3b65375022428aab5f810e40624b"><div class="ttname"><a href="namespacemlx_1_1core.html#a54eb3b65375022428aab5f810e40624b">mlx::core::get_ternary_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_ternary_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, Dtype type, const std::string op)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a76f614e9956a6ca05a9be4db5a483446"><div class="ttname"><a href="namespacemlx_1_1core.html#a76f614e9956a6ca05a9be4db5a483446">mlx::core::get_arange_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_arange_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;out)</div></div>
-<div class="ttc" id="anamespacemlx_1_1core_html_a7aa91fcfe8b9caa42d60a957f11bfe6b"><div class="ttname"><a href="namespacemlx_1_1core.html#a7aa91fcfe8b9caa42d60a957f11bfe6b">mlx::core::get_reduce_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_reduce_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;func_name, const std::string &amp;op_name, const array &amp;in, const array &amp;out, int ndim=-1, int bm=-1, int bn=-1)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a84ebe6275218070f0ea320f126f64e22"><div class="ttname"><a href="namespacemlx_1_1core.html#a84ebe6275218070f0ea320f126f64e22">mlx::core::get_sort_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_sort_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;in, const array &amp;out, int bn, int tn)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a84fa8e0aee321a9d614433a0b933103b"><div class="ttname"><a href="namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b">mlx::core::get_steel_gemm_fused_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_gemm_fused_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;hash_name, const metal::MTLFCList &amp;func_consts, const array &amp;out, bool transpose_a, bool transpose_b, int bm, int bn, int bk, int wm, int wn)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a90c24e0d0b99b68fad9deefcf4d3e818"><div class="ttname"><a href="namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818">mlx::core::get_gemv_masked_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_gemv_masked_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;out, const std::optional&lt; array &gt; &amp;mask_out, const std::optional&lt; array &gt; &amp;mask_op, bool transpose_mat, int bm, int bn, int sm, int sn, int tm, int tn, bool contiguous)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_aa3faeae5378bfaafe3ce3432a051e43e"><div class="ttname"><a href="namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e">mlx::core::get_quantized_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_quantized_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;template_def)</div></div>
-<div class="ttc" id="anamespacemlx_1_1core_html_aae0d19f0acdef2accd2428fb84c8a032"><div class="ttname"><a href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">mlx::core::get_template_definition</a></div><div class="ttdeci">std::string get_template_definition(std::string name, std::string func, Args... args)</div><div class="ttdef"><b>Definition</b> kernels.h:201</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_html_aae0d19f0acdef2accd2428fb84c8a032"><div class="ttname"><a href="namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032">mlx::core::get_template_definition</a></div><div class="ttdeci">std::string get_template_definition(std::string name, std::string func, Args... args)</div><div class="ttdef"><b>Definition</b> kernels.h:202</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_ab5f60614e965144b451930fdf935e08d"><div class="ttname"><a href="namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d">mlx::core::get_steel_gemm_masked_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_gemm_masked_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;out, const std::optional&lt; array &gt; &amp;mask_out, const std::optional&lt; array &gt; &amp;mask_op, bool transpose_a, bool transpose_b, int bm, int bn, int bk, int wm, int wn, bool mn_aligned, bool k_aligned)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_abce2b67044ee06a7bbe7a91ec7c8c48d"><div class="ttname"><a href="namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d">mlx::core::get_steel_conv_general_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_conv_general_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;out, int bm, int bn, int bk, int wm, int wn)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_adce79d220672f5f3c65cc31d145ca9c4"><div class="ttname"><a href="namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4">mlx::core::get_steel_conv_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_conv_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;out, int bm, int bn, int bk, int wm, int wn, int n_channel_specialization, bool small_filter)</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_html_ae0470605dc819efeb6510183619f0299"><div class="ttname"><a href="namespacemlx_1_1core.html#ae0470605dc819efeb6510183619f0299">mlx::core::get_reduce_init_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_reduce_init_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const std::string &amp;func_name, const std::string &amp;op_name, const Dtype &amp;out_type)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_aeefaff208444d3fa61ecc0946fe1de5f"><div class="ttname"><a href="namespacemlx_1_1core.html#aeefaff208444d3fa61ecc0946fe1de5f">mlx::core::get_scan_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_scan_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, bool reverse, bool inclusive, const std::string &amp;reduce_type, const array &amp;in, const array &amp;out)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_af48c6f2f72b61dbd6766e4f5fea85df5"><div class="ttname"><a href="namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5">mlx::core::get_steel_gemm_splitk_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_steel_gemm_splitk_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;in, const array &amp;out, bool transpose_a, bool transpose_b, int bm, int bn, int bk, int wm, int wn, bool mn_aligned, bool k_aligned)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_afb57825bb763050cc9a9d194aa41ac36"><div class="ttname"><a href="namespacemlx_1_1core.html#afb57825bb763050cc9a9d194aa41ac36">mlx::core::get_mb_sort_kernel</a></div><div class="ttdeci">MTL::ComputePipelineState * get_mb_sort_kernel(metal::Device &amp;d, const std::string &amp;kernel_name, const array &amp;in, const array &amp;idx, int bn, int tn)</div></div>

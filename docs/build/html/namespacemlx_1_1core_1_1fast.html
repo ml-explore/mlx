@@ -139,8 +139,6 @@ Functions</h2></td></tr>
 <tr class="separator:a3663b50265b0a9c0cca2b5376852e059"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa4b5f6886b2288cb6dfdd8598579f080" id="r_aa4b5f6886b2288cb6dfdd8598579f080"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa4b5f6886b2288cb6dfdd8598579f080">affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:aa4b5f6886b2288cb6dfdd8598579f080"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a638c7e9b9ea8677f01786d8f9738baf8" id="r_a638c7e9b9ea8677f01786d8f9738baf8"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a638c7e9b9ea8677f01786d8f9738baf8">affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="separator:a638c7e9b9ea8677f01786d8f9738baf8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a12c7ef41409d6fb378008e67b6fab328" id="r_a12c7ef41409d6fb378008e67b6fab328"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a12c7ef41409d6fb378008e67b6fab328">affine_dequantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:a12c7ef41409d6fb378008e67b6fab328"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab16436b465dc10ce472193d541d8426e" id="r_ab16436b465dc10ce472193d541d8426e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="#a0e8c2c4ea7a946568c8fe5b4810417e0">MetalKernelFunction</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab16436b465dc10ce472193d541d8426e">metal_kernel</a> (const std::string &amp;name, const std::vector&lt; std::string &gt; &amp;input_names, const std::vector&lt; std::string &gt; &amp;output_names, const std::string &amp;source, const std::string &amp;header=&quot;&quot;, bool ensure_row_contiguous=true, bool atomic_outputs=false)</td></tr>
@@ -217,49 +215,8 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a638c7e9b9ea8677f01786d8f9738baf8" name="a638c7e9b9ea8677f01786d8f9738baf8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a638c7e9b9ea8677f01786d8f9738baf8">&#9670;&#160;</a></span>affine_quantize() <span class="overload">[1/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::fast::affine_quantize </td>
-          <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>group_size</em></span><span class="paramdefsep"> = </span><span class="paramdefval">64</span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>bits</em></span><span class="paramdefsep"> = </span><span class="paramdefval">4</span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span><span class="paramdefsep"> = </span><span class="paramdefval">{}</span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="aa4b5f6886b2288cb6dfdd8598579f080" name="aa4b5f6886b2288cb6dfdd8598579f080"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa4b5f6886b2288cb6dfdd8598579f080">&#9670;&#160;</a></span>affine_quantize() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa4b5f6886b2288cb6dfdd8598579f080">&#9670;&#160;</a></span>affine_quantize()</h2>
 
 <div class="memitem">
 <div class="memproto">

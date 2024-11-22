@@ -95,16 +95,18 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="backend_2metal_2kernels_2steel_2gemm_2transforms_8h_source.html">transforms.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="backend_2metal_2kernels_2steel_2attn_2transforms_8h_source.html">transforms.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a98e558d63826d2aaa06d3e65a06d2760" id="r_a98e558d63826d2aaa06d3e65a06d2760"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC int2&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a98e558d63826d2aaa06d3e65a06d2760">swizzle</a> (uint3 tid, const int swizzle_log)</td></tr>
 <tr class="separator:a98e558d63826d2aaa06d3e65a06d2760"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98e558d63826d2aaa06d3e65a06d2760" id="r_a98e558d63826d2aaa06d3e65a06d2760"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC int2&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a98e558d63826d2aaa06d3e65a06d2760">swizzle</a> (uint3 tid, const int swizzle_log)</td></tr>
+<tr class="separator:a98e558d63826d2aaa06d3e65a06d2760"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
 <a id="a98e558d63826d2aaa06d3e65a06d2760" name="a98e558d63826d2aaa06d3e65a06d2760"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a98e558d63826d2aaa06d3e65a06d2760">&#9670;&#160;</a></span>swizzle()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a98e558d63826d2aaa06d3e65a06d2760">&#9670;&#160;</a></span>swizzle() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -132,7 +134,37 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
+<a id="a98e558d63826d2aaa06d3e65a06d2760" name="a98e558d63826d2aaa06d3e65a06d2760"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98e558d63826d2aaa06d3e65a06d2760">&#9670;&#160;</a></span>swizzle() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static METAL_FUNC int2 mlx::steel::BlockSwizzle::swizzle </td>
+          <td>(</td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>swizzle_log</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="backend_2metal_2kernels_2steel_2attn_2transforms_8h_source.html">transforms.h</a></li>
 <li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="backend_2metal_2kernels_2steel_2gemm_2transforms_8h_source.html">transforms.h</a></li>
 </ul>
 </div><!-- contents -->

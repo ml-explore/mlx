@@ -97,7 +97,7 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="gemm_2loader_8h_source.html">loader.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="attn_2loader_8h_source.html">loader.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
@@ -106,6 +106,17 @@ Classes</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
+<tr class="memitem:a37aca066e63dff238865b5923a2d4335" id="r_a37aca066e63dff238865b5923a2d4335"><td class="memItemLeft" align="right" valign="top">METAL_FUNC&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a37aca066e63dff238865b5923a2d4335">BlockLoader</a> (const device T *src_, const int src_ld_, threadgroup T *dst_, ushort simd_group_id, ushort simd_lane_id)</td></tr>
+<tr class="separator:a37aca066e63dff238865b5923a2d4335"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adb4ca2cc193630a779de552fa8847ddf" id="r_adb4ca2cc193630a779de552fa8847ddf"><td class="memTemplParams" colspan="2">template&lt;typename UnaryOp &gt; </td></tr>
+<tr class="memitem:adb4ca2cc193630a779de552fa8847ddf"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#adb4ca2cc193630a779de552fa8847ddf">apply_inplace_op</a> (thread const UnaryOp &amp;<a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>) const</td></tr>
+<tr class="separator:adb4ca2cc193630a779de552fa8847ddf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c9e27f11f48b34580ed2c7e9cad9a27" id="r_a6c9e27f11f48b34580ed2c7e9cad9a27"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6c9e27f11f48b34580ed2c7e9cad9a27">load_unsafe</a> () const</td></tr>
+<tr class="separator:a6c9e27f11f48b34580ed2c7e9cad9a27"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb0f4f66ec8b123627beb8eb4fbb609d" id="r_abb0f4f66ec8b123627beb8eb4fbb609d"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#abb0f4f66ec8b123627beb8eb4fbb609d">load_safe</a> (short2 src_tile_dim) const</td></tr>
+<tr class="separator:abb0f4f66ec8b123627beb8eb4fbb609d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6af21428f0e7c17b48ddedf4dd20a1e8" id="r_a6af21428f0e7c17b48ddedf4dd20a1e8"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6af21428f0e7c17b48ddedf4dd20a1e8">next</a> ()</td></tr>
+<tr class="separator:a6af21428f0e7c17b48ddedf4dd20a1e8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a37aca066e63dff238865b5923a2d4335" id="r_a37aca066e63dff238865b5923a2d4335"><td class="memItemLeft" align="right" valign="top">METAL_FUNC&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a37aca066e63dff238865b5923a2d4335">BlockLoader</a> (const device T *src_, const int src_ld_, threadgroup T *dst_, ushort simd_group_id, ushort simd_lane_id)</td></tr>
 <tr class="separator:a37aca066e63dff238865b5923a2d4335"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:adb4ca2cc193630a779de552fa8847ddf" id="r_adb4ca2cc193630a779de552fa8847ddf"><td class="memTemplParams" colspan="2">template&lt;typename UnaryOp &gt; </td></tr>
@@ -134,14 +145,60 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a9ef13742bcdf07532d8f09394928a8af"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a78c326e75ee35a484685771143047cd4" id="r_a78c326e75ee35a484685771143047cd4"><td class="memItemLeft" align="right" valign="top">const short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a78c326e75ee35a484685771143047cd4">bj</a></td></tr>
 <tr class="separator:a78c326e75ee35a484685771143047cd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af34c184a19846e4b40ba54b2946589ec" id="r_af34c184a19846e4b40ba54b2946589ec"><td class="memItemLeft" align="right" valign="top">threadgroup T *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af34c184a19846e4b40ba54b2946589ec">dst</a></td></tr>
-<tr class="separator:af34c184a19846e4b40ba54b2946589ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a13004952d0bf2030b95acb621a3779dd" id="r_a13004952d0bf2030b95acb621a3779dd"><td class="memItemLeft" align="right" valign="top">const device T *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a13004952d0bf2030b95acb621a3779dd">src</a></td></tr>
-<tr class="separator:a13004952d0bf2030b95acb621a3779dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af1c6c35a42e9da4408c1013ff1741bc2" id="r_af1c6c35a42e9da4408c1013ff1741bc2"><td class="memItemLeft" align="right" valign="top">threadgroup T *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af1c6c35a42e9da4408c1013ff1741bc2">dst</a></td></tr>
+<tr class="separator:af1c6c35a42e9da4408c1013ff1741bc2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad1db14517568ae9eddfb6986ef31c7aa" id="r_ad1db14517568ae9eddfb6986ef31c7aa"><td class="memItemLeft" align="right" valign="top">const device T *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad1db14517568ae9eddfb6986ef31c7aa">src</a></td></tr>
+<tr class="separator:ad1db14517568ae9eddfb6986ef31c7aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a37aca066e63dff238865b5923a2d4335" name="a37aca066e63dff238865b5923a2d4335"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a37aca066e63dff238865b5923a2d4335">&#9670;&#160;</a></span>BlockLoader()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a37aca066e63dff238865b5923a2d4335">&#9670;&#160;</a></span>BlockLoader() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::BlockLoader </td>
+          <td>(</td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>src_</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>src_ld_</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>dst_</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">ushort</td>          <td class="paramname"><span class="paramname"><em>simd_group_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">ushort</td>          <td class="paramname"><span class="paramname"><em>simd_lane_id</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a37aca066e63dff238865b5923a2d4335" name="a37aca066e63dff238865b5923a2d4335"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37aca066e63dff238865b5923a2d4335">&#9670;&#160;</a></span>BlockLoader() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -188,7 +245,36 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
 <a id="adb4ca2cc193630a779de552fa8847ddf" name="adb4ca2cc193630a779de552fa8847ddf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adb4ca2cc193630a779de552fa8847ddf">&#9670;&#160;</a></span>apply_inplace_op()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#adb4ca2cc193630a779de552fa8847ddf">&#9670;&#160;</a></span>apply_inplace_op() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
+<div class="memtemplate">
+template&lt;typename UnaryOp &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::apply_inplace_op </td>
+          <td>(</td>
+          <td class="paramtype">thread const UnaryOp &amp;</td>          <td class="paramname"><span class="paramname"><em>op</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adb4ca2cc193630a779de552fa8847ddf" name="adb4ca2cc193630a779de552fa8847ddf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb4ca2cc193630a779de552fa8847ddf">&#9670;&#160;</a></span>apply_inplace_op() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -217,7 +303,34 @@ template&lt;typename UnaryOp &gt; </div>
 </div>
 </div>
 <a id="abb0f4f66ec8b123627beb8eb4fbb609d" name="abb0f4f66ec8b123627beb8eb4fbb609d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abb0f4f66ec8b123627beb8eb4fbb609d">&#9670;&#160;</a></span>load_safe()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abb0f4f66ec8b123627beb8eb4fbb609d">&#9670;&#160;</a></span>load_safe() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::load_safe </td>
+          <td>(</td>
+          <td class="paramtype">short2</td>          <td class="paramname"><span class="paramname"><em>src_tile_dim</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abb0f4f66ec8b123627beb8eb4fbb609d" name="abb0f4f66ec8b123627beb8eb4fbb609d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abb0f4f66ec8b123627beb8eb4fbb609d">&#9670;&#160;</a></span>load_safe() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -244,7 +357,34 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 </div>
 </div>
 <a id="a6c9e27f11f48b34580ed2c7e9cad9a27" name="a6c9e27f11f48b34580ed2c7e9cad9a27"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6c9e27f11f48b34580ed2c7e9cad9a27">&#9670;&#160;</a></span>load_unsafe()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c9e27f11f48b34580ed2c7e9cad9a27">&#9670;&#160;</a></span>load_unsafe() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::load_unsafe </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6c9e27f11f48b34580ed2c7e9cad9a27" name="a6c9e27f11f48b34580ed2c7e9cad9a27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c9e27f11f48b34580ed2c7e9cad9a27">&#9670;&#160;</a></span>load_unsafe() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -271,7 +411,34 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 </div>
 </div>
 <a id="a6af21428f0e7c17b48ddedf4dd20a1e8" name="a6af21428f0e7c17b48ddedf4dd20a1e8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6af21428f0e7c17b48ddedf4dd20a1e8">&#9670;&#160;</a></span>next()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6af21428f0e7c17b48ddedf4dd20a1e8">&#9670;&#160;</a></span>next() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::next </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6af21428f0e7c17b48ddedf4dd20a1e8" name="a6af21428f0e7c17b48ddedf4dd20a1e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6af21428f0e7c17b48ddedf4dd20a1e8">&#9670;&#160;</a></span>next() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -330,8 +497,8 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 
 </div>
 </div>
-<a id="af34c184a19846e4b40ba54b2946589ec" name="af34c184a19846e4b40ba54b2946589ec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af34c184a19846e4b40ba54b2946589ec">&#9670;&#160;</a></span>dst</h2>
+<a id="af1c6c35a42e9da4408c1013ff1741bc2" name="af1c6c35a42e9da4408c1013ff1741bc2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af1c6c35a42e9da4408c1013ff1741bc2">&#9670;&#160;</a></span>dst</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -339,7 +506,7 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">threadgroup T* <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::dst</td>
+          <td class="memname">threadgroup T * <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::dst</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -362,8 +529,8 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 
 </div>
 </div>
-<a id="a13004952d0bf2030b95acb621a3779dd" name="a13004952d0bf2030b95acb621a3779dd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a13004952d0bf2030b95acb621a3779dd">&#9670;&#160;</a></span>src</h2>
+<a id="ad1db14517568ae9eddfb6986ef31c7aa" name="ad1db14517568ae9eddfb6986ef31c7aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1db14517568ae9eddfb6986ef31c7aa">&#9670;&#160;</a></span>src</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -371,7 +538,7 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction_dim, short tgp_size, short alignment = 1, short n_reads = (BCOLS * BROWS) / (tgp_size), short TCOLS = BCOLS / n_reads, short TROWS = tgp_size / TCOLS&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">const device T* <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::src</td>
+          <td class="memname">const device T * <a class="el" href="structmlx_1_1steel_1_1_block_loader.html">mlx::steel::BlockLoader</a>&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, alignment, n_reads, TCOLS, TROWS &gt;::src</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -442,7 +609,8 @@ template&lt;typename T , short BROWS, short BCOLS, short dst_ld, short reduction
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
+<hr/>The documentation for this struct was generated from the following files:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="attn_2loader_8h_source.html">loader.h</a></li>
 <li>mlx/backend/metal/kernels/steel/gemm/<a class="el" href="gemm_2loader_8h_source.html">loader.h</a></li>
 </ul>
 </div><!-- contents -->

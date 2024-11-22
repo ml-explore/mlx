@@ -12,6 +12,7 @@ Layers
    ALiBi
    AvgPool1d
    AvgPool2d
+   AvgPool3d
    BatchNorm
    CELU
    Conv1d
@@ -41,6 +42,7 @@ Layers
    LSTM
    MaxPool1d
    MaxPool2d
+   MaxPool3d
    Mish
    MultiHeadAttention
    PReLU

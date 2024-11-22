@@ -31,5 +31,6 @@ var searchData=
   ['array_28',['array',['../classmlx_1_1core_1_1array.html',1,'mlx::core']]],
   ['arrayiterator_29',['ArrayIterator',['../structmlx_1_1core_1_1array_1_1_array_iterator.html',1,'mlx::core::array']]],
   ['asstrided_30',['AsStrided',['../classmlx_1_1core_1_1_as_strided.html',1,'mlx::core']]],
-  ['astype_31',['AsType',['../classmlx_1_1core_1_1_as_type.html',1,'mlx::core']]]
+  ['astype_31',['AsType',['../classmlx_1_1core_1_1_as_type.html',1,'mlx::core']]],
+  ['attnparams_32',['AttnParams',['../structmlx_1_1steel_1_1_attn_params.html',1,'mlx::steel']]]
 ];

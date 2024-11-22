@@ -97,7 +97,8 @@ $(function(){ initResizable(false); });
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;metal_math&gt;</code><br />
-<code>#include &quot;<a class="el" href="backend_2metal_2kernels_2bf16_8h_source.html">mlx/backend/metal/kernels/bf16.h</a>&quot;</code><br />
+<code>#include &quot;bf16.h&quot;</code><br />
+<code>#include &quot;<a class="el" href="bf16__math_8h_source.html">mlx/backend/metal/kernels/bf16_math.h</a>&quot;</code><br />
 <code>#include &quot;<a class="el" href="backend_2metal_2kernels_2complex_8h_source.html">mlx/backend/metal/kernels/complex.h</a>&quot;</code><br />
 <code>#include &quot;<a class="el" href="defines_8h_source.html">mlx/backend/metal/kernels/defines.h</a>&quot;</code><br />
 </div>
@@ -133,11 +134,11 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_limits_3_01complex64__t_01_4.html">Limits&lt; complex64_t &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc.html">looped_elem_to_loc&lt; dim, offset_t &gt;</a></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_looped_elem_to_loc.html">LoopedElemToLoc&lt; DIM, OffsetT, General &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc_3_011_00_01offset__t_01_4.html">looped_elem_to_loc&lt; 1, offset_t &gt;</a></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01true_01_4.html">LoopedElemToLoc&lt; 1, OffsetT, true &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc_3_010_00_01offset__t_01_4.html">looped_elem_to_loc&lt; 0, offset_t &gt;</a></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01false_01_4.html">LoopedElemToLoc&lt; 1, OffsetT, false &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
@@ -156,36 +157,37 @@ Typedefs</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a8fd0c8fc6058e650fc99bca8b6acd7d1" id="r_a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a> (uint elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
-<tr class="separator:a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa6b041005351293e68e19b5abf1286cd" id="r_aa6b041005351293e68e19b5abf1286cd"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:aa6b041005351293e68e19b5abf1286cd"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa6b041005351293e68e19b5abf1286cd">elem_to_loc</a> (stride_t elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
-<tr class="separator:aa6b041005351293e68e19b5abf1286cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a37e00d94751710e81c9632bca2f91e51" id="r_a37e00d94751710e81c9632bca2f91e51"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:a37e00d94751710e81c9632bca2f91e51"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a37e00d94751710e81c9632bca2f91e51">elem_to_loc</a> (uint3 elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
-<tr class="separator:a37e00d94751710e81c9632bca2f91e51"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a196a07022b812b241d4c06192c0fa83d" id="r_a196a07022b812b241d4c06192c0fa83d"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:a196a07022b812b241d4c06192c0fa83d"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a196a07022b812b241d4c06192c0fa83d">elem_to_loc_1</a> (uint elem, constant const stride_t &amp;stride)</td></tr>
-<tr class="separator:a196a07022b812b241d4c06192c0fa83d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad6c45cacca97899cd362df49c06fea79" id="r_ad6c45cacca97899cd362df49c06fea79"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:ad6c45cacca97899cd362df49c06fea79"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a> (uint2 elem, constant const stride_t strides[2])</td></tr>
-<tr class="separator:ad6c45cacca97899cd362df49c06fea79"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2c34ed54714c69e6e1b44344f9e6e330" id="r_a2c34ed54714c69e6e1b44344f9e6e330"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:a2c34ed54714c69e6e1b44344f9e6e330"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a2c34ed54714c69e6e1b44344f9e6e330">elem_to_loc_3</a> (uint3 elem, constant const stride_t strides[3])</td></tr>
-<tr class="separator:a2c34ed54714c69e6e1b44344f9e6e330"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a01c9309978a6c12f79b6e4108728a953" id="r_a01c9309978a6c12f79b6e4108728a953"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
-<tr class="memitem:a01c9309978a6c12f79b6e4108728a953"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC ulong2&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a01c9309978a6c12f79b6e4108728a953">elem_to_loc_2_nd</a> (uint3 elem, constant const int *shape, constant const stride_t *a_strides, constant const stride_t *b_strides, int ndim)</td></tr>
-<tr class="separator:a01c9309978a6c12f79b6e4108728a953"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a66940b1cc3d64651d24634bc696d528b" id="r_a66940b1cc3d64651d24634bc696d528b"><td class="memItemLeft" align="right" valign="top">METAL_FUNC ulong3&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a66940b1cc3d64651d24634bc696d528b">elem_to_loc_3_nd</a> (uint3 elem, constant const int *shape, constant const size_t *a_strides, constant const size_t *b_strides, constant const size_t *c_strides, int ndim)</td></tr>
-<tr class="separator:a66940b1cc3d64651d24634bc696d528b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22eaa505dbc7dd2a63a895f2e16712f5" id="r_a22eaa505dbc7dd2a63a895f2e16712f5"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:a22eaa505dbc7dd2a63a895f2e16712f5"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a22eaa505dbc7dd2a63a895f2e16712f5">elem_to_loc</a> (uint elem, constant const int *shape, constant const StrideT *strides, int ndim)</td></tr>
+<tr class="separator:a22eaa505dbc7dd2a63a895f2e16712f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4b53fb0679f67f9063deba94753d4185" id="r_a4b53fb0679f67f9063deba94753d4185"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:a4b53fb0679f67f9063deba94753d4185"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4b53fb0679f67f9063deba94753d4185">elem_to_loc</a> (StrideT elem, constant const int *shape, constant const StrideT *strides, int ndim)</td></tr>
+<tr class="separator:a4b53fb0679f67f9063deba94753d4185"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aec82f4bf0e22b8d1b89ad654ad8d8753" id="r_aec82f4bf0e22b8d1b89ad654ad8d8753"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:aec82f4bf0e22b8d1b89ad654ad8d8753"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aec82f4bf0e22b8d1b89ad654ad8d8753">elem_to_loc</a> (uint3 elem, constant const int *shape, constant const StrideT *strides, int ndim)</td></tr>
+<tr class="separator:aec82f4bf0e22b8d1b89ad654ad8d8753"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac612d0ae30b8257198339debe04916a3" id="r_ac612d0ae30b8257198339debe04916a3"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:ac612d0ae30b8257198339debe04916a3"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac612d0ae30b8257198339debe04916a3">elem_to_loc_1</a> (uint elem, constant const StrideT &amp;stride)</td></tr>
+<tr class="separator:ac612d0ae30b8257198339debe04916a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a43f33efc000962d6de881a3aab7458de" id="r_a43f33efc000962d6de881a3aab7458de"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:a43f33efc000962d6de881a3aab7458de"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a43f33efc000962d6de881a3aab7458de">elem_to_loc_2</a> (uint2 elem, constant const StrideT strides[2])</td></tr>
+<tr class="separator:a43f33efc000962d6de881a3aab7458de"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a650f8ea8cf9f9519da9e301aad0308dc" id="r_a650f8ea8cf9f9519da9e301aad0308dc"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:a650f8ea8cf9f9519da9e301aad0308dc"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC IdxT&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a650f8ea8cf9f9519da9e301aad0308dc">elem_to_loc_3</a> (uint3 elem, constant const StrideT strides[3])</td></tr>
+<tr class="separator:a650f8ea8cf9f9519da9e301aad0308dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a66a2d7eec0262b12db16cd6c781ccf9a" id="r_a66a2d7eec0262b12db16cd6c781ccf9a"><td class="memTemplParams" colspan="2">template&lt;typename StrideT , typename IdxT  = StrideT&gt; </td></tr>
+<tr class="memitem:a66a2d7eec0262b12db16cd6c781ccf9a"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC vec&lt; IdxT, 2 &gt;&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a66a2d7eec0262b12db16cd6c781ccf9a">elem_to_loc_2_nd</a> (uint3 elem, constant const int *shape, constant const StrideT *a_strides, constant const StrideT *b_strides, int ndim)</td></tr>
+<tr class="separator:a66a2d7eec0262b12db16cd6c781ccf9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a65d87b425e1f8ca19df97c15049f8733" id="r_a65d87b425e1f8ca19df97c15049f8733"><td class="memTemplParams" colspan="2">template&lt;typename IdxT  = size_t&gt; </td></tr>
+<tr class="memitem:a65d87b425e1f8ca19df97c15049f8733"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC vec&lt; IdxT, 3 &gt;&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a65d87b425e1f8ca19df97c15049f8733">elem_to_loc_3_nd</a> (uint3 elem, constant const int *shape, constant const size_t *a_strides, constant const size_t *b_strides, constant const size_t *c_strides, int ndim)</td></tr>
+<tr class="separator:a65d87b425e1f8ca19df97c15049f8733"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8e5a4b0fb5d018d7b078d147efe4f1e3" id="r_a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U &gt; </td></tr>
 <tr class="memitem:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memTemplItemLeft" align="right" valign="top">T&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8e5a4b0fb5d018d7b078d147efe4f1e3">ceildiv</a> (T N, U M)</td></tr>
 <tr class="memdesc:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute ceil((float)N/(float)M)  <br /></td></tr>
 <tr class="separator:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a27c03f2f90ab56db2e4d59559a3d2e9a" id="r_a27c03f2f90ab56db2e4d59559a3d2e9a"><td class="memItemLeft" align="right" valign="top">float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a27c03f2f90ab56db2e4d59559a3d2e9a">log1p</a> (float x)</td></tr>
 <tr class="separator:a27c03f2f90ab56db2e4d59559a3d2e9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3501b665c8837eabf9789ea27a7d6946" id="r_a3501b665c8837eabf9789ea27a7d6946"><td class="memItemLeft" align="right" valign="top"><a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3501b665c8837eabf9789ea27a7d6946">log1p</a> (<a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> x)</td></tr>
+<tr class="memitem:a3501b665c8837eabf9789ea27a7d6946" id="r_a3501b665c8837eabf9789ea27a7d6946"><td class="memItemLeft" align="right" valign="top"><a class="el" href="backend_2metal_2kernels_2metal__3__0_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3501b665c8837eabf9789ea27a7d6946">log1p</a> (<a class="el" href="backend_2metal_2kernels_2metal__3__0_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> x)</td></tr>
 <tr class="separator:a3501b665c8837eabf9789ea27a7d6946"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aba6279624b1d30c525efee856a222b5c" id="r_aba6279624b1d30c525efee856a222b5c"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aba6279624b1d30c525efee856a222b5c">simd_shuffle_down</a> (uint64_t data, uint16_t delta)</td></tr>
 <tr class="separator:aba6279624b1d30c525efee856a222b5c"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -244,11 +246,11 @@ Functions</h2></td></tr>
 <div class="line">    <span class="keyword">static</span> <span class="keyword">constexpr</span> constant type <a class="code hl_variable" href="struct_limits.html#ae7469d21f2688797ca3e388d919ef05e">finite_min</a> =                              \</div>
 <div class="line">        metal::numeric_limits&lt;type&gt;::min();                                  \</div>
 <div class="line">  };</div>
-<div class="ttc" id="astruct_limits_html"><div class="ttname"><a href="struct_limits.html">Limits</a></div><div class="ttdef"><b>Definition</b> utils.h:17</div></div>
-<div class="ttc" id="astruct_limits_html_a2f0673b6f9da89ce1d64f9f3d74f50a8"><div class="ttname"><a href="struct_limits.html#a2f0673b6f9da89ce1d64f9f3d74f50a8">Limits::max</a></div><div class="ttdeci">static const constant U max</div><div class="ttdef"><b>Definition</b> utils.h:18</div></div>
-<div class="ttc" id="astruct_limits_html_a5a3eae6d244fbea2aa7b9200001463e5"><div class="ttname"><a href="struct_limits.html#a5a3eae6d244fbea2aa7b9200001463e5">Limits::finite_max</a></div><div class="ttdeci">static const constant U finite_max</div><div class="ttdef"><b>Definition</b> utils.h:20</div></div>
-<div class="ttc" id="astruct_limits_html_a6e81584ba65a4dc6ff9366b458e3a20e"><div class="ttname"><a href="struct_limits.html#a6e81584ba65a4dc6ff9366b458e3a20e">Limits::min</a></div><div class="ttdeci">static const constant U min</div><div class="ttdef"><b>Definition</b> utils.h:19</div></div>
-<div class="ttc" id="astruct_limits_html_ae7469d21f2688797ca3e388d919ef05e"><div class="ttname"><a href="struct_limits.html#ae7469d21f2688797ca3e388d919ef05e">Limits::finite_min</a></div><div class="ttdeci">static const constant U finite_min</div><div class="ttdef"><b>Definition</b> utils.h:21</div></div>
+<div class="ttc" id="astruct_limits_html"><div class="ttname"><a href="struct_limits.html">Limits</a></div><div class="ttdef"><b>Definition</b> utils.h:23</div></div>
+<div class="ttc" id="astruct_limits_html_a2f0673b6f9da89ce1d64f9f3d74f50a8"><div class="ttname"><a href="struct_limits.html#a2f0673b6f9da89ce1d64f9f3d74f50a8">Limits::max</a></div><div class="ttdeci">static const constant U max</div><div class="ttdef"><b>Definition</b> utils.h:24</div></div>
+<div class="ttc" id="astruct_limits_html_a5a3eae6d244fbea2aa7b9200001463e5"><div class="ttname"><a href="struct_limits.html#a5a3eae6d244fbea2aa7b9200001463e5">Limits::finite_max</a></div><div class="ttdeci">static const constant U finite_max</div><div class="ttdef"><b>Definition</b> utils.h:26</div></div>
+<div class="ttc" id="astruct_limits_html_a6e81584ba65a4dc6ff9366b458e3a20e"><div class="ttname"><a href="struct_limits.html#a6e81584ba65a4dc6ff9366b458e3a20e">Limits::min</a></div><div class="ttdeci">static const constant U min</div><div class="ttdef"><b>Definition</b> utils.h:25</div></div>
+<div class="ttc" id="astruct_limits_html_ae7469d21f2688797ca3e388d919ef05e"><div class="ttname"><a href="struct_limits.html#ae7469d21f2688797ca3e388d919ef05e">Limits::finite_min</a></div><div class="ttdeci">static const constant U finite_min</div><div class="ttdef"><b>Definition</b> utils.h:27</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -343,18 +345,18 @@ template&lt;typename T , typename U &gt; </div>
 
 </div>
 </div>
-<a id="aa6b041005351293e68e19b5abf1286cd" name="aa6b041005351293e68e19b5abf1286cd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa6b041005351293e68e19b5abf1286cd">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[1/3]</span></h2>
+<a id="a4b53fb0679f67f9063deba94753d4185" name="a4b53fb0679f67f9063deba94753d4185"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4b53fb0679f67f9063deba94753d4185">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc </td>
           <td>(</td>
-          <td class="paramtype">stride_t</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
+          <td class="paramtype">StrideT</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -364,7 +366,7 @@ template&lt;typename stride_t &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+          <td class="paramtype">constant const StrideT *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -376,16 +378,16 @@ template&lt;typename stride_t &gt; </div>
 
 </div>
 </div>
-<a id="a8fd0c8fc6058e650fc99bca8b6acd7d1" name="a8fd0c8fc6058e650fc99bca8b6acd7d1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8fd0c8fc6058e650fc99bca8b6acd7d1">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[2/3]</span></h2>
+<a id="a22eaa505dbc7dd2a63a895f2e16712f5" name="a22eaa505dbc7dd2a63a895f2e16712f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22eaa505dbc7dd2a63a895f2e16712f5">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[2/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc </td>
           <td>(</td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
@@ -397,7 +399,7 @@ template&lt;typename stride_t &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+          <td class="paramtype">constant const StrideT *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -409,16 +411,16 @@ template&lt;typename stride_t &gt; </div>
 
 </div>
 </div>
-<a id="a37e00d94751710e81c9632bca2f91e51" name="a37e00d94751710e81c9632bca2f91e51"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a37e00d94751710e81c9632bca2f91e51">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[3/3]</span></h2>
+<a id="aec82f4bf0e22b8d1b89ad654ad8d8753" name="aec82f4bf0e22b8d1b89ad654ad8d8753"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aec82f4bf0e22b8d1b89ad654ad8d8753">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc </td>
           <td>(</td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
@@ -430,7 +432,7 @@ template&lt;typename stride_t &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+          <td class="paramtype">constant const StrideT *</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -442,62 +444,62 @@ template&lt;typename stride_t &gt; </div>
 
 </div>
 </div>
-<a id="a196a07022b812b241d4c06192c0fa83d" name="a196a07022b812b241d4c06192c0fa83d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a196a07022b812b241d4c06192c0fa83d">&#9670;&#160;</a></span>elem_to_loc_1()</h2>
+<a id="ac612d0ae30b8257198339debe04916a3" name="ac612d0ae30b8257198339debe04916a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac612d0ae30b8257198339debe04916a3">&#9670;&#160;</a></span>elem_to_loc_1()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc_1 </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc_1 </td>
           <td>(</td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t &amp;</td>          <td class="paramname"><span class="paramname"><em>stride</em></span>&#160;)</td>
+          <td class="paramtype">constant const StrideT &amp;</td>          <td class="paramname"><span class="paramname"><em>stride</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="ad6c45cacca97899cd362df49c06fea79" name="ad6c45cacca97899cd362df49c06fea79"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad6c45cacca97899cd362df49c06fea79">&#9670;&#160;</a></span>elem_to_loc_2()</h2>
+<a id="a43f33efc000962d6de881a3aab7458de" name="a43f33efc000962d6de881a3aab7458de"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43f33efc000962d6de881a3aab7458de">&#9670;&#160;</a></span>elem_to_loc_2()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc_2 </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc_2 </td>
           <td>(</td>
           <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>[2]&#160;)</td>
+          <td class="paramtype">constant const StrideT</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>[2]&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a01c9309978a6c12f79b6e4108728a953" name="a01c9309978a6c12f79b6e4108728a953"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a01c9309978a6c12f79b6e4108728a953">&#9670;&#160;</a></span>elem_to_loc_2_nd()</h2>
+<a id="a66a2d7eec0262b12db16cd6c781ccf9a" name="a66a2d7eec0262b12db16cd6c781ccf9a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66a2d7eec0262b12db16cd6c781ccf9a">&#9670;&#160;</a></span>elem_to_loc_2_nd()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC ulong2 elem_to_loc_2_nd </td>
+          <td class="memname">METAL_FUNC vec&lt; IdxT, 2 &gt; elem_to_loc_2_nd </td>
           <td>(</td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
@@ -509,12 +511,12 @@ template&lt;typename stride_t &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>a_strides</em></span>, </td>
+          <td class="paramtype">constant const StrideT *</td>          <td class="paramname"><span class="paramname"><em>a_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+          <td class="paramtype">constant const StrideT *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -526,37 +528,39 @@ template&lt;typename stride_t &gt; </div>
 
 </div>
 </div>
-<a id="a2c34ed54714c69e6e1b44344f9e6e330" name="a2c34ed54714c69e6e1b44344f9e6e330"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2c34ed54714c69e6e1b44344f9e6e330">&#9670;&#160;</a></span>elem_to_loc_3()</h2>
+<a id="a650f8ea8cf9f9519da9e301aad0308dc" name="a650f8ea8cf9f9519da9e301aad0308dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a650f8ea8cf9f9519da9e301aad0308dc">&#9670;&#160;</a></span>elem_to_loc_3()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename stride_t &gt; </div>
+template&lt;typename StrideT , typename IdxT  = StrideT&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC stride_t elem_to_loc_3 </td>
+          <td class="memname">METAL_FUNC IdxT elem_to_loc_3 </td>
           <td>(</td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">constant const stride_t</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>[3]&#160;)</td>
+          <td class="paramtype">constant const StrideT</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>[3]&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a66940b1cc3d64651d24634bc696d528b" name="a66940b1cc3d64651d24634bc696d528b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a66940b1cc3d64651d24634bc696d528b">&#9670;&#160;</a></span>elem_to_loc_3_nd()</h2>
+<a id="a65d87b425e1f8ca19df97c15049f8733" name="a65d87b425e1f8ca19df97c15049f8733"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a65d87b425e1f8ca19df97c15049f8733">&#9670;&#160;</a></span>elem_to_loc_3_nd()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<div class="memtemplate">
+template&lt;typename IdxT  = size_t&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC ulong3 elem_to_loc_3_nd </td>
+          <td class="memname">METAL_FUNC vec&lt; IdxT, 3 &gt; elem_to_loc_3_nd </td>
           <td>(</td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>elem</em></span>, </td>
         </tr>
@@ -600,9 +604,9 @@ template&lt;typename stride_t &gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> log1p </td>
+          <td class="memname"><a class="el" href="backend_2metal_2kernels_2metal__3__0_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> log1p </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a></td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="backend_2metal_2kernels_2metal__3__0_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a></td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

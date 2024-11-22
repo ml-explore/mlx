@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Function Transforms &#8212; MLX 0.20.0 documentation</title>
+    <title>Function Transforms &#8212; MLX 0.21.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../_static/documentation_options.js?v=eb97cb82"></script>
+    <script src="../_static/documentation_options.js?v=174dfe6e"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -51,7 +51,7 @@
     <link rel="prev" title="Saving and Loading Arrays" href="saving_and_loading.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.20.0" />
+  <meta name="docsearch:version" content="0.21.0" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.20.0 documentation - Home"/>
-    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.20.0 documentation - Home"/>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
   
   
 </a></div>
@@ -444,7 +444,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </details></li>
@@ -521,6 +520,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool3d.html">mlx.nn.AvgPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.BatchNorm.html">mlx.nn.BatchNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.CELU.html">mlx.nn.CELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
@@ -550,6 +550,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MaxPool2d.html">mlx.nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MaxPool3d.html">mlx.nn.MaxPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
@@ -1005,8 +1006,8 @@ where the vectorized axes should be in the outputs.</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">timeit</span><span class="o">.</span><span class="n">timeit</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">mx</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">vmap_add</span><span class="p">(</span><span class="n">xs</span><span class="p">,</span> <span class="n">ys</span><span class="p">)),</span> <span class="n">number</span><span class="o">=</span><span class="mi">100</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>On an M1 Max the naive version takes in total <code class="docutils literal notranslate"><span class="pre">0.390</span></code> seconds whereas the
-vectorized version takes only <code class="docutils literal notranslate"><span class="pre">0.025</span></code> seconds, more than ten times faster.</p>
+<p>On an M1 Max the naive version takes in total <code class="docutils literal notranslate"><span class="pre">5.639</span></code> seconds whereas the
+vectorized version takes only <code class="docutils literal notranslate"><span class="pre">0.024</span></code> seconds, more than 200 times faster.</p>
 <p>Of course, this operation is quite contrived. A better approach is to simply do
 <code class="docutils literal notranslate"><span class="pre">xs</span> <span class="pre">+</span> <span class="pre">ys.T</span></code>, but for more complex functions <a class="reference internal" href="../python/_autosummary/mlx.core.vmap.html#mlx.core.vmap" title="mlx.core.vmap"><code class="xref py py-func docutils literal notranslate"><span class="pre">vmap()</span></code></a> can be quite handy.</p>
 </section>
