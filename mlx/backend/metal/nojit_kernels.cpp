@@ -1,3 +1,4 @@
+// Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
@@ -99,7 +100,7 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
     const std::string& kernel_name,
     const std::string&,
     const std::string&,
-    const array&) {
+    const Dtype&) {
   return d.get_kernel(kernel_name);
 }
 
@@ -108,8 +109,9 @@ MTL::ComputePipelineState* get_reduce_kernel(
     const std::string& kernel_name,
     const std::string&,
     const std::string&,
-    const array&,
-    const array&,
+    const Dtype&,
+    const Dtype&,
+    const std::string&,
     int,
     int,
     int) {

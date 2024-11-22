@@ -8,6 +8,7 @@
 
 namespace mlx::core {
 
+std::string type_to_name(const Dtype& t);
 std::string type_to_name(const array& a);
 
 // Compute the thread block dimensions which fit the given

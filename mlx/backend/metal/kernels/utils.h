@@ -204,16 +204,21 @@ METAL_FUNC vec<IdxT, 3> elem_to_loc_3_nd(
 // Elem to loc in a loop utils
 ///////////////////////////////////////////////////////////////////////////////
 
-template <int dim, typename offset_t = size_t>
-struct looped_elem_to_loc {
-  looped_elem_to_loc<dim - 1, offset_t> inner_looper;
-  offset_t offset{0};
+template <int DIM, typename OffsetT = size_t, bool General = true>
+struct LoopedElemToLoc {
+  int dim;
+  LoopedElemToLoc<DIM - 1, OffsetT, General> inner_looper;
+  OffsetT offset{0};
   int index{0};
 
-  void next(const constant int* shape, const constant size_t* strides) {
-    index++;
-    offset += strides[dim - 1];
+  LoopedElemToLoc(int dim) : dim(dim), inner_looper(dim - 1) {}
 
+  void next(const constant int* shape, const constant size_t* strides) {
+    if (dim == 0) {
+      return;
+    }
+    index++;
+    offset += OffsetT(strides[dim - 1]);
     if (index >= shape[dim - 1]) {
       index = 0;
       inner_looper.next(shape, strides);
@@ -222,13 +227,21 @@ struct looped_elem_to_loc {
   }
 
   void next(int n, const constant int* shape, const constant size_t* strides) {
+    if (dim == 0) {
+      return;
+    }
     index += n;
-    offset += n * strides[dim - 1];
+    offset += n * OffsetT(strides[dim - 1]);
 
     if (index >= shape[dim - 1]) {
       int extra = index - shape[dim - 1];
+      if (extra >= shape[dim - 1]) {
+        inner_looper.next(1 + extra / shape[dim - 1], shape, strides);
+        extra = extra % shape[dim - 1];
+      } else {
+        inner_looper.next(shape, strides);
+      }
       index = 0;
-      inner_looper.next(shape, strides);
       offset = inner_looper.offset;
       if (extra > 0) {
         next(extra, shape, strides);
@@ -236,41 +249,58 @@ struct looped_elem_to_loc {
     }
   }
 
-  offset_t
-  location(offset_t, const constant int*, const constant size_t*, int) {
+  OffsetT location() {
     return offset;
   }
 };
 
-template <typename offset_t>
-struct looped_elem_to_loc<1, offset_t> {
-  offset_t offset{0};
+template <typename OffsetT>
+struct LoopedElemToLoc<1, OffsetT, true> {
+  int dim;
+  OffsetT offset{0};
+  uint index{0};
+
+  LoopedElemToLoc(int dim) : dim(dim) {}
+
+  void next(const constant int* shape, const constant size_t* strides) {
+    index++;
+    if (dim > 1) {
+      offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
+    } else {
+      offset += OffsetT(strides[0]);
+    }
+  }
+
+  void next(int n, const constant int* shape, const constant size_t* strides) {
+    index += n;
+    if (dim > 1) {
+      offset = elem_to_loc<size_t, OffsetT>(index, shape, strides, dim);
+    } else {
+      offset = index * OffsetT(strides[0]);
+    }
+  }
+
+  OffsetT location() {
+    return offset;
+  }
+};
+
+template <typename OffsetT>
+struct LoopedElemToLoc<1, OffsetT, false> {
+  OffsetT offset{0};
+
+  LoopedElemToLoc(int) {}
 
   void next(const constant int*, const constant size_t* strides) {
-    offset += strides[0];
+    offset += OffsetT(strides[0]);
   }
 
   void next(int n, const constant int*, const constant size_t* strides) {
-    offset += n * strides[0];
+    offset += n * OffsetT(strides[0]);
   }
 
-  offset_t
-  location(offset_t, const constant int*, const constant size_t*, int) {
+  OffsetT location() {
     return offset;
-  }
-};
-
-template <typename offset_t>
-struct looped_elem_to_loc<0, offset_t> {
-  void next(const constant int*, const constant size_t*) {}
-  void next(int, const constant int*, const constant size_t*) {}
-
-  offset_t location(
-      offset_t idx,
-      const constant int* shape,
-      const constant size_t* strides,
-      int ndim) {
-    return elem_to_loc(idx, shape, strides, ndim);
   }
 };
 

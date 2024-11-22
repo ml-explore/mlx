@@ -81,15 +81,16 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
     const std::string& kernel_name,
     const std::string& func_name,
     const std::string& op_name,
-    const array& out);
+    const Dtype& out_type);
 
 MTL::ComputePipelineState* get_reduce_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& func_name,
     const std::string& op_name,
-    const array& in,
-    const array& out,
+    const Dtype& in_type,
+    const Dtype& out_type,
+    const std::string& idx_t,
     int ndim = -1,
     int bm = -1,
     int bn = -1);
