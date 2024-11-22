@@ -184,8 +184,8 @@ Let's time these two different versions:
   print(timeit.timeit(lambda: mx.eval(naive_add(xs, ys)), number=100))
   print(timeit.timeit(lambda: mx.eval(vmap_add(xs, ys)), number=100))
 
-On an M1 Max the naive version takes in total ``0.390`` seconds whereas the
-vectorized version takes only ``0.025`` seconds, more than ten times faster.
+On an M1 Max the naive version takes in total ``5.639`` seconds whereas the
+vectorized version takes only ``0.024`` seconds, more than 200 times faster.
 
 Of course, this operation is quite contrived. A better approach is to simply do
 ``xs + ys.T``, but for more complex functions :func:`vmap` can be quite handy.
