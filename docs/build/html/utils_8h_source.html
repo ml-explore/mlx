@@ -230,7 +230,29 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>}</div>
 </div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span> </div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>} <span class="comment">// namespace mlx::core</span></div>
+<div class="foldopen" id="foldopen00123" data-start="{" data-end="}">
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1env.html">  123</a></span><span class="keyword">namespace </span>env {</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span> </div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3">  125</a></span><span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3">get_var</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* name, <span class="keywordtype">int</span> default_value);</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span> </div>
+<div class="foldopen" id="foldopen00127" data-start="{" data-end="}">
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1env.html#ac3266e1259a64c8b56bdc6c7029179f2">  127</a></span><span class="keyword">inline</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1env.html#ac3266e1259a64c8b56bdc6c7029179f2">bfs_max_width</a>() {</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>  <span class="keyword">static</span> <span class="keywordtype">int</span> bfs_max_width_ = <a class="code hl_function" href="namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3">get_var</a>(<span class="stringliteral">&quot;MLX_BFS_MAX_WIDTH&quot;</span>, 20);</div>
+<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>  <span class="keywordflow">return</span> bfs_max_width_;</div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>}</div>
+</div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span> </div>
+<div class="foldopen" id="foldopen00132" data-start="{" data-end="}">
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1env.html#aedbf4e739553024c33dd0094dd9107aa">  132</a></span><span class="keyword">inline</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1env.html#aedbf4e739553024c33dd0094dd9107aa">max_ops_per_buffer</a>() {</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>  <span class="keyword">static</span> <span class="keywordtype">int</span> max_ops_per_buffer_ = <a class="code hl_function" href="namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3">get_var</a>(<span class="stringliteral">&quot;MLX_MAX_OPS_PER_BUFFER&quot;</span>, 10);</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>  <span class="keywordflow">return</span> max_ops_per_buffer_;</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>}</div>
+</div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span> </div>
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>} <span class="comment">// namespace env</span></div>
+</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span> </div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>} <span class="comment">// namespace mlx::core</span></div>
 <div class="ttc" id="aarray_8h_html"><div class="ttname"><a href="array_8h.html">array.h</a></div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1array_html"><div class="ttname"><a href="classmlx_1_1core_1_1array.html">mlx::core::array</a></div><div class="ttdef"><b>Definition</b> array.h:20</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1array_html_ae29e7d6fbfbea1e5e321a8d1ea3cfacd"><div class="ttname"><a href="classmlx_1_1core_1_1array.html#ae29e7d6fbfbea1e5e321a8d1ea3cfacd">mlx::core::array::dtype</a></div><div class="ttdeci">Dtype dtype() const</div><div class="ttdoc">Get the arrays data type.</div><div class="ttdef"><b>Definition</b> array.h:127</div></div>
@@ -239,6 +261,9 @@ $(function(){ initResizable(false); });
 <div class="ttc" id="agroup__ops_html_ga7fed87d96cc7741d8267f4eac83f5fe7"><div class="ttname"><a href="group__ops.html#ga7fed87d96cc7741d8267f4eac83f5fe7">mlx::core::max</a></div><div class="ttdeci">array max(const array &amp;a, bool keepdims, StreamOrDevice s={})</div><div class="ttdoc">The maximum of all elements of the array.</div></div>
 <div class="ttc" id="agroup__ops_html_gab27599802617a4c8f9964ab5f4ffee12"><div class="ttname"><a href="group__ops.html#gab27599802617a4c8f9964ab5f4ffee12">mlx::core::min</a></div><div class="ttdeci">array min(const array &amp;a, bool keepdims, StreamOrDevice s={})</div><div class="ttdoc">The minimum of all elements of the array.</div></div>
 <div class="ttc" id="agroup__ops_html_gad656c30f9fd7d9467e405657b325aa7e"><div class="ttname"><a href="group__ops.html#gad656c30f9fd7d9467e405657b325aa7e">mlx::core::operator&lt;&lt;</a></div><div class="ttdeci">array operator&lt;&lt;(const array &amp;a, const array &amp;b)</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_1_1env_html_a0efecbf9efe695adafad12b5a4945df3"><div class="ttname"><a href="namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3">mlx::core::env::get_var</a></div><div class="ttdeci">int get_var(const char *name, int default_value)</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_1_1env_html_ac3266e1259a64c8b56bdc6c7029179f2"><div class="ttname"><a href="namespacemlx_1_1core_1_1env.html#ac3266e1259a64c8b56bdc6c7029179f2">mlx::core::env::bfs_max_width</a></div><div class="ttdeci">int bfs_max_width()</div><div class="ttdef"><b>Definition</b> utils.h:127</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_1_1env_html_aedbf4e739553024c33dd0094dd9107aa"><div class="ttname"><a href="namespacemlx_1_1core_1_1env.html#aedbf4e739553024c33dd0094dd9107aa">mlx::core::env::max_ops_per_buffer</a></div><div class="ttdeci">int max_ops_per_buffer()</div><div class="ttdef"><b>Definition</b> utils.h:132</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html"><div class="ttname"><a href="namespacemlx_1_1core.html">mlx::core</a></div><div class="ttdef"><b>Definition</b> allocator.h:7</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a0181b5d72bf3d34448dabc70f7ff858d"><div class="ttname"><a href="namespacemlx_1_1core.html#a0181b5d72bf3d34448dabc70f7ff858d">mlx::core::normalize_axis</a></div><div class="ttdeci">int normalize_axis(int axis, int ndim)</div><div class="ttdoc">Returns the axis normalized to be in the range [0, ndim).</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a0196171cfe6ee2953113abce597dc815"><div class="ttname"><a href="namespacemlx_1_1core.html#a0196171cfe6ee2953113abce597dc815">mlx::core::default_device</a></div><div class="ttdeci">const Device &amp; default_device()</div></div>
@@ -256,7 +281,7 @@ $(function(){ initResizable(false); });
 <div class="ttc" id="anamespacemlx_1_1core_html_af35a2b06517d8bb7dbb469692b4f841c"><div class="ttname"><a href="namespacemlx_1_1core.html#af35a2b06517d8bb7dbb469692b4f841c">mlx::core::set_default_stream</a></div><div class="ttdeci">void set_default_stream(Stream s)</div><div class="ttdoc">Make the stream the default for its device.</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_af5a408a78cc934717dd711ddfda58ea6"><div class="ttname"><a href="namespacemlx_1_1core.html#af5a408a78cc934717dd711ddfda58ea6">mlx::core::global_formatter</a></div><div class="ttdeci">PrintFormatter global_formatter</div></div>
 <div class="ttc" id="astream_8h_html"><div class="ttname"><a href="stream_8h.html">stream.h</a></div></div>
-<div class="ttc" id="astruct___m_l_x___b_float16_html"><div class="ttname"><a href="struct___m_l_x___b_float16.html">_MLX_BFloat16</a></div><div class="ttdef"><b>Definition</b> bf16.h:54</div></div>
+<div class="ttc" id="astruct___m_l_x___b_float16_html"><div class="ttname"><a href="struct___m_l_x___b_float16.html">_MLX_BFloat16</a></div><div class="ttdef"><b>Definition</b> bf16.h:48</div></div>
 <div class="ttc" id="astructmlx_1_1core_1_1___m_l_x___float16_html"><div class="ttname"><a href="structmlx_1_1core_1_1___m_l_x___float16.html">mlx::core::_MLX_Float16</a></div><div class="ttdef"><b>Definition</b> fp16.h:21</div></div>
 <div class="ttc" id="astructmlx_1_1core_1_1_device_html"><div class="ttname"><a href="structmlx_1_1core_1_1_device.html">mlx::core::Device</a></div><div class="ttdef"><b>Definition</b> device.h:7</div></div>
 <div class="ttc" id="astructmlx_1_1core_1_1_dtype_html"><div class="ttname"><a href="structmlx_1_1core_1_1_dtype.html">mlx::core::Dtype</a></div><div class="ttdef"><b>Definition</b> dtype.h:13</div></div>

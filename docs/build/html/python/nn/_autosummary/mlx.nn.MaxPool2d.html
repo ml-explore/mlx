@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.nn.MaxPool2d &#8212; MLX 0.20.0 documentation</title>
+    <title>mlx.nn.MaxPool2d &#8212; MLX 0.21.0 documentation</title>
   
   
   
@@ -39,20 +39,19 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../../../_static/documentation_options.js?v=eb97cb82"></script>
+    <script src="../../../_static/documentation_options.js?v=174dfe6e"></script>
     <script src="../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'python/nn/_autosummary/mlx.nn.MaxPool2d';</script>
     <link rel="icon" href="../../../_static/mlx_logo.png"/>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="mlx.nn.Mish" href="mlx.nn.Mish.html" />
+    <link rel="next" title="mlx.nn.MaxPool3d" href="mlx.nn.MaxPool3d.html" />
     <link rel="prev" title="mlx.nn.MaxPool1d" href="mlx.nn.MaxPool1d.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.20.0" />
+  <meta name="docsearch:version" content="0.21.0" />
   </head>
   
   
@@ -131,8 +130,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.20.0 documentation - Home"/>
-    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.20.0 documentation - Home"/>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
   
   
 </a></div>
@@ -445,7 +444,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </details></li>
@@ -522,6 +520,7 @@
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mlx.nn.AvgPool3d.html">mlx.nn.AvgPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.BatchNorm.html">mlx.nn.BatchNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.CELU.html">mlx.nn.CELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
@@ -551,6 +550,7 @@
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
 <li class="toctree-l3 current active"><a class="current reference internal" href="#">mlx.nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mlx.nn.MaxPool3d.html">mlx.nn.MaxPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
@@ -868,26 +868,15 @@
 <dt class="sig sig-object py" id="mlx.nn.MaxPool2d">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">MaxPool2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.MaxPool2d" title="Link to this definition">#</a></dt>
 <dd><p>Applies 2-dimensional max pooling.</p>
-<p>Assuming an input of shape <span class="math notranslate nohighlight">\((N, H, W, C)\)</span> and <code class="docutils literal notranslate"><span class="pre">kernel_size</span></code> is
-<span class="math notranslate nohighlight">\((k_H, k_W)\)</span>, the output is a tensor of shape <span class="math notranslate nohighlight">\((N, H_{out},
-W_{out}, C)\)</span>, given by:</p>
-<div class="math notranslate nohighlight">
-\[\begin{split}\begin{aligned}
-    \text{out}(N_i, h, w, C_j) = &amp; \max_{m=0, \ldots, k_H-1} \max_{n=0, \ldots, k_W-1} \\
-                            &amp; \text{input}(N_i, \text{stride[0]} \times h + m,
-                                        \text{stride[1]} \times w + n, C_j),
-\end{aligned}\end{split}\]</div>
-<p>where <span class="math notranslate nohighlight">\(H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1\)</span>,
-<span class="math notranslate nohighlight">\(W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1\)</span>.</p>
-<p>The parameters <code class="docutils literal notranslate"><span class="pre">kernel_size</span></code>, <code class="docutils literal notranslate"><span class="pre">stride</span></code>, <code class="docutils literal notranslate"><span class="pre">padding</span></code>, can either be:</p>
-<blockquote>
-<div><ul class="simple">
+<p>Spatially downsamples the input by taking the maximum of a sliding window
+of size <code class="docutils literal notranslate"><span class="pre">kernel_size</span></code> and sliding stride <code class="docutils literal notranslate"><span class="pre">stride</span></code>.</p>
+<p>The parameters <code class="docutils literal notranslate"><span class="pre">kernel_size</span></code>, <code class="docutils literal notranslate"><span class="pre">stride</span></code>, and <code class="docutils literal notranslate"><span class="pre">padding</span></code> can either be:</p>
+<ul class="simple">
 <li><p>a single <code class="docutils literal notranslate"><span class="pre">int</span></code> – in which case the same value is used for both the
-height and width axis;</p></li>
+height and width axis.</p></li>
 <li><p>a <code class="docutils literal notranslate"><span class="pre">tuple</span></code> of two <code class="docutils literal notranslate"><span class="pre">int</span></code> s – in which case, the first <code class="docutils literal notranslate"><span class="pre">int</span></code> is
 used for the height axis, the second <code class="docutils literal notranslate"><span class="pre">int</span></code> for the width axis.</p></li>
 </ul>
-</div></blockquote>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -939,11 +928,11 @@ of the height and width axis. Default: <code class="docutils literal notranslate
       </div>
     </a>
     <a class="right-next"
-       href="mlx.nn.Mish.html"
+       href="mlx.nn.MaxPool3d.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">mlx.nn.Mish</p>
+        <p class="prev-next-title">mlx.nn.MaxPool3d</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
