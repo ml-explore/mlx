@@ -12,5 +12,4 @@ Fast
   layer_norm
   rope
   scaled_dot_product_attention
-  affine_quantize
   metal_kernel

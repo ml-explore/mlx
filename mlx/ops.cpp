@@ -3683,7 +3683,7 @@ std::tuple<array, array, array> quantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  return fast::affine_quantize(w, group_size, bits);
+  return fast::affine_quantize(w, group_size, bits, s);
 }
 
 array dequantize(

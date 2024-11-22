@@ -11,7 +11,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_quantize_dequantize(self):
         w = mx.random.normal(shape=(128, 512))
         for gs in [32, 64, 128]:
-            for b in [2, 4, 8]:
+            for b in [2, 3, 6, 4, 8]:
                 with self.subTest(gs=gs, b=b):
                     w_q, scales, biases = mx.quantize(w, group_size=gs, bits=b)
                     w_hat = mx.dequantize(w_q, scales, biases, gs, b)
@@ -22,7 +22,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))
         for gs in [32, 64, 128]:
-            for b in [2, 4, 8]:
+            for b in [2, 3, 4, 6, 8]:
                 w_q, scales, biases = mx.quantize(a, gs, b)
                 a_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 self.assertTrue(mx.all(a_hat == 0))
@@ -116,7 +116,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [128, 64, 32],  # group_size
-            [2, 4, 8],  # bits
+            [2, 3, 4, 6, 8],  # bits
             [512, 1024, 67],  # M
             [64, 128, 512, 1024],  # N
             [0, 1, 3, 8],  # B
@@ -143,7 +143,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [128, 64, 32],  # group_size
-            [2, 4, 8],  # bits
+            [2, 3, 4, 6, 8],  # bits
             [512, 1024],  # M
             [512, 1024, 67],  # N
             [0, 1, 3, 8],  # B
