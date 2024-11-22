@@ -374,19 +374,19 @@ class AvgPool3d(_Pool3d):
       ``int`` for the width axis.
 
     Args:
-    kernel_size (int or tuple(int, int, int)): The size of the pooling window.
-    stride (int or tuple(int, int, int), optional): The stride of the pooling
-        window. Default: ``kernel_size``.
-    padding (int or tuple(int, int, int), optional): How much zero
-        padding to apply to the input. The padding is applied on both sides
-        of the depth, height and width axis. Default: ``0``.
+        kernel_size (int or tuple(int, int, int)): The size of the pooling window.
+        stride (int or tuple(int, int, int), optional): The stride of the pooling
+            window. Default: ``kernel_size``.
+        padding (int or tuple(int, int, int), optional): How much zero
+            padding to apply to the input. The padding is applied on both sides
+            of the depth, height and width axis. Default: ``0``.
 
     Examples:
-    >>> import mlx.core as mx
-    >>> import mlx.nn.layers as nn
-    >>> x = mx.random.normal(shape=(8, 16, 32, 32, 4))
-    >>> pool = nn.AvgPool3d(kernel_size=2, stride=2)
-    >>> pool(x)
+        >>> import mlx.core as mx
+        >>> import mlx.nn.layers as nn
+        >>> x = mx.random.normal(shape=(8, 16, 32, 32, 4))
+        >>> pool = nn.AvgPool3d(kernel_size=2, stride=2)
+        >>> pool(x)
     """
 
     def __init__(
