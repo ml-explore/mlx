@@ -209,7 +209,7 @@ Metal library by run-time compiling kernels the first time they are used in MLX
 on a given machine. Note run-time compilation incurs a cold-start cost which can
 be anwywhere from a few hundred millisecond to a few seconds depending on the
 application. Once a kernel is compiled, it will be cached by the system. The
-Metal kernel cache persists accross reboots.
+Metal kernel cache persists across reboots.
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
