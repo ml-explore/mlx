@@ -6,8 +6,8 @@
 #include <metal_simdgroup_matrix>
 #include <metal_stdlib>
 
+#include "mlx/backend/metal/kernels/steel/attn/transforms.h"
 #include "mlx/backend/metal/kernels/steel/defines.h"
-#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils/integral_constant.h"
 
 using namespace metal;
@@ -18,6 +18,20 @@ using namespace metal;
 
 namespace mlx {
 namespace steel {
+
+template <typename RInt, typename CInt>
+struct Shape2D {
+  RInt r;
+  CInt c;
+
+  Shape2D(RInt r_, CInt c_) : r(r_), c(c_) {}
+};
+
+template <typename Shape, typename Layout>
+struct Layout2D {
+  Shape shape;
+  Layout layout;
+};
 
 template <typename T, int kFragRows_, int kFragCols_>
 struct BaseMMAFrag {
@@ -45,6 +59,8 @@ struct BaseMMAFrag<T, 8, 8> {
 
   typedef metal::simdgroup_matrix<T, kFragRows, kFragCols> mat_type;
   typedef metal::vec<T, kElemsPerFrag> frag_type;
+  typedef metal::vec<T, kElemRows> row_frag_type;
+  typedef metal::vec<T, kElemCols> col_frag_type;
 
   METAL_FUNC static constexpr short2 get_coord(ushort simd_lane_id
                                                [[thread_index_in_simdgroup]]) {
@@ -168,6 +184,35 @@ struct BaseMMAFrag<T, 8, 8> {
       thread mat_type& C) {
     simdgroup_multiply_accumulate(D, A, B, C);
   }
+
+  template <typename Op>
+  METAL_FUNC static constexpr void row_reduce(
+      thread const frag_type& inp_vals,
+      thread T* reduced_vals) {
+    T thr_reduce = Op::apply(inp_vals.x, inp_vals.y);
+
+    T qgr_reduce = simd_shuffle_xor(thr_reduce, ushort(1));
+    qgr_reduce = Op::apply(thr_reduce, qgr_reduce);
+
+    T sgr_reduce = simd_shuffle_xor(qgr_reduce, ushort(8));
+    sgr_reduce = Op::apply(qgr_reduce, sgr_reduce);
+
+    reduced_vals[0] = Op::apply(reduced_vals[0], sgr_reduce);
+  }
+
+  template <typename Op>
+  METAL_FUNC static constexpr void row_bin_op(
+      thread frag_type& inp_vals,
+      thread T* row_vals) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemRows; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kElemCols; j++) {
+        inp_vals[i * kElemCols + j] =
+            Op::apply(inp_vals[i * kElemCols + j], row_vals[i]);
+      }
+    }
+  }
 };
 
 template <
@@ -190,6 +235,9 @@ struct MMATile {
 
   STEEL_CONST int kNumFrags = kTileRows * kTileCols;
   STEEL_CONST int kElemsPerTile = kNumFrags * kElemsPerFrag;
+
+  STEEL_CONST int kRowsPerThread = kTileRows * MMAFrag_t::kElemRows;
+  STEEL_CONST int kColsPerThread = kTileCols * MMAFrag_t::kElemCols;
 
   typedef typename MMAFrag_t::mat_type mat_type;
   typedef typename MMAFrag_t::frag_type frag_type;
@@ -230,6 +278,30 @@ struct MMATile {
 
   METAL_FUNC const thread elem_type* elems() const {
     return reinterpret_cast<const thread elem_type*>(val_frags);
+  }
+
+  template <typename Op>
+  METAL_FUNC void row_reduce(thread T vals[kRowsPerThread]) const {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kTileRows; ++i) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kTileCols; ++j) {
+        MMAFrag_t::template row_reduce<Op>(
+            frag_at(i, j), &vals[i * MMAFrag_t::kElemRows]);
+      }
+    }
+  }
+
+  template <typename Op>
+  METAL_FUNC void row_bin_op(thread T vals[kRowsPerThread]) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kTileRows; ++i) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kTileCols; ++j) {
+        MMAFrag_t::template row_bin_op<Op>(
+            frag_at(i, j), &vals[i * MMAFrag_t::kElemRows]);
+      }
+    }
   }
 
   template <typename U, int w_x, int w_y, int str_x, int str_y>
@@ -344,12 +416,12 @@ METAL_FUNC void tile_matmad(
     thread MMATile<U, K, N>& B,
     thread MMATile<T, M, N>& C) {
   STEEL_PRAGMA_UNROLL
-  for (short m = 0; m < M; ++m) {
+  for (short k = 0; k < K; ++k) {
     STEEL_PRAGMA_UNROLL
-    for (short n = 0; n < N; ++n) {
-      short n_serp = (m % 2) ? (N - 1 - n) : n;
+    for (short m = 0; m < M; ++m) {
       STEEL_PRAGMA_UNROLL
-      for (short k = 0; k < K; ++k) {
+      for (short n = 0; n < N; ++n) {
+        short n_serp = (m % 2) ? (N - 1 - n) : n;
         MMATile<T, M, N>::MMAFrag_t::mma(
             D.frag_at(m, n_serp),
             A.frag_at(m, k),
@@ -385,9 +457,9 @@ struct BlockMMA {
   STEEL_CONST short TN_stride = kFragSize * WN;
 
   // Warp tile size along M
-  STEEL_CONST short TM = BM / (kFragSize * WM);
+  STEEL_CONST short TM = BM / TM_stride;
   // Warp tile size along N
-  STEEL_CONST short TN = BN / (kFragSize * WN);
+  STEEL_CONST short TN = BN / TN_stride;
 
   // Threadgroup A strides
   STEEL_CONST short A_str_m = transpose_a ? 1 : lda_tgp; // M

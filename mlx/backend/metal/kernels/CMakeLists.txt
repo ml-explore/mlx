@@ -44,9 +44,7 @@ build_kernel(layer_norm)
 build_kernel(random)
 build_kernel(rms_norm)
 build_kernel(rope)
-build_kernel(
-  scaled_dot_product_attention scaled_dot_product_attention_params.h
-  sdpa_vector.h steel/defines.h steel/gemm/transforms.h steel/utils.h)
+build_kernel(scaled_dot_product_attention sdpa_vector.h)
 
 set(STEEL_HEADERS
     steel/defines.h
@@ -67,6 +65,24 @@ set(STEEL_HEADERS
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
     steel/utils/integral_constant.h)
+
+set(STEEL_ATTN_HEADERS
+    steel/defines.h
+    steel/utils.h
+    steel/gemm/gemm.h
+    steel/gemm/mma.h
+    steel/gemm/loader.h
+    steel/gemm/transforms.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h
+    steel/attn/attn.h
+    steel/attn/loader.h
+    steel/attn/mma.h
+    steel/attn/params.h
+    steel/attn/transforms.h
+    steel/attn/kernels/steel_attention.h)
+
+build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
 if(NOT MLX_METAL_JIT)
   build_kernel(arange arange.h)
