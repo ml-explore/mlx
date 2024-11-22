@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Layers &#8212; MLX 0.20.0 documentation</title>
+    <title>Layers &#8212; MLX 0.21.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../../_static/documentation_options.js?v=eb97cb82"></script>
+    <script src="../../_static/documentation_options.js?v=174dfe6e"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -52,7 +52,7 @@
     <link rel="prev" title="mlx.nn.Module.update_modules" href="_autosummary/mlx.nn.Module.update_modules.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.20.0" />
+  <meta name="docsearch:version" content="0.21.0" />
   </head>
   
   
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.20.0 documentation - Home"/>
-    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.20.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
   
   
 </a></div>
@@ -445,7 +445,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </details></li>
@@ -522,6 +521,7 @@
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.AvgPool3d.html">mlx.nn.AvgPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.BatchNorm.html">mlx.nn.BatchNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.CELU.html">mlx.nn.CELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
@@ -551,6 +551,7 @@
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.MaxPool2d.html">mlx.nn.MaxPool2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.MaxPool3d.html">mlx.nn.MaxPool3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
 <li class="toctree-l3"><a class="reference internal" href="_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
@@ -865,92 +866,98 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.AvgPool2d.html#mlx.nn.AvgPool2d" title="mlx.nn.AvgPool2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AvgPool2d</span></code></a>(kernel_size[, stride, padding])</p></td>
 <td><p>Applies 2-dimensional average pooling.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.BatchNorm.html#mlx.nn.BatchNorm" title="mlx.nn.BatchNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BatchNorm</span></code></a>(num_features[, eps, momentum, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.AvgPool3d.html#mlx.nn.AvgPool3d" title="mlx.nn.AvgPool3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AvgPool3d</span></code></a>(kernel_size[, stride, padding])</p></td>
+<td><p>Applies 3-dimensional average pooling.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.BatchNorm.html#mlx.nn.BatchNorm" title="mlx.nn.BatchNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BatchNorm</span></code></a>(num_features[, eps, momentum, ...])</p></td>
 <td><p>Applies Batch Normalization over a 2D or 3D input.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.CELU.html#mlx.nn.CELU" title="mlx.nn.CELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CELU</span></code></a>([alpha])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.CELU.html#mlx.nn.CELU" title="mlx.nn.CELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CELU</span></code></a>([alpha])</p></td>
 <td><p>Applies the Continuously Differentiable Exponential Linear Unit.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html#mlx.nn.Conv1d" title="mlx.nn.Conv1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv1d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html#mlx.nn.Conv1d" title="mlx.nn.Conv1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv1d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
 <td><p>Applies a 1-dimensional convolution over the multi-channel input sequence.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv2d.html#mlx.nn.Conv2d" title="mlx.nn.Conv2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv2d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv2d.html#mlx.nn.Conv2d" title="mlx.nn.Conv2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv2d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
 <td><p>Applies a 2-dimensional convolution over the multi-channel input image.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d" title="mlx.nn.Conv3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv3d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d" title="mlx.nn.Conv3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Conv3d</span></code></a>(in_channels, out_channels, kernel_size)</p></td>
 <td><p>Applies a 3-dimensional convolution over the multi-channel input image.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose1d.html#mlx.nn.ConvTranspose1d" title="mlx.nn.ConvTranspose1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose1d</span></code></a>(in_channels, out_channels, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose1d.html#mlx.nn.ConvTranspose1d" title="mlx.nn.ConvTranspose1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose1d</span></code></a>(in_channels, out_channels, ...)</p></td>
 <td><p>Applies a 1-dimensional transposed convolution over the multi-channel input sequence.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose2d.html#mlx.nn.ConvTranspose2d" title="mlx.nn.ConvTranspose2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose2d</span></code></a>(in_channels, out_channels, ...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose2d.html#mlx.nn.ConvTranspose2d" title="mlx.nn.ConvTranspose2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose2d</span></code></a>(in_channels, out_channels, ...)</p></td>
 <td><p>Applies a 2-dimensional transposed convolution over the multi-channel input image.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose3d.html#mlx.nn.ConvTranspose3d" title="mlx.nn.ConvTranspose3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose3d</span></code></a>(in_channels, out_channels, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ConvTranspose3d.html#mlx.nn.ConvTranspose3d" title="mlx.nn.ConvTranspose3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ConvTranspose3d</span></code></a>(in_channels, out_channels, ...)</p></td>
 <td><p>Applies a 3-dimensional transposed convolution over the multi-channel input image.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout.html#mlx.nn.Dropout" title="mlx.nn.Dropout"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout</span></code></a>([p])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout.html#mlx.nn.Dropout" title="mlx.nn.Dropout"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout</span></code></a>([p])</p></td>
 <td><p>Randomly zero a portion of the elements during training.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout2d.html#mlx.nn.Dropout2d" title="mlx.nn.Dropout2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout2d</span></code></a>([p])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout2d.html#mlx.nn.Dropout2d" title="mlx.nn.Dropout2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout2d</span></code></a>([p])</p></td>
 <td><p>Apply 2D channel-wise dropout during training.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout3d.html#mlx.nn.Dropout3d" title="mlx.nn.Dropout3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout3d</span></code></a>([p])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Dropout3d.html#mlx.nn.Dropout3d" title="mlx.nn.Dropout3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dropout3d</span></code></a>([p])</p></td>
 <td><p>Apply 3D channel-wise dropout during training.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Embedding.html#mlx.nn.Embedding" title="mlx.nn.Embedding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Embedding</span></code></a>(num_embeddings, dims)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Embedding.html#mlx.nn.Embedding" title="mlx.nn.Embedding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Embedding</span></code></a>(num_embeddings, dims)</p></td>
 <td><p>Implements a simple lookup table that maps each input integer to a high-dimensional vector.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ELU.html#mlx.nn.ELU" title="mlx.nn.ELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ELU</span></code></a>([alpha])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ELU.html#mlx.nn.ELU" title="mlx.nn.ELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ELU</span></code></a>([alpha])</p></td>
 <td><p>Applies the Exponential Linear Unit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GELU.html#mlx.nn.GELU" title="mlx.nn.GELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GELU</span></code></a>([approx])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GELU.html#mlx.nn.GELU" title="mlx.nn.GELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GELU</span></code></a>([approx])</p></td>
 <td><p>Applies the Gaussian Error Linear Units.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GLU.html#mlx.nn.GLU" title="mlx.nn.GLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GLU</span></code></a>([axis])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GLU.html#mlx.nn.GLU" title="mlx.nn.GLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GLU</span></code></a>([axis])</p></td>
 <td><p>Applies the gated linear unit function.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GroupNorm.html#mlx.nn.GroupNorm" title="mlx.nn.GroupNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupNorm</span></code></a>(num_groups, dims[, eps, affine, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GroupNorm.html#mlx.nn.GroupNorm" title="mlx.nn.GroupNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupNorm</span></code></a>(num_groups, dims[, eps, affine, ...])</p></td>
 <td><p>Applies Group Normalization [1] to the inputs.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GRU.html#mlx.nn.GRU" title="mlx.nn.GRU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GRU</span></code></a>(input_size, hidden_size[, bias])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GRU.html#mlx.nn.GRU" title="mlx.nn.GRU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GRU</span></code></a>(input_size, hidden_size[, bias])</p></td>
 <td><p>A gated recurrent unit (GRU) RNN layer.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.HardShrink.html#mlx.nn.HardShrink" title="mlx.nn.HardShrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HardShrink</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.HardShrink.html#mlx.nn.HardShrink" title="mlx.nn.HardShrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HardShrink</span></code></a>()</p></td>
 <td><p>Applies the HardShrink function.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.HardTanh.html#mlx.nn.HardTanh" title="mlx.nn.HardTanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HardTanh</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.HardTanh.html#mlx.nn.HardTanh" title="mlx.nn.HardTanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HardTanh</span></code></a>()</p></td>
 <td><p>Applies the HardTanh function.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Hardswish.html#mlx.nn.Hardswish" title="mlx.nn.Hardswish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Hardswish</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Hardswish.html#mlx.nn.Hardswish" title="mlx.nn.Hardswish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Hardswish</span></code></a>()</p></td>
 <td><p>Applies the hardswish function, element-wise.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.InstanceNorm.html#mlx.nn.InstanceNorm" title="mlx.nn.InstanceNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">InstanceNorm</span></code></a>(dims[, eps, affine])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.InstanceNorm.html#mlx.nn.InstanceNorm" title="mlx.nn.InstanceNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">InstanceNorm</span></code></a>(dims[, eps, affine])</p></td>
 <td><p>Applies instance normalization [1] on the inputs.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LayerNorm.html#mlx.nn.LayerNorm" title="mlx.nn.LayerNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LayerNorm</span></code></a>(dims[, eps, affine, bias])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LayerNorm.html#mlx.nn.LayerNorm" title="mlx.nn.LayerNorm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LayerNorm</span></code></a>(dims[, eps, affine, bias])</p></td>
 <td><p>Applies layer normalization [1] on the inputs.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LeakyReLU.html#mlx.nn.LeakyReLU" title="mlx.nn.LeakyReLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LeakyReLU</span></code></a>([negative_slope])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LeakyReLU.html#mlx.nn.LeakyReLU" title="mlx.nn.LeakyReLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LeakyReLU</span></code></a>([negative_slope])</p></td>
 <td><p>Applies the Leaky Rectified Linear Unit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Linear.html#mlx.nn.Linear" title="mlx.nn.Linear"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Linear</span></code></a>(input_dims, output_dims[, bias])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Linear.html#mlx.nn.Linear" title="mlx.nn.Linear"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Linear</span></code></a>(input_dims, output_dims[, bias])</p></td>
 <td><p>Applies an affine transformation to the input.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LogSigmoid.html#mlx.nn.LogSigmoid" title="mlx.nn.LogSigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LogSigmoid</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LogSigmoid.html#mlx.nn.LogSigmoid" title="mlx.nn.LogSigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LogSigmoid</span></code></a>()</p></td>
 <td><p>Applies the Log Sigmoid function.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LogSoftmax.html#mlx.nn.LogSoftmax" title="mlx.nn.LogSoftmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LogSoftmax</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LogSoftmax.html#mlx.nn.LogSoftmax" title="mlx.nn.LogSoftmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LogSoftmax</span></code></a>()</p></td>
 <td><p>Applies the Log Softmax function.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LSTM.html#mlx.nn.LSTM" title="mlx.nn.LSTM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LSTM</span></code></a>(input_size, hidden_size[, bias])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.LSTM.html#mlx.nn.LSTM" title="mlx.nn.LSTM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">LSTM</span></code></a>(input_size, hidden_size[, bias])</p></td>
 <td><p>An LSTM recurrent layer.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.MaxPool1d.html#mlx.nn.MaxPool1d" title="mlx.nn.MaxPool1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxPool1d</span></code></a>(kernel_size[, stride, padding])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.MaxPool1d.html#mlx.nn.MaxPool1d" title="mlx.nn.MaxPool1d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxPool1d</span></code></a>(kernel_size[, stride, padding])</p></td>
 <td><p>Applies 1-dimensional max pooling.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.MaxPool2d.html#mlx.nn.MaxPool2d" title="mlx.nn.MaxPool2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxPool2d</span></code></a>(kernel_size[, stride, padding])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.MaxPool2d.html#mlx.nn.MaxPool2d" title="mlx.nn.MaxPool2d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxPool2d</span></code></a>(kernel_size[, stride, padding])</p></td>
 <td><p>Applies 2-dimensional max pooling.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.MaxPool3d.html#mlx.nn.MaxPool3d" title="mlx.nn.MaxPool3d"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxPool3d</span></code></a>(kernel_size[, stride, padding])</p></td>
+<td><p>Applies 3-dimensional max pooling.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Mish.html#mlx.nn.Mish" title="mlx.nn.Mish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mish</span></code></a>()</p></td>
 <td><p>Applies the Mish function, element-wise.</p></td>

@@ -99,18 +99,18 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ad1ce39d0b6d733a95e739121fcc61bd1" id="r_ad1ce39d0b6d733a95e739121fcc61bd1"><td class="memTemplParams" colspan="2">template&lt;typename T , typename IdxT , typename Op , int NIDX, bool UPD_ROW_CONTIG, int NWORK&gt; </td></tr>
-<tr class="memitem:ad1ce39d0b6d733a95e739121fcc61bd1"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad1ce39d0b6d733a95e739121fcc61bd1">scatter_impl</a> (const device T *updates, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; T &gt; *out, const constant int *upd_shape, const constant size_t *upd_strides, const constant size_t &amp;upd_ndim, const constant size_t &amp;upd_size, const constant int *out_shape, const constant size_t *out_strides, const constant size_t &amp;out_ndim, const constant int *axes, const constant size_t &amp;idx_size, const thread <a class="el" href="struct_indices.html">Indices</a>&lt; IdxT, NIDX &gt; &amp;indices, uint2 gid)</td></tr>
-<tr class="separator:ad1ce39d0b6d733a95e739121fcc61bd1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0df7206d4519defb48a6275afc12f87c" id="r_a0df7206d4519defb48a6275afc12f87c"><td class="memTemplParams" colspan="2">template&lt;typename T , typename IdxT , typename Op , int NIDX, bool UPD_ROW_CONTIG, int NWORK, typename LocT &gt; </td></tr>
+<tr class="memitem:a0df7206d4519defb48a6275afc12f87c"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0df7206d4519defb48a6275afc12f87c">scatter_impl</a> (const device T *updates, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; T &gt; *out, const constant int *upd_shape, const constant size_t *upd_strides, const constant size_t &amp;upd_ndim, const constant size_t &amp;upd_size, const constant int *out_shape, const constant size_t *out_strides, const constant size_t &amp;out_ndim, const constant int *axes, const constant size_t &amp;idx_size, const thread <a class="el" href="struct_indices.html">Indices</a>&lt; IdxT, NIDX &gt; &amp;indices, uint2 gid)</td></tr>
+<tr class="separator:a0df7206d4519defb48a6275afc12f87c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="ad1ce39d0b6d733a95e739121fcc61bd1" name="ad1ce39d0b6d733a95e739121fcc61bd1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad1ce39d0b6d733a95e739121fcc61bd1">&#9670;&#160;</a></span>scatter_impl()</h2>
+<a id="a0df7206d4519defb48a6275afc12f87c" name="a0df7206d4519defb48a6275afc12f87c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0df7206d4519defb48a6275afc12f87c">&#9670;&#160;</a></span>scatter_impl()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename IdxT , typename Op , int NIDX, bool UPD_ROW_CONTIG, int NWORK&gt; </div>
+template&lt;typename T , typename IdxT , typename Op , int NIDX, bool UPD_ROW_CONTIG, int NWORK, typename LocT &gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">METAL_FUNC void scatter_impl </td>
