@@ -1,4 +1,4 @@
 setuptools>=42
 cmake>=3.24
-mlx>=0.18.1
+mlx>=0.21.0
 nanobind==2.2.0
