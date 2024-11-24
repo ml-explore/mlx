@@ -22,7 +22,7 @@ template <typename T, typename Op>
   d[offset] = Op()(a[offset], b[offset], c[offset]);
 }
 
-template <typename T, typename Op>
+template <typename T, typename Op, typename IdxT = size_t>
 [[kernel]] void ternary_g_nd1(
     device const bool* a,
     device const T* b,
@@ -32,9 +32,9 @@ template <typename T, typename Op>
     constant const size_t& b_strides,
     constant const size_t& c_strides,
     uint index [[thread_position_in_grid]]) {
-  auto a_idx = elem_to_loc_1<size_t, uint>(index, a_strides);
-  auto b_idx = elem_to_loc_1<size_t, uint>(index, b_strides);
-  auto c_idx = elem_to_loc_1<size_t, uint>(index, c_strides);
+  auto a_idx = elem_to_loc_1<size_t, IdxT>(index, a_strides);
+  auto b_idx = elem_to_loc_1<size_t, IdxT>(index, b_strides);
+  auto c_idx = elem_to_loc_1<size_t, IdxT>(index, c_strides);
   d[index] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 

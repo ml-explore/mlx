@@ -19,7 +19,8 @@
   instantiate_kernel("vv2_" #op #tname, binary_vv2, itype, otype, op)          \
   instantiate_kernel("gn2_" #op #tname, binary_g, itype, otype, op, 2, uint)   \
   instantiate_kernel("gn4large_" #op #tname, binary_g, itype, otype, op, 4)    \
-  instantiate_kernel("g1_" #op #tname, binary_g_nd1, itype, otype, op)         \
+  instantiate_kernel("g1_" #op #tname, binary_g_nd1, itype, otype, op, uint)   \
+  instantiate_kernel("g1large_" #op #tname, binary_g_nd1, itype, otype, op)    \
   instantiate_kernel("g2_" #op #tname, binary_g_nd2, itype, otype, op, uint)   \
   instantiate_kernel("g2large_" #op #tname, binary_g_nd2, itype, otype, op)    \
   instantiate_kernel("g3_" #op #tname, binary_g_nd3, itype, otype, op, uint)   \

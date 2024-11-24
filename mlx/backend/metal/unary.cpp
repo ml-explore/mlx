@@ -36,7 +36,10 @@ void unary_op_gpu_inplace(
   auto [shape, strides] = maybe_collapse();
   int ndim = shape.size();
   size_t nthreads = contig ? in.data_size() : in.size();
-  bool large = nthreads > UINT32_MAX;
+  bool large = in.data_size() > UINT32_MAX;
+  if (!contig) {
+    large |= in.size() > UINT32_MAX;
+  }
   int work_per_thread = !contig && large ? 4 : 1;
   std::string kernel_name;
   if (contig) {

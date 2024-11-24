@@ -9,16 +9,18 @@
   instantiate_kernel("v_copy" #tname, copy_v, itype, otype)             \
   instantiate_kernel("s2_copy" #tname, copy_s2, itype, otype)           \
   instantiate_kernel("v2_copy" #tname, copy_v2, itype, otype)           \
-  instantiate_kernel("g1_copy" #tname, copy_g_nd1, itype, otype)        \
+  instantiate_kernel("g1_copy" #tname, copy_g_nd1, itype, otype, int)   \
   instantiate_kernel("g2_copy" #tname, copy_g_nd2, itype, otype, int)   \
   instantiate_kernel("g3_copy" #tname, copy_g_nd3, itype, otype, int)   \
-  instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, itype, otype)      \
+  instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, itype, otype, int) \
   instantiate_kernel("gg2_copy" #tname, copy_gg_nd2, itype, otype, int) \
   instantiate_kernel("gg3_copy" #tname, copy_gg_nd3, itype, otype, int) \
   instantiate_kernel("gn2_copy" #tname, copy_g, itype, otype, 2, int)   \
   instantiate_kernel("ggn2_copy" #tname, copy_gg, itype, otype, 2, int) \
+  instantiate_kernel("g1large_copy" #tname, copy_g_nd1, itype, otype)   \
   instantiate_kernel("g2large_copy" #tname, copy_g_nd2, itype, otype)   \
   instantiate_kernel("g3large_copy" #tname, copy_g_nd3, itype, otype)   \
+  instantiate_kernel("gg1large_copy" #tname, copy_gg_nd1, itype, otype) \
   instantiate_kernel("gg2large_copy" #tname, copy_gg_nd2, itype, otype) \
   instantiate_kernel("gg3large_copy" #tname, copy_gg_nd3, itype, otype) \
   instantiate_kernel("gn4large_copy" #tname, copy_g, itype, otype, 4)   \
