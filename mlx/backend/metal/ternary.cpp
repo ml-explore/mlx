@@ -40,6 +40,9 @@ void ternary_op_gpu_inplace(
   auto ndim = shape.size();
   int work_per_thread;
   if (topt == TernaryOpType::General) {
+    large |=
+        (a.data_size() > UINT32_MAX || b.data_size() > UINT32_MAX ||
+         c.data_size() > UINT32_MAX);
     work_per_thread = large ? 4 : 2;
   } else {
     work_per_thread = 1;

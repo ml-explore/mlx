@@ -69,7 +69,7 @@ template <typename T, typename U, typename Op>
   c[offset] = Op()(a[offset], b[offset]);
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, typename IdxT = size_t>
 [[kernel]] void binary_g_nd1(
     device const T* a,
     device const T* b,
@@ -77,8 +77,8 @@ template <typename T, typename U, typename Op>
     constant const size_t& a_stride,
     constant const size_t& b_stride,
     uint index [[thread_position_in_grid]]) {
-  auto a_idx = elem_to_loc_1<size_t, uint>(index, a_stride);
-  auto b_idx = elem_to_loc_1<size_t, uint>(index, b_stride);
+  auto a_idx = elem_to_loc_1<size_t, IdxT>(index, a_stride);
+  auto b_idx = elem_to_loc_1<size_t, IdxT>(index, b_stride);
   c[index] = Op()(a[a_idx], b[b_idx]);
 }
 

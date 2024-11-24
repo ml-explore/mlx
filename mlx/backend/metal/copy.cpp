@@ -77,7 +77,7 @@ void copy_gpu_inplace(
   bool large;
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     // Allow for negative strides
-    large = out.data_size() > INT32_MAX;
+    large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
   } else {
     large = out.data_size() > UINT32_MAX;
   }
@@ -134,13 +134,13 @@ void copy_gpu_inplace(
       compute_encoder.set_vector_bytes(strides_out, ndim, 4);
     }
 
-    int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
-    int dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
 
     size_t data_size = 1;
     for (auto& s : shape)
       data_size *= s;
-    int rest = data_size / (dim0 * dim1);
+    size_t rest = data_size / (dim0 * dim1);
 
     if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
       compute_encoder.set_bytes(ndim, 5);
