@@ -57,7 +57,7 @@ else()
   message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
 endif()
 
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64|aarch64")
   set(MLX_BUILD_ARM ON)
 endif()
 
