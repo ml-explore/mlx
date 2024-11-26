@@ -155,11 +155,13 @@ MetalAllocator::MetalAllocator()
 }
 
 size_t MetalAllocator::set_cache_limit(size_t limit) {
+  std::unique_lock lk(mutex_);
   std::swap(limit, max_pool_size_);
   return limit;
 };
 
 size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
+  std::unique_lock lk(mutex_);
   std::swap(limit, block_limit_);
   relaxed_ = relaxed;
   gc_limit_ = std::min(
@@ -169,6 +171,7 @@ size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
 };
 
 size_t MetalAllocator::set_wired_limit(size_t limit) {
+  std::unique_lock lk(mutex_);
   std::swap(limit, wired_limit_);
   residency_set_.resize(wired_limit_);
   return limit;
