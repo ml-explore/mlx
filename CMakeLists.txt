@@ -121,7 +121,7 @@ endif()
 
 if(MLX_BUILD_CPU)
   find_library(ACCELERATE_LIBRARY Accelerate)
-  if(MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
+  if(ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
     set(MLX_BUILD_ACCELERATE ON)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
