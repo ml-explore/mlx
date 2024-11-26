@@ -30,7 +30,7 @@ BufferCache::BufferCache(MTL::Device* device)
     : device_(device), head_(nullptr), tail_(nullptr), pool_size_(0) {}
 
 BufferCache::~BufferCache() {
-  auto thread_pool = metal::new_scoped_memory_pool();
+  auto pool = metal::new_scoped_memory_pool();
   clear();
 }
 
@@ -208,7 +208,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
       return Buffer{nullptr};
     }
 
-    auto thread_pool = metal::new_scoped_memory_pool();
+    auto pool = metal::new_scoped_memory_pool();
 
     // If we have a lot of memory pressure or are over the maximum cache size,
     // try to reclaim memory from the cache
@@ -229,7 +229,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
   // Maintain the cache below the requested limit
   if (get_cache_memory() >= max_pool_size_) {
-    auto thread_pool = metal::new_scoped_memory_pool();
+    auto pool = metal::new_scoped_memory_pool();
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
 
@@ -240,6 +240,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
 void MetalAllocator::clear_cache() {
   std::unique_lock lk(mutex_);
+  auto pool = metal::new_scoped_memory_pool();
   buffer_cache_.clear();
 }
 
@@ -255,7 +256,7 @@ void MetalAllocator::free(Buffer buffer) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     lk.unlock();
-    auto thread_pool = metal::new_scoped_memory_pool();
+    auto pool = metal::new_scoped_memory_pool();
     buf->release();
   }
 }
