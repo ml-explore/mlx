@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
-#include <fstream>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,7 +11,6 @@
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
-#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -157,9 +155,6 @@ CompileMode& compile_mode() {
   static CompileMode compile_mode_ = get_val();
   return compile_mode_;
 }
-
-using ParentsMap =
-    std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
 
 // Helper like below but only merges the two provided arrays. If the src has
 // siblings then these won't be merged to the dst.
@@ -911,178 +906,6 @@ void enable_compile() {
 
 void set_compile_mode(CompileMode mode) {
   detail::compile_mode() = mode;
-}
-
-std::vector<std::string> split(const std::string& str, char delim) {
-  std::vector<std::string> splits;
-  for (int j = 0; j < str.size();) {
-    int k = str.find(delim, j);
-    splits.push_back(str.substr(j, k - j));
-    if (k == std::string::npos) {
-      break;
-    }
-    j = k + 1;
-  }
-  return splits;
-}
-
-void export_function(
-    std::string path,
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& inputs,
-    bool shapeless /* = false */) {
-  // Trace to build the graph
-  auto [trace_inputs, trace_outputs] = detail::compile_trace(fun, inputs);
-
-  // DFS the graph and get the tape
-  auto [tape, parents_map] =
-      detail::compile_dfs(trace_inputs, trace_outputs, inputs);
-
-  detail::compile_simplify(tape, parents_map, trace_outputs, /* passes */ 3);
-
-  if (shapeless) {
-    detail::compile_validate_shapeless(tape);
-  }
-
-  // Serialize the tape, inputs, and outputs to the file
-  std::ofstream os(path);
-  if (!os.is_open()) {
-    throw std::runtime_error("[export_function] Failed to open " + path);
-  }
-  NodeNamer namer;
-  auto print_arrs =
-      [&namer, &os](const std::vector<array>& arrs, bool with_shape = true) {
-        for (auto& arr : arrs) {
-          os << namer.get_name(arr);
-          if (with_shape) {
-            os << ";" << arr.shape() << ";"
-               << static_cast<int>(arr.dtype().val()) << ","
-               << static_cast<int>(arr.dtype().size());
-          }
-          if (&arr != &arrs.back()) {
-            os << ":";
-          }
-        }
-      };
-
-  // Header
-  os << shapeless << "\n";
-
-  // Inputs and outputs
-  print_arrs(trace_inputs);
-  os << "\n";
-  print_arrs(trace_outputs, false);
-  os << "\n";
-
-  // Tape
-  for (auto& arr : tape) {
-    if (arr.has_primitive()) {
-      print_arrs(arr.inputs(), false);
-      os << "|";
-      arr.primitive().print(os);
-      os << "|";
-      print_arrs(arr.outputs());
-      os << "\n";
-    } else {
-      // TODO need shape info? Could be constant non input?
-      os << namer.get_name(arr) << "\n";
-    }
-  }
-}
-
-std::function<std::vector<array>(const std::vector<array>&)> import_function(
-    std::string path) {
-  // Read the tape from the file
-  std::ifstream is(path);
-  if (!is.is_open()) {
-    throw std::runtime_error("[import_function] Failed to open " + path);
-  }
-
-  std::string line;
-
-  // Parse header
-  getline(is, line);
-  bool shapeless = std::stoi(line);
-
-  std::unordered_map<std::string, array> name_map;
-
-  auto parse_shape = [](const std::string& str) {
-    // Trim ( and )
-    auto strs = split(str.substr(1, str.size() - 2), ',');
-    std::vector<int> shape;
-    shape.reserve(strs.size());
-    for (auto& s : strs) {
-      shape.push_back(std::stoi(s));
-    }
-    return shape;
-  };
-
-  auto parse_dtype = [](const std::string& str) {
-    auto strs = split(str, ',');
-    return Dtype(
-        static_cast<Dtype::Val>(std::stoi(strs[0])), std::stoi(strs[1]));
-  };
-
-  auto parse_arrays = [&](const std::string& str) {
-    std::vector<array> arrays;
-    for (auto& array_str : split(str, ':')) {
-      auto part_strs = split(array_str, ';');
-      auto& name = part_strs[0];
-      if (auto it = name_map.find(name); it != name_map.end()) {
-        arrays.push_back(it->second);
-      } else {
-        arrays.emplace_back(
-            std::move(parse_shape(part_strs[1])),
-            parse_dtype(part_strs[2]),
-            nullptr,
-            std::vector<array>{});
-        name_map.insert({name, arrays.back()});
-      }
-    }
-    return arrays;
-  };
-
-  getline(is, line);
-  std::vector<array> trace_inputs = parse_arrays(line);
-
-  // Parse outputs after building the tape
-  std::string output_line;
-  getline(is, output_line);
-
-  std::vector<array> tape;
-  while (getline(is, line)) {
-    auto fields = split(line, '|');
-    if (fields.size() > 1) {
-      auto inputs = parse_arrays(fields[0]);
-      // auto prim = parse_primitive(fields[1]);
-      auto output_strs = split(fields[2], ':');
-
-      // Special case for multi-output primitives
-      if (output_strs.size() > 1) {
-      } else {
-        auto part_strs = split(output_strs[0], ';');
-        name_map.emplace(
-            part_strs[0],
-            std::move(array(
-                std::move(parse_shape(part_strs[1])),
-                parse_dtype(part_strs[2]),
-                nullptr, // TODO replace with primitive
-                std::move(inputs))));
-      }
-    } else {
-      tape.push_back(name_map.find(fields[0])->second);
-    }
-  }
-  auto trace_outputs = parse_arrays(output_line);
-
-  return [tape = std::move(tape),
-          trace_inputs = std::move(trace_inputs),
-          trace_outputs = std::move(trace_outputs),
-          shapeless](const std::vector<array>& inputs) {
-    // TODO validate shapes and types
-    return detail::compile_replace(
-        tape, trace_inputs, trace_outputs, inputs, shapeless);
-  };
 }
 
 } // namespace mlx::core

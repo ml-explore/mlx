@@ -2171,21 +2171,6 @@ class Unflatten : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Uniform : public UnaryPrimitive {
- public:
-  explicit Uniform(Stream stream) : UnaryPrimitive(stream) {}
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_VMAP()
-  DEFINE_PRINT(Uniform)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
-};
-
 class View : public UnaryPrimitive {
  public:
   explicit View(Stream stream, Dtype dtype)
