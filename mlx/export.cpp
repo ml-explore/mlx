@@ -187,7 +187,7 @@ void serialize_iterable(std::ofstream& os, const T& v);
 template <typename T>
 T deserialize_iterable(std::ifstream& is);
 
-#define SERIALIZABLE_ITERABLE(type)                  \
+#define SERIALIZE_ITERABLE(type)                     \
   void serialize(std::ofstream& os, const type& v) { \
     serialize_iterable(os, v);                       \
   }                                                  \
@@ -196,12 +196,12 @@ T deserialize_iterable(std::ifstream& is);
     return deserialize_iterable<type>(is);           \
   }
 
-SERIALIZABLE_ITERABLE(std::string)
-SERIALIZABLE_ITERABLE(std::vector<int>)
-SERIALIZABLE_ITERABLE(std::vector<uint64_t>)
-SERIALIZABLE_ITERABLE(std::vector<Dtype>)
-SERIALIZABLE_ITERABLE(std::vector<array>)
-SERIALIZABLE_ITERABLE(std::vector<std::vector<int>>)
+SERIALIZE_ITERABLE(std::string)
+SERIALIZE_ITERABLE(std::vector<int>)
+SERIALIZE_ITERABLE(std::vector<uint64_t>)
+SERIALIZE_ITERABLE(std::vector<Dtype>)
+SERIALIZE_ITERABLE(std::vector<array>)
+SERIALIZE_ITERABLE(std::vector<std::vector<int>>)
 
 template <typename T>
 void serialize_iterable(std::ofstream& os, const T& v) {
