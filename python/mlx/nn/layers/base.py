@@ -308,6 +308,7 @@ class Module(dict):
         Returns:
             The module instance after updating the parameters.
         """
+        from mlx.nn.layers.containers import Sequential
 
         def apply(dst, parameters):
             if isinstance(parameters, dict):
@@ -322,6 +323,8 @@ class Module(dict):
                         elif isinstance(current_value, (dict, list)):
                             apply(current_value, new_value)
             elif isinstance(parameters, list):
+                if isinstance(dst, Sequential):
+                    dst = dst["layers"]
                 for i in range(len(parameters)):
                     current_value = dst[i]
                     new_value = parameters[i]
