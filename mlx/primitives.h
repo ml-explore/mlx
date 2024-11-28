@@ -361,6 +361,9 @@ class ArgPartition : public UnaryPrimitive {
   DEFINE_PRINT(ArgPartition)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<int, int> state() const {
+    return {kth_, axis_};
+  };
 
  private:
   int kth_;

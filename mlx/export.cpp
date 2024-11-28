@@ -8,115 +8,29 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define SIMPLE_BUILDER(primitive) \
-  {#primitive,                    \
-   [](Stream s, std::ifstream&) { return std::make_shared<primitive>(s); }}
+#define SERIALIZE_PRIMITIVE(primitive)             \
+  {                                                \
+    #primitive, {                                  \
+      [](std::ofstream&, const Primitive& p) {},   \
+          [](std::ifstream&, Stream s) {           \
+            return std::make_shared<primitive>(s); \
+          }                                        \
+    }                                              \
+  }
 
 namespace mlx::core {
 
-using PrimitiveFactory = std::unordered_map<
-    std::string,
-    std::function<std::shared_ptr<Primitive>(Stream s, std::ifstream&)>>;
+struct PrimitiveSerializer {
+  using Serializer = std::function<void(std::ofstream&, const Primitive&)>;
+  using Deserializer =
+      std::function<std::shared_ptr<Primitive>(std::ifstream&, Stream s)>;
+  PrimitiveSerializer(Serializer serialize, Deserializer deserialize)
+      : serialize(std::move(serialize)), deserialize(std::move(deserialize)) {};
+  Serializer serialize;
+  Deserializer deserialize;
+};
 
-PrimitiveFactory get_primitive_factory() {
-  return {
-      SIMPLE_BUILDER(Abs),
-      SIMPLE_BUILDER(Add),
-      // AddMM
-      // Arange
-      SIMPLE_BUILDER(ArcCos),
-      SIMPLE_BUILDER(ArcCosh),
-      SIMPLE_BUILDER(ArcSin),
-      SIMPLE_BUILDER(ArcSinh),
-      SIMPLE_BUILDER(ArcTan),
-      SIMPLE_BUILDER(ArcTan2),
-      SIMPLE_BUILDER(ArcTanh),
-      // ArgPartition
-      // ArgReduce
-      // ArgSort
-      // AsStrided
-      // BitwiseBinary
-      // BlockMaskedMM
-      // Broadcast
-      SIMPLE_BUILDER(Ceil),
-      SIMPLE_BUILDER(Conjugate),
-      // Contiguous
-      // Convolution
-      SIMPLE_BUILDER(Copy),
-      SIMPLE_BUILDER(Cos),
-      SIMPLE_BUILDER(Cosh),
-      // CustomTransforms
-      SIMPLE_BUILDER(Depends),
-      SIMPLE_BUILDER(Divide),
-      SIMPLE_BUILDER(DivMod),
-      SIMPLE_BUILDER(Equal),
-      SIMPLE_BUILDER(Erf),
-      SIMPLE_BUILDER(ErfInv),
-      SIMPLE_BUILDER(Exp),
-      SIMPLE_BUILDER(Expm1),
-      // FFT
-      SIMPLE_BUILDER(Floor),
-      SIMPLE_BUILDER(Full),
-      // Gather
-      // GatherMM
-      SIMPLE_BUILDER(Greater),
-      SIMPLE_BUILDER(GreaterEqual),
-      SIMPLE_BUILDER(GreaterEqual),
-      // Hadamard
-      SIMPLE_BUILDER(Imag),
-      SIMPLE_BUILDER(Less),
-      SIMPLE_BUILDER(LessEqual),
-      // Load
-      // Log
-      SIMPLE_BUILDER(Log1p),
-      SIMPLE_BUILDER(LogicalNot),
-      SIMPLE_BUILDER(LogicalAnd),
-      SIMPLE_BUILDER(LogicalOr),
-      SIMPLE_BUILDER(LogAddExp),
-      SIMPLE_BUILDER(Matmul),
-      SIMPLE_BUILDER(Maximum),
-      SIMPLE_BUILDER(Minimum),
-      SIMPLE_BUILDER(Negative),
-      SIMPLE_BUILDER(NotEqual),
-      // NumberOfElements
-      // Pad
-      // Partition
-      SIMPLE_BUILDER(Power),
-      // QuantizedMatmul
-      // GatherQMM
-      // RandomBits
-      SIMPLE_BUILDER(Real),
-      SIMPLE_BUILDER(Remainder),
-      // Reshape
-      // Reduce
-      SIMPLE_BUILDER(Round),
-      // Scan
-      // Scatter
-      SIMPLE_BUILDER(Select),
-      SIMPLE_BUILDER(Sigmoid),
-      SIMPLE_BUILDER(Sign),
-      SIMPLE_BUILDER(Sin),
-      SIMPLE_BUILDER(Sinh),
-      // Slice
-      // SliceUpdate
-      // Softmax
-      // Sort
-      // Split
-      SIMPLE_BUILDER(Square),
-      // Sqrt
-      SIMPLE_BUILDER(StopGradient),
-      SIMPLE_BUILDER(Subtract),
-      SIMPLE_BUILDER(Tan),
-      SIMPLE_BUILDER(Tanh),
-      // View
-      // Transpose
-      SIMPLE_BUILDER(QRF),
-      SIMPLE_BUILDER(SVD)
-      // Inverse
-      // Cholesky
-      // Eigh
-  };
-}
+using PrimitiveFactory = std::unordered_map<std::string, PrimitiveSerializer>;
 
 template <typename T>
 void write_bytes(std::ofstream& os, const T val) {
@@ -233,19 +147,135 @@ array deserialize(std::ifstream& is) {
   return array(std::move(shape), type, nullptr, std::vector<array>{});
 }
 
-void serialize(std::ofstream& os, const std::shared_ptr<Primitive>& p) {
+void serialize(
+    std::ofstream& os,
+    const std::shared_ptr<Primitive>& p,
+    const PrimitiveFactory& factory) {
   serialize(os, p->stream());
-  std::ostringstream pname;
-  p->print(pname);
-  serialize(os, pname.str());
+  std::ostringstream pout;
+  p->print(pout);
+  auto name = pout.str();
+  serialize(os, name);
+  factory.at(name).serialize(os, *p);
 }
+
 std::shared_ptr<Primitive> deserialize(
     std::ifstream& is,
     const PrimitiveFactory& factory) {
   auto stream = deserialize<Stream>(is);
   // TODO run some checks on the stream to make sure it exists
   auto name = deserialize<std::string>(is);
-  return factory.find(name)->second(stream, is);
+  return factory.at(name).deserialize(is, stream);
+}
+
+PrimitiveFactory get_primitive_factory() {
+  return {
+      SERIALIZE_PRIMITIVE(Abs),
+      SERIALIZE_PRIMITIVE(Add),
+      // AddMM
+      // Arange
+      SERIALIZE_PRIMITIVE(ArcCos),
+      SERIALIZE_PRIMITIVE(ArcCosh),
+      SERIALIZE_PRIMITIVE(ArcSin),
+      SERIALIZE_PRIMITIVE(ArcSinh),
+      SERIALIZE_PRIMITIVE(ArcTan),
+      SERIALIZE_PRIMITIVE(ArcTan2),
+      SERIALIZE_PRIMITIVE(ArcTanh),
+      {"ArgPartition",
+       {[](std::ofstream& os, const Primitive& p) {
+          auto [kth, axis] = static_cast<const ArgPartition&>(p).state();
+          serialize(os, kth);
+          serialize(os, axis);
+        },
+        [](std::ifstream& is, Stream s) {
+          int kth = deserialize<int>(is);
+          int axis = deserialize<int>(is);
+          return std::make_shared<ArgPartition>(s, kth, axis);
+        }}},
+      // ArgReduce
+      // ArgSort
+      // AsStrided
+      // BitwiseBinary
+      // BlockMaskedMM
+      // Broadcast
+      SERIALIZE_PRIMITIVE(Ceil),
+      SERIALIZE_PRIMITIVE(Conjugate),
+      // Contiguous
+      // Convolution
+      SERIALIZE_PRIMITIVE(Copy),
+      SERIALIZE_PRIMITIVE(Cos),
+      SERIALIZE_PRIMITIVE(Cosh),
+      // CustomTransforms
+      SERIALIZE_PRIMITIVE(Depends),
+      SERIALIZE_PRIMITIVE(Divide),
+      SERIALIZE_PRIMITIVE(DivMod),
+      SERIALIZE_PRIMITIVE(Equal),
+      SERIALIZE_PRIMITIVE(Erf),
+      SERIALIZE_PRIMITIVE(ErfInv),
+      SERIALIZE_PRIMITIVE(Exp),
+      SERIALIZE_PRIMITIVE(Expm1),
+      // FFT
+      SERIALIZE_PRIMITIVE(Floor),
+      SERIALIZE_PRIMITIVE(Full),
+      // Gather
+      // GatherMM
+      SERIALIZE_PRIMITIVE(Greater),
+      SERIALIZE_PRIMITIVE(GreaterEqual),
+      SERIALIZE_PRIMITIVE(GreaterEqual),
+      // Hadamard
+      SERIALIZE_PRIMITIVE(Imag),
+      SERIALIZE_PRIMITIVE(Less),
+      SERIALIZE_PRIMITIVE(LessEqual),
+      // Load
+      // Log
+      SERIALIZE_PRIMITIVE(Log1p),
+      SERIALIZE_PRIMITIVE(LogicalNot),
+      SERIALIZE_PRIMITIVE(LogicalAnd),
+      SERIALIZE_PRIMITIVE(LogicalOr),
+      SERIALIZE_PRIMITIVE(LogAddExp),
+      SERIALIZE_PRIMITIVE(Matmul),
+      SERIALIZE_PRIMITIVE(Maximum),
+      SERIALIZE_PRIMITIVE(Minimum),
+      SERIALIZE_PRIMITIVE(Negative),
+      SERIALIZE_PRIMITIVE(NotEqual),
+      // NumberOfElements
+      // Pad
+      // Partition
+      SERIALIZE_PRIMITIVE(Power),
+      // QuantizedMatmul
+      // GatherQMM
+      // RandomBits
+      SERIALIZE_PRIMITIVE(Real),
+      SERIALIZE_PRIMITIVE(Remainder),
+      // Reshape
+      // Reduce
+      SERIALIZE_PRIMITIVE(Round),
+      // Scan
+      // Scatter
+      SERIALIZE_PRIMITIVE(Select),
+      SERIALIZE_PRIMITIVE(Sigmoid),
+      SERIALIZE_PRIMITIVE(Sign),
+      SERIALIZE_PRIMITIVE(Sin),
+      SERIALIZE_PRIMITIVE(Sinh),
+      // Slice
+      // SliceUpdate
+      // Softmax
+      // Sort
+      // Split
+      SERIALIZE_PRIMITIVE(Square),
+      // Sqrt
+      SERIALIZE_PRIMITIVE(StopGradient),
+      SERIALIZE_PRIMITIVE(Subtract),
+      SERIALIZE_PRIMITIVE(Tan),
+      SERIALIZE_PRIMITIVE(Tanh),
+      // View
+      // Transpose
+      SERIALIZE_PRIMITIVE(QRF),
+      SERIALIZE_PRIMITIVE(SVD)
+      // Inverse
+      // Cholesky
+      // Eigh
+  };
 }
 
 void export_function(
@@ -290,12 +320,13 @@ void export_function(
   serialize(os, arrays_to_ids(trace_outputs));
 
   // Tape
+  auto primitive_factory = get_primitive_factory();
   serialize(os, static_cast<uint64_t>(tape.size()));
   for (auto& arr : tape) {
     if (arr.has_primitive()) {
       serialize(os, true);
       serialize(os, arrays_to_ids(arr.inputs()));
-      serialize(os, arr.primitive_ptr());
+      serialize(os, arr.primitive_ptr(), primitive_factory);
       serialize(os, static_cast<uint64_t>(arr.siblings().size()));
       serialize(os, static_cast<uint64_t>(arr.id()));
       if (arr.siblings().empty()) {
