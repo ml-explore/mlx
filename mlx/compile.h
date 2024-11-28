@@ -41,5 +41,4 @@ void enable_compile();
 
 /** Set the compiler mode to the given value. */
 void set_compile_mode(CompileMode mode);
-
 } // namespace mlx::core
