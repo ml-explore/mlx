@@ -1,7 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/export.h"
+#include <fstream>
+
 #include "mlx/compile_impl.h"
+#include "mlx/export.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 

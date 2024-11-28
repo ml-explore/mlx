@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <fstream>
 #include "mlx/array.h"
 
 namespace mlx::core {
