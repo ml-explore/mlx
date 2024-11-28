@@ -645,21 +645,27 @@ void new_stream(Stream stream) {
 
 std::unordered_map<std::string, std::variant<std::string, size_t>>
 device_info() {
-  auto raw_device = device(default_device()).mtl_device();
-  auto arch = std::string(raw_device->architecture()->name()->utf8String());
+  auto init_device_info = []()
+      -> std::unordered_map<std::string, std::variant<std::string, size_t>> {
+    auto pool = new_scoped_memory_pool();
+    auto raw_device = device(default_device()).mtl_device();
+    auto arch = std::string(raw_device->architecture()->name()->utf8String());
 
-  int mib[] = {CTL_HW, HW_MEMSIZE};
-  size_t memsize = 0;
-  size_t length = sizeof(memsize);
+    int mib[] = {CTL_HW, HW_MEMSIZE};
+    size_t memsize = 0;
+    size_t length = sizeof(memsize);
 
-  sysctl(mib, 2, &memsize, &length, NULL, 0);
+    sysctl(mib, 2, &memsize, &length, NULL, 0);
 
-  return {
-      {"architecture", arch},
-      {"max_buffer_length", raw_device->maxBufferLength()},
-      {"max_recommended_working_set_size",
-       raw_device->recommendedMaxWorkingSetSize()},
-      {"memory_size", memsize}};
+    return {
+        {"architecture", arch},
+        {"max_buffer_length", raw_device->maxBufferLength()},
+        {"max_recommended_working_set_size",
+         raw_device->recommendedMaxWorkingSetSize()},
+        {"memory_size", memsize}};
+  };
+  static auto device_info_ = init_device_info();
+  return device_info_;
 }
 
 } // namespace mlx::core::metal

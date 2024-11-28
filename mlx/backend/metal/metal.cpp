@@ -94,6 +94,7 @@ std::function<void()> make_synchronize_task(
     Stream s,
     std::shared_ptr<std::promise<void>> p) {
   return [s, p = std::move(p)]() {
+    auto pool = new_scoped_memory_pool();
     auto& d = metal::device(s.device);
     auto cb = d.get_command_buffer(s.index);
     cb->retain();

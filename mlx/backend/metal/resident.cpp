@@ -63,6 +63,7 @@ void ResidencySet::resize(size_t size) {
   size_t current_size = wired_set_->allocatedSize();
 
   if (current_size < size) {
+    auto pool = new_scoped_memory_pool();
     // Add unwired allocations to the set
     for (auto it = unwired_set_.begin(); it != unwired_set_.end();) {
       auto buf_size = (*it)->allocatedSize();
@@ -77,6 +78,7 @@ void ResidencySet::resize(size_t size) {
     wired_set_->commit();
     wired_set_->requestResidency();
   } else if (current_size > size) {
+    auto pool = new_scoped_memory_pool();
     // Remove wired allocations until under capacity
     auto allocations = wired_set_->allAllocations();
     auto num_allocations = wired_set_->allocationCount();
@@ -92,6 +94,7 @@ void ResidencySet::resize(size_t size) {
 
 ResidencySet::~ResidencySet() {
   if (wired_set_) {
+    auto pool = new_scoped_memory_pool();
     wired_set_->release();
   }
 }
