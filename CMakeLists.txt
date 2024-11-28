@@ -34,8 +34,6 @@ message(
     "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
 )
 
-set(MLX_BUILD_ARM OFF)
-
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
     if(NOT MLX_ENABLE_X64_MAC)
@@ -55,10 +53,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 else()
   set(MLX_BUILD_METAL OFF)
   message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
-endif()
-
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
-  set(MLX_BUILD_ARM ON)
 endif()
 
 # ----------------------------- Lib -----------------------------
