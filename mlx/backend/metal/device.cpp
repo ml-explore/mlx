@@ -280,7 +280,7 @@ void Device::end_encoding(int index) {
     // - Update the map of outputs to include this command encoder's outputs.
     // - Always signal this command encoders fence.
     // - Add a completion handler for this command encoder that removes outputs
-    //   from the map to limit the growth of the map and avoid unecessary waits
+    //   from the map to limit the growth of the map and avoid unnecessary waits
     // - Temporaries are a special case as they do not cross command encoder
     //   boundaries. These can be removed early from the encoders inputs and
     //   outputs since they don't need synchronization.
