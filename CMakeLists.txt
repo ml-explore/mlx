@@ -34,8 +34,6 @@ message(
     "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
 )
 
-set(MLX_BUILD_ARM OFF)
-
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
     if(NOT MLX_ENABLE_X64_MAC)
@@ -55,10 +53,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 else()
   set(MLX_BUILD_METAL OFF)
   message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
-endif()
-
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
-  set(MLX_BUILD_ARM ON)
 endif()
 
 # ----------------------------- Lib -----------------------------
@@ -121,7 +115,7 @@ endif()
 
 if(MLX_BUILD_CPU)
   find_library(ACCELERATE_LIBRARY Accelerate)
-  if(MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
+  if(ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
     set(MLX_BUILD_ACCELERATE ON)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
