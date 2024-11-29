@@ -16,6 +16,7 @@ Layers
    BatchNorm
    CELU
    Conv1d
+   CausalConv1d
    Conv2d
    Conv3d
    ConvTranspose1d

@@ -82,6 +82,60 @@ class Conv1d(Module):
         return y
 
 
+class CausalConv1d(Conv1d):
+    """Applies a 1-dimensional causal convolution over the multi-channel input sequence,
+    ensuring that each output at time t only depends on inputs up to time t.
+
+    This is commonly used in time series tasks such as Wavenet and Temporal Convolution Network.
+
+    The channels are expected to be last i.e. the input shape should be ``NLC`` where:
+
+    * ``N`` is the batch dimension
+    * ``L`` is the sequence length
+    * ``C`` is the number of input channels
+
+    Args:
+        in_channels (int): The number of input channels
+        out_channels (int): The number of output channels
+        kernel_size (int): The size of the convolution filters
+        stride (int, optional): The stride when applying the filter.
+            Default: ``1``.
+        dilation (int, optional): The dilation of the convolution.
+        groups (int, optional): The number of groups for the convolution.
+            Default: ``1``.
+        bias (bool, optional): If ``True`` add a learnable bias to the output.
+            Default: ``True``
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = True,
+    ):
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            ((kernel_size - 1) * dilation),
+            dilation,
+            groups,
+            bias,
+        )
+        self.kernel_size = kernel_size
+
+    def __call__(self, x):
+        y = super().__call__(x)
+        if self.kernel_size > 0:
+            y = y[:, 0 : (y.shape[1] - self.padding), :]
+        return y
+
+
 class Conv2d(Module):
     """Applies a 2-dimensional convolution over the multi-channel input image.
 

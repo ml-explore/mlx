@@ -658,6 +658,41 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(c.weight.shape, (C_out, ks, C_in // groups))
         self.assertEqual(y.shape, (N, L - ks + 1, C_out))
 
+    def test_causal_conv1d(self):
+        def compute_causalconv1d(
+            x: mx.array, kernels: mx.array, dilation: int
+        ) -> np.ndarray:
+            """
+            References:
+                https://github.com/awslabs/gluonts/blob/b983427034c23b4c9b02d11214b0bcf4f2e4ec20/test/model/seq2seq/test_cnn.py#L21
+
+            """
+            conv_x = np.zeros_like(x)
+            # compute in a naive way.
+            for t, _ in enumerate(x):
+                dial_offset = 0
+                for i in reversed(range(len(kernels))):
+                    xt_lag = x[t - dial_offset] if t - dial_offset >= 0 else 0.0
+                    dial_offset += dilation
+                    conv_x[t] += kernels[i] * xt_lag
+
+            return conv_x
+
+        x = mx.random.normal([1, 10, 1], mx.float32, 0.0, 1.0)
+
+        for kernel_size in [2, 3, 5]:
+            for dilation in [1, 2, 3]:
+                c = nn.CausalConv1d(1, 1, kernel_size, dilation=dilation)
+                c.weight = mx.ones_like(c.weight)
+                c.bias = mx.zeros_like(c.bias)
+
+                y1 = c(x).reshape(-1)
+
+                y2 = compute_causalconv1d(
+                    x.reshape(-1), kernels=mx.ones(kernel_size), dilation=dilation
+                )
+                self.assertLess(mx.abs(y1 - y2).max(), 1e-4)
+
     def test_conv2d(self):
         x = mx.ones((4, 8, 8, 3))
         c = nn.Conv2d(3, 1, 8)

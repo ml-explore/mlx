@@ -54,7 +54,7 @@ from mlx.nn.layers.activations import (
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
-from mlx.nn.layers.convolution import Conv1d, Conv2d, Conv3d
+from mlx.nn.layers.convolution import CausalConv1d, Conv1d, Conv2d, Conv3d
 from mlx.nn.layers.convolution_transpose import (
     ConvTranspose1d,
     ConvTranspose2d,
