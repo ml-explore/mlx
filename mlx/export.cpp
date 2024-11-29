@@ -34,50 +34,61 @@ struct PrimitiveSerializer {
 
 using PrimitiveFactory = std::unordered_map<std::string, PrimitiveSerializer>;
 
-template <typename T>
-void write_bytes(std::ofstream& os, const T val) {
-  // TODO canonicalize endianness here
-  os.write(reinterpret_cast<const char*>(&val), sizeof(T));
-}
+template <typename, typename = void>
+constexpr bool is_iterable = false;
 
 template <typename T>
-void read_bytes(std::ifstream& is, T& val) {
-  // TODO potentially swap endianness here
-  is.read(reinterpret_cast<char*>(&val), sizeof(T));
-}
+constexpr bool is_iterable<
+    T,
+    std::void_t<
+        decltype(std::declval<T>().begin()),
+        decltype(std::declval<T>().end())>> = true;
 
 template <typename T>
-T deserialize(std::ifstream& os);
-
-#define SERIALIZE_BUILTIN(type)               \
-  void serialize(std::ofstream& os, type v) { \
-    write_bytes(os, v);                       \
-  }                                           \
-  template <>                                 \
-  type deserialize(std::ifstream& is) {       \
-    type v;                                   \
-    read_bytes(is, v);                        \
-    return v;                                 \
+void serialize(std::ofstream& os, T v) {
+  if constexpr (std::is_integral_v<T>) {
+    // TODO canonicalize endianness here
+    os.write(reinterpret_cast<const char*>(&v), sizeof(T));
+  } else if constexpr (is_iterable<T>) {
+    serialize(os, static_cast<uint64_t>(v.size()));
+    for (const auto& t : v) {
+      serialize(os, t);
+    }
+  } else {
+    static_assert(false, "Type is not serializable.");
   }
+}
 
-SERIALIZE_BUILTIN(bool)
-SERIALIZE_BUILTIN(char)
-SERIALIZE_BUILTIN(int)
-SERIALIZE_BUILTIN(uint64_t)
+template <typename T>
+T deserialize(std::ifstream& is) {
+  if constexpr (std::is_integral_v<T>) {
+    T v;
+    // TODO potentially swap endianness here
+    is.read(reinterpret_cast<char*>(&v), sizeof(T));
+    return v;
+  } else if constexpr (is_iterable<T>) {
+    T v;
+    auto size = deserialize<uint64_t>(is);
+    v.reserve(size);
+    for (int i = 0; i < size; ++i) {
+      v.push_back(deserialize<typename T::value_type>(is));
+    }
+    return v;
+  } else {
+    static_assert(false, "Type is not deserializable.");
+  }
+}
 
 void serialize(std::ofstream& os, const Stream& s) {
-  write_bytes(os, s.index);
-  write_bytes(os, static_cast<int>(s.device.type));
-  write_bytes(os, s.device.index);
+  serialize(os, s.index);
+  serialize(os, static_cast<int>(s.device.type));
+  serialize(os, s.device.index);
 }
 template <>
 Stream deserialize(std::ifstream& is) {
-  int stream_index;
-  int device_type;
-  int device_index;
-  read_bytes(is, stream_index);
-  read_bytes(is, device_type);
-  read_bytes(is, device_index);
+  auto stream_index = deserialize<int>(is);
+  auto device_type = deserialize<int>(is);
+  auto device_index = deserialize<int>(is);
   // TODO handle streams correctly
   return Stream(
       stream_index,
@@ -85,57 +96,15 @@ Stream deserialize(std::ifstream& is) {
 }
 
 void serialize(std::ofstream& os, const Dtype& t) {
-  write_bytes(os, static_cast<int>(t.val()));
-  write_bytes(os, t.size());
+  serialize(os, static_cast<int>(t.val()));
+  serialize(os, t.size());
 }
 
 template <>
 Dtype deserialize(std::ifstream& is) {
-  int val;
-  uint8_t size;
-  read_bytes(is, val);
-  read_bytes(is, size);
+  auto val = deserialize<int>(is);
+  auto size = deserialize<uint8_t>(is);
   return Dtype(static_cast<Dtype::Val>(val), size);
-};
-
-template <typename T>
-void serialize_iterable(std::ofstream& os, const T& v);
-template <typename T>
-T deserialize_iterable(std::ifstream& is);
-
-#define SERIALIZE_ITERABLE(type)                     \
-  void serialize(std::ofstream& os, const type& v) { \
-    serialize_iterable(os, v);                       \
-  }                                                  \
-  template <>                                        \
-  type deserialize(std::ifstream& is) {              \
-    return deserialize_iterable<type>(is);           \
-  }
-
-SERIALIZE_ITERABLE(std::string)
-SERIALIZE_ITERABLE(std::vector<int>)
-SERIALIZE_ITERABLE(std::vector<uint64_t>)
-SERIALIZE_ITERABLE(std::vector<Dtype>)
-SERIALIZE_ITERABLE(std::vector<array>)
-SERIALIZE_ITERABLE(std::vector<std::vector<int>>)
-
-template <typename T>
-void serialize_iterable(std::ofstream& os, const T& v) {
-  serialize(os, static_cast<uint64_t>(v.size()));
-  for (const auto& t : v) {
-    serialize(os, t);
-  }
-};
-
-template <typename T>
-T deserialize_iterable(std::ifstream& is) {
-  T v;
-  auto size = deserialize<uint64_t>(is);
-  v.reserve(size);
-  for (int i = 0; i < size; ++i) {
-    v.push_back(deserialize<typename T::value_type>(is));
-  }
-  return v;
 };
 
 void serialize(std::ofstream& os, const array& arr) {
