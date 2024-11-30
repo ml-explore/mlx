@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <functional>
+#include <unordered_map>
 
 #include "mlx/array.h"
 #include "mlx/ops.h"
