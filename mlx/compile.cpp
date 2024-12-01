@@ -72,6 +72,10 @@ bool is_fusable(const Primitive& p) {
       is_noop(p);
 }
 
+bool has_no_inputs(const Primitive& p) {
+  return typeid(p) == typeid(Load) || typeid(p) == typeid(Arange);
+}
+
 bool allows_shapeless(const Primitive& p) {
   return typeid(p) == typeid(Arange) || typeid(p) == typeid(Compiled) ||
       is_unary(p) || is_binary(p) || is_noop(p) || is_reduction(p) ||
@@ -745,9 +749,12 @@ std::vector<array> compile_replace(
   }
 
   for (auto& a : tape) {
-    // Arrays in the tape without primitives are constants
-    // and can be used directly
-    if (!a.has_primitive()) {
+    // Arrays in the tape without primitives are either:
+    // - inputs, which are already in the map
+    // - constants, which can be used directly
+    // - primitives with no inputs which will become constants after the first
+    // eval
+    if (!a.has_primitive() || has_no_inputs(a.primitive())) {
       trace_to_real.insert({a.id(), a});
     } else {
       // Find real inputs

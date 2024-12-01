@@ -43,6 +43,22 @@ TEST_CASE("test export basic functions") {
   CHECK(allclose(expected[0], out[0]).item<bool>());
 }
 
+TEST_CASE("test export function with no inputs") {
+  auto fun = [](std::vector<array> x) -> std::vector<array> {
+    return {zeros({2, 2})};
+  };
+
+  std::string file_path = get_temp_file("model.mlxfn");
+
+  export_function(file_path, fun, {});
+
+  auto imported_fun = import_function(file_path);
+
+  auto expected = fun({});
+  auto out = imported_fun({});
+  CHECK(allclose(expected[0], out[0]).item<bool>());
+}
+
 TEST_CASE("test export multi output primitives") {
   std::string file_path = get_temp_file("model.mlxfn");
 
