@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include "mlx/export.h"
 #include "mlx/compile_impl.h"
 #include "mlx/io/load.h"
@@ -49,6 +48,13 @@ constexpr bool is_iterable<
         decltype(std::declval<T>().end())>> = true;
 
 template <typename T>
+constexpr bool is_pair = std::is_same_v<
+    T,
+    std::pair<
+        typename std::tuple_element<0, T>::type,
+        typename std::tuple_element<1, T>::type>>;
+
+template <typename T>
 void serialize(Writer& os, T v) {
   if constexpr (std::is_arithmetic_v<T>) {
     // TODO canonicalize endianness here
@@ -58,6 +64,9 @@ void serialize(Writer& os, T v) {
     for (const auto& t : v) {
       serialize(os, t);
     }
+  } else if constexpr (is_pair<T>) {
+    serialize(os, v.first);
+    serialize(os, v.second);
   } else {
     static_assert(false, "Type is not serializable.");
   }
@@ -78,6 +87,10 @@ T deserialize(Reader& is) {
       v.push_back(deserialize<typename T::value_type>(is));
     }
     return v;
+  } else if constexpr (is_pair<T>) {
+    return std::make_pair(
+        deserialize<typename std::tuple_element<0, T>::type>(is),
+        deserialize<typename std::tuple_element<1, T>::type>(is));
   } else {
     static_assert(false, "Type is not deserializable.");
   }
@@ -138,7 +151,6 @@ std::shared_ptr<Primitive> deserialize(
     Reader& is,
     const PrimitiveFactory& factory) {
   auto stream = deserialize<Stream>(is);
-  // TODO run some checks on the stream to make sure it exists
   auto name = deserialize<std::string>(is);
   return factory.at(name).deserialize(is, stream);
 }
@@ -149,13 +161,10 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(Add),
       {"AddMM",
        {[](Writer& os, const Primitive& p) {
-          auto [alpha, beta] = static_cast<const AddMM&>(p).state();
-          serialize(os, alpha);
-          serialize(os, beta);
+          serialize(os, static_cast<const AddMM&>(p).state());
         },
         [](Reader& is, Stream s) {
-          float alpha = deserialize<float>(is);
-          float beta = deserialize<float>(is);
+          auto [alpha, beta] = deserialize<std::pair<float, float>>(is);
           return std::make_shared<AddMM>(s, alpha, beta);
         }}},
       // Arange
@@ -168,13 +177,10 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(ArcTanh),
       {"ArgPartition",
        {[](Writer& os, const Primitive& p) {
-          auto [kth, axis] = static_cast<const ArgPartition&>(p).state();
-          serialize(os, kth);
-          serialize(os, axis);
+          serialize(os, static_cast<const ArgPartition&>(p).state());
         },
         [](Reader& is, Stream s) {
-          auto kth = deserialize<int>(is);
-          auto axis = deserialize<int>(is);
+          auto [kth, axis] = deserialize<std::pair<int, int>>(is);
           return std::make_shared<ArgPartition>(s, kth, axis);
         }}},
       {"ArgReduce",
@@ -193,7 +199,6 @@ PrimitiveFactory get_primitive_factory() {
       // AsStrided
       // BitwiseBinary
       // BlockMaskedMM
-      // Broadcast
       {"Broadcast",
        {[](Writer& os, const Primitive& p) {
           auto shape = static_cast<const Broadcast&>(p).state();
@@ -300,7 +305,6 @@ void export_function(
     detail::compile_validate_shapeless(tape);
   }
 
-  // Serialize the tape, inputs, and outputs to the file
   Writer os(path);
   if (!os.is_open()) {
     throw std::runtime_error("[export_function] Failed to open " + path);
