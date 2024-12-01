@@ -203,6 +203,9 @@ class AddMM : public UnaryPrimitive {
   DEFINE_PRINT(AddMM)
 
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<float, float> state() const {
+    return {alpha_, beta_};
+  };
 
  private:
   const float alpha_;
@@ -390,6 +393,9 @@ class ArgReduce : public UnaryPrimitive {
   DEFINE_PRINT(ArgReduce)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  std::pair<ReduceType, int> state() const {
+    return {reduce_type_, axis_};
+  };
 
  private:
   ReduceType reduce_type_;
@@ -535,6 +541,9 @@ class Broadcast : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Broadcast)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<int> state() const {
+    return shape_;
+  };
 
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 

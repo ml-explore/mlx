@@ -730,9 +730,12 @@ std::vector<array> compile_replace(
   }
 
   for (auto& a : tape) {
-    // Arrays in the tape without primitives are constants
-    // and can be used directly
-    if (!a.has_primitive()) {
+    // Arrays in the tape without primitives are either:
+    // - inputs, which are already in the map
+    // - constants, which can be used directly
+    // - primitives with no inputs which will become constants after the first
+    // eval
+    if (!a.has_primitive() || has_no_inputs(a.primitive())) {
       trace_to_real.insert({a.id(), a});
     } else {
       // Find real inputs

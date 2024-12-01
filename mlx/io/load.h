@@ -78,8 +78,15 @@ class ParallelFileReader : public Reader {
     return lseek(fd_, 0, SEEK_CUR);
   }
 
-  void seek(int64_t, std::ios_base::seekdir = std::ios_base::beg) override {
-    throw std::runtime_error("[ParallelFileReader::seek] Not allowed");
+  // Warning: do not use this function from multiple threads as
+  // it advances the file descriptor
+  void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
+      override {
+    if (way == std::ios_base::beg) {
+      lseek(fd_, off, 0);
+    } else {
+      lseek(fd_, off, SEEK_CUR);
+    }
   }
 
   // Warning: do not use this function from multiple threads as
