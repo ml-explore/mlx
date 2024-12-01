@@ -1,31 +1,35 @@
 // Copyright © 2024 Apple Inc.
 
-#include <fstream>
-
-#include "mlx/compile_impl.h"
 #include "mlx/export.h"
+#include "mlx/compile_impl.h"
+#include "mlx/io/load.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
+// clang-format off
 #define SERIALIZE_PRIMITIVE(primitive)             \
   {                                                \
     #primitive, {                                  \
-      [](std::ofstream&, const Primitive& p) {},   \
-          [](std::ifstream&, Stream s) {           \
-            return std::make_shared<primitive>(s); \
-          }                                        \
+      [](Writer&, const Primitive& p) {},          \
+      [](Reader&, Stream s) {                      \
+        return std::make_shared<primitive>(s);     \
+      }                                            \
     }                                              \
   }
+// clang-format on
 
 namespace mlx::core {
 
+using Reader = io::ParallelFileReader;
+using Writer = io::FileWriter;
+
 struct PrimitiveSerializer {
-  using Serializer = std::function<void(std::ofstream&, const Primitive&)>;
+  using Serializer = std::function<void(Writer&, const Primitive&)>;
   using Deserializer =
-      std::function<std::shared_ptr<Primitive>(std::ifstream&, Stream s)>;
+      std::function<std::shared_ptr<Primitive>(Reader&, Stream s)>;
   PrimitiveSerializer(Serializer serialize, Deserializer deserialize)
       : serialize(std::move(serialize)), deserialize(std::move(deserialize)) {};
   Serializer serialize;
@@ -45,8 +49,8 @@ constexpr bool is_iterable<
         decltype(std::declval<T>().end())>> = true;
 
 template <typename T>
-void serialize(std::ofstream& os, T v) {
-  if constexpr (std::is_integral_v<T>) {
+void serialize(Writer& os, T v) {
+  if constexpr (std::is_arithmetic_v<T>) {
     // TODO canonicalize endianness here
     os.write(reinterpret_cast<const char*>(&v), sizeof(T));
   } else if constexpr (is_iterable<T>) {
@@ -60,8 +64,8 @@ void serialize(std::ofstream& os, T v) {
 }
 
 template <typename T>
-T deserialize(std::ifstream& is) {
-  if constexpr (std::is_integral_v<T>) {
+T deserialize(Reader& is) {
+  if constexpr (std::is_arithmetic_v<T>) {
     T v;
     // TODO potentially swap endianness here
     is.read(reinterpret_cast<char*>(&v), sizeof(T));
@@ -79,13 +83,13 @@ T deserialize(std::ifstream& is) {
   }
 }
 
-void serialize(std::ofstream& os, const Stream& s) {
+void serialize(Writer& os, const Stream& s) {
   serialize(os, s.index);
   serialize(os, static_cast<int>(s.device.type));
   serialize(os, s.device.index);
 }
 template <>
-Stream deserialize(std::ifstream& is) {
+Stream deserialize(Reader& is) {
   auto stream_index = deserialize<int>(is);
   auto device_type = deserialize<int>(is);
   auto device_index = deserialize<int>(is);
@@ -95,31 +99,31 @@ Stream deserialize(std::ifstream& is) {
       Device(static_cast<Device::DeviceType>(device_type), device_index));
 }
 
-void serialize(std::ofstream& os, const Dtype& t) {
+void serialize(Writer& os, const Dtype& t) {
   serialize(os, static_cast<int>(t.val()));
   serialize(os, t.size());
 }
 
 template <>
-Dtype deserialize(std::ifstream& is) {
+Dtype deserialize(Reader& is) {
   auto val = deserialize<int>(is);
   auto size = deserialize<uint8_t>(is);
   return Dtype(static_cast<Dtype::Val>(val), size);
 };
 
-void serialize(std::ofstream& os, const array& arr) {
+void serialize(Writer& os, const array& arr) {
   serialize(os, arr.shape());
   serialize(os, arr.dtype());
 }
 template <>
-array deserialize(std::ifstream& is) {
+array deserialize(Reader& is) {
   auto shape = deserialize<std::vector<int>>(is);
   auto type = deserialize<Dtype>(is);
   return array(std::move(shape), type, nullptr, std::vector<array>{});
 }
 
 void serialize(
-    std::ofstream& os,
+    Writer& os,
     const std::shared_ptr<Primitive>& p,
     const PrimitiveFactory& factory) {
   serialize(os, p->stream());
@@ -131,7 +135,7 @@ void serialize(
 }
 
 std::shared_ptr<Primitive> deserialize(
-    std::ifstream& is,
+    Reader& is,
     const PrimitiveFactory& factory) {
   auto stream = deserialize<Stream>(is);
   // TODO run some checks on the stream to make sure it exists
@@ -143,7 +147,17 @@ PrimitiveFactory get_primitive_factory() {
   return {
       SERIALIZE_PRIMITIVE(Abs),
       SERIALIZE_PRIMITIVE(Add),
-      // AddMM
+      {"AddMM",
+       {[](Writer& os, const Primitive& p) {
+          auto [alpha, beta] = static_cast<const AddMM&>(p).state();
+          serialize(os, alpha);
+          serialize(os, beta);
+        },
+        [](Reader& is, Stream s) {
+          float alpha = deserialize<float>(is);
+          float beta = deserialize<float>(is);
+          return std::make_shared<AddMM>(s, alpha, beta);
+        }}},
       // Arange
       SERIALIZE_PRIMITIVE(ArcCos),
       SERIALIZE_PRIMITIVE(ArcCosh),
@@ -153,22 +167,42 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(ArcTan2),
       SERIALIZE_PRIMITIVE(ArcTanh),
       {"ArgPartition",
-       {[](std::ofstream& os, const Primitive& p) {
+       {[](Writer& os, const Primitive& p) {
           auto [kth, axis] = static_cast<const ArgPartition&>(p).state();
           serialize(os, kth);
           serialize(os, axis);
         },
-        [](std::ifstream& is, Stream s) {
-          int kth = deserialize<int>(is);
-          int axis = deserialize<int>(is);
+        [](Reader& is, Stream s) {
+          auto kth = deserialize<int>(is);
+          auto axis = deserialize<int>(is);
           return std::make_shared<ArgPartition>(s, kth, axis);
         }}},
-      // ArgReduce
+      {"ArgReduce",
+       {[](Writer& os, const Primitive& p) {
+          auto [reduce_type, axis] = static_cast<const ArgReduce&>(p).state();
+          serialize(os, static_cast<int>(reduce_type));
+          serialize(os, axis);
+        },
+        [](Reader& is, Stream s) {
+          auto reduce_type = deserialize<int>(is);
+          auto axis = deserialize<int>(is);
+          return std::make_shared<ArgReduce>(
+              s, static_cast<ArgReduce::ReduceType>(reduce_type), axis);
+        }}},
       // ArgSort
       // AsStrided
       // BitwiseBinary
       // BlockMaskedMM
       // Broadcast
+      {"Broadcast",
+       {[](Writer& os, const Primitive& p) {
+          auto shape = static_cast<const Broadcast&>(p).state();
+          serialize(os, shape);
+        },
+        [](Reader& is, Stream s) {
+          auto shape = deserialize<std::vector<int>>(is);
+          return std::make_shared<Broadcast>(s, std::move(shape));
+        }}},
       SERIALIZE_PRIMITIVE(Ceil),
       SERIALIZE_PRIMITIVE(Conjugate),
       // Contiguous
@@ -191,7 +225,6 @@ PrimitiveFactory get_primitive_factory() {
       // Gather
       // GatherMM
       SERIALIZE_PRIMITIVE(Greater),
-      SERIALIZE_PRIMITIVE(GreaterEqual),
       SERIALIZE_PRIMITIVE(GreaterEqual),
       // Hadamard
       SERIALIZE_PRIMITIVE(Imag),
@@ -268,7 +301,7 @@ void export_function(
   }
 
   // Serialize the tape, inputs, and outputs to the file
-  std::ofstream os(path, std::ios::binary);
+  Writer os(path);
   if (!os.is_open()) {
     throw std::runtime_error("[export_function] Failed to open " + path);
   }
@@ -286,20 +319,24 @@ void export_function(
   };
 
   // Inputs and outputs
-  serialize(os, arrays_to_ids(trace_inputs));
+  auto trace_input_ids = arrays_to_ids(trace_inputs);
+  serialize(os, trace_input_ids);
   serialize(os, trace_inputs);
   serialize(os, arrays_to_ids(trace_outputs));
+
+  std::unordered_set<std::uintptr_t> input_set(
+      trace_input_ids.begin(), trace_input_ids.end());
 
   // Tape
   auto primitive_factory = get_primitive_factory();
   serialize(os, static_cast<uint64_t>(tape.size()));
   for (auto& arr : tape) {
+    serialize(os, static_cast<uint64_t>(arr.id()));
     if (arr.has_primitive()) {
       serialize(os, true);
       serialize(os, arrays_to_ids(arr.inputs()));
       serialize(os, arr.primitive_ptr(), primitive_factory);
       serialize(os, static_cast<uint64_t>(arr.siblings().size()));
-      serialize(os, static_cast<uint64_t>(arr.id()));
       if (arr.siblings().empty()) {
         serialize(os, arr.shape());
         serialize(os, arr.dtype());
@@ -318,14 +355,23 @@ void export_function(
       }
     } else {
       serialize(os, false);
-      serialize(os, static_cast<uint64_t>(arr.id()));
+      if (input_set.find(arr.id()) == input_set.end()) {
+        // Save constant data
+        serialize(os, true);
+        serialize(os, arr.shape());
+        serialize(os, arr.dtype());
+        os.write(arr.data<char>(), arr.nbytes());
+      } else {
+        serialize(os, false);
+      }
     }
   }
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> import_function(
     std::string path) {
-  std::ifstream is(path, std::ios::binary);
+  auto is_ptr = std::make_shared<Reader>(path);
+  auto& is = *is_ptr;
   if (!is.is_open()) {
     throw std::runtime_error("[import_function] Failed to open " + path);
   }
@@ -348,6 +394,7 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
 
   auto primitive_factory = get_primitive_factory();
   for (size_t i = 0; i < tape_size; ++i) {
+    auto id = deserialize<uint64_t>(is);
     if (deserialize<bool>(is)) {
       auto input_ids = deserialize<std::vector<uint64_t>>(is);
       std::vector<array> inputs;
@@ -357,7 +404,6 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
       }
       std::shared_ptr<Primitive> prim = deserialize(is, primitive_factory);
       auto num_siblings = deserialize<uint64_t>(is);
-      auto id = deserialize<uint64_t>(is);
       if (num_siblings == 0) {
         auto shape = deserialize<std::vector<int>>(is);
         auto type = deserialize<Dtype>(is);
@@ -382,7 +428,23 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
         }
       }
     } else {
-      tape.push_back(array_map.at(deserialize<uint64_t>(is)));
+      if (deserialize<bool>(is)) {
+        // Load constant
+        auto shape = deserialize<std::vector<int>>(is);
+        auto type = deserialize<Dtype>(is);
+        size_t offset = is.tell();
+        tape.push_back(array(
+            std::move(shape),
+            type,
+            std::make_shared<Load>(
+                default_stream(default_device()), is_ptr, offset),
+            {}));
+        is.seek(offset + tape.back().nbytes());
+        array_map.emplace(id, tape.back());
+      } else {
+        // Function inputs are in the map
+        tape.push_back(array_map.at(id));
+      }
     }
   }
 
