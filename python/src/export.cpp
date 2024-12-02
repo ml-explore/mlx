@@ -90,12 +90,12 @@ void init_export(nb::module_& m) {
         Export a function to a file.
 
         Args:
-            path (str): File path where the function is saved.
+            path (str): Path to export the function to.
             fun (Callable): A function which takes as input zero or more
               :class:`array` and returns one or more :class:`array`.
             *arrays (array): Array inputs to the function.
-            shapeless (bool, optional): Whether or not the function allows changing the
-              shapes of inputs.
+            shapeless (bool, optional): Whether or not the function allows
+              changing the shapes of inputs.
       )pbdoc");
   m.def(
       "import_function",
@@ -105,7 +105,7 @@ void init_export(nb::module_& m) {
               if (!valid_inputs(arrays)) {
                 throw std::invalid_argument(
                     "[import_function::call] Inputs can be either a variable "
-                    "number of arrays or a single tuple / list of arrays.");
+                    "number of arrays or a single tuple or list of arrays.");
               }
               return nb::tuple(nb::cast(fn(tree_flatten(arrays, true))));
             });
@@ -116,7 +116,7 @@ void init_export(nb::module_& m) {
         Import a function from a file.
 
         Args:
-            path (str): File path where the function is saved.
+            path (str): Path to import the function from.
 
         Returns:
             Callable: The imported function.
@@ -135,7 +135,8 @@ void init_export(nb::module_& m) {
           write(out.str());
         } else {
           throw std::invalid_argument(
-              "export_to_dot accepts file-like objects or strings to be used as filenames");
+              "[export_to_dot] Accepts file-like objects or strings "
+              "to be used as filenames.");
         }
       },
       "file"_a,

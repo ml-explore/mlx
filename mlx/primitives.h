@@ -223,6 +223,9 @@ class Arange : public UnaryPrimitive {
   DEFINE_PRINT(Arange)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  std::tuple<double, double, double> state() const {
+    return {start_, stop_, step_};
+  };
 
  private:
   double start_;
@@ -416,6 +419,9 @@ class ArgSort : public UnaryPrimitive {
   DEFINE_PRINT(ArgSort)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  int state() const {
+    return axis_;
+  };
 
  private:
   int axis_;
@@ -2212,6 +2218,9 @@ class Transpose : public UnaryPrimitive {
   DEFINE_PRINT(Transpose)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  std::vector<int> state() const {
+    return axes_;
+  };
 
  private:
   std::vector<int> axes_;
