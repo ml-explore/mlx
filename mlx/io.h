@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <variant>
 
 #include "mlx/array.h"
