@@ -54,6 +54,19 @@ constexpr bool is_pair = std::is_same_v<
         typename std::tuple_element<0, T>::type,
         typename std::tuple_element<1, T>::type>>;
 
+template <typename>
+constexpr bool dependent_false = false;
+
+template <typename T>
+struct NotSerializable {
+  static_assert(dependent_false<T>, "Type is not serializable.");
+};
+
+template <typename T>
+struct NotDeserializable {
+  static_assert(dependent_false<T>, "Type is not deserializable.");
+};
+
 template <typename T>
 void serialize(Writer& os, T v) {
   if constexpr (std::is_arithmetic_v<T>) {
@@ -68,7 +81,7 @@ void serialize(Writer& os, T v) {
     serialize(os, v.first);
     serialize(os, v.second);
   } else {
-    static_assert(false, "Type is not serializable.");
+    NotSerializable<T>();
   }
 }
 
@@ -92,7 +105,7 @@ T deserialize(Reader& is) {
         deserialize<typename std::tuple_element<0, T>::type>(is),
         deserialize<typename std::tuple_element<1, T>::type>(is));
   } else {
-    static_assert(false, "Type is not deserializable.");
+    NotDeserializable<T>();
   }
 }
 
