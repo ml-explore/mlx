@@ -659,15 +659,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (N, L - ks + 1, C_out))
 
     def test_causal_conv1d(self):
+        from copy import deepcopy
+
         def compute_causalconv1d(
             x: mx.array, kernels: mx.array, dilation: int
-        ) -> np.ndarray:
+        ) -> mx.array:
             """
             References:
                 https://github.com/awslabs/gluonts/blob/b983427034c23b4c9b02d11214b0bcf4f2e4ec20/test/model/seq2seq/test_cnn.py#L21
-
             """
-            conv_x = np.zeros_like(x)
+            conv_x = mx.zeros_like(x)
             # compute in a naive way.
             for t, _ in enumerate(x):
                 dial_offset = 0
@@ -678,20 +679,72 @@ class TestLayers(mlx_tests.MLXTestCase):
 
             return conv_x
 
-        x = mx.random.normal([1, 10, 1], mx.float32, 0.0, 1.0)
+        test_params = [
+            {
+                "batch_size": 1,
+                "seq_len": 100,
+                "channels": 1,
+                "kernel_sizes": [1, 2, 3, 4, 5],
+                "dilations": [1, 2, 3, 4, 5],
+            }
+        ]
 
-        for kernel_size in [2, 3, 5]:
-            for dilation in [1, 2, 3]:
-                c = nn.CausalConv1d(1, 1, kernel_size, dilation=dilation)
-                c.weight = mx.ones_like(c.weight)
-                c.bias = mx.zeros_like(c.bias)
+        for params in test_params:
+            for kernel_size in params["kernel_sizes"]:
+                for dilation in params["dilations"]:
+                    x = mx.random.normal(
+                        [params["batch_size"], params["seq_len"], params["channels"]],
+                        mx.float32,
+                        0.0,
+                        1.0,
+                    )
 
-                y1 = c(x).reshape(-1)
+                    c = nn.CausalConv1d(1, 1, kernel_size, dilation=dilation)
+                    c.weight = mx.ones_like(c.weight)
+                    c.bias = mx.zeros_like(c.bias)
 
-                y2 = compute_causalconv1d(
-                    x.reshape(-1), kernels=mx.ones(kernel_size), dilation=dilation
-                )
-                self.assertLess(mx.abs(y1 - y2).max(), 1e-4)
+                    y1 = c(x).reshape(-1)
+
+                    y2 = compute_causalconv1d(
+                        x.reshape(-1), kernels=mx.ones(kernel_size), dilation=dilation
+                    )
+                    self.assertLess(mx.abs(y1 - y2).max(), 1e-5)
+
+                    # calculate receptive field
+                    receptive_field = (kernel_size - 1) * dilation + 1
+
+                    y_base = c(x)
+
+                    test_points = [
+                        int(params["seq_len"] * 0.25),
+                        int(params["seq_len"] * 0.5),
+                        int(params["seq_len"] * 0.75),
+                    ]
+
+                    for t in test_points:
+                        x_modified = deepcopy(x)
+                        x_modified[:, t:, :] = 0.0
+
+                        y_modified = c(x_modified)
+
+                        # Areas where future information has no effect
+                        safe_point = max(0, t - receptive_field)
+
+                        # The outputs in the safe area should be the same
+                        # Check that the output within the receptive field matches before and after the change
+                        self.assertLess(
+                            mx.all(
+                                mx.abs(
+                                    y_base[:, :safe_point, :]
+                                    - y_modified[:, :safe_point, :]
+                                )
+                            ),
+                            1e-5,
+                        )
+                        # Outputs in impact areas should be different
+                        # Confirm the change in output when future information is zeroed out
+                        diff_future = mx.abs(y_base[:, t:, :] - y_modified[:, t:, :])
+                        self.assertTrue(mx.any(diff_future > 1e-5))
 
     def test_conv2d(self):
         x = mx.ones((4, 8, 8, 3))
