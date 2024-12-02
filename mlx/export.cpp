@@ -180,7 +180,19 @@ PrimitiveFactory get_primitive_factory() {
           auto [alpha, beta] = deserialize<std::pair<float, float>>(is);
           return std::make_shared<AddMM>(s, alpha, beta);
         }}},
-      // Arange
+      {"Arange",
+       {[](Writer& os, const Primitive& p) {
+          auto [start, stop, step] = static_cast<const Arange&>(p).state();
+          serialize(os, start);
+          serialize(os, stop);
+          serialize(os, step);
+        },
+        [](Reader& is, Stream s) {
+          auto start = deserialize<double>(is);
+          auto stop = deserialize<double>(is);
+          auto step = deserialize<double>(is);
+          return std::make_shared<Arange>(s, start, stop, step);
+        }}},
       SERIALIZE_PRIMITIVE(ArcCos),
       SERIALIZE_PRIMITIVE(ArcCosh),
       SERIALIZE_PRIMITIVE(ArcSin),
@@ -208,7 +220,13 @@ PrimitiveFactory get_primitive_factory() {
           return std::make_shared<ArgReduce>(
               s, static_cast<ArgReduce::ReduceType>(reduce_type), axis);
         }}},
-      // ArgSort
+      {"ArgSort",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const ArgSort&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          return std::make_shared<ArgSort>(s, deserialize<int>(is));
+        }}},
       // AsStrided
       // BitwiseBinary
       // BlockMaskedMM
@@ -291,7 +309,14 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(Tan),
       SERIALIZE_PRIMITIVE(Tanh),
       // View
-      // Transpose
+      {"Transpose",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Transpose&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto axes = deserialize<std::vector<int>>(is);
+          return std::make_shared<Transpose>(s, std::move(axes));
+        }}},
       SERIALIZE_PRIMITIVE(QRF),
       SERIALIZE_PRIMITIVE(SVD)
       // Inverse
