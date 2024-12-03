@@ -15,7 +15,10 @@ namespace mlx::core {
 
 // Forward declaration
 class Primitive;
-using deleter_t = std::function<void(allocator::Buffer)>;
+
+using Deleter = std::function<void(allocator::Buffer)>;
+using Shape = std::vector<int32_t>;
+using Strides = std::vector<size_t>;
 
 class array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc
@@ -33,7 +36,7 @@ class array {
   template <typename It>
   array(
       It data,
-      std::vector<int> shape,
+      Shape shape,
       Dtype dtype =
           TypeToDtype<typename std::iterator_traits<It>::value_type>());
 
@@ -49,15 +52,15 @@ class array {
   template <typename T>
   array(
       std::initializer_list<T> data,
-      std::vector<int> shape,
+      Shape shape,
       Dtype dtype = TypeToDtype<T>());
 
   /* Build an array from a buffer */
   array(
       allocator::Buffer data,
-      std::vector<int> shape,
+      Shape shape,
       Dtype dtype,
-      deleter_t deleter = allocator::free);
+      Deleter deleter = allocator::free);
 
   /** Assignment to rvalue does not compile. */
   array& operator=(const array& other) && = delete;
@@ -96,7 +99,7 @@ class array {
   }
 
   /** The shape of the array as a vector of integers. */
-  const std::vector<int>& shape() const {
+  const Shape& shape() const {
     return array_desc_->shape;
   }
 
@@ -105,12 +108,12 @@ class array {
    *
    *  This function supports negative indexing and provides
    *  bounds checking. */
-  int shape(int dim) const {
+  auto shape(int dim) const {
     return shape().at(dim < 0 ? dim + ndim() : dim);
   }
 
   /** The strides of the array. */
-  const std::vector<size_t>& strides() const {
+  const Strides& strides() const {
     return array_desc_->strides;
   }
 
@@ -119,7 +122,7 @@ class array {
    *
    *  This function supports negative indexing and provides
    *  bounds checking. */
-  size_t strides(int dim) const {
+  auto strides(int dim) const {
     return strides().at(dim < 0 ? dim + ndim() : dim);
   }
 
@@ -184,13 +187,13 @@ class array {
    */
 
   array(
-      std::vector<int> shape,
+      Shape shape,
       Dtype dtype,
       std::shared_ptr<Primitive> primitive,
       std::vector<array> inputs);
 
   static std::vector<array> make_arrays(
-      std::vector<std::vector<int>> shapes,
+      std::vector<Shape> shapes,
       const std::vector<Dtype>& dtypes,
       const std::shared_ptr<Primitive>& primitive,
       const std::vector<array>& inputs);
@@ -207,8 +210,8 @@ class array {
 
   struct Data {
     allocator::Buffer buffer;
-    deleter_t d;
-    Data(allocator::Buffer buffer, deleter_t d = allocator::free)
+    Deleter d;
+    Data(allocator::Buffer buffer, Deleter d = allocator::free)
         : buffer(buffer), d(d) {}
     // Not copyable
     Data(const Data& d) = delete;
@@ -397,18 +400,18 @@ class array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
-  void set_data(allocator::Buffer buffer, deleter_t d = allocator::free);
+  void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
 
   void set_data(
       allocator::Buffer buffer,
       size_t data_size,
-      std::vector<size_t> strides,
+      Strides strides,
       Flags flags,
-      deleter_t d = allocator::free);
+      Deleter d = allocator::free);
 
   void copy_shared_buffer(
       const array& other,
-      const std::vector<size_t>& strides,
+      const Strides& strides,
       Flags flags,
       size_t data_size,
       size_t offset = 0);
@@ -417,7 +420,7 @@ class array {
 
   void move_shared_buffer(
       array other,
-      const std::vector<size_t>& strides,
+      const Strides& strides,
       Flags flags,
       size_t data_size,
       size_t offset = 0);
@@ -436,8 +439,8 @@ class array {
   void init(const It src);
 
   struct ArrayDesc {
-    std::vector<int> shape;
-    std::vector<size_t> strides;
+    Shape shape;
+    Strides strides;
     size_t size;
     Dtype dtype;
     std::shared_ptr<Primitive> primitive;
@@ -471,10 +474,10 @@ class array {
     // The arrays position in the output list
     uint32_t position{0};
 
-    explicit ArrayDesc(std::vector<int> shape, Dtype dtype);
+    explicit ArrayDesc(Shape shape, Dtype dtype);
 
     explicit ArrayDesc(
-        std::vector<int> shape,
+        Shape shape,
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
@@ -502,7 +505,7 @@ array::array(T val, Dtype dtype /* = TypeToDtype<T>() */)
 template <typename It>
 array::array(
   It data,
-  std::vector<int> shape,
+  Shape shape,
   Dtype dtype /* = TypeToDtype<typename std::iterator_traits<It>::value_type>() */) :
     array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   init(data);
@@ -521,7 +524,7 @@ array::array(
 template <typename T>
 array::array(
     std::initializer_list<T> data,
-    std::vector<int> shape,
+    Shape shape,
     Dtype dtype /* = TypeToDtype<T>() */)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   if (data.size() != size()) {
