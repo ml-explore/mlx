@@ -48,7 +48,6 @@ void init_stream(nb::module_& m) {
       R"pbdoc(
       A stream for running operations on a given device.
       )pbdoc")
-      .def(nb::init<int, Device>(), "index"_a, "device"_a)
       .def_ro("device", &Stream::device)
       .def(
           "__repr__",

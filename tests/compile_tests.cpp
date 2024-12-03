@@ -719,3 +719,14 @@ TEST_CASE("test compile strides") {
     CHECK_EQ(out.strides().size(), 3);
   }
 }
+
+TEST_CASE("test compile change streams") {
+  auto cfun = compile(simple_fun);
+  auto out = cfun({array(1.0f), array(2.0f)})[0];
+  CHECK_EQ(out.primitive().stream(), default_stream(default_device()));
+
+  auto s = new_stream(default_device());
+  StreamContext sctx(s);
+  out = cfun({array(1.0f), array(2.0f)})[0];
+  CHECK_EQ(out.primitive().stream(), s);
+}
