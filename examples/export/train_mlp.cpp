@@ -11,7 +11,6 @@ int main() {
   int output_dim = 10;
 
   auto state = import_function("init_mlp.mlxfn")({});
-  std::cout << state[0] << std::endl;
 
   // Make the input
   random::seed(42);
