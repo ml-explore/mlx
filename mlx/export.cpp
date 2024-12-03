@@ -29,13 +29,17 @@ struct PrimitiveSerializer {
   using Serializer = std::function<void(Writer&, const Primitive&)>;
   using Deserializer =
       std::function<std::shared_ptr<Primitive>(Reader&, Stream s)>;
-  PrimitiveSerializer(Serializer serialize, Deserializer deserialize)
-      : serialize(std::move(serialize)), deserialize(std::move(deserialize)) {};
+  PrimitiveSerializer(
+      Serializer serialize,
+      Deserializer deserialize,
+      std::vector<std::string> keys = {})
+      : serialize(std::move(serialize)),
+        deserialize(std::move(deserialize)),
+        keys(std::move(keys)) {};
   Serializer serialize;
   Deserializer deserialize;
+  std::vector<std::string> keys;
 };
-
-using PrimitiveFactory = std::unordered_map<std::string, PrimitiveSerializer>;
 
 template <typename, typename = void>
 constexpr bool is_iterable = false;
@@ -53,6 +57,14 @@ constexpr bool is_pair = std::is_same_v<
     std::pair<
         typename std::tuple_element<0, T>::type,
         typename std::tuple_element<1, T>::type>>;
+
+template <typename T>
+constexpr bool is_3_tuple = std::is_same_v<
+    T,
+    std::tuple<
+        typename std::tuple_element<0, T>::type,
+        typename std::tuple_element<1, T>::type,
+        typename std::tuple_element<2, T>::type>>;
 
 template <typename>
 constexpr bool dependent_false = false;
@@ -80,6 +92,10 @@ void serialize(Writer& os, T v) {
   } else if constexpr (is_pair<T>) {
     serialize(os, v.first);
     serialize(os, v.second);
+  } else if constexpr (is_3_tuple<T>) {
+    serialize(os, std::get<0>(v));
+    serialize(os, std::get<1>(v));
+    serialize(os, std::get<2>(v));
   } else {
     NotSerializable<T>();
   }
@@ -104,6 +120,11 @@ T deserialize(Reader& is) {
     return std::make_pair(
         deserialize<typename std::tuple_element<0, T>::type>(is),
         deserialize<typename std::tuple_element<1, T>::type>(is));
+  } else if constexpr (is_3_tuple<T>) {
+    return std::make_tuple(
+        deserialize<typename std::tuple_element<0, T>::type>(is),
+        deserialize<typename std::tuple_element<1, T>::type>(is),
+        deserialize<typename std::tuple_element<2, T>::type>(is));
   } else {
     NotDeserializable<T>();
   }
@@ -148,28 +169,8 @@ array deserialize(Reader& is) {
   return array(std::move(shape), type, nullptr, std::vector<array>{});
 }
 
-void serialize(
-    Writer& os,
-    const std::shared_ptr<Primitive>& p,
-    const PrimitiveFactory& factory) {
-  serialize(os, p->stream());
-  std::ostringstream pout;
-  p->print(pout);
-  auto name = pout.str();
-  serialize(os, name);
-  factory.at(name).serialize(os, *p);
-}
-
-std::shared_ptr<Primitive> deserialize(
-    Reader& is,
-    const PrimitiveFactory& factory) {
-  auto stream = deserialize<Stream>(is);
-  auto name = deserialize<std::string>(is);
-  return factory.at(name).deserialize(is, stream);
-}
-
-PrimitiveFactory get_primitive_factory() {
-  return {
+struct PrimitiveFactory {
+  std::unordered_map<std::string, PrimitiveSerializer> factory = {
       SERIALIZE_PRIMITIVE(Abs),
       SERIALIZE_PRIMITIVE(Add),
       {"AddMM",
@@ -180,17 +181,21 @@ PrimitiveFactory get_primitive_factory() {
           auto [alpha, beta] = deserialize<std::pair<float, float>>(is);
           return std::make_shared<AddMM>(s, alpha, beta);
         }}},
-      {"Arange",
+      {"AddMM",
        {[](Writer& os, const Primitive& p) {
-          auto [start, stop, step] = static_cast<const Arange&>(p).state();
-          serialize(os, start);
-          serialize(os, stop);
-          serialize(os, step);
+          serialize(os, static_cast<const AddMM&>(p).state());
         },
         [](Reader& is, Stream s) {
-          auto start = deserialize<double>(is);
-          auto stop = deserialize<double>(is);
-          auto step = deserialize<double>(is);
+          auto [alpha, beta] = deserialize<std::pair<float, float>>(is);
+          return std::make_shared<AddMM>(s, alpha, beta);
+        }}},
+      {"Arange",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Arange&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto [start, stop, step] =
+              deserialize<std::tuple<double, double, double>>(is);
           return std::make_shared<Arange>(s, start, stop, step);
         }}},
       SERIALIZE_PRIMITIVE(ArcCos),
@@ -227,6 +232,13 @@ PrimitiveFactory get_primitive_factory() {
         [](Reader& is, Stream s) {
           return std::make_shared<ArgSort>(s, deserialize<int>(is));
         }}},
+      {"AsType",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const AsType&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          return std::make_shared<AsType>(s, deserialize<Dtype>(is));
+        }}},
       // AsStrided
       // BitwiseBinary
       // BlockMaskedMM
@@ -258,7 +270,17 @@ PrimitiveFactory get_primitive_factory() {
       // FFT
       SERIALIZE_PRIMITIVE(Floor),
       SERIALIZE_PRIMITIVE(Full),
-      // Gather
+      {"Gather",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Gather&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto [axes, slice_sizes] =
+              deserialize<std::pair<std::vector<int>, std::vector<int>>>(is);
+          return std::make_shared<Gather>(
+              s, std::move(axes), std::move(slice_sizes));
+        }}},
+
       // GatherMM
       SERIALIZE_PRIMITIVE(Greater),
       SERIALIZE_PRIMITIVE(GreaterEqual),
@@ -267,7 +289,16 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(Less),
       SERIALIZE_PRIMITIVE(LessEqual),
       // Load
-      // Log
+      {"Log",
+       {[](Writer& os, const Primitive& p) {
+          auto base = static_cast<const Log&>(p).state();
+          serialize(os, static_cast<int>(base));
+        },
+        [](Reader& is, Stream s) {
+          auto base = static_cast<Log::Base>(deserialize<int>(is));
+          return std::make_shared<Log>(s, base);
+        },
+        {"Log2", "Log10"}}},
       SERIALIZE_PRIMITIVE(Log1p),
       SERIALIZE_PRIMITIVE(LogicalNot),
       SERIALIZE_PRIMITIVE(LogicalAnd),
@@ -276,22 +307,81 @@ PrimitiveFactory get_primitive_factory() {
       SERIALIZE_PRIMITIVE(Matmul),
       SERIALIZE_PRIMITIVE(Maximum),
       SERIALIZE_PRIMITIVE(Minimum),
+      SERIALIZE_PRIMITIVE(Multiply),
       SERIALIZE_PRIMITIVE(Negative),
       SERIALIZE_PRIMITIVE(NotEqual),
-      // NumberOfElements
+      {"Reshape",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Reshape&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto shape = deserialize<std::vector<int>>(is);
+          return std::make_shared<Reshape>(s, std::move(shape));
+        }}},
+      {"NumberOfElements",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const NumberOfElements&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto [axes, inverted, dtype] =
+              deserialize<std::tuple<std::vector<int>, bool, Dtype>>(is);
+          return std::make_shared<NumberOfElements>(
+              s, std::move(axes), inverted, dtype);
+        }}},
       // Pad
       // Partition
       SERIALIZE_PRIMITIVE(Power),
       // QuantizedMatmul
       // GatherQMM
-      // RandomBits
+      {"RandomBits",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const RandomBits&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto [shape, width] =
+              deserialize<std::pair<std::vector<int>, int>>(is);
+          return std::make_shared<RandomBits>(s, std::move(shape), width);
+        }}},
       SERIALIZE_PRIMITIVE(Real),
       SERIALIZE_PRIMITIVE(Remainder),
-      // Reshape
-      // Reduce
+      {"Reshape",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Reshape&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto shape = deserialize<std::vector<int>>(is);
+          return std::make_shared<Reshape>(s, std::move(shape));
+        }}},
+      {"Reduce",
+       {[](Writer& os, const Primitive& p) {
+          auto [reduce_type, axes] = static_cast<const Reduce&>(p).state();
+          serialize(os, static_cast<int>(reduce_type));
+          serialize(os, axes);
+        },
+        [](Reader& is, Stream s) {
+          auto reduce_type = deserialize<int>(is);
+          auto axes = deserialize<std::vector<int>>(is);
+          return std::make_shared<Reduce>(
+              s, static_cast<Reduce::ReduceType>(reduce_type), std::move(axes));
+        },
+        {"And", "Or", "Sum", "Prod", "Min", "Max"}}},
       SERIALIZE_PRIMITIVE(Round),
       // Scan
       // Scatter
+      {"Scatter",
+       {[](Writer& os, const Primitive& p) {
+          auto [reduce_type, axes] = static_cast<const Scatter&>(p).state();
+          serialize(os, static_cast<int>(reduce_type));
+          serialize(os, axes);
+        },
+        [](Reader& is, Stream s) {
+          auto reduce_type = deserialize<int>(is);
+          auto axes = deserialize<std::vector<int>>(is);
+          return std::make_shared<Scatter>(
+              s,
+              static_cast<Scatter::ReduceType>(reduce_type),
+              std::move(axes));
+        }}},
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),
       SERIALIZE_PRIMITIVE(Sign),
@@ -301,7 +391,15 @@ PrimitiveFactory get_primitive_factory() {
       // SliceUpdate
       // Softmax
       // Sort
-      // Split
+      {"Split",
+       {[](Writer& os, const Primitive& p) {
+          serialize(os, static_cast<const Split&>(p).state());
+        },
+        [](Reader& is, Stream s) {
+          auto [indices, axis] =
+              deserialize<std::pair<std::vector<int>, int>>(is);
+          return std::make_shared<Split>(s, std::move(indices), axis);
+        }}},
       SERIALIZE_PRIMITIVE(Square),
       // Sqrt
       SERIALIZE_PRIMITIVE(StopGradient),
@@ -323,7 +421,35 @@ PrimitiveFactory get_primitive_factory() {
       // Cholesky
       // Eigh
   };
-}
+  std::unordered_map<std::string, std::string> name_remap;
+
+  PrimitiveFactory() {
+    for (auto& [n, f] : factory) {
+      for (auto& k : f.keys) {
+        name_remap[k] = n;
+      }
+    }
+  }
+
+  void save(Writer& os, const std::shared_ptr<Primitive>& p) {
+    serialize(os, p->stream());
+    std::ostringstream pout;
+    p->print(pout);
+    auto name = pout.str();
+    name = name.substr(0, name.find(' '));
+    if (auto it = name_remap.find(name); it != name_remap.end()) {
+      name = it->second;
+    }
+    serialize(os, name);
+    factory.at(name).serialize(os, *p);
+  };
+
+  std::shared_ptr<Primitive> load(Reader& is) {
+    auto stream = deserialize<Stream>(is);
+    auto name = deserialize<std::string>(is);
+    return factory.at(name).deserialize(is, stream);
+  };
+};
 
 void export_function(
     std::string path,
@@ -370,14 +496,14 @@ void export_function(
       trace_input_ids.begin(), trace_input_ids.end());
 
   // Tape
-  auto primitive_factory = get_primitive_factory();
+  auto factory = PrimitiveFactory();
   serialize(os, static_cast<uint64_t>(tape.size()));
   for (auto& arr : tape) {
     serialize(os, static_cast<uint64_t>(arr.id()));
     if (arr.has_primitive()) {
       serialize(os, true);
       serialize(os, arrays_to_ids(arr.inputs()));
-      serialize(os, arr.primitive_ptr(), primitive_factory);
+      factory.save(os, arr.primitive_ptr());
       serialize(os, static_cast<uint64_t>(arr.siblings().size()));
       if (arr.siblings().empty()) {
         serialize(os, arr.shape());
@@ -434,7 +560,7 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
   auto tape_size = deserialize<uint64_t>(is);
   tape.reserve(tape_size);
 
-  auto primitive_factory = get_primitive_factory();
+  auto factory = PrimitiveFactory();
   for (size_t i = 0; i < tape_size; ++i) {
     auto id = deserialize<uint64_t>(is);
     if (deserialize<bool>(is)) {
@@ -444,7 +570,7 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
       for (auto id : input_ids) {
         inputs.push_back(array_map.at(id));
       }
-      std::shared_ptr<Primitive> prim = deserialize(is, primitive_factory);
+      std::shared_ptr<Primitive> prim = factory.load(is);
       auto num_siblings = deserialize<uint64_t>(is);
       if (num_siblings == 0) {
         auto shape = deserialize<std::vector<int>>(is);

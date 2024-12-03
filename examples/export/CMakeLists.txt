@@ -19,10 +19,11 @@ execute_process(
   COMMAND grep location
   COMMAND awk "{print $4 \"/mlx\"}"
   OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE MLX_DIR)
-list(APPEND CMAKE_PREFIX_PATH "${MLX_DIR}")
-
+  OUTPUT_VARIABLE MLX_ROOT)
 find_package(MLX CONFIG REQUIRED)
 
 add_executable(eval_mlp eval_mlp.cpp)
 target_link_libraries(eval_mlp PRIVATE mlx)
+
+add_executable(train_mlp train_mlp.cpp)
+target_link_libraries(train_mlp PRIVATE mlx)

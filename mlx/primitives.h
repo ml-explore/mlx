@@ -442,6 +442,9 @@ class AsType : public UnaryPrimitive {
   DEFINE_PRINT(AsType)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  Dtype state() const {
+    return dtype_;
+  };
 
  private:
   Dtype dtype_;
@@ -1121,6 +1124,9 @@ class Gather : public UnaryPrimitive {
   DEFINE_PRINT(Gather)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  std::pair<std::vector<int>, std::vector<int>> state() const {
+    return {axes_, slice_sizes_};
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1277,6 +1283,10 @@ class Log : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
+
+  Base state() const {
+    return base_;
+  };
 
   void print(std::ostream& os) override {
     switch (base_) {
@@ -1506,6 +1516,9 @@ class NumberOfElements : public UnaryPrimitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
     return {{}};
   }
+  std::tuple<std::vector<int>, bool, Dtype> state() const {
+    return {axes_, inverted_, dtype_};
+  }
 
  private:
   std::vector<int> axes_;
@@ -1645,6 +1658,9 @@ class RandomBits : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_PRINT(RandomBits)
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<std::vector<int>, int> state() const {
+    return {shape_, width_};
+  };
 
  private:
   Shape shape_;
@@ -1679,6 +1695,9 @@ class Reshape : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Reshape)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<int> state() const {
+    return shape_;
+  };
 
  private:
   Shape shape_;
@@ -1730,6 +1749,9 @@ class Reduce : public UnaryPrimitive {
     }
   }
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<ReduceType, std::vector<int>> state() const {
+    return {reduce_type_, axes_};
+  };
 
  private:
   ReduceType reduce_type_;
@@ -1841,6 +1863,9 @@ class Scatter : public UnaryPrimitive {
     }
   }
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<ReduceType, std::vector<int>> state() const {
+    return {reduce_type_, axes_};
+  };
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -2027,6 +2052,9 @@ class Split : public Primitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Split)
   bool is_equivalent(const Primitive& other) const override;
+  std::pair<std::vector<int>, int> state() const {
+    return {indices_, axis_};
+  };
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);

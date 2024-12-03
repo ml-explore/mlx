@@ -4486,7 +4486,7 @@ std::pair<std::vector<array>, std::vector<int>> View::vmap(
 }
 
 void View::print(std::ostream& os) {
-  os << "View" << dtype_;
+  os << "View " << dtype_;
 }
 
 bool View::is_equivalent(const Primitive& other) const {
