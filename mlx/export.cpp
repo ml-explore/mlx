@@ -117,14 +117,14 @@ T deserialize(Reader& is) {
     }
     return v;
   } else if constexpr (is_pair<T>) {
-    return std::make_pair(
-        deserialize<typename std::tuple_element<0, T>::type>(is),
-        deserialize<typename std::tuple_element<1, T>::type>(is));
+    auto x1 = deserialize<typename std::tuple_element<0, T>::type>(is);
+    auto x2 = deserialize<typename std::tuple_element<1, T>::type>(is);
+    return std::make_pair(x1, x2);
   } else if constexpr (is_3_tuple<T>) {
-    return std::make_tuple(
-        deserialize<typename std::tuple_element<0, T>::type>(is),
-        deserialize<typename std::tuple_element<1, T>::type>(is),
-        deserialize<typename std::tuple_element<2, T>::type>(is));
+    auto x1 = deserialize<typename std::tuple_element<0, T>::type>(is),
+         auto x2 = deserialize<typename std::tuple_element<1, T>::type>(is),
+         auto x3 = deserialize<typename std::tuple_element<2, T>::type>(is),
+         return std::make_tuple(x1, x2, x3);
   } else {
     NotDeserializable<T>();
   }
