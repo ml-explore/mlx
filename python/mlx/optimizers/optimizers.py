@@ -398,7 +398,7 @@ class Adam(Optimizer):
     r"""The Adam optimizer [1].
 
     Our Adam implementation follows the original paper and omits the bias
-    correction in the first and second moment estimates. In detail,
+    correction in the first and second moment estimates by default. In detail,
 
     [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
     optimization. ICLR 2015.
@@ -423,12 +423,14 @@ class Adam(Optimizer):
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
         betas: List[float] = [0.9, 0.999],
         eps: float = 1e-8,
+        bias_correction: bool = False,
     ):
         super().__init__()
 
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
+        self.bias_correction = bias_correction
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -441,6 +443,14 @@ class Adam(Optimizer):
         lr = self.learning_rate.astype(gradient.dtype)
         b1, b2 = self.betas
         eps = self.eps
+        bias_correction = self.bias_correction
+
+        step = self.step
+        bias_correction1 = (1 - b1**step) if bias_correction else 1
+        bias_correction2 = (1 - b2**step) if bias_correction else 1
+
+        step_size = (lr / bias_correction1).astype(gradient.dtype)
+        bias_correction2_sqrt = mx.sqrt(bias_correction2)
 
         m = state["m"]
         v = state["v"]
@@ -449,15 +459,17 @@ class Adam(Optimizer):
         state["m"] = m
         state["v"] = v
 
-        return parameter - lr * m / (mx.sqrt(v) + eps)
+        return parameter - step_size * m / (
+            mx.sqrt(v) / bias_correction2_sqrt + eps
+        ).astype(gradient.dtype)
 
 
 class AdamW(Adam):
     r"""The AdamW optimizer [1].
 
     Following the above convention, in contrast with [1], we do not use bias
-    correction in the first and second moments for AdamW. We update the weights
-    with a weight_decay (:math:`\lambda`) value:
+    correction in the first and second moments for AdamW by default. We update
+    the weights with a weight_decay (:math:`\lambda`) value:
 
     [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay
     regularization. ICLR 2019.
@@ -485,8 +497,14 @@ class AdamW(Adam):
         betas: List[float] = [0.9, 0.999],
         eps: float = 1e-8,
         weight_decay: float = 0.01,
+        bias_correction: bool = False,
     ):
-        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
+        super().__init__(
+            learning_rate=learning_rate,
+            betas=betas,
+            eps=eps,
+            bias_correction=bias_correction,
+        )
         self.weight_decay = weight_decay
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
