@@ -31,10 +31,9 @@ if __name__ == "__main__":
     input_dim = 32
     output_dim = 10
 
-    # Seed for the parameter initialization
-    mx.random.seed(0)
-
     def init():
+        # Seed for the parameter initialization
+        mx.random.seed(0)
         model = MLP(
             num_layers=3, input_dim=input_dim, hidden_dim=64, output_dim=output_dim
         )

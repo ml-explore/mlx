@@ -131,6 +131,24 @@ class TestExportImport(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             imported(mx.array(1.0), [mx.array(1.0)])
 
+    def test_export_random_sample(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        mx.random.seed(5)
+
+        def fun():
+            return mx.random.uniform(shape=(3,))
+
+        mx.export_function(path, fun)
+        imported = mx.import_function(path)
+
+        (out,) = imported()
+
+        mx.random.seed(5)
+        expected = fun()
+
+        self.assertTrue(mx.array_equal(out, expected))
+
 
 if __name__ == "__main__":
     unittest.main()
