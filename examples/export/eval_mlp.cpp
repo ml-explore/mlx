@@ -14,10 +14,10 @@ int main() {
   auto example_x = random::uniform({batch_size, input_dim});
 
   // Import the function
-  auto imported_forward = import_function("eval_mlp.mlxfn");
+  auto forward = import_function("eval_mlp.mlxfn");
 
   // Call the imported function
-  auto out = imported_forward({example_x})[0];
+  auto out = forward({example_x})[0];
 
   std::cout << out << std::endl;
 
