@@ -933,6 +933,9 @@ class Equal : public UnaryPrimitive {
       os << "Equal";
     }
   }
+  auto state() const {
+    return equal_nan_;
+  };
 
  private:
   void eval(const std::vector<array>& inputs, array& out);

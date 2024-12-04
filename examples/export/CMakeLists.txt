@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.27)
 
-project(_ext LANGUAGES CXX)
+project(import_mlx LANGUAGES CXX)
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-option(BUILD_SHARED_LIBS "Build as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
 find_package(
