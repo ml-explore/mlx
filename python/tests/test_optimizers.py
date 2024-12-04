@@ -185,7 +185,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
                     optim.state,
                 )
             )
-    
+
     def test_adamw_matches_pytorch(self):
         import numpy as np
         import torch
