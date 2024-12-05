@@ -10,7 +10,11 @@ enum class CompileMode { disabled, no_simplify, no_fuse, enabled };
 
 /** Compile takes a function and returns a compiled function. */
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    bool shapeless = false);
+
+std::function<std::vector<array>(const std::vector<array>&)> compile(
+    std::vector<array>(fun)(const std::vector<array>&),
     bool shapeless = false);
 
 /** Globally disable compilation.

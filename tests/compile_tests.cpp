@@ -730,3 +730,30 @@ TEST_CASE("test compile change streams") {
   out = cfun({array(1.0f), array(2.0f)})[0];
   CHECK_EQ(out.primitive().stream(), s);
 }
+
+TEST_CASE("test compile lambda") {
+  auto fun = [](const std::vector<array>& inputs) {
+    return std::vector<array>{abs(inputs[0])};
+  };
+
+  auto out = compile(+fun)({array(-1)});
+  CHECK_EQ(out[0].item<int>(), 1);
+
+  int x = 2;
+  auto fun_with_capture = [&x](const std::vector<array>& inputs) {
+    return std::vector<array>{inputs[0] + x};
+  };
+  auto cfun = compile(fun_with_capture);
+  out = cfun({array(0)});
+  CHECK_EQ(out[0].item<int>(), 2);
+
+  // Doesn't recompile
+  x = 3;
+  out = cfun({array(0)});
+  CHECK_EQ(out[0].item<int>(), 2);
+
+  // Recompiles
+  auto cfun2 = compile(fun_with_capture);
+  out = cfun2({array(0)});
+  CHECK_EQ(out[0].item<int>(), 3);
+}
