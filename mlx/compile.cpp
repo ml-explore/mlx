@@ -829,6 +829,11 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
   if (skip_compile()) {
     return fun;
   }
+  if (!fun) {
+    throw std::invalid_argument(
+        "[compile] Cannot compile a function without a target.");
+  }
+
   return [fun = std::move(fun),
           fun_id,
           shapeless,
@@ -899,7 +904,6 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
   if (detail::skip_compile()) {
     return fun;
   }
-
   auto fun_id = detail::get_function_address(fun);
   if (fun_id) {
     // If the function has an addressable target then no need to manage it's
