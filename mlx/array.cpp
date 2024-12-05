@@ -31,7 +31,7 @@ array::array(const std::complex<float>& val, Dtype dtype /* = complex64 */)
 }
 
 array::array(
-    std::vector<int> shape,
+    Shape shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
     std::vector<array> inputs)
@@ -42,7 +42,7 @@ array::array(
           std::move(inputs))) {}
 
 std::vector<array> array::make_arrays(
-    std::vector<std::vector<int>> shapes,
+    std::vector<Shape> shapes,
     const std::vector<Dtype>& dtypes,
     const std::shared_ptr<Primitive>& primitive,
     const std::vector<array>& inputs) {
@@ -74,11 +74,7 @@ array::array(std::initializer_list<int> data, Dtype dtype)
 }
 
 /* Build an array from a shared buffer */
-array::array(
-    allocator::Buffer data,
-    std::vector<int> shape,
-    Dtype dtype,
-    deleter_t deleter)
+array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   set_data(data, deleter);
 }
@@ -126,7 +122,7 @@ bool array::is_tracer() const {
   return array_desc_->is_tracer && in_tracing() || retain_graph();
 }
 
-void array::set_data(allocator::Buffer buffer, deleter_t d) {
+void array::set_data(allocator::Buffer buffer, Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
   array_desc_->data_ptr = buffer.raw_ptr();
   array_desc_->data_size = size();
@@ -139,9 +135,9 @@ void array::set_data(allocator::Buffer buffer, deleter_t d) {
 void array::set_data(
     allocator::Buffer buffer,
     size_t data_size,
-    std::vector<size_t> strides,
+    Strides strides,
     Flags flags,
-    deleter_t d) {
+    Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
   array_desc_->data_ptr = buffer.raw_ptr();
   array_desc_->data_size = data_size;
@@ -151,7 +147,7 @@ void array::set_data(
 
 void array::copy_shared_buffer(
     const array& other,
-    const std::vector<size_t>& strides,
+    const Strides& strides,
     Flags flags,
     size_t data_size,
     size_t offset /* = 0 */) {
@@ -170,7 +166,7 @@ void array::copy_shared_buffer(const array& other) {
 
 void array::move_shared_buffer(
     array other,
-    const std::vector<size_t>& strides,
+    const Strides& strides,
     Flags flags,
     size_t data_size,
     size_t offset /* = 0 */) {
@@ -237,13 +233,13 @@ void array::ArrayDesc::init() {
   }
 }
 
-array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
+array::ArrayDesc::ArrayDesc(Shape shape, Dtype dtype)
     : shape(std::move(shape)), dtype(dtype), status(Status::available) {
   init();
 }
 
 array::ArrayDesc::ArrayDesc(
-    std::vector<int> shape,
+    Shape shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
     std::vector<array> inputs)

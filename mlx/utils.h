@@ -62,9 +62,7 @@ inline Dtype result_type(const array& a, const array& b, const array& c) {
 }
 Dtype result_type(const std::vector<array>& arrays);
 
-std::vector<int> broadcast_shapes(
-    const std::vector<int>& s1,
-    const std::vector<int>& s2);
+Shape broadcast_shapes(const Shape& s1, const Shape& s2);
 
 bool is_same_shape(const std::vector<array>& arrays);
 
@@ -96,8 +94,8 @@ std::ostream& operator<<(std::ostream& os, const Stream& s);
 std::ostream& operator<<(std::ostream& os, const Dtype& d);
 std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k);
 std::ostream& operator<<(std::ostream& os, array a);
-std::ostream& operator<<(std::ostream& os, const std::vector<int>& v);
-std::ostream& operator<<(std::ostream& os, const std::vector<size_t>& v);
+std::ostream& operator<<(std::ostream& os, const Shape& v);
+std::ostream& operator<<(std::ostream& os, const Strides& v);
 std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v);
 inline std::ostream& operator<<(std::ostream& os, const complex64_t& v) {
   return os << v.real() << (v.imag() >= 0 ? "+" : "") << v.imag() << "j";
