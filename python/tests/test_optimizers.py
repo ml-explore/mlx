@@ -11,6 +11,15 @@ import mlx.optimizers as opt
 import mlx.utils
 import mlx_tests
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
+import numpy as np
+
+try:
+    import torch
+    import torch.nn.functional as F
+
+    has_torch = True
+except ImportError as e:
+    has_torch = False
 
 
 def get_all_optimizers():
@@ -186,10 +195,8 @@ class TestOptimizers(mlx_tests.MLXTestCase):
                 )
             )
 
+    @unittest.skipIf(not has_torch, "requires Torch")
     def test_adamw_matches_pytorch(self):
-        import numpy as np
-        import torch
-
         mx.random.seed(0)
         np.random.seed(0)
 
