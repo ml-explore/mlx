@@ -2856,9 +2856,6 @@ std::vector<array> Reshape::jvp(
 
 bool Reshape::is_equivalent(const Primitive& other) const {
   const Reshape& r_other = static_cast<const Reshape&>(other);
-  if (!expression_.empty()) {
-    return expression_ == r_other.expression_;
-  }
   return shape_ == r_other.shape_;
 }
 

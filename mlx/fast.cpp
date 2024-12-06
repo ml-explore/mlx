@@ -935,7 +935,7 @@ std::vector<Shape> AffineQuantize::output_shapes(
     wq_shape.back() = w.shape(-1) * bits_ / 32;
     auto sshape = w.shape();
     sshape.back() = w.shape(-1) / group_size_;
-    bshape = sshape;
+    auto bshape = sshape;
     return {std::move(wq_shape), std::move(sshape), std::move(bshape)};
   }
 }
