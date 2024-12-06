@@ -854,15 +854,17 @@ METAL_FUNC void qvm_impl(
   constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
   constexpr int num_simdgroups = 2;
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
-  constexpr int bytes_per_pack = power_of_2_bits ? 4 : 3;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
   constexpr int tn = 32 / pack_factor;
   constexpr int block_size = SIMD_SIZE;
 
-  const device uint8_t* ws = (const device uint8_t*)w;
+  using W_T =
+      typename ConditionalType<power_of_2_bits, uint32_t, uint8_t>::type;
+  const device W_T* ws = (const device W_T*)w;
 
   typedef float U;
   typedef struct {
-    uint8_t wi[tn * bytes_per_pack];
+    W_T wi[tn * bytes_per_pack];
   } vec_w;
 
   thread vec_w w_local;
