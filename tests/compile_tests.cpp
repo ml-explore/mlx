@@ -739,6 +739,29 @@ TEST_CASE("test compile lambda") {
   auto out = compile(+fun)({array(-1)});
   CHECK_EQ(out[0].item<int>(), 1);
 
+  decltype(compile(nullptr)) c_local_fun;
+  {
+    auto local_fun = [](const std::vector<array>& inputs) {
+      return std::vector<array>{abs(inputs[0])};
+    };
+    c_local_fun = compile(+local_fun);
+  }
+
+  // This is ok even though local_fun is out of scope
+  out = c_local_fun({array(-1)});
+  CHECK_EQ(out[0].item<int>(), 1);
+
+  {
+    int x = 2;
+    auto local_fun = [x](const std::vector<array>& inputs) {
+      return std::vector<array>{inputs[0] + x};
+    };
+    c_local_fun = compile(local_fun);
+  }
+  // Also ok even though local_fun is out of scope.
+  out = c_local_fun({array(0)});
+  CHECK_EQ(out[0].item<int>(), 2);
+
   int x = 2;
   auto fun_with_capture = [&x](const std::vector<array>& inputs) {
     return std::vector<array>{inputs[0] + x};
