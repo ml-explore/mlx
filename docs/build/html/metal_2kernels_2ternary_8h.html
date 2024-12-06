@@ -104,9 +104,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a3e610f3b01966bdbf23fdfebe5d2c508" id="r_a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
 <tr class="memitem:a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3e610f3b01966bdbf23fdfebe5d2c508">ternary_v2</a> (device const bool *a, device const T *b, device const T *c, device T *d, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1bd5918559850f3f80e3adee2391fe6a" id="r_a1bd5918559850f3f80e3adee2391fe6a"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
-<tr class="memitem:a1bd5918559850f3f80e3adee2391fe6a"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1bd5918559850f3f80e3adee2391fe6a">ternary_g_nd1</a> (device const bool *a, device const T *b, device const T *c, device T *d, constant const size_t &amp;a_strides, constant const size_t &amp;b_strides, constant const size_t &amp;c_strides, uint index)</td></tr>
-<tr class="separator:a1bd5918559850f3f80e3adee2391fe6a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad63096b65467d3048eefa68f4109878d" id="r_ad63096b65467d3048eefa68f4109878d"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op , typename IdxT  = size_t&gt; </td></tr>
+<tr class="memitem:ad63096b65467d3048eefa68f4109878d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad63096b65467d3048eefa68f4109878d">ternary_g_nd1</a> (device const bool *a, device const T *b, device const T *c, device T *d, constant const size_t &amp;a_strides, constant const size_t &amp;b_strides, constant const size_t &amp;c_strides, uint index)</td></tr>
+<tr class="separator:ad63096b65467d3048eefa68f4109878d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:adec9ca8a8bf527cb15d70da5857af15d" id="r_adec9ca8a8bf527cb15d70da5857af15d"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op , typename IdxT  = size_t&gt; </td></tr>
 <tr class="memitem:adec9ca8a8bf527cb15d70da5857af15d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#adec9ca8a8bf527cb15d70da5857af15d">ternary_g_nd2</a> (device const bool *a, device const T *b, device const T *c, device T *d, constant const size_t a_strides[2], constant const size_t b_strides[2], constant const size_t c_strides[2], uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:adec9ca8a8bf527cb15d70da5857af15d"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -186,13 +186,13 @@ template&lt;typename T , typename Op , int N = 1, typename IdxT  = size_t&gt; </
 
 </div>
 </div>
-<a id="a1bd5918559850f3f80e3adee2391fe6a" name="a1bd5918559850f3f80e3adee2391fe6a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1bd5918559850f3f80e3adee2391fe6a">&#9670;&#160;</a></span>ternary_g_nd1()</h2>
+<a id="ad63096b65467d3048eefa68f4109878d" name="ad63096b65467d3048eefa68f4109878d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad63096b65467d3048eefa68f4109878d">&#9670;&#160;</a></span>ternary_g_nd1()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename Op &gt; </div>
+template&lt;typename T , typename Op , typename IdxT  = size_t&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void ternary_g_nd1 </td>
