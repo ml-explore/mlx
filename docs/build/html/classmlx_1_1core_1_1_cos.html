@@ -130,9 +130,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab611ca38c987915659f7ffcce0370417" id="r_ab611ca38c987915659f7ffcce0370417"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab611ca38c987915659f7ffcce0370417">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const override</td></tr>
 <tr class="memdesc:ab611ca38c987915659f7ffcce0370417"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
 <tr class="separator:ab611ca38c987915659f7ffcce0370417"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a05b2d43942aa1d93a40c20ae8b90a25b" id="r_a05b2d43942aa1d93a40c20ae8b90a25b"><td class="memItemLeft" align="right" valign="top">std::vector&lt; std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a05b2d43942aa1d93a40c20ae8b90a25b">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs) override</td></tr>
-<tr class="memdesc:a05b2d43942aa1d93a40c20ae8b90a25b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
-<tr class="separator:a05b2d43942aa1d93a40c20ae8b90a25b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a923312e71c5a003a38b37ab67ec82580" id="r_a923312e71c5a003a38b37ab67ec82580"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a9be5b57d393e66169279cf521813af9b">Shape</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a923312e71c5a003a38b37ab67ec82580">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs) override</td></tr>
+<tr class="memdesc:a923312e71c5a003a38b37ab67ec82580"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
+<tr class="separator:a923312e71c5a003a38b37ab67ec82580"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1_unary_primitive"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1_unary_primitive')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1_unary_primitive.html">mlx::core::UnaryPrimitive</a></td></tr>
 <tr class="memitem:a189f6d4ed369f82a4b724a29eb056d4e inherit pub_methods_classmlx_1_1core_1_1_unary_primitive" id="r_a189f6d4ed369f82a4b724a29eb056d4e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_unary_primitive.html#a189f6d4ed369f82a4b724a29eb056d4e">UnaryPrimitive</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>)</td></tr>
 <tr class="memdesc:a189f6d4ed369f82a4b724a29eb056d4e inherit pub_methods_classmlx_1_1core_1_1_unary_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">An abstract base class for a primitive with a single output.  <br /></td></tr>
@@ -328,8 +328,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a05b2d43942aa1d93a40c20ae8b90a25b" name="a05b2d43942aa1d93a40c20ae8b90a25b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a05b2d43942aa1d93a40c20ae8b90a25b">&#9670;&#160;</a></span>output_shapes()</h2>
+<a id="a923312e71c5a003a38b37ab67ec82580" name="a923312e71c5a003a38b37ab67ec82580"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a923312e71c5a003a38b37ab67ec82580">&#9670;&#160;</a></span>output_shapes()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -338,7 +338,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">std::vector&lt; std::vector&lt; int &gt; &gt; mlx::core::Cos::output_shapes </td>
+          <td class="memname">std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a9be5b57d393e66169279cf521813af9b">Shape</a> &gt; mlx::core::Cos::output_shapes </td>
           <td>(</td>
           <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em></span></td><td>)</td>
           <td></td>
@@ -354,7 +354,7 @@ Public Member Functions</h2></td></tr>
 <p>Get the output shapes of the primitive. </p>
 <p>This is not required to be implemented by derived classes, in which case it will throw. </p>
 
-<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a8849dc20991398f6f9a24d6785673853">mlx::core::Primitive</a>.</p>
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#aa5b443d71db1c7ed31a5ae6e31b7fe29">mlx::core::Primitive</a>.</p>
 
 </div>
 </div>

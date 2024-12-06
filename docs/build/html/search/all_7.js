@@ -1,7 +1,7 @@
 var searchData=
 [
   ['gather_0',['Gather',['../classmlx_1_1core_1_1_gather.html',1,'mlx::core::Gather'],['../classmlx_1_1core_1_1_gather.html#a5b5f47ceff1d43477c87be5116f261d0',1,'mlx::core::Gather::Gather()']]],
-  ['gather_1',['gather',['../namespacemlx_1_1core_1_1metal.html#a545de371fefba1feec2e70b7e9f4187c',1,'mlx::core::metal::gather()'],['../group__ops.html#gab6e7f655a9ff15350ca5379692f9d444',1,'mlx::core::gather(const array &amp;a, const std::vector&lt; array &gt; &amp;indices, const std::vector&lt; int &gt; &amp;axes, const std::vector&lt; int &gt; &amp;slice_sizes, StreamOrDevice s={})'],['../group__ops.html#gadb4337ca5d4f88fe9e7c083bc478158b',1,'mlx::core::gather(const array &amp;a, const array &amp;indices, int axis, const std::vector&lt; int &gt; &amp;slice_sizes, StreamOrDevice s={})']]],
+  ['gather_1',['gather',['../namespacemlx_1_1core_1_1metal.html#a545de371fefba1feec2e70b7e9f4187c',1,'mlx::core::metal::gather()'],['../group__ops.html#ga8fcc3ad0677c834c36b72d5b2ebba6d0',1,'mlx::core::gather(const array &amp;a, const std::vector&lt; array &gt; &amp;indices, const std::vector&lt; int &gt; &amp;axes, const Shape &amp;slice_sizes, StreamOrDevice s={})'],['../group__ops.html#gafe2bd174c9953ed7f12664f7abaca0e6',1,'mlx::core::gather(const array &amp;a, const array &amp;indices, int axis, const Shape &amp;slice_sizes, StreamOrDevice s={})']]],
   ['gather_2eh_2',['gather.h',['../gather_8h.html',1,'']]],
   ['gather_5fbias_3',['gather_bias',['../steel__gemm__fused_8h.html#aaaf17233201156be684f858bfd0f1b67',1,'steel_gemm_fused.h']]],
   ['gather_5fimpl_4',['gather_impl',['../gather_8h.html#a767d7c5be6f2f649101f581449af5599',1,'gather.h']]],

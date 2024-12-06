@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.nn.quantize &#8212; MLX 0.21.0 documentation</title>
+    <title>mlx.nn.quantize &#8212; MLX 0.21.1 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../../_static/documentation_options.js?v=174dfe6e"></script>
+    <script src="../../_static/documentation_options.js?v=acb17c73"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -51,7 +51,7 @@
     <link rel="prev" title="mlx.nn.value_and_grad" href="mlx.nn.value_and_grad.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.21.0" />
+  <meta name="docsearch:version" content="0.21.1" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
-    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.1 documentation - Home"/>
+    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.1 documentation - Home"/>
   
   
 </a></div>
@@ -866,7 +866,7 @@
 <h1>mlx.nn.quantize<a class="headerlink" href="#mlx-nn-quantize" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.nn.quantize">
-<span class="sig-name descname"><span class="pre">quantize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.layers.base.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_predicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.quantize" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">quantize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.layers.base.Module"><span class="pre">Module</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_predicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.layers.base.Module"><span class="pre">Module</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.13)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.quantize" title="Link to this definition">#</a></dt>
 <dd><p>Quantize the sub-modules of a module according to a predicate.</p>
 <p>By default all layers that define a <code class="docutils literal notranslate"><span class="pre">to_quantized(group_size,</span> <span class="pre">bits)</span></code>
 method will be quantized. Both <a class="reference internal" href="../nn/_autosummary/mlx.nn.Linear.html#mlx.nn.Linear" title="mlx.nn.Linear"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Linear</span></code></a> and <a class="reference internal" href="../nn/_autosummary/mlx.nn.Embedding.html#mlx.nn.Embedding" title="mlx.nn.Embedding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Embedding</span></code></a> layers
@@ -880,10 +880,11 @@ will be quantized. Note also, the module is updated in-place.</p>
 <li><p><strong>bits</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The number of bits per parameter (see
 <a class="reference internal" href="mlx.core.quantize.html#mlx.core.quantize" title="mlx.core.quantize"><code class="xref py py-func docutils literal notranslate"><span class="pre">mlx.core.quantize()</span></code></a>). Default: <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p></li>
 <li><p><strong>class_predicate</strong> (<em>Optional</em><em>[</em><em>Callable</em><em>]</em>) – A callable which receives the
-<a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Module</span></code></a> path and <a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Module</span></code></a> itself and returns <code class="docutils literal notranslate"><span class="pre">True</span></code> if
-it should be quantized and <code class="docutils literal notranslate"><span class="pre">False</span></code> otherwise. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, then
-all layers that define a <code class="docutils literal notranslate"><span class="pre">to_quantized(group_size,</span> <span class="pre">bits)</span></code> method
-are quantized. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Module</span></code></a> path and <a class="reference internal" href="../nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Module</span></code></a> itself and returns <code class="docutils literal notranslate"><span class="pre">True</span></code> or a
+dict of params for <cite>to_quantized</cite> if it should be quantized and
+<code class="docutils literal notranslate"><span class="pre">False</span></code> otherwise. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, then all layers that define a
+<code class="docutils literal notranslate"><span class="pre">to_quantized(group_size,</span> <span class="pre">bits)</span></code> method are quantized.
+Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
