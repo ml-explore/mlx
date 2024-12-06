@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <cstdlib>
 #include <map>
 #include <unordered_map>
@@ -8,6 +7,7 @@
 #include "mlx/allocator.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
@@ -73,11 +73,19 @@ bool is_fusable(const Primitive& p) {
 }
 
 bool allows_shapeless(const Primitive& p) {
-  return typeid(p) == typeid(Compiled) || is_unary(p) || is_binary(p) ||
-      is_noop(p) || is_reduction(p) || typeid(p) == typeid(Softmax) ||
-      typeid(p) == typeid(Sort) || typeid(p) == typeid(ArgSort) ||
-      typeid(p) == typeid(ArgPartition) || typeid(p) == typeid(Partition) ||
-      typeid(p) == typeid(Select) || typeid(p) == typeid(NumberOfElements);
+  return typeid(p) == typeid(Arange) || typeid(p) == typeid(Compiled) ||
+      is_unary(p) || is_binary(p) || is_noop(p) || is_reduction(p) ||
+      typeid(p) == typeid(Softmax) || typeid(p) == typeid(Sort) ||
+      typeid(p) == typeid(ArgSort) || typeid(p) == typeid(ArgPartition) ||
+      typeid(p) == typeid(Partition) || typeid(p) == typeid(Select) ||
+      typeid(p) == typeid(NumberOfElements) || typeid(p) == typeid(Reshape) ||
+      typeid(p) == typeid(Gather) || typeid(p) == typeid(Transpose) ||
+      typeid(p) == typeid(Concatenate) || typeid(p) == typeid(Matmul) ||
+      typeid(p) == typeid(QuantizedMatmul) ||
+      typeid(p) == typeid(fast::AffineQuantize) ||
+      typeid(p) == typeid(fast::LayerNorm) ||
+      typeid(p) == typeid(fast::RMSNorm) || typeid(p) == typeid(fast::RoPE) ||
+      typeid(p) == typeid(fast::ScaledDotProductAttention);
 }
 
 Compiled::Compiled(
