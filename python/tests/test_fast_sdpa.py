@@ -168,7 +168,6 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 if dtype == mx.float16:
                     rtol = 1e-2
 
-                # np.testing.assert_allclose(o_q, reference, rtol=rtol, atol=atol)
                 self.assertTrue(mx.allclose(o_q, reference, rtol=rtol, atol=atol))
                 self.assertTrue(mx.allclose(o, reference, rtol=rtol, atol=atol))
 

@@ -792,7 +792,8 @@ array quantized_scaled_dot_product_attention(
 
   int query_head_dim = queries.shape(-1);
   int L = queries.shape(2);
-  if (L > 1 && query_head_dim != 64 && query_head_dim != 128) {
+  bool compatible_head_dim = query_head_dim == 64 || query_head_dim == 128;
+  if (L > 1 || !compatible_head_dim || stream.device != Device::gpu) {
     if (needs_mask) {
       return fallback(
           {queries,
