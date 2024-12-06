@@ -395,3 +395,56 @@ def sparse(
         return a
 
     return initializer
+
+def orthogonal(
+    gain: float = 1.0, dtype: mx.Dtype = mx.float32
+) -> Callable[[mx.array], mx.array]:
+    r"""An orthogonal initializer.
+
+    Generates a 2D orthogonal matrix by:
+    1. Determine a square size based on max(rows, cols).
+    2. Sampling a random square matrix from a normal distribution.
+    3. Performing a CPU-based QR decomposition on this square matrix.
+    4. Adjusting the sign of Q to ensure a unique orthogonal matrix.
+    5. Slicing Q to the desired shape (rows, cols) if non-square.
+    6. Scaling by `gain`.
+
+    Args:
+        gain (float, optional): Scaling factor for the orthogonal matrix.
+            Defaults to 1.0.
+        dtype (Dtype, optional): Data type of the array. Defaults to float32.
+
+    Returns:
+        Callable[[mx.array], mx.array]: An initializer function that produces
+        an orthogonal matrix.
+    """
+
+    def initializer(a: mx.array) -> mx.array:
+        if a.ndim < 2:
+            raise ValueError(
+                f"Orthogonal initialization requires at least 2D tensor but got {a.ndim}D."
+            )
+        if a.ndim > 2:
+            raise ValueError("Orthogonal initialization currently only supports 2D arrays.")
+
+        rows, cols = a.shape
+        n = max(rows, cols)
+
+        # Generate a square random matrix
+        rmat = mx.random.normal(shape=(n, n), dtype=dtype)
+
+        # Perform QR decomposition on CPU
+        q, r = mx.linalg.qr(rmat, stream=mx.cpu)
+
+        # Adjust the sign of Q using the diagonal of R
+        d = mx.diag(r)
+        q = q * mx.sign(d)
+
+        # Slice Q to the desired shape
+        q = q[:rows, :cols]
+
+        # Scale Q by gain
+        q = q * gain
+        return q
+
+    return initializer
