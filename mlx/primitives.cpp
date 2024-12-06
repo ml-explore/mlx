@@ -2858,7 +2858,47 @@ std::vector<array> Reshape::jvp(
 
 bool Reshape::is_equivalent(const Primitive& other) const {
   const Reshape& r_other = static_cast<const Reshape&>(other);
+  if (!expression_.empty()) {
+    return expression_ == r_other.expression_;
+  }
   return shape_ == r_other.shape_;
+}
+
+std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
+  // Only allowed to dynamically reshape when the shape is {}
+  if (expression_.empty() && !shape_.empty()) {
+    throw std::invalid_argument(
+        "[Reshape::output_shapes] Unable to infer output shape.");
+  }
+
+  auto& in = inputs[0];
+  Shape output_shape(expression_.size());
+  int dim_to_infer = -1;
+  for (int i = 0, j = 0; i < expression_.size(); ++i) {
+    auto& e = expression_[i];
+    if (auto pv = std::get_if<int>(&e); pv) {
+      if (*pv == -1) {
+        dim_to_infer = i;
+        continue;
+      } else {
+        output_shape[i] = *pv;
+      }
+    } else {
+      auto& s = std::get<std::string>(e);
+      output_shape[i] = in.shape()[j++];
+    }
+  }
+
+  if (dim_to_infer >= 0) {
+    uint64_t output_size = 1;
+    for (int i = 0; i < output_shape.size(); ++i) {
+      if (i != dim_to_infer) {
+        output_size *= output_shape[i];
+      }
+    }
+    output_shape[dim_to_infer] = in.size() / output_size;
+  }
+  return {std::move(output_shape)};
 }
 
 std::vector<array> Reduce::vjp(

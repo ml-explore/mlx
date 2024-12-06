@@ -3769,3 +3769,23 @@ TEST_CASE("test contiguous") {
   CHECK(x.flags().col_contiguous);
   CHECK_EQ(x.strides(), decltype(x.strides()){1, 2});
 }
+
+TEST_CASE("test dynamic reshape") {
+  auto x = array({1}, {1, 1, 1});
+  CHECK_EQ(dynamic_reshape(x, {}).shape(), Shape{});
+
+  // Bad character
+  CHECK_THROWS(dynamic_reshape(x, {"&", 1, 1}));
+
+  // No dim in string
+  CHECK_THROWS(dynamic_reshape(x, {"1", 1, 1}));
+
+  // Too many dims
+  CHECK_THROWS(dynamic_reshape(x, {"abcd", 1, 1}));
+
+  // Too many dims
+  CHECK_THROWS(dynamic_reshape(x, {"a", "b", "c", "d"}));
+
+  // Too many inferred dims
+  CHECK_THROWS(dynamic_reshape(x, {"a", -1, -1}));
+}

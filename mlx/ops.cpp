@@ -403,6 +403,69 @@ array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
   return array(std::move(shape), a.dtype(), std::move(p), {a});
 }
 
+// Variant of string and int for the expressions
+array dynamic_reshape(
+    const array& a,
+    std::vector<std::variant<int, std::string>> expressions,
+    StreamOrDevice s /* = {} */) {
+  // Reshape to scalar is not dynamic
+  if (expressions.empty()) {
+    return reshape(a, {}, s);
+  }
+
+  // Validate expressions:
+  // - At most one item in expressions is -1
+  // - Any string expression should have a letter
+  // - At most a.ndim() unique letters
+  // - Only valid characters in string (alphabet, integer, *, /)
+  bool infer_dim = false;
+  std::unordered_set<char> dims;
+  for (auto& e : expressions) {
+    if (auto pv = std::get_if<int>(&e); pv) {
+      if (*pv == -1) {
+        if (infer_dim) {
+          throw std::invalid_argument(
+              "[dynamic_reshape] Cannot infer more than one dimension.");
+        }
+        infer_dim = true;
+      }
+    } else {
+      auto& s = std::get<std::string>(e);
+      bool has_alpha = false;
+      for (auto c : s) {
+        if (isalpha(c)) {
+          has_alpha = true;
+          dims.insert(c);
+        } else if (!isdigit(c) && c != '*' && c != '/') {
+          std::ostringstream msg;
+          msg << "[dynamic_reshape] Invalid character in string expression \""
+              << s << "\".";
+          throw std::invalid_argument(msg.str());
+        }
+      }
+      if (!has_alpha) {
+        std::ostringstream msg;
+        msg << "[dynamic_reshape] String expression must contain at least "
+            << "one alphabetic character but got: \"" << s << "\".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  }
+  if (dims.size() >= a.ndim()) {
+    std::ostringstream msg;
+    msg << "[dynamic_reshape] Expressions contain " << dims.size()
+        << " abstract dimensions for array with only " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto output_shape = Shape{}; // Reshape::shape_from_expression(a, expression);
+  return array(
+      std::move(output_shape),
+      a.dtype(),
+      std::make_shared<Reshape>(to_stream(s), std::move(expressions)),
+      {a});
+}
+
 array flatten(
     const array& a,
     int start_axis,

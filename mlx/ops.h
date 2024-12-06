@@ -117,6 +117,12 @@ array triu(array x, int k = 0, StreamOrDevice s = {});
 /** Reshape an array to the given shape. */
 array reshape(const array& a, Shape shape, StreamOrDevice s = {});
 
+/** Dynamically reshape an array based on the given expressions. */
+array dynamic_reshape(
+    const array& a,
+    std::vector<std::variant<int, std::string>> expressions,
+    StreamOrDevice s = {});
+
 /** Flatten the dimensions in the range `[start_axis, end_axis]` . */
 array flatten(
     const array& a,

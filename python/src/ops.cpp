@@ -4880,4 +4880,27 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The imaginary part of ``a``.
       )pbdoc");
+  m.def(
+      "dynamic_reshape",
+      &dynamic_reshape,
+      nb::arg(),
+      "expression"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def dynamic_reshape(a: array, /, expression: Sequence[Union[int, str]], *, stream: "
+          "Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Dynamically reshape an array based on the given expression.
+
+        Args:
+            a (array): Input array.
+            expression (tuple(int or str)): The expression which determines the
+              output shape.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The reshaped array.
+      )pbdoc");
 }
