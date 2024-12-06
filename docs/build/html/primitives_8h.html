@@ -390,9 +390,9 @@ Macros</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">  std::vector&lt;std::vector&lt;int&gt;&gt; output_shapes(     \</div>
-<div class="line">      <span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs)<span class="keyword"> override </span>{ \</div>
-<div class="line">    <span class="keywordflow">return</span> {inputs[0].shape()};                    \</div>
+<b>Value:</b><div class="fragment"><div class="line">  std::vector&lt;Shape&gt; output_shapes(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs) \</div>
+<div class="line">      <span class="keyword">override</span> {                                                     \</div>
+<div class="line">    <span class="keywordflow">return</span> {inputs[0].shape()};                                      \</div>
 <div class="line">  }</div>
 </div><!-- fragment -->
 </div>
