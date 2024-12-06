@@ -58,6 +58,7 @@ class RMSNorm : public Custom {
 
   DEFINE_PRINT(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -110,6 +111,7 @@ class LayerNorm : public Custom {
 
   DEFINE_PRINT(LayerNorm)
   bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -173,6 +175,7 @@ class RoPE : public Custom {
 
   DEFINE_PRINT(RoPE)
   bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -207,6 +210,7 @@ class ScaledDotProductAttention : public Custom {
   bool is_equivalent(const Primitive& other) const override;
 
   DEFINE_PRINT(ScaledDotProductAttention);
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -234,6 +238,9 @@ class AffineQuantize : public Custom {
       override;
 
   DEFINE_PRINT(AffineQuantize);
+
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
