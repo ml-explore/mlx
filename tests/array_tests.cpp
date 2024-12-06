@@ -129,37 +129,59 @@ TEST_CASE("test array types") {
   }
 
   // uint8
-  { basic_dtype_test(uint8_t, uint8); }
+  {
+    basic_dtype_test(uint8_t, uint8);
+  }
 
   // uint16
-  { basic_dtype_test(uint16_t, uint16); }
+  {
+    basic_dtype_test(uint16_t, uint16);
+  }
 
   // uint32
-  { basic_dtype_test(uint32_t, uint32); }
+  {
+    basic_dtype_test(uint32_t, uint32);
+  }
 
   // uint64
-  { basic_dtype_test(uint64_t, uint64); }
+  {
+    basic_dtype_test(uint64_t, uint64);
+  }
 
   // int8
-  { basic_dtype_test(int8_t, int8); }
+  {
+    basic_dtype_test(int8_t, int8);
+  }
 
   // int16
-  { basic_dtype_test(int16_t, int16); }
+  {
+    basic_dtype_test(int16_t, int16);
+  }
 
   // int32
-  { basic_dtype_test(int32_t, int32); }
+  {
+    basic_dtype_test(int32_t, int32);
+  }
 
   // int64
-  { basic_dtype_test(int64_t, int64); }
+  {
+    basic_dtype_test(int64_t, int64);
+  }
 
   // float16
-  { basic_dtype_test(float16_t, float16); }
+  {
+    basic_dtype_test(float16_t, float16);
+  }
 
   // float32
-  { basic_dtype_test(float, float32); }
+  {
+    basic_dtype_test(float, float32);
+  }
 
   // bfloat16
-  { basic_dtype_test(bfloat16_t, bfloat16); }
+  {
+    basic_dtype_test(bfloat16_t, bfloat16);
+  }
 
 #undef basic_dtype_test
 
