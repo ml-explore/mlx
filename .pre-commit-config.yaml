@@ -1,6 +1,3 @@
-default_language_version:
-  python: python3.10
-
 repos:
 -   repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v19.1.4
