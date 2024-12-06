@@ -3045,13 +3045,17 @@ TEST_CASE("test divmod") {
 
   // Check that we can still eval when one output goes out of scope
   std::vector<array> out_holder;
-  { out_holder.push_back(divmod(x, y)[0]); }
+  {
+    out_holder.push_back(divmod(x, y)[0]);
+  }
   eval(out_holder);
   CHECK_EQ(out_holder[0].item<float>(), 0.0);
 
   // Check that we can still eval when the other output goes out of scope
   out_holder.clear();
-  { out_holder.push_back(divmod(x, y)[1]); }
+  {
+    out_holder.push_back(divmod(x, y)[1]);
+  }
   eval(out_holder);
   CHECK_EQ(out_holder[0].item<float>(), 1.0);
 }
