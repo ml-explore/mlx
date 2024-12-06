@@ -516,15 +516,11 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       offset_ == a_other.offset_ && forward_ == a_other.forward_);
 }
 
-/** Computes: O = softmax(Q @ K.T) @ V **/
-array scaled_dot_product_attention(
+void check_sdpa_arguments(
     const array& queries,
     const array& keys,
     const array& values,
-    const float scale,
-    const std::optional<array>& mask,
-    const std::optional<int> memory_efficient_threshold,
-    StreamOrDevice s) {
+    const std::optional<array>& mask) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
       std::ostringstream msg;
@@ -550,14 +546,6 @@ array scaled_dot_product_attention(
     }
   }
 
-  // Q, K must have matching last dims (d_k aka 'head_dim');
-  if (queries.shape(-1) != keys.shape(-1)) {
-    std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
-        << queries.shape() << " for keys shape " << keys.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
   // K, V must have matching number of heads (n_kv_heads);
   auto n_q_heads = queries.shape(-3);
   auto n_kv_heads = keys.shape(-3);
@@ -577,6 +565,26 @@ array scaled_dot_product_attention(
         << n_q_heads << " for n_kv_heads " << n_kv_heads << ".";
     throw std::invalid_argument(msg.str());
   }
+}
+
+/** Computes: O = softmax(Q @ K.T) @ V **/
+array scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const float scale,
+    const std::optional<array>& mask,
+    const std::optional<int> memory_efficient_threshold,
+    StreamOrDevice s) {
+  check_sdpa_arguments(queries, keys, values, mask);
+
+  // Q, K must have matching last dims (d_k aka 'head_dim');
+  if (queries.shape(-1) != keys.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
+        << queries.shape() << " for keys shape " << keys.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   auto final_type = result_type(queries, keys, values);
   if (!issubdtype(final_type, floating)) {
@@ -589,6 +597,9 @@ array scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
+
+  auto n_q_heads = queries.shape(-3);
+  auto n_kv_heads = keys.shape(-3);
 
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
@@ -696,6 +707,25 @@ array quantized_scaled_dot_product_attention(
     const int bits,
     StreamOrDevice s) {
   int el_per_int = 32 / bits;
+
+  check_sdpa_arguments(queries, keys, values, mask);
+
+  // Q, K must have matching last dims (d_k aka 'head_dim');
+  if (queries.shape(-1) != keys.shape(-1) * el_per_int) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
+        << queries.shape() << " for keys shape " << keys.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto final_type = result_type(queries, key_scales, value_scales);
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] Received unsupported type "
+        << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   int out_dim = values.shape(-1) * el_per_int;
 
   auto n_q_heads = queries.shape(-3);
@@ -760,8 +790,9 @@ array quantized_scaled_dot_product_attention(
     return std::vector<array>{out};
   };
 
+  int query_head_dim = queries.shape(-1);
   int L = queries.shape(2);
-  if (L > 1) {
+  if (L > 1 && query_head_dim != 64 && query_head_dim != 128) {
     if (needs_mask) {
       return fallback(
           {queries,

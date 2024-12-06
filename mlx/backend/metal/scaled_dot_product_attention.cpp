@@ -242,65 +242,6 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-void quant_sdpa_vector(
-    const Stream& s,
-    metal::Device& d,
-    const array& q,
-    const array& k,
-    const array& k_scales,
-    const array& k_biases,
-    const array& v,
-    const array& v_scales,
-    const array& v_biases,
-    array& out,
-    float scale,
-    int group_size,
-    int bits) {
-  // Set the kernel name
-  std::string kname;
-  kname.reserve(96);
-  kname += "quant_sdpa_vector_";
-  kname += get_type_string(q.dtype());
-  kname += "_";
-  kname += std::to_string(q.shape(-1));
-  kname += "_";
-  kname += std::to_string(group_size);
-  kname += "_";
-  kname += std::to_string(bits);
-
-  // Compute the necessary sizes
-  int gqa_factor = q.shape(1) / k.shape(1);
-  int N = k.shape(2);
-  int B = q.shape(0) * q.shape(1);
-  size_t stride = k.strides()[1];
-  size_t group_stride = k_scales.strides()[1];
-  MTL::Size group_dims(128, 1, 1);
-  MTL::Size grid_dims(1, B, 1);
-
-  // Get the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  // Set its arguments
-  compute_encoder.set_input_array(q.data_shared_ptr() == nullptr ? out : q, 0);
-  compute_encoder.set_input_array(k, 1);
-  compute_encoder.set_input_array(k_scales, 2);
-  compute_encoder.set_input_array(k_biases, 3);
-  compute_encoder.set_input_array(v, 4);
-  compute_encoder.set_input_array(v_scales, 5);
-  compute_encoder.set_input_array(v_biases, 6);
-  compute_encoder.set_output_array(out, 7);
-  compute_encoder.set_bytes(&gqa_factor, sizeof(int), 8);
-  compute_encoder.set_bytes(&N, sizeof(int), 9);
-  compute_encoder.set_bytes(&stride, sizeof(size_t), 10);
-  compute_encoder.set_bytes(&group_stride, sizeof(size_t), 11);
-  compute_encoder.set_bytes(&scale, sizeof(float), 12);
-
-  // Launch
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-}
-
 void quant_sdpa_vector_2pass(
     const Stream& s,
     metal::Device& d,
