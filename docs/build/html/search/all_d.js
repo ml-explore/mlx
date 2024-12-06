@@ -1,7 +1,7 @@
 var searchData=
 [
   ['m_0',['M',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#a2117fc93662d5177c8f3e7c2dbb9e2db',1,'mlx::steel::ImplicitGemmConv2DParams::M'],['../structmlx_1_1steel_1_1_g_e_m_m_params.html#a85b20a4c4558cc78d76fcbd045a9c694',1,'mlx::steel::GEMMParams::M'],['../structmlx_1_1steel_1_1_g_e_m_m_spilt_k_params.html#a8bab0cf8a20d2abefe294a7505917e7e',1,'mlx::steel::GEMMSpiltKParams::M']]],
-  ['make_5farrays_1',['make_arrays',['../classmlx_1_1core_1_1array.html#a1173db4e23f5a8230911cb8fba45d5e6',1,'mlx::core::array']]],
+  ['make_5farrays_1',['make_arrays',['../classmlx_1_1core_1_1array.html#a45b1c9763fe921fe5880ca28316ae98c',1,'mlx::core::array']]],
   ['make_5fcontiguous_5fstrides_2',['make_contiguous_strides',['../namespacemlx_1_1core.html#a085379297e21d57f5b3aa38ae1c26070',1,'mlx::core']]],
   ['make_5fstring_3',['make_string',['../namespacemlx_1_1core.html#aed148d95e7b5221f1312473deded0d27',1,'mlx::core']]],
   ['make_5fsynchronize_5ftask_4',['make_synchronize_task',['../namespacemlx_1_1core_1_1metal.html#ab31abdda3052162d59f6590a89e38337',1,'mlx::core::metal']]],
@@ -100,7 +100,7 @@ var searchData=
   ['mmatile_3c_20float_2c_20tm_2c_201_2c_20mlx_3a_3asteel_3a_3abasemmafrag_20_3e_97',['MMATile&lt; float, TM, 1, mlx::steel::BaseMMAFrag &gt;',['../structmlx_1_1steel_1_1_m_m_a_tile.html',1,'mlx::steel']]],
   ['mmatile_3c_20float_2c_20tm_2c_20tn_2c_20mlx_3a_3asteel_3a_3abasemmafrag_20_3e_98',['MMATile&lt; float, TM, TN, mlx::steel::BaseMMAFrag &gt;',['../structmlx_1_1steel_1_1_m_m_a_tile.html',1,'mlx::steel']]],
   ['move_5for_5fcopy_99',['move_or_copy',['../namespacemlx_1_1core.html#a830a47d8a317dffb0c88e5a7afe6aee2',1,'mlx::core::move_or_copy(const array &amp;in, array &amp;out)'],['../namespacemlx_1_1core.html#aae1e770954edf1f9a35d19e0de4d857a',1,'mlx::core::move_or_copy(const array &amp;in, array &amp;out, const std::vector&lt; size_t &gt; &amp;strides, array::Flags flags, size_t data_size, size_t offset=0)']]],
-  ['move_5fshared_5fbuffer_100',['move_shared_buffer',['../classmlx_1_1core_1_1array.html#acce00db63e0f3d80f797b02397ade836',1,'mlx::core::array::move_shared_buffer(array other, const std::vector&lt; size_t &gt; &amp;strides, Flags flags, size_t data_size, size_t offset=0)'],['../classmlx_1_1core_1_1array.html#a38d7ad605f8282e5e49d0c09e0555c78',1,'mlx::core::array::move_shared_buffer(array other)']]],
+  ['move_5fshared_5fbuffer_100',['move_shared_buffer',['../classmlx_1_1core_1_1array.html#ad41cc5e7aebfcad849ad15d697584cf8',1,'mlx::core::array::move_shared_buffer(array other, const Strides &amp;strides, Flags flags, size_t data_size, size_t offset=0)'],['../classmlx_1_1core_1_1array.html#a38d7ad605f8282e5e49d0c09e0555c78',1,'mlx::core::array::move_shared_buffer(array other)']]],
   ['moveaxis_101',['moveaxis',['../group__ops.html#ga24067d10a842db2c9d509ea48135a2c3',1,'mlx::core']]],
   ['mpinplace_102',['MPINPLACE',['../namespacepocketfft_1_1detail.html#af5eedf3cdfc83c0a30807092c39a9ce2',1,'pocketfft::detail']]],
   ['mtl_5fconst_103',['MTL_CONST',['../defines_8h.html#a767ed9f2604de22b259cee02c4ce1d22',1,'defines.h']]],
