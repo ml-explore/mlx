@@ -10,8 +10,8 @@ import mlx.nn as nn
 import mlx.optimizers as opt
 import mlx.utils
 import mlx_tests
-from mlx.utils import tree_flatten, tree_map, tree_unflatten
 import numpy as np
+from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 try:
     import torch
