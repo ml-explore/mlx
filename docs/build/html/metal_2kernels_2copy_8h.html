@@ -110,9 +110,9 @@ Functions</h2></td></tr>
 <tr class="memitem:aee14a5326f53d9b30b0b38e27d180ef3" id="r_aee14a5326f53d9b30b0b38e27d180ef3"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U &gt; </td></tr>
 <tr class="memitem:aee14a5326f53d9b30b0b38e27d180ef3"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aee14a5326f53d9b30b0b38e27d180ef3">copy_v2</a> (device const T *src, device U *dst, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:aee14a5326f53d9b30b0b38e27d180ef3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aba4530a7db6a61ca36f50e4f5e58fb77" id="r_aba4530a7db6a61ca36f50e4f5e58fb77"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U &gt; </td></tr>
-<tr class="memitem:aba4530a7db6a61ca36f50e4f5e58fb77"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aba4530a7db6a61ca36f50e4f5e58fb77">copy_g_nd1</a> (device const T *src, device U *dst, constant const int64_t &amp;src_stride, uint index)</td></tr>
-<tr class="separator:aba4530a7db6a61ca36f50e4f5e58fb77"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a232c5c6b8386cf8ecbf4cdadb6e4176e" id="r_a232c5c6b8386cf8ecbf4cdadb6e4176e"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </td></tr>
+<tr class="memitem:a232c5c6b8386cf8ecbf4cdadb6e4176e"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a232c5c6b8386cf8ecbf4cdadb6e4176e">copy_g_nd1</a> (device const T *src, device U *dst, constant const int64_t &amp;src_stride, uint index)</td></tr>
+<tr class="separator:a232c5c6b8386cf8ecbf4cdadb6e4176e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a39ec5b7b8351e4332b842982a2ee6260" id="r_a39ec5b7b8351e4332b842982a2ee6260"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </td></tr>
 <tr class="memitem:a39ec5b7b8351e4332b842982a2ee6260"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a39ec5b7b8351e4332b842982a2ee6260">copy_g_nd2</a> (device const T *src, device U *dst, constant const int64_t *src_strides, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a39ec5b7b8351e4332b842982a2ee6260"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -122,9 +122,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a71e4103db4689d90ef6f9d5ba93604cf" id="r_a71e4103db4689d90ef6f9d5ba93604cf"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , int N = 1, typename IdxT  = int64_t&gt; </td></tr>
 <tr class="memitem:a71e4103db4689d90ef6f9d5ba93604cf"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a71e4103db4689d90ef6f9d5ba93604cf">copy_g</a> (device const T *src, device U *dst, constant const int *src_shape, constant const int64_t *src_strides, constant const int &amp;ndim, uint3 index, uint3 grid_dim)</td></tr>
 <tr class="separator:a71e4103db4689d90ef6f9d5ba93604cf"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3278d9c999718bee3ccbe2922f501bf1" id="r_a3278d9c999718bee3ccbe2922f501bf1"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U &gt; </td></tr>
-<tr class="memitem:a3278d9c999718bee3ccbe2922f501bf1"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3278d9c999718bee3ccbe2922f501bf1">copy_gg_nd1</a> (device const T *src, device U *dst, constant const int64_t &amp;src_stride, constant const int64_t &amp;dst_stride, uint index)</td></tr>
-<tr class="separator:a3278d9c999718bee3ccbe2922f501bf1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a370d7bbba1a4b0d64da873bafd29a78b" id="r_a370d7bbba1a4b0d64da873bafd29a78b"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </td></tr>
+<tr class="memitem:a370d7bbba1a4b0d64da873bafd29a78b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a370d7bbba1a4b0d64da873bafd29a78b">copy_gg_nd1</a> (device const T *src, device U *dst, constant const int64_t &amp;src_stride, constant const int64_t &amp;dst_stride, uint index)</td></tr>
+<tr class="separator:a370d7bbba1a4b0d64da873bafd29a78b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af0b06ac3a96852a64fa4274a94b58301" id="r_af0b06ac3a96852a64fa4274a94b58301"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </td></tr>
 <tr class="memitem:af0b06ac3a96852a64fa4274a94b58301"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#af0b06ac3a96852a64fa4274a94b58301">copy_gg_nd2</a> (device const T *src, device U *dst, constant const int64_t *src_strides, constant const int64_t *dst_strides, uint2 index)</td></tr>
 <tr class="separator:af0b06ac3a96852a64fa4274a94b58301"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -184,13 +184,13 @@ template&lt;typename T , typename U , int N = 1, typename IdxT  = int64_t&gt; </
 
 </div>
 </div>
-<a id="aba4530a7db6a61ca36f50e4f5e58fb77" name="aba4530a7db6a61ca36f50e4f5e58fb77"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aba4530a7db6a61ca36f50e4f5e58fb77">&#9670;&#160;</a></span>copy_g_nd1()</h2>
+<a id="a232c5c6b8386cf8ecbf4cdadb6e4176e" name="a232c5c6b8386cf8ecbf4cdadb6e4176e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a232c5c6b8386cf8ecbf4cdadb6e4176e">&#9670;&#160;</a></span>copy_g_nd1()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U &gt; </div>
+template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void copy_g_nd1 </td>
@@ -341,13 +341,13 @@ template&lt;typename T , typename U , int N = 1, typename IdxT  = int64_t&gt; </
 
 </div>
 </div>
-<a id="a3278d9c999718bee3ccbe2922f501bf1" name="a3278d9c999718bee3ccbe2922f501bf1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3278d9c999718bee3ccbe2922f501bf1">&#9670;&#160;</a></span>copy_gg_nd1()</h2>
+<a id="a370d7bbba1a4b0d64da873bafd29a78b" name="a370d7bbba1a4b0d64da873bafd29a78b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a370d7bbba1a4b0d64da873bafd29a78b">&#9670;&#160;</a></span>copy_gg_nd1()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U &gt; </div>
+template&lt;typename T , typename U , typename IdxT  = int64_t&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void copy_gg_nd1 </td>
