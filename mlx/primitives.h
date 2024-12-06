@@ -1616,7 +1616,6 @@ class Reshape : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Reshape)
   bool is_equivalent(const Primitive& other) const override;
-  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
   Shape shape_;

@@ -78,10 +78,9 @@ bool allows_shapeless(const Primitive& p) {
       typeid(p) == typeid(Softmax) || typeid(p) == typeid(Sort) ||
       typeid(p) == typeid(ArgSort) || typeid(p) == typeid(ArgPartition) ||
       typeid(p) == typeid(Partition) || typeid(p) == typeid(Select) ||
-      typeid(p) == typeid(NumberOfElements) || typeid(p) == typeid(Reshape) ||
-      typeid(p) == typeid(Gather) || typeid(p) == typeid(Transpose) ||
-      typeid(p) == typeid(Concatenate) || typeid(p) == typeid(Matmul) ||
-      typeid(p) == typeid(QuantizedMatmul) ||
+      typeid(p) == typeid(NumberOfElements) || typeid(p) == typeid(Gather) ||
+      typeid(p) == typeid(Transpose) || typeid(p) == typeid(Concatenate) ||
+      typeid(p) == typeid(Matmul) || typeid(p) == typeid(QuantizedMatmul) ||
       typeid(p) == typeid(fast::AffineQuantize) ||
       typeid(p) == typeid(fast::LayerNorm) ||
       typeid(p) == typeid(fast::RMSNorm) || typeid(p) == typeid(fast::RoPE) ||
