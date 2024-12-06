@@ -396,6 +396,7 @@ def sparse(
 
     return initializer
 
+
 def orthogonal(
     gain: float = 1.0, dtype: mx.Dtype = mx.float32
 ) -> Callable[[mx.array], mx.array]:
@@ -425,7 +426,9 @@ def orthogonal(
                 f"Orthogonal initialization requires at least 2D tensor but got {a.ndim}D."
             )
         if a.ndim > 2:
-            raise ValueError("Orthogonal initialization currently only supports 2D arrays.")
+            raise ValueError(
+                "Orthogonal initialization currently only supports 2D arrays."
+            )
 
         rows, cols = a.shape
         n = max(rows, cols)
