@@ -90,6 +90,7 @@ $(function(){ initResizable(false); });
 <div class="header">
   <div class="summary">
 <a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
 <a href="classmlx_1_1core_1_1fast_1_1_ro_p_e-members.html">List of all members</a>  </div>
   <div class="headertitle"><div class="title">mlx::core::fast::RoPE Class Reference</div></div>
 </div><!--header-->
@@ -145,9 +146,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a6140a502af4c2bbbc776ab26e9afebcd"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a6140a502af4c2bbbc776ab26e9afebcd">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const</td></tr>
 <tr class="memdesc:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
 <tr class="separator:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a8849dc20991398f6f9a24d6785673853"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a8849dc20991398f6f9a24d6785673853">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs)</td></tr>
-<tr class="memdesc:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
-<tr class="separator:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa5b443d71db1c7ed31a5ae6e31b7fe29 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_aa5b443d71db1c7ed31a5ae6e31b7fe29"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a9be5b57d393e66169279cf521813af9b">Shape</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#aa5b443d71db1c7ed31a5ae6e31b7fe29">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs)</td></tr>
+<tr class="memdesc:aa5b443d71db1c7ed31a5ae6e31b7fe29 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
+<tr class="separator:aa5b443d71db1c7ed31a5ae6e31b7fe29 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a29f70eb2d3b7e6c5fe52779c03f03777"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a29f70eb2d3b7e6c5fe52779c03f03777">~Primitive</a> ()=default</td></tr>
 <tr class="separator:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3349f745fae50ca7627f79a731a19e32 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a3349f745fae50ca7627f79a731a19e32"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a3349f745fae50ca7627f79a731a19e32">Primitive</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other)=delete</td></tr>
@@ -158,6 +159,21 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a6b1be7ea92f3a7bb19875c70259dad6b inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a50bbddd43e1ba0cf5f127cd7aa756a9e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a50bbddd43e1ba0cf5f127cd7aa756a9e">operator=</a> (<a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;&amp;other)=delete</td></tr>
 <tr class="separator:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:ac23a3a25df836e6e72525ec624e9d0df" id="r_ac23a3a25df836e6e72525ec624e9d0df"><td class="memItemLeft" align="right" valign="top"><a class="el" href="primitives_8h.html#a649a06267b75e007224ea4ddefedb999">DEFINE_INPUT_OUTPUT_SHAPE</a>() private int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac23a3a25df836e6e72525ec624e9d0df">dims_</a></td></tr>
+<tr class="separator:ac23a3a25df836e6e72525ec624e9d0df"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aff0efd84921c5091c7ad1ea76096c728" id="r_aff0efd84921c5091c7ad1ea76096c728"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aff0efd84921c5091c7ad1ea76096c728">traditional_</a></td></tr>
+<tr class="separator:aff0efd84921c5091c7ad1ea76096c728"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a83e32b5180698d669b780387d2e7ebc2" id="r_a83e32b5180698d669b780387d2e7ebc2"><td class="memItemLeft" align="right" valign="top">float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a83e32b5180698d669b780387d2e7ebc2">base_</a></td></tr>
+<tr class="separator:a83e32b5180698d669b780387d2e7ebc2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa3b6ec6bb0766fb2f4f805d49d540f40" id="r_aa3b6ec6bb0766fb2f4f805d49d540f40"><td class="memItemLeft" align="right" valign="top">float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa3b6ec6bb0766fb2f4f805d49d540f40">scale_</a></td></tr>
+<tr class="separator:aa3b6ec6bb0766fb2f4f805d49d540f40"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5dd83599a4298f0d559e0e2542ee2c9f" id="r_a5dd83599a4298f0d559e0e2542ee2c9f"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5dd83599a4298f0d559e0e2542ee2c9f">offset_</a></td></tr>
+<tr class="separator:a5dd83599a4298f0d559e0e2542ee2c9f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aebc91cf07bff74462246745686b7e8d8" id="r_aebc91cf07bff74462246745686b7e8d8"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aebc91cf07bff74462246745686b7e8d8">forward_</a></td></tr>
+<tr class="separator:aebc91cf07bff74462246745686b7e8d8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a031fa27aeba94cfa5ccc633137a12163" name="a031fa27aeba94cfa5ccc633137a12163"></a>
@@ -350,6 +366,91 @@ Public Member Functions</h2></td></tr>
 <p>The vector-Jacobian product. </p>
 
 <p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1fast_1_1_custom.html#a74be4bcd0382f7f6400bf73fd5569c91">mlx::core::fast::Custom</a>.</p>
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a83e32b5180698d669b780387d2e7ebc2" name="a83e32b5180698d669b780387d2e7ebc2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a83e32b5180698d669b780387d2e7ebc2">&#9670;&#160;</a></span>base_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">float mlx::core::fast::RoPE::base_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac23a3a25df836e6e72525ec624e9d0df" name="ac23a3a25df836e6e72525ec624e9d0df"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac23a3a25df836e6e72525ec624e9d0df">&#9670;&#160;</a></span>dims_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="primitives_8h.html#a649a06267b75e007224ea4ddefedb999">DEFINE_INPUT_OUTPUT_SHAPE</a> () private int mlx::core::fast::RoPE::dims_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aebc91cf07bff74462246745686b7e8d8" name="aebc91cf07bff74462246745686b7e8d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aebc91cf07bff74462246745686b7e8d8">&#9670;&#160;</a></span>forward_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool mlx::core::fast::RoPE::forward_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5dd83599a4298f0d559e0e2542ee2c9f" name="a5dd83599a4298f0d559e0e2542ee2c9f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5dd83599a4298f0d559e0e2542ee2c9f">&#9670;&#160;</a></span>offset_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int mlx::core::fast::RoPE::offset_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa3b6ec6bb0766fb2f4f805d49d540f40" name="aa3b6ec6bb0766fb2f4f805d49d540f40"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa3b6ec6bb0766fb2f4f805d49d540f40">&#9670;&#160;</a></span>scale_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">float mlx::core::fast::RoPE::scale_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aff0efd84921c5091c7ad1ea76096c728" name="aff0efd84921c5091c7ad1ea76096c728"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff0efd84921c5091c7ad1ea76096c728">&#9670;&#160;</a></span>traditional_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool mlx::core::fast::RoPE::traditional_</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
