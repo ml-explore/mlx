@@ -208,8 +208,7 @@ std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
   using FunType = T (*)(U...);
   const FunType* fun_ptr = fun.template target<FunType>();
   if (fun_ptr == nullptr) {
-    throw std::invalid_argument(
-        "[compile] Cannot compile a non-addressable function.");
+    return 0;
   }
   return reinterpret_cast<std::uintptr_t>(*fun_ptr);
 }
@@ -817,17 +816,28 @@ void compile_validate_shapeless(const std::vector<array>& tape) {
   }
 }
 
+bool skip_compile() {
+  return compile_mode() == CompileMode::disabled ||
+      !(compile_available_for_device(default_device()));
+}
+
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::uintptr_t fun_id,
     bool shapeless /* = false */,
     std::vector<uint64_t> constants /* = {} */) {
-  if (compile_mode() == CompileMode::disabled ||
-      !(compile_available_for_device(default_device()))) {
+  if (skip_compile()) {
     return fun;
   }
-  return [fun, fun_id, shapeless, constants = std::move(constants)](
-             const std::vector<array>& inputs) {
+  if (!fun) {
+    throw std::invalid_argument(
+        "[compile] Cannot compile a function without a target.");
+  }
+
+  return [fun = std::move(fun),
+          fun_id,
+          shapeless,
+          constants = std::move(constants)](const std::vector<array>& inputs) {
     // If the inputs are tracers, trace the original graph
     if (std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
           return in.is_tracer();
@@ -889,13 +899,41 @@ void compile_clear_cache() {
 } // namespace detail
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
     bool shapeless /* false */) {
-  if (detail::compile_mode() == CompileMode::disabled) {
+  if (detail::skip_compile()) {
     return fun;
   }
   auto fun_id = detail::get_function_address(fun);
-  return detail::compile(fun, fun_id, shapeless);
+  if (fun_id) {
+    // If the function has an addressable target then no need to manage it's
+    // lifetime
+    return detail::compile(std::move(fun), fun_id, shapeless);
+  } else {
+    auto pfun = std::shared_ptr<
+        std::function<std::vector<array>(const std::vector<array>&)>>(
+        new std::function<std::vector<array>(const std::vector<array>&)>{fun},
+        [](auto p) {
+          detail::compile_erase(reinterpret_cast<std::uintptr_t>(p));
+          delete p;
+        });
+    fun_id = reinterpret_cast<std::uintptr_t>(pfun.get());
+    return detail::compile(
+        [pfun = std::move(pfun)](const auto& inputs) {
+          return (*pfun)(inputs);
+        },
+        fun_id,
+        shapeless);
+  }
+}
+
+std::function<std::vector<array>(const std::vector<array>&)> compile(
+    std::vector<array>(fun)(const std::vector<array>&),
+    bool shapeless /* = false */) {
+  if (detail::skip_compile()) {
+    return fun;
+  }
+  return detail::compile(fun, reinterpret_cast<std::uintptr_t>(fun), shapeless);
 }
 
 void disable_compile() {

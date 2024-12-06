@@ -9,7 +9,7 @@ namespace mlx::core::detail {
 // This is not part of the general C++ API as calling with a bad id is a bad
 // idea.
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::uintptr_t fun_id,
     bool shapeless = false,
     std::vector<uint64_t> constants = {});
