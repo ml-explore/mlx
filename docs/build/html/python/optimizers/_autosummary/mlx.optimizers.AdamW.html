@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.optimizers.AdamW &#8212; MLX 0.21.0 documentation</title>
+    <title>mlx.optimizers.AdamW &#8212; MLX 0.21.1 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
 
-    <script src="../../../_static/documentation_options.js?v=174dfe6e"></script>
+    <script src="../../../_static/documentation_options.js?v=acb17c73"></script>
     <script src="../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -52,7 +52,7 @@
     <link rel="prev" title="mlx.optimizers.Adam" href="mlx.optimizers.Adam.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.21.0" />
+  <meta name="docsearch:version" content="0.21.1" />
   </head>
   
   
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.0 documentation - Home"/>
-    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.0 documentation - Home"/>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.1 documentation - Home"/>
+    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.1 documentation - Home"/>
   
   
 </a></div>
@@ -867,11 +867,9 @@
 <h1>mlx.optimizers.AdamW<a class="headerlink" href="#mlx-optimizers-adamw" title="Link to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.optimizers.AdamW">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AdamW</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">betas</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">[0.9,</span> <span class="pre">0.999]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-08</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.01</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.optimizers.AdamW" title="Link to this definition">#</a></dt>
-<dd><p>The AdamW optimizer [1].</p>
-<p>Following the above convention, in contrast with [1], we do not use bias
-correction in the first and second moments for AdamW. We update the weights
-with a weight_decay (<span class="math notranslate nohighlight">\(\lambda\)</span>) value:</p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AdamW</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">betas</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.13)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">[0.9,</span> <span class="pre">0.999]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-08</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias_correction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.optimizers.AdamW" title="Link to this definition">#</a></dt>
+<dd><p>The AdamW optimizer [1]. We update the weights with a weight_decay
+(<span class="math notranslate nohighlight">\(\lambda\)</span>) value:</p>
 <p>[1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay
 regularization. ICLR 2019.</p>
 <div class="math notranslate nohighlight">
@@ -889,6 +887,8 @@ gradient and its square. Default: <code class="docutils literal notranslate"><sp
 denominator to improve numerical stability. Default: <code class="docutils literal notranslate"><span class="pre">1e-8</span></code></p></li>
 <li><p><strong>weight_decay</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – The weight decay <span class="math notranslate nohighlight">\(\lambda\)</span>.
 Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+<li><p><strong>bias_correction</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em>, </em><em>optional</em>) – If set to <code class="docutils literal notranslate"><span class="pre">True</span></code>, bias correction
+is applied. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p></li>
 </ul>
 </dd>
 </dl>

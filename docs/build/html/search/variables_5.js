@@ -15,5 +15,6 @@ var searchData=
   ['float32_12',['float32',['../namespacemlx_1_1core.html#a6894543b340321193dfb8052c438a319',1,'mlx::core']]],
   ['floating_13',['floating',['../namespacemlx_1_1core.html#ac9f9ea13cf0661e671569d37d14a128a',1,'mlx::core']]],
   ['forward_14',['FORWARD',['../namespacepocketfft_1_1detail.html#aecc5444a333360628be65a6f91ceb824',1,'pocketfft::detail']]],
-  ['forward_15',['forward',['../structpocketfft_1_1detail_1_1_exec_c2_c.html#a63e27292b327597674deede9debe1c43',1,'pocketfft::detail::ExecC2C::forward'],['../structpocketfft_1_1detail_1_1_exec_r2_r.html#a5ec66ebb2ccd079f62b068ddd1fc7bdf',1,'pocketfft::detail::ExecR2R::forward']]]
+  ['forward_15',['forward',['../structpocketfft_1_1detail_1_1_exec_c2_c.html#a63e27292b327597674deede9debe1c43',1,'pocketfft::detail::ExecC2C::forward'],['../structpocketfft_1_1detail_1_1_exec_r2_r.html#a5ec66ebb2ccd079f62b068ddd1fc7bdf',1,'pocketfft::detail::ExecR2R::forward']]],
+  ['forward_5f_16',['forward_',['../classmlx_1_1core_1_1fast_1_1_ro_p_e.html#aebc91cf07bff74462246745686b7e8d8',1,'mlx::core::fast::RoPE']]]
 ];

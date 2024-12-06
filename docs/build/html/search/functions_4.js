@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['data_0',['Data',['../structmlx_1_1core_1_1array_1_1_data.html#a77e2ea35fac1d54e4062468a432e1482',1,'mlx::core::array::Data::Data(allocator::Buffer buffer, deleter_t d=allocator::free)'],['../structmlx_1_1core_1_1array_1_1_data.html#a50f242040b123052e48e18c244ff70fc',1,'mlx::core::array::Data::Data(const Data &amp;d)=delete']]],
+  ['data_0',['Data',['../structmlx_1_1core_1_1array_1_1_data.html#a123d7c1738773dedfc9db075fdd7062d',1,'mlx::core::array::Data::Data(allocator::Buffer buffer, Deleter d=allocator::free)'],['../structmlx_1_1core_1_1array_1_1_data.html#a50f242040b123052e48e18c244ff70fc',1,'mlx::core::array::Data::Data(const Data &amp;d)=delete']]],
   ['data_1',['data',['../classpocketfft_1_1detail_1_1arr.html#aec0f2191b4663b4187aab92454c34de8',1,'pocketfft::detail::arr::data()'],['../classpocketfft_1_1detail_1_1arr.html#ac82daa17e9f991072b012343f9d7c182',1,'pocketfft::detail::arr::data() const'],['../classmlx_1_1core_1_1array.html#a72e3ce6c03fefe272cadf214bd127b95',1,'mlx::core::array::data()'],['../classmlx_1_1core_1_1array.html#a99fb28eeab39b9f429373f8bd7557676',1,'mlx::core::array::data() const']]],
   ['data_5fshared_5fptr_2',['data_shared_ptr',['../classmlx_1_1core_1_1array.html#ab84c792117e29cdf90ef3433303f6141',1,'mlx::core::array']]],
   ['data_5fsize_3',['data_size',['../classmlx_1_1core_1_1array.html#afaf2a370fa35d96af1b27a4b814e3bfd',1,'mlx::core::array']]],

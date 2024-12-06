@@ -118,6 +118,12 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a63812b2abaf26ad7e7fa4c9e82db1628"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4b8f1b1f633002c8ca6fa8f0ef4dd587" id="r_a4b8f1b1f633002c8ca6fa8f0ef4dd587"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4b8f1b1f633002c8ca6fa8f0ef4dd587">DEFINE_PRINT</a> (<a class="el" href="classmlx_1_1core_1_1fast_1_1_affine_quantize.html">AffineQuantize</a>)</td></tr>
 <tr class="separator:a4b8f1b1f633002c8ca6fa8f0ef4dd587"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5936175e5923aec272d6f718785f57a1" id="r_a5936175e5923aec272d6f718785f57a1"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5936175e5923aec272d6f718785f57a1">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const override</td></tr>
+<tr class="memdesc:a5936175e5923aec272d6f718785f57a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
+<tr class="separator:a5936175e5923aec272d6f718785f57a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a50934862ccdb16a3dcce6626c5727080" id="r_a50934862ccdb16a3dcce6626c5727080"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a9be5b57d393e66169279cf521813af9b">Shape</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a50934862ccdb16a3dcce6626c5727080">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs) override</td></tr>
+<tr class="memdesc:a50934862ccdb16a3dcce6626c5727080"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
+<tr class="separator:a50934862ccdb16a3dcce6626c5727080"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1fast_1_1_custom"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1fast_1_1_custom')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1fast_1_1_custom.html">mlx::core::fast::Custom</a></td></tr>
 <tr class="memitem:a4186fea23f7156c38960426821fca313 inherit pub_methods_classmlx_1_1core_1_1fast_1_1_custom" id="r_a4186fea23f7156c38960426821fca313"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_custom.html#a4186fea23f7156c38960426821fca313">Custom</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;)&gt; fallback)</td></tr>
 <tr class="separator:a4186fea23f7156c38960426821fca313 inherit pub_methods_classmlx_1_1core_1_1fast_1_1_custom"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -142,12 +148,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ae1aff91354ce036596088a3e19474ecb inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_ae1aff91354ce036596088a3e19474ecb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#ae1aff91354ce036596088a3e19474ecb">print</a> (std::ostream &amp;os)=0</td></tr>
 <tr class="memdesc:ae1aff91354ce036596088a3e19474ecb inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print the primitive.  <br /></td></tr>
 <tr class="separator:ae1aff91354ce036596088a3e19474ecb inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a6140a502af4c2bbbc776ab26e9afebcd"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a6140a502af4c2bbbc776ab26e9afebcd">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const</td></tr>
-<tr class="memdesc:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
-<tr class="separator:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a8849dc20991398f6f9a24d6785673853"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a8849dc20991398f6f9a24d6785673853">output_shapes</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs)</td></tr>
-<tr class="memdesc:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the output shapes of the primitive.  <br /></td></tr>
-<tr class="separator:a8849dc20991398f6f9a24d6785673853 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a29f70eb2d3b7e6c5fe52779c03f03777"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a29f70eb2d3b7e6c5fe52779c03f03777">~Primitive</a> ()=default</td></tr>
 <tr class="separator:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3349f745fae50ca7627f79a731a19e32 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a3349f745fae50ca7627f79a731a19e32"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a3349f745fae50ca7627f79a731a19e32">Primitive</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other)=delete</td></tr>
@@ -284,6 +284,65 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Implements <a class="el" href="classmlx_1_1core_1_1_primitive.html#ad217376dcf5eff691d731566faec2ba2">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a5936175e5923aec272d6f718785f57a1" name="a5936175e5923aec272d6f718785f57a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5936175e5923aec272d6f718785f57a1">&#9670;&#160;</a></span>is_equivalent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool mlx::core::fast::AffineQuantize::is_equivalent </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>other</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Equivalence check defaults to false unless overridden by the primitive. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a6140a502af4c2bbbc776ab26e9afebcd">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a50934862ccdb16a3dcce6626c5727080" name="a50934862ccdb16a3dcce6626c5727080"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50934862ccdb16a3dcce6626c5727080">&#9670;&#160;</a></span>output_shapes()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a9be5b57d393e66169279cf521813af9b">Shape</a> &gt; mlx::core::fast::AffineQuantize::output_shapes </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the output shapes of the primitive. </p>
+<p>This is not required to be implemented by derived classes, in which case it will throw. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#aa5b443d71db1c7ed31a5ae6e31b7fe29">mlx::core::Primitive</a>.</p>
 
 </div>
 </div>
