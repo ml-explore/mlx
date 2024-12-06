@@ -15,7 +15,7 @@ var searchData=
   ['tensordot_12',['tensordot',['../group__ops.html#gaf5c9735f4690327e1500e04e728fae70',1,'mlx::core::tensordot(const array &amp;a, const array &amp;b, const int axis=2, StreamOrDevice s={})'],['../group__ops.html#gad7fe00b566f89d607639c1a497cabbc6',1,'mlx::core::tensordot(const array &amp;a, const array &amp;b, const std::vector&lt; int &gt; &amp;axes_a, const std::vector&lt; int &gt; &amp;axes_b, StreamOrDevice s={})']]],
   ['ternary_13',['ternary',['../namespacemlx_1_1core_1_1metal.html#a2d1c92ba6897c0a7a428fed63279b61f',1,'mlx::core::metal']]],
   ['ternary_5fg_14',['ternary_g',['../metal_2kernels_2ternary_8h.html#ab2051fd944c2e24c57d5b4af54894d72',1,'ternary.h']]],
-  ['ternary_5fg_5fnd1_15',['ternary_g_nd1',['../metal_2kernels_2ternary_8h.html#a1bd5918559850f3f80e3adee2391fe6a',1,'ternary.h']]],
+  ['ternary_5fg_5fnd1_15',['ternary_g_nd1',['../metal_2kernels_2ternary_8h.html#ad63096b65467d3048eefa68f4109878d',1,'ternary.h']]],
   ['ternary_5fg_5fnd2_16',['ternary_g_nd2',['../metal_2kernels_2ternary_8h.html#adec9ca8a8bf527cb15d70da5857af15d',1,'ternary.h']]],
   ['ternary_5fg_5fnd3_17',['ternary_g_nd3',['../metal_2kernels_2ternary_8h.html#a046dcbf67cd2318d45355dc7516e3ff4',1,'ternary.h']]],
   ['ternary_5fop_5fgpu_18',['ternary_op_gpu',['../namespacemlx_1_1core.html#aa63e62b6d3906e4cac871d498515a1cd',1,'mlx::core']]],
