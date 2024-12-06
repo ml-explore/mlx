@@ -1609,6 +1609,11 @@ class Reshape : public UnaryPrimitive {
   explicit Reshape(Stream stream, const Shape& shape)
       : UnaryPrimitive(stream), shape_(shape) {}
 
+  explicit Reshape(
+      Stream stream,
+      std::vector<std::variant<int, std::string>> expression)
+      : UnaryPrimitive(stream), expression_(std::move(expression)) {}
+
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
@@ -1616,9 +1621,11 @@ class Reshape : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Reshape)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
   Shape shape_;
+  std::vector<std::variant<int, std::string>> expression_;
 
   void eval(const std::vector<array>& inputs, array& out);
 
