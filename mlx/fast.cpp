@@ -664,7 +664,7 @@ array scaled_dot_product_attention(
         std::move(out_shape),
         final_type,
         std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, false),
+            stream, fallback, scale, /*needs_mask=*/false, /*quantized=*/false),
         {q, k, v});
   }
 
@@ -678,7 +678,130 @@ array scaled_dot_product_attention(
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
-  return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
+  return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_ &&
+      quantized_ == a_other.quantized_;
+}
+
+array quantized_scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& key_scales,
+    const array& key_biases,
+    const array& values,
+    const array& value_scales,
+    const array& value_biases,
+    const float scale,
+    const std::optional<array>& mask,
+    const int group_size,
+    const int bits,
+    StreamOrDevice s) {
+  int el_per_int = 32 / bits;
+  int out_dim = values.shape(-1) * el_per_int;
+
+  auto n_q_heads = queries.shape(-3);
+  auto n_kv_heads = keys.shape(-3);
+
+  auto out_shape = std::vector<int>(
+      {queries.shape(0), queries.shape(1), queries.shape(2), out_dim});
+  auto stream = to_stream(s);
+  bool needs_mask = mask.has_value();
+  auto fallback =
+      [scale, needs_mask, n_q_heads, n_kv_heads, group_size, bits, &s](
+          const std::vector<array>& inputs) -> std::vector<array> {
+    int n_repeats = n_q_heads / n_kv_heads;
+
+    auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
+
+    auto k = inputs[1];
+    auto k_scales = inputs[2];
+    auto k_biases = inputs[3];
+    auto v = inputs[4];
+    auto v_scales = inputs[5];
+    auto v_biases = inputs[6];
+
+    int B = q.shape(0);
+    int L = q.shape(2);
+
+    if (n_repeats > 1) {
+      q = reshape(q, {B, n_kv_heads, n_repeats, L, -1}, s);
+      k = expand_dims(k, 2, s);
+      k_scales = expand_dims(k_scales, 2, s);
+      k_biases = expand_dims(k_biases, 2, s);
+      v = expand_dims(v, 2, s);
+      v_scales = expand_dims(v_scales, 2, s);
+      v_biases = expand_dims(v_biases, 2, s);
+    }
+
+    array scores = quantized_matmul(
+        q,
+        k,
+        k_scales,
+        k_biases,
+        /*transpose=*/true,
+        /*group_size=*/group_size,
+        /*bits=*/bits,
+        s);
+    if (needs_mask) {
+      scores = add(scores, inputs[7], s);
+    }
+    scores = softmax(scores, std::vector<int>{-1}, true, s);
+    array out = quantized_matmul(
+        scores,
+        v,
+        v_scales,
+        v_biases,
+        /*transpose=*/false,
+        /*group_size=*/group_size,
+        /*bits=*/bits,
+        s);
+    if (n_repeats > 1) {
+      out = reshape(out, {B, n_q_heads, L, -1}, s);
+    }
+    return std::vector<array>{out};
+  };
+
+  int L = queries.shape(2);
+  if (L > 1) {
+    if (needs_mask) {
+      return fallback(
+          {queries,
+           keys,
+           key_scales,
+           key_biases,
+           values,
+           value_scales,
+           value_biases,
+           mask.value()})[0];
+    } else {
+      return fallback(
+          {queries,
+           keys,
+           key_scales,
+           key_biases,
+           values,
+           value_scales,
+           value_biases})[0];
+    }
+  } else {
+    return array(
+        std::move(out_shape),
+        queries.dtype(),
+        std::make_shared<ScaledDotProductAttention>(
+            stream,
+            fallback,
+            scale,
+            /*needs_mask=*/false,
+            /*quantized=*/true,
+            group_size,
+            bits),
+        {queries,
+         keys,
+         key_scales,
+         key_biases,
+         values,
+         value_scales,
+         value_biases});
+  }
 }
 
 array pack_and_quantize(

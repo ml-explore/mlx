@@ -162,6 +162,45 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "quantized_scaled_dot_product_attention",
+      &fast::quantized_scaled_dot_product_attention,
+      "q"_a,
+      "k"_a,
+      "k_scales"_a,
+      "k_biases"_a,
+      "v"_a,
+      "v_scales"_a,
+      "v_biases"_a,
+      nb::kw_only(),
+      "scale"_a,
+      "mask"_a = nb::none(),
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, k_biases: array, v: array, v_scales: array, v_biases: array, *, scale: float,  mask: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        A fast implementation of multi-head attention where the keys and values are quantized.
+
+        see :func:`scaled_dot_product_attention` for more details.
+
+        Args:
+            q (array): Input query array.
+            k (array): Input keys array.
+            k_scales (array): Scales for the quantized keys array.
+            k_biases (array): Biases for the quantized keys array.
+            v (array): Input values array.
+            v_scales (array): Scales for the quantized values array.
+            v_biases (array): Biases for the quantized values array.
+            scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
+            mask (array, optional): An additive mask to apply to the query-key scores.
+            group_size (int): The group size used in the KV quantization.
+            bits (int): The bits used in the KV quantization.
+        Returns:
+            array: The output array.
+      )pbdoc");
+
+  m.def(
       "metal_kernel",
       [](const std::string& name,
          const std::vector<std::string>& input_names,

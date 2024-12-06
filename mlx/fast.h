@@ -41,6 +41,21 @@ array scaled_dot_product_attention(
     const std::optional<int> memory_efficient_threshold = std::nullopt,
     StreamOrDevice s = {});
 
+/** Computes: `O = softmax(Q @ K.T) @ V` where K and V are quantized. **/
+array quantized_scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& key_scales,
+    const array& key_biases,
+    const array& values,
+    const array& value_scales,
+    const array& value_biases,
+    const float scale,
+    const std::optional<array>& mask = std::nullopt,
+    const int group_size = 64,
+    const int bits = 4,
+    StreamOrDevice s = {});
+
 std::tuple<array, array, array> affine_quantize(
     const array& w,
     int group_size = 64,
