@@ -2858,24 +2858,21 @@ std::vector<array> Reshape::jvp(
 
 bool Reshape::is_equivalent(const Primitive& other) const {
   const Reshape& r_other = static_cast<const Reshape&>(other);
-  if (!expression_.empty()) {
-    return expression_ == r_other.expression_;
+  if (!expressions_.empty()) {
+    return expressions_ == r_other.expressions_;
   }
   return shape_ == r_other.shape_;
 }
 
-std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
-  // Only allowed to dynamically reshape when the shape is {}
-  if (expression_.empty() && !shape_.empty()) {
-    throw std::invalid_argument(
-        "[Reshape::output_shapes] Unable to infer output shape.");
-  }
-
-  auto& in = inputs[0];
-  Shape output_shape(expression_.size());
+Shape Reshape::shape_from_expressions(
+    const std::vector<std::variant<int, std::string>>& expressions,
+    const std::unordered_map<char, int>& char_to_dim,
+    const array& in) {
+  Shape output_shape(expressions.size());
   int dim_to_infer = -1;
-  for (int i = 0, j = 0; i < expression_.size(); ++i) {
-    auto& e = expression_[i];
+  uint64_t size = 1;
+  for (int i = 0; i < expressions.size(); ++i) {
+    auto& e = expressions[i];
     if (auto pv = std::get_if<int>(&e); pv) {
       if (*pv == -1) {
         dim_to_infer = i;
@@ -2885,20 +2882,66 @@ std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
       }
     } else {
       auto& s = std::get<std::string>(e);
-      output_shape[i] = in.shape()[j++];
+      if (s.size() == 1) {
+        output_shape[i] = in.shape()[char_to_dim.at(s[0])];
+      } else {
+        int d;
+        size_t loc = 0;
+        char op = 0;
+        while (loc < s.size()) {
+          int res;
+          if (std::isdigit(s[loc])) {
+            char* p;
+            res = std::strtol(s.c_str() + loc, &p, 10);
+            loc = (p - s.c_str());
+          } else if (std::isalpha(s[loc])) {
+            res = in.shape()[char_to_dim.at(s[loc++])];
+          } else if (s[loc] == '*' || s[loc] == '/') {
+            op = s[loc++];
+            continue;
+          }
+
+          if (op == '*') {
+            d *= res;
+          } else if (op == '/') {
+            d /= res;
+          } else {
+            d = res;
+          }
+        }
+        output_shape[i] = d;
+      }
     }
+    size *= output_shape[i];
   }
 
   if (dim_to_infer >= 0) {
-    uint64_t output_size = 1;
-    for (int i = 0; i < output_shape.size(); ++i) {
-      if (i != dim_to_infer) {
-        output_size *= output_shape[i];
-      }
+    if (size == 0) {
+      throw std::invalid_argument(
+          "[dynamic_reshape] Cannot infer the shape of an empty array.");
     }
-    output_shape[dim_to_infer] = in.size() / output_size;
+    auto d = in.size() / size;
+    output_shape[dim_to_infer] = d;
+    size *= d;
   }
-  return {std::move(output_shape)};
+
+  if (in.size() != size) {
+    std::ostringstream msg;
+    msg << "[dynamic_reshape] Cannot reshape array of size " << in.size()
+        << " into shape " << output_shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  return output_shape;
+}
+
+std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
+  // Only allowed to dynamically reshape when the shape is {}
+  if (expressions_.empty() && !shape_.empty()) {
+    throw std::invalid_argument(
+        "[Reshape::output_shapes] Unable to infer output shape.");
+  }
+  return {shape_from_expressions(expressions_, char_to_dim_, inputs[0])};
 }
 
 std::vector<array> Reduce::vjp(

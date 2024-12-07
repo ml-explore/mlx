@@ -419,7 +419,7 @@ array dynamic_reshape(
   // - At most a.ndim() unique letters
   // - Only valid characters in string (alphabet, integer, *, /)
   bool infer_dim = false;
-  std::unordered_set<char> dims;
+  std::unordered_map<char, int> char_to_dim;
   for (auto& e : expressions) {
     if (auto pv = std::get_if<int>(&e); pv) {
       if (*pv == -1) {
@@ -435,7 +435,7 @@ array dynamic_reshape(
       for (auto c : s) {
         if (isalpha(c)) {
           has_alpha = true;
-          dims.insert(c);
+          char_to_dim.insert({c, char_to_dim.size()});
         } else if (!isdigit(c) && c != '*' && c != '/') {
           std::ostringstream msg;
           msg << "[dynamic_reshape] Invalid character in string expression \""
@@ -449,20 +449,29 @@ array dynamic_reshape(
             << "one alphabetic character but got: \"" << s << "\".";
         throw std::invalid_argument(msg.str());
       }
+      if (!isdigit(s[0]) && !isalpha(s[0]) && !isdigit(s.back()) &&
+          !isalpha(s.back())) {
+        std::ostringstream msg;
+        msg << "[dynamic_reshape] String expression must start and end with "
+            << "integer or letter but got: \"" << s << "\".";
+        throw std::invalid_argument(msg.str());
+      }
     }
   }
-  if (dims.size() >= a.ndim()) {
+  if (char_to_dim.size() > a.ndim()) {
     std::ostringstream msg;
-    msg << "[dynamic_reshape] Expressions contain " << dims.size()
+    msg << "[dynamic_reshape] Expressions contain " << char_to_dim.size()
         << " abstract dimensions for array with only " << a.ndim()
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  auto output_shape = Shape{}; // Reshape::shape_from_expression(a, expression);
+  auto output_shape =
+      Reshape::shape_from_expressions(expressions, char_to_dim, a);
   return array(
       std::move(output_shape),
       a.dtype(),
-      std::make_shared<Reshape>(to_stream(s), std::move(expressions)),
+      std::make_shared<Reshape>(
+          to_stream(s), std::move(expressions), std::move(char_to_dim)),
       {a});
 }
 
