@@ -533,7 +533,7 @@ array scaled_dot_product_attention(
       throw std::invalid_argument(msg.str());
     }
   }
-  if (mask and (*mask).ndim() > 4) {
+  if (mask && (*mask).ndim() > 4) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] the mask with shape "
         << (*mask).shape() << " expected to have at most rank 4";
