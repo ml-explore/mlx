@@ -65,7 +65,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx_type_name,
       nidx,
       idx_ndim,
-      large ? "size_t" : "uint");
+      large ? "int64_t" : "uint");
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
@@ -86,7 +86,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_args,
         idx_arr,
         idx_ndim,
-        large ? "size_t" : "uint");
+        large ? "int64_t" : "uint");
     return kernel_source;
   });
 
@@ -246,7 +246,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       nidx,
       upd_contig ? "updc_true" : "updc_false",
       nwork,
-      large ? "size_t" : "uint");
+      large ? "int64_t" : "uint");
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
@@ -290,7 +290,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_arr,
         upd_contig,
         nwork,
-        large ? "size_t" : "uint");
+        large ? "int64_t" : "uint");
     return kernel_source;
   });
 
@@ -312,8 +312,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     upd_size *= upd.shape(i);
   }
   // Collect all idx shapes and strides into one place
-  std::vector<int> idx_shapes;
-  std::vector<size_t> idx_strides;
+  Shape idx_shapes;
+  Strides idx_strides;
   // To access .data() use char instead of bool
   // bool is 1 byte in Metal so this is safe
   std::vector<char> idx_contigs;
@@ -332,7 +332,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (upd_ndim == 0) {
     // Need placeholders so Metal doesn't compalain
     int shape_ = 0;
-    size_t stride_ = 0;
+    int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 3);
     compute_encoder.set_bytes(stride_, 4);
   } else {
@@ -347,7 +347,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (out_ndim == 0) {
     // Need placeholders so Metal doesn't compalain
     int shape_ = 0;
-    size_t stride_ = 0;
+    int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 7);
     compute_encoder.set_bytes(stride_, 8);
   } else {

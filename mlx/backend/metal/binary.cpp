@@ -75,8 +75,8 @@ void binary_op_gpu_inplace(
       auto [shape, strides] = collapse_contiguous_dims(a, b, out);
       return std::make_tuple(shape, strides[0], strides[1], strides[2]);
     } else {
-      std::vector<size_t> e;
-      return std::make_tuple(std::vector<int>{}, e, e, e);
+      decltype(a.strides()) e{};
+      return std::make_tuple(decltype(a.shape()){}, e, e, e);
     }
   };
   auto [shape, strides_a, strides_b, strides_out] = maybe_collapse();

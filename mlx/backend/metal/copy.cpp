@@ -43,13 +43,12 @@ void copy_gpu(const array& in, array& out, CopyType ctype) {
   copy_gpu(in, out, ctype, out.primitive().stream());
 }
 
-template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& strides_in_pre,
-    const std::vector<stride_t>& strides_out_pre,
+    const Shape& data_shape,
+    const Strides& strides_in_pre,
+    const Strides& strides_out_pre,
     int64_t inp_offset,
     int64_t out_offset,
     CopyType ctype,
@@ -68,8 +67,8 @@ void copy_gpu_inplace(
               /* size_cap = */ INT32_MAX);
           return std::make_tuple(shape, strides[0], strides[1]);
         } else {
-          std::vector<stride_t> e;
-          return std::make_tuple(std::vector<int>{}, e, e);
+          Strides e{};
+          return std::make_tuple(Shape{}, e, e);
         }
       };
   auto [shape, strides_in_, strides_out_] = maybe_collapse();
@@ -124,8 +123,8 @@ void copy_gpu_inplace(
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
-    std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
+    Strides strides_in{strides_in_.begin(), strides_in_.end()};
+    Strides strides_out{strides_out_.begin(), strides_out_.end()};
     if (ndim > 3) {
       compute_encoder.set_vector_bytes(shape, ndim, 2);
     }
@@ -180,14 +179,13 @@ void copy_gpu_inplace(
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const std::vector<int64_t>& istride,
+    const Strides& istride,
     int64_t ioffset,
     CopyType ctype,
     const Stream& s) {
   assert(in.shape() == out.shape());
-  std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
   return copy_gpu_inplace(
-      in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
+      in, out, in.shape(), istride, out.strides(), ioffset, 0, ctype, s);
 }
 
 void fill_gpu(const array& val, array& out, const Stream& s) {

@@ -436,9 +436,9 @@ template <
     const constant float& beta [[buffer(8)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* vector_batch_stride [[buffer(11)]],
-    const constant size_t* matrix_batch_stride [[buffer(12)]],
-    const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int64_t* vector_batch_stride [[buffer(11)]],
+    const constant int64_t* matrix_batch_stride [[buffer(12)]],
+    const constant int64_t* bias_batch_stride [[buffer(13)]],
     const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
@@ -486,31 +486,21 @@ template <
       simd_lid);
 }
 
-#define instantiate_gemv_helper(                                             \
-    name, itype, bm, bn, sm, sn, tm, tn, nc, axpby)                          \
-  template [[host_name("gemv_" #name "_bm" #bm "_bn" #bn "_sm" #sm "_sn" #sn \
-                       "_tm" #tm "_tn" #tn "_nc" #nc                         \
-                       "_axpby" #axpby)]] [[kernel]] void                    \
-  gemv<itype, bm, bn, sm, sn, tm, tn, nc, axpby>(                            \
-      const device itype* mat [[buffer(0)]],                                 \
-      const device itype* in_vec [[buffer(1)]],                              \
-      const device itype* bias [[buffer(2)]],                                \
-      device itype* out_vec [[buffer(3)]],                                   \
-      const constant int& in_vec_size [[buffer(4)]],                         \
-      const constant int& out_vec_size [[buffer(5)]],                        \
-      const constant int& marix_ld [[buffer(6)]],                            \
-      const constant float& alpha [[buffer(7)]],                             \
-      const constant float& beta [[buffer(8)]],                              \
-      const constant int& batch_ndim [[buffer(9)]],                          \
-      const constant int* batch_shape [[buffer(10)]],                        \
-      const constant size_t* vector_batch_stride [[buffer(11)]],             \
-      const constant size_t* matrix_batch_stride [[buffer(12)]],             \
-      const constant size_t* bias_batch_stride [[buffer(13)]],               \
-      const constant int& bias_stride [[buffer(14)]],                        \
-      uint3 tid [[threadgroup_position_in_grid]],                            \
-      uint3 lid [[thread_position_in_threadgroup]],                          \
-      uint simd_gid [[simdgroup_index_in_threadgroup]],                      \
-      uint simd_lid [[thread_index_in_simdgroup]]);
+#define instantiate_gemv_helper(                                      \
+    name, itype, bm, bn, sm, sn, tm, tn, nc, axpby)                   \
+  instantiate_kernel(                                                 \
+      "gemv_" #name "_bm" #bm "_bn" #bn "_sm" #sm "_sn" #sn "_tm" #tm \
+      "_tn" #tn "_nc" #nc "_axpby" #axpby,                            \
+      gemv,                                                           \
+      itype,                                                          \
+      bm,                                                             \
+      bn,                                                             \
+      sm,                                                             \
+      sn,                                                             \
+      tm,                                                             \
+      tn,                                                             \
+      nc,                                                             \
+      axpby)
 
 // clang-format off
 #define instantiate_gemv(name, itype, bm, bn, tm, tn)              \
@@ -549,13 +539,13 @@ template <
     const constant float& beta [[buffer(8)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* index_batch_strides [[buffer(11)]],
+    const constant int64_t* index_batch_strides [[buffer(11)]],
     const constant int& vector_batch_ndim [[buffer(12)]],
     const constant int* vector_batch_shape [[buffer(13)]],
-    const constant size_t* vector_batch_stride [[buffer(14)]],
+    const constant int64_t* vector_batch_stride [[buffer(14)]],
     const constant int& matrix_batch_ndim [[buffer(15)]],
     const constant int* matrix_batch_shape [[buffer(16)]],
-    const constant size_t* matrix_batch_stride [[buffer(17)]],
+    const constant int64_t* matrix_batch_stride [[buffer(17)]],
     const constant uint32_t* vec_indices [[buffer(18)]],
     const constant uint32_t* mat_indices [[buffer(19)]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -571,8 +561,8 @@ template <
 
   // Update batch offsets
   if (batch_ndim > 1) {
-    const constant size_t* veci_bstrides = index_batch_strides;
-    const constant size_t* mati_bstrides = index_batch_strides + batch_ndim;
+    const constant auto* veci_bstrides = index_batch_strides;
+    const constant auto* mati_bstrides = index_batch_strides + batch_ndim;
 
     ulong2 batch_offsets = elem_to_loc_broadcast(
         tid.z, batch_shape, veci_bstrides, mati_bstrides, batch_ndim);
@@ -619,37 +609,14 @@ template <
       simd_lid);
 }
 
-#define instantiate_gemv_bs_helper(nm, itype, bm, bn, sm, sn, tm, tn)   \
-  template [[host_name("gemv_gather_" #nm "_bm" #bm "_bn" #bn "_sm" #sm \
-                       "_sn" #sn "_tm" #tm "_tn" #tn)]] [[kernel]] void \
-  gemv_gather<itype, bm, bn, sm, sn, tm, tn>(                           \
-      const device itype* mat [[buffer(0)]],                            \
-      const device itype* in_vec [[buffer(1)]],                         \
-      const device itype* bias [[buffer(2)]],                           \
-      device itype* out_vec [[buffer(3)]],                              \
-      const constant int& in_vec_size [[buffer(4)]],                    \
-      const constant int& out_vec_size [[buffer(5)]],                   \
-      const constant int& marix_ld [[buffer(6)]],                       \
-      const constant float& alpha [[buffer(7)]],                        \
-      const constant float& beta [[buffer(8)]],                         \
-      const constant int& batch_ndim [[buffer(9)]],                     \
-      const constant int* batch_shape [[buffer(10)]],                   \
-      const constant size_t* index_batch_strides [[buffer(11)]],        \
-      const constant int& vector_batch_ndim [[buffer(12)]],             \
-      const constant int* vector_batch_shape [[buffer(13)]],            \
-      const constant size_t* vector_batch_stride [[buffer(14)]],        \
-      const constant int& matrix_batch_ndim [[buffer(15)]],             \
-      const constant int* matrix_batch_shape [[buffer(16)]],            \
-      const constant size_t* matrix_batch_stride [[buffer(17)]],        \
-      const constant uint32_t* vec_indices [[buffer(18)]],              \
-      const constant uint32_t* mat_indices [[buffer(19)]],              \
-      uint3 tid [[threadgroup_position_in_grid]],                       \
-      uint3 lid [[thread_position_in_threadgroup]],                     \
-      uint simd_gid [[simdgroup_index_in_threadgroup]],                 \
-      uint simd_lid [[thread_index_in_simdgroup]]);
-
 // clang-format off
-#define instantiate_gemv_bs_blocks(name, itype)        \
+#define instantiate_gemv_bs_helper(nm, itype, bm, bn, sm, sn, tm, tn) \
+  instantiate_kernel(                                                 \
+    "gemv_gather_" #nm "_bm" #bm "_bn" #bn "_sm" #sm                  \
+                       "_sn" #sn "_tm" #tm "_tn" #tn,                 \
+    gemv_gather, itype, bm, bn, sm, sn, tm, tn)
+
+#define instantiate_gemv_bs_blocks(name, itype)              \
   instantiate_gemv_bs_helper(name, itype, 4, 1, 1, 32, 1, 4) \
   instantiate_gemv_bs_helper(name, itype, 4, 1, 1, 32, 4, 4) \
   instantiate_gemv_bs_helper(name, itype, 8, 1, 1, 32, 4, 4) // clang-format on
@@ -684,9 +651,9 @@ template <
     const constant float& beta [[buffer(8)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* vector_batch_stride [[buffer(11)]],
-    const constant size_t* matrix_batch_stride [[buffer(12)]],
-    const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int64_t* vector_batch_stride [[buffer(11)]],
+    const constant int64_t* matrix_batch_stride [[buffer(12)]],
+    const constant int64_t* bias_batch_stride [[buffer(13)]],
     const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
@@ -734,33 +701,14 @@ template <
       simd_lid);
 }
 
-#define instantiate_gemv_t_helper(                                             \
-    name, itype, bm, bn, sm, sn, tm, tn, nc, axpby)                            \
-  template [[host_name("gemv_t_" #name "_bm" #bm "_bn" #bn "_sm" #sm "_sn" #sn \
-                       "_tm" #tm "_tn" #tn "_nc" #nc                           \
-                       "_axpby" #axpby)]] [[kernel]] void                      \
-  gemv_t<itype, bm, bn, sm, sn, tm, tn, nc, axpby>(                            \
-      const device itype* mat [[buffer(0)]],                                   \
-      const device itype* in_vec [[buffer(1)]],                                \
-      const device itype* bias [[buffer(2)]],                                  \
-      device itype* out_vec [[buffer(3)]],                                     \
-      const constant int& in_vec_size [[buffer(4)]],                           \
-      const constant int& out_vec_size [[buffer(5)]],                          \
-      const constant int& marix_ld [[buffer(6)]],                              \
-      const constant float& alpha [[buffer(7)]],                               \
-      const constant float& beta [[buffer(8)]],                                \
-      const constant int& batch_ndim [[buffer(9)]],                            \
-      const constant int* batch_shape [[buffer(10)]],                          \
-      const constant size_t* vector_batch_stride [[buffer(11)]],               \
-      const constant size_t* matrix_batch_stride [[buffer(12)]],               \
-      const constant size_t* bias_batch_stride [[buffer(13)]],                 \
-      const constant int& bias_stride [[buffer(14)]],                          \
-      uint3 tid [[threadgroup_position_in_grid]],                              \
-      uint3 lid [[thread_position_in_threadgroup]],                            \
-      uint simd_gid [[simdgroup_index_in_threadgroup]],                        \
-      uint simd_lid [[thread_index_in_simdgroup]]);
-
 // clang-format off
+#define instantiate_gemv_t_helper(                          \
+    name, itype, bm, bn, sm, sn, tm, tn, nc, axpby)         \
+  instantiate_kernel(                                       \
+    "gemv_t_" #name "_bm" #bm "_bn" #bn "_sm" #sm "_sn" #sn \
+       "_tm" #tm "_tn" #tn "_nc" #nc "_axpby" #axpby,       \
+  gemv_t, itype, bm, bn, sm, sn, tm, tn, nc, axpby)
+
 #define instantiate_gemv_t(name, itype, bm, bn, sm, sn, tm, tn)        \
   instantiate_gemv_t_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 0) \
   instantiate_gemv_t_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 1) \
@@ -800,13 +748,13 @@ template <
     const constant float& beta [[buffer(8)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* index_batch_strides [[buffer(11)]],
+    const constant int64_t* index_batch_strides [[buffer(11)]],
     const constant int& vector_batch_ndim [[buffer(12)]],
     const constant int* vector_batch_shape [[buffer(13)]],
-    const constant size_t* vector_batch_stride [[buffer(14)]],
+    const constant int64_t* vector_batch_stride [[buffer(14)]],
     const constant int& matrix_batch_ndim [[buffer(15)]],
     const constant int* matrix_batch_shape [[buffer(16)]],
-    const constant size_t* matrix_batch_stride [[buffer(17)]],
+    const constant int64_t* matrix_batch_stride [[buffer(17)]],
     const constant uint32_t* vec_indices [[buffer(18)]],
     const constant uint32_t* mat_indices [[buffer(19)]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -822,8 +770,8 @@ template <
 
   // Update batch offsets
   if (batch_ndim > 1) {
-    const constant size_t* veci_bstrides = index_batch_strides;
-    const constant size_t* mati_bstrides = index_batch_strides + batch_ndim;
+    const constant auto* veci_bstrides = index_batch_strides;
+    const constant auto* mati_bstrides = index_batch_strides + batch_ndim;
 
     ulong2 batch_offsets = elem_to_loc_broadcast(
         tid.z, batch_shape, veci_bstrides, mati_bstrides, batch_ndim);
@@ -870,36 +818,14 @@ template <
       simd_lid);
 }
 
-#define instantiate_gemv_t_bs_helper(nm, itype, bm, bn, sm, sn, tm, tn)   \
-  template [[host_name("gemv_t_gather_" #nm "_bm" #bm "_bn" #bn "_sm" #sm \
-                       "_sn" #sn "_tm" #tm "_tn" #tn)]] [[kernel]] void   \
-  gemv_t_gather<itype, bm, bn, sm, sn, tm, tn>(                           \
-      const device itype* mat [[buffer(0)]],                              \
-      const device itype* in_vec [[buffer(1)]],                           \
-      const device itype* bias [[buffer(2)]],                             \
-      device itype* out_vec [[buffer(3)]],                                \
-      const constant int& in_vec_size [[buffer(4)]],                      \
-      const constant int& out_vec_size [[buffer(5)]],                     \
-      const constant int& marix_ld [[buffer(6)]],                         \
-      const constant float& alpha [[buffer(7)]],                          \
-      const constant float& beta [[buffer(8)]],                           \
-      const constant int& batch_ndim [[buffer(9)]],                       \
-      const constant int* batch_shape [[buffer(10)]],                     \
-      const constant size_t* index_batch_strides [[buffer(11)]],          \
-      const constant int& vector_batch_ndim [[buffer(12)]],               \
-      const constant int* vector_batch_shape [[buffer(13)]],              \
-      const constant size_t* vector_batch_stride [[buffer(14)]],          \
-      const constant int& matrix_batch_ndim [[buffer(15)]],               \
-      const constant int* matrix_batch_shape [[buffer(16)]],              \
-      const constant size_t* matrix_batch_stride [[buffer(17)]],          \
-      const constant uint32_t* vec_indices [[buffer(18)]],                \
-      const constant uint32_t* mat_indices [[buffer(19)]],                \
-      uint3 tid [[threadgroup_position_in_grid]],                         \
-      uint3 lid [[thread_position_in_threadgroup]],                       \
-      uint simd_gid [[simdgroup_index_in_threadgroup]],                   \
-      uint simd_lid [[thread_index_in_simdgroup]]);
-
 // clang-format off
+#define instantiate_gemv_t_bs_helper(                  \
+    nm, itype, bm, bn, sm, sn, tm, tn)                 \
+  instantiate_kernel(                                  \
+    "gemv_t_gather_" #nm "_bm" #bm "_bn" #bn "_sm" #sm \
+       "_sn" #sn "_tm" #tm "_tn" #tn,                  \
+  gemv_t_gather, itype, bm, bn, sm, sn, tm, tn)
+
 #define instantiate_gemv_t_bs_blocks(name, itype)              \
   instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 1) \
   instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 4) \

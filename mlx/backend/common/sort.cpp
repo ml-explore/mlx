@@ -25,7 +25,7 @@ struct StridedIterator {
   // Constructors
   StridedIterator() = default;
 
-  explicit StridedIterator(T* ptr, size_t stride, difference_type offset = 0)
+  explicit StridedIterator(T* ptr, int64_t stride, difference_type offset = 0)
       : ptr_(ptr + offset * stride), stride_(stride) {}
 
   explicit StridedIterator(array& arr, int axis, difference_type offset = 0)
@@ -99,7 +99,7 @@ struct StridedIterator {
   }
 
  private:
-  size_t stride_;
+  int64_t stride_;
   T* ptr_;
 };
 
@@ -120,11 +120,11 @@ void sort(const array& in, array& out, int axis) {
   auto remaining_strides = out.strides();
   remaining_strides.erase(remaining_strides.begin() + axis);
 
-  size_t axis_stride = out.strides()[axis];
-  int axis_size = out.shape(axis);
+  auto axis_stride = out.strides()[axis];
+  auto axis_size = out.shape(axis);
 
   // Perform sorting in place
-  ContiguousIterator<size_t> src_it(
+  ContiguousIterator src_it(
       remaining_shape, remaining_strides, remaining_shape.size());
   for (int i = 0; i < n_rows; i++) {
     T* data_ptr = out.data<T>() + src_it.loc;
@@ -158,14 +158,14 @@ void argsort(const array& in, array& out, int axis) {
   auto out_remaining_strides = out.strides();
   out_remaining_strides.erase(out_remaining_strides.begin() + axis);
 
-  size_t in_stride = in.strides()[axis];
-  size_t out_stride = out.strides()[axis];
-  int axis_size = in.shape(axis);
+  auto in_stride = in.strides()[axis];
+  auto out_stride = out.strides()[axis];
+  auto axis_size = in.shape(axis);
 
   // Perform sorting
-  ContiguousIterator<size_t> in_it(
+  ContiguousIterator in_it(
       in_remaining_shape, in_remaining_strides, in_remaining_shape.size());
-  ContiguousIterator<size_t> out_it(
+  ContiguousIterator out_it(
       out_remaining_shape, out_remaining_strides, out_remaining_shape.size());
   for (int i = 0; i < n_rows; i++) {
     const T* data_ptr = in.data<T>() + in_it.loc;
@@ -208,13 +208,13 @@ void partition(const array& in, array& out, int axis, int kth) {
   auto remaining_strides = in.strides();
   remaining_strides.erase(remaining_strides.begin() + axis);
 
-  size_t axis_stride = in.strides()[axis];
+  auto axis_stride = in.strides()[axis];
   int axis_size = in.shape(axis);
 
   kth = kth < 0 ? kth + axis_size : kth;
 
   // Perform partition in place
-  ContiguousIterator<size_t> src_it(
+  ContiguousIterator src_it(
       remaining_shape, remaining_strides, remaining_shape.size());
   for (int i = 0; i < n_rows; i++) {
     T* data_ptr = out.data<T>() + src_it.loc;
@@ -249,16 +249,16 @@ void argpartition(const array& in, array& out, int axis, int kth) {
   auto out_remaining_strides = out.strides();
   out_remaining_strides.erase(out_remaining_strides.begin() + axis);
 
-  size_t in_stride = in.strides()[axis];
-  size_t out_stride = out.strides()[axis];
-  int axis_size = in.shape(axis);
+  auto in_stride = in.strides()[axis];
+  auto out_stride = out.strides()[axis];
+  auto axis_size = in.shape(axis);
 
   kth = kth < 0 ? kth + axis_size : kth;
 
   // Perform partition
-  ContiguousIterator<size_t> in_it(
+  ContiguousIterator in_it(
       in_remaining_shape, in_remaining_strides, in_remaining_shape.size());
-  ContiguousIterator<size_t> out_it(
+  ContiguousIterator out_it(
       out_remaining_shape, out_remaining_strides, out_remaining_shape.size());
   for (int i = 0; i < n_rows; i++) {
     const T* data_ptr = in.data<T>() + in_it.loc;

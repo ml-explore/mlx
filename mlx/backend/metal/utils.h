@@ -22,17 +22,13 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
 // - overall size (product of non-broadcasted dimensions) is < UINT_MAX^2
 // - shape and strides correspond to a contiguous (no holes) but
 //   possibly broadcasted array
-MTL::Size get_2d_grid_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides);
+MTL::Size get_2d_grid_dims(const Shape& shape, const Strides& strides);
 
 // Same as above but we do an implicit division with divisor.
 // Basically, equivalent to factorizing
 //    Prod(s \forall s in shape if strides[s] > 0) / divisor.
-MTL::Size get_2d_grid_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides,
-    size_t divisor);
+MTL::Size
+get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor);
 
 inline NS::String* make_string(std::ostringstream& os) {
   std::string string = os.str();

@@ -13,8 +13,8 @@ template <typename InT, typename OpT>
 void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
   auto axis_size = in.shape()[axis];
   auto axis_stride = in.strides()[axis];
-  std::vector<size_t> strides = in.strides();
-  std::vector<int> shape = in.shape();
+  Strides strides = in.strides();
+  Shape shape = in.shape();
   strides.erase(strides.begin() + axis);
   shape.erase(shape.begin() + axis);
   for (uint32_t i = 0; i < out.size(); ++i) {

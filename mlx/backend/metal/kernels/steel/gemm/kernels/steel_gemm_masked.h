@@ -56,7 +56,7 @@ block_masked_gemm(
     device T* D [[buffer(3)]],
     const constant GEMMParams* params [[buffer(4)]],
     const constant int* batch_shape [[buffer(6)]],
-    const constant size_t* batch_strides [[buffer(7)]],
+    const constant int64_t* batch_strides [[buffer(7)]],
     const device out_mask_t* out_mask [[buffer(10)]],
     const device op_mask_t* lhs_mask [[buffer(11)]],
     const device op_mask_t* rhs_mask [[buffer(12)]],
@@ -104,7 +104,7 @@ block_masked_gemm(
     return;
   }
 
-  const constant size_t* mask_batch_strides =
+  const constant auto* mask_batch_strides =
       batch_strides + 2 * params->batch_ndim;
 
   if (params->batch_ndim > 1) {
@@ -116,8 +116,8 @@ block_masked_gemm(
     }
 
     if (has_operand_mask) {
-      const constant size_t* mask_strides_lhs = mask_batch_strides;
-      const constant size_t* mask_strides_rhs =
+      const constant auto* mask_strides_lhs = mask_batch_strides;
+      const constant auto* mask_strides_rhs =
           mask_strides_lhs + params->batch_ndim;
 
       ulong2 batch_offsets = elem_to_loc_broadcast(
@@ -144,8 +144,8 @@ block_masked_gemm(
 
   // Adjust for batch
   if (params->batch_ndim > 1) {
-    const constant size_t* A_bstrides = batch_strides;
-    const constant size_t* B_bstrides = batch_strides + params->batch_ndim;
+    const constant auto* A_bstrides = batch_strides;
+    const constant auto* B_bstrides = batch_strides + params->batch_ndim;
 
     ulong2 batch_offsets = elem_to_loc_broadcast(
         tid.z, batch_shape, A_bstrides, B_bstrides, params->batch_ndim);
@@ -442,7 +442,7 @@ block_masked_gemm(
     device T* D [[buffer(3)]],
     const constant GEMMParams* params [[buffer(4)]],
     const constant int* batch_shape [[buffer(6)]],
-    const constant size_t* batch_strides [[buffer(7)]],
+    const constant int64_t* batch_strides [[buffer(7)]],
     const device bool* out_mask [[buffer(10)]],
     const device bool* lhs_mask [[buffer(11)]],
     const device bool* rhs_mask [[buffer(12)]],
@@ -476,15 +476,15 @@ block_masked_gemm(
   }
 
   if (params->batch_ndim > 1) {
-    const constant size_t* mask_batch_strides =
+    const constant auto* mask_batch_strides =
         batch_strides + 2 * params->batch_ndim;
     out_mask +=
         elem_to_loc(tid.z, batch_shape, mask_batch_strides, params->batch_ndim);
 
     if (has_operand_mask) {
-      const constant size_t* mask_strides_lhs =
+      const constant auto* mask_strides_lhs =
           mask_batch_strides + params->batch_ndim;
-      const constant size_t* mask_strides_rhs =
+      const constant auto* mask_strides_rhs =
           mask_strides_lhs + params->batch_ndim;
 
       ulong2 batch_offsets = elem_to_loc_broadcast(
@@ -507,8 +507,8 @@ block_masked_gemm(
 
   // Adjust for batch
   if (params->batch_ndim > 1) {
-    const constant size_t* A_bstrides = batch_strides;
-    const constant size_t* B_bstrides = batch_strides + params->batch_ndim;
+    const constant auto* A_bstrides = batch_strides;
+    const constant auto* B_bstrides = batch_strides + params->batch_ndim;
 
     ulong2 batch_offsets = elem_to_loc_broadcast(
         tid.z, batch_shape, A_bstrides, B_bstrides, params->batch_ndim);

@@ -16,11 +16,11 @@ METAL_FUNC void scatter_impl(
     const device T* updates,
     device mlx_atomic<T>* out,
     const constant int* upd_shape,
-    const constant size_t* upd_strides,
+    const constant int64_t* upd_strides,
     const constant size_t& upd_ndim,
     const constant size_t& upd_size,
     const constant int* out_shape,
-    const constant size_t* out_strides,
+    const constant int64_t* out_strides,
     const constant size_t& out_ndim,
     const constant int* axes,
     const constant size_t& idx_size,
@@ -31,7 +31,7 @@ METAL_FUNC void scatter_impl(
   auto ind_idx = gid.y * NWORK;
   LocT out_offset = 0;
   if (upd_size > 1) {
-    out_offset = elem_to_loc<size_t, LocT>(
+    out_offset = elem_to_loc<LocT>(
         gid.x, upd_shape + indices.ndim, out_strides, out_ndim);
   }
 
@@ -40,7 +40,7 @@ METAL_FUNC void scatter_impl(
     for (int i = 0; i < NIDX; ++i) {
       auto idx_loc = indices.row_contiguous[i]
           ? ind_idx
-          : elem_to_loc<size_t, LocT>(
+          : elem_to_loc<LocT>(
                 ind_idx,
                 &indices.shapes[indices.ndim * i],
                 &indices.strides[indices.ndim * i],
@@ -52,8 +52,7 @@ METAL_FUNC void scatter_impl(
     }
     auto upd_idx = ind_idx * static_cast<LocT>(upd_size) + gid.x;
     if constexpr (!UPD_ROW_CONTIG) {
-      upd_idx =
-          elem_to_loc<size_t, LocT>(upd_idx, upd_shape, upd_strides, upd_ndim);
+      upd_idx = elem_to_loc<LocT>(upd_idx, upd_shape, upd_strides, upd_ndim);
     }
     op.atomic_update(out, updates[upd_idx], out_idx);
   }

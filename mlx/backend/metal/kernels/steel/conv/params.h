@@ -14,9 +14,9 @@ struct MLXConvParams {
   const int pad[NDIM]; // Input padding
   const int kdil[NDIM]; // Kernel dilation
   const int idil[NDIM]; // Input dilation
-  const size_t in_strides[NDIM + 2]; // In strides
-  const size_t wt_strides[NDIM + 2]; // Wt strides
-  const size_t out_strides[NDIM + 2]; // Out strides
+  const int64_t in_strides[NDIM + 2]; // In strides
+  const int64_t wt_strides[NDIM + 2]; // Wt strides
+  const int64_t out_strides[NDIM + 2]; // Out strides
   const int groups; // Input channel groups
   const bool flip;
 };

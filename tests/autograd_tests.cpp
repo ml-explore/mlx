@@ -982,8 +982,8 @@ TEST_CASE("test comparison grads") {
 
 TEST_CASE("test as_strided grads") {
   auto x = ones({11});
-  std::vector<int> shape = {5, 5};
-  std::vector<size_t> strides = {1, 1};
+  Shape shape = {5, 5};
+  Strides strides = {1, 1};
   size_t offset = 0;
 
   auto fun = [&shape, &strides, &offset](array x) {

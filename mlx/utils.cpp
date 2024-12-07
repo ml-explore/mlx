@@ -323,15 +323,6 @@ std::ostream& operator<<(std::ostream& os, const Strides& v) {
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v) {
-  os << "(";
-  for (int i = 0; i < v.size(); ++i) {
-    os << v[i] << ((i == v.size() - 1) ? "" : ",");
-  }
-  os << ")";
-  return os;
-}
-
 namespace env {
 
 int get_var(const char* name, int default_value) {

@@ -43,7 +43,7 @@ template <typename T, typename U, typename Op>
     device U* c,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  int64_t offset = index.x + grid_dim.x * int64_t(index.y);
   c[offset] = Op()(a[0], b[offset]);
 }
 
@@ -54,7 +54,7 @@ template <typename T, typename U, typename Op>
     device U* c,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  int64_t offset = index.x + grid_dim.x * int64_t(index.y);
   c[offset] = Op()(a[offset], b[0]);
 }
 
@@ -65,49 +65,49 @@ template <typename T, typename U, typename Op>
     device U* c,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  int64_t offset = index.x + grid_dim.x * int64_t(index.y);
   c[offset] = Op()(a[offset], b[offset]);
 }
 
-template <typename T, typename U, typename Op, typename IdxT = size_t>
+template <typename T, typename U, typename Op, typename IdxT = int64_t>
 [[kernel]] void binary_g_nd1(
     device const T* a,
     device const T* b,
     device U* c,
-    constant const size_t& a_stride,
-    constant const size_t& b_stride,
+    constant const int64_t& a_stride,
+    constant const int64_t& b_stride,
     uint index [[thread_position_in_grid]]) {
-  auto a_idx = elem_to_loc_1<size_t, IdxT>(index, a_stride);
-  auto b_idx = elem_to_loc_1<size_t, IdxT>(index, b_stride);
+  auto a_idx = elem_to_loc_1<IdxT>(index, a_stride);
+  auto b_idx = elem_to_loc_1<IdxT>(index, b_stride);
   c[index] = Op()(a[a_idx], b[b_idx]);
 }
 
-template <typename T, typename U, typename Op, typename IdxT = size_t>
+template <typename T, typename U, typename Op, typename IdxT = int64_t>
 [[kernel]] void binary_g_nd2(
     device const T* a,
     device const T* b,
     device U* c,
-    constant const size_t a_strides[2],
-    constant const size_t b_strides[2],
+    constant const int64_t a_strides[2],
+    constant const int64_t b_strides[2],
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto a_idx = elem_to_loc_2<size_t, IdxT>(index, a_strides);
-  auto b_idx = elem_to_loc_2<size_t, IdxT>(index, b_strides);
+  auto a_idx = elem_to_loc_2<IdxT>(index, a_strides);
+  auto b_idx = elem_to_loc_2<IdxT>(index, b_strides);
   IdxT out_idx = index.x + IdxT(grid_dim.x) * index.y;
   c[out_idx] = Op()(a[a_idx], b[b_idx]);
 }
 
-template <typename T, typename U, typename Op, typename IdxT = size_t>
+template <typename T, typename U, typename Op, typename IdxT = int64_t>
 [[kernel]] void binary_g_nd3(
     device const T* a,
     device const T* b,
     device U* c,
-    constant const size_t a_strides[3],
-    constant const size_t b_strides[3],
+    constant const int64_t a_strides[3],
+    constant const int64_t b_strides[3],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto a_idx = elem_to_loc_3<size_t, IdxT>(index, a_strides);
-  auto b_idx = elem_to_loc_3<size_t, IdxT>(index, b_strides);
+  auto a_idx = elem_to_loc_3<IdxT>(index, a_strides);
+  auto b_idx = elem_to_loc_3<IdxT>(index, b_strides);
   IdxT out_idx = index.x + grid_dim.x * (index.y + IdxT(grid_dim.y) * index.z);
   c[out_idx] = Op()(a[a_idx], b[b_idx]);
 }
@@ -117,18 +117,18 @@ template <
     typename U,
     typename Op,
     int N = 1,
-    typename IdxT = size_t>
+    typename IdxT = int64_t>
 [[kernel]] void binary_g(
     device const T* a,
     device const T* b,
     device U* c,
     constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
+    constant const int64_t* a_strides,
+    constant const int64_t* b_strides,
     constant const int& ndim,
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto idx = elem_to_loc_2_nd<size_t, IdxT>(
+  auto idx = elem_to_loc_2_nd<IdxT>(
       {N * index.x, index.y, index.z}, shape, a_strides, b_strides, ndim);
   auto xshape = shape[ndim - 1];
   IdxT out_idx = N * index.x + xshape * (index.y + IdxT(grid_dim.y) * index.z);
