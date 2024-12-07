@@ -177,13 +177,14 @@ if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
     set(MLX_BUILD_GGUF OFF)
-  else()
-    # Needed for building with MinGW.
-    find_package(dlfcn-win32 REQUIRED)
-    message(STATUS "dlfcn-win32 lib " ${dlfcn-win32_LIBRARIES})
-    message(STATUS "dlfcn-win32 include " ${dlfcn-win32_INCLUDE_DIRS})
-    target_link_libraries(mlx PUBLIC ${dlfcn-win32_LIBRARIES})
   endif()
+  FetchContent_Declare(
+    dlfcn-win32
+    GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
+    GIT_TAG v1.4.1)
+  FetchContent_MakeAvailable(dlfcn-win32)
+  target_include_directories(mlx PRIVATE ${dlfcn-win32_SOURCE_DIR}/src)
+  target_link_libraries(mlx PRIVATE dlfcn-win32)
 endif()
 
 find_package(MPI)
