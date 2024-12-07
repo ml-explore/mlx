@@ -67,7 +67,9 @@ class array {
   array& operator=(array&& other) && = delete;
 
   /** Default copy and move constructors otherwise. */
+#if !defined(_MSC_VER)
   array& operator=(array&& other) & = default;
+#endif
   array(const array& other) = default;
   array(array&& other) = default;
 
