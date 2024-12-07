@@ -809,6 +809,29 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = fun(*inputs)
         self.assertTrue(mx.allclose(out, mx.full((2, 2), 20)))
 
+    def test_compile_shapeless_with_reshape(self):
+        def fun(a):
+            return mx.reshape(a, (4, 7, 4, 2))
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        a = mx.zeros((4, 7, 8))
+
+        with self.assertRaises(ValueError):
+            b = cfun(a)
+
+        def fun(a):
+            return mx.dynamic_reshape(a, ("B", "L", 4, 2))
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        b = cfun(a)
+        self.assertEqual(b.shape, (4, 7, 4, 2))
+
+        a = mx.zeros((4, 9, 8))
+        b = cfun(a)
+        self.assertEqual(b.shape, (4, 9, 4, 2))
+
 
 if __name__ == "__main__":
     unittest.main()
