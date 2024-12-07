@@ -438,13 +438,10 @@ each instantiation a unique host name so we can identify it.
 
 .. code-block:: C++
 
-    instantiate_kernel(                                  \
-      "axpby_general_" #type_name, axpby_general, type)  \
-
-    instantiate_axpby(float32, float);
-    instantiate_axpby(float16, half);
-    instantiate_axpby(bfloat16, bfloat16_t);
-    instantiate_axpby(complex64, complex64_t);
+    instantiate_kernel("axpby_general_float32", axpby_general, float)
+    instantiate_kernel("axpby_general_float16", axpby_general, float16_t)
+    instantiate_kernel("axpby_general_bfloat16", axpby_general, bfloat16_t)
+    instantiate_kernel("axpby_general_complex64", axpby_general, complex64_t)
 
 The logic to determine the kernel, set the inputs, resolve the grid dimensions,
 and dispatch to the GPU are contained in :meth:`Axpby::eval_gpu` as shown
