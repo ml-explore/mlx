@@ -26,10 +26,10 @@ struct AttnParams {
   int NQ_aligned; ///< Number of full query blocks
   int NK_aligned; ///< Number of full key/value blocks
 
-  size_t Q_strides[3]; ///< Query  strides (B, H, L, D = 1)
-  size_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
-  size_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
-  size_t O_strides[3]; ///< Output strides (B, H, L, D = 1)
+  int64_t Q_strides[3]; ///< Query  strides (B, H, L, D = 1)
+  int64_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
+  int64_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
+  int64_t O_strides[3]; ///< Output strides (B, H, L, D = 1)
 };
 
 } // namespace steel

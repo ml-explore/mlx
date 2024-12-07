@@ -98,11 +98,11 @@ template <
 METAL_FUNC void per_thread_row_reduce(
     thread U totals[N_WRITES],
     const device T* in,
-    const size_t row_idx,
+    const int64_t row_idx,
     int blocks,
     int extra,
     const constant int* shape,
-    const constant size_t* strides,
+    const constant int64_t* strides,
     const constant int& ndim,
     uint lsize_x,
     uint lid_x) {
@@ -199,13 +199,13 @@ template <
 [[kernel]] void row_reduce_small(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant size_t& row_size [[buffer(2)]],
-    const constant size_t& non_row_reductions [[buffer(3)]],
+    const constant int64_t& row_size [[buffer(2)]],
+    const constant int64_t& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
+    const constant int64_t* strides [[buffer(5)]],
     const constant int& ndim [[buffer(6)]],
     const constant int* reduce_shape [[buffer(7)]],
-    const constant size_t* reduce_strides [[buffer(8)]],
+    const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint3 gid [[threadgroup_position_in_grid]],
@@ -225,7 +225,7 @@ template <
   if ((non_row_reductions < 32 && row_size <= 8) || non_row_reductions <= 8) {
     // Simple loop over non_row_reductions and reduce the row in the thread.
     IdxT out_idx = tid.x + tsize.y * IdxT(tid.y);
-    in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
+    in += elem_to_loc<IdxT>(out_idx, shape, strides, ndim);
 
     for (uint r = 0; r < non_row_reductions; r++) {
       row = in + loop.location();
@@ -238,7 +238,7 @@ template <
     // Collaboratively reduce over non_row_reductions in the simdgroup. Each
     // thread reduces every 32nd row and then a simple simd reduce.
     IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
-    in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim);
+    in += elem_to_loc<IdxT>(out_idx, shape, strides, ndim);
 
     loop.next(simd_lane_id, reduce_shape, reduce_strides);
 
@@ -260,14 +260,14 @@ template <
     typename T,
     typename U,
     typename Op,
-    typename IdxT = size_t,
+    typename IdxT = int64_t,
     int N_READS = REDUCE_N_READS,
     int N_WRITES = REDUCE_N_WRITES>
 [[kernel]] void row_reduce_simple(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& out_size [[buffer(3)]],
+    const constant int64_t& out_size [[buffer(3)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
@@ -314,13 +314,13 @@ template <
 [[kernel]] void row_reduce_looped(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant size_t& row_size [[buffer(2)]],
-    const constant size_t& non_row_reductions [[buffer(3)]],
+    const constant int64_t& row_size [[buffer(2)]],
+    const constant int64_t& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
+    const constant int64_t* strides [[buffer(5)]],
     const constant int& ndim [[buffer(6)]],
     const constant int* reduce_shape [[buffer(7)]],
-    const constant size_t* reduce_strides [[buffer(8)]],
+    const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
@@ -337,8 +337,7 @@ template <
 
   // lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it
   // needs a small refactor.
-  in += elem_to_loc<size_t, IdxT>(out_idx, shape, strides, ndim) +
-      lid.x * N_READS;
+  in += elem_to_loc<IdxT>(out_idx, shape, strides, ndim) + lid.x * N_READS;
 
   LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;

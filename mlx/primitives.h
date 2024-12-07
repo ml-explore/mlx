@@ -1917,8 +1917,6 @@ class SliceUpdate : public UnaryPrimitive {
   std::vector<int> strides_;
 
   void eval(const std::vector<array>& inputs, array& out);
-
-  std::tuple<int64_t, std::vector<int64_t>> prepare_slice(const array& in);
 };
 
 class Softmax : public UnaryPrimitive {

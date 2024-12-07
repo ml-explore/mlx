@@ -15,13 +15,13 @@ using namespace mlx::core;
 TEST_CASE("test copy") {
   array x(1.0);
   auto y = copy(x);
-  CHECK_EQ(y.shape(), std::vector<int>{});
+  CHECK_EQ(y.shape(), Shape{});
   CHECK_NE(y.id(), x.id());
   CHECK_EQ(y.item<float>(), 1.0f);
 
   x = array({1, 2}, {2, 1});
   y = copy(x);
-  CHECK_EQ(y.shape(), std::vector<int>{2, 1});
+  CHECK_EQ(y.shape(), Shape{2, 1});
   CHECK_EQ(y.dtype(), int32);
   CHECK_NE(y.id(), x.id());
   CHECK(array_equal(y, x).item<bool>());
@@ -29,37 +29,37 @@ TEST_CASE("test copy") {
 
 TEST_CASE("test reshape") {
   array x(1.0);
-  CHECK_EQ(reshape(x, {}).shape(), std::vector<int>{});
+  CHECK_EQ(reshape(x, {}).shape(), Shape{});
   CHECK_THROWS_AS(reshape(x, {2}), std::invalid_argument);
   auto y = reshape(x, {1, 1, 1});
-  CHECK_EQ(y.shape(), std::vector<int>{1, 1, 1});
+  CHECK_EQ(y.shape(), Shape{1, 1, 1});
   y = reshape(x, {-1, 1, 1});
-  CHECK_EQ(y.shape(), std::vector<int>{1, 1, 1});
+  CHECK_EQ(y.shape(), Shape{1, 1, 1});
   y = reshape(x, {1, 1, -1});
-  CHECK_EQ(y.shape(), std::vector<int>{1, 1, 1});
+  CHECK_EQ(y.shape(), Shape{1, 1, 1});
   CHECK_THROWS_AS(reshape(x, {1, -1, -1}), std::invalid_argument);
   CHECK_THROWS_AS(reshape(x, {2, -1}), std::invalid_argument);
 
   x = zeros({2, 2, 2});
   y = reshape(x, {8});
-  CHECK_EQ(y.shape(), std::vector<int>{8});
+  CHECK_EQ(y.shape(), Shape{8});
   CHECK_THROWS_AS(reshape(x, {7}), std::invalid_argument);
   y = reshape(x, {-1});
-  CHECK_EQ(y.shape(), std::vector<int>{8});
+  CHECK_EQ(y.shape(), Shape{8});
   y = reshape(x, {-1, 2});
-  CHECK_EQ(y.shape(), std::vector<int>{4, 2});
+  CHECK_EQ(y.shape(), Shape{4, 2});
   CHECK_THROWS_AS(reshape(x, {-1, 7}), std::invalid_argument);
 
   // Works with empty array
   x = array({});
   y = reshape(x, {0, 0, 0});
-  CHECK_EQ(y.shape(), std::vector<int>{0, 0, 0});
+  CHECK_EQ(y.shape(), Shape{0, 0, 0});
   y.eval();
   CHECK_EQ(y.size(), 0);
   CHECK_THROWS_AS(reshape(x, {}), std::invalid_argument);
   CHECK_THROWS_AS(reshape(x, {1}), std::invalid_argument);
   y = reshape(x, {1, 5, 0});
-  CHECK_EQ(y.shape(), std::vector<int>{1, 5, 0});
+  CHECK_EQ(y.shape(), Shape{1, 5, 0});
 
   // Check that reshaping a transposed array doesn't result in a copy
   x = reshape(arange(64), {2, 4, 8});
@@ -138,15 +138,15 @@ TEST_CASE("test reshape") {
 
 TEST_CASE("test flatten") {
   array x = zeros({2, 3, 4});
-  CHECK_EQ(flatten(x).shape(), std::vector<int>({2 * 3 * 4}));
+  CHECK_EQ(flatten(x).shape(), Shape({2 * 3 * 4}));
 
-  CHECK_EQ(flatten(x, 1, 1).shape(), std::vector<int>({2, 3, 4}));
-  CHECK_EQ(flatten(x, 1, 2).shape(), std::vector<int>({2, 3 * 4}));
-  CHECK_EQ(flatten(x, 1, 3).shape(), std::vector<int>({2, 3 * 4}));
-  CHECK_EQ(flatten(x, 1, -1).shape(), std::vector<int>({2, 3 * 4}));
-  CHECK_EQ(flatten(x, -2, -1).shape(), std::vector<int>({2, 3 * 4}));
-  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({2 * 3 * 4}));
-  CHECK_EQ(flatten(x, -4, -1).shape(), std::vector<int>({2 * 3 * 4}));
+  CHECK_EQ(flatten(x, 1, 1).shape(), Shape({2, 3, 4}));
+  CHECK_EQ(flatten(x, 1, 2).shape(), Shape({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, 3).shape(), Shape({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, -1).shape(), Shape({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -2, -1).shape(), Shape({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -3, -1).shape(), Shape({2 * 3 * 4}));
+  CHECK_EQ(flatten(x, -4, -1).shape(), Shape({2 * 3 * 4}));
 
   // Check start > end throws
   CHECK_THROWS(flatten(x, 2, 1));
@@ -159,17 +159,17 @@ TEST_CASE("test flatten") {
 
   // Check scalar flattens to 1D
   x = array(1);
-  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({1}));
-  CHECK_EQ(flatten(x, 0, 0).shape(), std::vector<int>({1}));
+  CHECK_EQ(flatten(x, -3, -1).shape(), Shape({1}));
+  CHECK_EQ(flatten(x, 0, 0).shape(), Shape({1}));
 }
 
 TEST_CASE("test squeeze and expand") {
   array x = zeros({2, 1, 2, 1, 2, 1});
-  CHECK_EQ(squeeze(x).shape(), std::vector<int>{2, 2, 2});
-  CHECK_EQ(squeeze(x, {1, 3, 5}).shape(), std::vector<int>{2, 2, 2});
-  CHECK_EQ(squeeze(x, {-1, -3, -5}).shape(), std::vector<int>{2, 2, 2});
-  CHECK_EQ(squeeze(x, 1).shape(), std::vector<int>{2, 2, 1, 2, 1});
-  CHECK_EQ(squeeze(x, -1).shape(), std::vector<int>{2, 1, 2, 1, 2});
+  CHECK_EQ(squeeze(x).shape(), Shape{2, 2, 2});
+  CHECK_EQ(squeeze(x, {1, 3, 5}).shape(), Shape{2, 2, 2});
+  CHECK_EQ(squeeze(x, {-1, -3, -5}).shape(), Shape{2, 2, 2});
+  CHECK_EQ(squeeze(x, 1).shape(), Shape{2, 2, 1, 2, 1});
+  CHECK_EQ(squeeze(x, -1).shape(), Shape{2, 1, 2, 1, 2});
 
   CHECK_THROWS(squeeze(x, 0));
   CHECK_THROWS(squeeze(x, 2));
@@ -177,13 +177,13 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(squeeze(x, {1, 3, -3}));
 
   x = zeros({2, 2});
-  CHECK_EQ(expand_dims(x, 0).shape(), std::vector<int>{1, 2, 2});
-  CHECK_EQ(expand_dims(x, -1).shape(), std::vector<int>{2, 2, 1});
-  CHECK_EQ(expand_dims(x, 1).shape(), std::vector<int>{2, 1, 2});
-  CHECK_EQ(expand_dims(x, {0, 1, 2}).shape(), std::vector<int>{1, 1, 1, 2, 2});
+  CHECK_EQ(expand_dims(x, 0).shape(), Shape{1, 2, 2});
+  CHECK_EQ(expand_dims(x, -1).shape(), Shape{2, 2, 1});
+  CHECK_EQ(expand_dims(x, 1).shape(), Shape{2, 1, 2});
+  CHECK_EQ(expand_dims(x, {0, 1, 2}).shape(), Shape{1, 1, 1, 2, 2});
   CHECK_EQ(
       expand_dims(x, {0, 1, 2, 5, 6, 7}).shape(),
-      std::vector<int>{1, 1, 1, 2, 2, 1, 1, 1});
+      Shape{1, 1, 1, 2, 2, 1, 1, 1});
 
   CHECK_THROWS(expand_dims(x, 3));
   CHECK_THROWS(expand_dims(x, -4));
@@ -210,7 +210,7 @@ TEST_CASE("test slice") {
 
   out = slice(x, {1}, {0});
   eval(out);
-  CHECK_EQ(out.shape(), std::vector<int>{0});
+  CHECK_EQ(out.shape(), Shape{0});
 
   out = slice(x, {0}, {1}, {1});
   CHECK_EQ(out.item<int>(), 3);
@@ -353,7 +353,7 @@ TEST_CASE("test split") {
   out = split(x, 3, -1);
   CHECK_EQ(out.size(), 3);
   for (auto i = 0; i < 3; ++i) {
-    CHECK_EQ(out[i].shape(), std::vector<int>{1});
+    CHECK_EQ(out[i].shape(), Shape{1});
     CHECK_EQ(out[i].dtype(), int32);
     CHECK_EQ(out[i].item<int>(), i);
   }
@@ -370,13 +370,13 @@ TEST_CASE("test split") {
   x = zeros({8, 12});
   out = split(x, 2);
   CHECK_EQ(out.size(), 2);
-  CHECK_EQ(out[0].shape(), std::vector<int>{4, 12});
-  CHECK_EQ(out[1].shape(), std::vector<int>{4, 12});
+  CHECK_EQ(out[0].shape(), Shape{4, 12});
+  CHECK_EQ(out[1].shape(), Shape{4, 12});
   out = split(x, 3, 1);
   CHECK_EQ(out.size(), 3);
-  CHECK_EQ(out[0].shape(), std::vector<int>{8, 4});
-  CHECK_EQ(out[1].shape(), std::vector<int>{8, 4});
-  CHECK_EQ(out[2].shape(), std::vector<int>{8, 4});
+  CHECK_EQ(out[0].shape(), Shape{8, 4});
+  CHECK_EQ(out[1].shape(), Shape{8, 4});
+  CHECK_EQ(out[2].shape(), Shape{8, 4});
 
   out = split(x, std::vector<int>{});
   CHECK_EQ(out.size(), 1);
@@ -384,25 +384,25 @@ TEST_CASE("test split") {
 
   out = split(x, {3, 7});
   CHECK_EQ(out.size(), 3);
-  CHECK_EQ(out[0].shape(), std::vector<int>{3, 12});
-  CHECK_EQ(out[1].shape(), std::vector<int>{4, 12});
-  CHECK_EQ(out[2].shape(), std::vector<int>{1, 12});
+  CHECK_EQ(out[0].shape(), Shape{3, 12});
+  CHECK_EQ(out[1].shape(), Shape{4, 12});
+  CHECK_EQ(out[2].shape(), Shape{1, 12});
 
   out = split(x, std::vector<int>{20});
   CHECK_EQ(out.size(), 2);
-  CHECK_EQ(out[0].shape(), std::vector<int>{8, 12});
-  CHECK_EQ(out[1].shape(), std::vector<int>{0, 12});
+  CHECK_EQ(out[0].shape(), Shape{8, 12});
+  CHECK_EQ(out[1].shape(), Shape{0, 12});
 
   // Negative indices
   out = split(x, std::vector<int>{-5});
-  CHECK_EQ(out[0].shape(), std::vector<int>{3, 12});
-  CHECK_EQ(out[1].shape(), std::vector<int>{5, 12});
+  CHECK_EQ(out[0].shape(), Shape{3, 12});
+  CHECK_EQ(out[1].shape(), Shape{5, 12});
 
   // Different axis
   out = split(x, std::vector<int>{2, 8}, 1);
-  CHECK_EQ(out[0].shape(), std::vector<int>{8, 2});
-  CHECK_EQ(out[1].shape(), std::vector<int>{8, 6});
-  CHECK_EQ(out[2].shape(), std::vector<int>{8, 4});
+  CHECK_EQ(out[0].shape(), Shape{8, 2});
+  CHECK_EQ(out[1].shape(), Shape{8, 6});
+  CHECK_EQ(out[2].shape(), Shape{8, 4});
 
   // Out of order indices
   x = arange(5);
@@ -420,18 +420,18 @@ TEST_CASE("test swap and move axes") {
 
   a = zeros({2});
   CHECK_THROWS(swapaxes(a, 0, 1));
-  CHECK_EQ(swapaxes(a, 0, 0).shape(), std::vector<int>{2});
-  CHECK_EQ(swapaxes(a, -1, -1).shape(), std::vector<int>{2});
+  CHECK_EQ(swapaxes(a, 0, 0).shape(), Shape{2});
+  CHECK_EQ(swapaxes(a, -1, -1).shape(), Shape{2});
 
   a = zeros({2, 3, 4});
   CHECK_THROWS(swapaxes(a, 0, -4));
   CHECK_THROWS(swapaxes(a, 0, 3));
   CHECK_THROWS(swapaxes(a, 3, 0));
   CHECK_THROWS(swapaxes(a, -4, 0));
-  CHECK_EQ(swapaxes(a, 0, 2).shape(), std::vector<int>{4, 3, 2});
-  CHECK_EQ(swapaxes(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
-  CHECK_EQ(swapaxes(a, 0, -1).shape(), std::vector<int>{4, 3, 2});
-  CHECK_EQ(swapaxes(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
+  CHECK_EQ(swapaxes(a, 0, 2).shape(), Shape{4, 3, 2});
+  CHECK_EQ(swapaxes(a, 0, 1).shape(), Shape{3, 2, 4});
+  CHECK_EQ(swapaxes(a, 0, -1).shape(), Shape{4, 3, 2});
+  CHECK_EQ(swapaxes(a, -2, 2).shape(), Shape{2, 4, 3});
 
   // Test moveaxis
   a = array(0.0);
@@ -439,18 +439,18 @@ TEST_CASE("test swap and move axes") {
 
   a = zeros({2});
   CHECK_THROWS(moveaxis(a, 0, 1));
-  CHECK_EQ(moveaxis(a, 0, 0).shape(), std::vector<int>{2});
-  CHECK_EQ(moveaxis(a, -1, -1).shape(), std::vector<int>{2});
+  CHECK_EQ(moveaxis(a, 0, 0).shape(), Shape{2});
+  CHECK_EQ(moveaxis(a, -1, -1).shape(), Shape{2});
 
   a = zeros({2, 3, 4});
   CHECK_THROWS(moveaxis(a, 0, -4));
   CHECK_THROWS(moveaxis(a, 0, 3));
   CHECK_THROWS(moveaxis(a, 3, 0));
   CHECK_THROWS(moveaxis(a, -4, 0));
-  CHECK_EQ(moveaxis(a, 0, 2).shape(), std::vector<int>{3, 4, 2});
-  CHECK_EQ(moveaxis(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
-  CHECK_EQ(moveaxis(a, 0, -1).shape(), std::vector<int>{3, 4, 2});
-  CHECK_EQ(moveaxis(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
+  CHECK_EQ(moveaxis(a, 0, 2).shape(), Shape{3, 4, 2});
+  CHECK_EQ(moveaxis(a, 0, 1).shape(), Shape{3, 2, 4});
+  CHECK_EQ(moveaxis(a, 0, -1).shape(), Shape{3, 4, 2});
+  CHECK_EQ(moveaxis(a, -2, 2).shape(), Shape{2, 4, 3});
 }
 
 TEST_CASE("test transpose") {
@@ -1725,46 +1725,46 @@ TEST_CASE("test arithmetic binary ops") {
 
 TEST_CASE("test broadcast") {
   auto s = broadcast_shapes({1}, {1, 2});
-  CHECK_EQ(s, std::vector<int>{1, 2});
+  CHECK_EQ(s, Shape{1, 2});
 
   s = broadcast_shapes({1, 2}, {1});
-  CHECK_EQ(s, std::vector<int>{1, 2});
+  CHECK_EQ(s, Shape{1, 2});
 
   s = broadcast_shapes({2, 2}, {});
-  CHECK_EQ(s, std::vector<int>{2, 2});
+  CHECK_EQ(s, Shape{2, 2});
 
   s = broadcast_shapes({}, {1, 1});
-  CHECK_EQ(s, std::vector<int>{1, 1});
+  CHECK_EQ(s, Shape{1, 1});
 
   s = broadcast_shapes({1, 2, 1}, {2});
-  CHECK_EQ(s, std::vector<int>{1, 2, 2});
+  CHECK_EQ(s, Shape{1, 2, 2});
 
   s = broadcast_shapes({2}, {1, 2, 1});
-  CHECK_EQ(s, std::vector<int>{1, 2, 2});
+  CHECK_EQ(s, Shape{1, 2, 2});
 
   s = broadcast_shapes({2, 2, 2}, {1, 2, 1});
-  CHECK_EQ(s, std::vector<int>{2, 2, 2});
+  CHECK_EQ(s, Shape{2, 2, 2});
 
   s = broadcast_shapes({2, 2, 2, 1}, {1, 2, 1});
-  CHECK_EQ(s, std::vector<int>{2, 2, 2, 1});
+  CHECK_EQ(s, Shape{2, 2, 2, 1});
 
   s = broadcast_shapes({0}, {0, 0});
-  CHECK_EQ(s, std::vector<int>{0, 0});
+  CHECK_EQ(s, Shape{0, 0});
 
-  CHECK_EQ(broadcast_shapes({}, {0}), std::vector<int>{0});
+  CHECK_EQ(broadcast_shapes({}, {0}), Shape{0});
 
   s = broadcast_shapes({5, 0}, {0, 5, 0});
-  CHECK_EQ(s, std::vector<int>{0, 5, 0});
+  CHECK_EQ(s, Shape{0, 5, 0});
 
-  CHECK_EQ(broadcast_shapes({}, {0}), std::vector<int>{0});
-  CHECK_EQ(broadcast_shapes({1}, {0}), std::vector<int>{0});
-  CHECK_EQ(broadcast_shapes({1}, {0}), std::vector<int>{0});
-  CHECK_EQ(broadcast_shapes({1}, {0, 0}), std::vector<int>{0, 0});
-  CHECK_EQ(broadcast_shapes({1, 1}, {0}), std::vector<int>{1, 0});
-  CHECK_EQ(broadcast_shapes({1, 1}, {0, 0}), std::vector<int>{0, 0});
-  CHECK_EQ(broadcast_shapes({2, 1}, {1, 0}), std::vector<int>{2, 0});
-  CHECK_EQ(broadcast_shapes({2, 1}, {2, 0}), std::vector<int>{2, 0});
-  CHECK_EQ(broadcast_shapes({2, 1}, {1, 2, 0}), std::vector<int>{1, 2, 0});
+  CHECK_EQ(broadcast_shapes({}, {0}), Shape{0});
+  CHECK_EQ(broadcast_shapes({1}, {0}), Shape{0});
+  CHECK_EQ(broadcast_shapes({1}, {0}), Shape{0});
+  CHECK_EQ(broadcast_shapes({1}, {0, 0}), Shape{0, 0});
+  CHECK_EQ(broadcast_shapes({1, 1}, {0}), Shape{1, 0});
+  CHECK_EQ(broadcast_shapes({1, 1}, {0, 0}), Shape{0, 0});
+  CHECK_EQ(broadcast_shapes({2, 1}, {1, 0}), Shape{2, 0});
+  CHECK_EQ(broadcast_shapes({2, 1}, {2, 0}), Shape{2, 0});
+  CHECK_EQ(broadcast_shapes({2, 1}, {1, 2, 0}), Shape{1, 2, 0});
   CHECK_THROWS_AS(broadcast_shapes({2}, {0}), std::invalid_argument);
   CHECK_THROWS_AS(broadcast_shapes({2, 1}, {0, 0}), std::invalid_argument);
 
@@ -1778,19 +1778,19 @@ TEST_CASE("test broadcast") {
   CHECK_EQ(broadcast_to(x, {1, 1}).item<float>(), 2.3f);
 
   x = broadcast_to(x, {5, 1});
-  CHECK_EQ(x.shape(), std::vector<int>{5, 1});
+  CHECK_EQ(x.shape(), Shape{5, 1});
   x.eval();
-  CHECK_EQ(x.strides(), std::vector<size_t>{0, 0});
+  CHECK_EQ(x.strides(), Strides{0, 0});
 
   CHECK_THROWS_AS(broadcast_to(x, {1, 5}), std::invalid_argument);
   x = broadcast_to(x, {5, 5});
-  CHECK_EQ(x.shape(), std::vector<int>{5, 5});
+  CHECK_EQ(x.shape(), Shape{5, 5});
 
   x = zeros({2, 1, 2});
   x = broadcast_to(x, {4, 2, 1, 2});
-  CHECK_EQ(x.shape(), std::vector<int>{4, 2, 1, 2});
+  CHECK_EQ(x.shape(), Shape{4, 2, 1, 2});
   x.eval();
-  CHECK_EQ(x.strides(), std::vector<size_t>{0, 2, 0, 1});
+  CHECK_EQ(x.strides(), Strides{0, 2, 0, 1});
 
   // Broadcast on empty arrays works as expected
   x = array({});
@@ -1801,29 +1801,29 @@ TEST_CASE("test broadcast") {
   auto y = broadcast_to(x, {0});
   eval(y);
   CHECK_EQ(y.size(), 0);
-  CHECK_EQ(y.shape(), std::vector<int>{0});
+  CHECK_EQ(y.shape(), Shape{0});
 
   x = array({1, 2}, {2, 1});
   y = broadcast_to(x, {2, 0});
   eval(y);
   CHECK_EQ(y.size(), 0);
-  CHECK_EQ(y.shape(), std::vector<int>{2, 0});
+  CHECK_EQ(y.shape(), Shape{2, 0});
 
   // Check repeat application works
   x = zeros({2});
   x = broadcast_to(broadcast_to(x, {2, 2}), {2, 2});
-  CHECK_EQ(x.shape(), std::vector<int>{2, 2});
+  CHECK_EQ(x.shape(), Shape{2, 2});
   x.eval();
-  CHECK_EQ(x.strides(), std::vector<size_t>{0, 1});
+  CHECK_EQ(x.strides(), Strides{0, 1});
   x = broadcast_to(broadcast_to(x, {2, 2}), {2, 2, 2});
-  CHECK_EQ(x.shape(), std::vector<int>{2, 2, 2});
+  CHECK_EQ(x.shape(), Shape{2, 2, 2});
   x.eval();
-  CHECK_EQ(x.strides(), std::vector<size_t>{0, 0, 1});
+  CHECK_EQ(x.strides(), Strides{0, 0, 1});
 
   // Broadcast on transposed array works
   x = array({0, 1, 2, 3, 4, 5}, {2, 3});
   x = broadcast_to(transpose(x), {2, 3, 2});
-  CHECK_EQ(x.shape(), std::vector<int>{2, 3, 2});
+  CHECK_EQ(x.shape(), Shape{2, 3, 2});
   y = broadcast_to(array({0, 3, 1, 4, 2, 5}, {3, 2}), {2, 3, 2});
   CHECK(array_equal(x, y).item<bool>());
 

@@ -30,7 +30,7 @@ void unary_op_gpu_inplace(
     if (!contig) {
       return collapse_contiguous_dims(in);
     } else {
-      return std::make_pair(std::vector<int>{}, std::vector<size_t>{});
+      return std::make_pair(Shape{}, Strides{});
     }
   };
   auto [shape, strides] = maybe_collapse();

@@ -642,13 +642,13 @@ template <
     const constant int& marix_ld [[buffer(6)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* vector_batch_stride [[buffer(11)]],
-    const constant size_t* matrix_batch_stride [[buffer(12)]],
+    const constant int64_t* vector_batch_stride [[buffer(11)]],
+    const constant int64_t* matrix_batch_stride [[buffer(12)]],
     const device out_mask_t* out_mask [[buffer(20)]],
     const device op_mask_t* mat_mask [[buffer(21)]],
     const device op_mask_t* vec_mask [[buffer(22)]],
     const constant int* mask_strides [[buffer(23)]],
-    const constant size_t* mask_batch_strides [[buffer(24)]],
+    const constant int64_t* mask_batch_strides [[buffer(24)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -673,8 +673,8 @@ template <
     }
 
     if (has_operand_mask) {
-      const constant size_t* mask_strides_mat = mask_batch_strides;
-      const constant size_t* mask_strides_vec = mask_strides_mat + batch_ndim;
+      const constant auto* mask_strides_mat = mask_batch_strides;
+      const constant auto* mask_strides_vec = mask_strides_mat + batch_ndim;
 
       ulong2 batch_offsets = elem_to_loc_broadcast(
           tid.z, batch_shape, mask_strides_mat, mask_strides_vec, batch_ndim);
@@ -742,13 +742,13 @@ template <
     const constant int& marix_ld [[buffer(6)]],
     const constant int& batch_ndim [[buffer(9)]],
     const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* vector_batch_stride [[buffer(11)]],
-    const constant size_t* matrix_batch_stride [[buffer(12)]],
+    const constant int64_t* vector_batch_stride [[buffer(11)]],
+    const constant int64_t* matrix_batch_stride [[buffer(12)]],
     const device out_mask_t* out_mask [[buffer(20)]],
     const device op_mask_t* mat_mask [[buffer(21)]],
     const device op_mask_t* vec_mask [[buffer(22)]],
     const constant int* mask_strides [[buffer(23)]],
-    const constant size_t* mask_batch_strides [[buffer(24)]],
+    const constant int64_t* mask_batch_strides [[buffer(24)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -773,8 +773,8 @@ template <
     }
 
     if (has_operand_mask) {
-      const constant size_t* mask_strides_mat = mask_batch_strides;
-      const constant size_t* mask_strides_vec = mask_strides_mat + batch_ndim;
+      const constant auto* mask_strides_mat = mask_batch_strides;
+      const constant auto* mask_strides_vec = mask_strides_mat + batch_ndim;
 
       ulong2 batch_offsets = elem_to_loc_broadcast(
           tid.z, batch_shape, mask_strides_mat, mask_strides_vec, batch_ndim);

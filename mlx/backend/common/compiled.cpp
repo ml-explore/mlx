@@ -165,7 +165,7 @@ void compiled_allocate_outputs(
     bool move_buffers /* = false */) {
   if (contiguous) {
     int o = 0;
-    std::vector<size_t> strides;
+    Strides strides;
     size_t data_size;
     array::Flags flags;
     for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {

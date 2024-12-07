@@ -87,9 +87,7 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 /* = 10 */) {
   return MTL::Size{1ul << pows[0], 1ul << pows[1], 1ul << pows[2]};
 }
 
-MTL::Size get_2d_grid_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides) {
+MTL::Size get_2d_grid_dims(const Shape& shape, const Strides& strides) {
   // Dims with strides of 0 are ignored as they
   // correspond to broadcasted dimensions
   size_t grid_x = 1;
@@ -114,10 +112,8 @@ MTL::Size get_2d_grid_dims(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
 }
 
-MTL::Size get_2d_grid_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides,
-    size_t divisor) {
+MTL::Size
+get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor) {
   // Compute the 2d grid dimensions such that the total size of the grid is
   // divided by divisor.
   size_t grid_x = 1;

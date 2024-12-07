@@ -15,7 +15,7 @@ void move_or_copy(const array& in, array& out) {
 void move_or_copy(
     const array& in,
     array& out,
-    const std::vector<size_t>& strides,
+    const Strides& strides,
     array::Flags flags,
     size_t data_size,
     size_t offset /* = 0 */) {
@@ -26,15 +26,13 @@ void move_or_copy(
   }
 }
 
-template <typename StrideT>
-std::tuple<std::vector<int>, std::vector<std::vector<StrideT>>>
-collapse_contiguous_dims_impl(
-    const std::vector<int>& shape,
-    const std::vector<std::vector<StrideT>>& strides,
-    StrideT size_cap) {
+std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
+    const Shape& shape,
+    const std::vector<Strides>& strides,
+    int64_t size_cap) {
   // Make a vector that has axes separated with -1. Collapse all axes between
   // -1.
-  std::vector<int> to_collapse;
+  Shape to_collapse;
   if (shape.size() > 0) {
     if (shape[0] != 1) {
       to_collapse.push_back(0);
@@ -43,7 +41,7 @@ collapse_contiguous_dims_impl(
     for (int i = 1; i < shape.size(); i++) {
       bool contiguous = true;
       size *= shape[i];
-      for (const std::vector<StrideT>& st : strides) {
+      for (const auto& st : strides) {
         if (st[i] * shape[i] != st[i - 1] || size > size_cap) {
           contiguous = false;
           size = shape[i];
@@ -60,8 +58,8 @@ collapse_contiguous_dims_impl(
     to_collapse.push_back(-1);
   }
 
-  std::vector<int> out_shape;
-  std::vector<std::vector<StrideT>> out_strides(strides.size());
+  Shape out_shape;
+  std::vector<Strides> out_strides(strides.size());
   for (int i = 0;;) {
     while (i < to_collapse.size() && to_collapse[i] == -1) {
       ++i;
@@ -76,7 +74,7 @@ collapse_contiguous_dims_impl(
     }
     out_shape.push_back(current_shape);
     for (int j = 0; j < strides.size(); j++) {
-      const std::vector<StrideT>& st = strides[j];
+      const auto& st = strides[j];
       out_strides[j].push_back(st[to_collapse[k - 1]]);
     }
     i = k + 1;
@@ -91,29 +89,12 @@ collapse_contiguous_dims_impl(
   return std::make_tuple(out_shape, out_strides);
 }
 
-std::tuple<std::vector<int>, std::vector<std::vector<int64_t>>>
-collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<std::vector<int64_t>>& strides,
-    int64_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
-  return collapse_contiguous_dims_impl(shape, strides, size_cap);
-}
-
-std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
-collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<std::vector<size_t>>& strides,
-    size_t size_cap /* = std::numeric_limits<int32>::max() */) {
-  return collapse_contiguous_dims_impl(shape, strides, size_cap);
-}
-
-template <typename StrideT>
-std::pair<std::vector<int>, std::vector<StrideT>> collapse_contiguous_dims_impl(
-    const std::vector<int>& shape,
-    const std::vector<StrideT>& strides,
-    StrideT size_cap) {
-  std::vector<int> collapsed_shape;
-  std::vector<StrideT> collapsed_strides;
+std::pair<Shape, Strides> collapse_contiguous_dims(
+    const Shape& shape,
+    const Strides& strides,
+    int64_t size_cap) {
+  Shape collapsed_shape;
+  Strides collapsed_strides;
 
   if (shape.size() > 0) {
     collapsed_shape.push_back(shape[0]);
@@ -123,7 +104,7 @@ std::pair<std::vector<int>, std::vector<StrideT>> collapse_contiguous_dims_impl(
         continue;
       } else if (
           strides[i] * shape[i] != collapsed_strides.back() ||
-          collapsed_shape.back() * static_cast<StrideT>(shape[i]) > size_cap) {
+          collapsed_shape.back() * static_cast<int64_t>(shape[i]) > size_cap) {
         collapsed_shape.push_back(shape[i]);
         collapsed_strides.push_back(strides[i]);
       } else {
@@ -136,25 +117,10 @@ std::pair<std::vector<int>, std::vector<StrideT>> collapse_contiguous_dims_impl(
   return std::make_pair(collapsed_shape, collapsed_strides);
 }
 
-std::pair<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<int64_t>& strides,
-    int64_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
-  return collapse_contiguous_dims_impl<int64_t>(shape, strides, size_cap);
-}
-
-std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides,
-    size_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
-  return collapse_contiguous_dims_impl<size_t>(shape, strides, size_cap);
-}
-
-std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<Shape, Strides> collapse_contiguous_dims(
     const array& a,
-    size_t size_cap /* = std::numeric_limits<int32_t>::max()*/) {
-  return collapse_contiguous_dims_impl<size_t>(
-      a.shape(), a.strides(), size_cap);
+    int64_t size_cap /* = std::numeric_limits<int32_t>::max()*/) {
+  return collapse_contiguous_dims(a.shape(), a.strides(), size_cap);
 }
 
 } // namespace mlx::core
