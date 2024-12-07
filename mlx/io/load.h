@@ -2,11 +2,16 @@
 
 #pragma once
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <memory>
 #include <sstream>
+
+#include <fcntl.h>
+#ifdef _MSC_VER
+#include <io.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include "mlx/io/threadpool.h"
 
