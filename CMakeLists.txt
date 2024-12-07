@@ -117,11 +117,26 @@ if(MLX_BUILD_CPU)
   if(ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
     set(MLX_BUILD_ACCELERATE ON)
-    target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
-    add_compile_definitions(ACCELERATE_NEW_LAPACK)
   else()
     message(STATUS "Accelerate or arm neon not found, using default backend.")
     set(MLX_BUILD_ACCELERATE OFF)
+  endif()
+
+  if(MLX_BUILD_ACCELERATE)
+    target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
+    add_compile_definitions(ACCELERATE_NEW_LAPACK)
+  elseif(MSVC)
+    # Download prebuilt binaries when building with Visual Studio, as there is
+    # no package manager available.
+    FetchContent_Declare(
+      openblas
+      URL https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28-x64.zip)
+    FetchContent_MakeAvailable(openblas)
+    target_link_libraries(
+      mlx PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.a")
+    target_include_directories(
+      mlx PRIVATE "${openblas_SOURCE_DIR}/include")
+  else()
     if(${CMAKE_HOST_APPLE})
       # The blas shipped in macOS SDK is not supported, search homebrew for
       # openblas instead.
@@ -153,16 +168,22 @@ if(MLX_BUILD_CPU)
     message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
     target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
     target_link_libraries(mlx PUBLIC ${BLAS_LIBRARIES})
-
-    if(WIN32)
-      find_package(dlfcn-win32 REQUIRED)
-      message(STATUS "dlfcn-win32 lib " ${dlfcn-win32_LIBRARIES})
-      message(STATUS "dlfcn-win32 include " ${dlfcn-win32_INCLUDE_DIRS})
-      target_link_libraries(mlx PUBLIC ${dlfcn-win32_LIBRARIES})
-    endif()
   endif()
 else()
   set(MLX_BUILD_ACCELERATE OFF)
+endif()
+
+if(WIN32)
+  if(MSVC)
+    # GGUF does not build with MSVC.
+    set(MLX_BUILD_GGUF OFF)
+  else()
+    # Needed for building with MinGW.
+    find_package(dlfcn-win32 REQUIRED)
+    message(STATUS "dlfcn-win32 lib " ${dlfcn-win32_LIBRARIES})
+    message(STATUS "dlfcn-win32 include " ${dlfcn-win32_INCLUDE_DIRS})
+    target_link_libraries(mlx PUBLIC ${dlfcn-win32_LIBRARIES})
+  endif()
 endif()
 
 find_package(MPI)
