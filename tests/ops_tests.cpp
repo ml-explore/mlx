@@ -1,4 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
+
+#ifdef _MSC_VER
+// Required for ussing M_PI_2 in MSVC.
+#define _USE_MATH_DEFINES
+#endif
+
 #include <cmath>
 #include <numeric>
 
