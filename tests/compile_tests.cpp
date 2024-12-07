@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #ifdef _MSC_VER
-// Required for ussing M_SQRT2 in MSVC.
+// Required for using M_SQRT2 in MSVC.
 #define _USE_MATH_DEFINES
 #endif
 
