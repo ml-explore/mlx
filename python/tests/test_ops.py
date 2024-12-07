@@ -2718,6 +2718,16 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.dynamic_reshape(a, ())
         self.assertEqual(a.shape, ())
 
+        a = mx.zeros((4, 4, 4))
+        b = mx.dynamic_reshape(a, ("a", "b", "c"))
+        self.assertEqual(b.shape, (4, 4, 4))
+
+        b = mx.dynamic_reshape(a, ("a*b", "c"))
+        self.assertEqual(b.shape, (4 * 4, 4))
+
+        b = mx.dynamic_reshape(a, ("a*b*c", 1, 1))
+        self.assertEqual(b.shape, (4 * 4 * 4, 1, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
