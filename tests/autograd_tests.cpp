@@ -1,9 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
-#ifdef _MSC_VER
 // Required for using M_2_SQRTPI in MSVC.
 #define _USE_MATH_DEFINES
-#endif
 
 #include <algorithm>
 #include <cmath>
