@@ -183,8 +183,8 @@ if(WIN32)
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
     GIT_TAG v1.4.1)
   FetchContent_MakeAvailable(dlfcn-win32)
-  target_include_directories(mlx PRIVATE ${dlfcn-win32_SOURCE_DIR}/src)
-  target_link_libraries(mlx PRIVATE dlfcn-win32)
+  target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
+  target_link_libraries(mlx PRIVATE dl)
 endif()
 
 find_package(MPI)
