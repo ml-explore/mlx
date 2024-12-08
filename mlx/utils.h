@@ -70,7 +70,7 @@ bool is_same_shape(const std::vector<array>& arrays);
 template <typename T>
 int check_shape_dim(const T dim) {
   constexpr bool is_signed = std::numeric_limits<T>::is_signed;
-  using U = std::conditional_t<is_signed, ssize_t, size_t>;
+  using U = std::conditional_t<is_signed, int64_t, size_t>;
   constexpr U min = static_cast<U>(std::numeric_limits<int>::min());
   constexpr U max = static_cast<U>(std::numeric_limits<int>::max());
 
