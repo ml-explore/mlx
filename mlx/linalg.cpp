@@ -270,7 +270,7 @@ array inv(const array& a, StreamOrDevice s /* = {} */) {
 
 array tri_inv(
     const array& a,
-    bool upper /* = true */,
+    bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
   return inv_impl(a, /*tri=*/true, upper, s);
 }
@@ -454,7 +454,7 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
-void validate_eigh(const array& a, const std::string fname) {
+void validate_eigh(const array& a, const std::string& fname) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
     msg << fname << " Arrays must have type float32. Received array "
@@ -498,6 +498,147 @@ std::pair<array, array> eigh(
       std::make_shared<Eigh>(to_stream(s), UPLO, true),
       {a});
   return std::make_pair(out[0], out[1]);
+}
+
+void validate_lu(const array& a, const std::string& fname) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << fname << " Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << fname
+        << " Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(fname + " Only defined for square matrices.");
+  }
+}
+
+std::vector<array> lu(const array& a, StreamOrDevice s /* = {} */) {
+  validate_lu(a, "[linalg::lu]");
+
+  auto [LU, pivots] = lu_factor(a, s);
+  int N = a.shape(-1);
+
+  pivots.eval();
+  int* pivots_ptr = pivots.data<int>();
+
+  size_t num_matrices = a.size() / (a.shape(-2) * N);
+  std::vector<array> P_matrices;
+  P_matrices.reserve(num_matrices);
+  for (size_t m = 0; m < num_matrices; ++m) {
+    array P = eye(N, s);
+    for (int i = 0; i < N; ++i) {
+      // Convert pivots to 0-based indexing
+      int j = pivots_ptr[i] - 1;
+      if (i != j) {
+        array row_i = slice(P, {i, 0}, {i + 1, N}, s);
+        array row_j = slice(P, {j, 0}, {j + 1, N}, s);
+
+        P = slice_update(P, row_j, {i, 0}, {i + 1, N}, s);
+        P = slice_update(P, row_i, {j, 0}, {j + 1, N}, s);
+      }
+    }
+    P_matrices.push_back(transpose(P, s));
+    pivots_ptr += pivots.shape(-1);
+  }
+
+  array P = reshape(stack(P_matrices, /* axis = */ 0, s), a.shape(), s);
+  array L = add(tril(LU, /* k = */ -1, s), eye(N, s), s);
+  array U = triu(LU, /* k = */ 0, s);
+
+  return {P, L, U};
+}
+
+std::pair<array, array> lu_factor(const array& a, StreamOrDevice s /* = {} */) {
+  validate_lu(a, "[linalg::lu_factor]");
+
+  int m = a.shape()[a.shape().size() - 2];
+  int n = a.shape()[a.shape().size() - 1];
+
+  std::vector<int> pivots_shape(a.shape().begin(), a.shape().end() - 2);
+  pivots_shape.push_back(std::min(m, n));
+
+  auto out = array::make_arrays(
+      {a.shape(), pivots_shape},
+      {a.dtype(), int32},
+      std::make_shared<LUF>(to_stream(s)),
+      {astype(a, a.dtype(), s)});
+  return std::make_pair(out[0], out[1]);
+}
+
+void validate_solve(const array& a, const array& b, const std::string& fname) {
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << fname << " First input must have >= 2 dimensions. "
+        << "Received array with " << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (b.ndim() < 1) {
+    std::ostringstream msg;
+    msg << fname << " Second input must have >= 1 dimensions. "
+        << "Received array with " << b.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    std::ostringstream msg;
+    msg << fname << " First input must be a square matrix. "
+        << "Received array with shape " << a.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  int lastDim = b.ndim() > 1 ? -2 : -1;
+  if (a.shape(-1) != b.shape(lastDim)) {
+    std::ostringstream msg;
+    msg << fname << " Last dimension of first input with shape " << a.shape()
+        << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = promote_types(a.dtype(), b.dtype());
+  if (out_type != float32) {
+    std::ostringstream msg;
+    msg << fname << " Input array must have type float32. Received arrays "
+        << "with type " << a.dtype() << " and " << b.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  validate_solve(a, b, "[linalg::solve]");
+
+  // P, L, U matrices
+  const auto luf = lu(a, s);
+
+  std::vector<int> order(a.ndim());
+  std::iota(order.begin(), order.end(), 0);
+  std::swap(order[order.size() - 1], order[order.size() - 2]);
+
+  array P = transpose(luf[0], order, s);
+  array Pb = matmul(P, b, s);
+  array y = solve_triangular(luf[1], Pb, /* upper = */ false, s);
+  return solve_triangular(luf[2], y, /* upper = */ true, s);
+}
+
+array solve_triangular(
+    const array& a,
+    const array& b,
+    bool upper /* = false */,
+    StreamOrDevice s /* = {} */) {
+  validate_solve(a, b, "[linalg::solve_triangular]");
+  array a_inv = tri_inv(a, upper, s);
+  return matmul(a_inv, b);
 }
 
 } // namespace mlx::core::linalg
