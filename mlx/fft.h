@@ -13,7 +13,7 @@ namespace mlx::core::fft {
 /** Compute the n-dimensional Fourier Transform. */
 array fftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
 array fftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
@@ -22,7 +22,7 @@ array fftn(const array& a, StreamOrDevice s = {});
 /** Compute the n-dimensional inverse Fourier Transform. */
 array ifftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
 array ifftn(
@@ -50,7 +50,7 @@ inline array ifft(const array& a, int axis = -1, StreamOrDevice s = {}) {
 /** Compute the two-dimensional Fourier Transform. */
 inline array fft2(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {}) {
   return fftn(a, n, axes, s);
@@ -65,7 +65,7 @@ inline array fft2(
 /** Compute the two-dimensional inverse Fourier Transform. */
 inline array ifft2(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {}) {
   return ifftn(a, n, axes, s);
@@ -80,7 +80,7 @@ inline array ifft2(
 /** Compute the n-dimensional Fourier Transform on a real input. */
 array rfftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
 array rfftn(
@@ -92,7 +92,7 @@ array rfftn(const array& a, StreamOrDevice s = {});
 /** Compute the n-dimensional inverse of `rfftn`. */
 array irfftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
 array irfftn(
@@ -119,7 +119,7 @@ inline array irfft(const array& a, int axis = -1, StreamOrDevice s = {}) {
 /** Compute the two-dimensional Fourier Transform on a real input. */
 inline array rfft2(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {}) {
   return rfftn(a, n, axes, s);
@@ -134,7 +134,7 @@ inline array rfft2(
 /** Compute the two-dimensional inverse of `rfft2`. */
 inline array irfft2(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {}) {
   return irfftn(a, n, axes, s);

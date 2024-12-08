@@ -32,11 +32,11 @@ TEST_CASE("test save_safetensors") {
   CHECK_EQ(dict.count("test2"), 1);
   array test = dict.at("test");
   CHECK_EQ(test.dtype(), float32);
-  CHECK_EQ(test.shape(), std::vector<int>({4}));
+  CHECK_EQ(test.shape(), Shape{4});
   CHECK(array_equal(test, array({1.0, 2.0, 3.0, 4.0})).item<bool>());
   array test2 = dict.at("test2");
   CHECK_EQ(test2.dtype(), float32);
-  CHECK_EQ(test2.shape(), std::vector<int>({2, 2}));
+  CHECK_EQ(test2.shape(), Shape{2, 2});
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
 }
 

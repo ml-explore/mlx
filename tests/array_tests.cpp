@@ -566,8 +566,8 @@ TEST_CASE("test array iteration") {
 }
 
 TEST_CASE("test array shared buffer") {
-  std::vector<int> shape = {2, 2};
-  int n_elem = shape[0] * shape[1];
+  Shape shape = {2, 2};
+  auto n_elem = shape[0] * shape[1];
 
   allocator::Buffer buf_b = allocator::malloc(n_elem * sizeof(float));
   void* buf_b_ptr = buf_b.raw_ptr();

@@ -16,7 +16,7 @@ TEST_CASE("test matmul") {
   a = array({1.0});
   b = array({1.0});
   auto out = matmul(a, b);
-  CHECK_EQ(out.shape(), std::vector<int>{});
+  CHECK_EQ(out.shape(), Shape{});
   CHECK_EQ(out.size(), 1);
   CHECK_EQ(out.dtype(), float32);
   CHECK_EQ(out.item<float>(), 1.0f);
