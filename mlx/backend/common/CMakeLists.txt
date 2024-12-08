@@ -5,13 +5,22 @@ else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
 endif()
 
+if(WIN32)
+  set(SHELL_EXT ps1)
+  set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
+else()
+  set(SHELL_EXT sh)
+  set(SHELL_CMD /bin/bash)
+endif()
+
+message("CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
 add_custom_command(
   OUTPUT compiled_preamble.cpp
   COMMAND
-    /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
+    ${SHELL_CMD} ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.${SHELL_EXT}
     ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp ${COMPILER}
     ${PROJECT_SOURCE_DIR} ${CLANG} ${CMAKE_SYSTEM_PROCESSOR}
-  DEPENDS make_compiled_preamble.sh
+  DEPENDS make_compiled_preamble.${SHELL_EXT}
           compiled_preamble.h
           ${PROJECT_SOURCE_DIR}/mlx/types/half_types.h
           ${PROJECT_SOURCE_DIR}/mlx/types/fp16.h
