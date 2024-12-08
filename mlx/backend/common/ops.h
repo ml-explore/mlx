@@ -500,7 +500,12 @@ struct Equal {
 struct NaNEqual {
   template <typename T>
   bool operator()(T x, T y) {
-    return x == y || (std::isnan(x) && std::isnan(y));
+    if constexpr (std::is_integral_v<T>) {
+      // isnan always returns false for integers, and MSVC refuses to compile.
+      return x == y;
+    } else {
+      return x == y || (std::isnan(x) && std::isnan(y));
+    }
   }
 };
 
