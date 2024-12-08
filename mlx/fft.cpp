@@ -12,7 +12,7 @@ namespace mlx::core::fft {
 
 array fft_impl(
     const array& a,
-    std::vector<int> n,
+    Shape n,
     const std::vector<int>& axes,
     bool real,
     bool inverse,
@@ -59,7 +59,7 @@ array fft_impl(
     throw std::invalid_argument(msg.str());
   }
 
-  std::vector<int> in_shape = a.shape();
+  auto in_shape = a.shape();
   for (int i = 0; i < valid_axes.size(); ++i) {
     in_shape[valid_axes[i]] = n[i];
   }
@@ -76,13 +76,12 @@ array fft_impl(
 
   auto in = a;
   if (any_less) {
-    in = slice(in, std::vector<int>(in.ndim(), 0), in_shape, s);
+    in = slice(in, Shape(in.ndim(), 0), in_shape, s);
   }
   if (any_greater) {
     // Pad with zeros
     auto tmp = zeros(in_shape, a.dtype(), s);
-    std::vector<int> starts(in.ndim(), 0);
-    in = slice_update(tmp, in, starts, in.shape());
+    in = slice_update(tmp, in, Shape(in.ndim(), 0), in.shape());
   }
 
   auto out_shape = in_shape;
@@ -106,7 +105,7 @@ array fft_impl(
     bool real,
     bool inverse,
     StreamOrDevice s) {
-  std::vector<int> n;
+  Shape n;
   for (auto ax : axes) {
     n.push_back(a.shape(ax));
   }
@@ -124,7 +123,7 @@ array fft_impl(const array& a, bool real, bool inverse, StreamOrDevice s) {
 
 array fftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   return fft_impl(a, n, axes, false, false, s);
@@ -141,7 +140,7 @@ array fftn(const array& a, StreamOrDevice s /* = {} */) {
 
 array ifftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   return fft_impl(a, n, axes, false, true, s);
@@ -158,7 +157,7 @@ array ifftn(const array& a, StreamOrDevice s /* = {} */) {
 
 array rfftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   return fft_impl(a, n, axes, true, false, s);
@@ -175,7 +174,7 @@ array rfftn(const array& a, StreamOrDevice s /* = {} */) {
 
 array irfftn(
     const array& a,
-    const std::vector<int>& n,
+    const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   return fft_impl(a, n, axes, true, true, s);

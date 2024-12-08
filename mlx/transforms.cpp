@@ -681,7 +681,7 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
   std::vector<array> s_inputs;
   for (int i = 0; i < inputs.size(); ++i) {
     if (in_axes[i] != -1) {
-      std::vector<int> shape = inputs[i].shape();
+      auto shape = inputs[i].shape();
       shape.erase(shape.begin() + in_axes[i]);
       array in(shape, inputs[i].dtype(), nullptr, {});
       s_inputs.push_back(in);
@@ -924,7 +924,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
                                             : default_stream(default_device());
 
     // Make the output info
-    std::vector<std::vector<int>> shapes;
+    std::vector<Shape> shapes;
     std::vector<Dtype> dtypes;
     for (const auto& out : outputs) {
       shapes.emplace_back(out.shape());
