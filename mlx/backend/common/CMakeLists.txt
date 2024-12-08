@@ -5,7 +5,7 @@ else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
 endif()
 
-if(WIN32)
+if(MSVC)
   set(SHELL_EXT ps1)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
 else()
