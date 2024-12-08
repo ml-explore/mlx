@@ -2,6 +2,15 @@
 
 #pragma once
 
+// Required for Visual Studio.
+// https://github.com/OpenMathLib/OpenBLAS/blob/develop/docs/install.md
+#ifdef _MSC_VER
+#include <complex>
+#define LAPACK_COMPLEX_CUSTOM
+#define lapack_complex_float std::complex<float>
+#define lapack_complex_double std::complex<double>
+#endif
+
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
 #else
