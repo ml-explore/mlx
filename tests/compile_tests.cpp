@@ -1,5 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
+// Required for using M_SQRT2 in MSVC.
+#define _USE_MATH_DEFINES
+
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"

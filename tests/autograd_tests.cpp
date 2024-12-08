@@ -1,5 +1,8 @@
 // Copyright © 2023 Apple Inc.
 
+// Required for using M_2_SQRTPI in MSVC.
+#define _USE_MATH_DEFINES
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>

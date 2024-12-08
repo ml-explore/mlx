@@ -1,4 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
+
+// Required for using M_PI in MSVC.
+#define _USE_MATH_DEFINES
+
 #include <algorithm>
 #include <climits>
 #include <cmath>
