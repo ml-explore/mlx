@@ -399,6 +399,78 @@ array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
   return array(std::move(shape), a.dtype(), std::move(p), {a});
 }
 
+// Variant of string and int for the expressions
+array dynamic_reshape(
+    const array& a,
+    std::vector<std::variant<int, std::string>> expressions,
+    StreamOrDevice s /* = {} */) {
+  // Reshape to scalar is not dynamic
+  if (expressions.empty()) {
+    return reshape(a, {}, s);
+  }
+
+  // Validate expressions:
+  // - At most one item in expressions is -1
+  // - Any string expression should have a letter
+  // - At most a.ndim() unique letters
+  // - Only valid characters in string (alphabet, integer, *, /)
+  bool infer_dim = false;
+  std::unordered_map<char, int> char_to_dim;
+  for (auto& e : expressions) {
+    if (auto pv = std::get_if<int>(&e); pv) {
+      if (*pv == -1) {
+        if (infer_dim) {
+          throw std::invalid_argument(
+              "[dynamic_reshape] Cannot infer more than one dimension.");
+        }
+        infer_dim = true;
+      }
+    } else {
+      auto& s = std::get<std::string>(e);
+      bool has_alpha = false;
+      for (auto c : s) {
+        if (isalpha(c)) {
+          has_alpha = true;
+          char_to_dim.insert({c, char_to_dim.size()});
+        } else if (!isdigit(c) && c != '*' && c != '/') {
+          std::ostringstream msg;
+          msg << "[dynamic_reshape] Invalid character in string expression \""
+              << s << "\".";
+          throw std::invalid_argument(msg.str());
+        }
+      }
+      if (!has_alpha) {
+        std::ostringstream msg;
+        msg << "[dynamic_reshape] String expression must contain at least "
+            << "one alphabetic character but got: \"" << s << "\".";
+        throw std::invalid_argument(msg.str());
+      }
+      if (!isdigit(s[0]) && !isalpha(s[0]) && !isdigit(s.back()) &&
+          !isalpha(s.back())) {
+        std::ostringstream msg;
+        msg << "[dynamic_reshape] String expression must start and end with "
+            << "integer or letter but got: \"" << s << "\".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  }
+  if (char_to_dim.size() > a.ndim()) {
+    std::ostringstream msg;
+    msg << "[dynamic_reshape] Expressions contain " << char_to_dim.size()
+        << " abstract dimensions for array with only " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto output_shape =
+      Reshape::shape_from_expressions(expressions, char_to_dim, a);
+  return array(
+      std::move(output_shape),
+      a.dtype(),
+      std::make_shared<Reshape>(
+          to_stream(s), std::move(expressions), std::move(char_to_dim)),
+      {a});
+}
+
 array flatten(
     const array& a,
     int start_axis,
