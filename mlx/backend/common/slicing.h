@@ -6,14 +6,14 @@
 
 namespace mlx::core {
 
-std::tuple<bool, int64_t, std::vector<int64_t>> prepare_slice(
+std::tuple<int64_t, Strides> prepare_slice(
     const array& in,
-    const std::vector<int>& start_indices,
-    const std::vector<int>& strides);
+    const Shape& start_indices,
+    const Shape& strides);
 
 void shared_buffer_slice(
     const array& in,
-    const std::vector<size_t>& out_strides,
+    const Strides& out_strides,
     size_t data_offset,
     size_t data_size,
     array& out);

@@ -5,58 +5,45 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_masked.h"
 
-#define instantiate_gemm(                                                      \
-    outmaskname,                                                               \
-    outmasktype,                                                               \
-    opmaskname,                                                                \
-    opmasktype,                                                                \
-    tname,                                                                     \
-    trans_a,                                                                   \
-    trans_b,                                                                   \
-    iname,                                                                     \
-    itype,                                                                     \
-    oname,                                                                     \
-    otype,                                                                     \
-    bm,                                                                        \
-    bn,                                                                        \
-    bk,                                                                        \
-    wm,                                                                        \
-    wn,                                                                        \
-    aname,                                                                     \
-    mn_aligned,                                                                \
-    kname,                                                                     \
-    k_aligned)                                                                 \
-  template [[host_name("steel_gemm_block_outmask_" #outmaskname                \
-                       "_opmask_" #opmaskname "_" #tname "_" #iname "_" #oname \
-                       "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn       \
-                       "_MN_" #aname "_K_" #kname)]] [[kernel]] void           \
-  block_masked_gemm<                                                           \
-      itype,                                                                   \
-      outmasktype,                                                             \
-      opmasktype,                                                              \
-      bm,                                                                      \
-      bn,                                                                      \
-      bk,                                                                      \
-      wm,                                                                      \
-      wn,                                                                      \
-      trans_a,                                                                 \
-      trans_b,                                                                 \
-      mn_aligned,                                                              \
-      k_aligned>(                                                              \
-      const device itype* A [[buffer(0)]],                                     \
-      const device itype* B [[buffer(1)]],                                     \
-      device itype* D [[buffer(3)]],                                           \
-      const constant GEMMParams* params [[buffer(4)]],                         \
-      const constant int* batch_shape [[buffer(6)]],                           \
-      const constant size_t* batch_strides [[buffer(7)]],                      \
-      const device outmasktype* out_mask [[buffer(10)]],                       \
-      const device opmasktype* lhs_mask [[buffer(11)]],                        \
-      const device opmasktype* rhs_mask [[buffer(12)]],                        \
-      const constant int* mask_strides [[buffer(13)]],                         \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                         \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]],                   \
-      uint3 tid [[threadgroup_position_in_grid]],                              \
-      uint3 lid [[thread_position_in_threadgroup]]);
+#define instantiate_gemm(                                              \
+    outmaskname,                                                       \
+    outmasktype,                                                       \
+    opmaskname,                                                        \
+    opmasktype,                                                        \
+    tname,                                                             \
+    trans_a,                                                           \
+    trans_b,                                                           \
+    iname,                                                             \
+    itype,                                                             \
+    oname,                                                             \
+    otype,                                                             \
+    bm,                                                                \
+    bn,                                                                \
+    bk,                                                                \
+    wm,                                                                \
+    wn,                                                                \
+    aname,                                                             \
+    mn_aligned,                                                        \
+    kname,                                                             \
+    k_aligned)                                                         \
+  instantiate_kernel(                                                  \
+    "steel_gemm_block_outmask_" #outmaskname                           \
+      "_opmask_" #opmaskname "_" #tname "_" #iname "_" #oname          \
+      "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn                \
+      "_MN_" #aname "_K_" #kname,                                      \
+    block_masked_gemm,                                                 \
+      itype,                                                           \
+      outmasktype,                                                     \
+      opmasktype,                                                      \
+      bm,                                                              \
+      bn,                                                              \
+      bk,                                                              \
+      wm,                                                              \
+      wn,                                                              \
+      trans_a,                                                         \
+      trans_b,                                                         \
+      mn_aligned,                                                      \
+      k_aligned)
 
 #define instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned)                \
   instantiate_gemm(bool_, bool, bool_, bool, tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned)        \

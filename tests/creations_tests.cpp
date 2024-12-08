@@ -208,14 +208,14 @@ TEST_CASE("test full") {
   // Check zeros and ones
   {
     auto x = zeros({2, 2}, float32);
-    CHECK_EQ(x.shape(), std::vector<int>{2, 2});
+    CHECK_EQ(x.shape(), Shape{2, 2});
     CHECK_EQ(x.ndim(), 2);
     CHECK_EQ(x.dtype(), float32);
     auto y = array({0.0, 0.0, 0.0, 0.0}, {2, 2});
     CHECK(array_equal(x, y).item<bool>());
 
     x = ones({2, 2}, float32);
-    CHECK_EQ(x.shape(), std::vector<int>{2, 2});
+    CHECK_EQ(x.shape(), Shape{2, 2});
     CHECK_EQ(x.ndim(), 2);
     CHECK_EQ(x.dtype(), float32);
     y = array({1.0, 1.0, 1.0, 1.0}, {2, 2});
@@ -235,11 +235,11 @@ TEST_CASE("test full") {
   // Works for empty shape and empty array
   {
     array x = ones({}, int32);
-    CHECK_EQ(x.shape(), std::vector<int>{});
+    CHECK_EQ(x.shape(), Shape{});
     CHECK_EQ(x.item<int>(), 1);
 
     x = full({0}, array({}));
-    CHECK_EQ(x.shape(), std::vector<int>{0});
+    CHECK_EQ(x.shape(), Shape{0});
     CHECK_EQ(x.size(), 0);
 
     CHECK_THROWS_AS(full({}, array({})), std::invalid_argument);

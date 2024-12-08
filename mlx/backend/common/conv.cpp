@@ -746,9 +746,9 @@ void explicit_gemm_conv_1D_cpu(
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
 
   // Make strided view
-  std::vector<int> strided_shape = {N, oH, wH, C};
+  Shape strided_shape = {N, oH, wH, C};
 
-  std::vector<size_t> strided_strides = {
+  Strides strided_strides = {
       in_padded.strides()[0],
       in_padded.strides()[1] * wt_strides[0],
       in_padded.strides()[1],
@@ -865,9 +865,9 @@ void explicit_gemm_conv_2D_cpu(
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
 
   // Make strided view
-  std::vector<int> strided_shape = {N, oH, oW, wH, wW, C};
+  Shape strided_shape = {N, oH, oW, wH, wW, C};
 
-  std::vector<size_t> strided_strides = {
+  Strides strided_strides = {
       in_padded.strides()[0],
       in_padded.strides()[1] * wt_strides[0],
       in_padded.strides()[2] * wt_strides[1],
@@ -974,7 +974,7 @@ void explicit_gemm_conv_ND_cpu(
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
 
   // Make strided view
-  std::vector<int> strided_shape(oDim.size() + wDim.size() + 2);
+  Shape strided_shape(oDim.size() + wDim.size() + 2);
   strided_shape.front() = N;
   for (size_t i = 0; i < oDim.size(); i++) {
     strided_shape[i + 1] = oDim[i];
@@ -984,7 +984,7 @@ void explicit_gemm_conv_ND_cpu(
   }
   strided_shape.back() = C;
 
-  std::vector<size_t> strided_strides(in.shape().size() * 2 - 2);
+  Strides strided_strides(in.shape().size() * 2 - 2);
   strided_strides[0] = in_padded.strides()[0];
   for (size_t i = 0; i < wt_strides.size(); i++) {
     strided_strides[i + 1] = in_padded.strides()[i + 1] * wt_strides[i];
@@ -1000,7 +1000,7 @@ void explicit_gemm_conv_ND_cpu(
       in_padded, strided_strides, flags, in_strided_view.size(), 0);
 
   // Materialize strided view
-  std::vector<int> strided_reshape = {N, C};
+  Shape strided_reshape = {N, C};
   for (const auto& o : oDim) {
     strided_reshape[0] *= o;
   }

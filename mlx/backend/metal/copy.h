@@ -8,13 +8,12 @@
 namespace mlx::core {
 
 // Generic copy inplace
-template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const std::vector<int>& data_shape,
-    const std::vector<stride_t>& i_strides,
-    const std::vector<stride_t>& o_strides,
+    const Shape& data_shape,
+    const Strides& i_strides,
+    const Strides& o_strides,
     int64_t i_offset,
     int64_t o_offset,
     CopyType ctype,
@@ -32,7 +31,7 @@ void copy_gpu_inplace(
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const std::vector<int64_t>& istride,
+    const Strides& istride,
     int64_t ioffset,
     CopyType ctype,
     const Stream& s);

@@ -9,7 +9,7 @@ METAL_FUNC void gather_impl(
     const device T* src [[buffer(0)]],
     device T* out [[buffer(1)]],
     const constant int* src_shape [[buffer(2)]],
-    const constant size_t* src_strides [[buffer(3)]],
+    const constant int64_t* src_strides [[buffer(3)]],
     const constant size_t& src_ndim [[buffer(4)]],
     const constant int* slice_sizes [[buffer(5)]],
     const constant int* axes [[buffer(6)]],
@@ -27,7 +27,7 @@ METAL_FUNC void gather_impl(
       idx_loc = index.x * static_cast<LocT>(indices.strides[indices.ndim * i]);
       idx_loc += indices.row_contiguous[i]
           ? index.y
-          : elem_to_loc<size_t, LocT>(
+          : elem_to_loc<LocT>(
                 index.y,
                 &indices.shapes[indices.ndim * i + 1],
                 &indices.strides[indices.ndim * i + 1],
@@ -39,7 +39,7 @@ METAL_FUNC void gather_impl(
   }
 
   auto src_offset =
-      elem_to_loc<size_t, LocT>(index.z, slice_sizes, src_strides, src_ndim);
+      elem_to_loc<LocT>(index.z, slice_sizes, src_strides, src_ndim);
 
   LocT out_idx = index.z;
   if (IDX_NDIM == 1) {

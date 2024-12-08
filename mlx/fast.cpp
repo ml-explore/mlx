@@ -1014,7 +1014,7 @@ std::string write_signature(
       }
       if (shape_infos[i].strides) {
         kernel_source +=
-            ("  const constant size_t* " + name + "_strides [[buffer(" +
+            ("  const constant int64_t* " + name + "_strides [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }

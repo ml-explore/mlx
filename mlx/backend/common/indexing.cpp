@@ -32,7 +32,7 @@ void gather(
     const std::vector<array>& inds,
     array& out,
     const std::vector<int>& axes,
-    const std::vector<int>& slice_sizes) {
+    const Shape& slice_sizes) {
   // If the array is row contiguous then we can do a contiguous copy given
   // two conditions on the slice size:
   // - Any number of leading ones in the slice sizes are allowed
@@ -80,11 +80,10 @@ void gather(
   T* dst_ptr = out.data<T>();
   size_t out_idx = 0;
 
-  std::vector<ContiguousIterator<size_t>> its(inds.begin(), inds.end());
-  ContiguousIterator<size_t> src_it;
+  std::vector<ContiguousIterator> its(inds.begin(), inds.end());
+  ContiguousIterator src_it;
   if (!can_copy && src.ndim() > 0) {
-    src_it = std::move(
-        ContiguousIterator<size_t>(slice_sizes, src.strides(), src.ndim()));
+    src_it = ContiguousIterator(slice_sizes, src.strides(), src.ndim());
   }
   for (int idx = 0; idx < ind_size; idx++) {
     size_t src_idx = 0;
@@ -119,7 +118,7 @@ void dispatch_gather(
     const std::vector<array>& inds,
     array& out,
     const std::vector<int>& axes,
-    const std::vector<int>& size) {
+    const Shape& size) {
   switch (out.dtype()) {
     case bool_:
       gather<bool, IdxT>(src, inds, out, axes, size);
@@ -223,16 +222,16 @@ void scatter(
   auto inds_ndim = updates.ndim() - out.ndim();
   size_t n_updates = nind ? inds[0].size() : 1;
 
-  std::vector<int> update_shape(
+  Shape update_shape(
       updates.shape().begin() + inds_ndim, updates.shape().end());
   size_t update_size = 1;
   for (auto us : update_shape) {
     update_size *= us;
   }
 
-  std::vector<ContiguousIterator<size_t>> its(inds.begin(), inds.end());
-  ContiguousIterator<size_t> update_it(updates);
-  ContiguousIterator<size_t> out_it(update_shape, out.strides(), out.ndim());
+  std::vector<ContiguousIterator> its(inds.begin(), inds.end());
+  ContiguousIterator update_it(updates);
+  ContiguousIterator out_it(update_shape, out.strides(), out.ndim());
 
   for (int i = 0; i < n_updates; ++i) {
     size_t out_offset = 0;

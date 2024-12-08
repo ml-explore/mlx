@@ -34,7 +34,7 @@ array key(uint64_t seed) {
 }
 
 array bits(
-    const std::vector<int>& shape,
+    const Shape& shape,
     int width /* 4 */,
     const std::optional<array>& key_ /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -45,7 +45,7 @@ array bits(
         << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (key.shape() != std::vector<int>{2}) {
+  if (key.shape() != Shape{2}) {
     std::ostringstream msg;
     msg << "[bits] Expected key shape (2) but received " << key.shape() << ".";
     throw std::invalid_argument(msg.str());
@@ -118,7 +118,7 @@ array above_minus_one_with_default(Dtype dtype) {
 array uniform(
     const array& low,
     const array& high,
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype /* = float32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -168,7 +168,7 @@ array uniform(
 }
 
 array uniform(
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -177,7 +177,7 @@ array uniform(
 }
 
 array normal(
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype,
     const float loc /* = 0.0 */,
     const float scale /* = 1.0 */,
@@ -201,7 +201,7 @@ array normal(
 array multivariate_normal(
     const array& mean,
     const array& cov,
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype,
     const std::optional<array>& key /* = nullopt */,
     StreamOrDevice s) {
@@ -234,12 +234,9 @@ array multivariate_normal(
   }
 
   // Compute output shape
-  std::vector<int> truncated_output_shape;
-
   auto truncated_mean_shape =
-      std::vector<int>(mean.shape().begin(), mean.shape().end() - 1);
-  auto truncated_cov_shape =
-      std::vector<int>(cov.shape().begin(), cov.shape().end() - 2);
+      Shape(mean.shape().begin(), mean.shape().end() - 1);
+  auto truncated_cov_shape = Shape(cov.shape().begin(), cov.shape().end() - 2);
   auto output_shape =
       broadcast_shapes(truncated_cov_shape, truncated_mean_shape);
   output_shape = broadcast_shapes(output_shape, shape);
@@ -269,7 +266,7 @@ array multivariate_normal(
 array randint(
     const array& low,
     const array& high,
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype /* = int32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -283,7 +280,7 @@ array randint(
 
 array bernoulli(
     const array& p,
-    const std::vector<int>& shape,
+    const Shape& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   if (!issubdtype(p.dtype(), floating)) {
@@ -322,7 +319,7 @@ array bernoulli(
 array truncated_normal(
     const array& lower,
     const array& upper,
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype /* = float32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -357,7 +354,7 @@ array truncated_normal(
 }
 
 array gumbel(
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype /* = float32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -380,7 +377,7 @@ int get_valid_axis(int axis, int ndim) {
 array categorical_impl(
     const array& logits,
     int axis,
-    const std::vector<int>& shape,
+    const Shape& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s) {
   auto gumbel_shape = shape;
@@ -393,7 +390,7 @@ array categorical_impl(
 array categorical(
     const array& logits,
     int axis,
-    const std::vector<int>& shape,
+    const Shape& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   // Validate and normalize axis
@@ -439,7 +436,7 @@ array categorical(
 }
 
 array laplace(
-    const std::vector<int>& shape,
+    const Shape& shape,
     Dtype dtype,
     const float loc /* = 0.0 */,
     const float scale /* = 1.0 */,

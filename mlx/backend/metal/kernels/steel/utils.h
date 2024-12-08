@@ -7,8 +7,8 @@
 METAL_FUNC ulong2 elem_to_loc_broadcast(
     uint elem,
     constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
+    constant const int64_t* a_strides,
+    constant const int64_t* b_strides,
     int ndim) {
   ulong loc_a{0};
   ulong loc_b{0};
@@ -24,9 +24,9 @@ METAL_FUNC ulong2 elem_to_loc_broadcast(
 METAL_FUNC ulong3 elem_to_loc_broadcast(
     uint elem,
     constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
-    constant const size_t* c_strides,
+    constant const int64_t* a_strides,
+    constant const int64_t* b_strides,
+    constant const int64_t* c_strides,
     int ndim) {
   ulong loc_a{0};
   ulong loc_b{0};

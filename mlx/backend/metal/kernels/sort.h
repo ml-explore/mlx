@@ -343,8 +343,8 @@ template <
     const constant int& out_stride_sorted_axis [[buffer(4)]],
     const constant int& nc_dim [[buffer(5)]],
     const constant int* nc_shape [[buffer(6)]],
-    const constant size_t* in_nc_strides [[buffer(7)]],
-    const constant size_t* out_nc_strides [[buffer(8)]],
+    const constant int64_t* in_nc_strides [[buffer(7)]],
+    const constant int64_t* out_nc_strides [[buffer(8)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) {
   using sort_kernel =
@@ -486,7 +486,7 @@ template <
     const constant int& stride_sorted_axis [[buffer(4)]],
     const constant int& nc_dim [[buffer(5)]],
     const constant int* nc_shape [[buffer(6)]],
-    const constant size_t* nc_strides [[buffer(7)]],
+    const constant int64_t* nc_strides [[buffer(7)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) {
   using sort_kernel = KernelMultiBlockMergeSort<

@@ -363,7 +363,7 @@ void multi_upload_bluestein_fft(
   auto [w_k, w_q] = compute_bluestein_constants(n, plan.bluestein_n);
 
   // Broadcast w_q and w_k to the batch size
-  std::vector<size_t> b_strides(in.ndim(), 0);
+  Strides b_strides(in.ndim(), 0);
   b_strides[axis] = 1;
   array w_k_broadcast({}, complex64, nullptr, {});
   array w_q_broadcast({}, complex64, nullptr, {});
@@ -386,8 +386,8 @@ void multi_upload_bluestein_fft(
     copies.push_back(slice_temp);
     copies.push_back(conj_temp);
 
-    std::vector<int> rstarts(in.ndim(), 0);
-    std::vector<int> rstrides(in.ndim(), 1);
+    Shape rstarts(in.ndim(), 0);
+    Shape rstrides(in.ndim(), 1);
     rstarts[axis] = in.shape(axis) - back_offset;
     rstrides[axis] = -1;
     unary_op_gpu({in}, conj_temp, "Conjugate", s);
@@ -431,19 +431,19 @@ void multi_upload_bluestein_fft(
       s);
 
   int offset = plan.bluestein_n - (2 * n - 1);
-  std::vector<int> starts(in.ndim(), 0);
-  std::vector<int> strides(in.ndim(), 1);
+  Shape starts(in.ndim(), 0);
+  Shape strides(in.ndim(), 1);
   starts[axis] = plan.bluestein_n - offset - n;
   slice_gpu(pad_temp1, temp, starts, strides, s);
 
   binary_op_gpu_inplace({temp, w_k_broadcast}, temp1, "Multiply", s);
 
   if (real && !inverse) {
-    std::vector<int> rstarts(in.ndim(), 0);
-    std::vector<int> rstrides(in.ndim(), 1);
+    Shape rstarts(in.ndim(), 0);
+    Shape rstrides(in.ndim(), 1);
     slice_gpu(temp1, out, rstarts, strides, s);
   } else if (real && inverse) {
-    std::vector<size_t> b_strides(in.ndim(), 0);
+    Strides b_strides(in.ndim(), 0);
     auto inv_n = array({1.0f / n}, {1}, float32);
     array temp_float(out.shape(), out.dtype(), nullptr, {});
     copies.push_back(temp_float);
@@ -531,8 +531,8 @@ void fft_op(
       return x;
     } else {
       array x_copy(x.shape(), x.dtype(), nullptr, {});
-      std::vector<size_t> strides;
-      size_t cur_stride = x.shape(axis);
+      Strides strides;
+      int64_t cur_stride = x.shape(axis);
       for (int a = 0; a < x.ndim(); a++) {
         if (a == axis) {
           strides.push_back(1);
@@ -777,7 +777,7 @@ void nd_fft_op(
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
     bool step_real = (real && index == axes.size() - 1);
-    int step_shape = inverse ? out.shape(axis) : in.shape(axis);
+    auto step_shape = inverse ? out.shape(axis) : in.shape(axis);
     const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[1 - i % 2];
     array& out_arr = i == 0 ? out : temp_arrs[i % 2];
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);

@@ -67,7 +67,7 @@ inline void build_kernel(
 
   if (add_indices) {
     os += fmt::format(
-        "    constant const size_t* in_strides [[buffer({0})]],\n", cnt++);
+        "    constant const int64_t* in_strides [[buffer({0})]],\n", cnt++);
   }
 
   // Add the output arguments
@@ -81,7 +81,7 @@ inline void build_kernel(
   // Add output strides and shape to extract the indices.
   if (!contiguous) {
     os += fmt::format(
-        "    constant const size_t* output_strides [[buffer({0})]],\n", cnt++);
+        "    constant const int64_t* output_strides [[buffer({0})]],\n", cnt++);
     os += fmt::format(
         "    constant const int* output_shape [[buffer({0})]],\n", cnt++);
   }
@@ -93,11 +93,11 @@ inline void build_kernel(
   os += "    uint3 pos [[thread_position_in_grid]],\n";
   os += "    uint3 grid [[threads_per_grid]]) {\n";
 
-  std::string idx_type = use_big_index ? "size_t" : "uint";
+  std::string idx_type = use_big_index ? "int64_t" : "uint";
   if (contiguous && use_big_index) {
     // This is only used for contiguous kernels which don't have
     // a third grid dimension
-    os += "  size_t index = pos.x + grid.x * size_t(pos.y);\n";
+    os += "  int64_t index = pos.x + grid.x * int64_t(pos.y);\n";
   } else if (work_per_thread > 1) {
     os += fmt::format("  constexpr int N_ = {0};\n", work_per_thread);
     os += fmt::format(
@@ -144,20 +144,18 @@ inline void build_kernel(
     os += fmt::format("  {0} index_{1} = ", idx_type, xname);
     if (ndim == 1) {
       int offset = i * ndim;
-      os += fmt::format(
-          "elem_to_loc_1<size_t, uint>(pos.x, in_strides[{0}]);\n", offset);
+      os +=
+          fmt::format("elem_to_loc_1<uint>(pos.x, in_strides[{0}]);\n", offset);
     } else if (ndim == 2) {
       int offset = i * ndim;
       os += fmt::format(
-          "elem_to_loc_2<size_t, {0}>({{pos.x, pos.y}}, in_strides + {1});\n",
+          "elem_to_loc_2<{0}>({{pos.x, pos.y}}, in_strides + {1});\n",
           idx_type,
           offset);
     } else if (ndim == 3) {
       int offset = i * ndim;
       os += fmt::format(
-          "elem_to_loc_3<size_t, {0}>(pos, in_strides + {1});\n",
-          idx_type,
-          offset);
+          "elem_to_loc_3<{0}>(pos, in_strides + {1});\n", idx_type, offset);
     } else if (!dynamic_dims) {
       int offset = (i + 1) * ndim;
       os += fmt::format(
@@ -360,10 +358,10 @@ void Compiled::eval_gpu(
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
-  std::vector<std::vector<size_t>> initial_strides;
+  std::vector<Strides> initial_strides;
   initial_strides.push_back(outputs[0].strides());
-  std::vector<int> shape;
-  std::vector<std::vector<size_t>> strides;
+  Shape shape;
+  std::vector<Strides> strides;
   if (!contiguous) {
     for (int i = 0; i < inputs.size(); i++) {
       // Skip constants.
@@ -378,7 +376,7 @@ void Compiled::eval_gpu(
       }
 
       // Broadcast the inputs to the output shape.
-      std::vector<size_t> xstrides;
+      Strides xstrides;
       int j = 0;
       for (; j < output_shape.size() - x.ndim(); j++) {
         if (output_shape[j] == 1) {
@@ -440,7 +438,7 @@ void Compiled::eval_gpu(
   // Put the inputs in
   int cnt = 0;
   int stride_idx = 1; // idx 0 is the output strides
-  std::vector<size_t> in_strides;
+  Strides in_strides;
   for (int i = 0; i < inputs.size(); i++) {
     if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
       continue;

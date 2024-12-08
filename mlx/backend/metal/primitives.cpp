@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/load.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -101,10 +102,10 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Prepare the shapes, strides and axis arguments.
-  std::vector<size_t> in_strides = in.strides();
-  std::vector<int> shape = in.shape();
-  std::vector<size_t> out_strides = out.strides();
-  size_t axis_stride = in_strides[axis_];
+  auto in_strides = in.strides();
+  auto shape = in.shape();
+  auto out_strides = out.strides();
+  auto axis_stride = in_strides[axis_];
   size_t axis_size = shape[axis_];
   if (out_strides.size() == in_strides.size()) {
     out_strides.erase(out_strides.begin() + axis_);
@@ -136,7 +137,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (ndim == 0) {
       // Pass place holders so metal doesn't complain
       int shape_ = 0;
-      size_t stride_ = 0;
+      int64_t stride_ = 0;
       compute_encoder.set_bytes(shape_, 2);
       compute_encoder.set_bytes(stride_, 3);
       compute_encoder.set_bytes(stride_, 4);
@@ -311,13 +312,12 @@ void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   if (copy_necessary) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    auto out_strides = make_contiguous_strides<size_t>(in.shape());
     copy_gpu_inplace(
         in,
         out,
         in.shape(),
         in.strides(),
-        out_strides,
+        make_contiguous_strides(in.shape()),
         0,
         0,
         CopyType::General,
@@ -366,16 +366,15 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
   // Calculate out strides, initial offset and if copy needs to be made
-  auto [data_offset, out_strides] = prepare_slice(out);
+  auto [data_offset, out_strides] = prepare_slice(in, start_indices_, strides_);
 
   // Do copy
-  std::vector<int64_t> upd_strides{upd.strides().begin(), upd.strides().end()};
-  copy_gpu_inplace<int64_t>(
+  copy_gpu_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,
-      /* const std::vector<int>& data_shape = */ upd.shape(),
-      /* const std::vector<stride_t>& i_strides = */ upd_strides,
-      /* const std::vector<stride_t>& o_strides = */ out_strides,
+      /* const Shape& data_shape = */ upd.shape(),
+      /* const Strides& i_strides = */ upd.strides(),
+      /* const Strides& o_strides = */ out_strides,
       /* int64_t i_offset = */ 0,
       /* int64_t o_offset = */ data_offset,
       /* CopyType ctype = */ CopyType::GeneralGeneral,
