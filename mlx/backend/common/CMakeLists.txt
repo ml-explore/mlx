@@ -13,7 +13,6 @@ else()
   set(SHELL_CMD /bin/bash)
 endif()
 
-message("CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
 add_custom_command(
   OUTPUT compiled_preamble.cpp
   COMMAND
