@@ -543,14 +543,18 @@ array var(
     StreamOrDevice s = {});
 
 /** Computes the standard deviation of the elements of an array. */
-array std(const array& a, bool keepdims, int ddof = 0, StreamOrDevice s = {});
-inline array std(const array& a, StreamOrDevice s = {}) {
-  return std(a, false, 0, to_stream(s));
+array std_dev(
+    const array& a,
+    bool keepdims,
+    int ddof = 0,
+    StreamOrDevice s = {});
+inline array std_dev(const array& a, StreamOrDevice s = {}) {
+  return std_dev(a, false, 0, to_stream(s));
 }
 
 /** Computes the standard deviatoin of the elements of an array along the given
  * axes */
-array std(
+array std_dev(
     const array& a,
     const std::vector<int>& axes,
     bool keepdims = false,
@@ -559,7 +563,7 @@ array std(
 
 /** Computes the standard deviation of the elements of an array along the given
  * axis */
-array std(
+array std_dev(
     const array& a,
     int axis,
     bool keepdims = false,

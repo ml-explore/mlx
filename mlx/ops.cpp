@@ -1704,17 +1704,17 @@ array var(
   return var(a, std::vector<int>{axis}, keepdims, ddof, to_stream(s));
 }
 
-array std(
+array std_dev(
     const array& a,
     bool keepdims,
     int ddof /* = 0*/,
     StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
-  return std(a, axes, keepdims, ddof, to_stream(s));
+  return std_dev(a, axes, keepdims, ddof, to_stream(s));
 }
 
-array std(
+array std_dev(
     const array& a,
     const std::vector<int>& axes,
     bool keepdims /* = false */,
@@ -1723,13 +1723,13 @@ array std(
   return sqrt(var(a, axes, keepdims, ddof, s), s);
 }
 
-array std(
+array std_dev(
     const array& a,
     int axis,
     bool keepdims /* = false */,
     int ddof /* = 0*/,
     StreamOrDevice s /* = {} */) {
-  return std(a, std::vector<int>{axis}, keepdims, ddof, to_stream(s));
+  return std_dev(a, std::vector<int>{axis}, keepdims, ddof, to_stream(s));
 }
 
 array prod(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {

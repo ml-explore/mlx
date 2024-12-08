@@ -13,7 +13,7 @@
 #include "mlx/fft.h"
 #include "mlx/io.h"
 #include "mlx/linalg.h"
-#include "mlx/ops.h"
+#include "mlx/ops_public.h"
 #include "mlx/random.h"
 #include "mlx/stream.h"
 #include "mlx/transforms.h"
