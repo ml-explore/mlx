@@ -913,7 +913,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     auto pfun = std::shared_ptr<
         std::function<std::vector<array>(const std::vector<array>&)>>(
         new std::function<std::vector<array>(const std::vector<array>&)>{fun},
-        [](auto p) {
+        [](auto* p) {
           detail::compile_erase(reinterpret_cast<std::uintptr_t>(p));
           delete p;
         });
