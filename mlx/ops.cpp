@@ -808,7 +808,7 @@ std::vector<array> meshgrid(
     outputs.push_back(reshape(arrays[i], std::move(shape), s));
   }
 
-  if (indexing == "xy" and ndim > 1) {
+  if (indexing == "xy" && ndim > 1) {
     Shape shape(ndim, 1);
 
     shape[1] = arrays[0].size();
