@@ -1144,7 +1144,7 @@ MetalKernelFunction metal_kernel(
           shape_infos = std::move(shape_infos),
           attributes = std::move(attributes)](
              const std::vector<array>& inputs,
-             const std::vector<std::vector<int>>& output_shapes,
+             const std::vector<Shape>& output_shapes,
              const std::vector<Dtype>& output_dtypes,
              std::tuple<int, int, int> grid,
              std::tuple<int, int, int> threadgroup,
