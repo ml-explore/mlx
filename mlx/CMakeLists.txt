@@ -18,6 +18,11 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
 
+if(WIN32)
+  # Export symbols by default to behave like macOS/linux.
+  set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
+
 if(MLX_BUILD_CPU)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
 else()
