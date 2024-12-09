@@ -498,14 +498,15 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Calculate out strides, initial offset and if copy needs to be made
-  auto [copy_needed, data_offset, inp_strides] =
-      prepare_slice(in, start_indices_, strides_);
+  auto [data_offset, inp_strides] = prepare_slice(in, start_indices_, strides_);
+  auto copy_needed = std::any_of(
+      strides_.begin(), strides_.end(), [](auto i) { return i < 0; });
 
   // Do copy if needed
   if (copy_needed) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
-    copy_inplace<int64_t>(
+    Strides ostrides{out.strides().begin(), out.strides().end()};
+    copy_inplace(
         /* const array& src = */ in,
         /* array& dst = */ out,
         /* const std::vector<int>& data_shape = */ out.shape(),
@@ -523,7 +524,7 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
       }
     }
     size_t data_size = data_end - data_offset;
-    std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
+    Strides ostrides{inp_strides.begin(), inp_strides.end()};
     shared_buffer_slice(in, ostrides, data_offset, data_size, out);
   }
 }
@@ -550,11 +551,11 @@ void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype);
 
   // Calculate out strides, initial offset and if copy needs to be made
-  auto [data_offset, out_strides] = prepare_slice(out);
+  auto [data_offset, out_strides] = prepare_slice(in, start_indices_, strides_);
 
   // Do copy
-  std::vector<int64_t> upd_strides{upd.strides().begin(), upd.strides().end()};
-  copy_inplace<int64_t>(
+  Strides upd_strides{upd.strides().begin(), upd.strides().end()};
+  copy_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,
       /* const std::vector<int>& data_shape = */ upd.shape(),

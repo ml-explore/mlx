@@ -11,7 +11,7 @@ void test_arg_reduce_small(
     Device d,
     const array& x,
     ArgReduce::ReduceType r,
-    std::vector<int> out_shape,
+    Shape out_shape,
     int axis,
     std::vector<int> expected_output) {
   auto s = default_stream(d);
@@ -27,7 +27,7 @@ void test_arg_reduce_small(
 void test_arg_reduce_against_cpu(
     const array& x,
     ArgReduce::ReduceType r,
-    std::vector<int> out_shape,
+    Shape out_shape,
     int axis) {
   auto y1 = array(
       out_shape,
@@ -125,7 +125,7 @@ TEST_CASE("test arg reduce against cpu") {
 void test_arg_reduce_small_bool(
     Device d,
     ArgReduce::ReduceType r,
-    std::vector<int> out_shape,
+    Shape out_shape,
     int axis,
     std::vector<int> expected_output) {
   auto s = default_stream(d);

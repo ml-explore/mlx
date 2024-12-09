@@ -130,7 +130,7 @@ inline void matmul_common_general(
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy(arr, arr_copy, CopyType::General);
-      size_t stx = arr.shape(-1);
+      stx = arr.shape(-1);
       return std::make_tuple(false, stx, arr_copy);
     }
   };

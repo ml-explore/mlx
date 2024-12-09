@@ -59,10 +59,10 @@ instantiate_init_min_max(max, Max)
                      itype, otype, op, uint, dim)                          \
   instantiate_kernel("col_reduce_small_large_" #dim "_reduce_" #name,      \
                      col_reduce_small,                                     \
-                     itype, otype, op, size_t, dim)                        \
+                     itype, otype, op, int64_t, dim)                       \
   instantiate_kernel("col_reduce_longcolumn_large_" #dim "_reduce_" #name, \
                      col_reduce_longcolumn,                                \
-                     itype, otype, op, size_t, dim)
+                     itype, otype, op, int64_t, dim)
 
 #define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn)        \
   instantiate_kernel("col_reduce_looped_" #dim "_" #bm "_" #bn "_reduce_" #name,       \
@@ -70,7 +70,7 @@ instantiate_init_min_max(max, Max)
                      itype, otype, op, uint, dim, bm, bn)                              \
   instantiate_kernel("col_reduce_looped_large_" #dim "_" #bm "_" #bn "_reduce_" #name, \
                      col_reduce_looped,                                                \
-                     itype, otype, op, size_t, dim, bm, bn)
+                     itype, otype, op, int64_t, dim, bm, bn)
 
 #define instantiate_col_reduce_2pass_tile(name, itype, otype, op, dim, bm, bn)        \
   instantiate_kernel("col_reduce_2pass_" #dim "_" #bm "_" #bn "_reduce_" #name,       \
@@ -78,7 +78,7 @@ instantiate_init_min_max(max, Max)
                      itype, otype, op, uint, dim, bm, bn)                             \
   instantiate_kernel("col_reduce_2pass_large_" #dim "_" #bm "_" #bn "_reduce_" #name, \
                      col_reduce_2pass,                                                \
-                     itype, otype, op, size_t, dim, bm, bn)
+                     itype, otype, op, int64_t, dim, bm, bn)
 
 #define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32) \
@@ -98,7 +98,7 @@ instantiate_init_min_max(max, Max)
                      itype, otype, op, uint, dim)                     \
   instantiate_kernel("row_reduce_small_large_" #dim "_reduce_" #name, \
                      row_reduce_small,                                \
-                     itype, otype, op, size_t, dim)
+                     itype, otype, op, int64_t, dim)
 
 #define instantiate_row_reduce_looped(name, itype, otype, op, dim)       \
   instantiate_kernel("row_reduce_looped_" #dim "_reduce_" #name,         \
@@ -106,7 +106,7 @@ instantiate_init_min_max(max, Max)
                      itype, otype, op, uint, dim)                        \
   instantiate_kernel("row_reduce_looped_large_" #dim "_reduce_" #name,   \
                      row_reduce_looped,                                  \
-                     itype, otype, op, size_t, dim)
+                     itype, otype, op, int64_t, dim)
 
 #define instantiate_row_reduce_general(name, itype, otype, op) \
   instantiate_row_reduce_small(name, itype, otype, op, 1)      \
@@ -125,7 +125,7 @@ instantiate_init_min_max(max, Max)
   instantiate_col_reduce_general(name##tname, itype, otype, op<otype>)
 
 #define instantiate_and_or(name, op)                           \
-  instantiate_reduce_functions(name, bool_, bool, bool, op)   \
+  instantiate_reduce_functions(name, bool_, bool, bool, op)    \
   instantiate_reduce_functions(name, int16, int16_t, bool, op) \
   instantiate_reduce_functions(name, int32, int32_t, bool, op) \
   instantiate_reduce_functions(name, int64, int64_t, bool, op)

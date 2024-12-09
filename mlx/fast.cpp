@@ -1014,7 +1014,7 @@ std::string write_signature(
       }
       if (shape_infos[i].strides) {
         kernel_source +=
-            ("  const constant size_t* " + name + "_strides [[buffer(" +
+            ("  const constant int64_t* " + name + "_strides [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
@@ -1144,7 +1144,7 @@ MetalKernelFunction metal_kernel(
           shape_infos = std::move(shape_infos),
           attributes = std::move(attributes)](
              const std::vector<array>& inputs,
-             const std::vector<std::vector<int>>& output_shapes,
+             const std::vector<Shape>& output_shapes,
              const std::vector<Dtype>& output_dtypes,
              std::tuple<int, int, int> grid,
              std::tuple<int, int, int> threadgroup,

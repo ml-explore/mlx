@@ -18,13 +18,13 @@ namespace {
 
 struct RowReduceArgs {
   // Input shape and strides not including the reduction axes
-  std::vector<int> shape;
-  std::vector<size_t> strides;
+  Shape shape;
+  Strides strides;
   int ndim;
 
   // Input shape and strides for the reduction axes
-  std::vector<int> reduce_shape;
-  std::vector<size_t> reduce_strides;
+  Shape reduce_shape;
+  Strides reduce_strides;
   int reduce_ndim;
 
   // The number of rows we are reducing. Namely prod(reduce_shape).
@@ -88,13 +88,13 @@ struct RowReduceArgs {
 
 struct ColReduceArgs {
   // Input shape and strides not including the reduction axes
-  std::vector<int> shape;
-  std::vector<size_t> strides;
+  Shape shape;
+  Strides strides;
   int ndim;
 
   // Input shape and strides for the reduction axes
-  std::vector<int> reduce_shape;
-  std::vector<size_t> reduce_strides;
+  Shape reduce_shape;
+  Strides reduce_strides;
   int reduce_ndim;
 
   // The number of column reductions we are doing. Namely prod(reduce_shape).
@@ -102,7 +102,7 @@ struct ColReduceArgs {
 
   // The size of the contiguous column reduction.
   size_t reduction_size;
-  size_t reduction_stride;
+  int64_t reduction_stride;
 
   ColReduceArgs(
       const array& in,
@@ -126,7 +126,7 @@ struct ColReduceArgs {
     // yet we may have removed the appropriate amount of elements. It is safe
     // to compute the stride by multiplying shapes (while < reduction_stride)
     // because it is a contiguous section.
-    size_t stride_back = 1;
+    int64_t stride_back = 1;
     std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
     while (!shape.empty() && stride_back < reduction_stride) {
       stride_back *= shape.back();
@@ -683,7 +683,7 @@ void strided_reduce_longcolumn(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "int64_t" : "uint",
       n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -718,7 +718,7 @@ void strided_reduce_longcolumn(
       op_name,
       intermediate.dtype(),
       out_type,
-      large ? "size_t" : "uint",
+      large ? "int64_t" : "uint",
       1,
       32,
       32);
@@ -782,7 +782,7 @@ void strided_reduce_looped(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "int64_t" : "uint",
       n,
       BM,
       BN);
@@ -859,7 +859,7 @@ void strided_reduce_2pass(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "int64_t" : "uint",
       n,
       BM,
       BN);
@@ -894,7 +894,7 @@ void strided_reduce_2pass(
       op_name,
       intermediate.dtype(),
       out_type,
-      large ? "size_t" : "uint",
+      large ? "int64_t" : "uint",
       1,
       32,
       32);

@@ -54,7 +54,7 @@ void qrf_impl(const array& a, array& q, array& r) {
   // Copy the input to be column contiguous
   flags.col_contiguous = num_matrices == 1;
   flags.row_contiguous = false;
-  std::vector<size_t> strides = in.strides();
+  auto strides = in.strides();
   strides[in.ndim() - 2] = 1;
   strides[in.ndim() - 1] = M;
   in.set_data(

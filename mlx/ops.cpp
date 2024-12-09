@@ -856,14 +856,7 @@ array concatenate(
         "[concatenate] No arrays provided for concatenation");
   }
 
-  // Normalize the given axis
-  auto ax = axis < 0 ? axis + arrays[0].ndim() : axis;
-  if (ax < 0 || ax >= arrays[0].ndim()) {
-    std::ostringstream msg;
-    msg << "[concatenate] Invalid axis (" << axis << ") passed to concatenate"
-        << " for array with shape " << arrays[0].shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  auto ax = normalize_axis_index(axis, arrays[0].ndim(), "[concatenate] ");
 
   auto throw_invalid_shapes = [&]() {
     std::ostringstream msg;
@@ -925,12 +918,15 @@ array stack(
     int axis,
     StreamOrDevice s /* = {} */) {
   if (arrays.empty()) {
-    throw std::invalid_argument("No arrays provided for stacking");
+    throw std::invalid_argument("[stack] No arrays provided for stacking");
   }
-  if (!is_same_shape(arrays)) {
-    throw std::invalid_argument("All arrays must have the same shape");
+  if (!std::all_of(arrays.begin(), arrays.end(), [&](const auto& a) {
+        return arrays[0].shape() == a.shape();
+      })) {
+    throw std::invalid_argument("[stack] All arrays must have the same shape");
   }
-  int normalized_axis = normalize_axis(axis, arrays[0].ndim() + 1);
+  auto normalized_axis =
+      normalize_axis_index(axis, arrays[0].ndim() + 1, "[stack] ");
   std::vector<array> new_arrays;
   new_arrays.reserve(arrays.size());
   for (auto& a : arrays) {
@@ -945,7 +941,7 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
 
 /** array repeat with axis */
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
-  axis = normalize_axis(axis, arr.ndim());
+  axis = normalize_axis_index(axis, arr.ndim(), "[repeat] ");
 
   if (repeats < 0) {
     throw std::invalid_argument(

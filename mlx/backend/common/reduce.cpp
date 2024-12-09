@@ -174,19 +174,19 @@ void reduce_dispatch_min_max(
 
 void nd_loop(
     std::function<void(int)> callback,
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides) {
+    const Shape& shape,
+    const Strides& strides) {
   std::function<void(int, int)> loop_inner;
   loop_inner = [&](int dim, int offset) {
     if (dim < shape.size() - 1) {
-      int size = shape[dim];
-      size_t stride = strides[dim];
+      auto size = shape[dim];
+      auto stride = strides[dim];
       for (int i = 0; i < size; i++) {
         loop_inner(dim + 1, offset + i * stride);
       }
     } else {
-      int size = shape[dim];
-      size_t stride = strides[dim];
+      auto size = shape[dim];
+      auto stride = strides[dim];
       for (int i = 0; i < size; i++) {
         callback(offset + i * stride);
       }

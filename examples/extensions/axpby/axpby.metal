@@ -12,8 +12,8 @@ template <typename T>
     constant const float& alpha [[buffer(3)]],
     constant const float& beta [[buffer(4)]],
     constant const int* shape [[buffer(5)]],
-    constant const size_t* x_strides [[buffer(6)]],
-    constant const size_t* y_strides [[buffer(7)]],
+    constant const int64_t* x_strides [[buffer(6)]],
+    constant const int64_t* y_strides [[buffer(7)]],
     constant const int& ndim [[buffer(8)]],
     uint index [[thread_position_in_grid]]) {
   auto x_offset = elem_to_loc(index, shape, x_strides, ndim);
@@ -34,29 +34,14 @@ template <typename T>
       static_cast<T>(alpha) * x[index] + static_cast<T>(beta) * y[index];
 }
 
-#define instantiate_axpby(type_name, type)                               \
-  template [[host_name("axpby_general_" #type_name)]] [[kernel]] void    \
-  axpby_general<type>(                                                   \
-      device const type* x [[buffer(0)]],                                \
-      device const type* y [[buffer(1)]],                                \
-      device type* out [[buffer(2)]],                                    \
-      constant const float& alpha [[buffer(3)]],                         \
-      constant const float& beta [[buffer(4)]],                          \
-      constant const int* shape [[buffer(5)]],                           \
-      constant const size_t* x_strides [[buffer(6)]],                    \
-      constant const size_t* y_strides [[buffer(7)]],                    \
-      constant const int& ndim [[buffer(8)]],                            \
-      uint index [[thread_position_in_grid]]);                           \
-  template [[host_name("axpby_contiguous_" #type_name)]] [[kernel]] void \
-  axpby_contiguous<type>(                                                \
-      device const type* x [[buffer(0)]],                                \
-      device const type* y [[buffer(1)]],                                \
-      device type* out [[buffer(2)]],                                    \
-      constant const float& alpha [[buffer(3)]],                         \
-      constant const float& beta [[buffer(4)]],                          \
-      uint index [[thread_position_in_grid]]);
+// clang-format off
+#define instantiate_axpby(type_name, type)                             \
+  instantiate_kernel("axpby_general_" #type_name, axpby_general, type) \
+  instantiate_kernel(                                                  \
+          "axpby_contiguous_" #type_name, axpby_contiguous, type)
 
 instantiate_axpby(float32, float);
 instantiate_axpby(float16, half);
 instantiate_axpby(bfloat16, bfloat16_t);
 instantiate_axpby(complex64, complex64_t);
+// clang-format on

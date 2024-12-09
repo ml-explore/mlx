@@ -19,10 +19,10 @@ inline void mask_matrix(
     int block_size,
     const int X,
     const int Y,
-    const size_t X_data_str,
-    const size_t Y_data_str,
-    const size_t X_mask_str,
-    const size_t Y_mask_str,
+    const int64_t X_data_str,
+    const int64_t Y_data_str,
+    const int64_t X_mask_str,
+    const int64_t Y_mask_str,
     const size_t mask_offset) {
   int tX = (X + block_size - 1) / block_size;
   int tY = (Y + block_size - 1) / block_size;
@@ -84,7 +84,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
         } else {
           array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
           copy(arr, arr_copy, CopyType::General);
-          size_t stx = arr.shape(-1);
+          int64_t stx = arr.shape(-1);
           return std::make_tuple(false, stx, arr_copy);
         }
       };
@@ -117,13 +117,13 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
                        int Y,
                        size_t X_data_str,
                        size_t Y_data_str) {
-    size_t mask_offset = elem_to_loc(
+    auto mask_offset = elem_to_loc(
         mask.shape(-1) * mask.shape(-2) * batch_idx,
         mask.shape(),
         mask.strides());
 
-    size_t X_mask_str = mask.strides()[mask.ndim() - 2];
-    size_t Y_mask_str = mask.strides()[mask.ndim() - 1];
+    auto X_mask_str = mask.strides()[mask.ndim() - 2];
+    auto Y_mask_str = mask.strides()[mask.ndim() - 1];
 
     if (mask.dtype() == bool_) {
       return mask_matrix(
@@ -230,7 +230,7 @@ void GatherMM::eval(const std::vector<array>& inputs, array& out) {
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy(arr, arr_copy, CopyType::General);
-      size_t stx = arr.shape(-1);
+      int64_t stx = arr.shape(-1);
       return std::make_tuple(false, stx, arr_copy);
     }
   };
@@ -262,13 +262,13 @@ void GatherMM::eval(const std::vector<array>& inputs, array& out) {
   auto& lhs_indices = inputs[2];
   auto& rhs_indices = inputs[3];
 
-  std::vector<int> batch_shape = get_batch_dims(out.shape());
+  auto batch_shape = get_batch_dims(out.shape());
   int batch_ndim = batch_shape.size();
 
-  std::vector<int> batch_shape_A = get_batch_dims(a.shape());
-  std::vector<size_t> batch_strides_A = get_batch_dims(a.strides());
-  std::vector<int> batch_shape_B = get_batch_dims(b.shape());
-  std::vector<size_t> batch_strides_B = get_batch_dims(b.strides());
+  auto batch_shape_A = get_batch_dims(a.shape());
+  auto batch_strides_A = get_batch_dims(a.strides());
+  auto batch_shape_B = get_batch_dims(b.shape());
+  auto batch_strides_B = get_batch_dims(b.strides());
 
   const uint32_t* lhs_indices_ptr = lhs_indices.data<uint32_t>();
   const uint32_t* rhs_indices_ptr = rhs_indices.data<uint32_t>();

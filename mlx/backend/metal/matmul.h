@@ -21,11 +21,11 @@ void steel_matmul_regular(
     int ldd,
     bool transpose_a,
     bool transpose_b,
-    std::vector<int> batch_shape,
-    std::vector<size_t> batch_strides,
-    size_t A_batch_stride,
-    size_t B_batch_stride,
-    size_t matrix_stride_out,
+    Shape batch_shape,
+    Strides batch_strides,
+    int64_t A_batch_stride,
+    int64_t B_batch_stride,
+    int64_t matrix_stride_out,
     std::vector<array>& copies);
 
 void steel_matmul(
@@ -43,8 +43,8 @@ void steel_matmul(
     bool transpose_a,
     bool transpose_b,
     std::vector<array>& copies,
-    std::vector<int> batch_shape = {},
-    std::vector<size_t> A_batch_stride = {},
-    std::vector<size_t> B_batch_stride = {});
+    Shape batch_shape = {},
+    Strides A_batch_stride = {},
+    Strides B_batch_stride = {});
 
 } // namespace mlx::core

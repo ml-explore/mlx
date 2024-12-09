@@ -4,11 +4,11 @@
 
 namespace mlx::core {
 
-std::pair<std::vector<int>, std::vector<size_t>> shapes_without_reduction_axes(
+std::pair<Shape, Strides> shapes_without_reduction_axes(
     const array& x,
     const std::vector<int>& axes) {
-  std::vector<int> shape = x.shape();
-  std::vector<size_t> strides = x.strides();
+  auto shape = x.shape();
+  auto strides = x.strides();
 
   for (int i = axes.size() - 1; i >= 0; i--) {
     int a = axes[i];
@@ -29,8 +29,8 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
   // Row contiguous input so the output is row contiguous
   if (x.flags().row_contiguous) {
     // Merge consecutive axes
-    std::vector<int> shape = {x.shape(axes[0])};
-    std::vector<size_t> strides = {x.strides()[axes[0]]};
+    Shape shape = {x.shape(axes[0])};
+    Strides strides = {x.strides()[axes[0]]};
     for (int i = 1; i < axes.size(); i++) {
       if (axes[i] - 1 == axes[i - 1] && x.shape(axes[i]) > 1) {
         shape.back() *= x.shape(axes[i]);
@@ -69,7 +69,7 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
 
   // Sort reduction axes by stride in order to merge them and figure out if we
   // have a contiguous reduction.
-  std::vector<std::pair<int, size_t>> reductions;
+  std::vector<std::pair<int, int64_t>> reductions;
   for (auto a : axes) {
     if (x.shape(a) > 1) {
       reductions.push_back(std::make_pair(x.shape(a), x.strides()[a]));
@@ -93,8 +93,8 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
     }
   }
 
-  std::vector<int> shape;
-  std::vector<size_t> strides;
+  Shape shape;
+  Strides strides;
   for (auto r : reductions) {
     shape.push_back(r.first);
     strides.push_back(r.second);
@@ -109,15 +109,15 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
   // Delegate to the general strided reduction op if the axes after
   // strides.back() are contiguous.
   if (strides.back() > 1) {
-    int size = 1;
+    int64_t size = 1;
     bool have_expand = false;
     for (int i = x.ndim() - 1; i >= 0; i--) {
       if (axes.back() == i) {
         continue;
       }
 
-      size_t stride_i = x.strides()[i];
-      int shape_i = x.shape(i);
+      auto stride_i = x.strides()[i];
+      auto shape_i = x.shape(i);
       if (stride_i == 0) {
         if (shape_i == 1) {
           continue;

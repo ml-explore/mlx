@@ -178,10 +178,10 @@ void binary_op_dims(
     const T* b,
     U* out,
     Op op,
-    const std::vector<int>& shape,
-    const std::vector<size_t>& a_strides,
-    const std::vector<size_t>& b_strides,
-    const std::vector<size_t>& out_strides,
+    const Shape& shape,
+    const Strides& a_strides,
+    const Strides& b_strides,
+    const Strides& out_strides,
     int axis) {
   auto stride_a = a_strides[axis];
   auto stride_b = b_strides[axis];
@@ -212,10 +212,10 @@ void binary_op_dispatch_dims(
     array& out,
     Op op,
     int dim,
-    const std::vector<int>& shape,
-    const std::vector<size_t>& a_strides,
-    const std::vector<size_t>& b_strides,
-    const std::vector<size_t>& out_strides) {
+    const Shape& shape,
+    const Strides& a_strides,
+    const Strides& b_strides,
+    const Strides& out_strides) {
   const T* a_ptr = a.data<T>();
   const T* b_ptr = b.data<T>();
   U* out_ptr = out.data<U>();
@@ -258,10 +258,10 @@ void binary_op_dispatch_dims(
       return;
   }
 
-  ContiguousIterator<size_t> a_it(shape, a_strides, dim - 3);
-  ContiguousIterator<size_t> b_it(shape, b_strides, dim - 3);
-  size_t stride = out_strides[dim - 4];
-  for (size_t elem = 0; elem < a.size(); elem += stride) {
+  ContiguousIterator a_it(shape, a_strides, dim - 3);
+  ContiguousIterator b_it(shape, b_strides, dim - 3);
+  auto stride = out_strides[dim - 4];
+  for (int64_t elem = 0; elem < a.size(); elem += stride) {
     binary_op_dims<T, U, Op, 3, Strided>(
         a_ptr + a_it.loc,
         b_ptr + b_it.loc,
@@ -327,7 +327,7 @@ void binary_op(
   const auto& strides = new_strides[2];
 
   // Get the left-most dim such that the array is row contiguous after
-  auto leftmost_rc_dim = [&strides](const std::vector<size_t>& arr_strides) {
+  auto leftmost_rc_dim = [&strides](const auto& arr_strides) {
     int d = arr_strides.size() - 1;
     for (; d >= 0 && arr_strides[d] == strides[d]; d--) {
     }
@@ -337,7 +337,7 @@ void binary_op(
   auto b_rc_dim = leftmost_rc_dim(b_strides);
 
   // Get the left-most dim such that the array is a broadcasted "scalar" after
-  auto leftmost_s_dim = [](const std::vector<size_t>& arr_strides) {
+  auto leftmost_s_dim = [](const auto& arr_strides) {
     int d = arr_strides.size() - 1;
     for (; d >= 0 && arr_strides[d] == 0; d--) {
     }

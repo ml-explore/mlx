@@ -18,7 +18,7 @@ class Primitive;
 
 using Deleter = std::function<void(allocator::Buffer)>;
 using Shape = std::vector<int32_t>;
-using Strides = std::vector<size_t>;
+using Strides = std::vector<int64_t>;
 
 class array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc

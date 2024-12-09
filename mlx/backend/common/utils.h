@@ -8,12 +8,9 @@
 
 namespace mlx::core {
 
-template <typename StrideT>
-inline StrideT elem_to_loc(
-    int elem,
-    const std::vector<int>& shape,
-    const std::vector<StrideT>& strides) {
-  StrideT loc = 0;
+inline int64_t
+elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
+  int64_t loc = 0;
   for (int i = shape.size() - 1; i >= 0; --i) {
     auto q_and_r = ldiv(elem, shape[i]);
     loc += q_and_r.rem * strides[i];
@@ -22,16 +19,15 @@ inline StrideT elem_to_loc(
   return loc;
 }
 
-inline size_t elem_to_loc(int elem, const array& a) {
+inline int64_t elem_to_loc(int elem, const array& a) {
   if (a.flags().row_contiguous) {
     return elem;
   }
   return elem_to_loc(elem, a.shape(), a.strides());
 }
 
-template <typename StrideT>
-std::vector<StrideT> make_contiguous_strides(const std::vector<int>& shape) {
-  std::vector<StrideT> strides(shape.size(), 1);
+inline Strides make_contiguous_strides(const Shape& shape) {
+  Strides strides(shape.size(), 1);
   for (int i = shape.size() - 1; i > 0; i--) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -44,22 +40,15 @@ std::vector<StrideT> make_contiguous_strides(const std::vector<int>& shape) {
 //
 // When multiple arrays are passed they should all have the same shape. The
 // collapsed axes are also the same so one shape is returned.
-std::tuple<std::vector<int>, std::vector<std::vector<int64_t>>>
-collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<std::vector<int64_t>>& strides,
+std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
+    const Shape& shape,
+    const std::vector<Strides>& strides,
     int64_t size_cap = std::numeric_limits<int32_t>::max());
-std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
-collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<std::vector<size_t>>& strides,
-    size_t size_cap = std::numeric_limits<int32_t>::max());
 
-inline std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
-collapse_contiguous_dims(
+inline std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
     const std::vector<array>& xs,
     size_t size_cap = std::numeric_limits<int32_t>::max()) {
-  std::vector<std::vector<size_t>> strides;
+  std::vector<Strides> strides;
   for (auto& x : xs) {
     strides.emplace_back(x.strides());
   }
@@ -73,19 +62,14 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
 }
 
 // The single array version of the above.
-std::pair<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<int64_t>& strides,
+std::pair<Shape, Strides> collapse_contiguous_dims(
+    const Shape& shape,
+    const Strides& strides,
     int64_t size_cap = std::numeric_limits<int32_t>::max());
-std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
-    const std::vector<int>& shape,
-    const std::vector<size_t>& strides,
-    size_t size_cap = std::numeric_limits<int32_t>::max());
-std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<Shape, Strides> collapse_contiguous_dims(
     const array& a,
-    size_t size_cap = std::numeric_limits<int32_t>::max());
+    int64_t size_cap = std::numeric_limits<int32_t>::max());
 
-template <typename StrideT>
 struct ContiguousIterator {
   inline void step() {
     int dims = shape_.size();
@@ -102,7 +86,7 @@ struct ContiguousIterator {
     loc += strides_[i];
   }
 
-  void seek(StrideT n) {
+  void seek(int64_t n) {
     loc = 0;
     for (int i = shape_.size() - 1; i >= 0; --i) {
       auto q_and_r = ldiv(n, shape_[i]);
@@ -128,32 +112,29 @@ struct ContiguousIterator {
   }
 
   explicit ContiguousIterator(
-      const std::vector<int>& shape,
-      const std::vector<StrideT>& strides,
+      const Shape& shape,
+      const Strides& strides,
       int dims)
       : shape_(shape.begin(), shape.begin() + dims),
         strides_(strides.begin(), strides.begin() + dims) {
     if (!shape_.empty()) {
       std::tie(shape_, strides_) = collapse_contiguous_dims(shape_, strides_);
-      pos_ = std::vector<int>(shape_.size(), 0);
+      pos_ = Shape(shape_.size(), 0);
     }
   }
 
-  StrideT loc{0};
+  int64_t loc{0};
 
  private:
-  std::vector<int> shape_;
-  std::vector<StrideT> strides_;
-  std::vector<int> pos_;
+  Shape shape_;
+  Strides strides_;
+  Shape pos_;
 };
 
-template <typename StrideT>
-inline auto check_contiguity(
-    const std::vector<int>& shape,
-    const std::vector<StrideT>& strides) {
+inline auto check_contiguity(const Shape& shape, const Strides& strides) {
   size_t no_broadcast_data_size = 1;
-  size_t f_stride = 1;
-  size_t b_stride = 1;
+  int64_t f_stride = 1;
+  int64_t b_stride = 1;
   bool is_row_contiguous = true;
   bool is_col_contiguous = true;
 
@@ -182,7 +163,7 @@ void move_or_copy(const array& in, array& out);
 void move_or_copy(
     const array& in,
     array& out,
-    const std::vector<size_t>& strides,
+    const Strides& strides,
     array::Flags flags,
     size_t data_size,
     size_t offset = 0);
