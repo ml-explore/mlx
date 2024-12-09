@@ -603,7 +603,7 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
   }
 
   // Analyse the types of the indices
-  unsigned long max_dim = 0;
+  size_t max_dim = 0;
   bool arrays_first = false;
   int num_none = 0;
   int num_slices = 0;

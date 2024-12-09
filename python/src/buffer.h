@@ -56,13 +56,13 @@ std::string buffer_format(const array& a) {
 
 struct buffer_info {
   std::string format;
-  std::vector<ssize_t> shape;
-  std::vector<ssize_t> strides;
+  std::vector<Py_ssize_t> shape;
+  std::vector<Py_ssize_t> strides;
 
   buffer_info(
       std::string format,
-      std::vector<ssize_t> shape_in,
-      std::vector<ssize_t> strides_in)
+      std::vector<Py_ssize_t> shape_in,
+      std::vector<Py_ssize_t> strides_in)
       : format(std::move(format)),
         shape(std::move(shape_in)),
         strides(std::move(strides_in)) {}
@@ -91,8 +91,8 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
     a.eval();
   }
 
-  std::vector<ssize_t> shape(a.shape().begin(), a.shape().end());
-  std::vector<ssize_t> strides(a.strides().begin(), a.strides().end());
+  std::vector<Py_ssize_t> shape(a.shape().begin(), a.shape().end());
+  std::vector<Py_ssize_t> strides(a.strides().begin(), a.strides().end());
   for (auto& s : strides) {
     s *= a.itemsize();
   }
