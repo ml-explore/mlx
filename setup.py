@@ -67,7 +67,8 @@ class CMakeBuild(build_ext):
             "-DMLX_BUILD_EXAMPLES=OFF",
             f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}{os.sep}",
         ]
-        build_args = []
+        # Some generators require explcitly passing config when building.
+        build_args = ["--config", cfg]
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:

@@ -76,6 +76,9 @@ build/
 *.out
 *.app
 
+# Debug symbols
+*.pdb
+
 # VSCode 
 .vscode/
 .DS_Store
