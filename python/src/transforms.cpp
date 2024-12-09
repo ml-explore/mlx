@@ -433,19 +433,18 @@ struct PyCompiledFun {
         auto d = nb::cast<nb::dict>(obj);
         constants.push_back(dict_identifier);
         for (auto item : d) {
-          auto r = item.first.attr("__hash__");
-          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+          auto r = item.first.attr("__hash__")();
+          constants.push_back(nb::cast<int64_t>(r));
           recurse(item.second);
         }
       } else if (nb::isinstance<array>(obj)) {
         inputs.push_back(nb::cast<array>(obj));
         constants.push_back(array_identifier);
       } else if (nb::isinstance<nb::str>(obj)) {
-        auto r = obj.attr("__hash__");
-        constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+        auto r = obj.attr("__hash__")();
+        constants.push_back(nb::cast<int64_t>(r));
       } else if (nb::isinstance<nb::int_>(obj)) {
-        auto r = nb::cast<int64_t>(obj);
-        constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+        constants.push_back(nb::cast<int64_t>(obj));
       } else if (nb::isinstance<nb::float_>(obj)) {
         auto r = nb::cast<double>(obj);
         constants.push_back(*reinterpret_cast<uint64_t*>(&r));
