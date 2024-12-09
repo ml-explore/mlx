@@ -665,9 +665,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* bool transpose_a = */ a_transposed,
       /* bool transpose_b = */ b_transposed,
       /* std::vector<array>& = */ copies,
-      /* std::vector<int> batch_shape = */ batch_shape,
-      /* std::vector<size_t> A_batch_stride = */ A_batch_stride,
-      /* std::vector<size_t> B_batch_stride = */ B_batch_stride);
+      /* Shape batch_shape = */ batch_shape,
+      /* Strides A_batch_stride = */ A_batch_stride,
+      /* Strides B_batch_stride = */ B_batch_stride);
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -1277,7 +1277,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Get mask params
     std::vector<int> mask_strides;
-    std::vector<size_t> mask_batch_strides;
+    Strides mask_batch_strides;
     if (has_out_mask) {
       auto& out_mask = inputs[2];
 

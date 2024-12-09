@@ -116,13 +116,12 @@ nb::ndarray<NDParams...> mlx_to_nd_array_impl(
     a.eval();
   }
   std::vector<size_t> shape(a.shape().begin(), a.shape().end());
-  std::vector<int64_t> strides(a.strides().begin(), a.strides().end());
   return nb::ndarray<NDParams...>(
       a.data<T>(),
       a.ndim(),
       shape.data(),
       /* owner= */ nb::none(),
-      strides.data(),
+      a.strides().data(),
       t.value_or(nb::dtype<T>()));
 }
 

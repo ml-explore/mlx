@@ -138,7 +138,7 @@ SafetensorsLoad load_safetensors(
       continue;
     }
     const std::string& dtype = item.value().at("dtype");
-    const std::vector<int>& shape = item.value().at("shape");
+    const Shape& shape = item.value().at("shape");
     const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
