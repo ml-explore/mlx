@@ -444,8 +444,7 @@ struct PyCompiledFun {
         auto r = obj.attr("__hash__")();
         constants.push_back(nb::cast<int64_t>(r));
       } else if (nb::isinstance<nb::int_>(obj)) {
-        auto r = nb::cast<int64_t>(obj);
-        constants.push_back(static_cast<uint64_t>(r));
+        constants.push_back(nb::cast<int64_t>(obj));
       } else if (nb::isinstance<nb::float_>(obj)) {
         auto r = nb::cast<double>(obj);
         constants.push_back(*reinterpret_cast<uint64_t*>(&r));
