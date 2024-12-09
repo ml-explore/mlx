@@ -579,6 +579,27 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(counter[0], 2)
 
+        y = 1.0
+
+        @mx.compile
+        def fun(x, constant):
+            return x + y
+
+        constant1 = "abc"
+        out = fun(mx.array(0.0), constant1)
+        self.assertEqual(out, mx.array(1.0))
+
+        # new object, same value, no recompilation
+        y = 2.0
+        constant2 = "abc".encode("utf-8").decode("utf-8")
+        out = fun(mx.array(0.0), constant2)
+        self.assertEqual(out, mx.array(1.0))
+
+        # same object, new value, recompilation
+        constant2 = "xyz"
+        out = fun(mx.array(0.0), constant2)
+        self.assertEqual(out, mx.array(2.0))
+
     def test_compile_inf(self):
         @mx.compile
         def fun(x):
