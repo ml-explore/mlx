@@ -85,7 +85,7 @@ class ArrayPythonIterator {
 
 void init_array(nb::module_& m) {
   // Set Python print formatting options
-  mlx::core::global_formatter.capitalize_bool = true;
+  GetGlobalFormatter().capitalize_bool = true;
 
   // Types
   nb::class_<Dtype>(
