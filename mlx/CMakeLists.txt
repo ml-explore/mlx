@@ -18,6 +18,11 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
 
+if(MSVC)
+  # Disable some MSVC warnings to speed up compilation.
+  target_compile_options(mlx PUBLIC /wd4068 /wd4244 /wd4267 /wd4804)
+endif()
+
 if(MLX_BUILD_CPU)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
 else()
