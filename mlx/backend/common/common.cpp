@@ -85,6 +85,16 @@ void Depends::eval(
   }
 }
 
+void ExpandDims::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  auto strides = in.strides();
+  for (auto ax : axes_) {
+    strides.insert(strides.begin() + ax, 1);
+  }
+  move_or_copy(in, out, strides, in.flags(), in.data_size());
+}
+
 void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));

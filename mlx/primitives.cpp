@@ -1604,6 +1604,55 @@ std::pair<std::vector<array>, std::vector<int>> Expm1::vmap(
   return {{expm1(inputs[0], stream())}, axes};
 }
 
+std::vector<array> ExpandDims::vjp(
+    const std::vector<array>&,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {squeeze(cotangents[0], axes_, stream())};
+}
+
+std::vector<array> ExpandDims::jvp(
+    const std::vector<array>&,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {expand_dims(tangents[0], axes_, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> ExpandDims::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0];
+  auto expand_axes = axes_;
+  for (auto& s : expand_axes) {
+    if (s >= axes[0]) {
+      s++;
+    } else {
+      ax++;
+    }
+  }
+  return {{expand_dims(inputs[0], std::move(expand_axes), stream())}, {ax}};
+}
+
+bool ExpandDims::is_equivalent(const Primitive& other) const {
+  const ExpandDims& a_other = static_cast<const ExpandDims&>(other);
+  return (axes_ == a_other.axes_);
+}
+
+Shape ExpandDims::output_shape(
+    const array& input,
+    const std::vector<int>& axes) {
+  auto shape = input.shape();
+  for (auto ax : axes) {
+    shape.insert(shape.begin() + ax, 1);
+  }
+  return shape;
+}
+
+std::vector<Shape> ExpandDims::output_shapes(const std::vector<array>& inputs) {
+  return {ExpandDims::output_shape(inputs[0], axes_)};
+}
+
 bool FFT::is_equivalent(const Primitive& other) const {
   const FFT& r_other = static_cast<const FFT&>(other);
   return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&

@@ -515,18 +515,31 @@ array squeeze(const array& a, StreamOrDevice s /* = {} */) {
   return squeeze_impl(a, std::move(axes), s);
 }
 
-array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  int out_dim = a.ndim() + 1;
-  int ax = axis < 0 ? axis + out_dim : axis;
-  if (ax < 0 || ax >= out_dim) {
-    std::ostringstream msg;
-    msg << "[expand_dims] Invalid axis " << axis << " for output array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+array expand_dims_impl(
+    const array& a,
+    std::vector<int> axes,
+    StreamOrDevice s /* = {} */) {
+  auto out_ndim = a.ndim() + axes.size();
+  for (auto& ax : axes) {
+    auto new_ax = ax < 0 ? ax + out_ndim : ax;
+    if (new_ax < 0 || new_ax >= out_ndim) {
+      std::ostringstream msg;
+      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
+          << a.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    ax = new_ax;
   }
-  auto shape = a.shape();
-  shape.insert(shape.begin() + ax, 1);
-  return reshape(a, std::move(shape), s);
+  auto shape = ExpandDims::output_shape(a, axes);
+  return array(
+      std::move(shape),
+      a.dtype(),
+      std::make_shared<ExpandDims>(to_stream(s), std::move(axes)),
+      {a});
+}
+
+array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  return expand_dims_impl(a, {axis}, s);
 }
 
 array expand_dims(
@@ -539,31 +552,17 @@ array expand_dims(
       throw std::invalid_argument("[expand_dims] Received duplicate axes.");
     }
   }
-
-  int out_ndim = axes.size() + a.ndim();
-  std::vector<int> canonical_axes = axes;
-  for (auto& ax : canonical_axes) {
-    ax = ax < 0 ? ax + out_ndim : ax;
-    if (ax < 0 || ax >= out_ndim) {
-      std::ostringstream msg;
-      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
-          << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-
   // Check for repeats again
-  std::set<int> unique_axes(canonical_axes.begin(), canonical_axes.end());
+  auto out_ndim = a.ndim() + axes.size();
+  std::set<int> unique_axes;
+  for (auto ax : axes) {
+    unique_axes.insert(ax < 0 ? ax + out_ndim : ax);
+  }
   if (unique_axes.size() != axes.size()) {
     throw std::invalid_argument("[expand_dims] Received duplicate axes.");
   }
-
   std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  auto out_shape = a.shape();
-  for (int i = 0; i < sorted_axes.size(); ++i) {
-    out_shape.insert(out_shape.begin() + sorted_axes[i], 1);
-  }
-  return reshape(a, std::move(out_shape), s);
+  return expand_dims_impl(a, std::move(sorted_axes), s);
 }
 
 // Slice helper
@@ -2539,11 +2538,11 @@ array matmul(
   }
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
-    a = reshape(a, {1, -1}, s);
+    a = expand_dims(a, 0, s);
   }
   if (b.ndim() == 1) {
     // Insert a singleton dim at the end
-    b = reshape(b, {-1, 1}, s);
+    b = expand_dims(b, 1, s);
   }
   if (a.shape(-1) != b.shape(-2)) {
     std::ostringstream msg;
@@ -4003,11 +4002,11 @@ array block_masked_mm(
 
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
-    a = reshape(a, {1, -1}, s);
+    a = expand_dims(a, 0, s);
   }
   if (b.ndim() == 1) {
     // Insert a singleton dim at the end
-    b = reshape(b, {-1, 1}, s);
+    b = expand_dims(b, 1, s);
   }
 
   if (a.shape(-1) != b.shape(-2)) {
@@ -4166,11 +4165,11 @@ array gather_mm(
 
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
-    a = reshape(a, {1, -1}, s);
+    a = expand_dims(a, 0, s);
   }
   if (b.ndim() == 1) {
     // Insert a singleton dim at the end
-    b = reshape(b, {-1, 1}, s);
+    b = expand_dims(b, 1, s);
   }
 
   if (a.shape(-1) != b.shape(-2)) {
