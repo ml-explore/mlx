@@ -3,8 +3,6 @@
 // Required for using M_2_SQRTPI in MSVC.
 #define _USE_MATH_DEFINES
 
-#include <iostream> // TODO
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
