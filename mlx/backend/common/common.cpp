@@ -248,6 +248,20 @@ void Split::eval(
   }
 }
 
+void Squeeze::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  Strides strides;
+  for (int i = 0, j = 0; i < in.ndim(); ++i) {
+    if (j < axes_.size() && i == axes_[j]) {
+      j++;
+    } else {
+      strides.push_back(in.strides(i));
+    }
+  }
+  move_or_copy(in, out, strides, in.flags(), in.data_size());
+}
+
 void StopGradient::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   move_or_copy(inputs[0], out);

@@ -20,7 +20,7 @@ namespace mlx::core {
 
 namespace {
 
-std::tuple<Shape, std::vector<int>, Shape, bool> compute_reduce_shape(
+std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     const std::vector<int>& axes,
     const Shape& shape) {
   bool is_noop = true;
@@ -40,18 +40,16 @@ std::tuple<Shape, std::vector<int>, Shape, bool> compute_reduce_shape(
     throw std::invalid_argument("Duplicate axes detected in reduction.");
   }
   Shape out_shape;
-  Shape squeezed_shape;
   for (int i = 0; i < ndim; ++i) {
     if (axes_set.count(i) == 0) {
       out_shape.push_back(shape[i]);
-      squeezed_shape.push_back(shape[i]);
     } else {
       out_shape.push_back(1);
     }
     is_noop &= (out_shape.back() == shape[i]);
   }
   std::vector<int> sorted_axes(axes_set.begin(), axes_set.end());
-  return {out_shape, sorted_axes, squeezed_shape, is_noop};
+  return {out_shape, sorted_axes, is_noop};
 }
 
 Dtype at_least_float(const Dtype& d) {
@@ -460,54 +458,51 @@ array hadamard_transform(
       {astype(a, dtype, s)});
 }
 
+array squeeze_impl(
+    const array& a,
+    std::vector<int> axes,
+    StreamOrDevice s /* = {} */) {
+  for (auto& ax : axes) {
+    auto new_ax = ax < 0 ? ax + a.ndim() : ax;
+    if (new_ax < 0 || new_ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (a.shape(new_ax) != 1) {
+      std::ostringstream msg;
+      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
+          << a.shape(ax) << " which is not equal to 1.";
+      throw std::invalid_argument(msg.str());
+    }
+    ax = new_ax;
+  }
+  auto shape = Squeeze::output_shape(a, axes);
+  return array(
+      std::move(shape),
+      a.dtype(),
+      std::make_shared<Squeeze>(to_stream(s), std::move(axes)),
+      {a});
+}
+
 array squeeze(
     const array& a,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   std::set<int> unique_axes;
   for (auto ax : axes) {
-    ax = ax < 0 ? ax + a.ndim() : ax;
-    if (ax < 0 || ax >= a.ndim()) {
-      std::ostringstream msg;
-      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
-          << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    if (a.shape(ax) != 1) {
-      std::ostringstream msg;
-      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
-          << a.shape(ax) << " which is not equal to 1.";
-      throw std::invalid_argument(msg.str());
-    }
-    unique_axes.insert(ax);
+    unique_axes.insert(ax < 0 ? ax + a.ndim() : ax);
   }
-
   if (unique_axes.size() != axes.size()) {
     throw std::invalid_argument("[squeeze] Received duplicate axes.");
   }
   std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  Shape shape;
-  for (int i = 0, j = 0; i < a.ndim(); ++i) {
-    if (j < sorted_axes.size() && i == sorted_axes[j]) {
-      j++;
-    } else {
-      shape.push_back(a.shape(i));
-    }
-  }
-  return reshape(a, std::move(shape), s);
+  return squeeze_impl(a, std::move(sorted_axes), s);
 }
 
 array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  int ax = axis < 0 ? axis + a.ndim() : axis;
-  if (ax < 0 || ax >= a.ndim()) {
-    std::ostringstream msg;
-    msg << "[squeeze] Invalid axis " << axis << " for array with " << a.ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  auto shape = a.shape();
-  shape.erase(shape.begin() + ax);
-  return reshape(a, std::move(shape), s);
+  return squeeze_impl(a, {axis}, s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -517,7 +512,7 @@ array squeeze(const array& a, StreamOrDevice s /* = {} */) {
       axes.push_back(i);
     }
   }
-  return squeeze(a, axes, s);
+  return squeeze_impl(a, std::move(axes), s);
 }
 
 array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
@@ -1519,7 +1514,7 @@ array all(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   auto out = (is_noop)
       ? astype(a, bool_, s)
@@ -1529,7 +1524,7 @@ array all(
             std::make_shared<Reduce>(to_stream(s), Reduce::And, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1553,7 +1548,7 @@ array any(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   auto out = (is_noop)
       ? astype(a, bool_, s)
@@ -1563,7 +1558,7 @@ array any(
             std::make_shared<Reduce>(to_stream(s), Reduce::Or, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1590,7 +1585,7 @@ array sum(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   Dtype out_type = a.dtype();
   if (issubdtype(a.dtype(), signedinteger)) {
@@ -1608,7 +1603,7 @@ array sum(
             std::make_shared<Reduce>(to_stream(s), Reduce::Sum, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1742,7 +1737,7 @@ array prod(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   Dtype out_type = a.dtype();
   if (issubdtype(a.dtype(), signedinteger)) {
@@ -1760,7 +1755,7 @@ array prod(
             std::make_shared<Reduce>(to_stream(s), Reduce::Prod, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1787,7 +1782,7 @@ array max(
   if (a.size() == 0) {
     throw std::invalid_argument("[max] Cannot max reduce zero size array.");
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   auto out = (is_noop)
       ? a
@@ -1797,7 +1792,7 @@ array max(
             std::make_shared<Reduce>(to_stream(s), Reduce::Max, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1827,7 +1822,7 @@ array min(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
   auto out = (is_noop)
       ? a
@@ -1837,7 +1832,7 @@ array min(
             std::make_shared<Reduce>(to_stream(s), Reduce::Min, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes, s);
   }
   return out;
 }
@@ -1870,7 +1865,7 @@ array argmin(
     throw std::invalid_argument(
         "[argmin] Cannot argmin reduce zero size array.");
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape({axis}, a.shape());
   auto out = (is_noop)
       ? zeros(out_shape, uint32, s)
@@ -1881,7 +1876,7 @@ array argmin(
                 to_stream(s), ArgReduce::ArgMin, sorted_axes[0]),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes[0], s);
   }
   return out;
 }
@@ -1906,7 +1901,7 @@ array argmax(
     throw std::invalid_argument(
         "[argmax] Cannot argmax reduce zero size array.");
   }
-  auto [out_shape, sorted_axes, squeezed_shape, is_noop] =
+  auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape({axis}, a.shape());
   auto out = (is_noop)
       ? zeros(out_shape, uint32, s)
@@ -1917,7 +1912,7 @@ array argmax(
                 to_stream(s), ArgReduce::ArgMax, sorted_axes[0]),
             {a});
   if (!keepdims) {
-    out = reshape(out, std::move(squeezed_shape), s);
+    out = squeeze(out, sorted_axes[0], s);
   }
   return out;
 }
@@ -2736,9 +2731,7 @@ array take(
   }
 
   // Squeeze the axis we take over
-  auto out_shape = out.shape();
-  out_shape.erase(out_shape.begin() + indices.ndim() + axis);
-  return reshape(out, std::move(out_shape), s);
+  return squeeze(out, indices.ndim() + axis, s);
 }
 
 array take(const array& a, const array& indices, StreamOrDevice s /* = {} */) {
@@ -2815,8 +2808,10 @@ array take_along_axis(
   auto out = gather(a, nd_indices, dims, slice_sizes, s);
 
   // Squeeze out the slice shape
-  Shape out_shape(out.shape().begin(), out.shape().begin() + a.ndim());
-  return reshape(out, std::move(out_shape), s);
+  for (auto& d : dims) {
+    d += a.ndim();
+  }
+  return squeeze(out, dims, s);
 }
 
 array put_along_axis(
