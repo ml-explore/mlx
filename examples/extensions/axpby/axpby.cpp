@@ -32,9 +32,9 @@ namespace mlx::core {
  *  Follow numpy style broadcasting between x and y
  *  Inputs are upcasted to floats if needed
  **/
-array axpby(
-    const array& x, // Input array x
-    const array& y, // Input array y
+mx::array axpby(
+    const mx::array& x, // Input mx::array x
+    const mx::array& y, // Input mx::array y
     const float alpha, // Scaling factor for x
     const float beta, // Scaling factor for y
     StreamOrDevice s /* = {} */ // Stream on which to schedule the operation
@@ -43,13 +43,13 @@ array axpby(
   auto promoted_dtype = promote_types(x.dtype(), y.dtype());
 
   // Upcast to float32 for non-floating point inputs x and y
-  auto out_dtype = issubdtype(promoted_dtype, float32)
+  auto out_dtype = mx::issubdtype(promoted_dtype, mx::float32)
       ? promoted_dtype
-      : promote_types(promoted_dtype, float32);
+      : promote_types(promoted_dtype, mx::float32);
 
   // Cast x and y up to the determined dtype (on the same stream s)
-  auto x_casted = astype(x, out_dtype, s);
-  auto y_casted = astype(y, out_dtype, s);
+  auto x_casted = mx::astype(x, out_dtype, s);
+  auto y_casted = mx::astype(y, out_dtype, s);
 
   // Broadcast the shapes of x and y (on the same stream s)
   auto broadcasted_inputs = broadcast_arrays({x_casted, y_casted}, s);
@@ -57,12 +57,12 @@ array axpby(
 
   // Construct the array as the output of the Axpby primitive
   // with the broadcasted and upcasted arrays as inputs
-  return array(
+  return mx::array(
       /* const std::vector<int>& shape = */ out_shape,
-      /* Dtype dtype = */ out_dtype,
+      /* mx::Dtype dtype = */ out_dtype,
       /* std::unique_ptr<Primitive> primitive = */
       std::make_shared<Axpby>(to_stream(s), alpha, beta),
-      /* const std::vector<array>& inputs = */ broadcasted_inputs);
+      /* const std::vector<mx::array>& inputs = */ broadcasted_inputs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -71,9 +71,9 @@ array axpby(
 
 template <typename T>
 void axpby_impl(
-    const array& x,
-    const array& y,
-    array& out,
+    const mx::array& x,
+    const mx::array& y,
+    mx::array& out,
     float alpha_,
     float beta_) {
   // We only allocate memory when we are ready to fill the output
@@ -105,8 +105,8 @@ void axpby_impl(
 
 /** Fall back implementation for evaluation on CPU */
 void Axpby::eval(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<mx::array>& inputs,
+    std::vector<mx::array>& outputs) {
   // Check the inputs (registered in the op while constructing the out array)
   assert(inputs.size() == 2);
   auto& x = inputs[0];
@@ -114,7 +114,7 @@ void Axpby::eval(
   auto& out = outputs[0];
 
   // Dispatch to the correct dtype
-  if (out.dtype() == float32) {
+  if (out.dtype() == mx::float32) {
     return axpby_impl<float>(x, y, out, alpha_, beta_);
   } else if (out.dtype() == float16) {
     return axpby_impl<float16_t>(x, y, out, alpha_, beta_);
@@ -136,9 +136,9 @@ void Axpby::eval(
 
 template <typename T>
 void axpby_impl_accelerate(
-    const array& x,
-    const array& y,
-    array& out,
+    const mx::array& x,
+    const mx::array& y,
+    mx::array& out,
     float alpha_,
     float beta_) {
   // Accelerate library provides catlas_saxpby which does
@@ -175,15 +175,15 @@ void axpby_impl_accelerate(
 
 /** Evaluate primitive on CPU using accelerate specializations */
 void Axpby::eval_cpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<mx::array>& inputs,
+    std::vector<mx::array>& outputs) {
   assert(inputs.size() == 2);
   auto& x = inputs[0];
   auto& y = inputs[1];
   auto& out = outputs[0];
 
   // Accelerate specialization for contiguous single precision float arrays
-  if (out.dtype() == float32 &&
+  if (out.dtype() == mx::float32 &&
       ((x.flags().row_contiguous && y.flags().row_contiguous) ||
        (x.flags().col_contiguous && y.flags().col_contiguous))) {
     axpby_impl_accelerate<float>(x, y, out, alpha_, beta_);
@@ -191,16 +191,16 @@ void Axpby::eval_cpu(
   }
 
   // Fall back to common backend if specializations are not available
-  eval(inputs, outputs);
+  mx::eval(inputs, outputs);
 }
 
 #else // Accelerate not available
 
 /** Evaluate primitive on CPU falling back to common backend */
 void Axpby::eval_cpu(
-    const std::vector<array>& inputs,
-    const std::vector<array>& outputs) {
-  eval(inputs, outputs);
+    const std::vector<mx::array>& inputs,
+    const std::vector<mx::array>& outputs) {
+  mx::eval(inputs, outputs);
 }
 
 #endif
@@ -213,8 +213,8 @@ void Axpby::eval_cpu(
 
 /** Evaluate primitive on GPU */
 void Axpby::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<mx::array>& inputs,
+    std::vector<mx::array>& outputs) {
   // Prepare inputs
   assert(inputs.size() == 2);
   auto& x = inputs[0];
@@ -225,7 +225,7 @@ void Axpby::eval_gpu(
   // and each stream carries its device identifiers
   auto& s = stream();
   // We get the needed metal device using the stream
-  auto& d = metal::device(s.device);
+  auto& d = mx::metal::device(s.device);
 
   // Prepare to specialize based on contiguity
   bool contiguous_kernel =
@@ -302,8 +302,8 @@ void Axpby::eval_gpu(
 
 /** Fail evaluation on GPU */
 void Axpby::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& out) {
+    const std::vector<mx::array>& inputs,
+    std::vector<mx::array>& out) {
   throw std::runtime_error("Axpby has no GPU implementation.");
 }
 
@@ -314,9 +314,9 @@ void Axpby::eval_gpu(
 ///////////////////////////////////////////////////////////////////////////////
 
 /** The Jacobian-vector product. */
-std::vector<array> Axpby::jvp(
-    const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+std::vector<mx::array> Axpby::jvp(
+    const std::vector<mx::array>& primals,
+    const std::vector<mx::array>& tangents,
     const std::vector<int>& argnums) {
   // Forward mode diff that pushes along the tangents
   // The jvp transform on the primitive can built with ops
@@ -328,8 +328,8 @@ std::vector<array> Axpby::jvp(
   // scaled by beta
   if (argnums.size() > 1) {
     auto scale = argnums[0] == 0 ? alpha_ : beta_;
-    auto scale_arr = array(scale, tangents[0].dtype());
-    return {multiply(scale_arr, tangents[0], stream())};
+    auto scale_arr = mx::array(scale, tangents[0].dtype());
+    return {mx::multiply(scale_arr, tangents[0], stream())};
   }
   // If, argnums = {0, 1}, we take contributions from both
   // which gives us jvp = tangent_x * alpha + tangent_y * beta
@@ -339,24 +339,24 @@ std::vector<array> Axpby::jvp(
 }
 
 /** The vector-Jacobian product. */
-std::vector<array> Axpby::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+std::vector<mx::array> Axpby::vjp(
+    const std::vector<mx::array>& primals,
+    const std::vector<mx::array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<mx::array>&) {
   // Reverse mode diff
-  std::vector<array> vjps;
+  std::vector<mx::array> vjps;
   for (auto arg : argnums) {
     auto scale = arg == 0 ? alpha_ : beta_;
-    auto scale_arr = array(scale, cotangents[0].dtype());
-    vjps.push_back(multiply(scale_arr, cotangents[0], stream()));
+    auto scale_arr = mx::array(scale, cotangents[0].dtype());
+    vjps.push_back(mx::multiply(scale_arr, cotangents[0], stream()));
   }
   return vjps;
 }
 
 /** Vectorize primitive along given axis */
-std::pair<std::vector<array>, std::vector<int>> Axpby::vmap(
-    const std::vector<array>& inputs,
+std::pair<std::vector<mx::array>, std::vector<int>> Axpby::vmap(
+    const std::vector<mx::array>& inputs,
     const std::vector<int>& axes) {
   throw std::runtime_error("Axpby has no vmap implementation.");
 }
