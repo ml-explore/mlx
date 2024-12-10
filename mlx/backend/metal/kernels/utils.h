@@ -91,21 +91,7 @@ struct Limits<complex64_t> {
 
 template <typename IdxT = int64_t>
 METAL_FUNC IdxT elem_to_loc(
-    uint elem,
-    constant const int* shape,
-    constant const int64_t* strides,
-    int ndim) {
-  IdxT loc = 0;
-  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
-    loc += (elem % shape[i]) * IdxT(strides[i]);
-    elem /= shape[i];
-  }
-  return loc;
-}
-
-template <typename IdxT = int64_t>
-METAL_FUNC IdxT elem_to_loc(
-    int64_t elem,
+    IdxT elem,
     constant const int* shape,
     constant const int64_t* strides,
     int ndim) {
@@ -187,9 +173,12 @@ METAL_FUNC vec<IdxT, 3> elem_to_loc_3_nd(
     constant const int64_t* c_strides,
     int ndim) {
   vec<IdxT, 3> loc = {
-      elem.x * IdxT(a_strides[ndim - 1]) + elem.y * IdxT(a_strides[ndim - 2]),
-      elem.x * IdxT(b_strides[ndim - 1]) + elem.y * IdxT(b_strides[ndim - 2]),
-      elem.x * IdxT(c_strides[ndim - 1]) + elem.y * IdxT(c_strides[ndim - 2])};
+      IdxT(elem.x * IdxT(a_strides[ndim - 1])) +
+          IdxT(elem.y * IdxT(a_strides[ndim - 2])),
+      IdxT(elem.x * IdxT(b_strides[ndim - 1])) +
+          IdxT(elem.y * IdxT(b_strides[ndim - 2])),
+      IdxT(elem.x * IdxT(c_strides[ndim - 1])) +
+          IdxT(elem.y * IdxT(c_strides[ndim - 2]))};
   for (int d = ndim - 3; d >= 0; --d) {
     uint l = elem.z % shape[d];
     loc.x += l * IdxT(a_strides[d]);
