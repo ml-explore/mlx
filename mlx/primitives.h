@@ -1046,9 +1046,11 @@ class Gather : public UnaryPrimitive {
  public:
   explicit Gather(
       Stream stream,
-      const std::vector<int>& axes,
-      const std::vector<int>& slice_sizes)
-      : UnaryPrimitive(stream), axes_(axes), slice_sizes_(slice_sizes) {}
+      std::vector<int> axes,
+      std::vector<int> slice_sizes)
+      : UnaryPrimitive(stream),
+        axes_(std::move(axes)),
+        slice_sizes_(std::move(slice_sizes)) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;

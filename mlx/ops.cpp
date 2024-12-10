@@ -2653,15 +2653,6 @@ array gather(
         << " for array with " << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  for (int i = 0; i < a.ndim(); ++i) {
-    if (slice_sizes[i] < 0 || slice_sizes[i] > a.shape(i)) {
-      std::ostringstream msg;
-      msg << "[gather] Slice sizes must be in [0, a.shape(i)]. Got "
-          << slice_sizes << " for array with shape " << a.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-
   // Promote indices to the same type
   auto dtype = result_type(indices);
   if (issubdtype(dtype, inexact)) {
@@ -2675,6 +2666,29 @@ array gather(
     idx = astype(idx, dtype, s);
   }
 
+  if (a.size() == 0) {
+    // Empty input, either the total slice size is 0 or the indices are empty
+    auto total_slice = std::accumulate(
+        slice_sizes.begin(), slice_sizes.end(), 1, std::multiplies<int64_t>{});
+    auto idx_size = !inputs.empty() ? inputs[0].size() : 1;
+    if (idx_size != 0 && total_slice != 0) {
+      std::ostringstream msg;
+      msg << "[gather] If the input is empty, either the indices must be"
+          << " empty or the total slice size must be 0.";
+      throw std::invalid_argument(msg.str());
+    }
+  } else {
+    // Non-empty input, check slice sizes are valid
+    for (int i = 0; i < a.ndim(); ++i) {
+      if (slice_sizes[i] < 0 || slice_sizes[i] > a.shape(i)) {
+        std::ostringstream msg;
+        msg << "[gather] Slice sizes must be in [0, a.shape(i)]. Got "
+            << slice_sizes << " for array with shape " << a.shape() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  }
+
   Shape out_shape;
   if (!inputs.empty()) {
     out_shape = inputs[0].shape();
@@ -2683,9 +2697,10 @@ array gather(
 
   inputs.insert(inputs.begin(), a);
   return array(
-      out_shape,
+      std::move(out_shape),
       a.dtype(),
-      std::make_shared<Gather>(to_stream(s), axes, slice_sizes),
+      std::make_shared<Gather>(
+          to_stream(s), std::move(axes), std::move(slice_sizes)),
       inputs);
 }
 
@@ -2714,7 +2729,7 @@ array take(
 
   // Make slice sizes to pass to gather
   Shape slice_sizes = a.shape();
-  slice_sizes[axis] = indices.size() > 0 ? 1 : 0;
+  slice_sizes[axis] = 1;
 
   auto out = gather(a, indices, axis, slice_sizes, s);
 
@@ -2804,7 +2819,7 @@ array take_along_axis(
   }
   std::vector<int> dims(a.ndim());
   std::iota(dims.begin(), dims.end(), 0);
-  Shape slice_sizes(a.ndim(), a.size() > 0);
+  Shape slice_sizes(a.ndim(), 1);
   auto out = gather(a, nd_indices, dims, slice_sizes, s);
 
   // Squeeze out the slice shape
