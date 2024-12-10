@@ -5,6 +5,12 @@
 #include <limits>
 #include <sstream>
 
+// Used by pread implementation.
+#ifdef _MSC_VER
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -99,6 +105,29 @@ Dtype dtype_from_array_protocol(std::string_view t) {
   throw std::invalid_argument(
       "[from_str] Invalid array protocol type-string: " + std::string(t));
 }
+
+#ifdef _MSC_VER
+// There is no pread on Windows, emulate it with ReadFile.
+int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
+  HANDLE file = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
+  if (file == INVALID_HANDLE_VALUE) {
+    return -1;
+  }
+
+  OVERLAPPED overlapped = {0};
+  overlapped.Offset = offset & 0xFFFFFFFF;
+  overlapped.OffsetHigh = (offset >> 32) & 0xFFFFFFFF;
+
+  DWORD bytes_read;
+  if (!ReadFile(file, buf, size, &bytes_read, &overlapped)) {
+    if (GetLastError() != ERROR_HANDLE_EOF) {
+      return -1;
+    }
+  }
+
+  return bytes_read;
+}
+#endif
 
 } // namespace
 
