@@ -51,7 +51,7 @@ struct PrintFormatter {
   bool capitalize_bool{false};
 };
 
-extern PrintFormatter global_formatter;
+PrintFormatter& get_global_formatter();
 
 /** The type from promoting the arrays' types with one another. */
 inline Dtype result_type(const array& a, const array& b) {
