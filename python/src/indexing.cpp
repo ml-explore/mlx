@@ -173,8 +173,9 @@ array mlx_gather_nd(
   src = gather(src, gather_indices, axes, slice_sizes);
 
   // Squeeze the array index dims
+  auto extra_dims = std::max(gather_indices[0].ndim(), 1ul);
   for (auto& ax : axes) {
-    ax += gather_indices[0].ndim();
+    ax += extra_dims;
   }
   return squeeze(src, axes);
 }
