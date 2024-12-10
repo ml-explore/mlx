@@ -458,55 +458,51 @@ array hadamard_transform(
       {astype(a, dtype, s)});
 }
 
+array squeeze_impl(
+    const array& a,
+    std::vector<int> axes,
+    StreamOrDevice s /* = {} */) {
+  for (auto& ax : axes) {
+    auto new_ax = ax < 0 ? ax + a.ndim() : ax;
+    if (new_ax < 0 || new_ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (a.shape(new_ax) != 1) {
+      std::ostringstream msg;
+      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
+          << a.shape(ax) << " which is not equal to 1.";
+      throw std::invalid_argument(msg.str());
+    }
+    ax = new_ax;
+  }
+  auto shape = Squeeze::output_shape(a, axes);
+  return array(
+      std::move(shape),
+      a.dtype(),
+      std::make_shared<Squeeze>(to_stream(s), std::move(axes)),
+      {a});
+}
+
 array squeeze(
     const array& a,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
   std::set<int> unique_axes;
   for (auto ax : axes) {
-    ax = ax < 0 ? ax + a.ndim() : ax;
-    if (ax < 0 || ax >= a.ndim()) {
-      std::ostringstream msg;
-      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
-          << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    if (a.shape(ax) != 1) {
-      std::ostringstream msg;
-      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
-          << a.shape(ax) << " which is not equal to 1.";
-      throw std::invalid_argument(msg.str());
-    }
-    unique_axes.insert(ax);
+    unique_axes.insert(ax < 0 ? ax + a.ndim() : ax);
   }
-
   if (unique_axes.size() != axes.size()) {
     throw std::invalid_argument("[squeeze] Received duplicate axes.");
   }
   std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  auto shape = Squeeze::output_shape(a, sorted_axes);
-  return array(
-      std::move(shape),
-      a.dtype(),
-      std::make_shared<Squeeze>(to_stream(s), std::move(sorted_axes)),
-      {a});
+  return squeeze_impl(a, std::move(sorted_axes), s);
 }
 
 array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  int ax = axis < 0 ? axis + a.ndim() : axis;
-  if (ax < 0 || ax >= a.ndim()) {
-    std::ostringstream msg;
-    msg << "[squeeze] Invalid axis " << axis << " for array with " << a.ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  auto shape = a.shape();
-  shape.erase(shape.begin() + ax);
-  return array(
-      std::move(shape),
-      a.dtype(),
-      std::make_shared<Squeeze>(to_stream(s), std::vector<int>{ax}),
-      {a});
+  return squeeze_impl(a, {axis}, s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -516,7 +512,7 @@ array squeeze(const array& a, StreamOrDevice s /* = {} */) {
       axes.push_back(i);
     }
   }
-  return squeeze(a, axes, s);
+  return squeeze_impl(a, std::move(axes), s);
 }
 
 array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
