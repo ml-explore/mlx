@@ -2077,6 +2077,7 @@ class Squeeze : public UnaryPrimitive {
   static Shape output_shape(const array& input, const std::vector<int>& axes);
 
  private:
+  void eval(const std::vector<array>& inputs, array& out);
   std::vector<int> axes_;
 };
 

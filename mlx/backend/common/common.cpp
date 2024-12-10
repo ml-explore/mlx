@@ -248,7 +248,7 @@ void Split::eval(
   }
 }
 
-void Squeeze::eval_cpu(const std::vector<array>& inputs, array& out) {
+void Squeeze::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   Strides strides;

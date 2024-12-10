@@ -382,7 +382,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Squeeze::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval_cpu(inputs, out);
+  eval(inputs, out);
 }
 
 void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {
