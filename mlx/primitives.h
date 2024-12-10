@@ -2215,7 +2215,6 @@ class Eigh : public Primitive {
       : Primitive(stream),
         uplo_(std::move(uplo)),
         compute_eigenvectors_(compute_eigenvectors) {}
-
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -2232,6 +2231,21 @@ class Eigh : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
   std::string uplo_;
   bool compute_eigenvectors_;
+};
+
+/* LU Factorization primitive. */
+class LUF : public Primitive {
+ public:
+  explicit LUF(Stream stream) : Primitive(stream) {}
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(LUF)
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 } // namespace mlx::core
