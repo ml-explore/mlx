@@ -56,7 +56,7 @@ inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
   os << val;
 }
 
-PrintFormatter& GetGlobalFormatter() {
+PrintFormatter& get_global_formatter() {
   static PrintFormatter formatter;
   return formatter;
 }
@@ -174,7 +174,7 @@ void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
       i = n - num_print - 1;
       index += s * (n - 2 * num_print - 1);
     } else if (is_last) {
-      GetGlobalFormatter().print(os, a.data<T>()[index]);
+      get_global_formatter().print(os, a.data<T>()[index]);
     } else {
       print_subarray<T>(os, a, index, dim + 1);
     }
@@ -190,7 +190,7 @@ void print_array(std::ostream& os, const array& a) {
   os << "array(";
   if (a.ndim() == 0) {
     auto data = a.data<T>();
-    GetGlobalFormatter().print(os, data[0]);
+    get_global_formatter().print(os, data[0]);
   } else {
     print_subarray<T>(os, a, 0, 0);
   }
