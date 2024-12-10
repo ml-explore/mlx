@@ -10,14 +10,14 @@
 #include "mlx/stream.h"
 #include "mlx/utils.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
-using namespace mlx::core;
 
 // Create the StreamContext on enter and delete on exit.
 class PyStreamContext {
  public:
-  PyStreamContext(StreamOrDevice s) : _inner(nullptr) {
+  PyStreamContext(mx::StreamOrDevice s) : _inner(nullptr) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -26,7 +26,7 @@ class PyStreamContext {
   }
 
   void enter() {
-    _inner = new StreamContext(_s);
+    _inner = new mx::StreamContext(_s);
   }
 
   void exit() {
@@ -37,39 +37,40 @@ class PyStreamContext {
   }
 
  private:
-  StreamOrDevice _s;
-  StreamContext* _inner;
+  mx::StreamOrDevice _s;
+  mx::StreamContext* _inner;
 };
 
 void init_stream(nb::module_& m) {
-  nb::class_<Stream>(
+  nb::class_<mx::Stream>(
       m,
       "Stream",
       R"pbdoc(
       A stream for running operations on a given device.
       )pbdoc")
-      .def_ro("device", &Stream::device)
+      .def_ro("device", &mx::Stream::device)
       .def(
           "__repr__",
-          [](const Stream& s) {
+          [](const mx::Stream& s) {
             std::ostringstream os;
             os << s;
             return os.str();
           })
-      .def("__eq__", [](const Stream& s, const nb::object& other) {
-        return nb::isinstance<Stream>(other) && s == nb::cast<Stream>(other);
+      .def("__eq__", [](const mx::Stream& s, const nb::object& other) {
+        return nb::isinstance<mx::Stream>(other) &&
+            s == nb::cast<mx::Stream>(other);
       });
 
-  nb::implicitly_convertible<Device::DeviceType, Device>();
+  nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
 
   m.def(
       "default_stream",
-      &default_stream,
+      &mx::default_stream,
       "device"_a,
       R"pbdoc(Get the device's default stream.)pbdoc");
   m.def(
       "set_default_stream",
-      &set_default_stream,
+      &mx::set_default_stream,
       "stream"_a,
       R"pbdoc(
         Set the default stream.
@@ -82,7 +83,7 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "new_stream",
-      &new_stream,
+      &mx::new_stream,
       "device"_a,
       R"pbdoc(Make a new stream on the given device.)pbdoc");
 
@@ -94,7 +95,7 @@ void init_stream(nb::module_& m) {
         Args:
             s: The stream or device to set as the default.
   )pbdoc")
-      .def(nb::init<StreamOrDevice>(), "s"_a)
+      .def(nb::init<mx::StreamOrDevice>(), "s"_a)
       .def("__enter__", [](PyStreamContext& scm) { scm.enter(); })
       .def(
           "__exit__",
@@ -107,7 +108,7 @@ void init_stream(nb::module_& m) {
           "traceback"_a = nb::none());
   m.def(
       "stream",
-      [](StreamOrDevice s) { return PyStreamContext(s); },
+      [](mx::StreamOrDevice s) { return PyStreamContext(s); },
       "s"_a,
       R"pbdoc(
         Create a context manager to set the default device and stream.
@@ -131,8 +132,8 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "synchronize",
-      [](const std::optional<Stream>& s) {
-        s ? synchronize(s.value()) : synchronize();
+      [](const std::optional<mx::Stream>& s) {
+        s ? mx::synchronize(s.value()) : mx::synchronize();
       },
       "stream"_a = nb::none(),
       R"pbdoc(

@@ -12,9 +12,8 @@
 
 #include "mlx/array.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
-
-using namespace mlx::core;
 
 using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
 using ScalarOrArray = std::variant<
@@ -22,7 +21,7 @@ using ScalarOrArray = std::variant<
     nb::int_,
     nb::float_,
     // Must be above ndarray
-    array,
+    mx::array,
     // Must be above complex
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>,
     std::complex<float>,
@@ -45,7 +44,7 @@ inline bool is_comparable_with_array(const ScalarOrArray& v) {
   // Checks if the value can be compared to an array (or is already an
   // mlx array)
   if (auto pv = std::get_if<nb::object>(&v); pv) {
-    return nb::isinstance<array>(*pv) || nb::hasattr(*pv, "__mlx_array__");
+    return nb::isinstance<mx::array>(*pv) || nb::hasattr(*pv, "__mlx_array__");
   } else {
     // If it's not an object, it's a scalar (nb::int_, nb::float_, etc.)
     // and can be compared to an array
@@ -66,12 +65,12 @@ inline void throw_invalid_operation(
   throw std::invalid_argument(msg.str());
 }
 
-array to_array(
+mx::array to_array(
     const ScalarOrArray& v,
-    std::optional<Dtype> dtype = std::nullopt);
+    std::optional<mx::Dtype> dtype = std::nullopt);
 
-std::pair<array, array> to_arrays(
+std::pair<mx::array, mx::array> to_arrays(
     const ScalarOrArray& a,
     const ScalarOrArray& b);
 
-array to_array_with_accessor(nb::object obj);
+mx::array to_array_with_accessor(nb::object obj);

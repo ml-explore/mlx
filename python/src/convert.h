@@ -9,15 +9,15 @@
 #include "mlx/array.h"
 #include "mlx/ops.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
-using namespace mlx::core;
 
 using ArrayInitType = std::variant<
     nb::bool_,
     nb::int_,
     nb::float_,
     // Must be above ndarray
-    array,
+    mx::array,
     // Must be above complex
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>,
     std::complex<float>,
@@ -25,17 +25,17 @@ using ArrayInitType = std::variant<
     nb::tuple,
     nb::object>;
 
-array nd_array_to_mlx(
+mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
-    std::optional<Dtype> dtype);
+    std::optional<mx::Dtype> dtype);
 
-nb::ndarray<nb::numpy> mlx_to_np_array(const array& a);
-nb::ndarray<> mlx_to_dlpack(const array& a);
+nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
+nb::ndarray<> mlx_to_dlpack(const mx::array& a);
 
-nb::object to_scalar(array& a);
+nb::object to_scalar(mx::array& a);
 
-nb::object tolist(array& a);
+nb::object tolist(mx::array& a);
 
-array create_array(ArrayInitType v, std::optional<Dtype> t);
-array array_from_list(nb::list pl, std::optional<Dtype> dtype);
-array array_from_list(nb::tuple pl, std::optional<Dtype> dtype);
+mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t);
+mx::array array_from_list(nb::list pl, std::optional<mx::Dtype> dtype);
+mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype);

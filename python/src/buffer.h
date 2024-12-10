@@ -14,37 +14,37 @@
 #define Py_bf_releasebuffer 2
 #endif
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
-using namespace mlx::core;
 
-std::string buffer_format(const array& a) {
+std::string buffer_format(const mx::array& a) {
   // https://docs.python.org/3.10/library/struct.html#format-characters
   switch (a.dtype()) {
-    case bool_:
+    case mx::bool_:
       return "?";
-    case uint8:
+    case mx::uint8:
       return "B";
-    case uint16:
+    case mx::uint16:
       return "H";
-    case uint32:
+    case mx::uint32:
       return "I";
-    case uint64:
+    case mx::uint64:
       return "Q";
-    case int8:
+    case mx::int8:
       return "b";
-    case int16:
+    case mx::int16:
       return "h";
-    case int32:
+    case mx::int32:
       return "i";
-    case int64:
+    case mx::int64:
       return "q";
-    case float16:
+    case mx::float16:
       return "e";
-    case float32:
+    case mx::float32:
       return "f";
-    case bfloat16:
+    case mx::bfloat16:
       return "B";
-    case complex64:
+    case mx::complex64:
       return "Zf\0";
     default: {
       std::ostringstream os;
@@ -84,7 +84,7 @@ struct buffer_info {
 
 extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   std::memset(view, 0, sizeof(Py_buffer));
-  auto a = nb::cast<array>(nb::handle(obj));
+  auto a = nb::cast<mx::array>(nb::handle(obj));
 
   {
     nb::gil_scoped_release nogil;
