@@ -1848,7 +1848,7 @@ bool Gather::is_equivalent(const Primitive& other) const {
 std::vector<Shape> Gather::output_shapes(const std::vector<array>& inputs) {
   Shape out_shape;
   if (inputs.size() > 1) {
-    out_shape = inputs[0].shape();
+    out_shape = inputs[1].shape();
   }
   out_shape.insert(out_shape.end(), slice_sizes_.begin(), slice_sizes_.end());
   return {std::move(out_shape)};
