@@ -3,6 +3,8 @@
 // Required for using M_2_SQRTPI in MSVC.
 #define _USE_MATH_DEFINES
 
+#include <iostream> // TODO
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -3845,6 +3847,57 @@ std::pair<std::vector<array>, std::vector<int>> Subtract::vmap(
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
   return {{subtract(a, b, stream())}, {to_ax}};
+}
+
+std::vector<array> Squeeze::vjp(
+    const std::vector<array>&,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {expand_dims(cotangents[0], axes_, stream())};
+}
+
+std::vector<array> Squeeze::jvp(
+    const std::vector<array>&,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {squeeze(tangents[0], axes_, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> Squeeze::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0];
+  auto squeeze_axes = axes_;
+  for (auto& s : squeeze_axes) {
+    if (s >= axes[0]) {
+      s++;
+    } else {
+      ax--;
+    }
+  }
+  return {{squeeze(inputs[0], std::move(squeeze_axes), stream())}, {ax}};
+}
+
+bool Squeeze::is_equivalent(const Primitive& other) const {
+  const Squeeze& a_other = static_cast<const Squeeze&>(other);
+  return (axes_ == a_other.axes_);
+}
+
+Shape Squeeze::output_shape(const array& input, const std::vector<int>& axes) {
+  Shape shape;
+  for (int i = 0, j = 0; i < input.ndim(); ++i) {
+    if (j < axes.size() && i == axes[j]) {
+      j++;
+    } else {
+      shape.push_back(input.shape(i));
+    }
+  }
+  return shape;
+}
+
+std::vector<Shape> Squeeze::output_shapes(const std::vector<array>& inputs) {
+  return {Squeeze::output_shape(inputs[0], axes_)};
 }
 
 std::vector<array> Tan::vjp(
