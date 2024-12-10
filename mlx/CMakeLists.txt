@@ -23,6 +23,11 @@ if(MSVC)
   target_compile_options(mlx PUBLIC /wd4068 /wd4244 /wd4267 /wd4804)
 endif()
 
+if(WIN32)
+  # Export symbols by default to behave like macOS/linux.
+  set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
+
 if(MLX_BUILD_CPU)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
 else()
