@@ -2731,9 +2731,7 @@ array take(
   }
 
   // Squeeze the axis we take over
-  auto out_shape = out.shape();
-  out_shape.erase(out_shape.begin() + indices.ndim() + axis);
-  return reshape(out, std::move(out_shape), s);
+  return squeeze(out, indices.ndim() + axis, s);
 }
 
 array take(const array& a, const array& indices, StreamOrDevice s /* = {} */) {
@@ -2810,8 +2808,10 @@ array take_along_axis(
   auto out = gather(a, nd_indices, dims, slice_sizes, s);
 
   // Squeeze out the slice shape
-  Shape out_shape(out.shape().begin(), out.shape().begin() + a.ndim());
-  return reshape(out, std::move(out_shape), s);
+  for (auto& d : dims) {
+    d += a.ndim();
+  }
+  return squeeze(out, dims, s);
 }
 
 array put_along_axis(
