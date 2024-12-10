@@ -98,16 +98,13 @@ class QuantizedEmbedding(Module):
         self.freeze()
 
     def __call__(self, x):
-        s = x.shape
-        x = x.flatten()
-        out = mx.dequantize(
+        return mx.dequantize(
             self["weight"][x],
             scales=self["scales"][x],
             biases=self["biases"][x],
             group_size=self.group_size,
             bits=self.bits,
         )
-        return out.reshape(*s, -1)
 
     def as_linear(self, x):
         """
