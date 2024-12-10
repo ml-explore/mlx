@@ -2603,17 +2603,21 @@ array matmul(
   auto out_shape = a.shape();
   out_shape.back() = b.shape(-1);
 
-  auto p = std::make_shared<Matmul>(to_stream(s));
+  auto out = array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<Matmul>(to_stream(s)),
+      {a, b});
 
   // Remove the possibly inserted singleton dimensions
-  if (in_a.ndim() == 1 || in_b.ndim() == 1) {
-    auto out = array(out_shape, out_type, std::move(p), {a, b});
-    out_shape.erase(
-        out_shape.end() - ((in_a.ndim() == 1) ? 2 : 1),
-        out_shape.end() - ((in_b.ndim() == 1) ? 0 : 1));
-    return reshape(out, std::move(out_shape), s);
+  std::vector<int> axes;
+  if (in_a.ndim() == 1) {
+    axes.push_back(out.ndim() - 2);
   }
-  return array(std::move(out_shape), out_type, std::move(p), {a, b});
+  if (in_b.ndim() == 1) {
+    axes.push_back(out.ndim() - 1);
+  }
+  return axes.empty() ? out : squeeze(out, axes, s);
 }
 
 array gather(
@@ -3945,17 +3949,20 @@ array addmm(
   }
 
   auto out = array(
-      out_shape,
+      std::move(out_shape),
       out_type,
       std::make_shared<AddMM>(to_stream(s), alpha, beta),
       {a, b, c});
 
   // Remove the possibly inserted singleton dimensions
-  if (in_a_ndim == 1 || in_b_ndim == 1) {
-    out = reshape(out, out_shape_adjusted, s);
+  std::vector<int> axes;
+  if (in_a_ndim == 1) {
+    axes.push_back(out.ndim() - 2);
   }
-
-  return out;
+  if (in_b_ndim == 1) {
+    axes.push_back(out.ndim() - 1);
+  }
+  return axes.empty() ? out : squeeze(out, axes, s);
 }
 
 /** Compute matrix product with tile-level masking */
@@ -4120,20 +4127,19 @@ array block_masked_mm(
 
   // Caculate array
   auto out = array(
-      out_shape,
+      std::move(out_shape),
       out_type,
       std::make_shared<BlockMaskedMM>(to_stream(s), block_size),
       std::move(inputs));
-
   // Remove the possibly inserted singleton dimensions
-  if (in_a_ndim == 1 || in_b_ndim == 1) {
-    out_shape.erase(
-        out_shape.end() - ((in_a_ndim == 1) ? 2 : 1),
-        out_shape.end() - ((in_b_ndim == 1) ? 0 : 1));
-    out = reshape(out, out_shape, s);
+  std::vector<int> axes;
+  if (in_a_ndim == 1) {
+    axes.push_back(out.ndim() - 2);
   }
-
-  return out;
+  if (in_b_ndim == 1) {
+    axes.push_back(out.ndim() - 1);
+  }
+  return axes.empty() ? out : squeeze(out, axes, s);
 }
 
 /** Compute matrix product with matrix-level gather */
@@ -4222,20 +4228,20 @@ array gather_mm(
 
   // Caculate array
   auto out = array(
-      out_shape,
+      std::move(out_shape),
       out_type,
       std::make_shared<GatherMM>(to_stream(s)),
       {a, b, lhs_indices, rhs_indices});
 
   // Remove the possibly inserted singleton dimensions
-  if (in_a_ndim == 1 || in_b_ndim == 1) {
-    out_shape.erase(
-        out_shape.end() - ((in_a_ndim == 1) ? 2 : 1),
-        out_shape.end() - ((in_b_ndim == 1) ? 0 : 1));
-    out = reshape(out, out_shape, s);
+  std::vector<int> axes;
+  if (in_a_ndim == 1) {
+    axes.push_back(out.ndim() - 2);
   }
-
-  return out;
+  if (in_b_ndim == 1) {
+    axes.push_back(out.ndim() - 1);
+  }
+  return axes.empty() ? out : squeeze(out, axes, s);
 }
 
 array diagonal(
