@@ -206,6 +206,8 @@ MTL::ComputePipelineState* get_copy_kernel(
     kernel_source += get_template_definition(
         "gn4large_" + lib_name, "copy_g", in_type, out_type, 4);
     kernel_source += get_template_definition(
+        "gg1large_" + lib_name, "copy_gg_nd1", in_type, out_type);
+    kernel_source += get_template_definition(
         "gg2large_" + lib_name, "copy_gg_nd2", in_type, out_type);
     kernel_source += get_template_definition(
         "gg3large_" + lib_name, "copy_gg_nd3", in_type, out_type);
