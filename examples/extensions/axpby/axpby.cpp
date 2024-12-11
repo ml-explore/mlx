@@ -60,7 +60,7 @@ mx::array axpby(
   return mx::array(
       /* const std::vector<int>& shape = */ out_shape,
       /* mx::Dtype dtype = */ out_dtype,
-      /* std::unique_ptr<Primitive> primitive = */
+      /* std::unique_ptr<mx::Primitive> primitive = */
       std::make_shared<Axpby>(to_stream(s), alpha, beta),
       /* const std::vector<mx::array>& inputs = */ broadcasted_inputs);
 }
