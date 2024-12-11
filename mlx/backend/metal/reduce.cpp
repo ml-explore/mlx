@@ -393,7 +393,7 @@ void row_reduce_small(
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_small";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -411,7 +411,7 @@ void row_reduce_small(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "size_t" : "int",
       n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -490,7 +490,7 @@ void row_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "row_reduce_looped";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -508,7 +508,7 @@ void row_reduce_looped(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "size_t" : "int",
       n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -574,7 +574,7 @@ void strided_reduce_small(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   const std::string func_name = "col_reduce_small";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -592,7 +592,7 @@ void strided_reduce_small(
       op_name,
       in_type,
       out_type,
-      large ? "size_t" : "uint",
+      large ? "size_t" : "int",
       n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -665,7 +665,7 @@ void strided_reduce_longcolumn(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_longcolumn";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -683,7 +683,7 @@ void strided_reduce_longcolumn(
       op_name,
       in_type,
       out_type,
-      large ? "int64_t" : "uint",
+      large ? "int64_t" : "int",
       n);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -706,7 +706,7 @@ void strided_reduce_longcolumn(
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
   kname = func_name;
-  large = intermediate.size() > UINT32_MAX;
+  large = intermediate.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -718,7 +718,7 @@ void strided_reduce_longcolumn(
       op_name,
       intermediate.dtype(),
       out_type,
-      large ? "int64_t" : "uint",
+      large ? "int64_t" : "int",
       1,
       32,
       32);
@@ -760,7 +760,7 @@ void strided_reduce_looped(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_looped";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -782,7 +782,7 @@ void strided_reduce_looped(
       op_name,
       in_type,
       out_type,
-      large ? "int64_t" : "uint",
+      large ? "int64_t" : "int",
       n,
       BM,
       BN);
@@ -837,7 +837,7 @@ void strided_reduce_2pass(
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   std::string func_name = "col_reduce_2pass";
   std::string kname = func_name;
-  bool large = in.size() > UINT32_MAX;
+  bool large = in.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -859,7 +859,7 @@ void strided_reduce_2pass(
       op_name,
       in_type,
       out_type,
-      large ? "int64_t" : "uint",
+      large ? "int64_t" : "int",
       n,
       BM,
       BN);
@@ -882,7 +882,7 @@ void strided_reduce_2pass(
   // Set the 2nd kernel
   func_name = "col_reduce_looped";
   kname = func_name;
-  large = intermediate.size() > UINT32_MAX;
+  large = intermediate.size() > INT32_MAX;
   if (large) {
     kname += "_large";
   }
@@ -894,7 +894,7 @@ void strided_reduce_2pass(
       op_name,
       intermediate.dtype(),
       out_type,
-      large ? "int64_t" : "uint",
+      large ? "int64_t" : "int",
       1,
       32,
       32);
