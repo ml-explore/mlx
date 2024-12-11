@@ -19,7 +19,7 @@
 #include "mlx/backend/metal/utils.h"
 #endif
 
-namespace mlx::core {
+namespace my_ext {
 
 ///////////////////////////////////////////////////////////////////////////////
 // Operation Implementation
@@ -37,7 +37,7 @@ mx::array axpby(
     const mx::array& y, // Input mx::array y
     const float alpha, // Scaling factor for x
     const float beta, // Scaling factor for y
-    StreamOrDevice s /* = {} */ // Stream on which to schedule the operation
+    mx::StreamOrDevice s /* = {} */ // Stream on which to schedule the operation
 ) {
   // Promote dtypes between x and y as needed
   auto promoted_dtype = promote_types(x.dtype(), y.dtype());
@@ -80,7 +80,7 @@ void axpby_impl(
   // malloc_or_wait synchronously allocates available memory
   // There may be a wait executed here if the allocation is requested
   // under memory-pressured conditions
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
 
   // Collect input and output data pointers
   const T* x_ptr = x.data<T>();
@@ -94,8 +94,8 @@ void axpby_impl(
   // Do the element-wise operation for each output
   for (size_t out_idx = 0; out_idx < out.size(); out_idx++) {
     // Map linear indices to offsets in x and y
-    auto x_offset = elem_to_loc(out_idx, x.shape(), x.strides());
-    auto y_offset = elem_to_loc(out_idx, y.shape(), y.strides());
+    auto x_offset = mx::elem_to_loc(out_idx, x.shape(), x.strides());
+    auto y_offset = mx::elem_to_loc(out_idx, y.shape(), y.strides());
 
     // We allocate the output to be contiguous and regularly strided
     // (defaults to row major) and hence it doesn't need additional mapping
@@ -116,12 +116,12 @@ void Axpby::eval(
   // Dispatch to the correct dtype
   if (out.dtype() == mx::float32) {
     return axpby_impl<float>(x, y, out, alpha_, beta_);
-  } else if (out.dtype() == float16) {
-    return axpby_impl<float16_t>(x, y, out, alpha_, beta_);
-  } else if (out.dtype() == bfloat16) {
-    return axpby_impl<bfloat16_t>(x, y, out, alpha_, beta_);
-  } else if (out.dtype() == complex64) {
-    return axpby_impl<complex64_t>(x, y, out, alpha_, beta_);
+  } else if (out.dtype() == mx::float16) {
+    return axpby_impl<mx::float16_t>(x, y, out, alpha_, beta_);
+  } else if (out.dtype() == mx::bfloat16) {
+    return axpby_impl<mx::bfloat16_t>(x, y, out, alpha_, beta_);
+  } else if (out.dtype() == mx::complex64) {
+    return axpby_impl<mx::complex64_t>(x, y, out, alpha_, beta_);
   } else {
     throw std::runtime_error(
         "Axpby is only supported for floating point types.");
@@ -191,7 +191,7 @@ void Axpby::eval_cpu(
   }
 
   // Fall back to common backend if specializations are not available
-  mx::eval(inputs, outputs);
+  eval(inputs, outputs);
 }
 
 #else // Accelerate not available
@@ -199,8 +199,8 @@ void Axpby::eval_cpu(
 /** Evaluate primitive on CPU falling back to common backend */
 void Axpby::eval_cpu(
     const std::vector<mx::array>& inputs,
-    const std::vector<mx::array>& outputs) {
-  mx::eval(inputs, outputs);
+    std::vector<mx::array>& outputs) {
+  eval(inputs, outputs);
 }
 
 #endif
@@ -367,4 +367,4 @@ bool Axpby::is_equivalent(const Primitive& other) const {
   return alpha_ == r_other.alpha_ && beta_ == r_other.beta_;
 }
 
-} // namespace mlx::core
+} // namespace my_ext

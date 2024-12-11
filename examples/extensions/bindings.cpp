@@ -13,7 +13,7 @@ NB_MODULE(_ext, m) {
 
   m.def(
       "axpby",
-      &axpby,
+      &my_ext::axpby,
       "x"_a,
       "y"_a,
       "alpha"_a,
