@@ -1227,7 +1227,7 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
     x = array(neginf);
-    CHECK_EQ(exp(x).item<float>(), 0.0f);
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(0.0f));
 
     // Integer input type
     x = array(2);

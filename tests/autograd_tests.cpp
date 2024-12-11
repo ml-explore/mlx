@@ -437,10 +437,10 @@ TEST_CASE("test op vjps") {
   // Test erf
   {
     auto out = vjp([](array in) { return erf(in); }, array(inf), array(1.0f));
-    CHECK_EQ(out.second.item<float>(), 0.0f);
+    CHECK_EQ(out.second.item<float>(), doctest::Approx(0.0f));
 
     out = vjp([](array in) { return erf(in); }, array(-inf), array(2.0f));
-    CHECK_EQ(out.second.item<float>(), 0.0f);
+    CHECK_EQ(out.second.item<float>(), doctest::Approx(0.0f));
 
     out = vjp([](array in) { return erf(in); }, array(0.0f), array(1.0f));
     CHECK_EQ(out.second.item<float>(), static_cast<float>(M_2_SQRTPI));

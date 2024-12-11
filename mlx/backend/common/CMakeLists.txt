@@ -10,7 +10,7 @@ add_custom_command(
   COMMAND
     /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
     ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp ${COMPILER}
-    ${PROJECT_SOURCE_DIR} ${CLANG}
+    ${PROJECT_SOURCE_DIR} ${CLANG} ${CMAKE_SYSTEM_PROCESSOR}
   DEPENDS make_compiled_preamble.sh
           compiled_preamble.h
           ${PROJECT_SOURCE_DIR}/mlx/types/half_types.h

@@ -10,15 +10,16 @@ OUTPUT_FILE=$1
 GCC=$2
 SRCDIR=$3
 CLANG=$4
+ARCH=$5
 
 if [ "$CLANG" = "TRUE" ]; then
   read -r -d '' INCLUDES <<- EOM
-  #include <cmath>
-  #include <complex>
-  #include <cstdint>
-  #include <vector>
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <vector>
 EOM
-CC_FLAGS=""
+CC_FLAGS="-arch ${ARCH}"
 else
 CC_FLAGS="-std=c++17"
 fi
