@@ -125,10 +125,11 @@ if(WIN32)
     dlfcn-win32
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
     GIT_TAG v1.4.1
+    SOURCE_SUBDIR use-an-unexist-path-to-skip-cmake-of-dlfcn-win32
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(dlfcn-win32)
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  target_link_libraries(mlx PRIVATE dl)
+  target_sources(mlx PRIVATE ${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c)
 endif()
 
 if(MLX_BUILD_CPU)
@@ -264,7 +265,10 @@ install(
   EXPORT MLXTargets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  RUNTIME
+    DESTINATION
+      # On Windows, DLLs must be put in the same dir with the python bindings.
+      $<IF:$<BOOL:${WIN32}>,${CMAKE_INSTALL_PREFIX},${CMAKE_INSTALL_BINDIR}>
   INCLUDES
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
