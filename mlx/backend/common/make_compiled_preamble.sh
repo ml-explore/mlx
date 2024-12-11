@@ -14,7 +14,7 @@ ARCH=$5
 
 if [ "$CLANG" = "TRUE" ]; then
   read -r -d '' INCLUDES <<- EOM
-  #include <cmath>
+#include <cmath>
 #include <complex>
 #include <cstdint>
 #include <vector>
