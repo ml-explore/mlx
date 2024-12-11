@@ -150,10 +150,10 @@ void axpby_impl_accelerate(
   // The data in the output array is allocated to match the strides in y
   // such that x, y, and out are contiguous in the same mode and
   // no transposition is needed
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
 
   // We then copy over the elements using the contiguous vector specialization
-  copy_inplace(y, out, CopyType::Vector);
+  copy_inplace(y, out, mx::CopyType::Vector);
 
   // Get x and y pointers for catlas_saxpby
   const T* x_ptr = x.data<T>();
@@ -235,12 +235,12 @@ void Axpby::eval_gpu(
   // Allocate output memory with strides based on specialization
   if (contiguous_kernel) {
     out.set_data(
-        allocator::malloc_or_wait(x.data_size() * out.itemsize()),
+        mx::allocator::malloc_or_wait(x.data_size() * out.itemsize()),
         x.data_size(),
         x.strides(),
         x.flags());
   } else {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
   }
 
   // Resolve name of kernel (corresponds to axpby.metal)
