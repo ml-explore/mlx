@@ -8,14 +8,12 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-using namespace mlx::core;
-
 NB_MODULE(_ext, m) {
   m.doc() = "Sample extension for MLX";
 
   m.def(
       "axpby",
-      &axpby,
+      &my_ext::axpby,
       "x"_a,
       "y"_a,
       "alpha"_a,
