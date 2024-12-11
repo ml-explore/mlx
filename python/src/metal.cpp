@@ -8,22 +8,21 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
-
-using namespace mlx::core;
 
 void init_metal(nb::module_& m) {
   nb::module_ metal = m.def_submodule("metal", "mlx.metal");
   metal.def(
       "is_available",
-      &metal::is_available,
+      &mx::metal::is_available,
       R"pbdoc(
       Check if the Metal back-end is available.
       )pbdoc");
   metal.def(
       "get_active_memory",
-      &metal::get_active_memory,
+      &mx::metal::get_active_memory,
       R"pbdoc(
       Get the actively used memory in bytes.
 
@@ -32,7 +31,7 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "get_peak_memory",
-      &metal::get_peak_memory,
+      &mx::metal::get_peak_memory,
       R"pbdoc(
       Get the peak amount of used memory in bytes.
 
@@ -41,13 +40,13 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "reset_peak_memory",
-      &metal::reset_peak_memory,
+      &mx::metal::reset_peak_memory,
       R"pbdoc(
       Reset the peak memory to zero.
       )pbdoc");
   metal.def(
       "get_cache_memory",
-      &metal::get_cache_memory,
+      &mx::metal::get_cache_memory,
       R"pbdoc(
       Get the cache size in bytes.
 
@@ -56,7 +55,7 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "set_memory_limit",
-      &metal::set_memory_limit,
+      &mx::metal::set_memory_limit,
       "limit"_a,
       nb::kw_only(),
       "relaxed"_a = true,
@@ -81,7 +80,7 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "set_cache_limit",
-      &metal::set_cache_limit,
+      &mx::metal::set_cache_limit,
       "limit"_a,
       R"pbdoc(
       Set the free cache limit.
@@ -101,7 +100,7 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "set_wired_limit",
-      &metal::set_wired_limit,
+      &mx::metal::set_wired_limit,
       "limit"_a,
       R"pbdoc(
       Set the wired size limit.
@@ -133,7 +132,7 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "clear_cache",
-      &metal::clear_cache,
+      &mx::metal::clear_cache,
       R"pbdoc(
       Clear the memory cache.
 
@@ -142,7 +141,7 @@ void init_metal(nb::module_& m) {
 
   metal.def(
       "start_capture",
-      &metal::start_capture,
+      &mx::metal::start_capture,
       "path"_a,
       R"pbdoc(
       Start a Metal capture.
@@ -153,13 +152,13 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "stop_capture",
-      &metal::stop_capture,
+      &mx::metal::stop_capture,
       R"pbdoc(
       Stop a Metal capture.
       )pbdoc");
   metal.def(
       "device_info",
-      &metal::device_info,
+      &mx::metal::device_info,
       R"pbdoc(
       Get information about the GPU device and system settings.
 

@@ -14,22 +14,24 @@
 #include <variant>
 #include "mlx/io.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
-using namespace mlx::core;
 
 using LoadOutputTypes = std::variant<
-    array,
-    std::unordered_map<std::string, array>,
-    SafetensorsLoad,
-    GGUFLoad>;
+    mx::array,
+    std::unordered_map<std::string, mx::array>,
+    mx::SafetensorsLoad,
+    mx::GGUFLoad>;
 
-SafetensorsLoad mlx_load_safetensor_helper(nb::object file, StreamOrDevice s);
+mx::SafetensorsLoad mlx_load_safetensor_helper(
+    nb::object file,
+    mx::StreamOrDevice s);
 void mlx_save_safetensor_helper(
     nb::object file,
     nb::dict d,
     std::optional<nb::dict> m);
 
-GGUFLoad mlx_load_gguf_helper(nb::object file, StreamOrDevice s);
+mx::GGUFLoad mlx_load_gguf_helper(nb::object file, mx::StreamOrDevice s);
 
 void mlx_save_gguf_helper(
     nb::object file,
@@ -40,8 +42,8 @@ LoadOutputTypes mlx_load_helper(
     nb::object file,
     std::optional<std::string> format,
     bool return_metadata,
-    StreamOrDevice s);
-void mlx_save_helper(nb::object file, array a);
+    mx::StreamOrDevice s);
+void mlx_save_helper(nb::object file, mx::array a);
 void mlx_savez_helper(
     nb::object file,
     nb::args args,

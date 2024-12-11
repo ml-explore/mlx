@@ -9,26 +9,27 @@
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/ops.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
-using namespace mlx::core;
 
 void init_distributed(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "distributed", "mlx.core.distributed: Communication operations");
 
-  nb::class_<distributed::Group>(
+  nb::class_<mx::distributed::Group>(
       m,
       "Group",
       R"pbcopy(
         An :class:`mlx.core.distributed.Group` represents a group of independent mlx
         processes that can communicate.
       )pbcopy")
-      .def("rank", &distributed::Group::rank, "Get the rank of this process")
-      .def("size", &distributed::Group::size, "Get the size of the group")
+      .def(
+          "rank", &mx::distributed::Group::rank, "Get the rank of this process")
+      .def("size", &mx::distributed::Group::size, "Get the size of the group")
       .def(
           "split",
-          &distributed::Group::split,
+          &mx::distributed::Group::split,
           "color"_a,
           "key"_a = -1,
           nb::sig("def split(self, color: int, key: int = -1) -> Group"),
@@ -48,14 +49,14 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "is_available",
-      &distributed::is_available,
+      &mx::distributed::is_available,
       R"pbdoc(
       Check if a communication backend is available.
       )pbdoc");
 
   m.def(
       "init",
-      &distributed::init,
+      &mx::distributed::init,
       "strict"_a = false,
       nb::sig("def init(strict: bool = False) -> Group"),
       R"pbdoc(
@@ -72,7 +73,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "all_sum",
-      &distributed::all_sum,
+      &mx::distributed::all_sum,
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
@@ -98,7 +99,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "all_gather",
-      &distributed::all_gather,
+      &mx::distributed::all_gather,
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
@@ -125,7 +126,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "send",
-      &distributed::send,
+      &mx::distributed::send,
       "x"_a,
       "dst"_a,
       nb::kw_only(),
@@ -152,7 +153,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "recv",
-      &distributed::recv,
+      &mx::distributed::recv,
       "shape"_a,
       "dtype"_a,
       "src"_a,
@@ -181,7 +182,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "recv_like",
-      &distributed::recv_like,
+      &mx::distributed::recv_like,
       "x"_a,
       "src"_a,
       nb::kw_only(),

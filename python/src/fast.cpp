@@ -13,9 +13,9 @@
 #include "mlx/fast.h"
 #include "mlx/ops.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
-using namespace mlx::core;
 
 void init_fast(nb::module_& parent_module) {
   auto m =
@@ -23,7 +23,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rms_norm",
-      &fast::rms_norm,
+      &mx::fast::rms_norm,
       "x"_a,
       "weight"_a,
       "eps"_a,
@@ -49,7 +49,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "layer_norm",
-      &fast::layer_norm,
+      &mx::fast::layer_norm,
       "x"_a,
       "weight"_a.none(),
       "bias"_a.none(),
@@ -79,7 +79,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rope",
-      &fast::rope,
+      &mx::fast::rope,
       "a"_a,
       "dims"_a,
       nb::kw_only(),
@@ -114,7 +114,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "scaled_dot_product_attention",
-      &fast::scaled_dot_product_attention,
+      &mx::fast::scaled_dot_product_attention,
       "q"_a,
       "k"_a,
       "v"_a,
@@ -170,7 +170,7 @@ void init_fast(nb::module_& parent_module) {
          const std::string& header,
          bool ensure_row_contiguous,
          bool atomic_outputs) {
-        auto kernel = fast::metal_kernel(
+        auto kernel = mx::fast::metal_kernel(
             name,
             input_names,
             output_names,
@@ -182,7 +182,7 @@ void init_fast(nb::module_& parent_module) {
             [kernel = std::move(kernel)](
                 const std::vector<ScalarOrArray>& inputs_,
                 const std::vector<std::vector<int>>& output_shapes,
-                const std::vector<Dtype>& output_dtypes,
+                const std::vector<mx::Dtype>& output_dtypes,
                 std::tuple<int, int, int> grid,
                 std::tuple<int, int, int> threadgroup,
                 const std::optional<
@@ -190,12 +190,12 @@ void init_fast(nb::module_& parent_module) {
                     template_args_ = std::nullopt,
                 std::optional<float> init_value = std::nullopt,
                 bool verbose = false,
-                StreamOrDevice s = {}) {
-              std::vector<array> inputs;
+                mx::StreamOrDevice s = {}) {
+              std::vector<mx::array> inputs;
               for (const auto& value : inputs_) {
                 inputs.push_back(to_array(value, std::nullopt));
               }
-              std::vector<std::pair<std::string, fast::TemplateArg>>
+              std::vector<std::pair<std::string, mx::fast::TemplateArg>>
                   template_args;
               if (template_args_) {
                 for (const auto& [name, value] : template_args_.value()) {
@@ -206,8 +206,8 @@ void init_fast(nb::module_& parent_module) {
                   } else if (nb::isinstance<int>(value)) {
                     int int_val = nb::cast<int>(value);
                     template_args.emplace_back(name, int_val);
-                  } else if (nb::isinstance<Dtype>(value)) {
-                    Dtype dtype = nb::cast<Dtype>(value);
+                  } else if (nb::isinstance<mx::Dtype>(value)) {
+                    mx::Dtype dtype = nb::cast<mx::Dtype>(value);
                     template_args.emplace_back(name, dtype);
                   } else {
                     throw std::invalid_argument(

@@ -7,32 +7,35 @@
 #include "mlx/array.h"
 #include "python/src/utils.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
-using namespace mlx::core;
 
-array mlx_get_item(const array& src, const nb::object& obj);
-void mlx_set_item(array& src, const nb::object& obj, const ScalarOrArray& v);
-array mlx_add_item(
-    const array& src,
+mx::array mlx_get_item(const mx::array& src, const nb::object& obj);
+void mlx_set_item(
+    mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-array mlx_subtract_item(
-    const array& src,
+mx::array mlx_add_item(
+    const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-array mlx_multiply_item(
-    const array& src,
+mx::array mlx_subtract_item(
+    const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-array mlx_divide_item(
-    const array& src,
+mx::array mlx_multiply_item(
+    const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-array mlx_maximum_item(
-    const array& src,
+mx::array mlx_divide_item(
+    const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-array mlx_minimum_item(
-    const array& src,
+mx::array mlx_maximum_item(
+    const mx::array& src,
+    const nb::object& obj,
+    const ScalarOrArray& v);
+mx::array mlx_minimum_item(
+    const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);

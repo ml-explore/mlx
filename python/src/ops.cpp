@@ -18,17 +18,17 @@
 #include "python/src/load.h"
 #include "python/src/utils.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
-using namespace mlx::core;
 
 using Scalar = std::variant<int, double>;
 
-Dtype scalar_to_dtype(Scalar scalar) {
+mx::Dtype scalar_to_dtype(Scalar scalar) {
   if (std::holds_alternative<int>(scalar)) {
-    return int32;
+    return mx::int32;
   } else {
-    return float32;
+    return mx::float32;
   }
 }
 
@@ -43,7 +43,7 @@ double scalar_to_double(Scalar s) {
 void init_ops(nb::module_& m) {
   m.def(
       "reshape",
-      &reshape,
+      &mx::reshape,
       nb::arg(),
       "shape"_a,
       nb::kw_only(),
@@ -64,10 +64,12 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "flatten",
-      [](const array& a,
+      [](const mx::array& a,
          int start_axis,
          int end_axis,
-         const StreamOrDevice& s) { return flatten(a, start_axis, end_axis); },
+         const mx::StreamOrDevice& s) {
+        return mx::flatten(a, start_axis, end_axis);
+      },
       nb::arg(),
       "start_axis"_a = 0,
       "end_axis"_a = -1,
@@ -103,13 +105,13 @@ void init_ops(nb::module_& m) {
   )pbdoc");
   m.def(
       "squeeze",
-      [](const array& a, const IntOrVec& v, const StreamOrDevice& s) {
+      [](const mx::array& a, const IntOrVec& v, const mx::StreamOrDevice& s) {
         if (std::holds_alternative<std::monostate>(v)) {
-          return squeeze(a, s);
+          return mx::squeeze(a, s);
         } else if (auto pv = std::get_if<int>(&v); pv) {
-          return squeeze(a, *pv, s);
+          return mx::squeeze(a, *pv, s);
         } else {
-          return squeeze(a, std::get<std::vector<int>>(v), s);
+          return mx::squeeze(a, std::get<std::vector<int>>(v), s);
         }
       },
       nb::arg(),
@@ -132,13 +134,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "expand_dims",
-      [](const array& a,
+      [](const mx::array& a,
          const std::variant<int, std::vector<int>>& v,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&v); pv) {
-          return expand_dims(a, *pv, s);
+          return mx::expand_dims(a, *pv, s);
         } else {
-          return expand_dims(a, std::get<std::vector<int>>(v), s);
+          return mx::expand_dims(a, std::get<std::vector<int>>(v), s);
         }
       },
       nb::arg(),
@@ -159,8 +161,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "abs",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::abs(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::abs(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -178,8 +180,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sign",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return sign(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::sign(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -197,8 +199,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "negative",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return negative(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::negative(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -216,9 +218,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "add",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return add(a, b, s);
+        return mx::add(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -241,9 +245,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "subtract",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return subtract(a, b, s);
+        return mx::subtract(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -266,9 +272,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "multiply",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return multiply(a, b, s);
+        return mx::multiply(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -291,9 +299,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "divide",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return divide(a, b, s);
+        return mx::divide(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -316,9 +326,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "divmod",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return divmod(a, b, s);
+        return mx::divmod(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -342,9 +354,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "floor_divide",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return floor_divide(a, b, s);
+        return mx::floor_divide(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -367,9 +381,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "remainder",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return remainder(a, b, s);
+        return mx::remainder(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -393,9 +409,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "equal",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return equal(a, b, s);
+        return mx::equal(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -418,9 +436,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "not_equal",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return not_equal(a, b, s);
+        return mx::not_equal(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -443,9 +463,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "less",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return less(a, b, s);
+        return mx::less(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -468,9 +490,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "less_equal",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return less_equal(a, b, s);
+        return mx::less_equal(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -493,9 +517,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "greater",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return greater(a, b, s);
+        return mx::greater(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -518,9 +544,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "greater_equal",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return greater_equal(a, b, s);
+        return mx::greater_equal(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -546,9 +574,9 @@ void init_ops(nb::module_& m) {
       [](const ScalarOrArray& a_,
          const ScalarOrArray& b_,
          bool equal_nan,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return array_equal(a, b, equal_nan, s);
+        return mx::array_equal(a, b, equal_nan, s);
       },
       nb::arg(),
       nb::arg(),
@@ -575,7 +603,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "matmul",
-      &matmul,
+      &mx::matmul,
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
@@ -607,8 +635,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "square",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return square(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::square(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -626,8 +654,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sqrt",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::sqrt(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::sqrt(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -645,8 +673,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "rsqrt",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return rsqrt(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::rsqrt(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -664,8 +692,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "reciprocal",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return reciprocal(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::reciprocal(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -683,8 +711,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "logical_not",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return logical_not(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::logical_not(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -702,8 +730,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "logical_and",
-      [](const ScalarOrArray& a, const ScalarOrArray& b, StreamOrDevice s) {
-        return logical_and(to_array(a), to_array(b), s);
+      [](const ScalarOrArray& a, const ScalarOrArray& b, mx::StreamOrDevice s) {
+        return mx::logical_and(to_array(a), to_array(b), s);
       },
       nb::arg(),
       nb::arg(),
@@ -724,8 +752,8 @@ void init_ops(nb::module_& m) {
 
   m.def(
       "logical_or",
-      [](const ScalarOrArray& a, const ScalarOrArray& b, StreamOrDevice s) {
-        return logical_or(to_array(a), to_array(b), s);
+      [](const ScalarOrArray& a, const ScalarOrArray& b, mx::StreamOrDevice s) {
+        return mx::logical_or(to_array(a), to_array(b), s);
       },
       nb::arg(),
       nb::arg(),
@@ -745,9 +773,11 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "logaddexp",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return logaddexp(a, b, s);
+        return mx::logaddexp(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -772,8 +802,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "exp",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::exp(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::exp(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -791,8 +821,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "expm1",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::expm1(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::expm1(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -812,8 +842,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "erf",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::erf(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::erf(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -834,8 +864,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "erfinv",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::erfinv(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::erfinv(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -853,8 +883,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sin",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::sin(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::sin(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -872,8 +902,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cos",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::cos(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::cos(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -891,8 +921,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tan",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::tan(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::tan(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -910,8 +940,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arcsin",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arcsin(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arcsin(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -929,8 +959,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arccos",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arccos(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arccos(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -948,8 +978,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arctan(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arctan(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -967,7 +997,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan2",
-      &mlx::core::arctan2,
+      &mx::arctan2,
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
@@ -986,8 +1016,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sinh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::sinh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::sinh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1005,8 +1035,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cosh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::cosh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::cosh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1024,8 +1054,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tanh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::tanh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::tanh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1043,8 +1073,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arcsinh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arcsinh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arcsinh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1062,8 +1092,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arccosh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arccosh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arccosh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1081,8 +1111,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctanh",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::arctanh(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::arctanh(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1100,8 +1130,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "degrees",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return degrees(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::degrees(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1119,8 +1149,8 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "radians",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::radians(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::radians(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1138,8 +1168,8 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "log",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::log(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::log(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1157,8 +1187,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log2",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::log2(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::log2(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1176,8 +1206,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log10",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::log10(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::log10(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1195,8 +1225,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log1p",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::log1p(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::log1p(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1214,7 +1244,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "stop_gradient",
-      &stop_gradient,
+      &mx::stop_gradient,
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1236,8 +1266,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sigmoid",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return sigmoid(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::sigmoid(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1260,9 +1290,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "power",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return power(a, b, s);
+        return mx::power(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -1288,17 +1320,17 @@ void init_ops(nb::module_& m) {
       [](Scalar start,
          Scalar stop,
          const std::optional<Scalar>& step,
-         const std::optional<Dtype>& dtype_,
-         StreamOrDevice s) {
+         const std::optional<mx::Dtype>& dtype_,
+         mx::StreamOrDevice s) {
         // Determine the final dtype based on input types
-        Dtype dtype = dtype_
+        mx::Dtype dtype = dtype_
             ? *dtype_
-            : promote_types(
+            : mx::promote_types(
                   scalar_to_dtype(start),
-                  step ? promote_types(
+                  step ? mx::promote_types(
                              scalar_to_dtype(stop), scalar_to_dtype(*step))
                        : scalar_to_dtype(stop));
-        return arange(
+        return mx::arange(
             scalar_to_double(start),
             scalar_to_double(stop),
             step ? scalar_to_double(*step) : 1.0,
@@ -1338,13 +1370,13 @@ void init_ops(nb::module_& m) {
       "arange",
       [](Scalar stop,
          const std::optional<Scalar>& step,
-         const std::optional<Dtype>& dtype_,
-         StreamOrDevice s) {
-        Dtype dtype = dtype_ ? *dtype_
+         const std::optional<mx::Dtype>& dtype_,
+         mx::StreamOrDevice s) {
+        mx::Dtype dtype = dtype_ ? *dtype_
             : step
-            ? promote_types(scalar_to_dtype(stop), scalar_to_dtype(*step))
+            ? mx::promote_types(scalar_to_dtype(stop), scalar_to_dtype(*step))
             : scalar_to_dtype(stop);
-        return arange(
+        return mx::arange(
             0.0,
             scalar_to_double(stop),
             step ? scalar_to_double(*step) : 1.0,
@@ -1363,19 +1395,19 @@ void init_ops(nb::module_& m) {
       [](Scalar start,
          Scalar stop,
          int num,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
-        return linspace(
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::linspace(
             scalar_to_double(start),
             scalar_to_double(stop),
             num,
-            dtype.value_or(float32),
+            dtype.value_or(mx::float32),
             s);
       },
       "start"_a,
       "stop"_a,
       "num"_a = 50,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       "stream"_a = nb::none(),
       nb::sig(
           "def linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
@@ -1394,17 +1426,17 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "take",
-      [](const array& a,
-         const std::variant<nb::int_, array>& indices,
+      [](const mx::array& a,
+         const std::variant<nb::int_, mx::array>& indices,
          const std::optional<int>& axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<nb::int_>(&indices); pv) {
           auto idx = nb::cast<int>(*pv);
-          return axis ? take(a, idx, axis.value(), s) : take(a, idx, s);
+          return axis ? mx::take(a, idx, axis.value(), s) : mx::take(a, idx, s);
         } else {
-          auto indices_ = std::get<array>(indices);
-          return axis ? take(a, indices_, axis.value(), s)
-                      : take(a, indices_, s);
+          auto indices_ = std::get<mx::array>(indices);
+          return axis ? mx::take(a, indices_, axis.value(), s)
+                      : mx::take(a, indices_, s);
         }
       },
       nb::arg(),
@@ -1434,14 +1466,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "take_along_axis",
-      [](const array& a,
-         const array& indices,
+      [](const mx::array& a,
+         const mx::array& indices,
          const std::optional<int>& axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis.has_value()) {
-          return take_along_axis(a, indices, axis.value(), s);
+          return mx::take_along_axis(a, indices, axis.value(), s);
         } else {
-          return take_along_axis(reshape(a, {-1}, s), indices, 0, s);
+          return mx::take_along_axis(mx::reshape(a, {-1}, s), indices, 0, s);
         }
       },
       nb::arg(),
@@ -1467,16 +1499,17 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "put_along_axis",
-      [](const array& a,
-         const array& indices,
-         const array& values,
+      [](const mx::array& a,
+         const mx::array& indices,
+         const mx::array& values,
          const std::optional<int>& axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis.has_value()) {
-          return put_along_axis(a, indices, values, axis.value(), s);
+          return mx::put_along_axis(a, indices, values, axis.value(), s);
         } else {
-          return reshape(
-              put_along_axis(reshape(a, {-1}, s), indices, values, 0, s),
+          return mx::reshape(
+              mx::put_along_axis(
+                  mx::reshape(a, {-1}, s), indices, values, 0, s),
               a.shape(),
               s);
         }
@@ -1510,12 +1543,12 @@ void init_ops(nb::module_& m) {
       "full",
       [](const std::variant<int, std::vector<int>>& shape,
          const ScalarOrArray& vals,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&shape); pv) {
-          return full({*pv}, to_array(vals, dtype), s);
+          return mx::full({*pv}, to_array(vals, dtype), s);
         } else {
-          return full(
+          return mx::full(
               std::get<std::vector<int>>(shape), to_array(vals, dtype), s);
         }
       },
@@ -1544,17 +1577,17 @@ void init_ops(nb::module_& m) {
   m.def(
       "zeros",
       [](const std::variant<int, std::vector<int>>& shape,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
-        auto t = dtype.value_or(float32);
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(mx::float32);
         if (auto pv = std::get_if<int>(&shape); pv) {
-          return zeros({*pv}, t, s);
+          return mx::zeros({*pv}, t, s);
         } else {
-          return zeros(std::get<std::vector<int>>(shape), t, s);
+          return mx::zeros(std::get<std::vector<int>>(shape), t, s);
         }
       },
       "shape"_a,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1572,7 +1605,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "zeros_like",
-      &zeros_like,
+      &mx::zeros_like,
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1590,17 +1623,17 @@ void init_ops(nb::module_& m) {
   m.def(
       "ones",
       [](const std::variant<int, std::vector<int>>& shape,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
-        auto t = dtype.value_or(float32);
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(mx::float32);
         if (auto pv = std::get_if<int>(&shape); pv) {
-          return ones({*pv}, t, s);
+          return mx::ones({*pv}, t, s);
         } else {
-          return ones(std::get<std::vector<int>>(shape), t, s);
+          return mx::ones(std::get<std::vector<int>>(shape), t, s);
         }
       },
       "shape"_a,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1618,7 +1651,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ones_like",
-      &ones_like,
+      &mx::ones_like,
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1638,14 +1671,14 @@ void init_ops(nb::module_& m) {
       [](int n,
          std::optional<int> m,
          int k,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
-        return eye(n, m.value_or(n), k, dtype.value_or(float32), s);
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::eye(n, m.value_or(n), k, dtype.value_or(mx::float32), s);
       },
       "n"_a,
       "m"_a = nb::none(),
       "k"_a = 0,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1665,11 +1698,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "identity",
-      [](int n, std::optional<Dtype> dtype, StreamOrDevice s) {
-        return identity(n, dtype.value_or(float32), s);
+      [](int n, std::optional<mx::Dtype> dtype, mx::StreamOrDevice s) {
+        return mx::identity(n, dtype.value_or(mx::float32), s);
       },
       "n"_a,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1690,14 +1723,14 @@ void init_ops(nb::module_& m) {
       [](int n,
          std::optional<int> m,
          int k,
-         std::optional<Dtype> type,
-         StreamOrDevice s) {
-        return tri(n, m.value_or(n), k, type.value_or(float32), s);
+         std::optional<mx::Dtype> type,
+         mx::StreamOrDevice s) {
+        return mx::tri(n, m.value_or(n), k, type.value_or(mx::float32), s);
       },
       "n"_a,
       "m"_a = nb::none(),
       "k"_a = 0,
-      "dtype"_a.none() = float32,
+      "dtype"_a.none() = mx::float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1717,7 +1750,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tril",
-      &tril,
+      &mx::tril,
       "x"_a,
       "k"_a = 0,
       nb::kw_only(),
@@ -1737,7 +1770,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "triu",
-      &triu,
+      &mx::triu,
       "x"_a,
       "k"_a = 0,
       nb::kw_only(),
@@ -1757,7 +1790,7 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "allclose",
-      &allclose,
+      &mx::allclose,
       nb::arg(),
       nb::arg(),
       "rtol"_a = 1e-5,
@@ -1794,7 +1827,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isclose",
-      &isclose,
+      &mx::isclose,
       nb::arg(),
       nb::arg(),
       "rtol"_a = 1e-5,
@@ -1832,11 +1865,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "all",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return all(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::all(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -1861,11 +1894,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "any",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return any(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::any(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -1890,9 +1923,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "minimum",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return minimum(a, b, s);
+        return mx::minimum(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -1915,9 +1950,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "maximum",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return maximum(a, b, s);
+        return mx::maximum(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -1940,8 +1977,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "floor",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::floor(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::floor(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1959,8 +1996,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ceil",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::ceil(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::ceil(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1978,8 +2015,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isnan",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::isnan(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::isnan(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -1997,8 +2034,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isinf",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::isinf(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::isinf(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -2016,8 +2053,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isfinite",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::isfinite(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::isfinite(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -2037,8 +2074,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isposinf",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return isposinf(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::isposinf(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -2057,8 +2094,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isneginf",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return isneginf(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::isneginf(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -2077,7 +2114,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "moveaxis",
-      &moveaxis,
+      &mx::moveaxis,
       nb::arg(),
       "source"_a,
       "destination"_a,
@@ -2098,7 +2135,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "swapaxes",
-      &swapaxes,
+      &mx::swapaxes,
       nb::arg(),
       "axis1"_a,
       "axis2"_a,
@@ -2119,13 +2156,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "transpose",
-      [](const array& a,
+      [](const mx::array& a,
          const std::optional<std::vector<int>>& axes,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axes.has_value()) {
-          return transpose(a, *axes, s);
+          return mx::transpose(a, *axes, s);
         } else {
-          return transpose(a, s);
+          return mx::transpose(a, s);
         }
       },
       nb::arg(),
@@ -2147,13 +2184,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "permute_dims",
-      [](const array& a,
+      [](const mx::array& a,
          const std::optional<std::vector<int>>& axes,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axes.has_value()) {
-          return transpose(a, *axes, s);
+          return mx::transpose(a, *axes, s);
         } else {
-          return transpose(a, s);
+          return mx::transpose(a, s);
         }
       },
       nb::arg(),
@@ -2167,11 +2204,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sum",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return sum(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::sum(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       "array"_a,
       "axis"_a = nb::none(),
@@ -2196,11 +2233,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "prod",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return prod(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::prod(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2225,11 +2262,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "min",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return min(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::min(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2254,11 +2291,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "max",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return max(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::max(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2283,11 +2320,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "logsumexp",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return logsumexp(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::logsumexp(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2318,11 +2355,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "mean",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
-         StreamOrDevice s) {
-        return mean(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+         mx::StreamOrDevice s) {
+        return mx::mean(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2347,12 +2384,12 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "var",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
-         StreamOrDevice s) {
-        return var(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+         mx::StreamOrDevice s) {
+        return mx::var(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2380,13 +2417,12 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "std",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
-         StreamOrDevice s) {
-        return mlx::core::std(
-            a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+         mx::StreamOrDevice s) {
+        return mx::std(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2414,14 +2450,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "split",
-      [](const array& a,
+      [](const mx::array& a,
          const std::variant<int, std::vector<int>>& indices_or_sections,
          int axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&indices_or_sections); pv) {
-          return split(a, *pv, axis, s);
+          return mx::split(a, *pv, axis, s);
         } else {
-          return split(
+          return mx::split(
               a, std::get<std::vector<int>>(indices_or_sections), axis, s);
         }
       },
@@ -2449,14 +2485,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "argmin",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool keepdims,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return argmin(a, *axis, keepdims, s);
+          return mx::argmin(a, *axis, keepdims, s);
         } else {
-          return argmin(a, keepdims, s);
+          return mx::argmin(a, keepdims, s);
         }
       },
       nb::arg(),
@@ -2481,14 +2517,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "argmax",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool keepdims,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return argmax(a, *axis, keepdims, s);
+          return mx::argmax(a, *axis, keepdims, s);
         } else {
-          return argmax(a, keepdims, s);
+          return mx::argmax(a, keepdims, s);
         }
       },
       nb::arg(),
@@ -2513,11 +2549,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sort",
-      [](const array& a, std::optional<int> axis, StreamOrDevice s) {
+      [](const mx::array& a, std::optional<int> axis, mx::StreamOrDevice s) {
         if (axis) {
-          return sort(a, *axis, s);
+          return mx::sort(a, *axis, s);
         } else {
-          return sort(a, s);
+          return mx::sort(a, s);
         }
       },
       nb::arg(),
@@ -2540,11 +2576,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "argsort",
-      [](const array& a, std::optional<int> axis, StreamOrDevice s) {
+      [](const mx::array& a, std::optional<int> axis, mx::StreamOrDevice s) {
         if (axis) {
-          return argsort(a, *axis, s);
+          return mx::argsort(a, *axis, s);
         } else {
-          return argsort(a, s);
+          return mx::argsort(a, s);
         }
       },
       nb::arg(),
@@ -2567,11 +2603,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "partition",
-      [](const array& a, int kth, std::optional<int> axis, StreamOrDevice s) {
+      [](const mx::array& a,
+         int kth,
+         std::optional<int> axis,
+         mx::StreamOrDevice s) {
         if (axis) {
-          return partition(a, kth, *axis, s);
+          return mx::partition(a, kth, *axis, s);
         } else {
-          return partition(a, kth, s);
+          return mx::partition(a, kth, s);
         }
       },
       nb::arg(),
@@ -2602,11 +2641,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "argpartition",
-      [](const array& a, int kth, std::optional<int> axis, StreamOrDevice s) {
+      [](const mx::array& a,
+         int kth,
+         std::optional<int> axis,
+         mx::StreamOrDevice s) {
         if (axis) {
-          return argpartition(a, kth, *axis, s);
+          return mx::argpartition(a, kth, *axis, s);
         } else {
-          return argpartition(a, kth, s);
+          return mx::argpartition(a, kth, s);
         }
       },
       nb::arg(),
@@ -2638,11 +2680,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "topk",
-      [](const array& a, int k, std::optional<int> axis, StreamOrDevice s) {
+      [](const mx::array& a,
+         int k,
+         std::optional<int> axis,
+         mx::StreamOrDevice s) {
         if (axis) {
-          return topk(a, k, *axis, s);
+          return mx::topk(a, k, *axis, s);
         } else {
-          return topk(a, k, s);
+          return mx::topk(a, k, s);
         }
       },
       nb::arg(),
@@ -2671,7 +2716,9 @@ void init_ops(nb::module_& m) {
       "broadcast_to",
       [](const ScalarOrArray& a,
          const std::vector<int>& shape,
-         StreamOrDevice s) { return broadcast_to(to_array(a), shape, s); },
+         mx::StreamOrDevice s) {
+        return mx::broadcast_to(to_array(a), shape, s);
+      },
       nb::arg(),
       "shape"_a,
       nb::kw_only(),
@@ -2692,8 +2739,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "softmax",
-      [](const array& a, const IntOrVec& axis, bool precise, StreamOrDevice s) {
-        return softmax(a, get_reduce_axes(axis, a.ndim()), precise, s);
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool precise,
+         mx::StreamOrDevice s) {
+        return mx::softmax(a, get_reduce_axes(axis, a.ndim()), precise, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -2722,13 +2772,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "concatenate",
-      [](const std::vector<array>& arrays,
+      [](const std::vector<mx::array>& arrays,
          std::optional<int> axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return concatenate(arrays, *axis, s);
+          return mx::concatenate(arrays, *axis, s);
         } else {
-          return concatenate(arrays, s);
+          return mx::concatenate(arrays, s);
         }
       },
       nb::arg(),
@@ -2750,13 +2800,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "concat",
-      [](const std::vector<array>& arrays,
+      [](const std::vector<mx::array>& arrays,
          std::optional<int> axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return concatenate(arrays, *axis, s);
+          return mx::concatenate(arrays, *axis, s);
         } else {
-          return concatenate(arrays, s);
+          return mx::concatenate(arrays, s);
         }
       },
       nb::arg(),
@@ -2770,13 +2820,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "stack",
-      [](const std::vector<array>& arrays,
+      [](const std::vector<mx::array>& arrays,
          std::optional<int> axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis.has_value()) {
-          return stack(arrays, axis.value(), s);
+          return mx::stack(arrays, axis.value(), s);
         } else {
-          return stack(arrays, s);
+          return mx::stack(arrays, s);
         }
       },
       nb::arg(),
@@ -2802,9 +2852,10 @@ void init_ops(nb::module_& m) {
       [](nb::args arrays_,
          bool sparse,
          std::string indexing,
-         StreamOrDevice s) {
-        std::vector<array> arrays = nb::cast<std::vector<array>>(arrays_);
-        return meshgrid(arrays, sparse, indexing, s);
+         mx::StreamOrDevice s) {
+        std::vector<mx::array> arrays =
+            nb::cast<std::vector<mx::array>>(arrays_);
+        return mx::meshgrid(arrays, sparse, indexing, s);
       },
       "arrays"_a,
       "sparse"_a = false,
@@ -2828,14 +2879,14 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "repeat",
-      [](const array& array,
+      [](const mx::array& array,
          int repeats,
          std::optional<int> axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis.has_value()) {
-          return repeat(array, repeats, axis.value(), s);
+          return mx::repeat(array, repeats, axis.value(), s);
         } else {
-          return repeat(array, repeats, s);
+          return mx::repeat(array, repeats, s);
         }
       },
       nb::arg(),
@@ -2861,19 +2912,19 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "clip",
-      [](const array& a,
+      [](const mx::array& a,
          const std::optional<ScalarOrArray>& min,
          const std::optional<ScalarOrArray>& max,
-         StreamOrDevice s) {
-        std::optional<array> min_ = std::nullopt;
-        std::optional<array> max_ = std::nullopt;
+         mx::StreamOrDevice s) {
+        std::optional<mx::array> min_ = std::nullopt;
+        std::optional<mx::array> max_ = std::nullopt;
         if (min) {
           min_ = to_arrays(a, min.value()).second;
         }
         if (max) {
           max_ = to_arrays(a, max.value()).second;
         }
-        return clip(a, min_, max_, s);
+        return mx::clip(a, min_, max_, s);
       },
       nb::arg(),
       "a_min"_a.none(),
@@ -2899,7 +2950,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "pad",
-      [](const array& a,
+      [](const mx::array& a,
          const std::variant<
              int,
              std::tuple<int>,
@@ -2907,19 +2958,20 @@ void init_ops(nb::module_& m) {
              std::vector<std::pair<int, int>>>& pad_width,
          const std::string mode,
          const ScalarOrArray& constant_value,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&pad_width); pv) {
-          return pad(a, *pv, to_array(constant_value), mode, s);
+          return mx::pad(a, *pv, to_array(constant_value), mode, s);
         } else if (auto pv = std::get_if<std::tuple<int>>(&pad_width); pv) {
-          return pad(a, std::get<0>(*pv), to_array(constant_value), mode, s);
+          return mx::pad(
+              a, std::get<0>(*pv), to_array(constant_value), mode, s);
         } else if (auto pv = std::get_if<std::pair<int, int>>(&pad_width); pv) {
-          return pad(a, *pv, to_array(constant_value), mode, s);
+          return mx::pad(a, *pv, to_array(constant_value), mode, s);
         } else {
           auto v = std::get<std::vector<std::pair<int, int>>>(pad_width);
           if (v.size() == 1) {
-            return pad(a, v[0], to_array(constant_value), mode, s);
+            return mx::pad(a, v[0], to_array(constant_value), mode, s);
           } else {
-            return pad(a, v, to_array(constant_value), mode, s);
+            return mx::pad(a, v, to_array(constant_value), mode, s);
           }
         }
       },
@@ -2953,22 +3005,22 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "as_strided",
-      [](const array& a,
-         std::optional<Shape> shape,
-         std::optional<Strides> strides,
+      [](const mx::array& a,
+         std::optional<mx::Shape> shape,
+         std::optional<mx::Strides> strides,
          size_t offset,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         auto a_shape = (shape) ? *shape : a.shape();
-        Strides a_strides;
+        mx::Strides a_strides;
         if (strides) {
           a_strides = *strides;
         } else {
-          a_strides = Strides(a_shape.size(), 1);
+          a_strides = mx::Strides(a_shape.size(), 1);
           for (int i = a_shape.size() - 1; i > 0; i--) {
             a_strides[i - 1] = a_shape[i] * a_strides[i];
           }
         }
-        return as_strided(a, a_shape, a_strides, offset, s);
+        return mx::as_strided(a, a_shape, a_strides, offset, s);
       },
       nb::arg(),
       "shape"_a = nb::none(),
@@ -3006,15 +3058,15 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cumsum",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return cumsum(a, *axis, reverse, inclusive, s);
+          return mx::cumsum(a, *axis, reverse, inclusive, s);
         } else {
-          return cumsum(reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumsum(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
         }
       },
       nb::arg(),
@@ -3042,15 +3094,15 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cumprod",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return cumprod(a, *axis, reverse, inclusive, s);
+          return mx::cumprod(a, *axis, reverse, inclusive, s);
         } else {
-          return cumprod(reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumprod(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
         }
       },
       nb::arg(),
@@ -3078,15 +3130,15 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cummax",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return cummax(a, *axis, reverse, inclusive, s);
+          return mx::cummax(a, *axis, reverse, inclusive, s);
         } else {
-          return cummax(reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cummax(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
         }
       },
       nb::arg(),
@@ -3114,15 +3166,15 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cummin",
-      [](const array& a,
+      [](const mx::array& a,
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (axis) {
-          return cummin(a, *axis, reverse, inclusive, s);
+          return mx::cummin(a, *axis, reverse, inclusive, s);
         } else {
-          return cummin(reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cummin(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
         }
       },
       nb::arg(),
@@ -3150,8 +3202,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conj",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::conjugate(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::conjugate(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -3170,8 +3222,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conjugate",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::conjugate(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::conjugate(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -3190,10 +3242,10 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "convolve",
-      [](const array& a,
-         const array& v,
+      [](const mx::array& a,
+         const mx::array& v,
          const std::string& mode,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (a.ndim() != 1 || v.ndim() != 1) {
           throw std::invalid_argument("[convolve] Inputs must be 1D.");
         }
@@ -3202,12 +3254,12 @@ void init_ops(nb::module_& m) {
           throw std::invalid_argument("[convolve] Inputs cannot be empty.");
         }
 
-        array in = a.size() < v.size() ? v : a;
-        array wt = a.size() < v.size() ? a : v;
-        wt = slice(wt, {wt.shape(0) - 1}, {-wt.shape(0) - 1}, {-1}, s);
+        mx::array in = a.size() < v.size() ? v : a;
+        mx::array wt = a.size() < v.size() ? a : v;
+        wt = mx::slice(wt, {wt.shape(0) - 1}, {-wt.shape(0) - 1}, {-1}, s);
 
-        in = reshape(in, {1, -1, 1}, s);
-        wt = reshape(wt, {1, -1, 1}, s);
+        in = mx::reshape(in, {1, -1, 1}, s);
+        wt = mx::reshape(wt, {1, -1, 1}, s);
 
         int padding = 0;
 
@@ -3222,15 +3274,19 @@ void init_ops(nb::module_& m) {
           } else { // Even sizes use asymmetric padding
             int pad_l = wt.size() / 2;
             int pad_r = std::max(0, pad_l - 1);
-            in = pad(
-                in, {{0, 0}, {pad_l, pad_r}, {0, 0}}, array(0), "constant", s);
+            in = mx::pad(
+                in,
+                {{0, 0}, {pad_l, pad_r}, {0, 0}},
+                mx::array(0),
+                "constant",
+                s);
           }
 
         } else {
           throw std::invalid_argument("[convolve] Invalid mode.");
         }
 
-        array out = conv1d(
+        mx::array out = mx::conv1d(
             in,
             wt,
             /*stride = */ 1,
@@ -3239,7 +3295,7 @@ void init_ops(nb::module_& m) {
             /*groups = */ 1,
             s);
 
-        return reshape(out, {-1}, s);
+        return mx::reshape(out, {-1}, s);
       },
       nb::arg(),
       nb::arg(),
@@ -3264,7 +3320,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv1d",
-      &conv1d,
+      &mx::conv1d,
       nb::arg(),
       nb::arg(),
       "stride"_a = 1,
@@ -3291,13 +3347,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv2d",
-      [](const array& input,
-         const array& weight,
+      [](const mx::array& input,
+         const mx::array& weight,
          const std::variant<int, std::pair<int, int>>& stride,
          const std::variant<int, std::pair<int, int>>& padding,
          const std::variant<int, std::pair<int, int>>& dilation,
          int groups,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         std::pair<int, int> stride_pair{1, 1};
         std::pair<int, int> padding_pair{0, 0};
         std::pair<int, int> dilation_pair{1, 1};
@@ -3320,7 +3376,7 @@ void init_ops(nb::module_& m) {
           dilation_pair = std::get<std::pair<int, int>>(dilation);
         }
 
-        return conv2d(
+        return mx::conv2d(
             input, weight, stride_pair, padding_pair, dilation_pair, groups, s);
       },
       nb::arg(),
@@ -3355,13 +3411,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv3d",
-      [](const array& input,
-         const array& weight,
+      [](const mx::array& input,
+         const mx::array& weight,
          const std::variant<int, std::tuple<int, int, int>>& stride,
          const std::variant<int, std::tuple<int, int, int>>& padding,
          const std::variant<int, std::tuple<int, int, int>>& dilation,
          int groups,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         std::tuple<int, int, int> stride_tuple{1, 1, 1};
         std::tuple<int, int, int> padding_tuple{0, 0, 0};
         std::tuple<int, int, int> dilation_tuple{1, 1, 1};
@@ -3384,7 +3440,7 @@ void init_ops(nb::module_& m) {
           dilation_tuple = std::get<std::tuple<int, int, int>>(dilation);
         }
 
-        return conv3d(
+        return mx::conv3d(
             input,
             weight,
             stride_tuple,
@@ -3427,7 +3483,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv_transpose1d",
-      &conv_transpose1d,
+      &mx::conv_transpose1d,
       nb::arg(),
       nb::arg(),
       "stride"_a = 1,
@@ -3454,13 +3510,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv_transpose2d",
-      [](const array& input,
-         const array& weight,
+      [](const mx::array& input,
+         const mx::array& weight,
          const std::variant<int, std::pair<int, int>>& stride,
          const std::variant<int, std::pair<int, int>>& padding,
          const std::variant<int, std::pair<int, int>>& dilation,
          int groups,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         std::pair<int, int> stride_pair{1, 1};
         std::pair<int, int> padding_pair{0, 0};
         std::pair<int, int> dilation_pair{1, 1};
@@ -3483,7 +3539,7 @@ void init_ops(nb::module_& m) {
           dilation_pair = std::get<std::pair<int, int>>(dilation);
         }
 
-        return conv_transpose2d(
+        return mx::conv_transpose2d(
             input, weight, stride_pair, padding_pair, dilation_pair, groups, s);
       },
       nb::arg(),
@@ -3520,13 +3576,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv_transpose3d",
-      [](const array& input,
-         const array& weight,
+      [](const mx::array& input,
+         const mx::array& weight,
          const std::variant<int, std::tuple<int, int, int>>& stride,
          const std::variant<int, std::tuple<int, int, int>>& padding,
          const std::variant<int, std::tuple<int, int, int>>& dilation,
          int groups,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         std::tuple<int, int, int> stride_tuple{1, 1, 1};
         std::tuple<int, int, int> padding_tuple{0, 0, 0};
         std::tuple<int, int, int> dilation_tuple{1, 1, 1};
@@ -3549,7 +3605,7 @@ void init_ops(nb::module_& m) {
           dilation_tuple = std::get<std::tuple<int, int, int>>(dilation);
         }
 
-        return conv_transpose3d(
+        return mx::conv_transpose3d(
             input,
             weight,
             stride_tuple,
@@ -3592,8 +3648,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "conv_general",
-      [](const array& input,
-         const array& weight,
+      [](const mx::array& input,
+         const mx::array& weight,
          const std::variant<int, std::vector<int>>& stride,
          const std::variant<
              int,
@@ -3603,7 +3659,7 @@ void init_ops(nb::module_& m) {
          const std::variant<int, std::vector<int>>& input_dilation,
          int groups,
          bool flip,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         std::vector<int> stride_vec;
         std::vector<int> padding_lo_vec;
         std::vector<int> padding_hi_vec;
@@ -3641,7 +3697,7 @@ void init_ops(nb::module_& m) {
           input_dilation_vec = std::get<std::vector<int>>(input_dilation);
         }
 
-        return conv_general(
+        return mx::conv_general(
             /* array input = */ std::move(input),
             /* array weight = */ std::move(weight),
             /* std::vector<int> stride = */ std::move(stride_vec),
@@ -3842,9 +3898,9 @@ void init_ops(nb::module_& m) {
       [](const ScalarOrArray& condition,
          const ScalarOrArray& x_,
          const ScalarOrArray& y_,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         auto [x, y] = to_arrays(x_, y_);
-        return where(to_array(condition), x, y, s);
+        return mx::where(to_array(condition), x, y, s);
       },
       "condition"_a,
       nb::arg(),
@@ -3874,8 +3930,8 @@ void init_ops(nb::module_& m) {
          float nan,
          std::optional<float>& posinf,
          std::optional<float>& neginf,
-         StreamOrDevice s) {
-        return nan_to_num(to_array(a), nan, posinf, neginf, s);
+         mx::StreamOrDevice s) {
+        return mx::nan_to_num(to_array(a), nan, posinf, neginf, s);
       },
       nb::arg(),
       "nan"_a = 0.0f,
@@ -3903,8 +3959,8 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "round",
-      [](const ScalarOrArray& a, int decimals, StreamOrDevice s) {
-        return round(to_array(a), decimals, s);
+      [](const ScalarOrArray& a, int decimals, mx::StreamOrDevice s) {
+        return mx::round(to_array(a), decimals, s);
       },
       nb::arg(),
       "decimals"_a = 0,
@@ -3932,7 +3988,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "quantized_matmul",
-      &quantized_matmul,
+      &mx::quantized_matmul,
       nb::arg(),
       nb::arg(),
       "scales"_a,
@@ -3968,7 +4024,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "quantize",
-      &quantize,
+      &mx::quantize,
       nb::arg(),
       "group_size"_a = 64,
       "bits"_a = 4,
@@ -4027,7 +4083,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "dequantize",
-      &dequantize,
+      &mx::dequantize,
       nb::arg(),
       "scales"_a,
       "biases"_a,
@@ -4063,7 +4119,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "gather_qmm",
-      &gather_qmm,
+      &mx::gather_qmm,
       nb::arg(),
       nb::arg(),
       "scales"_a,
@@ -4109,19 +4165,19 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tensordot",
-      [](const array& a,
-         const array& b,
+      [](const mx::array& a,
+         const mx::array& b,
          const std::variant<int, std::vector<std::vector<int>>>& axes,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&axes); pv) {
-          return tensordot(a, b, *pv, s);
+          return mx::tensordot(a, b, *pv, s);
         } else {
           auto& x = std::get<std::vector<std::vector<int>>>(axes);
           if (x.size() != 2) {
             throw std::invalid_argument(
                 "[tensordot] axes must be a list of two lists.");
           }
-          return tensordot(a, b, x[0], x[1], s);
+          return mx::tensordot(a, b, x[0], x[1], s);
         }
       },
       nb::arg(),
@@ -4148,7 +4204,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "inner",
-      &inner,
+      &mx::inner,
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
@@ -4167,7 +4223,7 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "outer",
-      &outer,
+      &mx::outer,
       nb::arg(),
       nb::arg(),
       nb::kw_only(),
@@ -4186,13 +4242,13 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "tile",
-      [](const array& a,
+      [](const mx::array& a,
          const std::variant<int, std::vector<int>>& reps,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&reps); pv) {
-          return tile(a, {*pv}, s);
+          return mx::tile(a, {*pv}, s);
         } else {
-          return tile(a, std::get<std::vector<int>>(reps), s);
+          return mx::tile(a, std::get<std::vector<int>>(reps), s);
         }
       },
       nb::arg(),
@@ -4213,7 +4269,7 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "addmm",
-      &addmm,
+      &mx::addmm,
       nb::arg(),
       nb::arg(),
       nb::arg(),
@@ -4242,7 +4298,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "block_masked_mm",
-      &block_masked_mm,
+      &mx::block_masked_mm,
       nb::arg(),
       nb::arg(),
       "block_size"_a = 64,
@@ -4282,7 +4338,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "gather_mm",
-      &gather_mm,
+      &mx::gather_mm,
       nb::arg(),
       nb::arg(),
       "lhs_indices"_a = nb::none(),
@@ -4320,7 +4376,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "diagonal",
-      &diagonal,
+      &mx::diagonal,
       "a"_a,
       "offset"_a = 0,
       "axis1"_a = 0,
@@ -4353,7 +4409,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "diag",
-      &diag,
+      &mx::diag,
       nb::arg(),
       "k"_a = 0,
       nb::kw_only(),
@@ -4376,16 +4432,16 @@ void init_ops(nb::module_& m) {
         )pbdoc");
   m.def(
       "trace",
-      [](const array& a,
+      [](const mx::array& a,
          int offset,
          int axis1,
          int axis2,
-         std::optional<Dtype> dtype,
-         StreamOrDevice s) {
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
         if (!dtype.has_value()) {
-          return trace(a, offset, axis1, axis2, s);
+          return mx::trace(a, offset, axis1, axis2, s);
         }
-        return trace(a, offset, axis1, axis2, dtype.value(), s);
+        return mx::trace(a, offset, axis1, axis2, dtype.value(), s);
       },
       nb::arg(),
       "offset"_a = 0,
@@ -4415,11 +4471,12 @@ void init_ops(nb::module_& m) {
         )pbdoc");
   m.def(
       "atleast_1d",
-      [](const nb::args& arys, StreamOrDevice s) -> nb::object {
+      [](const nb::args& arys, mx::StreamOrDevice s) -> nb::object {
         if (arys.size() == 1) {
-          return nb::cast(atleast_1d(nb::cast<array>(arys[0]), s));
+          return nb::cast(mx::atleast_1d(nb::cast<mx::array>(arys[0]), s));
         }
-        return nb::cast(atleast_1d(nb::cast<std::vector<array>>(arys), s));
+        return nb::cast(
+            mx::atleast_1d(nb::cast<std::vector<mx::array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),
@@ -4437,11 +4494,12 @@ void init_ops(nb::module_& m) {
         )pbdoc");
   m.def(
       "atleast_2d",
-      [](const nb::args& arys, StreamOrDevice s) -> nb::object {
+      [](const nb::args& arys, mx::StreamOrDevice s) -> nb::object {
         if (arys.size() == 1) {
-          return nb::cast(atleast_2d(nb::cast<array>(arys[0]), s));
+          return nb::cast(mx::atleast_2d(nb::cast<mx::array>(arys[0]), s));
         }
-        return nb::cast(atleast_2d(nb::cast<std::vector<array>>(arys), s));
+        return nb::cast(
+            mx::atleast_2d(nb::cast<std::vector<mx::array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),
@@ -4459,11 +4517,12 @@ void init_ops(nb::module_& m) {
         )pbdoc");
   m.def(
       "atleast_3d",
-      [](const nb::args& arys, StreamOrDevice s) -> nb::object {
+      [](const nb::args& arys, mx::StreamOrDevice s) -> nb::object {
         if (arys.size() == 1) {
-          return nb::cast(atleast_3d(nb::cast<array>(arys[0]), s));
+          return nb::cast(mx::atleast_3d(nb::cast<mx::array>(arys[0]), s));
         }
-        return nb::cast(atleast_3d(nb::cast<std::vector<array>>(arys), s));
+        return nb::cast(
+            mx::atleast_3d(nb::cast<std::vector<mx::array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),
@@ -4483,19 +4542,19 @@ void init_ops(nb::module_& m) {
       "issubdtype",
       [](const nb::object& d1, const nb::object& d2) {
         auto dispatch_second = [](const auto& t1, const auto& d2) {
-          if (nb::isinstance<Dtype>(d2)) {
-            return issubdtype(t1, nb::cast<Dtype>(d2));
-          } else if (nb::isinstance<Dtype::Category>(d2)) {
-            return issubdtype(t1, nb::cast<Dtype::Category>(d2));
+          if (nb::isinstance<mx::Dtype>(d2)) {
+            return mx::issubdtype(t1, nb::cast<mx::Dtype>(d2));
+          } else if (nb::isinstance<mx::Dtype::Category>(d2)) {
+            return mx::issubdtype(t1, nb::cast<mx::Dtype::Category>(d2));
           } else {
             throw std::invalid_argument(
                 "[issubdtype] Received invalid type for second input.");
           }
         };
-        if (nb::isinstance<Dtype>(d1)) {
-          return dispatch_second(nb::cast<Dtype>(d1), d2);
-        } else if (nb::isinstance<Dtype::Category>(d1)) {
-          return dispatch_second(nb::cast<Dtype::Category>(d1), d2);
+        if (nb::isinstance<mx::Dtype>(d1)) {
+          return dispatch_second(nb::cast<mx::Dtype>(d1), d2);
+        } else if (nb::isinstance<mx::Dtype::Category>(d1)) {
+          return dispatch_second(nb::cast<mx::Dtype::Category>(d1), d2);
         } else {
           throw std::invalid_argument(
               "[issubdtype] Received invalid type for first input.");
@@ -4555,9 +4614,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "bitwise_and",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return bitwise_and(a, b, s);
+        return mx::bitwise_and(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -4580,9 +4641,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "bitwise_or",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return bitwise_or(a, b, s);
+        return mx::bitwise_or(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -4605,9 +4668,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "bitwise_xor",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return bitwise_xor(a, b, s);
+        return mx::bitwise_xor(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -4631,9 +4696,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "left_shift",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return left_shift(a, b, s);
+        return mx::left_shift(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -4657,9 +4724,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "right_shift",
-      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
-        return right_shift(a, b, s);
+        return mx::right_shift(a, b, s);
       },
       nb::arg(),
       nb::arg(),
@@ -4683,8 +4752,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "view",
-      [](const ScalarOrArray& a, const Dtype& dtype, StreamOrDevice s) {
-        return view(to_array(a), dtype, s);
+      [](const ScalarOrArray& a, const mx::Dtype& dtype, mx::StreamOrDevice s) {
+        return mx::view(to_array(a), dtype, s);
       },
       nb::arg(),
       "dtype"_a,
@@ -4711,7 +4780,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "hadamard_transform",
-      &hadamard_transform,
+      &mx::hadamard_transform,
       nb::arg(),
       "scale"_a = nb::none(),
       nb::kw_only(),
@@ -4743,8 +4812,8 @@ void init_ops(nb::module_& m) {
   m.def(
       "einsum_path",
       [](const std::string& equation, const nb::args& operands) {
-        auto arrays_list = nb::cast<std::vector<array>>(operands);
-        auto [path, str] = einsum_path(equation, arrays_list);
+        auto arrays_list = nb::cast<std::vector<mx::array>>(operands);
+        auto [path, str] = mx::einsum_path(equation, arrays_list);
         // Convert to list of tuples
         std::vector<nb::tuple> tuple_path;
         for (auto& p : path) {
@@ -4772,9 +4841,9 @@ void init_ops(nb::module_& m) {
       "einsum",
       [](const std::string& subscripts,
          const nb::args& operands,
-         StreamOrDevice s) {
-        auto arrays_list = nb::cast<std::vector<array>>(operands);
-        return einsum(subscripts, arrays_list, s);
+         mx::StreamOrDevice s) {
+        auto arrays_list = nb::cast<std::vector<mx::array>>(operands);
+        return mx::einsum(subscripts, arrays_list, s);
       },
       "subscripts"_a,
       "operands"_a,
@@ -4795,12 +4864,12 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "roll",
-      [](const array& a,
+      [](const mx::array& a,
          const IntOrVec& shift,
          const IntOrVec& axis,
-         StreamOrDevice s) {
+         mx::StreamOrDevice s) {
         return std::visit(
-            [&](auto sh, auto ax) -> array {
+            [&](auto sh, auto ax) -> mx::array {
               using T = decltype(ax);
               using V = decltype(sh);
 
@@ -4809,9 +4878,9 @@ void init_ops(nb::module_& m) {
                     "[roll] Expected two arguments but only one was given.");
               } else {
                 if constexpr (std::is_same_v<T, std::monostate>) {
-                  return roll(a, sh, s);
+                  return mx::roll(a, sh, s);
                 } else {
-                  return roll(a, sh, ax, s);
+                  return mx::roll(a, sh, ax, s);
                 }
               }
             },
@@ -4845,8 +4914,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "real",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::real(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::real(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
@@ -4864,8 +4933,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "imag",
-      [](const ScalarOrArray& a, StreamOrDevice s) {
-        return mlx::core::imag(to_array(a), s);
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::imag(to_array(a), s);
       },
       nb::arg(),
       nb::kw_only(),
