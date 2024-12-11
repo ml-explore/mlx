@@ -25,6 +25,25 @@ void arange_set_scalars(T start, T next, metal::CommandEncoder& enc) {
   enc.set_bytes(step, 1);
 }
 
+void reshape(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
+}
+
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
@@ -215,6 +234,14 @@ void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
+void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   auto read_task = [out = out,
@@ -309,26 +336,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-
-  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
-
-  if (copy_necessary) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    copy_gpu_inplace(
-        in,
-        out,
-        in.shape(),
-        in.strides(),
-        make_contiguous_strides(in.shape()),
-        0,
-        0,
-        CopyType::General,
-        stream());
-  } else {
-    shared_buffer_reshape(in, out_strides, out);
-  }
+  reshape(inputs[0], out, stream());
 }
 
 void Split::eval_gpu(

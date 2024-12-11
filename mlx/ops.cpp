@@ -267,7 +267,7 @@ array as_strided(
       std::make_shared<AsStrided>(
           to_stream(s), std::move(shape), std::move(strides), offset),
       // Force the input array to be contiguous.
-      {reshape(std::move(a), {-1}, s)});
+      {flatten(std::move(a), s)});
 }
 
 array copy(array a, StreamOrDevice s /* = {} */) {
@@ -380,10 +380,9 @@ array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
 
   // Infer the shape
   if (size > 0) {
-    auto q_and_r = std::ldiv(a.size(), size);
     if (infer_idx >= 0) {
-      shape[infer_idx] = q_and_r.quot;
-      size *= q_and_r.quot;
+      shape[infer_idx] = a.size() / size;
+      size *= shape[infer_idx];
     }
   } else if (infer_idx >= 0) {
     throw std::invalid_argument(
@@ -399,6 +398,59 @@ array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
   }
   auto p = std::make_shared<Reshape>(to_stream(s), shape);
   return array(std::move(shape), a.dtype(), std::move(p), {a});
+}
+
+array unflatten(
+    const array& a,
+    int axis,
+    Shape shape,
+    StreamOrDevice s /* = {} */) {
+  if (shape.empty()) {
+    throw std::invalid_argument(
+        "[unflatten] Shape to unflatten to cannot be empty.");
+  }
+  auto ndim = static_cast<int>(a.ndim());
+  auto ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    std::ostringstream msg;
+    msg << "[unflatten] Invalid axes " << ax << " for array with " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  size_t size = 1;
+  int infer_idx = -1;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (shape[i] == -1) {
+      if (infer_idx >= 0) {
+        throw std::invalid_argument(
+            "[Unflatten] Can only infer one dimension.");
+      }
+      infer_idx = i;
+    } else {
+      size *= shape[i];
+    }
+  }
+  if (infer_idx >= 0) {
+    shape[infer_idx] = a.shape(ax) / size;
+    size *= shape[infer_idx];
+  }
+  if (size != a.shape(ax)) {
+    std::ostringstream msg;
+    msg << "[Unflatten] Cannot unflatten axis " << axis << " with size "
+        << a.shape(ax) << " into shape " << shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (shape.size() == 1) {
+    return a;
+  }
+
+  auto out_shape = Unflatten::output_shape(a, ax, shape);
+  return array(
+      std::move(out_shape),
+      a.dtype(),
+      std::make_shared<Unflatten>(to_stream(s), ax, std::move(shape)),
+      {a});
 }
 
 array flatten(
@@ -433,11 +485,11 @@ array flatten(
   if (start_ax == end_ax) {
     return a;
   }
-  Shape new_shape(a.shape().begin(), a.shape().begin() + start_ax);
-  new_shape.push_back(-1);
-  new_shape.insert(
-      new_shape.end(), a.shape().begin() + end_ax + 1, a.shape().end());
-  return reshape(a, std::move(new_shape), s);
+  return array(
+      Flatten::output_shape(a, start_ax, end_ax),
+      a.dtype(),
+      std::make_shared<Flatten>(to_stream(s), start_ax, end_ax),
+      {a});
 }
 
 array flatten(const array& a, StreamOrDevice s /* = {} */) {
@@ -901,7 +953,7 @@ array concatenate(
     StreamOrDevice s /* = {} */) {
   std::vector<array> flat_inputs;
   for (auto& a : arrays) {
-    flat_inputs.push_back(reshape(a, {-1}, s));
+    flat_inputs.push_back(flatten(a, s));
   }
   return concatenate(flat_inputs, 0, s);
 }
@@ -2568,22 +2620,9 @@ array matmul(
   }
 
   // We can batch the multiplication by reshaping a
-  if (a.ndim() > 2 && b.ndim() == 2) {
-    std::vector<int> out_shape = a.shape();
-    a = reshape(a, {-1, out_shape.back()}, s);
-    out_shape.back() = b.shape(-1);
-    if (in_b.ndim() == 1) {
-      out_shape.pop_back();
-    }
-    auto out = array(
-        {a.shape(0), b.shape(1)},
-        out_type,
-        std::make_shared<Matmul>(to_stream(s)),
-        {a, b});
-    return reshape(out, out_shape, s);
-  }
-
-  if (a.ndim() > 2 || b.ndim() > 2) {
+  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+    a = flatten(a, 0, -2, s);
+  } else if (in_b.ndim() > 2) {
     Shape bsx_a(a.shape().begin(), a.shape().end() - 2);
     Shape bsx_b(b.shape().begin(), b.shape().end() - 2);
     auto inner_shape = broadcast_shapes(bsx_a, bsx_b);
@@ -2607,6 +2646,11 @@ array matmul(
       out_type,
       std::make_shared<Matmul>(to_stream(s)),
       {a, b});
+  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+    auto orig_shape = in_a.shape();
+    orig_shape.pop_back();
+    out = unflatten(out, 0, std::move(orig_shape), s);
+  }
 
   // Remove the possibly inserted singleton dimensions
   std::vector<int> axes;
@@ -2753,7 +2797,7 @@ array take(
 }
 
 array take(const array& a, const array& indices, StreamOrDevice s /* = {} */) {
-  return take(reshape(a, {-1}, s), indices, 0, s);
+  return take(flatten(a, s), indices, 0, s);
 }
 
 array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
@@ -2783,7 +2827,7 @@ array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
 }
 
 array take(const array& a, int index, StreamOrDevice s /* = {} */) {
-  return take(reshape(a, {-1}, s), index, 0, s);
+  return take(flatten(a, s), index, 0, s);
 }
 
 array take_along_axis(
@@ -3853,11 +3897,11 @@ array addmm(
 
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
-    a = reshape(a, {1, -1}, s);
+    a = expand_dims(a, 0, s);
   }
   if (b.ndim() == 1) {
     // Insert a singleton dim at the end
-    b = reshape(b, {-1, 1}, s);
+    b = expand_dims(b, 1, s);
   }
 
   if (a.shape(-1) != b.shape(-2)) {
@@ -4644,7 +4688,7 @@ array roll(
 array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
   auto shape = a.shape();
   return reshape(
-      roll(reshape(a, Shape{-1}, s), Shape{shift}, std::vector<int>{0}, s),
+      roll(flatten(a, s), Shape{shift}, std::vector<int>{0}, s),
       std::move(shape),
       s);
 }

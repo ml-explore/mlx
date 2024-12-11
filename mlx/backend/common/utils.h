@@ -168,4 +168,10 @@ void move_or_copy(
     size_t data_size,
     size_t offset = 0);
 
+std::pair<bool, Strides> prepare_reshape(const array& in, const array& out);
+
+void shared_buffer_reshape(
+    const array& in,
+    const Strides& out_strides,
+    array& out);
 } // namespace mlx::core
