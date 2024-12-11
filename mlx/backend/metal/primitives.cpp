@@ -211,6 +211,10 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   copy_gpu(in, out, ctype);
 }
 
+void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   auto read_task = [out = out,
@@ -379,6 +383,10 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* int64_t o_offset = */ data_offset,
       /* CopyType ctype = */ CopyType::GeneralGeneral,
       /* const Stream& s = */ stream());
+}
+
+void Squeeze::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
 }
 
 void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {

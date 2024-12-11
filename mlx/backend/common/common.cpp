@@ -85,6 +85,16 @@ void Depends::eval(
   }
 }
 
+void ExpandDims::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  auto strides = in.strides();
+  for (auto ax : axes_) {
+    strides.insert(strides.begin() + ax, 1);
+  }
+  move_or_copy(in, out, strides, in.flags(), in.data_size());
+}
+
 void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
@@ -246,6 +256,20 @@ void Split::eval(
     outputs[i].copy_shared_buffer(
         in, in.strides(), new_flags, data_size, offset);
   }
+}
+
+void Squeeze::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  Strides strides;
+  for (int i = 0, j = 0; i < in.ndim(); ++i) {
+    if (j < axes_.size() && i == axes_[j]) {
+      j++;
+    } else {
+      strides.push_back(in.strides(i));
+    }
+  }
+  move_or_copy(in, out, strides, in.flags(), in.data_size());
 }
 
 void StopGradient::eval(const std::vector<array>& inputs, array& out) {

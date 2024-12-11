@@ -1835,6 +1835,9 @@ TEST_CASE("test broadcast") {
 }
 
 TEST_CASE("test gather") {
+  // Empty input, non-empty indices/slice
+  CHECK_THROWS(gather(array({}), array({1}), 0, {1}));
+
   // More indices than dimensions
   CHECK_THROWS(gather(array(0), array({1}), 0, {1}));
 
