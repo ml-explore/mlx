@@ -470,6 +470,14 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 1, 4, 32))
 
+    def test_shapeless_compile_gather(self):
+        x = mx.zeros((1, 1, 32))
+
+        def fun(x):
+            return x[:, -1, :]
+
+        self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 32))
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
