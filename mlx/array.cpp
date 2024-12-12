@@ -1,6 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <functional>
-#include <unordered_map>
+#include <set>
 
 #include "mlx/array.h"
 #include "mlx/ops.h"
@@ -266,19 +266,25 @@ array::ArrayDesc::~ArrayDesc() {
   std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
 
   auto append_deletable_inputs = [&for_deletion](ArrayDesc& ad) {
-    std::unordered_map<std::uintptr_t, array> input_map;
+    std::set<std::uintptr_t> input_ids;
+    std::vector<array> input_arrs;
     for (array& a : ad.inputs) {
       if (a.array_desc_) {
-        input_map.insert({a.id(), a});
-        for (auto& s : a.siblings()) {
-          input_map.insert({s.id(), s});
+        if (input_ids.insert(a.id()).second) {
+          input_arrs.push_back(a);
+          for (auto& s : a.siblings()) {
+            if (input_ids.insert(s.id()).second) {
+              input_arrs.push_back(s);
+            }
+          }
         }
       }
     }
     ad.inputs.clear();
-    for (auto& [_, a] : input_map) {
-      if (a.array_desc_.use_count() <= a.siblings().size() + 1) {
-        for_deletion.push_back(std::move(a.array_desc_));
+    // The inputs are destroyed in reversed order.
+    for (auto a = input_arrs.rbegin(); a != input_arrs.rend(); ++a) {
+      if (a->array_desc_.use_count() <= a->siblings().size() + 1) {
+        for_deletion.push_back(std::move(a->array_desc_));
       }
     }
   };
