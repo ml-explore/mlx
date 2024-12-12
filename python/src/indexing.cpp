@@ -438,9 +438,7 @@ mx::array mlx_get_item(const mx::array& src, const nb::object& obj) {
   } else if (nb::isinstance<nb::ellipsis>(obj)) {
     return src;
   } else if (obj.is_none()) {
-    std::vector<int> s(1, 1);
-    s.insert(s.end(), src.shape().begin(), src.shape().end());
-    return reshape(src, s);
+    return expand_dims(src, 0);
   } else if (nb::isinstance<nb::list>(obj)) {
     return mlx_get_item_array(
         src, array_from_list(nb::cast<nb::list>(obj), {}));
