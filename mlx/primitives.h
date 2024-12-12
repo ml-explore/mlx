@@ -2152,7 +2152,7 @@ class Tanh : public UnaryPrimitive {
 class Unflatten : public UnaryPrimitive {
  public:
   explicit Unflatten(Stream stream, int axis, Shape shape)
-      : UnaryPrimitive(stream), axis_(), shape_(std::move(shape)) {}
+      : UnaryPrimitive(stream), axis_(axis), shape_(std::move(shape)) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
