@@ -105,7 +105,7 @@ void init_ops(nb::module_& m) {
   )pbdoc");
   m.def(
       "unflatten",
-      &unflatten,
+      &mx::unflatten,
       nb::arg(),
       "axis"_a,
       "shape"_a,
