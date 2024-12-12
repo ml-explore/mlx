@@ -497,7 +497,8 @@ mlx_scatter_args_array(
   auto up_shape = indices.shape();
   up_shape.insert(up_shape.end(), src.shape().begin() + 1, src.shape().end());
   up = broadcast_to(up, up_shape);
-  up = expand_dims(up, indices.ndim());
+  up_shape.insert(up_shape.begin() + indices.ndim(), 1);
+  up = reshape(up, up_shape);
 
   return {{indices}, up, {0}};
 }
@@ -784,7 +785,15 @@ auto mlx_slice_update(
   // Pre process tuple
   auto upd = to_array(v, src.dtype());
 
-  auto up = squeeze_leading_singletons(upd);
+  // Remove extra leading singletons dimensions from the update
+  int s = 0;
+  for (; s < (upd.ndim() - 1) && upd.shape(s) == 1 &&
+       (upd.ndim() - s) > src.ndim();
+       s++) {
+  };
+  auto squeeze_axes = std::vector<int>(s);
+  std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
+  auto up = mx::squeeze(upd, squeeze_axes);
 
   // Build slice update params
   mx::Shape starts(src.ndim(), 0);
