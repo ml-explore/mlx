@@ -117,6 +117,9 @@ array triu(array x, int k = 0, StreamOrDevice s = {});
 /** Reshape an array to the given shape. */
 array reshape(const array& a, Shape shape, StreamOrDevice s = {});
 
+/** Unflatten the axis to the given shape. */
+array unflatten(const array& a, int axis, Shape shape, StreamOrDevice s = {});
+
 /** Flatten the dimensions in the range `[start_axis, end_axis]` . */
 array flatten(
     const array& a,

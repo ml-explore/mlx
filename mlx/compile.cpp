@@ -82,6 +82,7 @@ bool allows_shapeless(const Primitive& p) {
       typeid(p) == typeid(Transpose) || typeid(p) == typeid(Concatenate) ||
       typeid(p) == typeid(Matmul) || typeid(p) == typeid(QuantizedMatmul) ||
       typeid(p) == typeid(Squeeze) || typeid(p) == typeid(ExpandDims) ||
+      typeid(p) == typeid(Flatten) || typeid(p) == typeid(Unflatten) ||
       typeid(p) == typeid(fast::AffineQuantize) ||
       typeid(p) == typeid(fast::LayerNorm) ||
       typeid(p) == typeid(fast::RMSNorm) || typeid(p) == typeid(fast::RoPE) ||

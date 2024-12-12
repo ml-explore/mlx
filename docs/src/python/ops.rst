@@ -168,6 +168,7 @@ Operations
    tri
    tril
    triu
+   unflatten
    var
    view
    where

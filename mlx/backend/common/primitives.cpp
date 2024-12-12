@@ -19,6 +19,16 @@
 
 namespace mlx::core {
 
+void reshape(const array& in, array& out) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    copy_inplace(in, out, CopyType::General);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
+}
+
 void Abs::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
@@ -258,6 +268,14 @@ void Expm1::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Flatten::eval_cpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out);
+}
+
+void Unflatten::eval_cpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out);
+}
+
 void Floor::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
@@ -417,18 +435,8 @@ void Real::eval_cpu(const std::vector<array>& inputs, array& out) {
   unary_op<complex64_t, float>(inputs[0], out, detail::Real());
 }
 
-void Reshape::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-
-  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
-
-  if (copy_necessary) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    copy_inplace(in, out, CopyType::General);
-  } else {
-    shared_buffer_reshape(in, out_strides, out);
-  }
+void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out);
 }
 
 void Round::eval(const std::vector<array>& inputs, array& out) {
