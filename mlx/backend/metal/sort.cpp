@@ -82,9 +82,17 @@ void single_block_sort(
     compute_encoder.set_bytes(out_stride_segment_axis, 6);
   } else {
     compute_encoder.set_bytes(nc_dim, 5);
-    compute_encoder.set_vector_bytes(nc_shape, 6);
-    compute_encoder.set_vector_bytes(in_nc_str, 7);
-    compute_encoder.set_vector_bytes(out_nc_str, 8);
+    if (nc_shape.empty()) {
+      int shape = 0;
+      int64_t stride = 0;
+      compute_encoder.set_bytes(shape, 6);
+      compute_encoder.set_bytes(stride, 7);
+      compute_encoder.set_bytes(stride, 8);
+    } else {
+      compute_encoder.set_vector_bytes(nc_shape, 6);
+      compute_encoder.set_vector_bytes(in_nc_str, 7);
+      compute_encoder.set_vector_bytes(out_nc_str, 8);
+    }
   }
 
   MTL::Size group_dims = MTL::Size(bn, 1, 1);
