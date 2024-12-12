@@ -53,9 +53,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int idx_ndim = nidx ? inputs[1].ndim() : 0;
   size_t ndim = src.ndim();
 
-  bool large_index = nidx && inputs[1].size() > UINT32_MAX;
-  bool large_src = src.size() > UINT32_MAX;
-  bool large_out = out.size() > UINT32_MAX;
+  bool large_index = nidx && inputs[1].size() > INT32_MAX;
+  bool large_src = src.size() > INT32_MAX;
+  bool large_out = out.size() > INT32_MAX;
   bool large = large_index || large_src || large_out;
 
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
@@ -65,7 +65,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx_type_name,
       nidx,
       idx_ndim,
-      large ? "int64_t" : "uint");
+      large ? "int64_t" : "int");
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
@@ -86,7 +86,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_args,
         idx_arr,
         idx_ndim,
-        large ? "int64_t" : "uint");
+        large ? "int64_t" : "int");
     return kernel_source;
   });
 
@@ -234,9 +234,9 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       break;
   }
   auto upd_contig = upd.flags().row_contiguous;
-  bool large_out = out.size() > UINT32_MAX;
-  bool large_idx = nidx && (inputs[1].size() > UINT32_MAX);
-  bool large_upd = upd.size() > UINT32_MAX;
+  bool large_out = out.size() > INT32_MAX;
+  bool large_idx = nidx && (inputs[1].size() > INT32_MAX);
+  bool large_upd = upd.size() > INT32_MAX;
   bool large = large_out || large_idx || large_upd;
   std::string kernel_name = fmt::format(
       "scatter{0}{1}_{2}_{3}_{4}_nwork{5}_{6}",
@@ -246,7 +246,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       nidx,
       upd_contig ? "updc_true" : "updc_false",
       nwork,
-      large ? "int64_t" : "uint");
+      large ? "int64_t" : "int");
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
@@ -290,7 +290,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_arr,
         upd_contig,
         nwork,
-        large ? "int64_t" : "uint");
+        large ? "int64_t" : "int");
     return kernel_source;
   });
 

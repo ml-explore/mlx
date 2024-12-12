@@ -9,19 +9,19 @@
   instantiate_kernel("v_" #op #in_tname #out_tname, unary_v, in_type, out_type, op)   \
   instantiate_kernel("v2_" #op #in_tname #out_tname, unary_v2, in_type, out_type, op) \
   instantiate_kernel(                                                                 \
-      "gn1_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 1, uint)       \
+      "gn1_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 1, int)        \
   instantiate_kernel(                                                                 \
       "gn4large" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
 
 #define instantiate_unary_all_same(op, tname, type)   \
   instantiate_unary_all(op, tname, tname, type, type)
 
-#define instantiate_unary_float(op)               \
+#define instantiate_unary_float(op)                    \
   instantiate_unary_all_same(op, float16, half)        \
   instantiate_unary_all_same(op, float32, float)       \
   instantiate_unary_all_same(op, bfloat16, bfloat16_t)
 
-#define instantiate_unary_types(op)           \
+#define instantiate_unary_types(op)                \
   instantiate_unary_all_same(op, bool_, bool)      \
   instantiate_unary_all_same(op, uint8, uint8_t)   \
   instantiate_unary_all_same(op, uint16, uint16_t) \
