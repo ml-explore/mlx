@@ -1956,6 +1956,12 @@ class TestOps(mlx_tests.MLXTestCase):
             b_mx = mx.sort(a_mx)
             self.assertTrue(np.array_equal(b_np, b_mx))
 
+        # 1D strided sort
+        a = mx.array([[4, 3], [2, 1], [5, 4], [3, 2]])
+        out = mx.argsort(a[:, 1])
+        expected = mx.array([1, 3, 0, 2], dtype=mx.uint32)
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
