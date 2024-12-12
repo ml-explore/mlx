@@ -787,7 +787,7 @@ auto mlx_slice_update(
 
   // Remove extra leading singletons dimensions from the update
   int s = 0;
-  for (; s < (upd.ndim() - 1) && upd.shape(s) == 1 &&
+  for (; s < static_cast<int>(upd.ndim()) - 1 && upd.shape(s) == 1 &&
        (upd.ndim() - s) > src.ndim();
        s++) {
   };
