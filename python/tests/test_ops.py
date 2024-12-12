@@ -1955,7 +1955,7 @@ class TestOps(mlx_tests.MLXTestCase):
         # 1D strided sort
         a = mx.array([[4, 3], [2, 1], [5, 4], [3, 2]])
         out = mx.argsort(a[:, 1])
-        expected = mx.array([1, 3, 0, 2], dtype=uint32)
+        expected = mx.array([1, 3, 0, 2], dtype=mx.uint32)
         self.assertTrue(mx.array_equal(out, expected))
 
     def test_partition(self):
