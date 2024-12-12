@@ -1658,7 +1658,7 @@ std::vector<array> Flatten::vjp(
     const std::vector<array>&) {
   auto& in = primals[0];
   Shape unflatten_shape(
-      in.shape().begin() + start_axis_, in.shape().begin() + end_axis_);
+      in.shape().begin() + start_axis_, in.shape().begin() + end_axis_ + 1);
   return {unflatten(
       cotangents[0], start_axis_, std::move(unflatten_shape), stream())};
 }
