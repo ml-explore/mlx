@@ -1,11 +1,16 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <dlfcn.h>
+#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <list>
 #include <mutex>
+#include <numeric>
 #include <shared_mutex>
+#include <sstream>
+
+#include <dlfcn.h>
+#include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/compiled_preamble.h"
@@ -13,6 +18,110 @@
 #include "mlx/graph_utils.h"
 
 namespace mlx::core {
+
+#ifdef _MSC_VER
+
+namespace {
+
+// Remove trailing whitespaces.
+std::string rtrim(const std::string& s) {
+  return std::string(s.begin(), std::find_if(s.rbegin(), s.rend(), [](auto ch) {
+                                  return !std::isspace(ch);
+                                }).base());
+}
+
+// Split string into array.
+std::vector<std::string> str_split(const std::string& str, char delimiter) {
+  std::vector<std::string> tokens;
+  std::string token;
+  std::istringstream tokenStream(str);
+  while (std::getline(tokenStream, token, delimiter)) {
+    tokens.push_back(token);
+  }
+  return tokens;
+}
+
+// Return a new vector by transforming its values.
+template <typename T, typename F>
+std::vector<T> vec_map(const std::vector<T>& v, F&& transform) {
+  std::vector<T> ret(v.size());
+  std::transform(v.begin(), v.end(), ret.begin(), std::forward<F>(transform));
+  return ret;
+}
+
+// Join a vector into a string.
+template <typename T>
+std::string vec_join(const std::vector<T>& v, const std::string& delimiter) {
+  if (v.empty())
+    return "";
+  return std::accumulate(
+      v.begin() + 1,
+      v.end(),
+      v[0],
+      [&](const std::string& a, const std::string& b) {
+        return a + delimiter + b;
+      });
+}
+
+// Run a command and get its output.
+std::string exec(std::string cmd) {
+  std::unique_ptr<FILE, decltype(&_pclose)> pipe(
+      _popen(cmd.c_str(), "r"), _pclose);
+  if (!pipe) {
+    throw std::runtime_error("popen() failed.");
+  }
+  char buffer[128];
+  std::string result;
+  while (fgets(buffer, sizeof(buffer), pipe.get())) {
+    result += buffer;
+  }
+  return rtrim(result);
+}
+
+// Get path information about MSVC.
+struct VisualStudioInfo {
+  VisualStudioInfo() {
+#ifdef _M_ARM64
+    arch = "arm64";
+#else
+    arch = "x64";
+#endif
+    // Get path of Visual Studio.
+    std::string vs_path = exec(fmt::format(
+        "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
+        " -property installationPath",
+        std::getenv("ProgramFiles(x86)")));
+    if (vs_path.empty()) {
+      throw std::runtime_error("Can not find Visual Studio.");
+    }
+    // Read the envs from vcvarsall.
+    std::string envs = exec(fmt::format(
+        "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",
+        vs_path,
+        arch));
+    for (const std::string& line : str_split(envs, '\n')) {
+      auto pair = str_split(line, '=');
+      assert(pair.size() == 2);
+      if (pair[0] == "LIB") {
+        libpaths = str_split(pair[1], ';');
+      } else if (pair[0] == "VCToolsInstallDir") {
+        cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", pair[1], arch);
+      }
+    }
+  }
+  std::string arch;
+  std::string cl_exe;
+  std::vector<std::string> libpaths;
+};
+
+const VisualStudioInfo& GetVisualStudioInfo() {
+  static VisualStudioInfo info;
+  return info;
+}
+
+} // namespace
+
+#endif // _MSC_VER
 
 struct CompilerCache {
   struct DLib {
@@ -44,6 +153,7 @@ namespace detail {
 bool compile_available_for_device(const Device& device) {
   return true;
 }
+
 } // namespace detail
 
 std::string get_temp_file(const std::string& name) {
@@ -107,11 +217,29 @@ void* compile(
     source_file << source_code;
     source_file.close();
 
-    std::ostringstream build_command;
-    build_command << "g++ -std=c++17 -O3 -Wall -fPIC -shared '"
-                  << source_file_path << "' -o '" << shared_lib_path << "'";
-    std::string build_command_str = build_command.str();
-    auto return_code = system(build_command_str.c_str());
+#ifdef _MSC_VER
+    const VisualStudioInfo& info = GetVisualStudioInfo();
+    std::string build_command = fmt::format(
+        "\""
+        "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\" {3}"
+        "\"",
+        info.cl_exe,
+        source_file_path,
+        shared_lib_path,
+        vec_join(
+            vec_map(
+                info.libpaths,
+                [](const auto& lib) {
+                  return fmt::format("/libpath:\"{0}\"", lib);
+                }),
+            " "));
+#else
+    std::string build_command = fmt::format(
+        "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}'",
+        source_file_path,
+        shared_lib_path);
+#endif
+    auto return_code = system(build_command.c_str());
     if (return_code) {
       std::ostringstream msg;
       msg << "[Compile::eval_cpu] Failed to compile function " << kernel_name
