@@ -542,6 +542,9 @@ array squeeze(
     const array& a,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
   std::set<int> unique_axes;
   for (auto ax : axes) {
     unique_axes.insert(ax < 0 ? ax + a.ndim() : ax);
@@ -598,6 +601,9 @@ array expand_dims(
     const array& a,
     const std::vector<int>& axes,
     StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
   { // Check for repeats
     std::set<int> unique_axes(axes.begin(), axes.end());
     if (unique_axes.size() != axes.size()) {
