@@ -15,6 +15,14 @@
 
 #include "mlx/io/threadpool.h"
 
+// Strictly we need to operate on files in binary mode (to avoid \r getting
+// automatically inserted), but every modern system except for Windows no
+// longer differentiates between binary and text files and for them define
+// the flag as no-op.
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 namespace mlx::core {
 
 namespace io {
@@ -51,7 +59,8 @@ class Writer {
 class ParallelFileReader : public Reader {
  public:
   explicit ParallelFileReader(std::string file_path)
-      : fd_(open(file_path.c_str(), O_RDONLY)), label_(std::move(file_path)) {}
+      : fd_(open(file_path.c_str(), O_RDONLY | O_BINARY)),
+        label_(std::move(file_path)) {}
 
   ~ParallelFileReader() override {
     close(fd_);
@@ -93,7 +102,10 @@ class ParallelFileReader : public Reader {
 class FileWriter : public Writer {
  public:
   explicit FileWriter(std::string file_path)
-      : fd_(open(file_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644)),
+      : fd_(open(
+            file_path.c_str(),
+            O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
+            0644)),
         label_(std::move(file_path)) {}
 
   ~FileWriter() override {
