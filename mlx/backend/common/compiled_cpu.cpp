@@ -284,6 +284,11 @@ inline void build_kernel(
 
   NodeNamer namer;
 
+#ifdef _MSC_VER
+  // Export the symbol
+  os << "__declspec(dllexport) ";
+#endif
+
   // Start the kernel
   os << "void " << kernel_name << "(void** args) {" << std::endl;
 
