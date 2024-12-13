@@ -50,15 +50,13 @@ std::vector<T> vec_map(const std::vector<T>& v, F&& transform) {
 }
 
 // Join a vector into a string.
-template <typename T>
-std::string vec_join(const std::vector<T>& v, const std::string& delimiter) {
+std::string vec_join(
+    const std::vector<std::string>& v,
+    const std::string& delimiter) {
   if (v.empty())
     return "";
   return std::accumulate(
-      v.begin() + 1,
-      v.end(),
-      v[0],
-      [&](const std::string& a, const std::string& b) {
+      v.begin() + 1, v.end(), v[0], [&](const auto& a, const auto& b) {
         return a + delimiter + b;
       });
 }
