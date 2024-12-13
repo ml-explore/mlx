@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 project(mlx LANGUAGES C CXX)
 
@@ -125,11 +125,13 @@ if(WIN32)
     dlfcn-win32
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
     GIT_TAG v1.4.1
-    SOURCE_SUBDIR use-an-unexist-path-to-skip-cmake-of-dlfcn-win32
     EXCLUDE_FROM_ALL)
-  FetchContent_MakeAvailable(dlfcn-win32)
+  block()
+    set(BUILD_SHARED_LIBS OFF)
+    FetchContent_MakeAvailable(dlfcn-win32)
+  endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  target_sources(mlx PRIVATE ${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c)
+  target_link_libraries(mlx PRIVATE dl)
 endif()
 
 if(MLX_BUILD_CPU)
