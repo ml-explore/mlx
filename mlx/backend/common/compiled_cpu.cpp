@@ -203,7 +203,7 @@ void* compile(
         "\""
         "cd /D \"{0}\" && "
         "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17 \"{2}\" "
-        "/link /out:\"{3}\" {4}"
+        "/link /out:\"{3}\" {4} >nul"
         "\"",
         std::filesystem::temp_directory_path().string(),
         info.cl_exe,
