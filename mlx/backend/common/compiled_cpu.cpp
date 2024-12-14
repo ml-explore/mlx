@@ -98,12 +98,16 @@ struct VisualStudioInfo {
         vs_path,
         arch));
     for (const std::string& line : str_split(envs, '\n')) {
-      auto pair = str_split(line, '=');
-      assert(pair.size() == 2);
-      if (pair[0] == "LIB") {
-        libpaths = str_split(pair[1], ';');
-      } else if (pair[0] == "VCToolsInstallDir") {
-        cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", pair[1], arch);
+      // Each line is in the format "ENV_NAME=values".
+      auto pos = line.find_first_of('=');
+      if (pos == std::string::npos || pos == 0 || pos == line.size() - 1)
+        continue;
+      std::string name = line.substr(0, pos);
+      std::string value = line.substr(pos + 1);
+      if (name == "LIB") {
+        libpaths = str_split(value, ';');
+      } else if (name == "VCToolsInstallDir") {
+        cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
       }
     }
   }
