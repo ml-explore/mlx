@@ -201,11 +201,14 @@ void* compile(
     }
     std::string build_command = fmt::format(
         "\""
-        "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\"{3}"
+        "cd /D \"{0}\" && "
+        "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17 \"{2}\" "
+        "/link /out:\"{3}\" {4}"
         "\"",
+        std::filesystem::temp_directory_path().string(),
         info.cl_exe,
-        source_file_path,
-        shared_lib_path,
+        source_file_name.str(),
+        shared_lib_name.str(),
         libpaths);
 #else
     std::string build_command = fmt::format(
