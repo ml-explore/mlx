@@ -4,7 +4,6 @@
 #include <fstream>
 #include <list>
 #include <mutex>
-#include <numeric>
 #include <shared_mutex>
 #include <sstream>
 
@@ -22,13 +21,6 @@ namespace mlx::core {
 
 namespace {
 
-// Remove trailing whitespaces.
-std::string rtrim(const std::string& s) {
-  return std::string(s.begin(), std::find_if(s.rbegin(), s.rend(), [](auto ch) {
-                                  return !std::isspace(ch);
-                                }).base());
-}
-
 // Split string into array.
 std::vector<std::string> str_split(const std::string& str, char delimiter) {
   std::vector<std::string> tokens;
@@ -40,26 +32,6 @@ std::vector<std::string> str_split(const std::string& str, char delimiter) {
   return tokens;
 }
 
-// Return a new vector by transforming its values.
-template <typename T, typename F>
-std::vector<T> vec_map(const std::vector<T>& v, F&& transform) {
-  std::vector<T> ret(v.size());
-  std::transform(v.begin(), v.end(), ret.begin(), std::forward<F>(transform));
-  return ret;
-}
-
-// Join a vector into a string.
-std::string vec_join(
-    const std::vector<std::string>& v,
-    const std::string& delimiter) {
-  if (v.empty())
-    return "";
-  return std::accumulate(
-      v.begin() + 1, v.end(), v[0], [&](const auto& a, const auto& b) {
-        return a + delimiter + b;
-      });
-}
-
 // Run a command and get its output.
 std::string exec(std::string cmd) {
   std::unique_ptr<FILE, decltype(&_pclose)> pipe(
@@ -68,11 +40,13 @@ std::string exec(std::string cmd) {
     throw std::runtime_error("popen() failed.");
   }
   char buffer[128];
-  std::string result;
+  std::string ret;
   while (fgets(buffer, sizeof(buffer), pipe.get())) {
-    result += buffer;
+    ret += buffer;
   }
-  return rtrim(result);
+  // Trim trailing spaces.
+  ret.erase(std::remove_if(ret.begin(), ret.end(), isspace), ret.end());
+  return ret;
 }
 
 // Get path information about MSVC.
@@ -220,20 +194,18 @@ void* compile(
 
 #ifdef _MSC_VER
     const VisualStudioInfo& info = GetVisualStudioInfo();
+    std::string libpaths;
+    for (const std::string& lib : info.libpaths) {
+      libpaths += fmt::format(" /libpath:\"{0}\"", lib);
+    }
     std::string build_command = fmt::format(
         "\""
-        "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\" {3}"
+        "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\"{3}"
         "\"",
         info.cl_exe,
         source_file_path,
         shared_lib_path,
-        vec_join(
-            vec_map(
-                info.libpaths,
-                [](const auto& lib) {
-                  return fmt::format("/libpath:\"{0}\"", lib);
-                }),
-            " "));
+        libpaths);
 #else
     std::string build_command = fmt::format(
         "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}'",
