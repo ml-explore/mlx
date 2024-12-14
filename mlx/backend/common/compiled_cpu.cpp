@@ -45,7 +45,13 @@ std::string exec(std::string cmd) {
     ret += buffer;
   }
   // Trim trailing spaces.
-  ret.erase(std::remove_if(ret.begin(), ret.end(), isspace), ret.end());
+  ret.erase(
+      std::find_if(
+          ret.rbegin(),
+          ret.rend(),
+          [](unsigned char ch) { return !std::isspace(ch); })
+          .base(),
+      ret.end());
   return ret;
 }
 
