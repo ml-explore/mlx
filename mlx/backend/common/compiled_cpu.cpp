@@ -68,10 +68,14 @@ void* compile(
   std::string source_code = source_builder();
   std::string kernel_file_name;
 
-  // Deal with long kernel names. Maximum length for files on macOS is 255
-  // characters. Clip file name with a little extra room and append a 16
-  // character hash.
+  // Deal with long kernel names. Maximum length for filename on macOS is 255
+  // characters, and on Windows the maximum length for whole path is 260. Clip
+  // file name with a little extra room and append a 16 character hash.
+#ifdef _WIN32
+  constexpr int max_file_name_length = 140;
+#else
   constexpr int max_file_name_length = 245;
+#endif
   if (kernel_name.size() > max_file_name_length) {
     std::ostringstream file_name;
     file_name
