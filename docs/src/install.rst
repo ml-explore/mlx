@@ -53,7 +53,7 @@ Build Requirements
 ^^^^^^^^^^^^^^^^^^
 
 - A C++ compiler with C++17 support (e.g. Clang >= 5.0)
-- `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
+- `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
 - Xcode >= 15.0 and macOS SDK >= 14.0
 
 .. note::

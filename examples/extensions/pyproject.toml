@@ -1,7 +1,7 @@
 [build-system]
 requires = [
   "setuptools>=42",
-  "cmake>=3.24",
+  "cmake>=3.25",
   "mlx>=0.18.0",
   "nanobind==2.2.0",
 ]
