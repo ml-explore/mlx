@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <list>
