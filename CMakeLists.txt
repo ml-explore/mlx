@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 project(mlx LANGUAGES C CXX)
 
@@ -126,7 +126,10 @@ if(WIN32)
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
     GIT_TAG v1.4.1
     EXCLUDE_FROM_ALL)
+  block()
+  set(BUILD_SHARED_LIBS OFF)
   FetchContent_MakeAvailable(dlfcn-win32)
+  endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
   target_link_libraries(mlx PRIVATE dl)
 endif()
@@ -264,7 +267,10 @@ install(
   EXPORT MLXTargets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  RUNTIME
+    DESTINATION
+      # On Windows, DLLs must be put in the same dir with the python bindings.
+      $<IF:$<BOOL:${WIN32}>,${CMAKE_INSTALL_PREFIX},${CMAKE_INSTALL_BINDIR}>
   INCLUDES
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
