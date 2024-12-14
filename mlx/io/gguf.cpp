@@ -242,9 +242,9 @@ GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
   }
 
   std::unique_ptr<gguf_ctx, decltype(&gguf_close)> ctx(
-      gguf_open(file.data()), gguf_close);
+      gguf_open(file.data(), O_RDONLY | O_BINARY), gguf_close);
   if (!ctx) {
-    throw std::runtime_error("[load_gguf] gguf_init failed");
+    throw std::runtime_error("[load_gguf] gguf_open failed");
   }
   auto metadata = load_metadata(ctx.get());
   auto arrays = load_arrays(ctx.get());
@@ -434,7 +434,7 @@ void save_gguf(
     const char* tensorname = key.c_str();
     const uint64_t namelen = key.length();
     const uint32_t num_dim = arr.ndim();
-    uint64_t dim[num_dim];
+    std::vector<uint64_t> dim(num_dim);
     for (int i = 0; i < num_dim; i++) {
       dim[i] = arr.shape()[num_dim - 1 - i];
     }
@@ -443,7 +443,7 @@ void save_gguf(
             tensorname,
             namelen,
             num_dim,
-            dim,
+            dim.data(),
             gguf_type.value(),
             tensor_offset)) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_info failed");
