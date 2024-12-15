@@ -181,7 +181,7 @@ void init_fast(nb::module_& parent_module) {
         return nb::cpp_function(
             [kernel = std::move(kernel)](
                 const std::vector<ScalarOrArray>& inputs_,
-                const std::vector<std::vector<int>>& output_shapes,
+                const std::vector<mx::Shape>& output_shapes,
                 const std::vector<mx::Dtype>& output_dtypes,
                 std::tuple<int, int, int> grid,
                 std::tuple<int, int, int> threadgroup,

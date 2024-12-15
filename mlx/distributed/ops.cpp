@@ -82,7 +82,7 @@ array send(
 }
 
 array recv(
-    std::vector<int> shape,
+    Shape shape,
     Dtype dtype,
     int src,
     std::optional<Group> group_ /* = std::nullopt */,

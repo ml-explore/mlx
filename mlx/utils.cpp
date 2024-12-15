@@ -296,7 +296,7 @@ std::ostream& operator<<(std::ostream& os, array a) {
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const Shape& v) {
+std::ostream& operator<<(std::ostream& os, const std::vector<int>& v) {
   os << "(";
   for (int i = 0; i < v.size(); ++i) {
     os << v[i] << ((i == v.size() - 1) ? "" : ",");
@@ -305,7 +305,7 @@ std::ostream& operator<<(std::ostream& os, const Shape& v) {
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const Strides& v) {
+std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v) {
   os << "(";
   for (int i = 0; i < v.size(); ++i) {
     os << v[i] << ((i == v.size() - 1) ? "" : ",");

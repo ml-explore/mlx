@@ -14,10 +14,10 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T, typename IdxT = int32_t>
+template <typename T>
 struct StridedIterator {
   using iterator_category = std::random_access_iterator_tag;
-  using difference_type = IdxT;
+  using difference_type = int32_t;
   using value_type = T;
   using reference = value_type&;
   using pointer = value_type*;

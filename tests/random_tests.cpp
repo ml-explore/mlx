@@ -611,8 +611,8 @@ TEST_CASE("test categorical") {
   CHECK_THROWS(categorical(logits, -3));
 
   // Invalid requested shapes
-  CHECK_THROWS(categorical(logits, 1, std::vector<int>{1}));
-  CHECK_THROWS(categorical(logits, 1, std::vector<int>{11}));
+  CHECK_THROWS(categorical(logits, 1, 1));
+  CHECK_THROWS(categorical(logits, 1, 11));
   CHECK_THROWS(categorical(logits, 1, {10, 1}));
 
   CHECK_EQ(categorical(logits, -1).shape(), Shape{10});

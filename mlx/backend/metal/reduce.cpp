@@ -635,7 +635,7 @@ void strided_reduce_longcolumn(
   }
 
   // Prepare the temporary accumulator
-  std::vector<int> intermediate_shape;
+  Shape intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
   intermediate_shape.push_back(outer_blocks);
   intermediate_shape.insert(
@@ -806,7 +806,7 @@ void strided_reduce_2pass(
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
 
   // Prepare the temporary accumulator
-  std::vector<int> intermediate_shape;
+  Shape intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
   intermediate_shape.push_back(32);
   intermediate_shape.insert(

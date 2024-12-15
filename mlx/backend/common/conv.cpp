@@ -726,7 +726,7 @@ void explicit_gemm_conv_1D_cpu(
   auto conv_dtype = float32;
 
   // Pad input
-  std::vector<int> padded_shape = {N, iH + 2 * padding[0], C};
+  Shape padded_shape = {N, iH + 2 * padding[0], C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
@@ -765,7 +765,7 @@ void explicit_gemm_conv_1D_cpu(
       in_padded, strided_strides, flags, in_strided_view.size(), 0);
 
   // Materialize strided view
-  std::vector<int> strided_reshape = {N * oH, wH * C};
+  Shape strided_reshape = {N * oH, wH * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General);
 
@@ -843,8 +843,7 @@ void explicit_gemm_conv_2D_cpu(
   auto conv_dtype = out.dtype();
 
   // Pad input
-  std::vector<int> padded_shape = {
-      N, iH + 2 * padding[0], iW + 2 * padding[1], C};
+  Shape padded_shape = {N, iH + 2 * padding[0], iW + 2 * padding[1], C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
@@ -881,7 +880,7 @@ void explicit_gemm_conv_2D_cpu(
       in_padded, strided_strides, flags, in_strided_view.size(), 0);
 
   // Materialize strided view
-  std::vector<int> strided_reshape = {N * oH * oW, wH * wW * C};
+  Shape strided_reshape = {N * oH * oW, wH * wW * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General);
 
@@ -934,19 +933,19 @@ void explicit_gemm_conv_ND_cpu(
     const std::vector<int>& wt_dilation,
     const bool flip) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
-  const auto iDim = std::vector<int>(
-      in.shape().begin() + 1, in.shape().end() - 1); // Input spatial dim
-  const auto oDim = std::vector<int>(
+  const auto iDim =
+      Shape(in.shape().begin() + 1, in.shape().end() - 1); // Input spatial dim
+  const auto oDim = Shape(
       out.shape().begin() + 1, out.shape().end() - 1); // Output spatial dim
   const int O = wt.shape(0); // Out channels
   const int C = wt.shape(-1); // In channels
-  const auto wDim = std::vector<int>(
-      wt.shape().begin() + 1, wt.shape().end() - 1); // Weight spatial dim
+  const auto wDim =
+      Shape(wt.shape().begin() + 1, wt.shape().end() - 1); // Weight spatial dim
 
   auto conv_dtype = float32;
 
   // Pad input
-  std::vector<int> padded_shape(in.shape().size());
+  Shape padded_shape(in.shape().size());
   padded_shape.front() = N;
   for (size_t i = 0; i < iDim.size(); i++) {
     padded_shape[i + 1] = iDim[i] + 2 * padding[i];

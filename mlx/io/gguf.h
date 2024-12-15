@@ -12,7 +12,7 @@ extern "C" {
 
 namespace mlx::core {
 
-std::vector<int> get_shape(const gguf_tensor& tensor);
+Shape get_shape(const gguf_tensor& tensor);
 void gguf_load_quantized(
     std::unordered_map<std::string, array>& a,
     const gguf_tensor& tensor);
