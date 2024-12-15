@@ -1904,7 +1904,7 @@ array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   int size = a.size();
   auto result = argmin(flatten(a, s), 0, true, s);
   if (keepdims) {
-    std::vector<int> axes(a.ndim());
+    std::vector<int> axes(a.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     result = expand_dims(result, axes, s);
   } else {
@@ -1942,7 +1942,7 @@ array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   int size = a.size();
   auto result = argmax(flatten(a, s), 0, true, s);
   if (keepdims) {
-    std::vector<int> axes(a.ndim());
+    std::vector<int> axes(a.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     result = expand_dims(result, axes, s);
   } else {
