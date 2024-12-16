@@ -6,9 +6,11 @@
 #include <sstream>
 
 // Used by pread implementation.
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #ifdef _MSC_VER
 #define NOMINMAX
-#include <windows.h>
 #endif
 
 #include "mlx/io/load.h"
@@ -106,7 +108,7 @@ Dtype dtype_from_array_protocol(std::string_view t) {
       "[from_str] Invalid array protocol type-string: " + std::string(t));
 }
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 // There is no pread on Windows, emulate it with ReadFile.
 int64_t pread(int fd, void* buf, uint64_t size, uint64_t offset) {
   HANDLE file = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
