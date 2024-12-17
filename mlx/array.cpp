@@ -277,7 +277,19 @@ array::ArrayDesc::~ArrayDesc() {
     }
     ad.inputs.clear();
     for (auto& [_, a] : input_map) {
-      if (a.array_desc_.use_count() <= a.siblings().size() + 1) {
+      bool is_deletable =
+          (a.array_desc_.use_count() <= a.siblings().size() + 1);
+      // An array with siblings is deletable only if all of its siblings
+      // are deletable
+      for (auto& s : a.siblings()) {
+        if (!is_deletable) {
+          break;
+        }
+        int is_input = (input_map.find(s.id()) != input_map.end());
+        is_deletable &=
+            s.array_desc_.use_count() <= a.siblings().size() + is_input;
+      }
+      if (is_deletable) {
         for_deletion.push_back(std::move(a.array_desc_));
       }
     }
