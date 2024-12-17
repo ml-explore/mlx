@@ -1716,7 +1716,7 @@ std::vector<array> Unflatten::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>&,
     const std::vector<array>&) {
-  return {flatten(cotangents[0], axis_, axis_ + shape_.size(), stream())};
+  return {flatten(cotangents[0], axis_, axis_ + shape_.size() - 1, stream())};
 }
 
 std::vector<array> Unflatten::jvp(
