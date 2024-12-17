@@ -219,7 +219,7 @@ class Upsample(Module):
     def __init__(
         self,
         scale_factor: Union[float, Tuple],
-        mode: Literal["nearest", "linear"] = "nearest",
+        mode: Literal["nearest", "linear", "cubic"] = "nearest",
         align_corners: bool = False,
     ):
         super().__init__()
