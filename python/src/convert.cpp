@@ -477,7 +477,7 @@ mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
   } else if (auto pv = std::get_if<mx::array>(&v); pv) {
     return mx::astype(*pv, t.value_or((*pv).dtype()));
   } else {
-    auto arr = to_array_with_accessor(std::get<nb::object>(v));
+    auto arr = to_array_with_accessor(std::get<ArrayLike>(v).obj);
     return mx::astype(arr, t.value_or(arr.dtype()));
   }
 }

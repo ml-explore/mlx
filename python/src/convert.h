@@ -12,6 +12,11 @@
 namespace mx = mlx::core;
 namespace nb = nanobind;
 
+struct ArrayLike {
+  ArrayLike(nb::object obj) : obj(obj) {};
+  nb::object obj;
+};
+
 using ArrayInitType = std::variant<
     nb::bool_,
     nb::int_,
@@ -23,7 +28,7 @@ using ArrayInitType = std::variant<
     std::complex<float>,
     nb::list,
     nb::tuple,
-    nb::object>;
+    ArrayLike>;
 
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,

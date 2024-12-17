@@ -193,6 +193,15 @@ void init_array(nb::module_& m) {
       .def("maximum", &ArrayAt::maximum, "value"_a)
       .def("minimum", &ArrayAt::minimum, "value"_a);
 
+  nb::class_<ArrayLike>(
+      m,
+      "ArrayLike",
+      R"pbdoc(
+        Any Python object which has an ``__mlx__array__`` method that
+        returns an :obj:`array`.
+      )pbdoc")
+      .def(nb::init_implicit<nb::object>());
+
   nb::class_<ArrayPythonIterator>(
       m,
       "ArrayIterator",

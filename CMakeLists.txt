@@ -239,8 +239,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
     OUTPUT_STRIP_TRAILING_WHITESPACE
-    OUTPUT_VARIABLE NB_DIR)
-  list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
+    OUTPUT_VARIABLE nanobind_ROOT)
   find_package(nanobind CONFIG REQUIRED)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
