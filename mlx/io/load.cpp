@@ -7,11 +7,11 @@
 
 // Used by pread implementation.
 #ifdef _WIN32
-#include <windows.h>
-#endif
 #ifdef _MSC_VER
 #define NOMINMAX
 #endif
+#include <windows.h>
+#endif // _WIN32
 
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
