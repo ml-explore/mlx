@@ -849,6 +849,38 @@ class TestCompile(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             compiled_fun(x)
 
+    def test_compile_shapeless_with_broadcast(self):
+        a = mx.array(0.0)
+        b = mx.ones((2, 2))
+
+        def fun(a):
+            return mx.broadcast_to(a, b.shape)
+
+        cfun = mx.compile(fun, shapeless=True)
+        with self.assertRaises(ValueError):
+            cfun(a)
+
+        return
+
+        def fun(a, b):
+            return mx.broadcast_arrays(a, b)
+
+        cfun = mx.compile(fun, shapeless=True)
+        a, b = cfun(a, b)
+        self.assertEqual(a.shape, (2, 2))
+        self.assertEqual(b.shape, (2, 2))
+
+        # Batched matmul
+        a = mx.zeros((2, 1, 4, 2))
+        b = mx.zeros((3, 2, 5))
+
+        def fun(a, b):
+            return a @ b
+
+        cfun = mx.compile(fun, shapeless=True)
+        out = cfun(a, b)
+        self.assertEqual(out.shape, (2, 3, 4, 5))
+
 
 if __name__ == "__main__":
     unittest.main()
