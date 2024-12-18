@@ -14,6 +14,7 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -4533,6 +4534,13 @@ array number_of_elements(
     ax = normal_axis;
   }
 
+  if (!detail::in_dynamic_tracing()) {
+    double numel = 1;
+    for (auto ax : axes) {
+      numel *= a.shape(ax);
+    }
+    return array(inverted ? 1.0 / numel : numel, dtype);
+  }
   return stop_gradient(array(
       Shape{},
       dtype,
