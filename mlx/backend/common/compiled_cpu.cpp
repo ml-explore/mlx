@@ -80,7 +80,8 @@ void* compile(
     std::ostringstream file_name;
     file_name
         << std::string_view(kernel_name).substr(0, max_file_name_length - 16);
-    auto file_id = std::hash<std::string>{}(kernel_name);
+    auto file_id =
+        std::hash<std::string>{}(kernel_name.substr(max_file_name_length - 16));
     file_name << "_" << std::hex << std::setw(16) << file_id << std::dec;
     kernel_file_name = file_name.str();
   } else {
