@@ -8,14 +8,12 @@
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
-#include <fstream>
 #include <numeric>
 #include <sstream>
 
 #include "mlx/array.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
-#include "mlx/graph_utils.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
@@ -1313,25 +1311,6 @@ void init_transforms(nb::module_& m) {
         Returns:
             Callable: The vectorized function.
       )pbdoc");
-  m.def(
-      "export_to_dot",
-      [](nb::object file, const nb::args& args) {
-        std::vector<mx::array> arrays = tree_flatten(args);
-        if (nb::isinstance<nb::str>(file)) {
-          std::ofstream out(nb::cast<std::string>(file));
-          export_to_dot(out, arrays);
-        } else if (nb::hasattr(file, "write")) {
-          std::ostringstream out;
-          export_to_dot(out, arrays);
-          auto write = file.attr("write");
-          write(out.str());
-        } else {
-          throw std::invalid_argument(
-              "export_to_dot accepts file-like objects or strings to be used as filenames");
-        }
-      },
-      "file"_a,
-      "args"_a);
   m.def(
       "compile",
       [](const nb::callable& fun,
