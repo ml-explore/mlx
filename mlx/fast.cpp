@@ -497,7 +497,7 @@ array rope(
     const std::optional<array>& freqs /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   return rope(
-      x, dims, traditional, base, scale, array(offset, uint32), freqs, s);
+      x, dims, traditional, base, scale, array(offset, int32), freqs, s);
 }
 
 std::vector<array> RoPE::vjp(
