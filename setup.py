@@ -82,10 +82,12 @@ class CMakeBuild(build_ext):
             archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
             if archs:
                 cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
-        if platform.system() != "Windows":
+        if platform.system() == "Windows":
             # On Windows DLLs must be put in the same dir with the extension
             # while cmake puts mlx.dll into the "bin" sub-dir. Link with mlx
             # statically to work around it.
+            cmake_args += ["-DBUILD_SHARED_LIBS=OFF"]
+        else:
             cmake_args += ["-DBUILD_SHARED_LIBS=ON"]
 
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
