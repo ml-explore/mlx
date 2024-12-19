@@ -179,6 +179,31 @@ void init_array(nb::module_& m) {
       .value("number", mx::number)
       .value("generic", mx::generic)
       .export_values();
+
+  nb::class_<mx::finfo>(
+      m,
+      "finfo",
+      R"pbdoc(
+      Get information on floating-point types.
+      )pbdoc")
+      .def(nb::init<mx::Dtype>())
+      .def_ro(
+          "min",
+          &mx::finfo::min,
+          R"pbdoc(The smallest representable number.)pbdoc")
+      .def_ro(
+          "max",
+          &mx::finfo::max,
+          R"pbdoc(The largest representable number.)pbdoc")
+      .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
+      .def("__repr__", [](const mx::finfo& f) {
+        std::ostringstream os;
+        os << "finfo("
+           << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
+           << ")";
+        return os.str();
+      });
+
   nb::class_<ArrayAt>(
       m,
       "ArrayAt",
