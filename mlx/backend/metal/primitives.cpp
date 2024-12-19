@@ -186,6 +186,8 @@ void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void BroadcastShapes::eval_gpu(const std::vector<array>& inputs, array& out) {}
+
 void Concatenate::eval_gpu(const std::vector<array>& inputs, array& out) {
   concatenate_gpu(inputs, out, axis_, stream());
 }
