@@ -31,6 +31,16 @@ array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
+array rope(
+    const array& x,
+    int dims,
+    bool traditional,
+    std::optional<float> base,
+    float scale,
+    const array& offset,
+    const std::optional<array>& freqs = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 array scaled_dot_product_attention(
     const array& queries,
