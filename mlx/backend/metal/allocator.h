@@ -23,11 +23,11 @@ class BufferCache {
 
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
-  void release_cached_buffers(size_t min_bytes_to_free);
+  int release_cached_buffers(size_t min_bytes_to_free);
   size_t cache_size() {
     return pool_size_;
   }
-  void clear();
+  int clear();
 
  private:
   struct BufferHolder {
@@ -94,6 +94,8 @@ class MetalAllocator : public allocator::Allocator {
   size_t max_pool_size_;
   size_t wired_limit_{0};
   bool relaxed_{true};
+  size_t num_resources_{0};
+  size_t resource_limit_{0};
 
   std::mutex mutex_;
 };
