@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <iostream> // TODO
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
