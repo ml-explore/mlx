@@ -860,8 +860,6 @@ class TestCompile(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             cfun(a)
 
-        return
-
         def fun(a, b):
             return mx.broadcast_arrays(a, b)
 

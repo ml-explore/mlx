@@ -697,15 +697,16 @@ std::vector<array> Broadcast::vjp(
   auto& shape = primals[0].shape();
   auto& cotan = cotangents[0];
   int diff = cotan.ndim() - shape.size();
-  std::vector<int> reduce_axes;
-  for (int i = 0; i < cotan.ndim(); ++i) {
-    if (i < diff) {
-      reduce_axes.push_back(i);
-    } else if (shape[i - diff] != cotan.shape(i)) {
+  std::vector<int> squeeze_axes(diff);
+  std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
+  auto reduce_axes = squeeze_axes;
+  for (int i = diff; i < cotan.ndim(); ++i) {
+    if (shape[i - diff] != cotan.shape(i)) {
       reduce_axes.push_back(i);
     }
   }
-  return {reshape(sum(cotan, reduce_axes, true, stream()), shape, stream())};
+  return {
+      squeeze(sum(cotan, reduce_axes, true, stream()), squeeze_axes, stream())};
 }
 
 std::vector<array> Broadcast::jvp(
@@ -719,18 +720,13 @@ std::vector<array> Broadcast::jvp(
 std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  assert(inputs.size() == 1);
-  assert(axes.size() == 1);
   auto ax = axes[0];
   auto in = inputs[0];
   if (ax >= 0) {
-    auto in_shape = in.shape();
     int diff = shape_.size() - in.ndim() + 1;
     assert(diff >= 0);
-    in_shape.insert(in_shape.begin(), diff, 1);
+    shape_.insert(shape_.begin() + ax + diff, in.shape(ax));
     ax += diff;
-    shape_.insert(shape_.begin() + ax, in_shape[ax]);
-    in = reshape(in, in_shape, stream());
   }
   return {{broadcast_to(in, shape_, stream())}, {ax}};
 }
@@ -740,11 +736,61 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
-std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
-  if (broadcast_shapes(inputs[0].shape(), shape_) != shape_) {
-    throw std::invalid_argument("[Broadcast] Unable to infer broadcast shape");
+Shape Broadcast::output_shape(const array& in, const Shape& shape) {
+  auto out_shape = shape;
+  int dim_diff = shape.size() - in.ndim();
+  for (int i = in.ndim() - 1; i >= 0; --i) {
+    int j = i + dim_diff;
+    if (out_shape[j] == -1) {
+      out_shape[j] = in.shape()[i];
+    }
   }
-  return {shape_};
+  return out_shape;
+}
+
+std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
+  if (inputs.size() < 2) {
+    if (broadcast_shapes(inputs[0].shape(), shape_) != shape_) {
+      throw std::invalid_argument("[Broadcast] Unable to infer broadcast shape");
+    }
+    return {shape_};
+  }
+  return {output_shape(inputs[0], inputs[1].shape())};
+};
+
+std::pair<std::vector<array>, std::vector<int>> BroadcastShapes::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::invalid_argument("[BroadcastShapes] VMAP NYI");
+}
+
+bool BroadcastShapes::is_equivalent(const Primitive& other) const {
+  const auto& b_other = static_cast<const BroadcastShapes&>(other);
+  return ignore_axes_ == b_other.ignore_axes_;
+}
+
+Shape BroadcastShapes::output_shape(
+    const std::vector<array>& inputs,
+    const std::vector<int>& ignore_axes) {
+  auto shape = Shape{};
+  for (auto& in : inputs) {
+    auto in_shape = in.shape();
+    for (auto it = ignore_axes.rbegin(); it != ignore_axes.rend(); ++it) {
+      in_shape.erase(in_shape.begin() + in.ndim() + *it);
+    }
+    shape = broadcast_shapes(shape, in_shape);
+  }
+  // -1 is a place-holder for broadcast to copy from the input
+  int dims = ignore_axes.size() + shape.size();
+  for (auto ax : ignore_axes) {
+    shape.insert(shape.begin() + dims + ax, -1);
+  }
+  return shape;
+}
+
+std::vector<Shape> BroadcastShapes::output_shapes(
+    const std::vector<array>& inputs) {
+  return {output_shape(inputs, ignore_axes_)};
 }
 
 std::vector<array> Ceil::vjp(

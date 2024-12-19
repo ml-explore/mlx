@@ -31,7 +31,8 @@ struct InTracing {
     return !trace_stack.empty();
   }
   static bool in_dynamic_tracing() {
-    return in_tracing() && trace_stack.back();
+    // compile is always and only the outer-most transform
+    return in_tracing() && trace_stack.front();
   }
 
  private:

@@ -60,7 +60,8 @@ bool is_broadcast(const Primitive& p) {
 }
 
 bool is_noop(const Primitive& p) {
-  return typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient);
+  return typeid(p) == typeid(BroadcastShapes) || typeid(p) == typeid(Copy) ||
+      typeid(p) == typeid(StopGradient);
 }
 
 bool is_reduction(const Primitive& p) {
