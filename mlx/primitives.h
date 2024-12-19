@@ -520,16 +520,16 @@ class GatherMM : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class BroadcastShapes : public UnaryPrimitive {
+class BroadcastAxes : public UnaryPrimitive {
  public:
-  explicit BroadcastShapes(Stream stream, std::vector<int> ignore_axes = {})
+  explicit BroadcastAxes(Stream stream, std::vector<int> ignore_axes = {})
       : UnaryPrimitive(stream), ignore_axes_(std::move(ignore_axes)) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
-  DEFINE_PRINT(BroadcastShapes)
+  DEFINE_PRINT(BroadcastAxes)
   bool is_equivalent(const Primitive& other) const override;
   static Shape output_shape(
       const std::vector<array>& inputs,
@@ -537,6 +537,7 @@ class BroadcastShapes : public UnaryPrimitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
+  void eval(const std::vector<array>& inputs, array& out);
   std::vector<int> ignore_axes_;
 };
 
@@ -551,7 +552,7 @@ class Broadcast : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Broadcast)
-  static Shape output_shape(const array& input, const Shape& shape);
+  static Shape output_shape(const std::vector<array>& inputs);
 
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   bool is_equivalent(const Primitive& other) const override;

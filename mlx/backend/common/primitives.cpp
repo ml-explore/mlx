@@ -123,8 +123,6 @@ void AsType::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
-void BroadcastShapes::eval_cpu(const std::vector<array>& inputs, array& out) {}
-
 void Ceil::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
