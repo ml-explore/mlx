@@ -766,7 +766,8 @@ auto mlx_slice_update(
     const ScalarOrArray& v) {
   // Can't route to slice update if not slice or tuple
   if (src.ndim() == 0 ||
-      (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj))) {
+      (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj) &&
+       !nb::isinstance<nb::int_>(obj))) {
     return std::make_pair(false, src);
   }
   if (nb::isinstance<nb::tuple>(obj)) {
@@ -777,7 +778,6 @@ auto mlx_slice_update(
       }
     }
   }
-
   // Should be able to route to slice update
 
   // Pre process tuple
@@ -797,6 +797,20 @@ auto mlx_slice_update(
   mx::Shape starts(src.ndim(), 0);
   mx::Shape stops = src.shape();
   mx::Shape strides(src.ndim(), 1);
+  if (nb::isinstance<nb::int_>(obj)) {
+    if (src.ndim() < 1) {
+      std::ostringstream msg;
+      msg << "Too many indices for array with " << src.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    auto idx = nb::cast<int>(obj);
+    idx = idx < 0 ? idx + stops[0] : idx;
+    starts[0] = idx;
+    stops[0] = idx + 1;
+    auto out = slice_update(
+        src, up, std::move(starts), std::move(stops), std::move(strides));
+    return std::make_pair(true, out);
+  }
 
   // If it's just a simple slice, just do a slice update and return
   if (nb::isinstance<nb::slice>(obj)) {
