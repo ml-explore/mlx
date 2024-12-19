@@ -1829,11 +1829,11 @@ class TestLayers(mlx_tests.MLXTestCase):
     def test_causal_mask(self):
         mask = nn.MultiHeadAttention.create_additive_causal_mask(4, mx.float16)
         self.assertFalse(mx.any(mx.isnan(mask)))
-        self.assertTrue(mask[-1, 0].item() < 0)
+        self.assertTrue(mask[0, -1].item() < 0)
 
         mask = nn.MultiHeadAttention.create_additive_causal_mask(4, mx.bfloat16)
         self.assertFalse(mx.any(mx.isnan(mask)))
-        self.assertTrue(mask[-1, 0].item() < 0)
+        self.assertTrue(mask[0, -1].item() < 0)
 
 
 if __name__ == "__main__":

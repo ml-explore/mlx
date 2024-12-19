@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 
+#include "mlx/types/limits.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -328,8 +329,8 @@ int get_var(const char* name, int default_value) {
 
 template <typename T>
 void set_finfo_limits(float& min, float& max) {
-  min = std::numeric_limits<T>::min();
-  max = std::numeric_limits<T>::max();
+  min = numeric_limits<T>::lowest();
+  max = numeric_limits<T>::max();
 }
 
 finfo::finfo(Dtype dtype) : dtype(dtype) {
