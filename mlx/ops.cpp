@@ -3742,29 +3742,6 @@ array quantized_matmul(
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  // QuantizedMatmul handles w.ndim == 2 case.
-  if (x.ndim() > 2 && w.ndim() > 2) {
-    Shape bsx_x(x.shape().begin(), x.shape().end() - 2);
-    Shape bsx_w(w.shape().begin(), w.shape().end() - 2);
-    auto inner_shape = broadcast_shapes(bsx_x, bsx_w);
-
-    // Broadcast x
-    inner_shape.push_back(x.shape(-2));
-    inner_shape.push_back(x.shape(-1));
-    x = broadcast_to(x, inner_shape, s);
-
-    // Broadcast w
-    *(inner_shape.end() - 2) = w.shape(-2);
-    *(inner_shape.end() - 1) = w.shape(-1);
-    w = broadcast_to(w, inner_shape, s);
-
-    *(inner_shape.end() - 1) = scales.shape(-1);
-    scales = broadcast_to(scales, inner_shape, s);
-
-    *(inner_shape.end() - 1) = biases.shape(-1);
-    biases = broadcast_to(biases, inner_shape, s);
-  }
-
   auto dtype = result_type(x, scales, biases);
   if (!issubdtype(dtype, floating)) {
     std::ostringstream msg;
@@ -3774,18 +3751,21 @@ array quantized_matmul(
         << " and biases.dtype() == " << biases.dtype();
     throw std::invalid_argument(msg.str());
   }
+  std::vector<array> inputs = {
+      astype(x, dtype), w, astype(scales, dtype), astype(biases, dtype)};
 
-  auto out_shape = x.shape();
+  if (x.ndim() > 2 && w.ndim() > 2) {
+    inputs = broadcast_arrays(inputs, {-2, -1}, s);
+  }
+
+  auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   return array(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
           to_stream(s), group_size, bits, transpose),
-      {astype(x, dtype, s),
-       w,
-       astype(scales, dtype, s),
-       astype(biases, dtype, s)});
+      std::move(inputs));
 }
 
 std::tuple<array, array, array> quantize(
