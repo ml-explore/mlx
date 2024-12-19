@@ -430,7 +430,6 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
   }
-
   std::vector<array> vjps;
   for (auto& primal : primals_) {
     if (auto cotan_it = cotan_map.find(primal.id());
