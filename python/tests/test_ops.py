@@ -1153,7 +1153,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a = mx.arange(float("inf"), 1, float("inf"))
         with self.assertRaises(ValueError):
             a = mx.arange(float("inf"), 1, 5)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             INT_MAX = 2147483647
             a = mx.arange(0, INT_MAX + 1, 1)
 
