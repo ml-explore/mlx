@@ -115,8 +115,6 @@ endif()
 
 if(WIN32)
   if(MSVC)
-    # GGUF does not build with MSVC.
-    set(MLX_BUILD_GGUF OFF)
     # There is no prebuilt OpenBLAS distribution for MSVC.
     set(MLX_BUILD_BLAS_FROM_SOURCE ON)
   endif()
