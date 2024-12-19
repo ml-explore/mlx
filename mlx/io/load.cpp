@@ -271,7 +271,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   bool col_contiguous = header[34] == 'T';
 
   // Read array shape from header
-  std::vector<int> shape;
+  Shape shape;
 
   size_t st = header.find_last_of('(') + 1;
   size_t ed = header.find_last_of(')');

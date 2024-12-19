@@ -109,7 +109,7 @@ void gguf_load_quantized(
 
   std::string name(tensor.name, tensor.namelen);
 
-  std::vector<int> shape = get_shape(tensor);
+  auto shape = get_shape(tensor);
   const uint64_t weights_per_block = 32;
   if (shape[shape.size() - 1] % weights_per_block != 0) {
     std::ostringstream msg;
@@ -118,7 +118,7 @@ void gguf_load_quantized(
     throw std::runtime_error(msg.str());
   }
 
-  std::vector<int> weights_shape = shape;
+  auto weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);
   auto w_nbytes = uint32.size() *
       std::accumulate(weights_shape.begin(),

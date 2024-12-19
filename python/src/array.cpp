@@ -889,13 +889,13 @@ void init_array(nb::module_& m) {
       .def(
           "reshape",
           [](const mx::array& a, nb::args shape_, mx::StreamOrDevice s) {
-            std::vector<int> shape;
+            mx::Shape shape;
             if (!nb::isinstance<int>(shape_[0])) {
-              shape = nb::cast<std::vector<int>>(shape_[0]);
+              shape = nb::cast<mx::Shape>(shape_[0]);
             } else {
-              shape = nb::cast<std::vector<int>>(shape_);
+              shape = nb::cast<mx::Shape>(shape_);
             }
-            return mx::reshape(a, shape, s);
+            return mx::reshape(a, std::move(shape), s);
           },
           "shape"_a,
           "stream"_a = nb::none(),
@@ -1182,14 +1182,14 @@ void init_array(nb::module_& m) {
       .def(
           "split",
           [](const mx::array& a,
-             const std::variant<int, std::vector<int>>& indices_or_sections,
+             const std::variant<int, mx::Shape>& indices_or_sections,
              int axis,
              mx::StreamOrDevice s) {
             if (auto pv = std::get_if<int>(&indices_or_sections); pv) {
               return mx::split(a, *pv, axis, s);
             } else {
               return mx::split(
-                  a, std::get<std::vector<int>>(indices_or_sections), axis, s);
+                  a, std::get<mx::Shape>(indices_or_sections), axis, s);
             }
           },
           "indices_or_sections"_a,

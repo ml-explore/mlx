@@ -130,7 +130,7 @@ std::string build_lib_name(
 
 bool compiled_check_contiguity(
     const std::vector<array>& inputs,
-    const std::vector<int>& shape) {
+    const Shape& shape) {
   bool contiguous = true;
   bool all_contig = true;
   bool all_row_contig = true;

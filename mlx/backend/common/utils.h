@@ -107,7 +107,7 @@ struct ContiguousIterator {
       : shape_(a.shape()), strides_(a.strides()) {
     if (!shape_.empty()) {
       std::tie(shape_, strides_) = collapse_contiguous_dims(shape_, strides_);
-      pos_ = std::vector<int>(shape_.size(), 0);
+      pos_ = Shape(shape_.size(), 0);
     }
   }
 

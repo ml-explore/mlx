@@ -77,8 +77,8 @@ std::ostream& operator<<(std::ostream& os, const Stream& s);
 std::ostream& operator<<(std::ostream& os, const Dtype& d);
 std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k);
 std::ostream& operator<<(std::ostream& os, array a);
-std::ostream& operator<<(std::ostream& os, const Shape& v);
-std::ostream& operator<<(std::ostream& os, const Strides& v);
+std::ostream& operator<<(std::ostream& os, const std::vector<int>& v);
+std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v);
 inline std::ostream& operator<<(std::ostream& os, const complex64_t& v) {
   return os << v.real() << (v.imag() >= 0 ? "+" : "") << v.imag() << "j";
 }

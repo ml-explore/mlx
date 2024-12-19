@@ -25,9 +25,9 @@ int get_slice_int(nb::object obj, int default_val) {
 }
 
 void get_slice_params(
-    int& starts,
-    int& ends,
-    int& strides,
+    mx::ShapeElem& starts,
+    mx::ShapeElem& ends,
+    mx::ShapeElem& strides,
     const nb::slice& in_slice,
     int axis_size) {
   // Following numpy's convention
@@ -68,9 +68,9 @@ mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
     return src;
   }
 
-  std::vector<int> starts(src.ndim(), 0);
-  std::vector<int> ends = src.shape();
-  std::vector<int> strides(src.ndim(), 1);
+  mx::Shape starts(src.ndim(), 0);
+  auto ends = src.shape();
+  mx::Shape strides(src.ndim(), 1);
 
   // Check and update slice params
   get_slice_params(starts[0], ends[0], strides[0], in_slice, ends[0]);
@@ -119,7 +119,7 @@ mx::array mlx_gather_nd(
     auto& idx = indices[i];
 
     if (nb::isinstance<nb::slice>(idx)) {
-      int start, end, stride;
+      mx::ShapeElem start, end, stride;
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(idx), src.shape(i));
 
@@ -168,7 +168,7 @@ mx::array mlx_gather_nd(
   // Do the gather
   std::vector<int> axes(indices.size());
   std::iota(axes.begin(), axes.end(), 0);
-  std::vector<int> slice_sizes = src.shape();
+  auto slice_sizes = src.shape();
   std::fill(slice_sizes.begin(), slice_sizes.begin() + indices.size(), 1);
   src = gather(src, gather_indices, axes, slice_sizes);
 
@@ -179,9 +179,7 @@ mx::array mlx_gather_nd(
   return mx::squeeze(src, axes);
 }
 
-auto mlx_expand_ellipsis(
-    const std::vector<int>& shape,
-    const nb::tuple& entries) {
+auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
   std::vector<nb::object> indices;
 
   // Go over all entries and note the position of ellipsis
@@ -230,7 +228,8 @@ auto mlx_expand_ellipsis(
     for (int axis = non_none_indices_before;
          axis < shape.size() - non_none_indices_after;
          axis++) {
-      indices.push_back(nb::slice(0, shape[axis], 1));
+      indices.push_back(
+          nb::slice(mx::ShapeElem{0}, shape[axis], mx::ShapeElem{1}));
       non_none_indices++;
     }
   }
@@ -371,9 +370,9 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
 
   // Slice handling
   {
-    std::vector<int> starts(src.ndim(), 0);
-    std::vector<int> ends = src.shape();
-    std::vector<int> strides(src.ndim(), 1);
+    mx::Shape starts(src.ndim(), 0);
+    auto ends = src.shape();
+    mx::Shape strides(src.ndim(), 1);
     int axis = 0;
     for (auto& idx : remaining_indices) {
       if (!idx.is_none()) {
@@ -461,8 +460,7 @@ mlx_scatter_args_int(
   int s = 0;
   for (; s < update.ndim() && update.shape(s) == 1; s++)
     ;
-  auto up_shape =
-      std::vector<int>(update.shape().begin() + s, update.shape().end());
+  auto up_shape = mx::Shape(update.shape().begin() + s, update.shape().end());
   auto shape = src.shape();
   shape[0] = 1;
 
@@ -521,9 +519,9 @@ mlx_scatter_args_slice(
         {}, broadcast_to(squeeze_leading_singletons(update), src.shape()), {}};
   }
 
-  int start = 0;
-  int end = src.shape(0);
-  int stride = 1;
+  mx::ShapeElem start = 0;
+  auto end = src.shape(0);
+  mx::ShapeElem stride = 1;
 
   // Check and update slice params
   get_slice_params(start, end, stride, in_slice, end);
@@ -645,7 +643,7 @@ mlx_scatter_args_nd(
   for (int i = 0; i < indices.size(); ++i) {
     auto& pyidx = indices[i];
     if (nb::isinstance<nb::slice>(pyidx)) {
-      int start, end, stride;
+      mx::ShapeElem start, end, stride;
       auto axis_size = src.shape(ax++);
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(pyidx), axis_size);
@@ -654,7 +652,7 @@ mlx_scatter_args_nd(
       start = (start < 0) ? start + axis_size : start;
       end = (end < 0) ? end + axis_size : end;
 
-      std::vector<int> idx_shape(idx_ndim, 1);
+      mx::Shape idx_shape(idx_ndim, 1);
 
       // If it's a simple slice, we only need to add the start index
       if (array_num >= num_arrays && num_strided_slices <= 0 && stride == 1) {

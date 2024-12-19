@@ -26,7 +26,7 @@ array send(
     StreamOrDevice s = {});
 
 array recv(
-    std::vector<int> shape,
+    Shape shape,
     Dtype dtype,
     int src,
     std::optional<Group> group = std::nullopt,

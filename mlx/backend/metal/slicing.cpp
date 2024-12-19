@@ -63,8 +63,8 @@ void pad_gpu(
     const array& in,
     const array& val,
     array& out,
-    std::vector<int> axes,
-    std::vector<int> low_pad_size,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
     const Stream& s) {
   // Fill output with val
   fill_gpu(val, out, s);

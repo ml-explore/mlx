@@ -59,7 +59,7 @@ typedef std::variant<int, bool, Dtype> TemplateArg;
 
 typedef std::function<std::vector<array>(
     const std::vector<array>&,
-    const std::vector<std::vector<int>>&,
+    const std::vector<Shape>&,
     const std::vector<Dtype>&,
     std::tuple<int, int, int>,
     std::tuple<int, int, int>,
