@@ -691,8 +691,6 @@ std::vector<array> Broadcast::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  assert(argnums.size() == 1);
-
   // Reduce cotangents to the shape of the primal
   auto& shape = primals[0].shape();
   auto& cotan = cotangents[0];
@@ -705,15 +703,15 @@ std::vector<array> Broadcast::vjp(
       reduce_axes.push_back(i);
     }
   }
-  return {
-      squeeze(sum(cotan, reduce_axes, true, stream()), squeeze_axes, stream())};
+  auto out =
+      squeeze(sum(cotan, reduce_axes, true, stream()), squeeze_axes, stream());
+  return {out};
 }
 
 std::vector<array> Broadcast::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  assert(argnums.size() == 1);
   return {broadcast_to(tangents[0], shape_, stream())};
 }
 
@@ -736,16 +734,12 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
-Shape Broadcast::output_shape(const array& in, const Shape& shape) {
-  auto out_shape = shape;
-  int dim_diff = shape.size() - in.ndim();
-  for (int i = in.ndim() - 1; i >= 0; --i) {
-    int j = i + dim_diff;
-    if (out_shape[j] == -1) {
-      out_shape[j] = in.shape()[i];
-    }
+Shape Broadcast::output_shape(const std::vector<array>& inputs) {
+  auto shape = inputs[0].shape();
+  for (int i = 1; i < inputs.size(); ++i) {
+    shape = broadcast_shapes(shape, inputs[i].shape());
   }
-  return out_shape;
+  return shape;
 }
 
 std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
@@ -755,21 +749,21 @@ std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
     }
     return {shape_};
   }
-  return {output_shape(inputs[0], inputs[1].shape())};
+  return {output_shape(inputs)};
 };
 
-std::pair<std::vector<array>, std::vector<int>> BroadcastShapes::vmap(
+std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::invalid_argument("[BroadcastShapes] VMAP NYI");
+  throw std::invalid_argument("[BroadcastAxes] VMAP NYI");
 }
 
-bool BroadcastShapes::is_equivalent(const Primitive& other) const {
-  const auto& b_other = static_cast<const BroadcastShapes&>(other);
+bool BroadcastAxes::is_equivalent(const Primitive& other) const {
+  const auto& b_other = static_cast<const BroadcastAxes&>(other);
   return ignore_axes_ == b_other.ignore_axes_;
 }
 
-Shape BroadcastShapes::output_shape(
+Shape BroadcastAxes::output_shape(
     const std::vector<array>& inputs,
     const std::vector<int>& ignore_axes) {
   auto shape = Shape{};
@@ -780,15 +774,14 @@ Shape BroadcastShapes::output_shape(
     }
     shape = broadcast_shapes(shape, in_shape);
   }
-  // -1 is a place-holder for broadcast to copy from the input
   int dims = ignore_axes.size() + shape.size();
   for (auto ax : ignore_axes) {
-    shape.insert(shape.begin() + dims + ax, -1);
+    shape.insert(shape.begin() + dims + ax, inputs[0].shape(ax));
   }
   return shape;
 }
 
-std::vector<Shape> BroadcastShapes::output_shapes(
+std::vector<Shape> BroadcastAxes::output_shapes(
     const std::vector<array>& inputs) {
   return {output_shape(inputs, ignore_axes_)};
 }

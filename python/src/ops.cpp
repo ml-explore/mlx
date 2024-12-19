@@ -2815,7 +2815,7 @@ void init_ops(nb::module_& m) {
         The broadcasting semantics are the same as Numpy.
 
         Args:
-            a (array): Input array.
+            *arrays (array): The input arrays.
 
         Returns:
             tuple(array): The output arrays with the broadcasted shape.
@@ -3874,8 +3874,8 @@ void init_ops(nb::module_& m) {
 
         Args:
             file (file, str): Path to file to which the arrays are saved.
-            args (arrays): Arrays to be saved.
-            kwargs (arrays): Arrays to be saved. Each array will be saved
+            *args (arrays): Arrays to be saved.
+            **kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
       )pbdoc");
   m.def(

@@ -12,9 +12,8 @@ namespace mlx::core {
 
 inline bool is_static_cast(const Primitive& p) {
   return (
-      typeid(p) == typeid(BroadcastShapes) || typeid(p) == typeid(Broadcast) ||
-      typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient) ||
-      typeid(p) == typeid(AsType));
+      typeid(p) == typeid(Broadcast) || typeid(p) == typeid(Copy) ||
+      typeid(p) == typeid(StopGradient) || typeid(p) == typeid(AsType));
 }
 
 std::string build_lib_name(
