@@ -53,6 +53,14 @@ struct PrintFormatter {
 
 PrintFormatter& get_global_formatter();
 
+/** Holds information about floating-point types. */
+struct finfo {
+  explicit finfo(Dtype dtype);
+  Dtype dtype;
+  float min;
+  float max;
+};
+
 /** The type from promoting the arrays' types with one another. */
 inline Dtype result_type(const array& a, const array& b) {
   return promote_types(a.dtype(), b.dtype());

@@ -97,6 +97,18 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(x.shape))
                 self.assertListEqual(list(z.shape), list(y.shape))
 
+    def test_finfo(self):
+        with self.assertRaises(ValueError):
+            mx.finfo(mx.int32)
+
+        self.assertEqual(mx.finfo(mx.float32).min, np.finfo(np.float32).min)
+        self.assertEqual(mx.finfo(mx.float32).max, np.finfo(np.float32).max)
+        self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
+
+        self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
+        self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
+        self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
+
 
 class TestEquality(mlx_tests.MLXTestCase):
     def test_array_eq_array(self):

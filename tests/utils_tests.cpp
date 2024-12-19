@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <iostream> // TODO
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
@@ -42,4 +43,16 @@ TEST_CASE("test normalize axis") {
 
   CHECK_THROWS(normalize_axis_index(3, 3));
   CHECK_THROWS(normalize_axis_index(-4, 3));
+}
+
+TEST_CASE("test finfo") {
+  CHECK_EQ(finfo(float32).dtype, float32);
+  CHECK_EQ(finfo(complex64).dtype, float32);
+  CHECK_EQ(finfo(float16).dtype, float16);
+  CHECK_EQ(finfo(float32).min, std::numeric_limits<float>::min());
+  CHECK_EQ(finfo(float32).max, std::numeric_limits<float>::max());
+  CHECK_EQ(finfo(complex64).min, std::numeric_limits<float>::min());
+  CHECK_EQ(finfo(complex64).max, std::numeric_limits<float>::max());
+  CHECK_EQ(finfo(float16).min, std::numeric_limits<float16_t>::min());
+  CHECK_EQ(finfo(float16).max, std::numeric_limits<float16_t>::max());
 }
