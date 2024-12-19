@@ -150,14 +150,12 @@ class RoPE : public Custom {
       bool traditional,
       float base,
       float scale,
-      int offset,
       bool forward)
       : Custom(stream, fallback),
         dims_(dims),
         traditional_(traditional),
         base_(base),
         scale_(scale),
-        offset_(offset),
         forward_(forward) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -183,7 +181,6 @@ class RoPE : public Custom {
   bool traditional_;
   float base_;
   float scale_;
-  int offset_;
   bool forward_;
 };
 

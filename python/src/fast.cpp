@@ -79,7 +79,17 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rope",
-      &mx::fast::rope,
+      [](const mx::array& a,
+         int dims,
+         bool traditional,
+         std::optional<float> base,
+         float scale,
+         const ScalarOrArray& offset,
+         const std::optional<mx::array>& freqs /* = std::nullopt */,
+         mx::StreamOrDevice s /* = {} */) {
+        return mx::fast::rope(
+            a, dims, traditional, base, scale, to_array(offset), freqs, s);
+      },
       "a"_a,
       "dims"_a,
       nb::kw_only(),
@@ -90,7 +100,7 @@ void init_fast(nb::module_& parent_module) {
       "freqs"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rope(a: array, dims: int, *, traditional: bool, base: Optional[float], scale: float, offset: int, freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rope(a: array, dims: int, *, traditional: bool, base: Optional[float], scale: float, offset: Union[int, array], freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Apply rotary positional encoding to the input.
 
@@ -104,7 +114,7 @@ void init_fast(nb::module_& parent_module) {
               each dimension in the positional encodings. Exactly one of ``base`` and
               ``freqs`` must be ``None``.
             scale (float): The scale used to scale the positions.
-            offset (int): The position offset to start at.
+            offset (int or array): The position offset to start at.
             freqs (array, optional): Optional frequencies to use with RoPE.
               If set, the ``base`` parameter must be ``None``. Default: ``None``.
 
