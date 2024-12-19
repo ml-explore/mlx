@@ -1321,24 +1321,63 @@ array broadcast_to(
       {a});
 }
 
+/** Broadcast the input arrays against one another while ignoring the
+ * axes specified in `ignore_axes`. The `ignore_axes` should be:
+ * - negative values indicating axes from the end
+ * - sorted in increasing order
+ */
+std::vector<array> broadcast_arrays(
+    const std::vector<array>& inputs,
+    std::vector<int> ignore_axes,
+    StreamOrDevice s /* = {} */) {
+  auto shape = BroadcastShapes::output_shape(inputs, ignore_axes);
+  std::vector<array> outputs;
+  if (!detail::in_dynamic_tracing()) {
+    for (auto& in : inputs) {
+      auto out_shape =
+          ignore_axes.empty() ? shape : Broadcast::output_shape(in, shape);
+      outputs.push_back(broadcast_to(in, std::move(out_shape), s));
+    }
+  } else {
+    auto bsx_array = stop_gradient(
+        array(
+            shape,
+            bool_,
+            std::make_shared<BroadcastShapes>(
+                to_stream(s), std::move(ignore_axes)),
+            inputs),
+        s);
+    for (auto& in : inputs) {
+      auto out_shape =
+          ignore_axes.empty() ? shape : Broadcast::output_shape(in, shape);
+      outputs.push_back(array(
+          out_shape,
+          in.dtype(),
+          std::make_shared<Broadcast>(to_stream(s), out_shape),
+          {in, bsx_array}));
+    }
+  }
+  return outputs;
+}
+
 std::vector<array>
 broadcast_arrays(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  auto shape = broadcast_shapes(a.shape(), b.shape());
-  return {broadcast_to(a, shape, s), broadcast_to(b, shape, s)};
+  return broadcast_arrays({a, b}, {}, s);
+}
+
+std::pair<array, array> broadcast_arrays(
+    const array& a,
+    const array& b,
+    std::vector<int> ignore_axes,
+    StreamOrDevice s /* = {} */) {
+  auto out = broadcast_arrays({a, b}, std::move(ignore_axes), s);
+  return {out[0], out[1]};
 }
 
 std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     StreamOrDevice s /* = {} */) {
-  Shape shape{};
-  for (const auto& in : inputs) {
-    shape = broadcast_shapes(shape, in.shape());
-  }
-  std::vector<array> outputs;
-  for (const auto& in : inputs) {
-    outputs.push_back(broadcast_to(in, shape, s));
-  }
-  return outputs;
+  return broadcast_arrays(inputs, {}, s);
 }
 
 array equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -2632,19 +2671,7 @@ array matmul(
   if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
     a = flatten(a, 0, -2, s);
   } else if (in_b.ndim() > 2) {
-    Shape bsx_a(a.shape().begin(), a.shape().end() - 2);
-    Shape bsx_b(b.shape().begin(), b.shape().end() - 2);
-    auto inner_shape = broadcast_shapes(bsx_a, bsx_b);
-
-    // Broadcast a
-    inner_shape.push_back(a.shape(-2));
-    inner_shape.push_back(a.shape(-1));
-    a = broadcast_to(a, inner_shape, s);
-
-    // Broadcast b
-    *(inner_shape.end() - 2) = b.shape(-2);
-    *(inner_shape.end() - 1) = b.shape(-1);
-    b = broadcast_to(b, inner_shape, s);
+    std::tie(a, b) = broadcast_arrays(a, b, {-2, -1}, s);
   }
 
   auto out_shape = a.shape();
