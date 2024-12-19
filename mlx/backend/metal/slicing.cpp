@@ -14,7 +14,7 @@ void slice_gpu(
     const Shape& start_indices,
     const Shape& strides,
     const Stream& s) {
-  // Calculate out strides, initial offset and if copy needs to be made
+  // Calculate out strides and initial offset
   auto [data_offset, inp_strides] = prepare_slice(in, start_indices, strides);
 
   size_t data_end = 1;
