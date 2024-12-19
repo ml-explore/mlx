@@ -42,9 +42,7 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
   return move_or_copy(in, out, strides_, flags, data_size, offset_);
 }
 
-void Broadcast::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
+void broadcast(const array& in, array& out) {
   if (out.size() == 0) {
     out.set_data(nullptr);
     return;
@@ -59,6 +57,14 @@ void Broadcast::eval(const std::vector<array>& inputs, array& out) {
     flags.row_contiguous = flags.col_contiguous = false;
   }
   move_or_copy(in, out, strides, flags, in.data_size());
+}
+
+void Broadcast::eval(const std::vector<array>& inputs, array& out) {
+  broadcast(inputs[0], out);
+}
+
+void BroadcastAxes::eval(const std::vector<array>& inputs, array& out) {
+  broadcast(inputs[0], out);
 }
 
 void Copy::eval(const std::vector<array>& inputs, array& out) {
