@@ -2765,6 +2765,27 @@ void init_ops(nb::module_& m) {
             array: The output array with the new shape.
       )pbdoc");
   m.def(
+      "broadcast_arrays",
+      [](const nb::args& args, mx::StreamOrDevice s) {
+        return broadcast_arrays(nb::cast<std::vector<mx::array>>(args), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def broadcast_arrays(*arrays: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, ...]"),
+      R"pbdoc(
+        Broadcast arrays against one another.
+
+        The broadcasting semantics are the same as Numpy.
+
+        Args:
+            *arrays (array): The input arrays.
+
+        Returns:
+            tuple(array): The output arrays with the broadcasted shape.
+      )pbdoc");
+  m.def(
       "softmax",
       [](const mx::array& a,
          const IntOrVec& axis,
@@ -2894,7 +2915,7 @@ void init_ops(nb::module_& m) {
         Generate multidimensional coordinate grids from 1-D coordinate arrays
 
         Args:
-            arrays (array): Input arrays.
+            *arrays (array): Input arrays.
             sparse (bool, optional): If ``True``, a sparse grid is returned in which each output
               array has a single non-zero element. If ``False``, a dense grid is returned.
               Defaults to ``False``.
@@ -3818,8 +3839,8 @@ void init_ops(nb::module_& m) {
 
         Args:
             file (file, str): Path to file to which the arrays are saved.
-            args (arrays): Arrays to be saved.
-            kwargs (arrays): Arrays to be saved. Each array will be saved
+            *args (arrays): Arrays to be saved.
+            **kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
       )pbdoc");
   m.def(
@@ -3836,8 +3857,8 @@ void init_ops(nb::module_& m) {
 
         Args:
             file (file, str): Path to file to which the arrays are saved.
-            args (arrays): Arrays to be saved.
-            kwargs (arrays): Arrays to be saved. Each array will be saved
+            *args (arrays): Arrays to be saved.
+            **kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
       )pbdoc");
   m.def(
