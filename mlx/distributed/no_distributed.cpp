@@ -17,6 +17,8 @@ Group Group::split(int color, int key) {
   throw std::runtime_error("Cannot split the distributed group further");
 }
 
+void Group::barrier() {}
+
 bool is_available() {
   return false;
 }
