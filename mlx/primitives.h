@@ -562,6 +562,9 @@ class BroadcastAxes : public UnaryPrimitive {
       const std::vector<array>& inputs,
       const std::vector<int>& ignore_axes);
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return ignore_axes_;
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -580,14 +583,11 @@ class Broadcast : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Broadcast)
   static Shape output_shape(const std::vector<array>& inputs);
-
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   bool is_equivalent(const Primitive& other) const override;
   std::vector<int> state() const {
     return shape_;
   };
-
-  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
   Shape shape_;

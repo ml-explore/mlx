@@ -857,8 +857,12 @@ class TestCompile(mlx_tests.MLXTestCase):
             return mx.broadcast_to(a, b.shape)
 
         cfun = mx.compile(fun, shapeless=True)
+        # Works on the first shape
+        cfun(a)
+
+        # Fails on a different shape
         with self.assertRaises(ValueError):
-            cfun(a)
+            cfun(mx.array(0.0).reshape(1, 1, 1))
 
         def fun(a, b):
             return mx.broadcast_arrays(a, b)
