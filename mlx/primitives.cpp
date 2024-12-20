@@ -745,7 +745,8 @@ Shape Broadcast::output_shape(const std::vector<array>& inputs) {
 std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
   if (inputs.size() < 2) {
     if (broadcast_shapes(inputs[0].shape(), shape_) != shape_) {
-      throw std::invalid_argument("[Broadcast] Unable to infer broadcast shape");
+      throw std::invalid_argument(
+          "[Broadcast] Unable to infer broadcast shape");
     }
     return {shape_};
   }
