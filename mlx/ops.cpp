@@ -1329,41 +1329,30 @@ array broadcast_to(
 std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     std::vector<int> ignore_axes,
-    StreamOrDevice s /* = {} */) {
+    StreamOrDevice s) {
   if (inputs.empty()) {
     return {};
   }
-  auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
   std::vector<array> outputs;
-  if (!detail::in_dynamic_tracing()) {
-    for (auto& in : inputs) {
-      for (auto ax : ignore_axes) {
-        shape[shape.size() + ax] = in.shape(ax);
-      }
-      if (in.shape() == shape) {
-        outputs.push_back(in);
-      } else {
-        outputs.push_back(array(
-            shape,
-            in.dtype(),
-            std::make_shared<Broadcast>(to_stream(s), shape),
-            {in}));
-      }
+  auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
+  for (auto& in : inputs) {
+    for (auto ax : ignore_axes) {
+      shape[shape.size() + ax] = in.shape(ax);
     }
-  } else {
-    outputs.push_back(array(
-        shape,
-        bool_,
-        std::make_shared<BroadcastAxes>(to_stream(s), ignore_axes),
-        inputs));
-    for (int i = 1; i < inputs.size(); ++i) {
-      std::vector<array> p_inputs = {inputs[i], outputs.front()};
-      auto out_shape = BroadcastAxes::output_shape(p_inputs, ignore_axes);
+    if (in.shape() == shape) {
+      outputs.push_back(in);
+    } else if (detail::in_dynamic_tracing()) {
       outputs.push_back(array(
-          out_shape,
-          inputs[i].dtype(),
+          shape,
+          in.dtype(),
           std::make_shared<BroadcastAxes>(to_stream(s), ignore_axes),
-          std::move(p_inputs)));
+          outputs.empty() ? inputs : std::vector<array>{in, outputs.front()}));
+    } else {
+      outputs.push_back(array(
+          shape,
+          in.dtype(),
+          std::make_shared<Broadcast>(to_stream(s), shape),
+          {in}));
     }
   }
   return outputs;
@@ -1375,55 +1364,47 @@ std::vector<array> broadcast_arrays(
   if (inputs.empty()) {
     return {};
   }
-
   auto shape = Broadcast::output_shape(inputs);
   std::vector<array> outputs;
-  if (!detail::in_dynamic_tracing()) {
-    for (auto& in : inputs) {
-      if (in.shape() == shape) {
-        outputs.push_back(in);
+  for (auto& in : inputs) {
+    if (in.shape() == shape) {
+      outputs.push_back(in);
+    } else {
+      std::vector<array> p_inputs;
+      if (detail::in_dynamic_tracing()) {
+        p_inputs =
+            outputs.empty() ? inputs : std::vector<array>{in, outputs.front()};
       } else {
-        outputs.push_back(array(
-            shape,
-            in.dtype(),
-            std::make_shared<Broadcast>(to_stream(s), shape),
-            {in}));
+        p_inputs = {in};
       }
-    }
-  } else {
-    outputs.push_back(array(
-        shape,
-        inputs[0].dtype(),
-        std::make_shared<Broadcast>(to_stream(s), shape),
-        inputs));
-    for (int i = 1; i < inputs.size(); ++i) {
       outputs.push_back(array(
           shape,
-          inputs[i].dtype(),
+          in.dtype(),
           std::make_shared<Broadcast>(to_stream(s), shape),
-          {inputs[i], outputs.front()}));
+          std::move(p_inputs)));
     }
   }
   return outputs;
 }
 
-std::vector<array>
-broadcast_arrays(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  return broadcast_arrays({a, b}, s);
+std::pair<array, array>
+broadcast_arrays(const array& a, const array& b, StreamOrDevice s) {
+  auto out = broadcast_arrays({a, b}, s);
+  return {out[0], out[1]};
 }
 
 std::pair<array, array> broadcast_arrays(
     const array& a,
     const array& b,
     std::vector<int> ignore_axes,
-    StreamOrDevice s /* = {} */) {
+    StreamOrDevice s) {
   auto out = broadcast_arrays({a, b}, std::move(ignore_axes), s);
   return {out[0], out[1]};
 }
 
 array equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, bool_, std::make_shared<Equal>(to_stream(s)), std::move(inputs));
@@ -1431,7 +1412,7 @@ array equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 
 array not_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -1442,7 +1423,7 @@ array not_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 
 array greater(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, bool_, std::make_shared<Greater>(to_stream(s)), std::move(inputs));
@@ -1453,7 +1434,7 @@ array greater_equal(
     const array& b,
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -1464,7 +1445,7 @@ array greater_equal(
 
 array less(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, bool_, std::make_shared<Less>(to_stream(s)), std::move(inputs));
@@ -1472,7 +1453,7 @@ array less(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 
 array less_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2279,7 +2260,7 @@ array logical_not(const array& a, StreamOrDevice s /* = {} */) {
 
 array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   // Broadcast arrays to a common shape
-  auto inputs = broadcast_arrays(astype(a, bool_, s), astype(b, bool_, s), s);
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2293,7 +2274,7 @@ array operator&&(const array& a, const array& b) {
 
 array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   // Broadcast arrays to a common shape
-  auto inputs = broadcast_arrays(astype(a, bool_, s), astype(b, bool_, s), s);
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2313,7 +2294,7 @@ array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
 array add(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, out_type, std::make_shared<Add>(to_stream(s)), std::move(inputs));
@@ -2326,7 +2307,7 @@ array operator+(const array& a, const array& b) {
 array subtract(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2342,7 +2323,7 @@ array operator-(const array& a, const array& b) {
 array multiply(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2357,8 +2338,8 @@ array operator*(const array& a, const array& b) {
 
 array divide(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(promote_types(a.dtype(), b.dtype()));
-  auto inputs =
-      broadcast_arrays(astype(a, dtype, s), astype(b, dtype, to_stream(s)), s);
+  auto inputs = broadcast_arrays(
+      {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
@@ -2382,7 +2363,7 @@ array floor_divide(
     return floor(divide(a, b, s), s);
   }
 
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
@@ -2390,8 +2371,8 @@ array floor_divide(
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  auto inputs =
-      broadcast_arrays(astype(a, dtype, s), astype(b, dtype, to_stream(s)), s);
+  auto inputs = broadcast_arrays(
+      {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2409,8 +2390,8 @@ divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (issubdtype(dtype, complexfloating)) {
     throw std::invalid_argument("[divmod] Complex type not supported.");
   }
-  auto inputs =
-      broadcast_arrays(astype(a, dtype, s), astype(b, dtype, to_stream(s)), s);
+  auto inputs = broadcast_arrays(
+      {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   return array::make_arrays(
       {inputs[0].shape(), inputs[0].shape()},
       {inputs[0].dtype(), inputs[0].dtype()},
@@ -2421,7 +2402,7 @@ divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2433,7 +2414,7 @@ array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 array minimum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -2516,7 +2497,7 @@ array arctan(const array& a, StreamOrDevice s /* = {} */) {
 
 array arctan2(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(promote_types(a.dtype(), b.dtype()));
-  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape, dtype, std::make_shared<ArcTan2>(to_stream(s)), std::move(inputs));
@@ -2612,7 +2593,7 @@ array logaddexp(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   // Make sure out type is floating point
   auto out_type = at_least_float(promote_types(a.dtype(), b.dtype()));
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& shape = inputs[0].shape();
   return array(
       shape,
@@ -3808,13 +3789,11 @@ array gather_qmm(
   // Extract indices and broadcast them
   array lhs_indices = indices_or_default(lhs_indices_, x, s);
   array rhs_indices = indices_or_default(rhs_indices_, w, s);
-  auto out_bsx_shape =
-      broadcast_shapes(lhs_indices.shape(), rhs_indices.shape());
-  lhs_indices = broadcast_to(lhs_indices, out_bsx_shape, s);
-  rhs_indices = broadcast_to(rhs_indices, out_bsx_shape, s);
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
 
   // Compute the full output shape
-  auto out_shape = out_bsx_shape;
+  auto out_shape = lhs_indices.shape();
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);
 
@@ -4316,13 +4295,10 @@ array gather_mm(
   int N = b.shape(-1);
   int K = a.shape(-1);
 
-  auto out_bsx_shape =
-      broadcast_shapes(lhs_indices.shape(), rhs_indices.shape());
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
 
-  lhs_indices = broadcast_to(lhs_indices, out_bsx_shape, s);
-  rhs_indices = broadcast_to(rhs_indices, out_bsx_shape, s);
-
-  auto out_shape = out_bsx_shape;
+  auto out_shape = lhs_indices.shape();
   out_shape.push_back(M);
   out_shape.push_back(N);
 
@@ -4622,7 +4598,7 @@ array bitwise_impl(
     throw std::runtime_error(msg.str());
   }
   auto inputs =
-      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+      broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto& out_shape = inputs[0].shape();
   return array(
       out_shape,
