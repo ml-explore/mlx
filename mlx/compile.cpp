@@ -83,6 +83,7 @@ bool allows_shapeless(const Primitive& p) {
       typeid(p) == typeid(Matmul) || typeid(p) == typeid(QuantizedMatmul) ||
       typeid(p) == typeid(Squeeze) || typeid(p) == typeid(ExpandDims) ||
       typeid(p) == typeid(Flatten) || typeid(p) == typeid(Unflatten) ||
+      typeid(p) == typeid(BroadcastAxes) || typeid(p) == typeid(Broadcast) ||
       typeid(p) == typeid(fast::AffineQuantize) ||
       typeid(p) == typeid(fast::LayerNorm) ||
       typeid(p) == typeid(fast::RMSNorm) || typeid(p) == typeid(fast::RoPE) ||
@@ -304,9 +305,10 @@ CompilerCache& compiler_cache() {
 
 std::pair<std::vector<array>, std::vector<array>> compile_trace(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& inputs) {
+    const std::vector<array>& inputs,
+    bool shapeless) {
   // Set the global tracing flag.
-  detail::InTracing in_tracing;
+  detail::InTracing in_tracing{shapeless};
 
   // Run the function on placeholder inputs
   // to get compute graph
@@ -857,7 +859,8 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // Set the constants
       entry.constants = std::move(constants);
       // Trace to build the graph
-      std::tie(entry.inputs, entry.outputs) = compile_trace(fun, inputs);
+      std::tie(entry.inputs, entry.outputs) =
+          compile_trace(fun, inputs, shapeless);
 
       // DFS the graph and get a tape, and a map of array id to (parent,
       // position in parent inputs)

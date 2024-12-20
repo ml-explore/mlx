@@ -691,46 +691,40 @@ std::vector<array> Broadcast::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  assert(argnums.size() == 1);
-
   // Reduce cotangents to the shape of the primal
   auto& shape = primals[0].shape();
   auto& cotan = cotangents[0];
   int diff = cotan.ndim() - shape.size();
-  std::vector<int> reduce_axes;
-  for (int i = 0; i < cotan.ndim(); ++i) {
-    if (i < diff) {
-      reduce_axes.push_back(i);
-    } else if (shape[i - diff] != cotan.shape(i)) {
+  std::vector<int> squeeze_axes(diff);
+  std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
+  auto reduce_axes = squeeze_axes;
+  for (int i = diff; i < cotan.ndim(); ++i) {
+    if (shape[i - diff] != cotan.shape(i)) {
       reduce_axes.push_back(i);
     }
   }
-  return {reshape(sum(cotan, reduce_axes, true, stream()), shape, stream())};
+  auto out =
+      squeeze(sum(cotan, reduce_axes, true, stream()), squeeze_axes, stream());
+  return {out};
 }
 
 std::vector<array> Broadcast::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  assert(argnums.size() == 1);
   return {broadcast_to(tangents[0], shape_, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  assert(inputs.size() == 1);
-  assert(axes.size() == 1);
   auto ax = axes[0];
   auto in = inputs[0];
   if (ax >= 0) {
-    auto in_shape = in.shape();
     int diff = shape_.size() - in.ndim() + 1;
     assert(diff >= 0);
-    in_shape.insert(in_shape.begin(), diff, 1);
+    shape_.insert(shape_.begin() + ax + diff, in.shape(ax));
     ax += diff;
-    shape_.insert(shape_.begin() + ax, in_shape[ax]);
-    in = reshape(in, in_shape, stream());
   }
   return {{broadcast_to(in, shape_, stream())}, {ax}};
 }
@@ -738,6 +732,55 @@ std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(
 bool Broadcast::is_equivalent(const Primitive& other) const {
   const Broadcast& b_other = static_cast<const Broadcast&>(other);
   return shape_ == b_other.shape_;
+}
+
+Shape Broadcast::output_shape(const std::vector<array>& inputs) {
+  auto shape = inputs[0].shape();
+  for (int i = 1; i < inputs.size(); ++i) {
+    shape = broadcast_shapes(shape, inputs[i].shape());
+  }
+  return shape;
+}
+
+std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
+  if (inputs.size() < 2) {
+    throw std::invalid_argument("[Broadcast] Unable to infer broadcast shape");
+  }
+  return {output_shape(inputs)};
+};
+
+std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::invalid_argument("[BroadcastAxes] VMAP NYI");
+}
+
+bool BroadcastAxes::is_equivalent(const Primitive& other) const {
+  const auto& b_other = static_cast<const BroadcastAxes&>(other);
+  return ignore_axes_ == b_other.ignore_axes_;
+}
+
+Shape BroadcastAxes::output_shape(
+    const std::vector<array>& inputs,
+    const std::vector<int>& ignore_axes) {
+  auto shape = Shape{};
+  for (auto& in : inputs) {
+    auto in_shape = in.shape();
+    for (auto it = ignore_axes.rbegin(); it != ignore_axes.rend(); ++it) {
+      in_shape.erase(in_shape.begin() + in.ndim() + *it);
+    }
+    shape = broadcast_shapes(shape, in_shape);
+  }
+  int dims = ignore_axes.size() + shape.size();
+  for (auto ax : ignore_axes) {
+    shape.insert(shape.begin() + dims + ax, inputs[0].shape(ax));
+  }
+  return shape;
+}
+
+std::vector<Shape> BroadcastAxes::output_shapes(
+    const std::vector<array>& inputs) {
+  return {output_shape(inputs, ignore_axes_)};
 }
 
 std::vector<array> Ceil::vjp(
@@ -3639,7 +3682,6 @@ std::vector<array> Slice::vjp(
   inds.insert(inds.end(), single_inds.begin(), single_inds.end());
   ind_axes.insert(
       ind_axes.end(), single_ind_axes.begin(), single_ind_axes.end());
-
   return {scatter_add(
       zeros_like(primals[0], stream()), inds, cotan, ind_axes, stream())};
 }
