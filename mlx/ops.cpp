@@ -1330,8 +1330,8 @@ std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     std::vector<int> ignore_axes,
     StreamOrDevice s) {
-  if (inputs.empty()) {
-    return {};
+  if (inputs.size() <= 1) {
+    return inputs;
   }
   std::vector<array> outputs;
   auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
@@ -1361,8 +1361,8 @@ std::vector<array> broadcast_arrays(
 std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     StreamOrDevice s /* = {} */) {
-  if (inputs.empty()) {
-    return {};
+  if (inputs.size() <= 1) {
+    return inputs;
   }
   auto shape = Broadcast::output_shape(inputs);
   std::vector<array> outputs;
