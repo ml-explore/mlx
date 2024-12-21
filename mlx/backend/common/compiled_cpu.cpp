@@ -106,7 +106,7 @@ void* compile(
     source_file.close();
 
     std::string command = JitCompiler::build_command(
-        std::filesystem::temp_directory_path(),
+        output_dir,
         source_file_name,
         shared_lib_name);
     auto return_code = system(command.c_str());
