@@ -88,7 +88,7 @@ void* compile(
 
   auto output_dir = std::filesystem::temp_directory_path();
 
-  std::string shared_lib_name = std::string("lib") + kernel_file_name + ".so";
+  std::string shared_lib_name = "lib" + kernel_file_name + ".so";
   auto shared_lib_path = (output_dir / shared_lib_name).string();
   bool lib_exists = false;
   {
