@@ -1393,16 +1393,15 @@ void init_ops(nb::module_& m) {
             array: The range of values.
       )pbdoc");
   m.def(
-    "kron",
-    &kron,
-    nb::arg("a"),
-    nb::arg("b"),
-    nb::kw_only(),
-    "stream"_a = nb::none(),
-    nb::sig(
-        "def kron(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"
-    ),
-    R"pbdoc(
+      "kron",
+      &kron,
+      nb::arg("a"),
+      nb::arg("b"),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def kron(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
         Compute the Kronecker product of two arrays `a` and `b`.
         Args:
           a (array): The first input array

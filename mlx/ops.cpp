@@ -2698,40 +2698,38 @@ array gather(
       inputs);
 }
 
-array kron(
-  array& a,
-  array& b,
-  StreamOrDevice s /* = {} */) {
-   auto out_type = promote_types(a.dtype(), b.dtype());
+array kron(array& a, array& b, StreamOrDevice s /* = {} */) {
+  auto out_type = promote_types(a.dtype(), b.dtype());
 
-   if (a.size() == 0 || b.size() == 0) {
-        throw std::invalid_argument("Input arrays cannot be empty."); // Or your mx equivalent
-    }
-    while (a.ndim() < b.ndim()) {
-      a = expand_dims(a, {0}, s);
-    }
-    while (b.ndim() < a.ndim()) {
-      b = expand_dims(b, {0}, s);
-    }
-    int ndim = a.ndim();
-    std::vector<int> a_new_shape;
-    std::vector<int> b_new_shape;
-    std::vector<int> out_shape;
-
-    for (int i = 0; i < ndim; ++i) {
-        a_new_shape.push_back(a.shape()[i]);
-        a_new_shape.push_back(1);
-        b_new_shape.push_back(1);
-        b_new_shape.push_back(b.shape()[i]);
-        out_shape.push_back(a.shape()[i] * b.shape()[i]);
-    }
-
-    array a_reshaped = reshape(a, a_new_shape, s);
-    array b_reshaped = reshape(b, b_new_shape, s);
-
-    array result = multiply(a_reshaped, b_reshaped, s);
-    return reshape(result, out_shape, s);
+  if (a.size() == 0 || b.size() == 0) {
+    throw std::invalid_argument(
+        "Input arrays cannot be empty."); // Or your mx equivalent
   }
+  while (a.ndim() < b.ndim()) {
+    a = expand_dims(a, {0}, s);
+  }
+  while (b.ndim() < a.ndim()) {
+    b = expand_dims(b, {0}, s);
+  }
+  int ndim = a.ndim();
+  std::vector<int> a_new_shape;
+  std::vector<int> b_new_shape;
+  std::vector<int> out_shape;
+
+  for (int i = 0; i < ndim; ++i) {
+    a_new_shape.push_back(a.shape()[i]);
+    a_new_shape.push_back(1);
+    b_new_shape.push_back(1);
+    b_new_shape.push_back(b.shape()[i]);
+    out_shape.push_back(a.shape()[i] * b.shape()[i]);
+  }
+
+  array a_reshaped = reshape(a, a_new_shape, s);
+  array b_reshaped = reshape(b, b_new_shape, s);
+
+  array result = multiply(a_reshaped, b_reshaped, s);
+  return reshape(result, out_shape, s);
+}
 
 array take(
     const array& a,

@@ -918,10 +918,7 @@ inline array gather(
 }
 
 /**  Returns Kronecker Producct given two input arrays. */
-array kron(
-  array& a,
-  array& b,
-  StreamOrDevice s = {});
+array kron(array& a, array& b, StreamOrDevice s = {});
 
 /** Take array slices at the given indices of the specified axis. */
 array take(

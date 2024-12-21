@@ -999,6 +999,7 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [2, 2, 2]
 
         self.assertListEqual(mx.grad(func)(x).tolist(), expected)
+
     def test_kron(self):
         # Basic vector test
         x = mx.array([1, 2])
@@ -1010,7 +1011,10 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([[1, 2], [3, 4]])
         y = mx.array([[0, 5], [6, 7]])
         z = mx.kron(x, y)
-        self.assertEqual(z.tolist(), [[0, 5, 0, 10], [6, 7, 12, 14], [0, 15, 0, 20], [18, 21, 24, 28]])
+        self.assertEqual(
+            z.tolist(),
+            [[0, 5, 0, 10], [6, 7, 12, 14], [0, 15, 0, 20], [18, 21, 24, 28]],
+        )
 
         # Test with different dimensions
         x = mx.array([1, 2])  # (2,)
@@ -1020,9 +1024,9 @@ class TestOps(mlx_tests.MLXTestCase):
 
         # Test with empty array
         x = mx.array([])
-        y = mx.array([1,2])
+        y = mx.array([1, 2])
         with self.assertRaises(ValueError):
-            mx.kron(x,y)
+            mx.kron(x, y)
 
     def test_take(self):
         # Shape: 4 x 3 x 2
