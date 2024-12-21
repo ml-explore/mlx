@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/jit_compiler.h"
 
+#include <vector>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -104,7 +105,7 @@ std::string JitCompiler::build_command(
   for (const std::string& lib : info.libpaths) {
     libpaths += fmt::format(" /libpath:\"{0}\"", lib);
   }
-  std::string command = fmt::format(
+  return fmt::format(
       "\""
       "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\"{3}"
       "\"",
@@ -113,12 +114,11 @@ std::string JitCompiler::build_command(
       shared_lib_path,
       libpaths);
 #else
-  std::string command = fmt::format(
+  return fmt::format(
       "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}'",
       source_file_path,
       shared_lib_path);
 #endif
-  return command;
 }
 
 } // namespace mlx::core
