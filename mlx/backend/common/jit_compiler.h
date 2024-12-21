@@ -1,17 +1,17 @@
 // Copyright © 2024 Apple Inc.
 #pragma once
 
-#include <string>
+#include <filesystem>
 
 namespace mlx::core {
 
 class JitCompiler {
  public:
-  // Build a shell command that compiles |source_file_path| to a shared library
-  // at |shared_lib_path|.
+  // Build a shell command that compiles a source code file to a shared library.
   static std::string build_command(
-      const std::string& source_file_path,
-      const std::string& shared_lib_path);
+      const std::filesystem::path& dir,
+      const std::string& source_file_name,
+      const std::string& shared_lib_name);
 };
 
 } // namespace mlx::core

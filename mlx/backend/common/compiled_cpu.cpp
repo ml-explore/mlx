@@ -48,10 +48,6 @@ bool compile_available_for_device(const Device& device) {
 
 } // namespace detail
 
-std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name).string();
-}
-
 // Return a pointer to a compiled function
 void* compile(
     const std::string& kernel_name,
@@ -90,9 +86,10 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  std::ostringstream shared_lib_name;
-  shared_lib_name << "lib" << kernel_file_name << ".so";
-  auto shared_lib_path = get_temp_file(shared_lib_name.str());
+  auto output_dir = std::filesystem::temp_directory_path();
+
+  std::string shared_lib_name = std::string("lib") + kernel_file_name + ".so";
+  auto shared_lib_path = (output_dir / shared_lib_name).string();
   bool lib_exists = false;
   {
     std::ifstream f(shared_lib_path.c_str());
@@ -101,16 +98,17 @@ void* compile(
 
   if (!lib_exists) {
     // Open source file and write source code to it
-    std::ostringstream source_file_name;
-    source_file_name << kernel_file_name << ".cpp";
-    auto source_file_path = get_temp_file(source_file_name.str());
+    std::string source_file_name = kernel_file_name + ".cpp";
+    auto source_file_path = (output_dir / source_file_name).string();
 
     std::ofstream source_file(source_file_path);
     source_file << source_code;
     source_file.close();
 
-    std::string command =
-        JitCompiler::build_command(source_file_path, shared_lib_path);
+    std::string command = JitCompiler::build_command(
+        std::filesystem::temp_directory_path(),
+        source_file_name,
+        shared_lib_name);
     auto return_code = system(command.c_str());
     if (return_code) {
       std::ostringstream msg;

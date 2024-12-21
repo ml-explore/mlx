@@ -2,8 +2,8 @@
 
 #include "mlx/backend/common/jit_compiler.h"
 
-#include <vector>
 #include <sstream>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -97,8 +97,9 @@ const VisualStudioInfo& GetVisualStudioInfo() {
 #endif // _MSC_VER
 
 std::string JitCompiler::build_command(
-    const std::string& source_file_path,
-    const std::string& shared_lib_path) {
+    const std::filesystem::path& dir,
+    const std::string& source_file_name,
+    const std::string& shared_lib_name) {
 #ifdef _MSC_VER
   const VisualStudioInfo& info = GetVisualStudioInfo();
   std::string libpaths;
@@ -107,17 +108,20 @@ std::string JitCompiler::build_command(
   }
   return fmt::format(
       "\""
-      "\"{0}\" /LD /EHsc /nologo /std:c++17 \"{1}\" /link /out:\"{2}\"{3}"
+      "cd /D \"{0}\" && "
+      "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17 \"{2}\" "
+      "/link /out:\"{3}\" {4} >nul"
       "\"",
+      dir.string(),
       info.cl_exe,
-      source_file_path,
-      shared_lib_path,
+      source_file_name,
+      shared_lib_name,
       libpaths);
 #else
   return fmt::format(
       "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}'",
-      source_file_path,
-      shared_lib_path);
+      (dir / source_file_name).string(),
+      (dir / shared_lib_name).string());
 #endif
 }
 
