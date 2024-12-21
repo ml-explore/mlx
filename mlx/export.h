@@ -2,23 +2,61 @@
 
 #pragma once
 
+#include <map>
+#include <set>
 #include "mlx/array.h"
 
 namespace mlx::core {
+
+using Args = std::vector<array>;
+using Kwargs = std::map<std::string, array>;
+
+struct FunctionExporter;
+
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    bool shapeless = false);
+
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    bool shapeless = false);
+
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    bool shapeless = false);
 
 /**
  * Export a function to a file.
  */
 void export_function(
-    std::string path,
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& inputs,
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    const Args& args,
     bool shapeless = false);
+
+void export_function(
+    const std::string& path,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    const Kwargs& kwargs,
+    bool shapeless = false);
+
+void export_function(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    const Args& args,
+    const Kwargs& kwargs,
+    bool shapeless = false);
+
+struct ImportedFunction;
 
 /**
  * Import a function from a file.
  */
-std::function<std::vector<array>(const std::vector<array>&)> import_function(
-    std::string path);
+ImportedFunction import_function(const std::string& path);
 
 } // namespace mlx::core
+
+#include "mlx/export_impl.h"

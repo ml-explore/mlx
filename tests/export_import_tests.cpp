@@ -93,3 +93,59 @@ TEST_CASE("test export primitives with state") {
   auto out = imported_fun({x});
   CHECK(allclose(expected[0], out[0]).item<bool>());
 }
+
+TEST_CASE("test export functions with kwargs") {
+  std::string file_path = get_temp_file("model.mlxfn");
+
+  auto fun =
+      [](const std::map<std::string, array>& kwargs) -> std::vector<array> {
+    return {kwargs.at("x") + kwargs.at("y")};
+  };
+
+  export_function(file_path, fun, {{"x", array(1)}, {"y", array(2)}});
+  auto fn = import_function(file_path);
+
+  // Must use kwargs
+  CHECK_THROWS(fn({array(1), array(2)}));
+
+  // Wrong number of keys
+  CHECK_THROWS(fn({{"x", array(1)}, {"y", array(2)}, {"z", array(3)}}));
+
+  // Wrong keys
+  CHECK_THROWS(fn({{"a", array(1)}, {"b", array(2)}}));
+
+  // Works
+  auto out = fn({{"x", array(1)}, {"y", array(2)}})[0];
+  CHECK_EQ(out.item<int>(), 3);
+  out = fn({}, {{"x", array(1)}, {"y", array(2)}})[0];
+  CHECK_EQ(out.item<int>(), 3);
+}
+
+TEST_CASE("test export function with variable inputs") {
+  std::string file_path = get_temp_file("model.mlxfn");
+
+  auto fun = [](const std::vector<array>& args) -> std::vector<array> {
+    auto out = array({1, 1, 1, 1});
+    for (auto x : args) {
+      out = out + x;
+    }
+    return {out};
+  };
+
+  {
+    auto fn_exporter = exporter(file_path, fun);
+    fn_exporter({array(0), array(0)});
+    fn_exporter({array(0), array(0), array(0)});
+  }
+
+  auto imported_fun = import_function(file_path);
+
+  // Call with two inputs
+  auto out = imported_fun({array(1), array(2)})[0];
+
+  CHECK(array_equal(out, array({4, 4, 4, 4})).item<bool>());
+
+  // Call with three inputs
+  out = imported_fun({array(1), array(2), array(3)})[0];
+  CHECK(array_equal(out, array({7, 7, 7, 7})).item<bool>());
+}

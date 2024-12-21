@@ -1,7 +1,6 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/export.h"
 #include "mlx/compile_impl.h"
-#include "mlx/io/load.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -329,13 +328,45 @@ struct PrimitiveFactory {
   };
 };
 
-void export_function(
-    std::string path,
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& inputs,
-    bool shapeless /* = false */) {
+void write_header(Writer& os, int count, bool shapeless) {
+  serialize(os, std::string(TOSTRING(MLX_VERSION)));
+  serialize(os, count);
+  serialize(os, shapeless);
+}
+
+FunctionExporter::FunctionExporter(
+    const std::string& path,
+    std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
+    bool shapeless)
+    : os(path), fun(std::move(fun)), shapeless(shapeless) {
+  if (!os.is_open()) {
+    throw std::runtime_error("[export_function] Failed to open " + path);
+  }
+  write_header(os, count, shapeless);
+}
+
+void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
+  // Flatten the inputs to the function for tracing
+  std::vector<std::string> kwarg_keys;
+  auto inputs = args;
+  for (auto& [k, v] : kwargs) {
+    kwarg_keys.push_back(k);
+    inputs.push_back(v);
+  }
+
+  auto flat_fun = [this, &kwarg_keys](const Args& flat_args) {
+    auto args = Args(flat_args.begin(), flat_args.end() - kwarg_keys.size());
+    Kwargs kwargs;
+    auto it = flat_args.end() - kwarg_keys.size();
+    ;
+    for (auto& k : kwarg_keys) {
+      kwargs.insert({k, *it++});
+    }
+    return fun(args, kwargs);
+  };
+
   // Trace to build the graph
-  auto [trace_inputs, trace_outputs] = detail::compile_trace(fun, inputs);
+  auto [trace_inputs, trace_outputs] = detail::compile_trace(flat_fun, inputs);
 
   // DFS the graph and get the tape
   auto [tape, parents_map] =
@@ -347,14 +378,15 @@ void export_function(
     detail::compile_validate_shapeless(tape);
   }
 
-  Writer os(path);
-  if (!os.is_open()) {
-    throw std::runtime_error("[export_function] Failed to open " + path);
-  }
+  // Update header
+  count++;
 
-  // Header
-  serialize(os, std::string(TOSTRING(MLX_VERSION)));
-  serialize(os, shapeless);
+  // Overwrite the header
+  auto pos = os.tell();
+  os.seek(0);
+  write_header(os, count, shapeless);
+  os.seek(pos);
+  serialize(os, kwarg_keys);
 
   auto arrays_to_ids = [](const std::vector<array>& arrs) {
     std::vector<uint64_t> ids;
@@ -402,11 +434,13 @@ void export_function(
     } else {
       serialize(os, false);
       if (input_set.find(arr.id()) == input_set.end()) {
-        // Save constant data
         serialize(os, true);
-        serialize(os, arr.shape());
-        serialize(os, arr.dtype());
-        os.write(arr.data<char>(), arr.nbytes());
+        // Save constant data if not already saved
+        if (constants.insert(arr.id()).second) {
+          serialize(os, arr.shape());
+          serialize(os, arr.dtype());
+          os.write(arr.data<char>(), arr.nbytes());
+        }
       } else {
         serialize(os, false);
       }
@@ -414,8 +448,134 @@ void export_function(
   }
 }
 
-std::function<std::vector<array>(const std::vector<array>&)> import_function(
-    std::string path) {
+void FunctionExporter::operator()(const Args& args) {
+  export_function(args, {});
+}
+
+void FunctionExporter::operator()(const Kwargs& kwargs) {
+  export_function({}, kwargs);
+}
+
+void FunctionExporter::operator()(const Args& args, const Kwargs& kwargs) {
+  export_function(args, kwargs);
+}
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    bool shapeless /* = false */) {
+  return FunctionExporter{
+      path,
+      [fun](const Args& args, const Kwargs&) { return fun(args); },
+      shapeless};
+}
+
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    bool shapeless /* = false */) {
+  return exporter(
+      path,
+      [fun](const Args&, const Kwargs kwargs) { return fun(kwargs); },
+      shapeless);
+}
+
+FunctionExporter exporter(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    bool shapeless /* = false */) {
+  return FunctionExporter{path, fun, shapeless};
+}
+
+void export_function(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    const Args& args,
+    bool shapeless /* = false */) {
+  exporter(path, fun, shapeless)(args);
+}
+
+void export_function(
+    const std::string& path,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    const Kwargs& kwargs,
+    bool shapeless /* = false */) {
+  exporter(path, fun, shapeless)(kwargs);
+}
+
+void export_function(
+    const std::string& path,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    const Args& args,
+    const Kwargs& kwargs,
+    bool shapeless /* = false */) {
+  exporter(path, fun, shapeless)(args, kwargs);
+}
+
+std::vector<array> ImportedFunction::operator()(const Kwargs& kwargs) const {
+  return this->operator()({}, kwargs);
+}
+
+std::vector<array> ImportedFunction::operator()(const Args& args) const {
+  return this->operator()(args, {});
+}
+
+std::vector<array> ImportedFunction::operator()(
+    const Args& args,
+    const Kwargs& kwargs) const {
+  auto inputs = args;
+  for (auto& [_, v] : kwargs) {
+    inputs.push_back(v);
+  }
+  auto funs_it = functions.find(inputs.size());
+  if (funs_it == functions.end()) {
+    std::ostringstream msg;
+    msg << "[import_function::call] No function is available which takes "
+        << inputs.size() << " arguments.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto all_match = [&inputs, &kwargs, this](
+                       const auto& trace_inputs, const auto& kwarg_keys) {
+    for (auto& k : kwarg_keys) {
+      if (kwargs.find(k) == kwargs.end()) {
+        return false;
+      }
+    }
+    for (int i = 0; i < inputs.size(); ++i) {
+      if (inputs[i].dtype() != trace_inputs[i].dtype()) {
+        return false;
+      }
+      if (!shapeless && inputs[i].shape() != trace_inputs[i].shape()) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  auto it = funs_it->second.begin();
+  for (; it < funs_it->second.end(); ++it) {
+    auto& fun = *it;
+    if (all_match(fun.trace_inputs, fun.kwarg_keys)) {
+      break;
+    }
+  }
+
+  if (it == funs_it->second.end()) {
+    throw std::invalid_argument(
+        "[import_function::call] No imported function found which "
+        " matches the given positional and keyword arguments.");
+  }
+
+  auto& fun = *it;
+  return detail::compile_replace(
+      fun.tape, fun.trace_inputs, fun.trace_outputs, inputs, shapeless);
+}
+
+ImportedFunction import_function(const std::string& path) {
+  return ImportedFunction{path};
+}
+
+ImportedFunction::ImportedFunction(const std::string& path) {
   auto is_ptr = std::make_shared<Reader>(path);
   auto& is = *is_ptr;
   if (!is.is_open()) {
@@ -424,111 +584,101 @@ std::function<std::vector<array>(const std::vector<array>&)> import_function(
 
   // Parse header
   auto mlx_version = deserialize<std::string>(is);
-  bool shapeless = deserialize<bool>(is);
+  auto function_count = deserialize<int>(is);
+  shapeless = deserialize<bool>(is);
+  std::unordered_map<std::uintptr_t, array> constants;
 
-  std::unordered_map<uint64_t, array> array_map;
-  auto trace_input_ids = deserialize<std::vector<uint64_t>>(is);
-  auto trace_inputs = deserialize<std::vector<array>>(is);
-  for (int i = 0; i < trace_inputs.size(); ++i) {
-    array_map.emplace(trace_input_ids[i], trace_inputs[i]);
-  }
-  auto trace_output_ids = deserialize<std::vector<uint64_t>>(is);
+  auto import_one = [&]() {
+    auto kwarg_keys = deserialize<std::vector<std::string>>(is);
 
-  std::vector<array> tape;
-  auto tape_size = deserialize<uint64_t>(is);
-  tape.reserve(tape_size);
+    std::unordered_map<uint64_t, array> array_map;
+    auto trace_input_ids = deserialize<std::vector<uint64_t>>(is);
+    auto trace_inputs = deserialize<std::vector<array>>(is);
+    for (int i = 0; i < trace_inputs.size(); ++i) {
+      array_map.emplace(trace_input_ids[i], trace_inputs[i]);
+    }
+    auto trace_output_ids = deserialize<std::vector<uint64_t>>(is);
 
-  auto factory = PrimitiveFactory();
-  for (size_t i = 0; i < tape_size; ++i) {
-    auto id = deserialize<uint64_t>(is);
-    if (deserialize<bool>(is)) {
-      auto input_ids = deserialize<std::vector<uint64_t>>(is);
-      std::vector<array> inputs;
-      inputs.reserve(input_ids.size());
-      for (auto id : input_ids) {
-        inputs.push_back(array_map.at(id));
-      }
-      std::shared_ptr<Primitive> prim = factory.load(is);
-      auto num_siblings = deserialize<uint64_t>(is);
-      if (num_siblings == 0) {
-        auto shape = deserialize<std::vector<int>>(is);
-        auto type = deserialize<Dtype>(is);
-        tape.emplace_back(
-            std::move(shape), type, std::move(prim), std::move(inputs));
-        array_map.emplace(id, tape.back());
-      } else {
-        auto ids = deserialize<std::vector<uint64_t>>(is);
-        auto shapes = deserialize<std::vector<std::vector<int>>>(is);
-        auto types = deserialize<std::vector<Dtype>>(is);
-        auto arrays = array::make_arrays(
-            std::move(shapes),
-            std::move(types),
-            std::move(prim),
-            std::move(inputs));
-        for (int i = 0; i < arrays.size(); ++i) {
-          auto sid = ids[i];
-          if (sid == id) {
-            tape.push_back(arrays[i]);
+    std::vector<array> tape;
+    auto tape_size = deserialize<uint64_t>(is);
+    tape.reserve(tape_size);
+
+    auto factory = PrimitiveFactory();
+    for (size_t i = 0; i < tape_size; ++i) {
+      auto id = deserialize<uint64_t>(is);
+      if (deserialize<bool>(is)) {
+        auto input_ids = deserialize<std::vector<uint64_t>>(is);
+        std::vector<array> inputs;
+        inputs.reserve(input_ids.size());
+        for (auto id : input_ids) {
+          inputs.push_back(array_map.at(id));
+        }
+        std::shared_ptr<Primitive> prim = factory.load(is);
+        auto num_siblings = deserialize<uint64_t>(is);
+        if (num_siblings == 0) {
+          auto shape = deserialize<std::vector<int>>(is);
+          auto type = deserialize<Dtype>(is);
+          tape.emplace_back(
+              std::move(shape), type, std::move(prim), std::move(inputs));
+          array_map.emplace(id, tape.back());
+        } else {
+          auto ids = deserialize<std::vector<uint64_t>>(is);
+          auto shapes = deserialize<std::vector<std::vector<int>>>(is);
+          auto types = deserialize<std::vector<Dtype>>(is);
+          auto arrays = array::make_arrays(
+              std::move(shapes),
+              std::move(types),
+              std::move(prim),
+              std::move(inputs));
+          for (int i = 0; i < arrays.size(); ++i) {
+            auto sid = ids[i];
+            if (sid == id) {
+              tape.push_back(arrays[i]);
+            }
+            array_map.emplace(sid, arrays[i]);
           }
-          array_map.emplace(sid, arrays[i]);
+        }
+      } else {
+        if (deserialize<bool>(is)) {
+          // Load constant
+          if (auto it = constants.find(id); it != constants.end()) {
+            tape.push_back(it->second);
+          } else {
+            auto shape = deserialize<std::vector<int>>(is);
+            auto type = deserialize<Dtype>(is);
+            size_t offset = is.tell();
+            tape.push_back(array(
+                std::move(shape),
+                type,
+                std::make_shared<Load>(
+                    default_stream(default_device()), is_ptr, offset),
+                {}));
+            is.seek(offset + tape.back().nbytes());
+            constants.insert({id, tape.back()});
+          }
+          array_map.emplace(id, tape.back());
+        } else {
+          // Function inputs are in the map
+          tape.push_back(array_map.at(id));
         }
       }
-    } else {
-      if (deserialize<bool>(is)) {
-        // Load constant
-        auto shape = deserialize<std::vector<int>>(is);
-        auto type = deserialize<Dtype>(is);
-        size_t offset = is.tell();
-        tape.push_back(array(
-            std::move(shape),
-            type,
-            std::make_shared<Load>(
-                default_stream(default_device()), is_ptr, offset),
-            {}));
-        is.seek(offset + tape.back().nbytes());
-        array_map.emplace(id, tape.back());
-      } else {
-        // Function inputs are in the map
-        tape.push_back(array_map.at(id));
-      }
     }
-  }
 
-  std::vector<array> trace_outputs;
-  trace_outputs.reserve(trace_output_ids.size());
-  for (auto id : trace_output_ids) {
-    trace_outputs.push_back(array_map.at(id));
-  }
-
-  return [tape = std::move(tape),
-          trace_inputs = std::move(trace_inputs),
-          trace_outputs = std::move(trace_outputs),
-          shapeless](const std::vector<array>& inputs) {
-    if (inputs.size() != trace_inputs.size()) {
-      std::ostringstream msg;
-      msg << "[import_function::call] Incorrect number of arguments. Expected "
-          << trace_inputs.size() << " but received " << inputs.size() << ".";
-      throw std::invalid_argument(msg.str());
+    std::vector<array> trace_outputs;
+    trace_outputs.reserve(trace_output_ids.size());
+    for (auto id : trace_output_ids) {
+      trace_outputs.push_back(array_map.at(id));
     }
-    for (int i = 0; i < inputs.size(); ++i) {
-      if (inputs[i].dtype() != trace_inputs[i].dtype()) {
-        std::ostringstream msg;
-        msg << "[import_function::call] Incorrect type " << inputs[i].dtype()
-            << " for input " << i << ". Expected type "
-            << trace_inputs[i].dtype() << ".";
-        throw std::invalid_argument(msg.str());
-      }
-      if (!shapeless && inputs[i].shape() != trace_inputs[i].shape()) {
-        std::ostringstream msg;
-        msg << "[import_function::call] Incorrect shape " << inputs[i].shape()
-            << " for input " << i << ". Expected shape "
-            << trace_inputs[i].shape() << ".";
-        throw std::invalid_argument(msg.str());
-      }
-    }
-    return detail::compile_replace(
-        tape, trace_inputs, trace_outputs, inputs, shapeless);
+    functions[trace_inputs.size()].emplace_back(Function{
+        std::move(kwarg_keys),
+        std::move(trace_inputs),
+        std::move(trace_outputs),
+        std::move(tape)});
   };
+
+  for (int i = 0; i < function_count; ++i) {
+    import_one();
+  }
 }
 
 } // namespace mlx::core
