@@ -1404,16 +1404,13 @@ void init_ops(nb::module_& m) {
     ),
     R"pbdoc(
         Compute the Kronecker product of two arrays `a` and `b`.
-
         Args:
           a (array): The first input array
           b (array): The second input array
           stream (Union[None, Stream, Device], optional): Optional stream or device for execution.
             Default is `None`.
-
         Returns:
           array: The Kronecker product of `a` and `b`.
-
         Examples:
           >>> import mlx
           >>> a = mlx.array([[1, 2], [3, 4]])

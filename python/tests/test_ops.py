@@ -999,7 +999,6 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [2, 2, 2]
 
         self.assertListEqual(mx.grad(func)(x).tolist(), expected)
-    
     def test_kron(self):
         # Basic vector test
         x = mx.array([1, 2])
