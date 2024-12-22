@@ -16,6 +16,12 @@ struct FunctionExporter {
   void operator()(const Kwargs& kwargs);
   void operator()(const Args& args, const Kwargs& kwargs);
 
+  void close();
+
+  FunctionExporter(const FunctionExporter&) = delete;
+  FunctionExporter& operator=(const FunctionExporter&) = delete;
+  FunctionExporter(FunctionExporter&& other) = default;
+
  private:
   struct FunctionInfo {
     std::vector<Shape> shapes;
@@ -49,7 +55,8 @@ struct FunctionExporter {
   void export_function(const Args& args, const Kwargs& kwargs);
   std::set<std::uintptr_t> constants;
   int count{0};
-  // std::vector<ExportedFunctionInfo> functions;
+  bool closed{false};
+  // TODO std::vector<ExportedFunctionInfo> functions;
 };
 
 struct ImportedFunction {

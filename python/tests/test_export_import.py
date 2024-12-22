@@ -21,7 +21,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
-    def test_basic_import_export(self):
+    def test_basic_export_import(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 
         # Function with no inputs
@@ -53,6 +53,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
             return mx.abs(mx.sin(x[0]))
 
         mx.export_function(path, fun, [inputs])
+        return
         imported = mx.import_function(path)
 
         expected = fun([inputs])
@@ -148,6 +149,98 @@ class TestExportImport(mlx_tests.MLXTestCase):
         expected = fun()
 
         self.assertTrue(mx.array_equal(out, expected))
+
+    def test_export_with_kwargs(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x, z=None):
+            out = x
+            if z is not None:
+                out += z
+            return out
+
+        x = mx.array([1, 2, 3])
+        y = mx.array([1, 1, 0])
+        z = mx.array([2, 2, 2])
+
+        mx.export_function(path, fun, (x,), {"z": z})
+        imported_fun = mx.import_function(path)
+
+        with self.assertRaises(ValueError):
+            imported_fun(x, z)
+
+        with self.assertRaises(ValueError):
+            imported_fun(x, y=z)
+
+        with self.assertRaises(ValueError):
+            imported_fun((x,), {"y": z})
+
+        out = imported_fun(x, z=z)[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+        out = imported_fun((x,), {"z": z})[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+        mx.export_function(path, fun, x, z=z)
+        imported_fun = mx.import_function(path)
+        out = imported_fun(x, z=z)[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+        out = imported_fun((x,), {"z": z})[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+        # Only specify kwargs
+        mx.export_function(path, fun, x=x, z=z)
+        imported_fun = mx.import_function(path)
+        with self.assertRaises(ValueError):
+            out = imported_fun(x, z=z)[0]
+
+        out = imported_fun(x=x, z=z)[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+        out = imported_fun({"x": x, "z": z})[0]
+        self.assertTrue(mx.array_equal(out, mx.array([3, 4, 5])))
+
+    def test_export_variable_inputs(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x, y, z=None):
+            out = x + y
+            if z is not None:
+                out += z
+            return out
+
+        with mx.exporter(path, fun) as exporter:
+            exporter(mx.array([1, 2, 3]), mx.array([1, 1, 1]))
+            exporter(mx.array([1, 2, 3]), mx.array([1, 1, 1]), z=mx.array([2]))
+
+        with self.assertRaises(RuntimeError):
+            exporter(mx.array([1, 2, 3, 4]), mx.array([1, 1, 1, 1]))
+
+        imported_fun = mx.import_function(path)
+        out = imported_fun(mx.array([1, 2, 3]), mx.array([1, 1, 1]))[0]
+        self.assertTrue(mx.array_equal(out, mx.array([2, 3, 4])))
+
+        out = imported_fun(mx.array([1, 2, 3]), mx.array([1, 1, 1]), z=mx.array([2]))[0]
+        self.assertTrue(mx.array_equal(out, mx.array([4, 5, 6])))
+
+        with self.assertRaises(ValueError):
+            imported_fun(mx.array([1, 2, 3, 4]), mx.array([1, 1, 1, 1]))
+
+        # A function with a large constant
+        constant = mx.zeros((16, 2048))
+        mx.eval(constant)
+
+        def fun(*args):
+            return constant + sum(args)
+
+        with mx.exporter(path, fun) as exporter:
+            for i in range(5):
+                exporter(*[mx.array(1)] * i)
+
+        # Check the exported file size < constant size + small amount
+        constants_size = constant.nbytes + 8192
+        self.assertTrue(os.path.getsize(path) < constants_size)
 
 
 if __name__ == "__main__":

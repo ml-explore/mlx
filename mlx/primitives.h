@@ -2158,6 +2158,9 @@ class Squeeze : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   static Shape output_shape(const array& input, const std::vector<int>& axes);
+  auto state() const {
+    return axes_;
+  };
 
  private:
   void eval(const std::vector<array>& inputs, array& out);

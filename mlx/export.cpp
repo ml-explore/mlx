@@ -285,6 +285,7 @@ struct PrimitiveFactory {
       // Sort
       SERIALIZE_PRIMITIVE(Split),
       SERIALIZE_PRIMITIVE(Square),
+      SERIALIZE_PRIMITIVE(Squeeze),
       // Sqrt
       SERIALIZE_PRIMITIVE(StopGradient),
       SERIALIZE_PRIMITIVE(Subtract),
@@ -318,7 +319,12 @@ struct PrimitiveFactory {
       name = it->second;
     }
     serialize(os, name);
-    factory.at(name).serialize(os, *p);
+    if (auto it = factory.find(name); it != factory.end()) {
+      it->second.serialize(os, *p);
+    } else {
+      throw std::invalid_argument(
+          "[export_function] Unable to serialize primitive " + name);
+    }
   };
 
   std::shared_ptr<Primitive> load(Reader& is) {
@@ -345,7 +351,15 @@ FunctionExporter::FunctionExporter(
   write_header(os, count, shapeless);
 }
 
+void FunctionExporter::close() {
+  closed = true;
+};
 void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
+  if (closed) {
+    throw std::runtime_error(
+        "[export_function] Attempting to write after exporting is closed.");
+  }
+
   // Flatten the inputs to the function for tracing
   std::vector<std::string> kwarg_keys;
   auto inputs = args;
@@ -459,6 +473,7 @@ void FunctionExporter::operator()(const Kwargs& kwargs) {
 void FunctionExporter::operator()(const Args& args, const Kwargs& kwargs) {
   export_function(args, kwargs);
 }
+
 FunctionExporter exporter(
     const std::string& path,
     const std::function<std::vector<array>(const Args&)>& fun,

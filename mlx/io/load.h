@@ -115,8 +115,16 @@ class FileWriter : public Writer {
             0644)),
         label_(std::move(file_path)) {}
 
+  FileWriter(const FileWriter&) = delete;
+  FileWriter& operator=(const FileWriter&) = delete;
+  FileWriter(FileWriter&& other) {
+    std::swap(fd_, other.fd_);
+  }
+
   ~FileWriter() override {
-    close(fd_);
+    if (fd_ != 0) {
+      close(fd_);
+    }
   }
 
   bool is_open() const override {
@@ -158,7 +166,7 @@ class FileWriter : public Writer {
   }
 
  private:
-  int fd_;
+  int fd_{0};
   std::string label_;
 };
 
