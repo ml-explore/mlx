@@ -131,7 +131,8 @@ have to :func:`mlx.utils.tree_map` the gradients with following function.
 .. code:: python
 
     def all_avg(x):
-        return mx.distributed.all_sum(x) / mx.distributed.init().size()
+        N = mx.distributed.init().size()
+        return mx.distributed.all_sum(x) / N
 
 Putting everything together our training loop step looks as follows with
 everything else remaining the same.
@@ -141,12 +142,13 @@ everything else remaining the same.
     from mlx.utils import tree_map
 
     def all_reduce_grads(grads):
-        N = mx.distributed.init()
+        N = mx.distributed.init().size()
         if N == 1:
             return grads
         return tree_map(
-                lambda x: mx.distributed.all_sum(x) / N,
-                grads)
+            lambda x: mx.distributed.all_sum(x) / N,
+            grads
+        )
 
     def step(model, x, y):
         loss, grads = loss_grad_fn(model, x, y)
