@@ -539,15 +539,11 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       forward_ == a_other.forward_);
 }
 
-/** Computes: O = softmax(Q @ K.T) @ V **/
-array scaled_dot_product_attention(
+void check_sdpa_arguments(
     const array& queries,
     const array& keys,
     const array& values,
-    const float scale,
-    const std::optional<array>& mask,
-    const std::optional<int> memory_efficient_threshold,
-    StreamOrDevice s) {
+    const std::optional<array>& mask) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
       std::ostringstream msg;
@@ -573,14 +569,6 @@ array scaled_dot_product_attention(
     }
   }
 
-  // Q, K must have matching last dims (d_k aka 'head_dim');
-  if (queries.shape(-1) != keys.shape(-1)) {
-    std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
-        << queries.shape() << " for keys shape " << keys.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
   // K, V must have matching number of heads (n_kv_heads);
   auto n_q_heads = queries.shape(-3);
   auto n_kv_heads = keys.shape(-3);
@@ -598,6 +586,26 @@ array scaled_dot_product_attention(
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] n_heads must be a multiple of n_kv_heads, found n_heads "
         << n_q_heads << " for n_kv_heads " << n_kv_heads << ".";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+/** Computes: O = softmax(Q @ K.T) @ V **/
+array scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const float scale,
+    const std::optional<array>& mask,
+    const std::optional<int> memory_efficient_threshold,
+    StreamOrDevice s) {
+  check_sdpa_arguments(queries, keys, values, mask);
+
+  // Q, K must have matching last dims (d_k aka 'head_dim');
+  if (queries.shape(-1) != keys.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
+        << queries.shape() << " for keys shape " << keys.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
@@ -619,6 +627,9 @@ array scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
+
+  auto n_q_heads = queries.shape(-3);
+  auto n_kv_heads = keys.shape(-3);
 
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
@@ -698,7 +709,7 @@ array scaled_dot_product_attention(
         std::move(out_shape),
         final_type,
         std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, false),
+            stream, fallback, scale, /*needs_mask=*/false, /*quantized=*/false),
         {q, k, v});
   }
 
@@ -712,7 +723,151 @@ array scaled_dot_product_attention(
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
-  return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
+  return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_ &&
+      quantized_ == a_other.quantized_;
+}
+
+array quantized_scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& key_scales,
+    const array& key_biases,
+    const array& values,
+    const array& value_scales,
+    const array& value_biases,
+    const float scale,
+    const std::optional<array>& mask,
+    const int group_size,
+    const int bits,
+    StreamOrDevice s) {
+  int el_per_int = 32 / bits;
+
+  check_sdpa_arguments(queries, keys, values, mask);
+
+  // Q, K must have matching last dims (d_k aka 'head_dim');
+  if (queries.shape(-1) != keys.shape(-1) * el_per_int) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
+        << queries.shape() << " for keys shape " << keys.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto final_type = result_type(queries, key_scales, value_scales);
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] Received unsupported type "
+        << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  int out_dim = values.shape(-1) * el_per_int;
+
+  auto n_q_heads = queries.shape(-3);
+  auto n_kv_heads = keys.shape(-3);
+
+  auto out_shape = std::vector<int>(
+      {queries.shape(0), queries.shape(1), queries.shape(2), out_dim});
+  auto stream = to_stream(s);
+  bool needs_mask = mask.has_value();
+  auto fallback =
+      [scale, needs_mask, n_q_heads, n_kv_heads, group_size, bits, &s](
+          const std::vector<array>& inputs) -> std::vector<array> {
+    int n_repeats = n_q_heads / n_kv_heads;
+
+    auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
+
+    auto k = inputs[1];
+    auto k_scales = inputs[2];
+    auto k_biases = inputs[3];
+    auto v = inputs[4];
+    auto v_scales = inputs[5];
+    auto v_biases = inputs[6];
+
+    int B = q.shape(0);
+    int L = q.shape(2);
+
+    if (n_repeats > 1) {
+      q = reshape(q, {B, n_kv_heads, n_repeats, L, -1}, s);
+      k = expand_dims(k, 2, s);
+      k_scales = expand_dims(k_scales, 2, s);
+      k_biases = expand_dims(k_biases, 2, s);
+      v = expand_dims(v, 2, s);
+      v_scales = expand_dims(v_scales, 2, s);
+      v_biases = expand_dims(v_biases, 2, s);
+    }
+
+    array scores = quantized_matmul(
+        q,
+        k,
+        k_scales,
+        k_biases,
+        /*transpose=*/true,
+        /*group_size=*/group_size,
+        /*bits=*/bits,
+        s);
+    if (needs_mask) {
+      scores = add(scores, inputs[7], s);
+    }
+    scores = softmax(scores, std::vector<int>{-1}, true, s);
+    array out = quantized_matmul(
+        scores,
+        v,
+        v_scales,
+        v_biases,
+        /*transpose=*/false,
+        /*group_size=*/group_size,
+        /*bits=*/bits,
+        s);
+    if (n_repeats > 1) {
+      out = reshape(out, {B, n_q_heads, L, -1}, s);
+    }
+    return std::vector<array>{out};
+  };
+
+  int query_head_dim = queries.shape(-1);
+  int L = queries.shape(2);
+  bool compatible_head_dim = query_head_dim == 64 || query_head_dim == 128;
+  if (L > 1 || !compatible_head_dim || stream.device != Device::gpu) {
+    if (needs_mask) {
+      return fallback(
+          {queries,
+           keys,
+           key_scales,
+           key_biases,
+           values,
+           value_scales,
+           value_biases,
+           mask.value()})[0];
+    } else {
+      return fallback(
+          {queries,
+           keys,
+           key_scales,
+           key_biases,
+           values,
+           value_scales,
+           value_biases})[0];
+    }
+  } else {
+    return array(
+        std::move(out_shape),
+        queries.dtype(),
+        std::make_shared<ScaledDotProductAttention>(
+            stream,
+            fallback,
+            scale,
+            /*needs_mask=*/false,
+            /*quantized=*/true,
+            group_size,
+            bits),
+        {queries,
+         keys,
+         key_scales,
+         key_biases,
+         values,
+         value_scales,
+         value_biases});
+  }
 }
 
 array pack_and_quantize(

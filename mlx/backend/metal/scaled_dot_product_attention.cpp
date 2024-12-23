@@ -242,6 +242,112 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void quant_sdpa_vector_2pass(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& k_scales,
+    const array& k_biases,
+    const array& v,
+    const array& v_scales,
+    const array& v_biases,
+    array& out,
+    float scale,
+    int group_size,
+    int bits) {
+  // Set the kernel name
+  std::string kname;
+  kname.reserve(96);
+  kname += "quant_sdpa_vector_2pass_1_";
+  kname += get_type_string(q.dtype());
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
+  kname += "_";
+  kname += std::to_string(group_size);
+  kname += "_";
+  kname += std::to_string(bits);
+
+  // Compute the necessary sizes
+  int gqa_factor = q.shape(1) / k.shape(1);
+  int N = k.shape(2);
+  int blocks = 32;
+  int B = q.shape(0) * q.shape(1);
+  size_t k_stride = k.strides()[1];
+  size_t v_stride = v.strides()[1];
+  size_t k_group_stride = k_scales.strides()[1];
+  size_t v_group_stride = v_scales.strides()[1];
+  MTL::Size group_dims(8 * 4, 1, 1);
+  MTL::Size grid_dims(1, B, blocks);
+
+  // Allocate the intermediates
+  std::vector<int> intermediate_shape;
+  intermediate_shape.reserve(out.ndim() + 1);
+  intermediate_shape.insert(
+      intermediate_shape.end(), out.shape().begin(), out.shape().end() - 1);
+  intermediate_shape.push_back(blocks);
+  intermediate_shape.push_back(out.shape().back());
+  array intermediate(intermediate_shape, float32, nullptr, {});
+  intermediate_shape.pop_back();
+  array sums(intermediate_shape, float32, nullptr, {});
+  array maxs(std::move(intermediate_shape), float32, nullptr, {});
+  intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+  sums.set_data(allocator::malloc_or_wait(sums.nbytes()));
+  maxs.set_data(allocator::malloc_or_wait(maxs.nbytes()));
+  d.add_temporary(intermediate, s.index);
+  d.add_temporary(sums, s.index);
+  d.add_temporary(maxs, s.index);
+
+  // Get the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set its arguments
+  compute_encoder.set_input_array(q.data_shared_ptr() == nullptr ? out : q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(k_scales, 2);
+  compute_encoder.set_input_array(k_biases, 3);
+  compute_encoder.set_input_array(v, 4);
+  compute_encoder.set_input_array(v_scales, 5);
+  compute_encoder.set_input_array(v_biases, 6);
+  compute_encoder.set_output_array(intermediate, 7);
+  compute_encoder.set_output_array(sums, 8);
+  compute_encoder.set_output_array(maxs, 9);
+  compute_encoder.set_bytes(gqa_factor, 10);
+  compute_encoder.set_bytes(N, 11);
+  compute_encoder.set_bytes(k_stride, 12);
+  compute_encoder.set_bytes(v_stride, 13);
+  compute_encoder.set_bytes(k_group_stride, 14);
+  compute_encoder.set_bytes(v_group_stride, 15);
+  compute_encoder.set_bytes(scale, 16);
+
+  // Launch
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  // Final pass
+  kname.clear();
+  kname += "sdpa_vector_2pass_2_";
+  kname += get_type_string(q.dtype());
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
+
+  // Get the kernel
+  kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set its arguments
+  compute_encoder.set_input_array(intermediate, 0);
+  compute_encoder.set_input_array(sums, 1);
+  compute_encoder.set_input_array(maxs, 2);
+  compute_encoder.set_output_array(out, 3);
+
+  // Launch
+  group_dims = MTL::Size(1024, 1, 1);
+  grid_dims = MTL::Size(1, B, 1);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 } // namespace
 
 void ScaledDotProductAttention::eval_gpu(
@@ -254,7 +360,6 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& q_pre = inputs[0];
   auto& k_pre = inputs[1];
-  auto& v_pre = inputs[2];
   auto& o = out;
 
   std::vector<array> copies;
@@ -295,9 +400,7 @@ void ScaledDotProductAttention::eval_gpu(
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) == 1) {
-    const auto& q = copy_unless(is_contiguous, q_pre);
-    const auto& k = copy_unless(is_contiguous_except_seq_len, k_pre);
-    const auto& v = copy_unless(is_contiguous_except_seq_len, v_pre);
+    auto q = copy_unless(is_contiguous, q_pre);
 
     // Donate the query if possible
     if (q.is_donatable()) {
@@ -306,20 +409,55 @@ void ScaledDotProductAttention::eval_gpu(
       o.set_data(allocator::malloc_or_wait(o.nbytes()));
     }
 
-    // We route to the 2 pass fused attention if
-    // - The device is large and the sequence length long
-    // - The sequence length is even longer and we have gqa
-    char devc = d.get_architecture().back();
-    if ((devc == 'd' && k.shape(2) >= 1024) ||
-        (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_);
+    if (quantized_) {
+      auto& k_scales_pre = inputs[2];
+      auto& k_biases_pre = inputs[3];
+      auto& v_pre = inputs[4];
+      auto& v_scales_pre = inputs[5];
+      auto& v_biases_pre = inputs[6];
+
+      auto k = copy_unless(is_contiguous_except_seq_len, k_pre);
+      auto k_scales = copy_unless(is_contiguous_except_seq_len, k_scales_pre);
+      auto k_biases = copy_unless(is_contiguous_except_seq_len, k_biases_pre);
+      auto v = copy_unless(is_contiguous_except_seq_len, v_pre);
+      auto v_scales = copy_unless(is_contiguous_except_seq_len, v_scales_pre);
+      auto v_biases = copy_unless(is_contiguous_except_seq_len, v_biases_pre);
+
+      quant_sdpa_vector_2pass(
+          s,
+          d,
+          q,
+          k,
+          k_scales,
+          k_biases,
+          v,
+          v_scales,
+          v_biases,
+          o,
+          scale_,
+          group_size_,
+          bits_);
     } else {
-      sdpa_vector(s, d, q, k, v, o, scale_);
+      auto& k_pre = inputs[1];
+      auto& v_pre = inputs[2];
+
+      const auto& k = copy_unless(is_contiguous_except_seq_len, k_pre);
+      const auto& v = copy_unless(is_contiguous_except_seq_len, v_pre);
+
+      char devc = d.get_architecture().back();
+      if ((devc == 'd' && k.shape(2) >= 1024) ||
+          (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
+        sdpa_vector_2pass(s, d, q, k, v, o, scale_);
+      } else {
+        sdpa_vector(s, d, q, k, v, o, scale_);
+      }
     }
   }
 
   // Full attention mode
   else {
+    auto& v_pre = inputs[2];
+
     const auto& q = copy_unless(is_matrix_contiguous, q_pre);
     const auto& k = copy_unless(is_matrix_contiguous, k_pre);
     const auto& v = copy_unless(is_matrix_contiguous, v_pre);

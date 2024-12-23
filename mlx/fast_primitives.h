@@ -190,8 +190,16 @@ class ScaledDotProductAttention : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       const float scale,
-      const bool needs_mask)
-      : Custom(stream, fallback), scale_(scale), needs_mask_(needs_mask) {}
+      const bool needs_mask,
+      const bool quantized,
+      const int group_size = 64,
+      const int bits = 4)
+      : Custom(stream, fallback),
+        scale_(scale),
+        needs_mask_(needs_mask),
+        quantized_(quantized),
+        group_size_(group_size),
+        bits_(bits) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -213,6 +221,9 @@ class ScaledDotProductAttention : public Custom {
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
   bool needs_mask_;
+  bool quantized_;
+  int group_size_;
+  int bits_;
 };
 
 class AffineQuantize : public Custom {
