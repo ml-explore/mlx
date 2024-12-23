@@ -163,7 +163,6 @@ Stream deserialize(Reader& is) {
   auto stream_index = deserialize<int>(is);
   auto device_type = deserialize<Device::DeviceType>(is);
   auto device_index = deserialize<int>(is);
-  // TODO handle streams correctly
   return Stream(stream_index, Device(device_type, device_index));
 }
 
@@ -365,6 +364,11 @@ struct PrimitiveFactory {
 
   std::shared_ptr<Primitive> load(Reader& is) {
     auto stream = deserialize<Stream>(is);
+    if (get_stream(stream.index) != stream) {
+      std::ostringstream msg;
+      msg << "[import_function] Invalid stream encountered " << stream << ".";
+      throw std::invalid_argument(msg.str());
+    }
     auto name = deserialize<std::string>(is);
     if (auto it = factory.find(name); it != factory.end()) {
       return it->second.deserialize(is, stream);

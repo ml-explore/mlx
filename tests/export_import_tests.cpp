@@ -149,3 +149,17 @@ TEST_CASE("test export function with variable inputs") {
   out = imported_fun({array(1), array(2), array(3)})[0];
   CHECK(array_equal(out, array({7, 7, 7, 7})).item<bool>());
 }
+
+TEST_CASE("test export function on different stream") {
+  std::string file_path = get_temp_file("model.mlxfn");
+
+  // Caller is responsible for setting up streams before
+  // importing functoins
+  auto fun = [](const std::vector<array>& args) -> std::vector<array> {
+    return {abs(args[0], Stream(1000, Device::cpu))};
+  };
+
+  export_function(file_path, fun, {array({0, 1, 2})});
+
+  CHECK_THROWS(import_function(file_path));
+}
