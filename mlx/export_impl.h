@@ -6,7 +6,7 @@
 
 namespace mlx::core {
 
-namespace {}
+struct FunctionTable;
 
 struct FunctionExporter {
   void operator()(const std::initializer_list<array>& args) {
@@ -23,12 +23,6 @@ struct FunctionExporter {
   FunctionExporter(FunctionExporter&& other) = default;
 
  private:
-  struct FunctionInfo {
-    std::vector<Shape> shapes;
-    std::vector<Dtype> types;
-    std::vector<std::string> kwarg_keys;
-  };
-
   friend FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Args&)>&,
@@ -48,15 +42,13 @@ struct FunctionExporter {
       const std::string& path,
       std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
       bool shapeless);
-
   io::FileWriter os;
   std::function<std::vector<array>(const Args&, const Kwargs& kwargs)> fun;
-  bool shapeless;
   void export_function(const Args& args, const Kwargs& kwargs);
   std::set<std::uintptr_t> constants;
   int count{0};
   bool closed{false};
-  // TODO std::vector<ExportedFunctionInfo> functions;
+  std::shared_ptr<FunctionTable> ftable;
 };
 
 struct ImportedFunction {
@@ -70,20 +62,10 @@ struct ImportedFunction {
 
  private:
   ImportedFunction(const std::string& path);
-  struct Function {
-    std::vector<std::string> kwarg_keys;
-    std::vector<array> trace_inputs;
-    std::vector<array> trace_outputs;
-    std::vector<array> tape;
-  };
-
-  bool shapeless;
   friend ImportedFunction import_function(const std::string&);
   ImportedFunction();
 
-  // Index functions by number of inputs as a heuristic for reasonably
-  // fast lookup
-  std::unordered_map<int, std::vector<Function>> functions;
+  std::shared_ptr<FunctionTable> ftable;
 };
 
 } // namespace mlx::core

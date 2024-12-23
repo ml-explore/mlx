@@ -50,14 +50,17 @@ class TestExportImport(mlx_tests.MLXTestCase):
 
         # Inputs in a list or tuple
         def fun(x):
-            return mx.abs(mx.sin(x[0]))
+            x = mx.abs(mx.sin(x))
+            return x
 
         mx.export_function(path, fun, [inputs])
-        return
         imported = mx.import_function(path)
 
-        expected = fun([inputs])
+        expected = fun(inputs)
         (out,) = imported([inputs])
+        self.assertTrue(mx.allclose(out, expected))
+
+        (out,) = imported(inputs)
         self.assertTrue(mx.allclose(out, expected))
 
         mx.export_function(path, fun, (inputs,))
@@ -92,12 +95,6 @@ class TestExportImport(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.export_function(path, fun, mx.array(1.0), "hi")
-
-        def fun(x):
-            return mx.abs(x["hi"])
-
-        with self.assertRaises(ValueError):
-            mx.export_function(path, fun, {"hi": mx.array(1.0)})
 
         def fun(x):
             return mx.abs(x[0][0])

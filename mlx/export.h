@@ -13,6 +13,10 @@ using Kwargs = std::map<std::string, array>;
 
 struct FunctionExporter;
 
+/**
+ * Make an exporter to save multiple traces of a given function to
+ * the same file.
+ */
 FunctionExporter exporter(
     const std::string& path,
     const std::function<std::vector<array>(const Args&)>& fun,

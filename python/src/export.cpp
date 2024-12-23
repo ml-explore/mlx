@@ -181,7 +181,6 @@ void init_export(nb::module_& m) {
       "fun"_a,
       nb::kw_only(),
       "shapeless"_a = false);
-
   m.def(
       "export_to_dot",
       [](nb::object file, const nb::args& args) {

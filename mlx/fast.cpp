@@ -697,8 +697,7 @@ array scaled_dot_product_attention(
     return array(
         std::move(out_shape),
         final_type,
-        std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, false),
+        std::make_shared<ScaledDotProductAttention>(stream, fallback, scale),
         {q, k, v});
   }
 
@@ -712,7 +711,7 @@ array scaled_dot_product_attention(
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
-  return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
+  return scale_ == a_other.scale_;
 }
 
 array pack_and_quantize(

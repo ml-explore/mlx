@@ -466,6 +466,9 @@ class AsStrided : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(AsStrided)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(shape_, strides_, offset_);
+  }
 
  private:
   Shape shape_;
@@ -490,6 +493,9 @@ class BitwiseBinary : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   void print(std::ostream& os) override;
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return op_;
+  }
 
  private:
   Op op_;
@@ -511,6 +517,9 @@ class BlockMaskedMM : public UnaryPrimitive {
 
   DEFINE_PRINT(BlockMaskedMM)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return block_size_;
+  }
 
  private:
   int block_size_;
@@ -634,6 +643,9 @@ class Concatenate : public UnaryPrimitive {
   DEFINE_PRINT(Concatenate)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return axis_;
+  }
 
  private:
   int axis_;
@@ -705,6 +717,15 @@ class Convolution : public UnaryPrimitive {
 
   DEFINE_PRINT(Convolution)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        groups_,
+        flip_);
+  }
 
  private:
   std::vector<int> padding_;
@@ -1025,6 +1046,9 @@ class ExpandDims : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   static Shape output_shape(const array& input, const std::vector<int>& axes);
+  auto state() const {
+    return axes_;
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1048,6 +1072,9 @@ class FFT : public UnaryPrimitive {
   DEFINE_PRINT(FFT)
 
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(axes_, inverse_, real_);
+  }
 
  private:
   std::vector<size_t> axes_;
@@ -1072,6 +1099,9 @@ class Flatten : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   static Shape output_shape(const array& input, int start_axis, int end_axis);
+  auto state() const {
+    return std::make_pair(start_axis_, end_axis_);
+  }
 
  private:
   int start_axis_;
@@ -1185,6 +1215,9 @@ class Hadamard : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return scale_;
+  }
 
  private:
   float scale_;
@@ -1550,6 +1583,9 @@ class Pad : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Pad)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(axes_, low_pad_size_, high_pad_size_);
+  }
 
  private:
   std::vector<int> axes_;
@@ -1572,6 +1608,9 @@ class Partition : public UnaryPrimitive {
   DEFINE_PRINT(Partition)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_pair(kth_, axis_);
+  };
 
  private:
   int kth_;
@@ -1617,6 +1656,9 @@ class QuantizedMatmul : public UnaryPrimitive {
   DEFINE_PRINT(QuantizedMatmul)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(group_size_, bits_, transpose_);
+  }
 
  private:
   int group_size_;
@@ -1641,6 +1683,9 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(group_size_, bits_, transpose_);
+  }
 
  private:
   int group_size_;
@@ -1820,6 +1865,9 @@ class Scan : public UnaryPrimitive {
     }
   }
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(reduce_type_, axis_, reverse_, inclusive_);
+  }
 
  private:
   ReduceType reduce_type_;
@@ -1963,6 +2011,9 @@ class Slice : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Slice)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_tuple(start_indices_, end_indices_, strides_);
+  }
 
  private:
   Shape start_indices_;
@@ -1992,6 +2043,9 @@ class SliceUpdate : public UnaryPrimitive {
   DEFINE_PRINT(SliceUpdate)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(start_indices_, end_indices_, strides_);
+  }
 
  private:
   Shape start_indices_;
@@ -2015,6 +2069,9 @@ class Softmax : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return precise_;
+  };
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -2034,6 +2091,9 @@ class Sort : public UnaryPrimitive {
   DEFINE_PRINT(Sort)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return axis_;
+  }
 
  private:
   int axis_;
@@ -2095,6 +2155,9 @@ class Sqrt : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return recip_;
+  }
 
   void print(std::ostream& os) override {
     if (recip_) {
@@ -2216,6 +2279,9 @@ class Unflatten : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   static Shape output_shape(const array& input, int axis, const Shape& shape);
+  auto state() const {
+    return std::make_pair(axis_, shape_);
+  }
 
  private:
   int axis_;
@@ -2234,6 +2300,9 @@ class View : public UnaryPrimitive {
   DEFINE_VMAP()
   void print(std::ostream& os) override;
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return dtype_;
+  }
 
  private:
   Dtype dtype_;
@@ -2306,6 +2375,9 @@ class Inverse : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(Inverse)
+  auto state() const {
+    return std::make_pair(tri_, upper_);
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& output);
@@ -2320,6 +2392,9 @@ class Cholesky : public UnaryPrimitive {
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
+  auto state() const {
+    return upper_;
+  }
 
   DEFINE_VMAP()
   DEFINE_PRINT(Cholesky)
@@ -2347,6 +2422,9 @@ class Eigh : public Primitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_pair(uplo_, compute_eigenvectors_);
+  }
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);

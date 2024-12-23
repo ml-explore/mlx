@@ -60,6 +60,10 @@ class RMSNorm : public Custom {
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  auto state() const {
+    return std::make_pair(nullptr, eps_);
+  }
+
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
@@ -82,6 +86,9 @@ class RMSNormVJP : public Custom {
 
   DEFINE_PRINT(RMSNormVJP)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_pair(nullptr, eps_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -112,6 +119,9 @@ class LayerNorm : public Custom {
   DEFINE_PRINT(LayerNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_pair(nullptr, eps_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -135,6 +145,9 @@ class LayerNormVJP : public Custom {
 
   DEFINE_PRINT(LayerNormVJP)
   bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_pair(nullptr, eps_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -174,6 +187,10 @@ class RoPE : public Custom {
   DEFINE_PRINT(RoPE)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(
+        nullptr, dims_, traditional_, base_, scale_, forward_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
@@ -189,9 +206,8 @@ class ScaledDotProductAttention : public Custom {
   explicit ScaledDotProductAttention(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      const float scale,
-      const bool needs_mask)
-      : Custom(stream, fallback), scale_(scale), needs_mask_(needs_mask) {}
+      const float scale)
+      : Custom(stream, fallback), scale_(scale) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -208,11 +224,13 @@ class ScaledDotProductAttention : public Custom {
 
   DEFINE_PRINT(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_pair(nullptr, scale_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
-  bool needs_mask_;
 };
 
 class AffineQuantize : public Custom {
@@ -238,6 +256,9 @@ class AffineQuantize : public Custom {
 
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(nullptr, group_size_, bits_, dequantize_);
+  }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;

@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/export.h"
 #include "mlx/compile_impl.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -23,6 +24,8 @@
 // clang-format on
 
 namespace mlx::core {
+
+using namespace mlx::core::fast;
 
 using Reader = io::ParallelFileReader;
 using Writer = io::FileWriter;
@@ -85,6 +88,7 @@ void serialize(Writer& os, T v) {
     os.write(reinterpret_cast<const char*>(&v), sizeof(T));
   } else if constexpr (std::is_enum_v<T>) {
     serialize(os, static_cast<int>(v));
+  } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
   } else if constexpr (is_iterable<T>) {
     serialize(os, static_cast<uint64_t>(v.size()));
     for (const auto& t : v) {
@@ -109,6 +113,8 @@ T deserialize(Reader& is) {
     return v;
   } else if constexpr (std::is_enum_v<T>) {
     return static_cast<T>(deserialize<int>(is));
+  } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
+    return nullptr;
   } else if constexpr (is_iterable<T>) {
     T v;
     auto size = deserialize<uint64_t>(is);
@@ -215,18 +221,23 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(ArgReduce),
       SERIALIZE_PRIMITIVE(ArgSort),
       SERIALIZE_PRIMITIVE(AsType),
-      // AsStrided
-      // BitwiseBinary
-      // BlockMaskedMM
+      SERIALIZE_PRIMITIVE(AsStrided),
+      SERIALIZE_PRIMITIVE(
+          BitwiseBinary,
+          "BitwiseAnd",
+          "BitwiseOr",
+          "BitwiseXor",
+          "LeftShift",
+          "RightShift"),
+      SERIALIZE_PRIMITIVE(BlockMaskedMM),
       SERIALIZE_PRIMITIVE(Broadcast),
       SERIALIZE_PRIMITIVE(Ceil),
+      SERIALIZE_PRIMITIVE(Concatenate),
       SERIALIZE_PRIMITIVE(Conjugate),
-      // Contiguous
-      // Convolution
+      SERIALIZE_PRIMITIVE(Convolution),
       SERIALIZE_PRIMITIVE(Copy),
       SERIALIZE_PRIMITIVE(Cos),
       SERIALIZE_PRIMITIVE(Cosh),
-      // CustomTransforms
       SERIALIZE_PRIMITIVE(Depends),
       SERIALIZE_PRIMITIVE(Divide),
       SERIALIZE_PRIMITIVE(DivMod),
@@ -235,18 +246,19 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(ErfInv),
       SERIALIZE_PRIMITIVE(Exp),
       SERIALIZE_PRIMITIVE(Expm1),
-      // FFT
+      SERIALIZE_PRIMITIVE(ExpandDims),
+      SERIALIZE_PRIMITIVE(FFT),
+      SERIALIZE_PRIMITIVE(Flatten),
       SERIALIZE_PRIMITIVE(Floor),
       SERIALIZE_PRIMITIVE(Full),
       SERIALIZE_PRIMITIVE(Gather),
-      // GatherMM
+      SERIALIZE_PRIMITIVE(GatherMM),
       SERIALIZE_PRIMITIVE(Greater),
       SERIALIZE_PRIMITIVE(GreaterEqual),
-      // Hadamard
+      SERIALIZE_PRIMITIVE(Hadamard),
       SERIALIZE_PRIMITIVE(Imag),
       SERIALIZE_PRIMITIVE(Less),
       SERIALIZE_PRIMITIVE(LessEqual),
-      // Load
       SERIALIZE_PRIMITIVE(Log, "Log2", "Log10"),
       SERIALIZE_PRIMITIVE(Log1p),
       SERIALIZE_PRIMITIVE(LogicalNot),
@@ -261,44 +273,51 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(NotEqual),
       SERIALIZE_PRIMITIVE(Reshape),
       SERIALIZE_PRIMITIVE(NumberOfElements),
-      // Pad
-      // Partition
+      SERIALIZE_PRIMITIVE(Pad),
+      SERIALIZE_PRIMITIVE(Partition),
       SERIALIZE_PRIMITIVE(Power),
-      // QuantizedMatmul
-      // GatherQMM
+      SERIALIZE_PRIMITIVE(QuantizedMatmul),
+      SERIALIZE_PRIMITIVE(GatherQMM),
       SERIALIZE_PRIMITIVE(RandomBits),
       SERIALIZE_PRIMITIVE(Real),
       SERIALIZE_PRIMITIVE(Remainder),
       SERIALIZE_PRIMITIVE(Reshape),
       SERIALIZE_PRIMITIVE(Reduce, "And", "Or", "Sum", "Prod", "Min", "Max"),
       SERIALIZE_PRIMITIVE(Round),
-      // Scan
+      SERIALIZE_PRIMITIVE(Scan, "CumSum", "CumProd", "CumMin", "CumMax"),
       SERIALIZE_PRIMITIVE(Scatter),
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),
       SERIALIZE_PRIMITIVE(Sign),
       SERIALIZE_PRIMITIVE(Sin),
       SERIALIZE_PRIMITIVE(Sinh),
-      // Slice
-      // SliceUpdate
-      // Softmax
-      // Sort
+      SERIALIZE_PRIMITIVE(Slice),
+      SERIALIZE_PRIMITIVE(SliceUpdate),
+      SERIALIZE_PRIMITIVE(Softmax),
+      SERIALIZE_PRIMITIVE(Sort),
       SERIALIZE_PRIMITIVE(Split),
       SERIALIZE_PRIMITIVE(Square),
       SERIALIZE_PRIMITIVE(Squeeze),
-      // Sqrt
+      SERIALIZE_PRIMITIVE(Sqrt, "Rsqrt", "Sqrt"),
       SERIALIZE_PRIMITIVE(StopGradient),
       SERIALIZE_PRIMITIVE(Subtract),
       SERIALIZE_PRIMITIVE(Tan),
       SERIALIZE_PRIMITIVE(Tanh),
-      // View
+      SERIALIZE_PRIMITIVE(View),
       SERIALIZE_PRIMITIVE(Transpose),
+      SERIALIZE_PRIMITIVE(Unflatten),
       SERIALIZE_PRIMITIVE(QRF),
-      SERIALIZE_PRIMITIVE(SVD)
-      // Inverse
-      // Cholesky
-      // Eigh
-  };
+      SERIALIZE_PRIMITIVE(SVD),
+      SERIALIZE_PRIMITIVE(Inverse),
+      SERIALIZE_PRIMITIVE(Cholesky),
+      SERIALIZE_PRIMITIVE(Eigh),
+      SERIALIZE_PRIMITIVE(AffineQuantize),
+      SERIALIZE_PRIMITIVE(RMSNorm),
+      SERIALIZE_PRIMITIVE(RMSNormVJP),
+      SERIALIZE_PRIMITIVE(LayerNorm),
+      SERIALIZE_PRIMITIVE(LayerNormVJP),
+      SERIALIZE_PRIMITIVE(RoPE),
+      SERIALIZE_PRIMITIVE(ScaledDotProductAttention)};
   std::unordered_map<std::string, std::string> name_remap;
 
   PrimitiveFactory() {
@@ -330,7 +349,12 @@ struct PrimitiveFactory {
   std::shared_ptr<Primitive> load(Reader& is) {
     auto stream = deserialize<Stream>(is);
     auto name = deserialize<std::string>(is);
-    return factory.at(name).deserialize(is, stream);
+    if (auto it = factory.find(name); it != factory.end()) {
+      return it->second.deserialize(is, stream);
+    } else {
+      throw std::invalid_argument(
+          "[import_function] Unable to deserialize primitive " + name);
+    }
   };
 };
 
@@ -340,11 +364,149 @@ void write_header(Writer& os, int count, bool shapeless) {
   serialize(os, shapeless);
 }
 
+// A struct to hold and retrieve the graphs that are exported / imported
+struct FunctionTable {
+  FunctionTable(bool shapeless = false) : shapeless(shapeless) {};
+  struct Function {
+    Function(
+        std::vector<std::string> kwarg_keys,
+        std::vector<array> inputs,
+        std::vector<array> outputs,
+        std::vector<array> tape)
+        : kwarg_keys(std::move(kwarg_keys)),
+          inputs(std::move(inputs)),
+          outputs(std::move(outputs)),
+          tape(std::move(tape)) {}
+
+    std::vector<std::string> kwarg_keys;
+    std::vector<array> inputs;
+    std::vector<array> outputs;
+    std::vector<array> tape;
+    Function(const Function&) = delete;
+    Function& operator=(const Function&) = delete;
+    Function(Function&&) = default;
+    Function() = default;
+  };
+  bool shapeless;
+  std::unordered_map<int, std::vector<Function>> table;
+  Function* find(const Args& args, const Kwargs& kwargs);
+  std::pair<Function&, bool> emplace(const Args& args, const Kwargs& kwargs);
+  void insert(
+      std::vector<std::string> kwarg_keys,
+      std::vector<array> inputs,
+      std::vector<array> outputs,
+      std::vector<array> tape) {
+    auto [it, _] = table.emplace(inputs.size(), std::vector<Function>{});
+    it->second.emplace_back(
+        std::move(kwarg_keys),
+        std::move(inputs),
+        std::move(outputs),
+        std::move(tape));
+  }
+
+  void print_functions(std::ostream& os) {
+    int n = 1;
+    for (auto& [_, vec] : table) {
+      for (auto& fun : vec) {
+        auto npos = fun.inputs.size() - fun.kwarg_keys.size();
+        os << " " << n++ << ". Function with " << npos
+           << " positional inputs and " << fun.kwarg_keys.size()
+           << " keyword inputs:\n";
+        for (int j = 0; j < fun.inputs.size(); ++j) {
+          auto& in = fun.inputs[j];
+          if (j < npos) {
+            os << "   " << j + 1 << ": ";
+          } else {
+            os << "   \"" << fun.kwarg_keys[j - npos] << "\": ";
+          }
+          os << in.shape() << " " << in.dtype() << "\n";
+        }
+      }
+    }
+  }
+
+ private:
+  bool match(const Args& args, const Kwargs& kwargs, const Function& fun);
+};
+
+bool FunctionTable::match(
+    const Args& args,
+    const Kwargs& kwargs,
+    const Function& fun) {
+  for (auto& k : fun.kwarg_keys) {
+    if (kwargs.find(k) == kwargs.end()) {
+      return false;
+    }
+  }
+
+  auto match_inputs = [shapeless = this->shapeless](
+                          const array& x, const array& y) {
+    if (x.dtype() != y.dtype()) {
+      return false;
+    }
+    if (!shapeless && x.shape() != y.shape()) {
+      return false;
+    }
+    return true;
+  };
+
+  int i = 0;
+  for (; i < args.size(); ++i) {
+    if (!match_inputs(args[i], fun.inputs[i])) {
+      return false;
+    }
+  }
+  for (auto& [_, in] : kwargs) {
+    if (!match_inputs(in, fun.inputs[i++])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::pair<FunctionTable::Function&, bool> FunctionTable::emplace(
+    const Args& args,
+    const Kwargs& kwargs) {
+  auto n_inputs = args.size() + kwargs.size();
+  auto [it, _] = table.emplace(n_inputs, std::vector<Function>{});
+  auto& funs_vec = it->second;
+
+  for (auto& fun : funs_vec) {
+    if (match(args, kwargs, fun)) {
+      return {fun, false};
+    }
+  }
+
+  funs_vec.emplace_back();
+  return {funs_vec.back(), true};
+}
+
+FunctionTable::Function* FunctionTable::find(
+    const Args& args,
+    const Kwargs& kwargs) {
+  auto n_inputs = args.size() + kwargs.size();
+  auto it = table.find(n_inputs);
+  if (it == table.end()) {
+    return nullptr;
+  }
+
+  for (auto& fun : it->second) {
+    if (match(args, kwargs, fun)) {
+      return &fun;
+    }
+  }
+
+  return nullptr;
+}
+
 FunctionExporter::FunctionExporter(
     const std::string& path,
     std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
     bool shapeless)
-    : os(path), fun(std::move(fun)), shapeless(shapeless) {
+    : os(path),
+      fun(std::move(fun)),
+      ftable(std::make_shared<FunctionTable>(shapeless)) {
   if (!os.is_open()) {
     throw std::runtime_error("[export_function] Failed to open " + path);
   }
@@ -354,10 +516,17 @@ FunctionExporter::FunctionExporter(
 void FunctionExporter::close() {
   closed = true;
 };
+
 void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   if (closed) {
     throw std::runtime_error(
         "[export_function] Attempting to write after exporting is closed.");
+  }
+  auto [fentry, inserted] = ftable->emplace(args, kwargs);
+  if (!inserted) {
+    throw std::runtime_error(
+        "[export_function] Attempting to export a function twice with "
+        "the same signature is not allowed.");
   }
 
   // Flatten the inputs to the function for tracing
@@ -388,17 +557,13 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
 
   detail::compile_simplify(tape, parents_map, trace_outputs, /* passes */ 3);
 
-  if (shapeless) {
-    detail::compile_validate_shapeless(tape);
-  }
-
   // Update header
   count++;
 
   // Overwrite the header
   auto pos = os.tell();
   os.seek(0);
-  write_header(os, count, shapeless);
+  write_header(os, count, ftable->shapeless);
   os.seek(pos);
   serialize(os, kwarg_keys);
 
@@ -415,6 +580,10 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   serialize(os, trace_input_ids);
   serialize(os, trace_inputs);
   serialize(os, arrays_to_ids(trace_outputs));
+
+  // Update the table entry
+  fentry.kwarg_keys = std::move(kwarg_keys);
+  fentry.inputs = std::move(trace_inputs);
 
   std::unordered_set<std::uintptr_t> input_set(
       trace_input_ids.begin(), trace_input_ids.end());
@@ -537,60 +706,38 @@ std::vector<array> ImportedFunction::operator()(const Args& args) const {
 std::vector<array> ImportedFunction::operator()(
     const Args& args,
     const Kwargs& kwargs) const {
+  auto* fun = ftable->find(args, kwargs);
+  if (fun == nullptr) {
+    std::ostringstream msg;
+    msg << "[import_function::call] No imported function found which matches "
+        << "the given positional and keyword arguments. Possible functions include:\n";
+    ftable->print_functions(msg);
+    msg << "\nReceived function with " << args.size()
+        << " positional inputs and " << kwargs.size() << " keyword inputs:\n";
+    for (int i = 0; i < args.size(); ++i) {
+      auto& in = args[i];
+      msg << "  " << i + 1 << ": " << in.shape() << " " << in.dtype() << "\n";
+    }
+    for (auto& [k, in] : kwargs) {
+      msg << "  \"" << k << "\": " << in.shape() << " " << in.dtype() << "\n";
+    }
+    throw std::invalid_argument(msg.str());
+  }
+
   auto inputs = args;
   for (auto& [_, v] : kwargs) {
     inputs.push_back(v);
   }
-  auto funs_it = functions.find(inputs.size());
-  if (funs_it == functions.end()) {
-    std::ostringstream msg;
-    msg << "[import_function::call] No function is available which takes "
-        << inputs.size() << " arguments.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  auto all_match = [&inputs, &kwargs, this](
-                       const auto& trace_inputs, const auto& kwarg_keys) {
-    for (auto& k : kwarg_keys) {
-      if (kwargs.find(k) == kwargs.end()) {
-        return false;
-      }
-    }
-    for (int i = 0; i < inputs.size(); ++i) {
-      if (inputs[i].dtype() != trace_inputs[i].dtype()) {
-        return false;
-      }
-      if (!shapeless && inputs[i].shape() != trace_inputs[i].shape()) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  auto it = funs_it->second.begin();
-  for (; it < funs_it->second.end(); ++it) {
-    auto& fun = *it;
-    if (all_match(fun.trace_inputs, fun.kwarg_keys)) {
-      break;
-    }
-  }
-
-  if (it == funs_it->second.end()) {
-    throw std::invalid_argument(
-        "[import_function::call] No imported function found which "
-        " matches the given positional and keyword arguments.");
-  }
-
-  auto& fun = *it;
   return detail::compile_replace(
-      fun.tape, fun.trace_inputs, fun.trace_outputs, inputs, shapeless);
+      fun->tape, fun->inputs, fun->outputs, inputs, ftable->shapeless);
 }
 
 ImportedFunction import_function(const std::string& path) {
   return ImportedFunction{path};
 }
 
-ImportedFunction::ImportedFunction(const std::string& path) {
+ImportedFunction::ImportedFunction(const std::string& path)
+    : ftable(std::make_shared<FunctionTable>()) {
   auto is_ptr = std::make_shared<Reader>(path);
   auto& is = *is_ptr;
   if (!is.is_open()) {
@@ -600,7 +747,7 @@ ImportedFunction::ImportedFunction(const std::string& path) {
   // Parse header
   auto mlx_version = deserialize<std::string>(is);
   auto function_count = deserialize<int>(is);
-  shapeless = deserialize<bool>(is);
+  ftable->shapeless = deserialize<bool>(is);
   std::unordered_map<std::uintptr_t, array> constants;
 
   auto import_one = [&]() {
@@ -684,11 +831,11 @@ ImportedFunction::ImportedFunction(const std::string& path) {
     for (auto id : trace_output_ids) {
       trace_outputs.push_back(array_map.at(id));
     }
-    functions[trace_inputs.size()].emplace_back(Function{
+    ftable->insert(
         std::move(kwarg_keys),
         std::move(trace_inputs),
         std::move(trace_outputs),
-        std::move(tape)});
+        std::move(tape));
   };
 
   for (int i = 0; i < function_count; ++i) {
