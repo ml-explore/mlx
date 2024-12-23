@@ -23,6 +23,11 @@
   }
 // clang-format on
 
+bool is_big_endian() {
+  int num = 1;
+  return *reinterpret_cast<char*>(&num) != 1;
+}
+
 namespace mlx::core {
 
 using namespace mlx::core::fast;
@@ -82,9 +87,19 @@ struct NotDeserializable {
 };
 
 template <typename T>
+void reverse_bytes(T& data) {
+  auto* bytes = reinterpret_cast<uint8_t*>(&data);
+  for (size_t j = 0; j < (sizeof(T) / 2); j++) {
+    std::swap(bytes[j], bytes[sizeof(T) - j - 1]);
+  }
+}
+
+template <typename T>
 void serialize(Writer& os, T v) {
   if constexpr (std::is_arithmetic_v<T>) {
-    // TODO canonicalize endianness here
+    if (is_big_endian()) {
+      reverse_bytes(v);
+    }
     os.write(reinterpret_cast<const char*>(&v), sizeof(T));
   } else if constexpr (std::is_enum_v<T>) {
     serialize(os, static_cast<int>(v));
@@ -108,8 +123,10 @@ template <typename T>
 T deserialize(Reader& is) {
   if constexpr (std::is_arithmetic_v<T>) {
     T v;
-    // TODO potentially swap endianness here
     is.read(reinterpret_cast<char*>(&v), sizeof(T));
+    if (is_big_endian()) {
+      reverse_bytes(v);
+    }
     return v;
   } else if constexpr (std::is_enum_v<T>) {
     return static_cast<T>(deserialize<int>(is));
