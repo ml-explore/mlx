@@ -28,8 +28,8 @@ BinaryOpType get_binary_op_type(const array& a, const array& b) {
   } else if (b.data_size() == 1 && a.flags().contiguous) {
     bopt = BinaryOpType::VectorScalar;
   } else if (
-      a.flags().row_contiguous && b.flags().row_contiguous ||
-      a.flags().col_contiguous && b.flags().col_contiguous) {
+      (a.flags().row_contiguous && b.flags().row_contiguous) ||
+      (a.flags().col_contiguous && b.flags().col_contiguous)) {
     bopt = BinaryOpType::VectorVector;
   } else {
     bopt = BinaryOpType::General;

@@ -157,7 +157,7 @@ array arange(
   // Check if start and stop specify a valid range because if not, we have to
   // return an empty array
   if (std::isinf(step) &&
-      (step > 0 && start < stop || step < 0 && start > stop)) {
+      ((step > 0 && start < stop) || (step < 0 && start > stop))) {
     return array({start}, dtype);
   }
 
