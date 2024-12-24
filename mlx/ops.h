@@ -917,6 +917,9 @@ inline array gather(
   return gather(a, {indices}, std::vector<int>{axis}, slice_sizes, s);
 }
 
+/**  Returns Kronecker Producct given two input arrays. */
+array kron(const array& a, const array& b, StreamOrDevice s = {});
+
 /** Take array slices at the given indices of the specified axis. */
 array take(
     const array& a,

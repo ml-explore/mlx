@@ -2759,6 +2759,41 @@ array gather(
       inputs);
 }
 
+array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  auto out_type = promote_types(a.dtype(), b.dtype());
+
+  if (a.size() == 0 || b.size() == 0) {
+    throw std::invalid_argument(
+        "Input arrays cannot be empty."); // Or your mx equivalent
+  }
+
+  int ndim = std::max(a.ndim(), b.ndim());
+  int a_dim, b_dim;
+  std::vector<int> a_new_shape;
+  std::vector<int> b_new_shape;
+  std::vector<int> out_shape;
+
+  for (int i = 0; i < ndim; ++i) {
+    a_dim = (i < ndim - a.ndim()) ? 1 : a.shape(i - (ndim - a.ndim()));
+    b_dim = (i < ndim - b.ndim()) ? 1 : b.shape(i - (ndim - b.ndim()));
+
+
+    a_new_shape.push_back(a_dim);
+    a_new_shape.push_back(1);
+    b_new_shape.push_back(1);
+    b_new_shape.push_back(b_dim);
+    out_shape.push_back(a_dim * b_dim);
+  }
+
+  return astype(reshape(
+    multiply(
+        reshape(a, std::move(a_new_shape), s),
+        reshape(b, std::move(b_new_shape), s),
+        s),
+    std::move(out_shape),
+    s), out_type, s);
+}
+
 array take(
     const array& a,
     const array& indices,

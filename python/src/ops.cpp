@@ -1459,6 +1459,35 @@ void init_ops(nb::module_& m) {
             array: The range of values.
       )pbdoc");
   m.def(
+      "kron",
+      &kron,
+      nb::arg("a"),
+      nb::arg("b"),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def kron(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the Kronecker product of two arrays `a` and `b`.
+        Args:
+          a (array): The first input array
+          b (array): The second input array
+          stream (Union[None, Stream, Device], optional): Optional stream or device for execution.
+            Default is `None`.
+        Returns:
+          array: The Kronecker product of `a` and `b`.
+        Examples:
+          >>> import mlx
+          >>> a = mlx.array([[1, 2], [3, 4]])
+          >>> b = mlx.array([[0, 5], [6, 7]])
+          >>> result = mlx.kron(a, b)
+          >>> print(result)
+          [[ 0  5  0 10]
+           [ 6  7 12 14]
+           [ 0 15  0 20]
+           [18 21 24 28]]
+      )pbdoc");
+  m.def(
       "take",
       [](const mx::array& a,
          const std::variant<nb::int_, mx::array>& indices,
