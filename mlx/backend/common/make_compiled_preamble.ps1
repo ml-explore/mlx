@@ -13,7 +13,7 @@ $CONTENT = & $CL /std:c++17 /EP "/I$SRCDIR" /Tp "$SRCDIR/mlx/backend/common/comp
 # Otherwise there will be too much empty lines making the result unreadable.
 $CONTENT = $CONTENT | Where-Object { $_.Trim() -ne '' }
 # Concatenate to string.
-$CONTENT = $CONTENT -join '`n'
+$CONTENT = $CONTENT -join "`n"
 
 # Append extra content.
 $CONTENT = @"
