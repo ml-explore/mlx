@@ -106,9 +106,7 @@ void* compile(
     source_file.close();
 
     std::string command = JitCompiler::build_command(
-        output_dir,
-        source_file_name,
-        shared_lib_name);
+        output_dir, source_file_name, shared_lib_name);
     auto return_code = system(command.c_str());
     if (return_code) {
       std::ostringstream msg;
