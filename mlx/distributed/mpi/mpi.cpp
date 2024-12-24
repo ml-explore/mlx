@@ -71,6 +71,7 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Allgather, all_gather);
     LOAD_SYMBOL(MPI_Send, send);
     LOAD_SYMBOL(MPI_Recv, recv);
+    LOAD_SYMBOL(MPI_Barrier, barrier);
     LOAD_SYMBOL(MPI_Type_contiguous, mpi_type_contiguous);
     LOAD_SYMBOL(MPI_Type_commit, mpi_type_commit);
     LOAD_SYMBOL(MPI_Op_create, mpi_op_create);
@@ -195,6 +196,7 @@ struct MPIWrapper {
   int (*comm_free)(MPI_Comm*);
   int (*send)(const void*, int, MPI_Datatype, int, int, MPI_Comm);
   int (*recv)(void*, int, MPI_Datatype, int, int, MPI_Comm, MPI_Status*);
+  int (*barrier)(MPI_Comm);
 
   // Objects
   MPI_Comm comm_world_;
@@ -263,6 +265,10 @@ struct MPIGroupImpl {
     return size_;
   }
 
+  void barrier() {
+    mpi().barrier(comm_);
+  }
+
  private:
   MPI_Comm comm_;
   bool global_;
@@ -296,6 +302,11 @@ Group Group::split(int color, int key) {
   }
 
   return Group(std::make_shared<MPIGroupImpl>(new_comm, false));
+}
+
+void Group::barrier() {
+  auto mpi_group = std::static_pointer_cast<MPIGroupImpl>(group_);
+  mpi_group->barrier();
 }
 
 bool is_available() {
