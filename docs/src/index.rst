@@ -87,3 +87,4 @@ are the CPU and GPU.
    dev/extensions
    dev/metal_debugger
    dev/custom_metal_kernels
+   dev/mlx_in_cpp
