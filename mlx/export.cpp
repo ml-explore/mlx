@@ -247,6 +247,7 @@ struct PrimitiveFactory {
           "RightShift"),
       SERIALIZE_PRIMITIVE(BlockMaskedMM),
       SERIALIZE_PRIMITIVE(Broadcast),
+      SERIALIZE_PRIMITIVE(BroadcastAxes),
       SERIALIZE_PRIMITIVE(Ceil),
       SERIALIZE_PRIMITIVE(Concatenate),
       SERIALIZE_PRIMITIVE(Conjugate),
@@ -570,7 +571,8 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   };
 
   // Trace to build the graph
-  auto [trace_inputs, trace_outputs] = detail::compile_trace(flat_fun, inputs);
+  auto [trace_inputs, trace_outputs] =
+      detail::compile_trace(flat_fun, inputs, ftable->shapeless);
 
   // DFS the graph and get the tape
   auto [tape, parents_map] =
