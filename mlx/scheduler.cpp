@@ -21,6 +21,10 @@ void set_default_stream(Stream s) {
   return scheduler::scheduler().set_default_stream(s);
 }
 
+Stream get_stream(int index) {
+  return scheduler::scheduler().get_stream(index);
+}
+
 Stream new_stream(Device d) {
   if (!metal::is_available() && d == Device::gpu) {
     throw std::invalid_argument(
