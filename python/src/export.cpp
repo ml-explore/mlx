@@ -83,7 +83,7 @@ auto wrap_export_function(const nb::callable& fun) {
 void init_export(nb::module_& m) {
   m.def(
       "export_function",
-      [](const std::string& path,
+      [](const std::string& file,
          const nb::callable& fun,
          const nb::args& args,
          bool shapeless,
@@ -91,65 +91,97 @@ void init_export(nb::module_& m) {
         auto [args_, kwargs_] =
             validate_and_extract_inputs(args, kwargs, "[export_function]");
         mx::export_function(
-            path, wrap_export_function(fun), args_, kwargs_, shapeless);
+            file, wrap_export_function(fun), args_, kwargs_, shapeless);
       },
-      "path"_a,
+      "file"_a,
       "fun"_a,
       "args"_a,
       nb::kw_only(),
       "shapeless"_a = false,
       "kwargs"_a,
-      nb::sig(
-          "def export_function(path: str, fun: Callable, *args, *, shapeless: bool = False, **kwargs)"),
       R"pbdoc(
         Export a function to a file.
 
-        To export ``fun`` Example input arrays must be provided. The arrays
-        can be either variable ``*args`` and ``**kwargs`` or a tuple of arrays and/or
-        dictionary of string keys with array values.
+        Example input arrays must be provided to export a function. The example
+        inputs can be variable ``*args`` and ``**kwargs`` or a tuple of arrays
+        and/or dictionary of string keys with array values.
+
+        .. warning::
+
+          This is part of an experimental API which is likely to
+          change in future versions of MLX. Functions exported with older
+          versions of MLX may not be compatible with future versions.
 
         Args:
-            path (str): Path to export the function to.
+            file (str): File path to export the function to.
             fun (Callable): A function which takes as input zero or more
               :class:`array` and returns one or more :class:`array`.
             *args (array): Example array inputs to the function.
             shapeless (bool, optional): Whether or not the function allows
-              changing the shapes of inputs.
-            **kwargs (array): Additional example keyword array inputs to the function.
+              inputs with variable shapes. Default: ``False``.
+            **kwargs (array): Additional example keyword array inputs to the
+              function.
+
+        Example:
+
+          .. code-block:: python
+
+            def fun(x, y):
+                return x + y
+
+            x = mx.array(1)
+            y = mx.array([1, 2, 3])
+            mx.export_function("fun.mlxfn", fun, x, y=y)
       )pbdoc");
   m.def(
       "import_function",
-      [](const std::string& path) {
+      [](const std::string& file) {
         return nb::cpp_function(
-            [fn = mx::import_function(path)](
+            [fn = mx::import_function(file)](
                 const nb::args& args, const nb::kwargs& kwargs) {
               auto [args_, kwargs_] = validate_and_extract_inputs(
                   args, kwargs, "[import_function::call]");
               return nb::tuple(nb::cast(fn(args_, kwargs_)));
             });
       },
-      "path"_a,
+      "file"_a,
+      nb::sig("def import_function(file: str) -> Callable"),
       R"pbdoc(
         Import a function from a file.
 
-        The imported function can be called either with variable ``*args`` and
+        The imported function can be called either with ``*args`` and
         ``**kwargs`` or with a tuple of arrays and/or dictionary of string
-        keys with array values.
+        keys with array values. Imported functions always return a tuple of
+        arrays.
+
+        .. warning::
+
+          This is part of an experimental API which is likely to
+          change in future versions of MLX. Functions exported with older
+          versions of MLX may not be compatible with future versions.
 
         Args:
-            path (str): Path to import the function from.
+            file (str): The file path to import the function from.
 
         Returns:
             Callable: The imported function.
 
         Example:
-          >>> fn = mx.import("function.mlxfn")
+          >>> fn = mx.import_function("function.mlxfn")
           >>> out = fn(a, b, x=x, y=y)[0]
           >>>
           >>> out = fn((a, b), {"x": x, "y": y}[0]
       )pbdoc");
 
-  nb::class_<mx::FunctionExporter>(m, "FunctionExporter")
+  nb::class_<mx::FunctionExporter>(
+      m,
+      "FunctionExporter",
+      R"pbdoc(
+       A context managing class for exporting multiple traces of the same
+       function to a file.
+
+       Make an instance of this class by calling fun:`mx.exporter`.
+      )pbdoc")
       .def("close", &mx::FunctionExporter::close)
       .def(
           "__enter__", [](mx::FunctionExporter& exporter) { return &exporter; })
@@ -174,13 +206,39 @@ void init_export(nb::module_& m) {
 
   m.def(
       "exporter",
-      [](const std::string& path, const nb::callable& fun, bool shapeless) {
-        return mx::exporter(path, wrap_export_function(fun), shapeless);
+      [](const std::string& file, const nb::callable& fun, bool shapeless) {
+        return mx::exporter(file, wrap_export_function(fun), shapeless);
       },
-      "path"_a,
+      "file"_a,
       "fun"_a,
       nb::kw_only(),
-      "shapeless"_a = false);
+      "shapeless"_a = false,
+      R"pbdoc(
+        Make a callable object to export multiple traces of a function to a file.
+
+        .. warning::
+
+          This is part of an experimental API which is likely to
+          change in future versions of MLX. Functions exported with older
+          versions of MLX may not be compatible with future versions.
+
+        Args:
+            file (str): File path to export the function to.
+            shapeless (bool, optional): Whether or not the function allows
+              inputs with variable shapes. Default: ``False``.
+
+        Example:
+
+          .. code-block:: python
+
+            def fun(*args):
+                return sum(args)
+
+            with mx.exporter("fun.mlxfn", fun) as exporter:
+                exporter(mx.array(1))
+                exporter(mx.array(1), mx.array(2))
+                exporter(mx.array(1), mx.array(2), mx.array(3))
+      )pbdoc");
   m.def(
       "export_to_dot",
       [](nb::object file, const nb::args& args) {
@@ -200,5 +258,20 @@ void init_export(nb::module_& m) {
         }
       },
       "file"_a,
-      "args"_a);
+      "args"_a,
+      R"pbdoc(
+        Export a graph to DOT format for visualization.
+
+        A variable number of output arrays can be provided for exporting
+        The graph exported will recursively include all enevaluated inputs of
+        the provided outputs.
+
+        Args:
+            file (str): The file path to export to.
+            *args (array): The output arrays.
+
+        Example:
+          >>> a = mx.array(1) + mx.array(2)
+          >>> mx.export_to_dot("graph.dot", a)
+      )pbdoc");
 }

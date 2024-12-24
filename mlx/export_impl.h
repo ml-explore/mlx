@@ -39,7 +39,7 @@ struct FunctionExporter {
       bool shapeless);
 
   FunctionExporter(
-      const std::string& path,
+      const std::string& file,
       std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
       bool shapeless);
   io::FileWriter os;
@@ -61,7 +61,7 @@ struct ImportedFunction {
   std::vector<array> operator()(const Args& args, const Kwargs& kwargs) const;
 
  private:
-  ImportedFunction(const std::string& path);
+  ImportedFunction(const std::string& file);
   friend ImportedFunction import_function(const std::string&);
   ImportedFunction();
 

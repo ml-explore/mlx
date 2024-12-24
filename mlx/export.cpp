@@ -522,14 +522,14 @@ FunctionTable::Function* FunctionTable::find(
 }
 
 FunctionExporter::FunctionExporter(
-    const std::string& path,
+    const std::string& file,
     std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
     bool shapeless)
-    : os(path),
+    : os(file),
       fun(std::move(fun)),
       ftable(std::make_shared<FunctionTable>(shapeless)) {
   if (!os.is_open()) {
-    throw std::runtime_error("[export_function] Failed to open " + path);
+    throw std::runtime_error("[export_function] Failed to open " + file);
   }
   write_header(os, count, shapeless);
 }
@@ -665,55 +665,55 @@ void FunctionExporter::operator()(const Args& args, const Kwargs& kwargs) {
 }
 
 FunctionExporter exporter(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     bool shapeless /* = false */) {
   return FunctionExporter{
-      path,
+      file,
       [fun](const Args& args, const Kwargs&) { return fun(args); },
       shapeless};
 }
 
 FunctionExporter exporter(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     bool shapeless /* = false */) {
   return exporter(
-      path,
+      file,
       [fun](const Args&, const Kwargs kwargs) { return fun(kwargs); },
       shapeless);
 }
 
 FunctionExporter exporter(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
     bool shapeless /* = false */) {
-  return FunctionExporter{path, fun, shapeless};
+  return FunctionExporter{file, fun, shapeless};
 }
 
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     const Args& args,
     bool shapeless /* = false */) {
-  exporter(path, fun, shapeless)(args);
+  exporter(file, fun, shapeless)(args);
 }
 
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     const Kwargs& kwargs,
     bool shapeless /* = false */) {
-  exporter(path, fun, shapeless)(kwargs);
+  exporter(file, fun, shapeless)(kwargs);
 }
 
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
     const Args& args,
     const Kwargs& kwargs,
     bool shapeless /* = false */) {
-  exporter(path, fun, shapeless)(args, kwargs);
+  exporter(file, fun, shapeless)(args, kwargs);
 }
 
 std::vector<array> ImportedFunction::operator()(const Kwargs& kwargs) const {
@@ -753,16 +753,16 @@ std::vector<array> ImportedFunction::operator()(
       fun->tape, fun->inputs, fun->outputs, inputs, ftable->shapeless);
 }
 
-ImportedFunction import_function(const std::string& path) {
-  return ImportedFunction{path};
+ImportedFunction import_function(const std::string& file) {
+  return ImportedFunction{file};
 }
 
-ImportedFunction::ImportedFunction(const std::string& path)
+ImportedFunction::ImportedFunction(const std::string& file)
     : ftable(std::make_shared<FunctionTable>()) {
-  auto is_ptr = std::make_shared<Reader>(path);
+  auto is_ptr = std::make_shared<Reader>(file);
   auto& is = *is_ptr;
   if (!is.is_open()) {
-    throw std::runtime_error("[import_function] Failed to open " + path);
+    throw std::runtime_error("[import_function] Failed to open " + file);
   }
 
   // Parse header

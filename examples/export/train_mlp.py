@@ -43,9 +43,9 @@ if __name__ == "__main__":
         tree_structure, state = zip(*mlx.utils.tree_flatten(state))
         return model, optimizer, tree_structure, state
 
+    # Export the model parameter initialization
     model, optimizer, tree_structure, state = init()
     mx.eval(state)
-    print(state[0])
     mx.export_function("init_mlp.mlxfn", lambda: init()[-1])
 
     def loss_fn(params, X, y):
@@ -67,7 +67,9 @@ if __name__ == "__main__":
     example_y = mx.random.randint(low=0, high=output_dim, shape=(batch_size,))
     mx.export_function("train_mlp.mlxfn", step, *state, example_X, example_y)
 
+    # Export one step of SGD
     imported_step = mx.import_function("train_mlp.mlxfn")
+
     for it in range(100):
         *state, loss = imported_step(*state, example_X, example_y)
         if it % 10 == 0:

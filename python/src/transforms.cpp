@@ -943,34 +943,34 @@ void init_transforms(nb::module_& m) {
       Note, all custom transformations are optional. Undefined transformations
       fall back to the default behaviour.
 
-      Example usage:
+      Example:
 
-      .. code-block:: python
+        .. code-block:: python
 
-          import mlx.core as mx
+            import mlx.core as mx
 
-          @mx.custom_function
-          def f(x, y):
-              return mx.sin(x) * y
+            @mx.custom_function
+            def f(x, y):
+                return mx.sin(x) * y
 
-          @f.vjp
-          def f_vjp(primals, cotangent, output):
+            @f.vjp
+            def f_vjp(primals, cotangent, output):
+                x, y = primals
+                return cotan * mx.cos(x) * y, cotan * mx.sin(x)
+
+            @f.jvp
+            def f_jvp(primals, tangents):
               x, y = primals
-              return cotan * mx.cos(x) * y, cotan * mx.sin(x)
+              dx, dy = tangents
+              return dx * mx.cos(x) * y + dy * mx.sin(x)
 
-          @f.jvp
-          def f_jvp(primals, tangents):
-            x, y = primals
-            dx, dy = tangents
-            return dx * mx.cos(x) * y + dy * mx.sin(x)
-
-          @f.vmap
-          def f_vmap(inputs, axes):
-            x, y = inputs
-            ax, ay = axes
-            if ay != ax and ax is not None:
-                y = y.swapaxes(ay, ax)
-            return mx.sin(x) * y, (ax or ay)
+            @f.vmap
+            def f_vmap(inputs, axes):
+              x, y = inputs
+              ax, ay = axes
+              if ay != ax and ax is not None:
+                  y = y.swapaxes(ay, ax)
+              return mx.sin(x) * y, (ax or ay)
       )pbdoc")
       .def(
           nb::init<nb::callable>(),

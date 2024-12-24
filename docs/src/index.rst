@@ -61,6 +61,7 @@ are the CPU and GPU.
    python/array
    python/data_types
    python/devices_and_streams
+   python/export
    python/ops
    python/random
    python/transforms

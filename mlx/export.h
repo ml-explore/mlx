@@ -18,12 +18,12 @@ struct FunctionExporter;
  * the same file.
  */
 FunctionExporter exporter(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     bool shapeless = false);
 
 FunctionExporter exporter(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     bool shapeless = false);
 
@@ -36,19 +36,19 @@ FunctionExporter exporter(
  * Export a function to a file.
  */
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     const Args& args,
     bool shapeless = false);
 
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     const Kwargs& kwargs,
     bool shapeless = false);
 
 void export_function(
-    const std::string& path,
+    const std::string& file,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
     const Args& args,
     const Kwargs& kwargs,
@@ -59,7 +59,7 @@ struct ImportedFunction;
 /**
  * Import a function from a file.
  */
-ImportedFunction import_function(const std::string& path);
+ImportedFunction import_function(const std::string& file);
 
 } // namespace mlx::core
 
