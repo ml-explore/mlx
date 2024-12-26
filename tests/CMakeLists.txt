@@ -24,6 +24,7 @@ target_sources(
           creations_tests.cpp
           device_tests.cpp
           einsum_tests.cpp
+          export_import_tests.cpp
           eval_tests.cpp
           fft_tests.cpp
           load_tests.cpp

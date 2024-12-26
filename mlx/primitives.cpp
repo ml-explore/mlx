@@ -740,6 +740,13 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
+std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
+  if (broadcast_shapes(inputs[0].shape(), shape_) != shape_) {
+    throw std::invalid_argument("[Broadcast] Unable to infer broadcast shape");
+  }
+  return {shape_};
+}
+
 std::vector<array> Ceil::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -3585,63 +3592,9 @@ std::vector<array> Slice::vjp(
     const std::vector<array>&) {
   // Check inputs
   assert(primals.size() == 1);
-
-  std::vector<array> inds;
-  std::vector<int> ind_axes;
-  std::vector<array> single_inds;
-  std::vector<int> single_ind_axes;
-  for (int i = 0; i < start_indices_.size(); ++i) {
-    auto start = start_indices_[i];
-    auto end = end_indices_[i];
-    auto stride = strides_[i];
-    if (start == 0 && stride == 1) {
-      continue;
-    }
-    if (stride == 1) {
-      single_inds.push_back(array(start));
-      single_ind_axes.push_back(i);
-    } else {
-      inds.push_back(arange(start, end, stride, stream()));
-      ind_axes.push_back(i);
-    }
-  }
-
-  // Transpose and reshape cotangents
-  auto cotan = cotangents[0];
-  if (!ind_axes.empty()) {
-    Shape cotan_shape;
-    for (auto ax : ind_axes) {
-      cotan_shape.push_back(cotan.shape(ax));
-    }
-    std::vector<int> cotan_axes(ind_axes);
-    for (int j = 0, i = 0; i < cotan.ndim(); ++i) {
-      if (j < ind_axes.size() && ind_axes[j] == i) {
-        cotan_shape.push_back(1);
-        j++;
-      } else {
-        cotan_shape.push_back(cotan.shape(i));
-        cotan_axes.push_back(i);
-      }
-    }
-    cotan =
-        reshape(transpose(cotan, cotan_axes, stream()), cotan_shape, stream());
-  }
-
-  // Make indices broadcastable
-  Shape inds_shape(inds.size(), 1);
-  for (int i = 0; i < inds.size(); ++i) {
-    inds_shape[i] = inds[i].size();
-    inds[i] = reshape(inds[i], inds_shape, stream());
-    inds_shape[i] = 1;
-  }
-
-  // Concatenate all the indices and axes
-  inds.insert(inds.end(), single_inds.begin(), single_inds.end());
-  ind_axes.insert(
-      ind_axes.end(), single_ind_axes.begin(), single_ind_axes.end());
-
-  return {scatter_add(
-      zeros_like(primals[0], stream()), inds, cotan, ind_axes, stream())};
+  auto out = zeros_like(primals[0], stream());
+  return {slice_update(
+      out, cotangents[0], start_indices_, end_indices_, strides_, stream())};
 }
 
 std::vector<array> Slice::jvp(
@@ -4533,7 +4486,7 @@ std::pair<std::vector<array>, std::vector<int>> View::vmap(
 }
 
 void View::print(std::ostream& os) {
-  os << "View" << dtype_;
+  os << "View " << dtype_;
 }
 
 bool View::is_equivalent(const Primitive& other) const {

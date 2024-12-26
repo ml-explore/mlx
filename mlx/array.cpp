@@ -119,7 +119,7 @@ void array::eval() {
 }
 
 bool array::is_tracer() const {
-  return array_desc_->is_tracer && in_tracing() || retain_graph();
+  return (array_desc_->is_tracer && in_tracing()) || retain_graph();
 }
 
 void array::set_data(allocator::Buffer buffer, Deleter d) {

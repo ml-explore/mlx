@@ -21,6 +21,9 @@ void set_default_stream(Stream s);
 /** Make a new stream on the given device. */
 Stream new_stream(Device d);
 
+/** Get the stream with the given index. */
+Stream get_stream(int index);
+
 inline bool operator==(const Stream& lhs, const Stream& rhs) {
   return lhs.index == rhs.index;
 }

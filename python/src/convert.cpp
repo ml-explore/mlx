@@ -331,7 +331,7 @@ PyScalarT validate_shape(
         t = pycomplex;
       } else {
         std::ostringstream msg;
-        msg << "Invalid type  " << nb::type_name(l.type()).c_str()
+        msg << "Invalid type " << nb::type_name(l.type()).c_str()
             << " received in array initialization.";
         throw std::invalid_argument(msg.str());
       }

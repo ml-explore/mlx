@@ -66,5 +66,6 @@ target_sources(
 if(IOS)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled_nocpu.cpp)
 else()
-  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled_cpu.cpp)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled_cpu.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/jit_compiler.cpp)
 endif()

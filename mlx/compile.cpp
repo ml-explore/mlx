@@ -72,23 +72,6 @@ bool is_fusable(const Primitive& p) {
       is_noop(p);
 }
 
-bool allows_shapeless(const Primitive& p) {
-  return typeid(p) == typeid(Arange) || typeid(p) == typeid(Compiled) ||
-      is_unary(p) || is_binary(p) || is_noop(p) || is_reduction(p) ||
-      typeid(p) == typeid(Softmax) || typeid(p) == typeid(Sort) ||
-      typeid(p) == typeid(ArgSort) || typeid(p) == typeid(ArgPartition) ||
-      typeid(p) == typeid(Partition) || typeid(p) == typeid(Select) ||
-      typeid(p) == typeid(NumberOfElements) || typeid(p) == typeid(Gather) ||
-      typeid(p) == typeid(Transpose) || typeid(p) == typeid(Concatenate) ||
-      typeid(p) == typeid(Matmul) || typeid(p) == typeid(QuantizedMatmul) ||
-      typeid(p) == typeid(Squeeze) || typeid(p) == typeid(ExpandDims) ||
-      typeid(p) == typeid(Flatten) || typeid(p) == typeid(Unflatten) ||
-      typeid(p) == typeid(fast::AffineQuantize) ||
-      typeid(p) == typeid(fast::LayerNorm) ||
-      typeid(p) == typeid(fast::RMSNorm) || typeid(p) == typeid(fast::RoPE) ||
-      typeid(p) == typeid(fast::ScaledDotProductAttention);
-}
-
 Compiled::Compiled(
     Stream stream,
     std::vector<array> inputs,
@@ -172,9 +155,6 @@ CompileMode& compile_mode() {
   static CompileMode compile_mode_ = get_val();
   return compile_mode_;
 }
-
-using ParentsMap =
-    std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
 
 // Helper like below but only merges the two provided arrays. If the src has
 // siblings then these won't be merged to the dst.
@@ -749,10 +729,15 @@ std::vector<array> compile_replace(
     trace_to_real.insert({trace_inputs[i].id(), inputs[i]});
   }
 
+  auto is_load = [](const Primitive& p) { return typeid(p) == typeid(Load); };
+
   for (auto& a : tape) {
-    // Arrays in the tape without primitives are constants
-    // and can be used directly
-    if (!a.has_primitive()) {
+    // Arrays in the tape without primitives are either:
+    // - inputs, which are already in the map
+    // - constants, which can be used directly
+    // - a load primitive which has no inputs and will become a constant
+    //   after the first eval
+    if (!a.has_primitive() || is_load(a.primitive())) {
       trace_to_real.insert({a.id(), a});
     } else {
       // Find real inputs
@@ -798,24 +783,6 @@ std::vector<array> compile_replace(
     outputs.push_back(trace_to_real.at(o.id()));
   }
   return outputs;
-}
-
-void compile_validate_shapeless(const std::vector<array>& tape) {
-  for (auto& t : tape) {
-    if (!t.has_primitive()) {
-      continue;
-    }
-    auto& p = t.primitive();
-    if (allows_shapeless(p)) {
-      continue;
-    }
-
-    std::ostringstream msg;
-    msg << "[compile] Cannot compile primitive ";
-    p.print(msg);
-    msg << " with shapeless enabled.";
-    throw std::invalid_argument(msg.str());
-  }
 }
 
 bool skip_compile() {
@@ -876,10 +843,6 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // new outputs must be updated accordingly
       if (compile_mode() != CompileMode::no_fuse) {
         compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
-      }
-
-      if (shapeless) {
-        compile_validate_shapeless(entry.tape);
       }
     }
 

@@ -9,6 +9,7 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/compiled_preamble.h"
+#include "mlx/backend/common/jit_compiler.h"
 #include "mlx/device.h"
 #include "mlx/graph_utils.h"
 
@@ -44,11 +45,8 @@ namespace detail {
 bool compile_available_for_device(const Device& device) {
   return true;
 }
-} // namespace detail
 
-std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name).string();
-}
+} // namespace detail
 
 // Return a pointer to a compiled function
 void* compile(
@@ -88,9 +86,10 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  std::ostringstream shared_lib_name;
-  shared_lib_name << "lib" << kernel_file_name << ".so";
-  auto shared_lib_path = get_temp_file(shared_lib_name.str());
+  auto output_dir = std::filesystem::temp_directory_path();
+
+  std::string shared_lib_name = "lib" + kernel_file_name + ".so";
+  auto shared_lib_path = (output_dir / shared_lib_name).string();
   bool lib_exists = false;
   {
     std::ifstream f(shared_lib_path.c_str());
@@ -99,19 +98,16 @@ void* compile(
 
   if (!lib_exists) {
     // Open source file and write source code to it
-    std::ostringstream source_file_name;
-    source_file_name << kernel_file_name << ".cpp";
-    auto source_file_path = get_temp_file(source_file_name.str());
+    std::string source_file_name = kernel_file_name + ".cpp";
+    auto source_file_path = (output_dir / source_file_name).string();
 
     std::ofstream source_file(source_file_path);
     source_file << source_code;
     source_file.close();
 
-    std::ostringstream build_command;
-    build_command << "g++ -std=c++17 -O3 -Wall -fPIC -shared '"
-                  << source_file_path << "' -o '" << shared_lib_path << "'";
-    std::string build_command_str = build_command.str();
-    auto return_code = system(build_command_str.c_str());
+    std::string command = JitCompiler::build_command(
+        output_dir, source_file_name, shared_lib_name);
+    auto return_code = system(command.c_str());
     if (return_code) {
       std::ostringstream msg;
       msg << "[Compile::eval_cpu] Failed to compile function " << kernel_name
@@ -155,6 +151,11 @@ inline void build_kernel(
   };
 
   NodeNamer namer;
+
+#ifdef _MSC_VER
+  // Export the symbol
+  os << "__declspec(dllexport) ";
+#endif
 
   // Start the kernel
   os << "void " << kernel_name << "(void** args) {" << std::endl;

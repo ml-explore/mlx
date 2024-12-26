@@ -10,6 +10,11 @@ namespace mlx::core {
 
 void async_eval(std::vector<array> outputs);
 
+template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
+void async_eval(Arrays&&... outputs) {
+  async_eval(std::vector<array>{std::forward<Arrays>(outputs)...});
+}
+
 void eval(std::vector<array> outputs);
 
 template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>

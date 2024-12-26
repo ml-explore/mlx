@@ -78,8 +78,15 @@ class ParallelFileReader : public Reader {
     return lseek(fd_, 0, SEEK_CUR);
   }
 
-  void seek(int64_t, std::ios_base::seekdir = std::ios_base::beg) override {
-    throw std::runtime_error("[ParallelFileReader::seek] Not allowed");
+  // Warning: do not use this function from multiple threads as
+  // it advances the file descriptor
+  void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
+      override {
+    if (way == std::ios_base::beg) {
+      lseek(fd_, off, 0);
+    } else {
+      lseek(fd_, off, SEEK_CUR);
+    }
   }
 
   // Warning: do not use this function from multiple threads as
@@ -108,8 +115,16 @@ class FileWriter : public Writer {
             0644)),
         label_(std::move(file_path)) {}
 
+  FileWriter(const FileWriter&) = delete;
+  FileWriter& operator=(const FileWriter&) = delete;
+  FileWriter(FileWriter&& other) {
+    std::swap(fd_, other.fd_);
+  }
+
   ~FileWriter() override {
-    close(fd_);
+    if (fd_ != 0) {
+      close(fd_);
+    }
   }
 
   bool is_open() const override {
@@ -151,7 +166,7 @@ class FileWriter : public Writer {
   }
 
  private:
-  int fd_;
+  int fd_{0};
   std::string label_;
 };
 
