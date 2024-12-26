@@ -177,7 +177,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         grads = tree_map(lambda x: mx.ones_like(x), params)
 
         # Explicit init
-        for optimizer in [opt.Adam, opt.AdamW, opt.Adamax]:
+        for optimizer in [opt.Adam, opt.AdamW, opt.Adamax, opt.Adan]:
             optim = optimizer(learning_rate=1e-2)
             optim.init(params)
             self.assertTrue(

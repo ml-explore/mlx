@@ -460,26 +460,33 @@ class Adam(Optimizer):
             return parameter - lr * m / (mx.sqrt(v) + eps)
 
 class Adan(Optimizer):
-    r"""The Adam optimizer [1]. In detail,
+    r"""The Adan optimizer [1]. In detail,
 
-    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
-    optimization. ICLR 2015.
+    [1]: Xie, Z., Wang, S., Hu, X., Huang, Y., Long, M., 2022. Adan: Adaptive 
+    Nesterov momentum algorithm for faster training of deep learning models. 
+    NeurIPS 2022.
 
     .. math::
 
-        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
-        v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
+        m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
+        v_t &= \beta_2 v_{t-1} + (1 - \beta_2) (g_t - g_{t-1}) \\
+        n_t &= \beta_3 n_{t-1} + (1 - \beta_3) (g_t + (1 - \beta_2)(g_t - g_{t-1}))^2 \\
+        \eta_t &= \frac{\eta}{\sqrt{n_t + \epsilon_{\text{root}}} + \epsilon} \\
+        w_{t+1} &= \frac{w_t - \eta_t (m_t + (1 - \beta_2)v_t)}{1 + \lambda \eta_t}
 
     Args:
-        learning_rate (float or callable): The learning rate :math:`\lambda`.
-        betas (Tuple[float, float], optional): The coefficients
-          :math:`(\beta_1, \beta_2)` used for computing running averages of the
-          gradient and its square. Default: ``(0.9, 0.999)``
-        eps (float, optional): The term :math:`\epsilon` added to the
-          denominator to improve numerical stability. Default: ``1e-8``
-        bias_correction (bool, optional): If set to ``True``, bias correction
-          is applied. Default: ``False``
+        learning_rate (float or callable): The learning rate :math:`\eta`.
+        betas (Tuple[float, float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2, \beta_3)` used for computing running averages
+          of the gradient, gradient differences, and squared terms. Default: ``(0.9, 0.999, 0.999)``
+        eps (float, optional): The term :math:`\epsilon` added to the denominator
+          to improve numerical stability. Default: ``1e-8``
+        eps_root (float, optional): The term :math:`\epsilon_{\text{root}}` added
+          inside the square root to improve numerical stability. Default: ``1e-8``
+        weight_decay (float, optional): The strength of the weight decay
+          regularization :math:`\lambda`. Default: ``0.0``
+        bias_correction (bool, optional): If set to ``True``, bias correction is applied.
+          Default: ``True``
     """
 
     def __init__(
