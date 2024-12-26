@@ -131,8 +131,7 @@ have to :func:`mlx.utils.tree_map` the gradients with following function.
 .. code:: python
 
     def all_avg(x):
-        N = mx.distributed.init().size()
-        return mx.distributed.all_sum(x) / N
+        return mx.distributed.all_sum(x) / mx.distributed.init().size()
 
 Putting everything together our training loop step looks as follows with
 everything else remaining the same.
