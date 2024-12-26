@@ -459,6 +459,7 @@ class Adam(Optimizer):
         else:
             return parameter - lr * m / (mx.sqrt(v) + eps)
 
+
 class Adan(Optimizer):
     r"""The Adan optimizer [1]. In detail,
 
@@ -496,7 +497,7 @@ class Adan(Optimizer):
         eps: float = 1e-8,
         eps_root: float = 1e-8,
         weight_decay: float = 0.01,
-        bias_correction = False,
+        bias_correction=False,
     ):
         super().__init__()
 
@@ -529,24 +530,30 @@ class Adan(Optimizer):
         v = state["v"]
         n = state["n"]
         g_prev = state["g_prev"]
-        
+
         diff = gradient - g_prev
 
         m = b1 * m + (1 - b1) * gradient
         v = b2 * v + (1 - b2) * diff
-        n = b3 * n + (1-b3)*mx.square(gradient + (1-b2) * diff)
-        
+        n = b3 * n + (1 - b3) * mx.square(gradient + (1 - b2) * diff)
+
         state["m"] = m
         state["v"] = v
         state["n"] = n
         state["g_prev"] = gradient
 
         if bias_correction:
-            denominator = mx.sqrt((n/(1-b3**step)) + eps_root) + eps
-            return parameter - lr * ((m/(1-b1**step)) + (1-b2) * (v/(1-b2**step))) / denominator
+            denominator = mx.sqrt((n / (1 - b3**step)) + eps_root) + eps
+            return (
+                parameter
+                - lr
+                * ((m / (1 - b1**step)) + (1 - b2) * (v / (1 - b2**step)))
+                / denominator
+            )
 
         denominator = mx.sqrt(n + eps_root) + eps
-        return parameter - lr * (m + (1-b2) * v) / denominator
+        return parameter - lr * (m + (1 - b2) * v) / denominator
+
 
 class AdamW(Adam):
     r"""The AdamW optimizer [1]. We update the weights with a weight_decay

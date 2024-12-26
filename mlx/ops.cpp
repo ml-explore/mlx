@@ -2716,7 +2716,6 @@ array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
     a_dim = (i < ndim - a.ndim()) ? 1 : a.shape(i - (ndim - a.ndim()));
     b_dim = (i < ndim - b.ndim()) ? 1 : b.shape(i - (ndim - b.ndim()));
 
-
     a_new_shape.push_back(a_dim);
     a_new_shape.push_back(1);
     b_new_shape.push_back(1);
@@ -2724,13 +2723,16 @@ array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
     out_shape.push_back(a_dim * b_dim);
   }
 
-  return astype(reshape(
-    multiply(
-        reshape(a, std::move(a_new_shape), s),
-        reshape(b, std::move(b_new_shape), s),
-        s),
-    std::move(out_shape),
-    s), out_type, s);
+  return astype(
+      reshape(
+          multiply(
+              reshape(a, std::move(a_new_shape), s),
+              reshape(b, std::move(b_new_shape), s),
+              s),
+          std::move(out_shape),
+          s),
+      out_type,
+      s);
 }
 
 array take(
