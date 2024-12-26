@@ -489,6 +489,7 @@ class Adan(Optimizer):
         eps: float = 1e-8,
         eps_root: float = 1e-8,
         weight_decay: float = 0.01,
+        bias_correction = False,
     ):
         super().__init__()
 
@@ -497,6 +498,7 @@ class Adan(Optimizer):
         self.eps = eps
         self.eps_root = eps_root
         self.weight_decay = weight_decay
+        self.bias_correction = bias_correction
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -513,6 +515,8 @@ class Adan(Optimizer):
         b1, b2, b3 = self.betas
         eps = self.eps
         eps_root = self.eps_root
+        bias_correction = self.bias_correction
+        step = self.step
 
         m = state["m"]
         v = state["v"]
@@ -529,6 +533,10 @@ class Adan(Optimizer):
         state["v"] = v
         state["n"] = n
         state["g_prev"] = gradient
+
+        if bias_correction:
+            denominator = mx.sqrt((n/(1-b3**step)) + eps_root) + eps
+            return parameter - lr * ((m/(1-b1**step)) + (1-b2) * (v/(1-b2**step))) / denominator
 
         denominator = mx.sqrt(n + eps_root) + eps
         return parameter - lr * (m + (1-b2) * v) / denominator
