@@ -1,3 +1,5 @@
+.. _mlx_in_cpp:
+
 Using MLX in C++
 ================
 
@@ -35,7 +37,7 @@ Next make an example program in ``example.cpp``:
     return 0;
   }
 
-The next step is to setup a CMake file in ``CMakeLists.txt``.
+The next step is to setup a CMake file in ``CMakeLists.txt``:
 
 .. code-block:: cmake
 
@@ -45,7 +47,6 @@ The next step is to setup a CMake file in ``CMakeLists.txt``.
 
   set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 Depending on how you installed MLX, you may need to tell CMake where to
@@ -98,8 +99,7 @@ And run it with:
 
   ./build/example
 
-Note ``find_package(MLX CONFIG REQUIRED)`` sets the following
-variables:
+Note ``find_package(MLX CONFIG REQUIRED)`` sets the following variables:
 
 .. list-table:: Package Variables
    :widths: 20 20 
