@@ -898,7 +898,7 @@ array clip(
 }
 
 array concatenate(
-    const std::vector<array>& arrays,
+    std::vector<array> arrays,
     int axis,
     StreamOrDevice s /* = {} */) {
   if (arrays.size() == 0) {
@@ -944,6 +944,9 @@ array concatenate(
 
   // Promote all the arrays to the same type
   auto dtype = result_type(arrays);
+  for (auto& a : arrays) {
+    a = astype(a, dtype, s);
+  }
 
   return array(
       std::move(shape),
@@ -952,14 +955,11 @@ array concatenate(
       std::move(arrays));
 }
 
-array concatenate(
-    const std::vector<array>& arrays,
-    StreamOrDevice s /* = {} */) {
-  std::vector<array> flat_inputs;
+array concatenate(std::vector<array> arrays, StreamOrDevice s /* = {} */) {
   for (auto& a : arrays) {
-    flat_inputs.push_back(flatten(a, s));
+    a = flatten(a, s);
   }
-  return concatenate(flat_inputs, 0, s);
+  return concatenate(std::move(arrays), 0, s);
 }
 
 /** Stack arrays along a new axis */

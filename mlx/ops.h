@@ -211,11 +211,8 @@ array clip(
     StreamOrDevice s = {});
 
 /** Concatenate arrays along a given axis. */
-array concatenate(
-    const std::vector<array>& arrays,
-    int axis,
-    StreamOrDevice s = {});
-array concatenate(const std::vector<array>& arrays, StreamOrDevice s = {});
+array concatenate(std::vector<array> arrays, int axis, StreamOrDevice s = {});
+array concatenate(std::vector<array> arrays, StreamOrDevice s = {});
 
 /** Stack arrays along a new axis. */
 array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {});
