@@ -13,7 +13,7 @@ using namespace mlx::core;
 
 namespace {
 std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name);
+  return std::filesystem::temp_directory_path().append(name).string();
 }
 } // namespace
 
