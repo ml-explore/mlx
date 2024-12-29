@@ -9,17 +9,13 @@
 #define TOSTRING(x) STRINGIFY(x)
 
 // clang-format off
-#define SERIALIZE_PRIMITIVE(primitive, keys...)          \
-  {                                                      \
-    #primitive, {                                        \
-      [](Writer& os, const Primitive& p) {               \
-        serialize_primitive<primitive>(os, p);           \
-      },                                                 \
-      [](Reader& is, Stream s) {                         \
-        return deserialize_primitive<primitive>(is, s);  \
-      },                                                 \
-      {keys}                                             \
-    }                                                    \
+#define SERIALIZE_PRIMITIVE(primitive, ...)  \
+  {                                          \
+    #primitive, {                            \
+      serialize_primitive<primitive>,        \
+      deserialize_primitive<primitive>,      \
+      {__VA_ARGS__}                          \
+    }                                        \
   }
 // clang-format on
 
