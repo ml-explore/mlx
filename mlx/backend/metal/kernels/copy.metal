@@ -17,18 +17,16 @@
   instantiate_kernel("g2large_copy" #tname, copy_g_nd2, itype, otype)   \
   instantiate_kernel("g3large_copy" #tname, copy_g_nd3, itype, otype)
 
-#define instantiate_copy_same(tname, type)                            \
-  instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, type, type, int) \
-  instantiate_kernel("gg2_copy" #tname, copy_gg_nd2, type, type, int) \
-  instantiate_kernel("gg3_copy" #tname, copy_gg_nd3, type, type, int) \
-  instantiate_kernel("ggn2_copy" #tname, copy_gg, type, type, 2, int) \
-  instantiate_kernel("gg1large_copy" #tname, copy_gg_nd1, type, type) \
-  instantiate_kernel("gg2large_copy" #tname, copy_gg_nd2, type, type) \
-  instantiate_kernel("gg3large_copy" #tname, copy_gg_nd3, type, type) \
-  instantiate_kernel("gn4large_copy" #tname, copy_g, type, type, 4)   \
-  instantiate_kernel("ggn4large_copy" #tname, copy_gg, type, type, 4)
-
-#define instantiate_copy_same(tname, type)                       \
+#define instantiate_copy_same(tname, type)                                            \
+  instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, type, type, int)                 \
+  instantiate_kernel("gg2_copy" #tname, copy_gg_nd2, type, type, int)                 \
+  instantiate_kernel("gg3_copy" #tname, copy_gg_nd3, type, type, int)                 \
+  instantiate_kernel("ggn2_copy" #tname, copy_gg, type, type, 2, int)                 \
+  instantiate_kernel("gg1large_copy" #tname, copy_gg_nd1, type, type)                 \
+  instantiate_kernel("gg2large_copy" #tname, copy_gg_nd2, type, type)                 \
+  instantiate_kernel("gg3large_copy" #tname, copy_gg_nd3, type, type)                 \
+  instantiate_kernel("gn4large_copy" #tname, copy_g, type, type, 4)                   \
+  instantiate_kernel("ggn4large_copy" #tname, copy_gg, type, type, 4)                 \
   instantiate_kernel("gg1_dynamic_copy" #tname, copy_gg_dynamic_nd1, type, type, int) \
   instantiate_kernel("gg2_dynamic_copy" #tname, copy_gg_dynamic_nd2, type, type, int) \
   instantiate_kernel("gg3_dynamic_copy" #tname, copy_gg_dynamic_nd3, type, type, int) \
