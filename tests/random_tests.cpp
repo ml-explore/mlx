@@ -686,7 +686,7 @@ TEST_CASE("test laplace") {
     CHECK(std::abs(sample_variance - expected_variance) < 0.01);
 
     // Expected kurtosis of Laplace distribution is 3.
-    array fourth_pows = power(out - sample_mean, {4});
+    array fourth_pows = power(out - sample_mean, array(4));
     float sample_kurtosis =
         mean(fourth_pows).item<float>() / std::pow(sample_variance, 2) - 3;
     float expected_kurtosis = 3.0;

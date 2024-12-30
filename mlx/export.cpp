@@ -253,6 +253,8 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Depends),
       SERIALIZE_PRIMITIVE(Divide),
       SERIALIZE_PRIMITIVE(DivMod),
+      SERIALIZE_PRIMITIVE(DynamicSlice),
+      SERIALIZE_PRIMITIVE(DynamicSliceUpdate),
       SERIALIZE_PRIMITIVE(Equal, "NaNEqual"),
       SERIALIZE_PRIMITIVE(Erf),
       SERIALIZE_PRIMITIVE(ErfInv),

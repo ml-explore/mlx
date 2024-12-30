@@ -29,6 +29,35 @@ void reshape(const array& in, array& out) {
   }
 }
 
+int64_t compute_dynamic_offset(
+    const array& indices,
+    const Strides& strides,
+    const std::vector<int>& axes) {
+  auto compute_offset = [&strides, &axes](const auto* indices) {
+    int64_t offset = 0;
+    for (int i = 0; i < axes.size(); ++i) {
+      offset += indices[i] * strides[axes[i]];
+    }
+    return offset;
+  };
+  switch (indices.dtype()) {
+    case int8:
+    case uint8:
+      return compute_offset(indices.data<uint8_t>());
+    case int16:
+    case uint16:
+      return compute_offset(indices.data<uint16_t>());
+    case int32:
+    case uint32:
+      return compute_offset(indices.data<uint32_t>());
+    case int64:
+    case uint64:
+      return compute_offset(indices.data<uint64_t>());
+    default:
+      throw std::runtime_error("Invalid indices type.");
+  }
+}
+
 void Abs::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
@@ -519,6 +548,54 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
   shared_buffer_slice(in, ostrides, data_offset, data_size, out);
 }
 
+void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+  auto& in = inputs[0];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto i_offset = compute_dynamic_offset(inputs[1], in.strides(), axes_);
+  copy_inplace(
+      /* const array& src = */ in,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ out.shape(),
+      /* const Strides& i_strides = */ in.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ i_offset,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral);
+}
+
+void DynamicSliceUpdate::eval_cpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+
+  // Copy or move src to dst
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype);
+
+  auto o_offset = compute_dynamic_offset(inputs[2], out.strides(), axes_);
+  copy_inplace(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const std::vector<int>& data_shape = */ upd.shape(),
+      /* const std::vector<stride_t>& i_strides = */ upd.strides(),
+      /* const std::vector<stride_t>& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ o_offset,
+      /* CopyType ctype = */ CopyType::GeneralGeneral);
+}
+
 void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
@@ -544,12 +621,11 @@ void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
   auto [data_offset, out_strides] = prepare_slice(in, start_indices_, strides_);
 
   // Do copy
-  Strides upd_strides{upd.strides().begin(), upd.strides().end()};
   copy_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,
       /* const std::vector<int>& data_shape = */ upd.shape(),
-      /* const std::vector<stride_t>& i_strides = */ upd_strides,
+      /* const std::vector<stride_t>& i_strides = */ upd.strides(),
       /* const std::vector<stride_t>& o_strides = */ out_strides,
       /* int64_t i_offset = */ 0,
       /* int64_t o_offset = */ data_offset,

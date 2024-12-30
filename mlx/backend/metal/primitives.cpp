@@ -4,6 +4,7 @@
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/load.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
@@ -42,6 +43,59 @@ void reshape(const array& in, array& out, Stream s) {
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }
+}
+array compute_dynamic_offset(
+    const array& indices,
+    const Stride& strides,
+    const std::vector<int>& axes,
+    Stream s) {
+  auto& d = metal::device(s.device);
+
+  // Kernel to compute offset here.
+  array offset({1}, int64, nullptr, {});
+  bool donate = indices.is_donatable() &&
+      (indices.data_size() * indices.itemsize()) >= offset.itemsize();
+  if (donate) {
+    offset.move_shared_buffer(indices);
+  } else {
+    offset.set_data(allocator::malloc_or_wait(offset.itemsize()));
+  }
+  d.add_temporary(offset, s.index);
+
+  auto dtype = indices.dtype();
+  std::string lib_name = "compute_dynamic_offset_" + type_to_name(dtype);
+  auto lib = d.get_library(lib_name, [dtype]() {
+    return fmt::format(
+        R"(
+        [[kernel]] void compute_dynamic_offset_{0}(
+            constant const {1}* indices [[buffer(0)]],
+            device int64_t& offset [[buffer(1)]],
+            constant const int64_t* strides [[buffer(2)]],
+            constant const int* axes [[buffer(3)]],
+            constant const int& n_axes [[buffer(4)]],
+            uint index [[thread_position_in_grid]]) {{
+          int64_t acc = 0;
+          for (int i = 0; i < n_axes; ++i) {{
+            acc += indices[i] * strides[axes[i]];
+          }}
+          offset = acc;
+        }})",
+        type_to_name(dtype),
+        get_type_string(dtype));
+  });
+  auto kernel = d.get_kernel(lib_name, lib);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(donate ? offset : indices, 0);
+  compute_encoder.set_output_array(offset, 1);
+  compute_encoder.set_vector_bytes(strides, 2);
+  compute_encoder.set_vector_bytes(axes, 3);
+  int n_axes = axes.size();
+  compute_encoder.set_bytes(n_axes, 4);
+  MTL::Size dims = MTL::Size(1, 1, 1);
+  compute_encoder.dispatch_threads(dims, dims);
+  return offset;
 }
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -356,6 +410,72 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
   slice_gpu(in, out, start_indices_, strides_, stream());
 }
 
+void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& start = inputs[1];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto s = stream();
+  auto in_offset = compute_dynamic_offset(start, in.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ in,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ out.shape(),
+      /* const Strides& i_strides = */ in.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* const std::optional<array>& dynamic_i_offset = */ in_offset,
+      /* const std::optional<array>& dynamic_o_offset = */ std::nullopt);
+}
+
+void DynamicSliceUpdate::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+  auto& start_indices = inputs[2];
+
+  if (upd.size() == 0) {
+    move_or_copy(in, out);
+    return;
+  }
+
+  // Copy or donate input to output
+  auto s = stream();
+  auto& d = metal::device(s.device);
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
+
+  auto out_offset =
+      compute_dynamic_offset(start_indices, out.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ upd.shape(),
+      /* const Strides& i_strides = */ upd.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* const std::optional<array>& dynamic_i_offset = */ std::nullopt,
+      /* const std::optional<array>& dynamic_o_offset = */ out_offset);
+}
+
 void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
@@ -371,13 +491,11 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // Check if materialization is needed
   auto ctype = in.flags().contiguous && in.size() == in.data_size()
       ? CopyType::Vector
       : CopyType::General;
   copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
-  // Calculate out strides, initial offset and if copy needs to be made
   auto [data_offset, out_strides] = prepare_slice(in, start_indices_, strides_);
 
   // Do copy
