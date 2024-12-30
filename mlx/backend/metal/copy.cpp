@@ -52,7 +52,9 @@ void copy_gpu_inplace(
     int64_t inp_offset,
     int64_t out_offset,
     CopyType ctype,
-    const Stream& s) {
+    const Stream& s,
+    const std::optional<array>& dynamic_i_offset /* = std::nullopt */,
+    const std::optional<array>& dynamic_o_offset /* = std::nullopt */) {
   if (out.size() == 0) {
     return;
   }
@@ -107,6 +109,13 @@ void copy_gpu_inplace(
     if (large) {
       kernel_name += "large";
     }
+    if (dynamic_i_offset || dynamic_o_offset) {
+      kernel_name += "_dynamic";
+      if (ctype != CopyType::GeneralGeneral) {
+        throw std::runtime_error(
+            "[Copy::eval_gpu] Dynamic output offset requires GeneralGeneral copy");
+      }
+    }
   }
   concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
   auto kernel = get_copy_kernel(d, kernel_name, in, out);
@@ -145,6 +154,12 @@ void copy_gpu_inplace(
       compute_encoder.set_bytes(ndim, 5);
       dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     }
+    if (dynamic_i_offset) {
+      compute_encoder.set_input_array(*dynamic_i_offset, 6);
+    }
+    if (dynamic_o_offset) {
+      compute_encoder.set_input_array(*dynamic_o_offset, 7);
+    }
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
     if (thread_group_size != 1024) {
@@ -179,13 +194,13 @@ void copy_gpu_inplace(
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const Strides& istride,
-    int64_t ioffset,
+    const Strides& i_strides,
+    int64_t i_offset,
     CopyType ctype,
     const Stream& s) {
   assert(in.shape() == out.shape());
   return copy_gpu_inplace(
-      in, out, in.shape(), istride, out.strides(), ioffset, 0, ctype, s);
+      in, out, in.shape(), i_strides, out.strides(), i_offset, 0, ctype, s);
 }
 
 void fill_gpu(const array& val, array& out, const Stream& s) {

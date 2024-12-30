@@ -250,7 +250,7 @@ TEST_CASE("test QR factorization") {
   // Unsupported types throw
   CHECK_THROWS(linalg::qr(array({0, 1}, {1, 2})));
 
-  array A = array({{2., 3., 1., 2.}, {2, 2}});
+  array A = array({2., 3., 1., 2.}, {2, 2});
   auto [Q, R] = linalg::qr(A, Device::cpu);
   auto out = matmul(Q, R);
   CHECK(allclose(out, A).item<bool>());

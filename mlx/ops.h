@@ -168,7 +168,15 @@ array slice(
 /** Slice an array with a stride of 1 in each dimension. */
 array slice(const array& a, Shape start, Shape stop, StreamOrDevice s = {});
 
-/** Update a slice from the source array */
+/** Slice an array with dynamic starting indices. */
+array slice(
+    const array& a,
+    const array& start,
+    std::vector<int> axes,
+    Shape slice_size,
+    StreamOrDevice s = {});
+
+/** Update a slice from the source array. */
 array slice_update(
     const array& src,
     const array& update,
@@ -177,12 +185,20 @@ array slice_update(
     Shape strides,
     StreamOrDevice s = {});
 
-/** Update a slice from the source array with stride 1 in each dimension */
+/** Update a slice from the source array with stride 1 in each dimension. */
 array slice_update(
     const array& src,
     const array& update,
     Shape start,
     Shape stop,
+    StreamOrDevice s = {});
+
+/** Update a slice from the source array with dynamic starting indices. */
+array slice_update(
+    const array& src,
+    const array& update,
+    const array& start,
+    std::vector<int> axes,
     StreamOrDevice s = {});
 
 /** Split an array into sub-arrays along a given axis. */

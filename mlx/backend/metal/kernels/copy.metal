@@ -28,6 +28,13 @@
   instantiate_kernel("gn4large_copy" #tname, copy_g, type, type, 4)   \
   instantiate_kernel("ggn4large_copy" #tname, copy_gg, type, type, 4)
 
+#define instantiate_copy_same(tname, type)                       \
+  instantiate_kernel("gg1_dynamic_copy" #tname, copy_gg_dynamic_nd1, type, type, int) \
+  instantiate_kernel("gg2_dynamic_copy" #tname, copy_gg_dynamic_nd2, type, type, int) \
+  instantiate_kernel("gg3_dynamic_copy" #tname, copy_gg_dynamic_nd3, type, type, int) \
+  instantiate_kernel("ggn2_dynamic_copy" #tname, copy_gg_dynamic, type, type, 2, int)
+
+
 #define instantiate_copy_itype(itname, itype)                \
   instantiate_copy_same(itname ##itname, itype)              \
   instantiate_copy_all(itname ##bool_, itype, bool)          \
