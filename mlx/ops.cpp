@@ -756,8 +756,9 @@ array slice(
       throw std::invalid_argument(msg.str());
     }
   }
+  auto out_shape = slice_size;
   return array(
-      slice_size,
+      std::move(out_shape),
       a.dtype(),
       std::make_shared<DynamicSlice>(
           to_stream(s), std::move(axes), std::move(slice_size)),

@@ -164,6 +164,14 @@ array slice(
     Shape stop,
     Shape strides,
     StreamOrDevice s = {});
+inline array slice(
+    const array& a,
+    std::initializer_list<int> start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s = {}) {
+  return slice(a, Shape(start), std::move(stop), std::move(strides), s);
+}
 
 /** Slice an array with a stride of 1 in each dimension. */
 array slice(const array& a, Shape start, Shape stop, StreamOrDevice s = {});
