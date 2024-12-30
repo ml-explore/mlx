@@ -764,7 +764,7 @@ auto mlx_slice_update(
     const mx::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
-  // Can't route to slice update if not slice or tuple
+  // Can't route to slice update if not slice, tuple, or int
   if (src.ndim() == 0 ||
       (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj) &&
        !nb::isinstance<nb::int_>(obj))) {
@@ -845,20 +845,14 @@ auto mlx_slice_update(
     return std::make_pair(true, broadcast_to(up, src.shape()));
   }
 
-  // Process entries
-  mx::Shape up_reshape(src.ndim());
-  int ax = src.ndim() - 1;
-  int up_ax = up.ndim() - 1;
-  for (; ax >= non_none_indices; ax--) {
-    if (up_ax >= 0) {
-      up_reshape[ax] = up.shape(up_ax);
-      up_ax--;
-    } else {
-      up_reshape[ax] = 1;
-    }
-  }
-
-  for (int i = indices.size() - 1; i >= 0; --i) {
+  int unspecified = src.ndim() - non_none_indices;
+  std::vector<int> squeeze_dims;
+  std::vector<int> expand_dims;
+  for (int i = indices.size() - 1,
+           ax = non_none_indices - 1,
+           upd_ax = upd.ndim() - unspecified - 1;
+       i >= 0;
+       --i) {
     auto& pyidx = indices[i];
     if (nb::isinstance<nb::slice>(pyidx)) {
       get_slice_params(
@@ -867,19 +861,26 @@ auto mlx_slice_update(
           strides[ax],
           nb::cast<nb::slice>(pyidx),
           src.shape(ax));
-      up_reshape[ax] = (up_ax >= 0) ? up.shape(up_ax--) : 1;
       ax--;
+      upd_ax--;
     } else if (nb::isinstance<nb::int_>(pyidx)) {
       int st = nb::cast<int>(pyidx);
-      st = (st < 0) ? st + src.shape(ax) : st;
+      st = (st < 0) ? st + src.shape(i) : st;
       starts[ax] = st;
       stops[ax] = st + 1;
-      up_reshape[ax] = 1;
+      if (upd_ax >= 0) {
+        expand_dims.push_back(i - indices.size() - unspecified);
+      }
       ax--;
+    } else if (pyidx.is_none()) {
+      if (upd_ax-- >= 0) {
+        squeeze_dims.push_back(i - indices.size() - unspecified);
+      }
     }
   }
 
-  up = reshape(up, std::move(up_reshape));
+  up = mx::squeeze(
+      mx::expand_dims(up, std::move(expand_dims)), std::move(squeeze_dims));
   auto out = slice_update(src, up, starts, stops, strides);
   return std::make_pair(true, out);
 }

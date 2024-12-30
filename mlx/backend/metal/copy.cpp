@@ -154,11 +154,17 @@ void copy_gpu_inplace(
       compute_encoder.set_bytes(ndim, 5);
       dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     }
-    if (dynamic_i_offset) {
-      compute_encoder.set_input_array(*dynamic_i_offset, 6);
-    }
-    if (dynamic_o_offset) {
-      compute_encoder.set_input_array(*dynamic_o_offset, 7);
+    if (dynamic_i_offset || dynamic_o_offset) {
+      if (dynamic_i_offset) {
+        compute_encoder.set_input_array(*dynamic_i_offset, 6);
+      } else {
+        compute_encoder.set_bytes(0ll, 6);
+      }
+      if (dynamic_o_offset) {
+        compute_encoder.set_input_array(*dynamic_o_offset, 7);
+      } else {
+        compute_encoder.set_bytes(0ll, 7);
+      }
     }
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32

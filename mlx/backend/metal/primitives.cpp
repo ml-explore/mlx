@@ -46,7 +46,7 @@ void reshape(const array& in, array& out, Stream s) {
 }
 array compute_dynamic_offset(
     const array& indices,
-    const Stride& strides,
+    const Strides& strides,
     const std::vector<int>& axes,
     Stream s) {
   auto& d = metal::device(s.device);
