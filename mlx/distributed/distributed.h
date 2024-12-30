@@ -32,6 +32,8 @@ struct Group {
    */
   Group split(int color, int key = -1);
 
+  void barrier();
+
   const std::shared_ptr<void>& raw_group() {
     return group_;
   }
