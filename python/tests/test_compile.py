@@ -830,6 +830,25 @@ class TestCompile(mlx_tests.MLXTestCase):
         a = mx.array([0.0, 1.0, 2.0, 3.0, 4.0])
         self.assertTrue(mx.allclose(cfun(a), fun(a)))
 
+    def test_shapeless_compile_with_reshape(self):
+        def fun(x):
+            return x.reshape(x.shape[0] * x.shape[1], -1)
+
+        compiled_fun = mx.compile(fun, shapeless=True)
+
+        x = mx.zeros(shape=(2, 3, 4))
+        out = compiled_fun(x)
+        self.assertEqual(out.shape, (6, 4))
+
+        x = mx.zeros(shape=(2, 3, 8))
+        out = compiled_fun(x)
+        self.assertEqual(out.shape, (6, 8))
+
+        x = mx.zeros(shape=(5, 5, 5))
+
+        with self.assertRaises(ValueError):
+            compiled_fun(x)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -421,3 +421,73 @@ the most opportunity to optimize the computation graph:
   # Compiling the outer function is good to do as it will likely
   # be faster even though the inner functions are compiled
   fun = mx.compile(outer)
+
+Shapeless Compilation
+---------------------
+
+When the shape of an input to a compiled function changes, the function is
+recompiled. You can compile a function once and run it on inputs with
+variable shapes by specifying ``shapeless=True`` to :func:`compile`. In this
+case changes to the shapes of the inputs do not cause the function to be
+recompiled.
+
+.. code-block:: python
+
+  def fun(x, y):
+      return mx.abs(x + y)
+
+  compiled_fun = mx.compile(fun, shapeless=True)
+
+  x = mx.array(1.0)
+  y = mx.array(-2.0)
+
+  # Firt call compiles the function
+  print(compiled_fun(x, y))
+
+  # Second call with different shapes
+  # does not recompile the function
+  x = mx.array([1.0, -6.0])
+  y = mx.array([-2.0, 3.0])
+  print(compiled_fun(x, y))
+
+
+Use shapeless compilations carefully. Since compilation is not triggered when
+shapes change, any graphs which are conditional on the input shapes will not
+work as expected. Shape-dependent computations are common and sometimes subtle
+to detect. For example:
+
+.. code-block:: python
+
+  def fun(x):
+      return x.reshape(x.shape[0] * x.shape[1], -1)
+
+  compiled_fun = mx.compile(fun, shapeless=True)
+
+  x = mx.random.uniform(shape=(2, 3, 4))
+
+  out = compiled_fun(x)
+
+  x = mx.random.uniform(shape=(5, 5, 3))
+
+  # Error, can't reshape (5, 5, 3) to (6, -1)
+  out = compiled_fun(x)
+
+The second call to the ``compiled_fun`` fails because of the call to
+:func:`reshape` which uses the static shape of ``x`` in the first call. We can
+fix this by using :func:`flatten` to avoid hardcoding the shape of ``x``:
+
+.. code-block:: python
+
+  def fun(x):
+      return x.flatten(0, 1)
+
+  compiled_fun = mx.compile(fun, shapeless=True)
+
+  x = mx.random.uniform(shape=(2, 3, 4))
+
+  out = compiled_fun(x)
+
+  x = mx.random.uniform(shape=(5, 5, 3))
+
+  # Ok
+  out = compiled_fun(x)
