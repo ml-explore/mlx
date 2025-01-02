@@ -2699,38 +2699,31 @@ array gather(
 }
 
 array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  auto out_type = promote_types(a.dtype(), b.dtype());
-
   if (a.size() == 0 || b.size() == 0) {
-    throw std::invalid_argument(
-        "Input arrays cannot be empty."); // Or your mx equivalent
+    throw std::invalid_argument("[kron] Input arrays cannot be empty.");
   }
 
   int ndim = std::max(a.ndim(), b.ndim());
-  int a_dim, b_dim;
-  std::vector<int> a_new_shape;
-  std::vector<int> b_new_shape;
-  std::vector<int> out_shape;
+  std::vector<int> a_shape(2 * ndim, 1);
+  std::vector<int> b_shape(2 * ndim, 1);
+  std::vector<int> out_shape(ndim, 1);
 
-  for (int i = 0; i < ndim; ++i) {
-    a_dim = (i < ndim - a.ndim()) ? 1 : a.shape(i - (ndim - a.ndim()));
-    b_dim = (i < ndim - b.ndim()) ? 1 : b.shape(i - (ndim - b.ndim()));
-
-
-    a_new_shape.push_back(a_dim);
-    a_new_shape.push_back(1);
-    b_new_shape.push_back(1);
-    b_new_shape.push_back(b_dim);
-    out_shape.push_back(a_dim * b_dim);
+  for (int i = ndim - 1, j = a.ndim() - 1; j >= 0; j--, i--) {
+    a_shape[2 * i] = a.shape(j);
+    out_shape[i] *= a.shape(j);
+  }
+  for (int i = ndim - 1, j = b.ndim() - 1; j >= 0; j--, i--) {
+    b_shape[2 * i + 1] = b.shape(j);
+    out_shape[i] *= b.shape(j);
   }
 
-  return astype(reshape(
-    multiply(
-        reshape(a, std::move(a_new_shape), s),
-        reshape(b, std::move(b_new_shape), s),
-        s),
-    std::move(out_shape),
-    s), out_type, s);
+  return reshape(
+      multiply(
+          reshape(a, std::move(a_shape), s),
+          reshape(b, std::move(b_shape), s),
+          s),
+      std::move(out_shape),
+      s);
 }
 
 array take(
