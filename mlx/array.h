@@ -358,6 +358,9 @@ class array {
     // status of `x` in `auto x = a + b; eval(x);`
     scheduled,
 
+    // Exception was thrown when evaluating the array.
+    failure,
+
     // The array's `eval_*` function has been run, but the computation is not
     // necessarily complete. The array will have memory allocated and if it is
     // not a tracer then it will be detached from the graph.
@@ -400,6 +403,14 @@ class array {
   }
   // Check if the array is a tracer array
   bool is_tracer() const;
+
+  // Set and get the exception thrown when evaluating the array.
+  void set_exception(const std::runtime_error& e) {
+    array_desc_->exception = std::make_unique<std::runtime_error>(e);
+  }
+  std::runtime_error* exception() const {
+    return array_desc_->exception.get();
+  }
 
   void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
 
@@ -474,6 +485,9 @@ class array {
     std::vector<array> siblings;
     // The arrays position in the output list
     uint32_t position{0};
+
+    // The exception thrown when evaluating the array.
+    std::unique_ptr<std::runtime_error> exception;
 
     explicit ArrayDesc(Shape shape, Dtype dtype);
 

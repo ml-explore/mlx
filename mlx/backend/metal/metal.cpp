@@ -30,7 +30,13 @@ std::function<void()> make_task(array arr, bool signal) {
     auto command_buffer = d.get_command_buffer(s.index);
     d.increment_command_buffer_ops(s.index);
 
+    bool failure = false;
     for (auto& input : arr.inputs()) {
+      if (input.status() == array::Status::failure) {
+        failure = true;
+        arr.set_exception(*input.exception());
+        break;
+      }
       if (input.event().valid() &&
           input.event().stream() != arr.primitive().stream()) {
         input.event().wait();
@@ -38,7 +44,7 @@ std::function<void()> make_task(array arr, bool signal) {
     }
 
     auto outputs = arr.outputs();
-    {
+    if (!failure) {
       // If the array is a tracer hold a reference
       // to its inputs so they don't get donated
       std::vector<array> inputs;
@@ -47,8 +53,22 @@ std::function<void()> make_task(array arr, bool signal) {
       }
 
       debug_set_primitive_buffer_label(command_buffer, arr.primitive());
-      arr.primitive().eval_gpu(arr.inputs(), outputs);
+      try {
+        arr.primitive().eval_gpu(arr.inputs(), outputs);
+      } catch (const std::runtime_error& e) {
+        failure = true;
+        arr.set_exception(e);
+      }
     }
+
+    if (failure) {
+      for (auto& out : outputs) {
+        out.set_status(array::Status::failure);
+        out.set_exception(*arr.exception());
+      }
+      return;
+    }
+
     std::vector<std::shared_ptr<array::Data>> buffers;
     for (auto& in : arr.inputs()) {
       buffers.push_back(in.data_shared_ptr());

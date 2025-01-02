@@ -113,6 +113,8 @@ void array::eval() {
   // Ensure the array is ready to be read
   if (status() == Status::unscheduled) {
     mlx::core::eval({*this});
+  } else if (status() == Status::failure) {
+    throw *exception();
   } else {
     wait();
   }

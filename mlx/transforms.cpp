@@ -83,6 +83,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
           continue;
         }
 
+        // Throw if exception was thrown when evaluating the array.
+        if (in.status() == array::Status::failure) {
+          throw *in.exception();
+        }
+
         if (in.status() == array::Status::unscheduled) {
           if (async && in.is_tracer()) {
             throw std::invalid_argument(
@@ -212,20 +217,42 @@ array eval_impl(std::vector<array> outputs, bool async) {
       scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
     } else {
       auto task = [arr = std::move(arr), stream, signal]() mutable {
+        bool failure = false;
         for (auto& input : arr.inputs()) {
+          if (input.status() == array::Status::failure) {
+            failure = true;
+            arr.set_exception(*input.exception());
+            break;
+          }
           if (input.event().valid() &&
               input.event().stream() != arr.primitive().stream()) {
             input.event().wait();
           }
         }
+
         scheduler::notify_new_task(stream);
         auto outputs = arr.outputs();
-        arr.primitive().eval_cpu(arr.inputs(), outputs);
+
+        if (!failure) {
+          try {
+            arr.primitive().eval_cpu(arr.inputs(), outputs);
+          } catch (const std::runtime_error& e) {
+            failure = true;
+            arr.set_exception(e);
+          }
+        }
+
         if (!arr.is_tracer()) {
           arr.detach();
         }
+
         for (auto& out : outputs) {
-          out.set_status(array::Status::available);
+          if (failure) {
+            out.set_status(array::Status::failure);
+            out.set_exception(*arr.exception());
+          } else {
+            out.set_status(array::Status::available);
+          }
         }
 
         if (signal) {
@@ -268,7 +295,11 @@ void eval(std::vector<array> outputs) {
     return;
   }
 
-  eval_impl(std::move(outputs), false).event().wait();
+  array synchronizer = eval_impl(std::move(outputs), false);
+  synchronizer.event().wait();
+  if (synchronizer.status() == array::Status::failure) {
+    throw *synchronizer.exception();
+  }
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(
