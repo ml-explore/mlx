@@ -422,6 +422,10 @@ the most opportunity to optimize the computation graph:
   # be faster even though the inner functions are compiled
   fun = mx.compile(outer)
 
+
+
+.. _shapeless_compile:
+
 Shapeless Compilation
 ---------------------
 
