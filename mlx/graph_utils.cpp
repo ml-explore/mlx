@@ -30,6 +30,10 @@ const std::string& NodeNamer::get_name(const array& x) {
   return it->second;
 }
 
+void NodeNamer::set_name(const array& x, std::string n) {
+  names[x.id()] = std::move(n);
+}
+
 void depth_first_traversal(
     std::function<void(array)> callback,
     const std::vector<array>& outputs) {
@@ -55,7 +59,10 @@ void depth_first_traversal(
   }
 }
 
-void print_graph(std::ostream& os, const std::vector<array>& outputs) {
+void print_graph(
+    std::ostream& os,
+    NodeNamer namer,
+    const std::vector<array>& outputs) {
   std::vector<array> tape;
   std::vector<array> inputs;
 
@@ -69,7 +76,6 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
       },
       outputs);
 
-  NodeNamer namer;
   auto print_arrs = [&namer, &os](std::vector<array> arrs) {
     for (auto& arr : arrs) {
       os << namer.get_name(arr);
@@ -96,7 +102,10 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
   }
 }
 
-void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
+void export_to_dot(
+    std::ostream& os,
+    NodeNamer namer,
+    const std::vector<array>& outputs) {
   os << "digraph {" << std::endl;
 
   std::unordered_set<std::uintptr_t> output_set;
@@ -104,7 +113,6 @@ void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
     output_set.insert(o.id());
   }
   std::unordered_set<std::uintptr_t> input_set;
-  NodeNamer namer;
   depth_first_traversal(
       [&](const array& x) {
         if (!x.has_primitive()) {
