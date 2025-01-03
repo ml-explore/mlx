@@ -729,8 +729,8 @@ std::vector<array> ImportedFunction::operator()(
     msg << "[import_function::call] No imported function found which matches "
         << "the given positional and keyword arguments. Possible functions include:\n";
     ftable->print_functions(msg);
-    msg << "\nReceived function with " << args.size()
-        << " positional inputs and " << kwargs.size() << " keyword inputs:\n";
+    msg << "\nCalled with " << args.size() << " positional inputs and "
+        << kwargs.size() << " keyword inputs:\n";
     for (int i = 0; i < args.size(); ++i) {
       auto& in = args[i];
       msg << "  " << i + 1 << ": " << in.shape() << " " << in.dtype() << "\n";

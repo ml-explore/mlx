@@ -45,6 +45,7 @@ are the CPU and GPU.
    usage/numpy
    usage/distributed
    usage/using_streams
+   usage/export
 
 .. toctree::
    :caption: Examples
