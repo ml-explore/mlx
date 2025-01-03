@@ -1460,7 +1460,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "kron",
-      &kron,
+      &mx::kron,
       nb::arg("a"),
       nb::arg("b"),
       nb::kw_only(),
