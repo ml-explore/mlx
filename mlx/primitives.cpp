@@ -3021,6 +3021,44 @@ bool Reshape::is_equivalent(const Primitive& other) const {
   return shape_ == r_other.shape_;
 }
 
+Shape Reshape::output_shape(const array& input, Shape shape) {
+  size_t size = 1;
+  int infer_idx = -1;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (shape[i] == -1) {
+      if (infer_idx >= 0) {
+        throw std::invalid_argument(
+            "[reshape] Reshape can only infer one dimension.");
+      }
+      infer_idx = i;
+    } else {
+      size *= shape[i];
+    }
+  }
+
+  // Infer the shape
+  if (size > 0 && infer_idx >= 0) {
+    shape[infer_idx] = input.size() / size;
+    size *= shape[infer_idx];
+  } else if (infer_idx >= 0) {
+    throw std::invalid_argument(
+        "[reshape] Cannot infer the shape of an empty array");
+  }
+
+  // Check that the reshaping is valid
+  if (input.size() != size) {
+    std::ostringstream msg;
+    msg << "[reshape] Cannot reshape array of size " << input.size()
+        << " into shape " << shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  return shape;
+}
+
+std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
+  return {output_shape(inputs[0], shape_)};
+}
+
 std::vector<array> Reduce::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

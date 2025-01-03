@@ -685,7 +685,8 @@ auto compile_shapeless_ok(const std::vector<array>& inputs) {
 TEST_CASE("test shapeless compile") {
   {
     auto cfun = compile(compile_shapeless_not_ok, /* shapeless */ true);
-    CHECK_THROWS(cfun({array({1, 2, 3, 4})}));
+    cfun({array({1, 2, 3, 4})});
+    CHECK_THROWS(cfun({array({1, 2, 3, 4, 5})}));
   }
 
   {

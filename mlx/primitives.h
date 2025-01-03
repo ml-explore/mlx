@@ -1746,6 +1746,8 @@ class Reshape : public UnaryPrimitive {
   std::vector<int> state() const {
     return shape_;
   };
+  static Shape output_shape(const array& input, Shape shape);
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
  private:
   Shape shape_;

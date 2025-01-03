@@ -363,41 +363,12 @@ array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
   if (a.shape() == shape) {
     return a;
   }
-
-  size_t size = 1;
-  int infer_idx = -1;
-  for (int i = 0; i < shape.size(); ++i) {
-    if (shape[i] == -1) {
-      if (infer_idx >= 0) {
-        throw std::invalid_argument(
-            "[reshape] Reshape can only infer one dimension.");
-      }
-      infer_idx = i;
-    } else {
-      size *= shape[i];
-    }
-  }
-
-  // Infer the shape
-  if (size > 0) {
-    if (infer_idx >= 0) {
-      shape[infer_idx] = a.size() / size;
-      size *= shape[infer_idx];
-    }
-  } else if (infer_idx >= 0) {
-    throw std::invalid_argument(
-        "[reshape] Cannot infer the shape of an empty array");
-  }
-
-  // Check that the reshaping is valid
-  if (a.size() != size) {
-    std::ostringstream msg;
-    msg << "[reshape] Cannot reshape array of size " << a.size()
-        << " into shape " << shape << ".";
-    throw std::invalid_argument(msg.str());
-  }
-  auto p = std::make_shared<Reshape>(to_stream(s), shape);
-  return array(std::move(shape), a.dtype(), std::move(p), {a});
+  auto out_shape = Reshape::output_shape(a, shape);
+  return array(
+      std::move(out_shape),
+      a.dtype(),
+      std::make_shared<Reshape>(to_stream(s), std::move(shape)),
+      {a});
 }
 
 array unflatten(
