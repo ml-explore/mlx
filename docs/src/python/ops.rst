@@ -89,6 +89,7 @@ Operations
    isneginf
    isposinf
    issubdtype
+   kron
    left_shift
    less
    less_equal
