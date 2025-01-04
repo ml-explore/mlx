@@ -117,7 +117,8 @@ void export_to_dot(
       [&](const array& x) {
         if (!x.has_primitive()) {
           input_set.insert(x.id());
-          os << "{ rank=source; " << namer.get_name(x) << "; }" << std::endl;
+          os << "{ rank=source; \"" << namer.get_name(x) << "\"; }"
+             << std::endl;
           return;
         }
 
@@ -131,7 +132,8 @@ void export_to_dot(
           os << "; }" << std::endl;
           // Arrows to primitive's inputs
           for (auto& a : x.inputs()) {
-            os << namer.get_name(a) << " -> " << x.primitive_id() << std::endl;
+            os << '"' << namer.get_name(a) << "\" -> " << x.primitive_id()
+               << std::endl;
           }
         }
 
@@ -141,10 +143,11 @@ void export_to_dot(
           if (output_set.find(a.id()) != output_set.end()) {
             os << "rank=sink; ";
           }
-          os << namer.get_name(a);
-          os << "; }" << std::endl;
+          os << '"' << namer.get_name(a);
+          os << "\"; }" << std::endl;
           if (x.has_primitive()) {
-            os << x.primitive_id() << " -> " << namer.get_name(a) << std::endl;
+            os << x.primitive_id() << " -> \"" << namer.get_name(a) << '"'
+               << std::endl;
           }
         }
       },
