@@ -36,6 +36,10 @@ target_sources(
           linalg_tests.cpp
           ${METAL_TEST_SOURCES})
 
+if(NOT MLX_BUILD_ACCELERATE)
+  target_sources(tests PRIVATE exception_tests.cpp)
+endif()
+
 target_link_libraries(tests PRIVATE mlx doctest)
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)
