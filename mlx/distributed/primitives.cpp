@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/ops.h"
@@ -105,6 +106,7 @@ void Send::eval_cpu(
   assert(outputs.size() == 1);
 
   distributed::detail::send(group(), inputs[0], dst_);
+  move_or_copy(inputs[0], outputs[0]);
 }
 
 std::pair<std::vector<array>, std::vector<int>> Send::vmap(

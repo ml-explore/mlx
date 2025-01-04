@@ -111,6 +111,14 @@ class TestDistributed(mlx_tests.MLXTestCase):
 
         self.assertTrue(mx.all(x == (1024 if pairs.rank() == 0 else 512)))
 
+        # Check recv and computation in same eval:
+        y = mx.ones((5, 5)) + mx.array(2.0)
+        if send:
+            x = mx.distributed.send(2 * x, neighbor, group=pairs)
+        else:
+            x = mx.distributed.recv_like(x, neighbor, group=pairs)
+        mx.eval(y, x)
+
     def test_average_gradients(self):
         original_all_sum = mx.distributed.all_sum
         n_calls = 0

@@ -78,7 +78,10 @@ array send(
   }
 
   return array(
-      {0}, int32, std::make_shared<Send>(to_stream(s), group, dst), {x});
+      x.shape(),
+      x.dtype(),
+      std::make_shared<Send>(to_stream(s), group, dst),
+      {x});
 }
 
 array recv(
