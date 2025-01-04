@@ -1327,6 +1327,16 @@ class TestArray(mlx_tests.MLXTestCase):
         x[0, 0] = 1
         self.assertTrue(mx.array_equal(x[0, 0], mx.ones((2, 2, 2, 2))))
 
+        a = mx.zeros((2, 2, 2))
+        with self.assertRaises(ValueError):
+            a[:, None, :] = mx.ones((2, 2, 2))
+
+        # Ok, doesn't throw
+        a[:, None, :] = mx.ones((2, 1, 2, 2))
+        a[:, None, :] = mx.ones((2, 2))
+        a[:, None, 0] = mx.ones((2,))
+        a[:, None, 0] = mx.ones((1, 2))
+
     def test_array_at(self):
         a = mx.array(1)
         a = a.at[None].add(1)

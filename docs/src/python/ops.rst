@@ -145,6 +145,8 @@ Operations
    sign
    sin
    sinh
+   slice
+   slice_update
    softmax
    sort
    split
