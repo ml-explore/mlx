@@ -31,13 +31,13 @@ class Synchronizer : public Primitive {
   DEFINE_PRINT(Synchronize);
 };
 
-// Initialize the static tracing counter from transforms_impl.h .
+// Initialize the static tracing members from transforms_impl.h
 //
-// This is used to implement the in_tracing() function the returns true if we
+// These are used to implement the in_tracing() function the returns true if we
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-int detail::InTracing::tracing_counter{0};
+std::vector<bool> detail::InTracing::trace_stack{};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
@@ -430,7 +430,6 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
   }
-
   std::vector<array> vjps;
   for (auto& primal : primals_) {
     if (auto cotan_it = cotan_map.find(primal.id());

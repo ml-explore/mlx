@@ -25,7 +25,8 @@ bool compile_available_for_device(const Device& device);
 
 std::pair<std::vector<array>, std::vector<array>> compile_trace(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& inputs);
+    const std::vector<array>& inputs,
+    bool shapeless);
 
 using ParentsMap =
     std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
