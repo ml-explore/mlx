@@ -242,7 +242,8 @@ void init_export(nb::module_& m) {
   m.def(
       "export_to_dot",
       [](nb::object file, const nb::args& args, const nb::kwargs& kwargs) {
-        std::vector<mx::array> arrays = tree_flatten(args);
+        std::vector<mx::array> arrays =
+            tree_flatten(nb::make_tuple(args, kwargs));
         mx::NodeNamer namer;
         for (const auto& n : kwargs) {
           namer.set_name(

@@ -105,18 +105,34 @@ void print_graph(
 void export_to_dot(
     std::ostream& os,
     NodeNamer namer,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& nodes) {
+  // Perform one DFS to mark arrays as intermediate if they are used as inputs
+  // to other arrays.
+  std::unordered_set<std::uintptr_t> intermediate_set;
+  depth_first_traversal(
+      [&](const array& x) {
+        // No primitive so it is an input
+        if (!x.has_primitive()) {
+          return;
+        }
+
+        for (auto& a : x.inputs()) {
+          intermediate_set.insert(a.id());
+        }
+      },
+      nodes);
+
+  // Now we got everything we need to make the graph. Arrays can be one of 3
+  // things:
+  //  1. Inputs, when they have no primitive ie are evaluated
+  //  2. Intermediates, when they are the intermediate set
+  //  3. Outputs, if they are not inputs and not intermediates
+
   os << "digraph {" << std::endl;
 
-  std::unordered_set<std::uintptr_t> output_set;
-  for (auto& o : outputs) {
-    output_set.insert(o.id());
-  }
-  std::unordered_set<std::uintptr_t> input_set;
   depth_first_traversal(
       [&](const array& x) {
         if (!x.has_primitive()) {
-          input_set.insert(x.id());
           os << "{ rank=source; \"" << namer.get_name(x) << "\"; }"
              << std::endl;
           return;
@@ -140,7 +156,7 @@ void export_to_dot(
         // Point outputs to their primitive
         for (auto& a : x.outputs()) {
           os << "{ ";
-          if (output_set.find(a.id()) != output_set.end()) {
+          if (intermediate_set.find(a.id()) == intermediate_set.end()) {
             os << "rank=sink; ";
           }
           os << '"' << namer.get_name(a);
@@ -151,7 +167,7 @@ void export_to_dot(
           }
         }
       },
-      outputs);
+      nodes);
 
   os << "}";
 }
