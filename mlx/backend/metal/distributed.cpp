@@ -90,13 +90,14 @@ void Send::eval_gpu(
 
   auto& in = inputs[0];
   auto& out = outputs[0];
+  move_or_copy(in, out);
 
   // Schedule an async send on the comm stream
   auto task = [in = in, out = out, group = group(), dst = dst_]() mutable {
     if (in.event().valid()) {
       in.event().wait();
     }
-    distributed::detail::send(group, in, dst);
+    distributed::detail::send(group, out, dst);
     out.event().signal();
   };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
@@ -112,7 +113,6 @@ void Send::eval_gpu(
         static_cast<MTL::Event*>(in.event().raw_event().get()),
         in.event().value());
   }
-  move_or_copy(in, out);
 }
 
 void Recv::eval_gpu(
