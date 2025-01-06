@@ -32,11 +32,11 @@ void recv(Group group, array& out, int src) {
 
 class EmptyGroup : public GroupImpl {
  public:
-  int rank() override {
+  int rank() const override {
     return 0;
   }
 
-  int size() override {
+  int size() const override {
     return 1;
   }
 
