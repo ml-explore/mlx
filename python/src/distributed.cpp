@@ -148,7 +148,7 @@ void init_distributed(nb::module_& parent_module) {
             in which case the default stream of the default device is used.
 
         Returns:
-          array: An empty array which when evaluated the send is performed.
+          array: An array identical to ``x`` which when evaluated the send is performed.
       )pbdoc");
 
   m.def(
