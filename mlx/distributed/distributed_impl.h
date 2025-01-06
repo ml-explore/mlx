@@ -11,8 +11,8 @@ namespace mlx::core::distributed::detail {
  */
 class GroupImpl {
  public:
-  virtual int rank() = 0;
-  virtual int size() = 0;
+  virtual int rank() const = 0;
+  virtual int size() const = 0;
   virtual std::shared_ptr<GroupImpl> split(int color, int key = -1) = 0;
 
   virtual void all_sum(const array& input, array& output) = 0;

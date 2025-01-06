@@ -22,10 +22,10 @@ bool is_available();
  * order to define more granular communication.
  */
 struct Group {
-  Group(std::shared_ptr<detail::GroupImpl> group) : group_(group) {}
+  Group(std::shared_ptr<detail::GroupImpl> group) : group_(std::move(group)) {}
 
-  int rank();
-  int size();
+  int rank() const;
+  int size() const;
 
   /**
    * Split the group according to the provided color. Namely processes that use

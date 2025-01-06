@@ -331,20 +331,14 @@ bool is_available() {
 }
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
-  static std::shared_ptr<MPIGroup> global_group = nullptr;
-
-  if (global_group == nullptr) {
-    if (!mpi().init_safe()) {
-      if (strict) {
-        throw std::runtime_error("Cannot initialize MPI");
-      }
-      return nullptr;
-    } else {
-      global_group = std::make_shared<MPIGroup>(mpi().world(), true);
+  if (!mpi().init_safe()) {
+    if (strict) {
+      throw std::runtime_error("Cannot initialize MPI");
     }
+    return nullptr;
   }
 
-  return global_group;
+  return std::make_shared<MPIGroup>(mpi().world(), true);
 }
 
 } // namespace mlx::core::distributed::mpi

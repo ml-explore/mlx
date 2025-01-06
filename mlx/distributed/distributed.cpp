@@ -81,15 +81,14 @@ Group Group::split(int color, int key /* = -1 */) {
 }
 
 Group init(bool strict /* = false */) {
-  static std::shared_ptr<detail::GroupImpl> default_group = nullptr;
-
-  if (default_group == nullptr) {
-    default_group = mpi::init(strict);
-  }
-
-  if (default_group == nullptr) {
-    default_group = std::make_shared<detail::EmptyGroup>();
-  }
+  auto init_group = [strict]() {
+    auto default_group = mpi::init(strict);
+    if (default_group == nullptr) {
+      default_group = std::make_shared<detail::EmptyGroup>();
+    }
+    return default_group;
+  };
+  static std::shared_ptr<detail::GroupImpl> default_group = init_group();
 
   // Ensure the communication stream is alive before
   // the graph is evaluated
