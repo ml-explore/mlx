@@ -32,11 +32,11 @@ void recv(Group group, array& out, int src) {
 
 class EmptyGroup : public GroupImpl {
  public:
-  int rank() const override {
+  int rank() override {
     return 0;
   }
 
-  int size() const override {
+  int size() override {
     return 1;
   }
 
@@ -68,15 +68,15 @@ bool is_available() {
   return mpi::is_available();
 }
 
-int Group::rank() {
+int Group::rank() const {
   return group_->rank();
 }
 
-int Group::size() {
+int Group::size() const {
   return group_->size();
 }
 
-Group Group::split(int color, int key /* = -1 */) {
+Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 

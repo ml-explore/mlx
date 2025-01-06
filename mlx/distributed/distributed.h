@@ -35,9 +35,9 @@ struct Group {
    * the key the smaller the rank. If the provided key is negative, then the
    * rank in the current group is used.
    */
-  Group split(int color, int key = -1);
+  Group split(int color, int key = -1) const;
 
-  const std::shared_ptr<detail::GroupImpl>& raw_group() {
+  const std::shared_ptr<detail::GroupImpl>& raw_group() const {
     return group_;
   }
 
