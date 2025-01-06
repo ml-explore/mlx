@@ -27,7 +27,7 @@ void send(Group group, const array& input, int dst) {
 }
 
 void recv(Group group, array& out, int src) {
-  group.raw_group()->send(out, src);
+  group.raw_group()->recv(out, src);
 }
 
 class EmptyGroup : public GroupImpl {
