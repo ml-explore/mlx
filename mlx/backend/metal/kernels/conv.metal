@@ -445,14 +445,21 @@ winograd_conv_2d_input_transform(
   // Resolve input tile
   constexpr int TH = (A / WM);
   constexpr int TW = (A / WN);
-  int kh = TH * (simd_group_id / WN);
-  int kw = TW * (simd_group_id % WN);
-  int bh = M * tid.y + kh;
-  int bw = M * tid.x + kw;
+  const int kh = TH * (simd_group_id / WN);
+  const int kw = TW * (simd_group_id % WN);
+  const int bh = M * tid.y + kh - params.pad[1];
+  const int bw = M * tid.x + kw - params.pad[0];
+
+  const bool is_edge_w_lo = bw < 0;
+  const bool is_edge_h_lo = bh < 0;
+  const bool is_edge_w_hi = bw + (TW - 1) >= params.iS[0];
+  const bool is_edge_h_hi = bh + (TH - 1) >= params.iS[1];
+  const bool is_edge =
+      is_edge_w_lo || is_edge_h_lo || is_edge_w_hi || is_edge_h_hi;
 
   // Move to the correct input tile
-  inp_in += tid.z * params.in_strides[0] + bh * params.in_strides[1] +
-      bw * params.in_strides[2];
+  inp_in += tid.z * params.in_strides[0] + bh * int64_t(params.in_strides[1]) +
+      bw * int64_t(params.in_strides[2]);
 
   // Pre compute strides
   int jump_in[TH][TW];
@@ -484,8 +491,21 @@ winograd_conv_2d_input_transform(
     for (int h = 0; h < TH; h++) {
       for (int w = 0; w < TW; w++) {
         const device T* in_ptr = inp_in + jump_in[h][w];
-        for (int c = simd_lane_id; c < BC; c += 32) {
-          Is[kh + h][kw + w][c] = in_ptr[c];
+        if (is_edge) {
+          if (((bh + h) < 0 || (bh + h) >= params.iS[1]) ||
+              ((bw + w) < 0 || (bw + w) >= params.iS[0])) {
+            for (int c = simd_lane_id; c < BC; c += 32) {
+              Is[kh + h][kw + w][c] = T(0);
+            }
+          } else {
+            for (int c = simd_lane_id; c < BC; c += 32) {
+              Is[kh + h][kw + w][c] = in_ptr[c];
+            }
+          }
+        } else {
+          for (int c = simd_lane_id; c < BC; c += 32) {
+            Is[kh + h][kw + w][c] = in_ptr[c];
+          }
         }
       }
     }
