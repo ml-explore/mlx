@@ -8,6 +8,11 @@
 
 namespace mlx::core::distributed {
 
+// Forward declaration of the base group implementation.
+namespace detail {
+class GroupImpl;
+};
+
 /* Check if a communication backend is available */
 bool is_available();
 
@@ -17,7 +22,7 @@ bool is_available();
  * order to define more granular communication.
  */
 struct Group {
-  Group(std::shared_ptr<void> group) : group_(group) {}
+  Group(std::shared_ptr<detail::GroupImpl> group) : group_(group) {}
 
   int rank();
   int size();
@@ -32,12 +37,12 @@ struct Group {
    */
   Group split(int color, int key = -1);
 
-  const std::shared_ptr<void>& raw_group() {
+  const std::shared_ptr<detail::GroupImpl>& raw_group() {
     return group_;
   }
 
  private:
-  std::shared_ptr<void> group_{nullptr};
+  std::shared_ptr<detail::GroupImpl> group_{nullptr};
 };
 
 /**

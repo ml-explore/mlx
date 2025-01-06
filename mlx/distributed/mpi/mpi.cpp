@@ -6,6 +6,7 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/distributed/mpi/mpi.h"
 #include "mlx/scheduler.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
@@ -18,7 +19,9 @@
     }                                                              \
   }
 
-namespace mlx::core::distributed {
+namespace mlx::core::distributed::mpi {
+
+using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 
 namespace {
 
@@ -233,11 +236,14 @@ MPIWrapper& mpi() {
   return wrapper;
 }
 
-struct MPIGroupImpl {
-  MPIGroupImpl() : comm_(nullptr), global_(true), rank_(0), size_(1) {}
-  MPIGroupImpl(MPI_Comm comm, bool global)
+} // namespace
+
+class MPIGroup : public GroupImpl {
+ public:
+  MPIGroup(MPI_Comm comm, bool global)
       : comm_(comm), global_(global), rank_(-1), size_(-1) {}
-  ~MPIGroupImpl() {
+
+  virtual ~MPIGroup() {
     if (global_) {
       mpi().finalize_safe();
     } else {
@@ -245,22 +251,72 @@ struct MPIGroupImpl {
     }
   }
 
-  MPI_Comm comm() {
-    return comm_;
-  }
-
-  int rank() {
+  int rank() override {
     if (rank_ < 0) {
       mpi().rank(comm_, &rank_);
     }
     return rank_;
   }
 
-  int size() {
+  int size() override {
     if (size_ < 0) {
       mpi().size(comm_, &size_);
     }
     return size_;
+  }
+
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
+    key = (key < 0) ? rank() : key;
+
+    MPI_Comm new_comm;
+    int result = mpi().comm_split(comm_, color, key, &new_comm);
+    if (result != MPI_SUCCESS) {
+      throw std::runtime_error("MPI could not split this group");
+    }
+
+    return std::make_shared<MPIGroup>(new_comm, false);
+  }
+
+  void all_sum(const array& input_, array& output) override {
+    array input = ensure_row_contiguous(input_);
+    mpi().all_reduce(
+        (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                    : input.data<void>(),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        mpi().op_sum(input),
+        comm_);
+  }
+
+  void all_gather(const array& input_, array& output) override {
+    array input = ensure_row_contiguous(input_);
+    mpi().all_gather(
+        input.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(output),
+        comm_);
+  }
+
+  void send(const array& input_, int dst) override {
+    array input = ensure_row_contiguous(input_);
+    mpi().send(
+        input.data<void>(), input.size(), mpi().datatype(input), dst, 0, comm_);
+  }
+
+  void recv(array& out, int src) override {
+    MPI_Status status;
+    mpi().recv(
+        out.data<void>(),
+        out.size(),
+        mpi().datatype(out),
+        src,
+        MPI_ANY_TAG,
+        comm_,
+        &status);
   }
 
  private:
@@ -270,112 +326,25 @@ struct MPIGroupImpl {
   int size_;
 };
 
-MPI_Comm to_comm(Group& group) {
-  return std::static_pointer_cast<MPIGroupImpl>(group.raw_group())->comm();
-}
-
-} // namespace
-
-int Group::rank() {
-  return std::static_pointer_cast<MPIGroupImpl>(group_)->rank();
-}
-
-int Group::size() {
-  return std::static_pointer_cast<MPIGroupImpl>(group_)->size();
-}
-
-Group Group::split(int color, int key) {
-  auto mpi_group = std::static_pointer_cast<MPIGroupImpl>(group_);
-
-  key = (key < 0) ? rank() : key;
-
-  MPI_Comm new_comm;
-  int result = mpi().comm_split(mpi_group->comm(), color, key, &new_comm);
-  if (result != MPI_SUCCESS) {
-    throw std::runtime_error("MPI could not split this group");
-  }
-
-  return Group(std::make_shared<MPIGroupImpl>(new_comm, false));
-}
-
 bool is_available() {
   return mpi().is_available();
 }
 
-Group init(bool strict /* = false */) {
-  static std::shared_ptr<MPIGroupImpl> global_group = nullptr;
+std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
+  static std::shared_ptr<MPIGroup> global_group = nullptr;
 
   if (global_group == nullptr) {
     if (!mpi().init_safe()) {
       if (strict) {
         throw std::runtime_error("Cannot initialize MPI");
       }
-      global_group = std::make_shared<MPIGroupImpl>();
+      return nullptr;
     } else {
-      global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
+      global_group = std::make_shared<MPIGroup>(mpi().world(), true);
     }
   }
 
-  // Ensure the communication stream is alive before
-  // the graph is evaluated
-  detail::communication_stream();
-  return Group(global_group);
+  return global_group;
 }
 
-namespace detail {
-
-Stream communication_stream() {
-  static Stream comm_stream = new_stream(Device::cpu);
-  return comm_stream;
-}
-
-void all_sum(Group group, const array& input_, array& output) {
-  array input = ensure_row_contiguous(input_);
-  mpi().all_reduce(
-      (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
-                                                  : input.data<void>(),
-      output.data<void>(),
-      input.size(),
-      mpi().datatype(input),
-      mpi().op_sum(input),
-      to_comm(group));
-}
-
-void all_gather(Group group, const array& input_, array& output) {
-  array input = ensure_row_contiguous(input_);
-  mpi().all_gather(
-      input.data<void>(),
-      input.size(),
-      mpi().datatype(input),
-      output.data<void>(),
-      input.size(),
-      mpi().datatype(output),
-      to_comm(group));
-}
-
-void send(Group group, const array& input_, int dst) {
-  array input = ensure_row_contiguous(input_);
-  mpi().send(
-      input.data<void>(),
-      input.size(),
-      mpi().datatype(input),
-      dst,
-      0,
-      to_comm(group));
-}
-
-void recv(Group group, array& out, int src) {
-  MPI_Status status;
-  mpi().recv(
-      out.data<void>(),
-      out.size(),
-      mpi().datatype(out),
-      src,
-      MPI_ANY_TAG,
-      to_comm(group),
-      &status);
-}
-
-} // namespace detail
-
-} // namespace mlx::core::distributed
+} // namespace mlx::core::distributed::mpi
