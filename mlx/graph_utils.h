@@ -33,7 +33,10 @@ inline void print_graph(std::ostream& os, Arrays&&... outputs) {
 template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
 inline void
 print_graph(std::ostream& os, NodeNamer namer, Arrays&&... outputs) {
-  print_graph(os, namer, std::vector<array>{std::forward<Arrays>(outputs)...});
+  print_graph(
+      os,
+      std::move(namer),
+      std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
 void export_to_dot(
@@ -55,7 +58,9 @@ template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
 inline void
 export_to_dot(std::ostream& os, NodeNamer namer, Arrays&&... outputs) {
   export_to_dot(
-      os, namer, std::vector<array>{std::forward<Arrays>(outputs)...});
+      os,
+      std::move(namer),
+      std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
 } // namespace mlx::core
