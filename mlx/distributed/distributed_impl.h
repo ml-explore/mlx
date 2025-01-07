@@ -11,6 +11,8 @@ namespace mlx::core::distributed::detail {
  */
 class GroupImpl {
  public:
+  virtual ~GroupImpl() {}
+
   virtual int rank() = 0;
   virtual int size() = 0;
   virtual std::shared_ptr<GroupImpl> split(int color, int key = -1) = 0;
