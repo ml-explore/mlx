@@ -67,7 +67,12 @@ void set_ternary_op_output_data(
       }
       break;
     case TernaryOpType::General:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      // Try to donate an input which is row_contiguous
+      if (!((a.flags().row_contiguous && maybe_donate(a)) ||
+            (b.flags().row_contiguous && maybe_donate(b)) ||
+            (c.flags().row_contiguous && maybe_donate(c)))) {
+        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      }
       break;
   }
 }
