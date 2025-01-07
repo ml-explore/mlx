@@ -56,6 +56,14 @@ MTL::ComputePipelineState* get_copy_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_dynamic_copy_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    const array&) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_softmax_kernel(
     metal::Device& d,
     const std::string& kernel_name,

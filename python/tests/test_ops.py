@@ -2769,6 +2769,19 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.imag(z).dtype, mx.float32)
         self.assertTrue(mx.array_equal(mx.imag(z), y))
 
+    def test_dynamic_slicing(self):
+        x = mx.random.randint(0, 100, shape=(4, 4, 4))
+        expected = x[1:, 2:, 3:]
+        out = mx.slice(x, mx.array([1, 2, 3]), (0, 1, 2), (3, 2, 1))
+        self.assertTrue(mx.array_equal(expected, out))
+
+        x = mx.zeros(shape=(4, 4, 4))
+        update = mx.random.randint(0, 100, shape=(3, 2, 1))
+        out = mx.slice_update(x, update, mx.array([1, 2, 3]), (0, 1, 2))
+        expected = mx.zeros_like(x)
+        expected[1:, 2:, 3:] = update
+        self.assertTrue(mx.array_equal(expected, out))
+
 
 if __name__ == "__main__":
     unittest.main()

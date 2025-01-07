@@ -35,29 +35,29 @@ class array {
   explicit array(const std::complex<float>& val, Dtype dtype = complex64);
 
   template <typename It>
-  array(
+  explicit array(
       It data,
       Shape shape,
       Dtype dtype =
           TypeToDtype<typename std::iterator_traits<It>::value_type>());
 
   template <typename T>
-  array(std::initializer_list<T> data, Dtype dtype = TypeToDtype<T>());
+  explicit array(std::initializer_list<T> data, Dtype dtype = TypeToDtype<T>());
 
   /* Special case so empty lists default to float32. */
-  array(std::initializer_list<float> data);
+  explicit array(std::initializer_list<float> data);
 
   /* Special case so array({}, type) is an empty array. */
-  array(std::initializer_list<int> data, Dtype dtype);
+  explicit array(std::initializer_list<int> data, Dtype dtype);
 
   template <typename T>
-  array(
+  explicit array(
       std::initializer_list<T> data,
       Shape shape,
       Dtype dtype = TypeToDtype<T>());
 
   /* Build an array from a buffer */
-  array(
+  explicit array(
       allocator::Buffer data,
       Shape shape,
       Dtype dtype,
