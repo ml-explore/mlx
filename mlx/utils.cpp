@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cstdlib>
+#include <iostream>
 #include <sstream>
 #include <vector>
 
@@ -60,6 +61,13 @@ inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
 PrintFormatter& get_global_formatter() {
   static PrintFormatter formatter;
   return formatter;
+}
+
+void abort_with_exception(const std::exception& error) {
+  std::ostringstream msg;
+  msg << "Terminating due to uncaught exception: " << error.what();
+  std::cerr << msg.str() << std::endl;
+  std::abort();
 }
 
 Dtype result_type(const std::vector<array>& arrays) {

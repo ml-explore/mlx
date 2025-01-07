@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <exception>
 #include <variant>
 
 #include "mlx/array.h"
@@ -52,6 +53,9 @@ struct PrintFormatter {
 };
 
 PrintFormatter& get_global_formatter();
+
+/** Print the exception and then abort. */
+void abort_with_exception(const std::exception& error);
 
 /** Holds information about floating-point types. */
 struct finfo {

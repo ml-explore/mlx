@@ -220,7 +220,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
         scheduler::notify_new_task(stream);
         auto outputs = arr.outputs();
-        arr.primitive().eval_cpu(arr.inputs(), outputs);
+        try {
+          arr.primitive().eval_cpu(arr.inputs(), outputs);
+        } catch (const std::exception& error) {
+          abort_with_exception(error);
+        }
         if (!arr.is_tracer()) {
           arr.detach();
         }
