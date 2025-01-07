@@ -8,6 +8,11 @@
 
 namespace mlx::core::distributed {
 
+// Forward declaration of the base group implementation.
+namespace detail {
+class GroupImpl;
+};
+
 /* Check if a communication backend is available */
 bool is_available();
 
@@ -17,10 +22,10 @@ bool is_available();
  * order to define more granular communication.
  */
 struct Group {
-  Group(std::shared_ptr<void> group) : group_(group) {}
+  Group(std::shared_ptr<detail::GroupImpl> group) : group_(std::move(group)) {}
 
-  int rank();
-  int size();
+  int rank() const;
+  int size() const;
 
   /**
    * Split the group according to the provided color. Namely processes that use
@@ -30,14 +35,14 @@ struct Group {
    * the key the smaller the rank. If the provided key is negative, then the
    * rank in the current group is used.
    */
-  Group split(int color, int key = -1);
+  Group split(int color, int key = -1) const;
 
-  const std::shared_ptr<void>& raw_group() {
+  const std::shared_ptr<detail::GroupImpl>& raw_group() const {
     return group_;
   }
 
  private:
-  std::shared_ptr<void> group_{nullptr};
+  std::shared_ptr<detail::GroupImpl> group_{nullptr};
 };
 
 /**
