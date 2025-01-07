@@ -659,7 +659,12 @@ array scaled_dot_product_attention(
           mask = unflatten(mask, -3, {n_kv_heads, n_repeats}, s);
         }
       }
-      scores = add(scores, mask, s);
+      if (mask.dtype() == bool_) {
+        scores = where(
+            mask, scores, array(finfo(scores.dtype()).min, scores.dtype()));
+      } else {
+        scores = add(scores, mask, s);
+      }
     }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
     auto out = matmul(scores, v, s);
