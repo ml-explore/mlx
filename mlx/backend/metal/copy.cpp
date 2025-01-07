@@ -82,6 +82,7 @@ void copy_gpu_inplace(
   } else {
     large = out.data_size() > UINT32_MAX;
   }
+  bool dynamic = dynamic_i_offset || dynamic_o_offset;
   auto& d = metal::device(s.device);
   int work_per_thread = 1;
   std::string kernel_name;
@@ -109,7 +110,7 @@ void copy_gpu_inplace(
     if (large) {
       kernel_name += "large";
     }
-    if (dynamic_i_offset || dynamic_o_offset) {
+    if (dynamic) {
       kernel_name += "_dynamic";
       if (ctype != CopyType::GeneralGeneral) {
         throw std::runtime_error(
@@ -118,7 +119,8 @@ void copy_gpu_inplace(
     }
   }
   concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
-  auto kernel = get_copy_kernel(d, kernel_name, in, out);
+  auto kernel = dynamic ? get_dynamic_copy_kernel(d, kernel_name, in, out)
+                        : get_copy_kernel(d, kernel_name, in, out);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -154,7 +156,7 @@ void copy_gpu_inplace(
       compute_encoder.set_bytes(ndim, 5);
       dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     }
-    if (dynamic_i_offset || dynamic_o_offset) {
+    if (dynamic) {
       if (dynamic_i_offset) {
         compute_encoder.set_input_array(*dynamic_i_offset, 6);
       } else {
