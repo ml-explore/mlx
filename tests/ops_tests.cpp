@@ -355,7 +355,6 @@ TEST_CASE("test slice update") {
 
 TEST_CASE("test dynamic slice") {
   auto src = reshape(arange(6), {2, 3});
-  ;
   CHECK_THROWS(slice(src, array({1, 0, 0}), {0, 0, 0}, {1, 1}));
   CHECK_THROWS(slice(src, array({1, 0}), {0}, {1, 1}));
   CHECK_THROWS(slice(src, array({1}), {3}, {1, 1}));

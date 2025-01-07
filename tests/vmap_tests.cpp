@@ -518,7 +518,6 @@ TEST_CASE("test vmap dynamic slices") {
     };
     auto x = zeros({2, 2});
     auto upd = ones({2, 1});
-    ;
 
     auto out = vmap(fun)({x, upd})[0];
     CHECK(array_equal(out, array({0, 1, 0, 1}, {2, 2})).item<bool>());
