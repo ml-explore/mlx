@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <unordered_map>
+
 #include "mlx/array.h"
 
 namespace mlx::core::detail {
