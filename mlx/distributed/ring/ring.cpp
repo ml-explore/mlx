@@ -79,6 +79,7 @@ namespace mlx::core::distributed::ring {
 constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
+constexpr const int MAX_THREADS = 6;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -247,23 +248,26 @@ std::vector<int> make_connections(const std::vector<address_t>& addresses) {
   int success;
 
   for (auto& address : addresses) {
-    // Create the socket
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-      std::ostringstream msg;
-      msg << "[ring] Couldn't create socket (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
+    int sock;
 
     // Attempt to connect to the peer CONN_ATTEMPTS times with exponential
     // backoff. TODO: Do we need that?
     for (int attempt = 0; attempt < CONN_ATTEMPTS; attempt++) {
+      // Create the socket
+      sock = socket(AF_INET, SOCK_STREAM, 0);
+      if (sock < 0) {
+        std::ostringstream msg;
+        msg << "[ring] Couldn't create socket (error: " << errno << ")";
+        throw std::runtime_error(msg.str());
+      }
+
       if (attempt > 0) {
         int wait = (1 << (attempt - 1)) * CONN_WAIT;
-        std::cout << "Attempt " << attempt << " wait " << wait << " ms"
-                  << std::endl;
+        std::cout << "Attempt " << attempt << " wait " << wait << " ms "
+                  << "error: " << errno << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(wait));
       }
+
       success = connect(sock, address.sockaddr(), address.len);
       if (success == 0) {
         break;
@@ -301,16 +305,12 @@ void sum_inplace(const T* input, T* output, size_t N) {
 }
 
 template <typename T>
-void _send(
-    const std::vector<int>& send_sockets,
-    T* data,
-    size_t start,
-    size_t stop) {
+void _send(int sock, T* data, size_t start, size_t stop) {
   data += start;
   size_t len = (stop - start) * sizeof(T);
   const char* buffer = (const char*)data;
   while (len > 0) {
-    ssize_t r = send(send_sockets[0], buffer, len, 0);
+    ssize_t r = send(sock, buffer, len, 0);
     if (r <= 0) {
       std::ostringstream msg;
       msg << "Send of " << len << " bytes failed (errno: " << errno << ")";
@@ -322,16 +322,12 @@ void _send(
 }
 
 template <typename T>
-void _recv(
-    const std::vector<int>& recv_sockets,
-    T* data,
-    size_t start,
-    size_t stop) {
+void _recv(int sock, T* data, size_t start, size_t stop) {
   data += start;
   size_t len = (stop - start) * sizeof(T);
   char* buffer = (char*)data;
   while (len > 0) {
-    ssize_t r = recv(recv_sockets[0], buffer, len, 0);
+    ssize_t r = recv(sock, buffer, len, 0);
     if (r <= 0) {
       std::ostringstream msg;
       msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
@@ -343,16 +339,12 @@ void _recv(
 }
 
 template <typename T>
-void _recv_sum(
-    const std::vector<int>& recv_sockets,
-    T* data,
-    size_t start,
-    size_t stop) {
+void _recv_sum(int sock, T* data, size_t start, size_t stop) {
   data += start;
   char buffer[PACKET_SIZE];
   size_t len = (stop - start) * sizeof(T);
   while (len > 0) {
-    ssize_t r = recv(recv_sockets[0], buffer, std::min(len, PACKET_SIZE), 0);
+    ssize_t r = recv(sock, buffer, std::min(len, PACKET_SIZE), 0);
     if (r <= 0) {
       std::ostringstream msg;
       msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
@@ -369,7 +361,7 @@ void _recv_sum(
 class RingGroup : public GroupImpl {
  public:
   RingGroup(int rank, std::vector<std::vector<address_t>> nodes)
-      : rank_(rank), pool_(2) {
+      : rank_(rank), pool_(MAX_THREADS) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
           "[ring] Rank cannot be larger than the size of the group");
@@ -451,6 +443,11 @@ class RingGroup : public GroupImpl {
  private:
   template <typename T>
   void all_sum(array& output) {
+    size_t send_channels = send_sockets_.size();
+    size_t recv_channels = recv_sockets_.size();
+    std::vector<std::future<void>> futures;
+    futures.reserve(send_channels + recv_channels);
+
     T* data = output.data<T>();
     size_t step = output.size() / size_ + (output.size() % size_ > 0);
 
@@ -465,17 +462,36 @@ class RingGroup : public GroupImpl {
       size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
 
       // Send and recv sum
-      std::future<void> sent, received;
-      const auto& send_sockets = send_sockets_;
-      const auto& recv_sockets = recv_sockets_;
-      sent = pool_.enqueue([data, send_start, send_stop, send_sockets]() {
-        _send(send_sockets, data, send_start, send_stop);
-      });
-      received = pool_.enqueue([data, recv_start, recv_stop, recv_sockets]() {
-        _recv_sum(recv_sockets, data, recv_start, recv_stop);
-      });
-      sent.wait();
-      received.wait();
+      size_t send_size = send_stop - send_start;
+      size_t send_step =
+          send_size / send_channels + (send_size % send_channels > 0);
+      size_t recv_size = recv_stop - recv_start;
+      size_t recv_step =
+          recv_size / recv_channels + (recv_size % recv_channels > 0);
+      for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
+        if (i < send_sockets_.size()) {
+          futures.push_back(pool_.enqueue(
+              _send<T>,
+              send_sockets_[i],
+              data,
+              send_start + i * send_step,
+              std::min(send_stop, send_start + (i + 1) * send_step)));
+        }
+        if (i < recv_sockets_.size()) {
+          futures.push_back(pool_.enqueue(
+              _recv_sum<T>,
+              recv_sockets_[i],
+              data,
+              recv_start + i * recv_step,
+              std::min(recv_stop, recv_start + (i + 1) * recv_step)));
+        }
+      }
+
+      // Wait for all the communication to finish
+      for (auto& f : futures) {
+        f.wait();
+      }
+      futures.clear();
 
       send_segment = (send_segment + size_ - 1) % size_;
       recv_segment = (recv_segment + size_ - 1) % size_;
@@ -489,17 +505,37 @@ class RingGroup : public GroupImpl {
       size_t recv_start = recv_segment * step;
       size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
 
-      std::future<void> sent, received;
-      const auto& send_sockets = send_sockets_;
-      const auto& recv_sockets = recv_sockets_;
-      sent = pool_.enqueue([data, send_start, send_stop, send_sockets]() {
-        _send(send_sockets, data, send_start, send_stop);
-      });
-      received = pool_.enqueue([data, recv_start, recv_stop, recv_sockets]() {
-        _recv(recv_sockets, data, recv_start, recv_stop);
-      });
-      sent.wait();
-      received.wait();
+      // Send and recv
+      size_t send_size = send_stop - send_start;
+      size_t send_step =
+          send_size / send_channels + (send_size % send_channels > 0);
+      size_t recv_size = recv_stop - recv_start;
+      size_t recv_step =
+          recv_size / recv_channels + (recv_size % recv_channels > 0);
+      for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
+        if (i < send_sockets_.size()) {
+          futures.push_back(pool_.enqueue(
+              _send<T>,
+              send_sockets_[i],
+              data,
+              send_start + i * send_step,
+              std::min(send_stop, send_start + (i + 1) * send_step)));
+        }
+        if (i < recv_sockets_.size()) {
+          futures.push_back(pool_.enqueue(
+              _recv<T>,
+              recv_sockets_[i],
+              data,
+              recv_start + i * recv_step,
+              std::min(recv_stop, recv_start + (i + 1) * recv_step)));
+        }
+      }
+
+      // Wait for all the communication to finish
+      for (auto& f : futures) {
+        f.wait();
+      }
+      futures.clear();
 
       send_segment = (send_segment + size_ - 1) % size_;
       recv_segment = (recv_segment + size_ - 1) % size_;
