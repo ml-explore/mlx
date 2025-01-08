@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <thread>
 
@@ -16,6 +17,62 @@
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/io/threadpool.h"
+
+#define SWITCH_TYPE(x, ...)  \
+  switch ((x).dtype()) {     \
+    case bool_: {            \
+      using T = bool;        \
+      __VA_ARGS__;           \
+    } break;                 \
+    case int8: {             \
+      using T = int8_t;      \
+      __VA_ARGS__;           \
+    } break;                 \
+    case int16: {            \
+      using T = int16_t;     \
+      __VA_ARGS__;           \
+    } break;                 \
+    case int32: {            \
+      using T = int32_t;     \
+      __VA_ARGS__;           \
+    } break;                 \
+    case int64: {            \
+      using T = int64_t;     \
+      __VA_ARGS__;           \
+    } break;                 \
+    case uint8: {            \
+      using T = uint8_t;     \
+      __VA_ARGS__;           \
+    } break;                 \
+    case uint16: {           \
+      using T = uint16_t;    \
+      __VA_ARGS__;           \
+    } break;                 \
+    case uint32: {           \
+      using T = uint32_t;    \
+      __VA_ARGS__;           \
+    } break;                 \
+    case uint64: {           \
+      using T = uint64_t;    \
+      __VA_ARGS__;           \
+    } break;                 \
+    case bfloat16: {         \
+      using T = bfloat16_t;  \
+      __VA_ARGS__;           \
+    } break;                 \
+    case float16: {          \
+      using T = float16_t;   \
+      __VA_ARGS__;           \
+    } break;                 \
+    case float32: {          \
+      using T = float;       \
+      __VA_ARGS__;           \
+    } break;                 \
+    case complex64: {        \
+      using T = complex64_t; \
+      __VA_ARGS__;           \
+    } break;                 \
+  }
 
 namespace mlx::core::distributed::ring {
 
@@ -84,9 +141,9 @@ address_t parse_address(const std::string& ip_port) {
  *
  * For example:
  *  [
- *    ["hostname1:5000", "hostname1:5001"],
- *    ["hostname2:5000", "hostname2:5001"],
- *    ["hostname3:5000", "hostname3:5001"],
+ *    ["ip1:5000", "ip1:5001"],
+ *    ["ip2:5000", "ip2:5001"],
+ *    ["ip3:5000", "ip3:5001"],
  *  ]
  */
 std::vector<std::vector<address_t>> load_nodes(const char* hostfile) {
@@ -203,6 +260,8 @@ std::vector<int> make_connections(const std::vector<address_t>& addresses) {
     for (int attempt = 0; attempt < CONN_ATTEMPTS; attempt++) {
       if (attempt > 0) {
         int wait = (1 << (attempt - 1)) * CONN_WAIT;
+        std::cout << "Attempt " << attempt << " wait " << wait << " ms"
+                  << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(wait));
       }
       success = connect(sock, address.sockaddr(), address.len);
@@ -215,16 +274,102 @@ std::vector<int> make_connections(const std::vector<address_t>& addresses) {
       msg << "[ring] Couldn't connect (error: " << errno << ")";
       throw std::runtime_error(msg.str());
     }
+
+    sockets.push_back(sock);
   }
 
   return sockets;
+}
+
+array ensure_row_contiguous(const array& arr) {
+  if (arr.flags().row_contiguous) {
+    return arr;
+  } else {
+    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+    copy(arr, arr_copy, CopyType::General);
+    return arr_copy;
+  }
+}
+
+template <typename T>
+void sum_inplace(const T* input, T* output, size_t N) {
+  while (N-- > 0) {
+    *output += *input;
+    input++;
+    output++;
+  }
+}
+
+template <typename T>
+void _send(
+    const std::vector<int>& send_sockets,
+    T* data,
+    size_t start,
+    size_t stop) {
+  data += start;
+  size_t len = (stop - start) * sizeof(T);
+  const char* buffer = (const char*)data;
+  while (len > 0) {
+    ssize_t r = send(send_sockets[0], buffer, len, 0);
+    if (r <= 0) {
+      std::ostringstream msg;
+      msg << "Send of " << len << " bytes failed (errno: " << errno << ")";
+      throw std::runtime_error(msg.str());
+    }
+    buffer += r;
+    len -= r;
+  }
+}
+
+template <typename T>
+void _recv(
+    const std::vector<int>& recv_sockets,
+    T* data,
+    size_t start,
+    size_t stop) {
+  data += start;
+  size_t len = (stop - start) * sizeof(T);
+  char* buffer = (char*)data;
+  while (len > 0) {
+    ssize_t r = recv(recv_sockets[0], buffer, len, 0);
+    if (r <= 0) {
+      std::ostringstream msg;
+      msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
+      throw std::runtime_error(msg.str());
+    }
+    buffer += r;
+    len -= r;
+  }
+}
+
+template <typename T>
+void _recv_sum(
+    const std::vector<int>& recv_sockets,
+    T* data,
+    size_t start,
+    size_t stop) {
+  data += start;
+  char buffer[PACKET_SIZE];
+  size_t len = (stop - start) * sizeof(T);
+  while (len > 0) {
+    ssize_t r = recv(recv_sockets[0], buffer, std::min(len, PACKET_SIZE), 0);
+    if (r <= 0) {
+      std::ostringstream msg;
+      msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
+      throw std::runtime_error(msg.str());
+    }
+    sum_inplace((const T*)buffer, data, r / sizeof(T));
+    data += r / sizeof(T);
+    len -= r;
+  }
 }
 
 } // namespace
 
 class RingGroup : public GroupImpl {
  public:
-  RingGroup(int rank, std::vector<std::vector<address_t>> nodes) : rank_(rank) {
+  RingGroup(int rank, std::vector<std::vector<address_t>> nodes)
+      : rank_(rank), pool_(2) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
           "[ring] Rank cannot be larger than the size of the group");
@@ -236,11 +381,26 @@ class RingGroup : public GroupImpl {
     int success;
 
     if (rank_ < sendto) {
+      std::cout << "Rank " << rank_ << " accepting" << std::endl;
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
+      std::cout << "Rank " << rank_ << " connecting to " << sendto << std::endl;
       send_sockets_ = std::move(make_connections(nodes[sendto]));
     } else {
+      std::cout << "Rank " << rank_ << " connecting to " << sendto << std::endl;
       send_sockets_ = std::move(make_connections(nodes[sendto]));
+      std::cout << "Rank " << rank_ << " accepting" << std::endl;
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
+    }
+
+    if (send_sockets_.empty()) {
+      std::ostringstream msg;
+      msg << "[ring] Rank " << rank_ << " has no send sockets.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (recv_sockets_.empty()) {
+      std::ostringstream msg;
+      msg << "[ring] Rank " << rank_ << " has no recv sockets.";
+      throw std::invalid_argument(msg.str());
     }
   }
   ~RingGroup() {
@@ -262,7 +422,18 @@ class RingGroup : public GroupImpl {
     return size_;
   }
 
-  void all_sum(const array& input, array& output) override {}
+  void all_sum(const array& input_, array& output) override {
+    // Make sure that the input is row contiguous
+    array input = ensure_row_contiguous(input_);
+
+    // If not inplace all reduce then copy the input to the output first
+    if (input.data<void>() != output.data<void>()) {
+      std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
+    }
+
+    // All reduce in place
+    SWITCH_TYPE(output, all_sum<T>(output));
+  }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
     throw std::runtime_error("[ring] Group split not supported.");
@@ -278,8 +449,67 @@ class RingGroup : public GroupImpl {
   }
 
  private:
+  template <typename T>
+  void all_sum(array& output) {
+    T* data = output.data<T>();
+    size_t step = output.size() / size_ + (output.size() % size_ > 0);
+
+    // Scatter reduce steps
+    int send_segment = size_ - 1 - rank_;
+    int recv_segment = (send_segment + size_ - 1) % size_;
+    for (int i = 0; i < size_ - 1; i++) {
+      // Compute the send and recv locations
+      size_t send_start = send_segment * step;
+      size_t send_stop = std::min((send_segment + 1) * step, output.size());
+      size_t recv_start = recv_segment * step;
+      size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
+
+      // Send and recv sum
+      std::future<void> sent, received;
+      const auto& send_sockets = send_sockets_;
+      const auto& recv_sockets = recv_sockets_;
+      sent = pool_.enqueue([data, send_start, send_stop, send_sockets]() {
+        _send(send_sockets, data, send_start, send_stop);
+      });
+      received = pool_.enqueue([data, recv_start, recv_stop, recv_sockets]() {
+        _recv_sum(recv_sockets, data, recv_start, recv_stop);
+      });
+      sent.wait();
+      received.wait();
+
+      send_segment = (send_segment + size_ - 1) % size_;
+      recv_segment = (recv_segment + size_ - 1) % size_;
+    }
+
+    // Gather results
+    for (int i = 0; i < size_ - 1; i++) {
+      // Compute the send and recv locations
+      size_t send_start = send_segment * step;
+      size_t send_stop = std::min((send_segment + 1) * step, output.size());
+      size_t recv_start = recv_segment * step;
+      size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
+
+      std::future<void> sent, received;
+      const auto& send_sockets = send_sockets_;
+      const auto& recv_sockets = recv_sockets_;
+      sent = pool_.enqueue([data, send_start, send_stop, send_sockets]() {
+        _send(send_sockets, data, send_start, send_stop);
+      });
+      received = pool_.enqueue([data, recv_start, recv_stop, recv_sockets]() {
+        _recv(recv_sockets, data, recv_start, recv_stop);
+      });
+      sent.wait();
+      received.wait();
+
+      send_segment = (send_segment + size_ - 1) % size_;
+      recv_segment = (recv_segment + size_ - 1) % size_;
+    }
+  }
+
   int rank_;
   int size_;
+
+  ThreadPool pool_;
 
   std::vector<int> send_sockets_;
   std::vector<int> recv_sockets_;

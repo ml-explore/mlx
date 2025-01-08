@@ -8,6 +8,9 @@
 
 namespace mlx::core::distributed {
 
+// Enumerate the possible distributed communication backends
+enum class Backend { Any, MPI, Ring };
+
 // Forward declaration of the base group implementation.
 namespace detail {
 class GroupImpl;
@@ -53,6 +56,6 @@ struct Group {
  * distributed subsystem. Otherwise simply return a singleton group which will
  * render communication operations as no-op.
  */
-Group init(bool strict = false);
+Group init(bool strict = false, Backend bk = Backend::MPI);
 
 } // namespace mlx::core::distributed

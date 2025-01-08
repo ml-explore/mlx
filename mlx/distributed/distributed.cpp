@@ -1,8 +1,11 @@
 // Copyright © 2024 Apple Inc.
 
+#include <unordered_map>
+
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/ring/ring.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core::distributed {
@@ -65,7 +68,7 @@ class EmptyGroup : public GroupImpl {
 } // namespace detail
 
 bool is_available() {
-  return mpi::is_available();
+  return mpi::is_available() || ring::is_available();
 }
 
 int Group::rank() const {
@@ -80,20 +83,47 @@ Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 
-Group init(bool strict /* = false */) {
-  auto init_group = [strict]() {
-    auto default_group = mpi::init(strict);
-    if (default_group == nullptr) {
-      default_group = std::make_shared<detail::EmptyGroup>();
-    }
-    return default_group;
-  };
-  static std::shared_ptr<detail::GroupImpl> default_group = init_group();
+Group init(bool strict /* = false */, Backend bk /* = Backend::Any */) {
+  static std::unordered_map<Backend, std::shared_ptr<detail::GroupImpl>>
+      backends;
+
+  // Already initialized so return the group.
+  if (auto g = backends.find(bk); g != backends.end()) {
+    return Group(g->second);
+  }
+
+  // Create the requested communication group
+  std::shared_ptr<detail::GroupImpl> group;
+  switch (bk) {
+    case Backend::MPI:
+      group = mpi::init(strict);
+      break;
+    case Backend::Ring:
+      group = ring::init(strict);
+      break;
+    case Backend::Any:
+      group = mpi::init(false);
+      bk = Backend::MPI;
+      if (group == nullptr) {
+        group = ring::init(false);
+        bk = Backend::Ring;
+      }
+      if (group == nullptr && strict) {
+        throw std::runtime_error("Couldn't initialize any distributed backend");
+      }
+      break;
+  }
+  if (group == nullptr) {
+    group = std::make_shared<detail::EmptyGroup>();
+  } else {
+    backends.insert({Backend::Any, group});
+  }
+  backends.insert({bk, group});
 
   // Ensure the communication stream is alive before
   // the graph is evaluated
   detail::communication_stream();
-  return Group(default_group);
+  return Group(group);
 }
 
 } // namespace mlx::core::distributed
