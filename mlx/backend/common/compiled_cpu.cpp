@@ -7,6 +7,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include <fmt/format.h>
+
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/compiled_preamble.h"
 #include "mlx/backend/common/jit_compiler.h"
@@ -105,14 +107,14 @@ void* compile(
     source_file << source_code;
     source_file.close();
 
-    std::string command = JitCompiler::build_command(
-        output_dir, source_file_name, shared_lib_name);
-    auto return_code = system(command.c_str());
-    if (return_code) {
-      std::ostringstream msg;
-      msg << "[Compile::eval_cpu] Failed to compile function " << kernel_name
-          << " with error code " << return_code << "." << std::endl;
-      throw std::runtime_error(msg.str());
+    try {
+      JitCompiler::exec(JitCompiler::build_command(
+          output_dir, source_file_name, shared_lib_name));
+    } catch (const std::exception& error) {
+      throw std::runtime_error(fmt::format(
+          "[Compile::eval_cpu] Failed to compile function {0}: {1}",
+          kernel_name,
+          error.what()));
     }
   }
 

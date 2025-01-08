@@ -12,6 +12,9 @@ class JitCompiler {
       const std::filesystem::path& dir,
       const std::string& source_file_name,
       const std::string& shared_lib_name);
+
+  // Run a command and get its output.
+  static std::string exec(const std::string& cmd);
 };
 
 } // namespace mlx::core
