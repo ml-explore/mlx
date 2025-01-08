@@ -47,7 +47,11 @@ std::function<void()> make_task(array arr, bool signal) {
       }
 
       debug_set_primitive_buffer_label(command_buffer, arr.primitive());
-      arr.primitive().eval_gpu(arr.inputs(), outputs);
+      try {
+        arr.primitive().eval_gpu(arr.inputs(), outputs);
+      } catch (const std::exception& error) {
+        abort_with_exception(error);
+      }
     }
     std::vector<std::shared_ptr<array::Data>> buffers;
     for (auto& in : arr.inputs()) {
