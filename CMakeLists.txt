@@ -25,7 +25,7 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.21.1)
+  set(MLX_VERSION 0.22.0)
 endif()
 add_compile_definitions("MLX_VERSION=${MLX_VERSION}")
 
