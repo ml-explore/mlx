@@ -157,6 +157,17 @@ TEST_CASE("test simplify") {
   set_compile_mode(CompileMode::enabled);
 }
 
+TEST_CASE("test simplify noops") {
+  set_compile_mode(CompileMode::no_fuse);
+  auto a = array({1.0f, 2.0f});
+  auto fun = [](const std::vector<array>& inputs) -> std::vector<array> {
+    return {copy(stop_gradient(exp(stop_gradient(inputs[0]))))};
+  };
+  auto b = compile(fun)({a})[0];
+  CHECK(b.inputs()[0].id() == a.id());
+  set_compile_mode(CompileMode::enabled);
+}
+
 auto add_diff(const std::vector<array>& inputs) {
   auto a = inputs[0];
   return std::vector<array>{cos(a) + sin(a)};
