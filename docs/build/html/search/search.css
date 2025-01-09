@@ -1,14 +1,9 @@
-/*---------------- Search Box positioning */
+/*---------------- Search Box */
 
-#main-menu > li:last-child {
-    /* This <li> object is the parent of the search bar */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 36px;
-    margin-right: 1em;
+#MSearchBox {
+    position: absolute;
+    right: 5px;
 }
-
 /*---------------- Search box styling */
 
 .SRPage * {
