@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <fmt/format.h>
-#include <iostream> //TODO
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
