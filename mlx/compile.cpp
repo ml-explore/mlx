@@ -350,12 +350,12 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
   return {tape, parents_map};
 }
 
-// Simplify the tape. Note, this function modifies in-place both the tape and
-// the parents map to remove orphaned arrays
+// Simplify the tape. Note, this function modifies in-place both the tape,
+// the parents map to remove orphaned arrays, and potentially the outputs
 void compile_simplify(
     std::vector<array>& tape,
     ParentsMap& parents_map,
-    const std::vector<array>& outputs,
+    std::vector<array>& outputs,
     int passes) {
   // Helpers to identify identical scalars
   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
@@ -432,6 +432,28 @@ void compile_simplify(
   }
   tape = std::move(new_tape);
 
+  // Remove no-ops
+  {
+    std::unordered_map<uintptr_t, array> output_map;
+    for (auto& o : outputs) {
+      output_map.insert({o.id(), o});
+    }
+    for (auto& arr : tape) {
+      if (!arr.has_primitive() || !is_noop(arr.primitive())) {
+        new_tape.push_back(std::move(arr));
+        continue;
+      }
+      merge_one(arr.inputs()[0], arr, parents_map);
+      if (auto it = output_map.find(arr.id()); it != output_map.end()) {
+        it->second = arr.inputs()[0];
+      }
+    }
+    tape = std::move(new_tape);
+    for (auto& o : outputs) {
+      o = output_map.at(o.id());
+    }
+  }
+
   std::unordered_map<std::uintptr_t, uint32_t> tape_order;
   for (uint32_t i = 0; i < tape.size(); ++i) {
     tape_order.insert({tape[i].id(), i});
@@ -441,6 +463,7 @@ void compile_simplify(
   for (auto& o : outputs) {
     output_set.insert(o.id());
   }
+
   // Multi-pass merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {

@@ -38,12 +38,11 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     const std::vector<array>& outputs,
     const std::vector<array>& original_inputs);
 
-// Simplify the tape. Note, this function modifies in-place both the tape and
-// the parents map to remove orphaned arrays
+// Simplify the tape.
 void compile_simplify(
     std::vector<array>& tape,
     ParentsMap& parents_map,
-    const std::vector<array>& outputs,
+    std::vector<array>& outputs,
     int passes);
 
 std::vector<array> compile_replace(
