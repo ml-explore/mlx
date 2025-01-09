@@ -6,5 +6,5 @@ var searchData=
   ['weight_5fsize_3',['weight_size',['../structmlx_1_1steel_1_1_conv2_d_general_base_info.html#aff119a4325b97fdbd745d8fcaed9f041',1,'mlx::steel::Conv2DGeneralBaseInfo']]],
   ['weight_5fw_4',['weight_w',['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_large_filter.html#add1186c7accb62bfa8a4a7e87fc4cc84',1,'mlx::steel::Conv2DInputBlockLoaderLargeFilter::weight_w'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_filter.html#a4744bd79fb05e81eaa53d2eabe017446',1,'mlx::steel::Conv2DInputBlockLoaderSmallFilter::weight_w'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_general.html#a0261d0349a0a95ca1a02a959b73e9352',1,'mlx::steel::Conv2DInputBlockLoaderGeneral::weight_w'],['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader_general.html#a6efa6268a37f18f4d225674bf1780cf6',1,'mlx::steel::Conv2DWeightBlockLoaderGeneral::weight_w']]],
   ['ws_5',['wS',['../struct_m_l_x_conv_params.html#aba2074189644b1b59567d018409277a9',1,'MLXConvParams']]],
-  ['wt_5fstrides_6',['wt_strides',['../struct_m_l_x_conv_params.html#a887fee0da1494d038526fb0f59faff45',1,'MLXConvParams']]]
+  ['wt_5fstrides_6',['wt_strides',['../struct_m_l_x_conv_params.html#aa5ec3cb7bccbb04d561be16498cf06c3',1,'MLXConvParams']]]
 ];
