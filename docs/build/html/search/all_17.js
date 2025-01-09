@@ -1,7 +1,7 @@
 var searchData=
 [
   ['wait_0',['wait',['../classpocketfft_1_1detail_1_1threading_1_1latch.html#af503189cc9247047fbdfc3ebf1daacc1',1,'pocketfft::detail::threading::latch::wait()'],['../classmlx_1_1core_1_1array.html#a648592006f1c92287734ba2428eaa45e',1,'mlx::core::array::wait()'],['../classmlx_1_1core_1_1_event.html#a634afd918e6ed847f354531ba9f48252',1,'mlx::core::Event::wait()']]],
-  ['wait_5ffor_5ffence_1',['wait_for_fence',['../structmlx_1_1core_1_1metal_1_1_command_encoder.html#aefdadbff4e003dc6f77506840babc088',1,'mlx::core::metal::CommandEncoder']]],
+  ['wait_5ffor_5ffence_1',['wait_for_fence',['../structmlx_1_1core_1_1metal_1_1_command_encoder.html#aefdadbff4e003dc6f77506840babc088',1,'mlx::core::metal::CommandEncoder::wait_for_fence()'],['../structmlx_1_1core_1_1_command_encoder.html#aefdadbff4e003dc6f77506840babc088',1,'mlx::core::CommandEncoder::wait_for_fence()']]],
   ['wait_5ffor_5fone_2',['wait_for_one',['../classmlx_1_1core_1_1scheduler_1_1_scheduler.html#a01c574bb388f10d67aaaaa541894d807',1,'mlx::core::scheduler::Scheduler::wait_for_one()'],['../namespacemlx_1_1core_1_1scheduler.html#a8cc4d5fd1f5ce722b377ead1863a2291',1,'mlx::core::scheduler::wait_for_one()']]],
   ['weight_5fbase_3',['weight_base',['../structmlx_1_1steel_1_1_conv2_d_general_base_info.html#a1d88677c4617f4bdae157e40a64a407b',1,'mlx::steel::Conv2DGeneralBaseInfo']]],
   ['weight_5fh_4',['weight_h',['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_large_filter.html#a3be4815d4090cb27ebe2f9bad1a39e95',1,'mlx::steel::Conv2DInputBlockLoaderLargeFilter::weight_h'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_filter.html#a366c3cee4ed1165545287c8d5ce49445',1,'mlx::steel::Conv2DInputBlockLoaderSmallFilter::weight_h'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_general.html#a397412909eb955babc935a35d97c3fd4',1,'mlx::steel::Conv2DInputBlockLoaderGeneral::weight_h'],['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader_general.html#a5997fd8ef249e4cd3df7dad7b251d8d5',1,'mlx::steel::Conv2DWeightBlockLoaderGeneral::weight_h']]],
@@ -16,5 +16,5 @@ var searchData=
   ['write_5funsafe_13',['write_unsafe',['../scan_8h.html#a8010e7bdf7a72cbd35ce7cd7ecb08e32',1,'scan.h']]],
   ['writer_14',['Writer',['../classmlx_1_1core_1_1io_1_1_writer.html',1,'mlx::core::io']]],
   ['ws_15',['wS',['../struct_m_l_x_conv_params.html#aba2074189644b1b59567d018409277a9',1,'MLXConvParams']]],
-  ['wt_5fstrides_16',['wt_strides',['../struct_m_l_x_conv_params.html#a887fee0da1494d038526fb0f59faff45',1,'MLXConvParams']]]
+  ['wt_5fstrides_16',['wt_strides',['../struct_m_l_x_conv_params.html#aa5ec3cb7bccbb04d561be16498cf06c3',1,'MLXConvParams']]]
 ];

@@ -1,19 +1,19 @@
 var searchData=
 [
   ['q_0',['q',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#adf608e22d0c0397217472408aab52631',1,'mlx::core::scheduler::StreamThread']]],
-  ['q_5fstrides_1',['Q_strides',['../structmlx_1_1steel_1_1_attn_params.html#a90bba215328201a37eb1c430ce9f8563',1,'mlx::steel::AttnParams']]],
+  ['q_5fstrides_1',['Q_strides',['../structmlx_1_1steel_1_1_attn_params.html#a9150df3fb79de521bbccf57c43f6b092',1,'mlx::steel::AttnParams']]],
   ['qdot_2',['qdot',['../quantized_8h.html#ab364d58ab652e3ad87a8f80910556071',1,'quantized.h']]],
   ['qdot_5fsafe_3',['qdot_safe',['../quantized_8h.html#a07b26d2d0b0d65dfe925c452c453fa42',1,'quantized.h']]],
   ['ql_4',['qL',['../structmlx_1_1steel_1_1_attn_params.html#a59255882cbd78bb6f15e704e3a356a7f',1,'mlx::steel::AttnParams']]],
-  ['qmm_5fn_5',['qmm_n',['../quantized_8h.html#a2ce135e392dbf9a3e5180fb083792ed7',1,'quantized.h']]],
+  ['qmm_5fn_5',['qmm_n',['../quantized_8h.html#a733a2d4ef5af5242c838359d8824bf64',1,'quantized.h']]],
   ['qmm_5fn_5fimpl_6',['qmm_n_impl',['../quantized_8h.html#a0ba59096494f1001c195312571523ae9',1,'quantized.h']]],
-  ['qmm_5ft_7',['qmm_t',['../quantized_8h.html#abe2e3ef0ee4ec2cb61dc5330ad463d10',1,'quantized.h']]],
+  ['qmm_5ft_7',['qmm_t',['../quantized_8h.html#a8c800222221c34a270589579ffb677a6',1,'quantized.h']]],
   ['qmm_5ft_5fimpl_8',['qmm_t_impl',['../quantized_8h.html#af5750a35e8f5462218effba719f7f5b8',1,'quantized.h']]],
-  ['qmv_9',['qmv',['../quantized_8h.html#a639c50a08b5cf57e8be5279a116274bd',1,'quantized.h']]],
-  ['qmv_5ffast_10',['qmv_fast',['../quantized_8h.html#a7bd1d9f17c86c8fd34ec13678cff755f',1,'quantized.h']]],
+  ['qmv_9',['qmv',['../quantized_8h.html#a872664c9ead5aa6f03ea26330c469bee',1,'quantized.h']]],
+  ['qmv_5ffast_10',['qmv_fast',['../quantized_8h.html#a351ff8f1d25c5edee035c30a0e99a53e',1,'quantized.h']]],
   ['qmv_5ffast_5fimpl_11',['qmv_fast_impl',['../quantized_8h.html#aba7687e6f8f1d29c0a1b2a3db150bd81',1,'quantized.h']]],
   ['qmv_5fimpl_12',['qmv_impl',['../quantized_8h.html#a8e13c7d895624f738d2a6d9893b687fd',1,'quantized.h']]],
-  ['qmv_5fquad_13',['qmv_quad',['../quantized_8h.html#a7ce5f53a4d6d1555e9402d545408d0ad',1,'quantized.h']]],
+  ['qmv_5fquad_13',['qmv_quad',['../quantized_8h.html#a9d14bd6c50ecd04fac423717e6ead1d1',1,'quantized.h']]],
   ['qmv_5fquad_5fimpl_14',['qmv_quad_impl',['../quantized_8h.html#ad5cf1cf63656bc1780685d22169cd4ef',1,'quantized.h']]],
   ['qouter_15',['qouter',['../quantized_8h.html#ae756f6817b584c60f5dcdd1d9c6b4f58',1,'quantized.h']]],
   ['qr_16',['qr',['../namespacemlx_1_1core_1_1linalg.html#ae6d97829459353fe3b31c8a0867c0ca2',1,'mlx::core::linalg']]],
@@ -27,7 +27,7 @@ var searchData=
   ['quantizedmatmul_24',['QuantizedMatmul',['../classmlx_1_1core_1_1_quantized_matmul.html',1,'mlx::core::QuantizedMatmul'],['../classmlx_1_1core_1_1_quantized_matmul.html#a5bd164d038d9dc21919f7e0bfdeaa25c',1,'mlx::core::QuantizedMatmul::QuantizedMatmul()']]],
   ['queue_25',['queue',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a77c75a63c51ea56815a86bd882ed190d',1,'mlx::core::metal::DeviceStream']]],
   ['quiet_5fnan_26',['quiet_NaN',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#aebeb07c01984be246bc2d1b8f8e4ac7b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
-  ['qvm_27',['qvm',['../quantized_8h.html#ad84f7d5ab9e32dbbe3ca759ae5d5d5c5',1,'quantized.h']]],
+  ['qvm_27',['qvm',['../quantized_8h.html#a55844c4576fff2182bc1fca171994118',1,'quantized.h']]],
   ['qvm_5fimpl_28',['qvm_impl',['../quantized_8h.html#a1546533c5b925b2fbb3bec870ec7487a',1,'quantized.h']]],
-  ['qvm_5fsplit_5fk_29',['qvm_split_k',['../quantized_8h.html#ab8243818512d6078d23e6ffb65fd7bb8',1,'quantized.h']]]
+  ['qvm_5fsplit_5fk_29',['qvm_split_k',['../quantized_8h.html#aac4440b5ef8f323dd36c85721d00f7e7',1,'quantized.h']]]
 ];

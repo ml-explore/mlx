@@ -89,6 +89,7 @@ Operations
    isneginf
    isposinf
    issubdtype
+   kron
    left_shift
    less
    less_equal
@@ -144,6 +145,8 @@ Operations
    sign
    sin
    sinh
+   slice
+   slice_update
    softmax
    sort
    split
@@ -168,6 +171,7 @@ Operations
    tri
    tril
    triu
+   unflatten
    var
    view
    where

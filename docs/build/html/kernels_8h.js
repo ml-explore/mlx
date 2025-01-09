@@ -1,0 +1,26 @@
+var kernels_8h =
+[
+    [ "mlx::core::get_arange_kernel", "namespacemlx_1_1core.html#a76f614e9956a6ca05a9be4db5a483446", null ],
+    [ "mlx::core::get_binary_kernel", "namespacemlx_1_1core.html#a4decd4a07d91487e6903f6e3c8b7513a", null ],
+    [ "mlx::core::get_binary_two_kernel", "namespacemlx_1_1core.html#a4e809746f48e5dcf7fa63215d3f5e33e", null ],
+    [ "mlx::core::get_copy_kernel", "namespacemlx_1_1core.html#a05a220cff45f12439fde775983c6df78", null ],
+    [ "mlx::core::get_dynamic_copy_kernel", "namespacemlx_1_1core.html#addb29b3e6771875f2aecd035ed560461", null ],
+    [ "mlx::core::get_fft_kernel", "namespacemlx_1_1core.html#a1d4cffc3c78067b3d9a62d64f3fb686f", null ],
+    [ "mlx::core::get_gemv_masked_kernel", "namespacemlx_1_1core.html#a90c24e0d0b99b68fad9deefcf4d3e818", null ],
+    [ "mlx::core::get_mb_sort_kernel", "namespacemlx_1_1core.html#afb57825bb763050cc9a9d194aa41ac36", null ],
+    [ "mlx::core::get_quantized_kernel", "namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e", null ],
+    [ "mlx::core::get_reduce_init_kernel", "namespacemlx_1_1core.html#ae0470605dc819efeb6510183619f0299", null ],
+    [ "mlx::core::get_reduce_kernel", "namespacemlx_1_1core.html#a1be32ba7d67137dde7ac191dfe83ff49", null ],
+    [ "mlx::core::get_scan_kernel", "namespacemlx_1_1core.html#aeefaff208444d3fa61ecc0946fe1de5f", null ],
+    [ "mlx::core::get_softmax_kernel", "namespacemlx_1_1core.html#a35a412f688d79eb47e42d20a7c8650ee", null ],
+    [ "mlx::core::get_sort_kernel", "namespacemlx_1_1core.html#a84ebe6275218070f0ea320f126f64e22", null ],
+    [ "mlx::core::get_steel_conv_general_kernel", "namespacemlx_1_1core.html#abce2b67044ee06a7bbe7a91ec7c8c48d", null ],
+    [ "mlx::core::get_steel_conv_kernel", "namespacemlx_1_1core.html#adce79d220672f5f3c65cc31d145ca9c4", null ],
+    [ "mlx::core::get_steel_gemm_fused_kernel", "namespacemlx_1_1core.html#a84fa8e0aee321a9d614433a0b933103b", null ],
+    [ "mlx::core::get_steel_gemm_masked_kernel", "namespacemlx_1_1core.html#ab5f60614e965144b451930fdf935e08d", null ],
+    [ "mlx::core::get_steel_gemm_splitk_accum_kernel", "namespacemlx_1_1core.html#a195b86cad5bb99aa1bcd23952305af6b", null ],
+    [ "mlx::core::get_steel_gemm_splitk_kernel", "namespacemlx_1_1core.html#af48c6f2f72b61dbd6766e4f5fea85df5", null ],
+    [ "mlx::core::get_template_definition", "namespacemlx_1_1core.html#aae0d19f0acdef2accd2428fb84c8a032", null ],
+    [ "mlx::core::get_ternary_kernel", "namespacemlx_1_1core.html#a54eb3b65375022428aab5f810e40624b", null ],
+    [ "mlx::core::get_unary_kernel", "namespacemlx_1_1core.html#afbb085188b563a54606d84f87a9bf5a6", null ]
+];
