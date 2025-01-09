@@ -556,6 +556,7 @@ class BroadcastAxes : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(BroadcastAxes)
   bool is_equivalent(const Primitive& other) const override;
   static Shape output_shape(

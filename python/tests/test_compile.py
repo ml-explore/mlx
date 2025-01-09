@@ -890,16 +890,37 @@ class TestCompile(mlx_tests.MLXTestCase):
         a = mx.array(0.0)
         b = mx.ones((2, 2))
 
-        # cfun = mx.compile(mx.grad(fun), shapeless=True)
-        # out = cfun((a, b))
+        cfun = mx.compile(mx.grad(fun), shapeless=True)
+        out = cfun((a, b))
 
-        # self.assertEqual(out[0].shape, ())
-        # self.assertEqual(out[1].shape, (2, 2))
+        self.assertEqual(out[0].shape, ())
+        self.assertEqual(out[1].shape, (2, 2))
 
-        # out = cfun((b, a))
+        out = cfun((b, a))
 
-        # self.assertEqual(out[0].shape, (2, 2))
-        # self.assertEqual(out[1].shape, ())
+        self.assertEqual(out[0].shape, (2, 2))
+        self.assertEqual(out[1].shape, ())
+
+        # Shapeless compile should be preserved over vjp, jvp, vmap
+        def fun(args):
+            return (args[0] @ args[1]).sum()
+
+        a = mx.zeros((2, 1, 4, 2))
+        b = mx.zeros((3, 2, 5))
+
+        cfun = mx.compile(mx.grad(fun), shapeless=True)
+        out = cfun((a, b))
+
+        self.assertEqual(out[0].shape, (2, 1, 4, 2))
+        self.assertEqual(out[1].shape, (3, 2, 5))
+
+        a = mx.zeros((3, 1, 4, 2))
+        b = mx.zeros((2, 2, 5))
+
+        out = cfun((a, b))
+
+        self.assertEqual(out[0].shape, (3, 1, 4, 2))
+        self.assertEqual(out[1].shape, (2, 2, 5))
 
 
 if __name__ == "__main__":

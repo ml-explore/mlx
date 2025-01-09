@@ -686,14 +686,10 @@ std::vector<array> BitwiseBinary::vjp(
   return jvp(primals, cotangents, argnums);
 }
 
-std::vector<array> Broadcast::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
-    const std::vector<array>&) {
+std::vector<array>
+broadcast_vjp(const array& primal, const array& cotan, const Stream& s) {
   // Reduce cotangents to the shape of the primal
-  auto& shape = primals[0].shape();
-  auto& cotan = cotangents[0];
+  auto& shape = primal.shape();
   int diff = cotan.ndim() - shape.size();
   std::vector<int> squeeze_axes(diff);
   std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
@@ -703,9 +699,15 @@ std::vector<array> Broadcast::vjp(
       reduce_axes.push_back(i);
     }
   }
-  auto out =
-      squeeze(sum(cotan, reduce_axes, true, stream()), squeeze_axes, stream());
-  return {out};
+  return {squeeze(sum(cotan, reduce_axes, true, s), squeeze_axes, s)};
+}
+
+std::vector<array> Broadcast::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return broadcast_vjp(primals[0], cotangents[0], stream());
 }
 
 std::vector<array> Broadcast::jvp(
@@ -723,7 +725,7 @@ std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto ax = axes[0];
-  auto in = inputs[0];
+  auto& in = inputs[0];
   if (ax >= 0) {
     int diff = shape_.size() - in.ndim() + 1;
     assert(diff >= 0);
@@ -756,6 +758,25 @@ std::vector<Shape> Broadcast::output_shapes(const std::vector<array>& inputs) {
   }
   return {output_shape(inputs)};
 };
+
+std::vector<array> BroadcastAxes::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return broadcast_vjp(primals[0], cotangents[0], stream());
+}
+
+std::vector<array> BroadcastAxes::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  return {array(
+      output_shape(primals, ignore_axes_),
+      tangents[0].dtype(),
+      std::make_shared<BroadcastAxes>(stream(), ignore_axes_),
+      tangents)};
+}
 
 std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
     const std::vector<array>& inputs,
@@ -3110,14 +3131,9 @@ std::vector<array> Reduce::vjp(
     const std::vector<array>& outputs) {
   auto in = primals[0];
 
-  auto shape = in.shape();
-  for (auto ax : axes_) {
-    shape[ax] = 1;
-  }
   auto& cotan = cotangents[0];
   if (reduce_type_ == Reduce::Sum) {
-    return {
-        broadcast_to(reshape(cotan, shape, stream()), in.shape(), stream())};
+    return {broadcast_arrays({cotan, in}, stream())[0]};
   } else if (reduce_type_ == Reduce::Prod) {
     auto s = stream();
     auto prod_grad_single_axis =
@@ -3173,7 +3189,7 @@ std::vector<array> Reduce::vjp(
 
       return {grad};
     } else {
-      return {prod_grad_single_axis(in, reshape(cotan, shape, s), axes_[0])};
+      return {prod_grad_single_axis(in, cotan, axes_[0])};
     }
 
   } else if (reduce_type_ == Reduce::Min || reduce_type_ == Reduce::Max) {
@@ -3183,9 +3199,7 @@ std::vector<array> Reduce::vjp(
     }
     auto mask = equal(in, out, stream());
     auto normalizer = sum(mask, axes_, true, stream());
-    auto cotan_reshape = reshape(cotan, shape, stream());
-    cotan_reshape = divide(cotan_reshape, normalizer, stream());
-    return {multiply(cotan_reshape, mask, stream())};
+    return {multiply(divide(cotan, normalizer, stream()), mask, stream())};
   }
 
   else {

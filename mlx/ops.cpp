@@ -1413,9 +1413,11 @@ std::vector<array> broadcast_arrays(
   if (inputs.size() <= 1) {
     return inputs;
   }
+
   std::vector<array> outputs;
   auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
-  for (auto& in : inputs) {
+  auto check_and_get_shape = [&shape, &ignore_axes](const array& in) {
+    auto out_shape = shape;
     for (int i = 0; i < ignore_axes.size(); ++i) {
       auto ax = ignore_axes[i];
       auto pos_ax = in.ndim() + ax;
@@ -1424,22 +1426,51 @@ std::vector<array> broadcast_arrays(
         throw std::invalid_argument(
             "[broadcast_arrays] Received invalid axes to ignore.");
       }
-      shape[shape.size() + ax] = in.shape(ax);
+      out_shape[out_shape.size() + ax] = in.shape(ax);
     }
-    if (in.shape() == shape) {
+    return out_shape;
+  };
+
+  if (!detail::in_dynamic_tracing()) {
+    for (auto& in : inputs) {
+      auto out_shape = check_and_get_shape(in);
+      if (in.shape() == out_shape) {
+        outputs.push_back(in);
+      } else {
+        outputs.push_back(array(
+            std::move(out_shape),
+            in.dtype(),
+            std::make_shared<Broadcast>(to_stream(s), out_shape),
+            {in}));
+      }
+    }
+    return outputs;
+  }
+
+  std::vector<array> stop_grad_inputs;
+  for (auto& in : inputs) {
+    stop_grad_inputs.push_back(stop_gradient(in, s));
+  }
+
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto& in = inputs[i];
+    auto out_shape = check_and_get_shape(in);
+    if (in.shape() == out_shape) {
       outputs.push_back(in);
-    } else if (detail::in_dynamic_tracing()) {
+    } else {
+      // broadcasted array goes first followed by other stopgrad inputs
+      std::vector<array> p_inputs = {in};
+      for (int j = 0; j < inputs.size(); ++j) {
+        if (j == i) {
+          continue;
+        }
+        p_inputs.push_back(stop_grad_inputs[j]);
+      }
       outputs.push_back(array(
-          shape,
+          std::move(out_shape),
           in.dtype(),
           std::make_shared<BroadcastAxes>(to_stream(s), ignore_axes),
-          outputs.empty() ? inputs : std::vector<array>{in, outputs.front()}));
-    } else {
-      outputs.push_back(array(
-          shape,
-          in.dtype(),
-          std::make_shared<Broadcast>(to_stream(s), shape),
-          {in}));
+          std::move(p_inputs)));
     }
   }
   return outputs;
@@ -1453,16 +1484,38 @@ std::vector<array> broadcast_arrays(
   }
   auto shape = Broadcast::output_shape(inputs);
   std::vector<array> outputs;
+
+  if (!detail::in_dynamic_tracing()) {
+    for (auto& in : inputs) {
+      if (in.shape() == shape) {
+        outputs.push_back(in);
+      } else {
+        outputs.push_back(array(
+            shape,
+            in.dtype(),
+            std::make_shared<Broadcast>(to_stream(s), shape),
+            {in}));
+      }
+    }
+    return outputs;
+  }
+
+  std::vector<array> stop_grad_inputs;
   for (auto& in : inputs) {
+    stop_grad_inputs.push_back(stop_gradient(in, s));
+  }
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto& in = inputs[i];
     if (in.shape() == shape) {
       outputs.push_back(in);
     } else {
-      std::vector<array> p_inputs;
-      if (detail::in_dynamic_tracing()) {
-        p_inputs =
-            outputs.empty() ? inputs : std::vector<array>{in, outputs.front()};
-      } else {
-        p_inputs = {in};
+      // broadcasted array goes first followed by other stopgrad inputs
+      std::vector<array> p_inputs = {in};
+      for (int j = 0; j < inputs.size(); ++j) {
+        if (j == i) {
+          continue;
+        }
+        p_inputs.push_back(stop_grad_inputs[j]);
       }
       outputs.push_back(array(
           shape,
