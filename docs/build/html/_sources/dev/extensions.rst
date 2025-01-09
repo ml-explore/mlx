@@ -420,8 +420,8 @@ element in the output.
             constant const float& alpha [[buffer(3)]],
             constant const float& beta [[buffer(4)]],
             constant const int* shape [[buffer(5)]],
-            constant const size_t* x_strides [[buffer(6)]],
-            constant const size_t* y_strides [[buffer(7)]],
+            constant const int64_t* x_strides [[buffer(6)]],
+            constant const int64_t* y_strides [[buffer(7)]],
             constant const int& ndim [[buffer(8)]],
             uint index [[thread_position_in_grid]]) {
         // Convert linear indices to offsets in array
@@ -438,24 +438,10 @@ each instantiation a unique host name so we can identify it.
 
 .. code-block:: C++
 
-    #define instantiate_axpby(type_name, type)              \
-        template [[host_name("axpby_general_" #type_name)]] \
-        [[kernel]] void axpby_general<type>(                \
-            device const type* x [[buffer(0)]],             \
-            device const type* y [[buffer(1)]],             \
-            device type* out [[buffer(2)]],                 \
-            constant const float& alpha [[buffer(3)]],      \
-            constant const float& beta [[buffer(4)]],       \
-            constant const int* shape [[buffer(5)]],        \
-            constant const size_t* x_strides [[buffer(6)]], \
-            constant const size_t* y_strides [[buffer(7)]], \
-            constant const int& ndim [[buffer(8)]],         \
-            uint index [[thread_position_in_grid]]);
-
-    instantiate_axpby(float32, float);
-    instantiate_axpby(float16, half);
-    instantiate_axpby(bfloat16, bfloat16_t);
-    instantiate_axpby(complex64, complex64_t);
+    instantiate_kernel("axpby_general_float32", axpby_general, float)
+    instantiate_kernel("axpby_general_float16", axpby_general, float16_t)
+    instantiate_kernel("axpby_general_bfloat16", axpby_general, bfloat16_t)
+    instantiate_kernel("axpby_general_complex64", axpby_general, complex64_t)
 
 The logic to determine the kernel, set the inputs, resolve the grid dimensions,
 and dispatch to the GPU are contained in :meth:`Axpby::eval_gpu` as shown
