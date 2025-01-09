@@ -712,7 +712,11 @@ std::vector<array> Broadcast::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  return {broadcast_to(tangents[0], shape_, stream())};
+  return {array(
+      shape_,
+      tangents[0].dtype(),
+      std::make_shared<Broadcast>(stream(), shape_),
+      tangents)};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(

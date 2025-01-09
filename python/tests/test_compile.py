@@ -883,6 +883,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = cfun(a, b)
         self.assertEqual(out.shape, (2, 3, 4, 5))
 
+        # Shapeless compile should be preserved over vjp, jvp, vmap
+        def fun(args):
+            return sum(args).sum()
+
+        a = mx.array(0.0)
+        b = mx.ones((2, 2))
+
+        # cfun = mx.compile(mx.grad(fun), shapeless=True)
+        # out = cfun((a, b))
+
+        # self.assertEqual(out[0].shape, ())
+        # self.assertEqual(out[1].shape, (2, 2))
+
+        # out = cfun((b, a))
+
+        # self.assertEqual(out[0].shape, (2, 2))
+        # self.assertEqual(out[1].shape, ())
+
 
 if __name__ == "__main__":
     unittest.main()

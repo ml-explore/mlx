@@ -1401,7 +1401,8 @@ array broadcast_to(
 }
 
 /** Broadcast the input arrays against one another while ignoring the
- * axes specified in `ignore_axes`. The `ignore_axes` should be:
+ * axes specified in `ignore_axes`. Note, this API is internal only.
+ * The `ignore_axes` should be:
  * - negative values indicating axes from the end
  * - sorted in increasing order
  */
@@ -1415,7 +1416,14 @@ std::vector<array> broadcast_arrays(
   std::vector<array> outputs;
   auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
   for (auto& in : inputs) {
-    for (auto ax : ignore_axes) {
+    for (int i = 0; i < ignore_axes.size(); ++i) {
+      auto ax = ignore_axes[i];
+      auto pos_ax = in.ndim() + ax;
+      if (pos_ax < 0 || pos_ax > in.ndim() ||
+          (i > 0 && ax <= ignore_axes[i - 1])) {
+        throw std::invalid_argument(
+            "[broadcast_arrays] Received invalid axes to ignore.");
+      }
       shape[shape.size() + ax] = in.shape(ax);
     }
     if (in.shape() == shape) {
