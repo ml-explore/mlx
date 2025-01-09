@@ -1216,7 +1216,7 @@ METAL_FUNC void adjust_matrix_offsets(
     const device T*& scales,
     const device T*& biases,
     device T*& y,
-    int output_stride,
+    int out_vec_size,
     const constant int& x_batch_ndims,
     const constant int* x_shape,
     const constant int64_t* x_strides,
@@ -1245,6 +1245,7 @@ METAL_FUNC void adjust_matrix_offsets(
     scales += idx.y;
     biases += idx.z;
   }
+  int output_stride = out_vec_size * x_shape[x_batch_ndims];
   y += tid.z * output_stride;
 }
 
@@ -1257,7 +1258,7 @@ METAL_FUNC void adjust_matrix_offsets(
     const device uint32_t* lhs_indices,
     const device uint32_t* rhs_indices,
     device T*& y,
-    int output_stride,
+    int out_vec_size,
     const constant int& batch_ndims,
     const constant int* batch_shape,
     const constant int64_t* lhs_strides,
@@ -1299,6 +1300,7 @@ METAL_FUNC void adjust_matrix_offsets(
     scales += idx.y;
     biases += idx.z;
   }
+  int output_stride = out_vec_size * x_shape[x_batch_ndims];
   y += tid.z * output_stride;
 }
 
@@ -1605,7 +1607,7 @@ template <
         scales,
         biases,
         y,
-        M * N,
+        N,
         x_batch_ndims,
         x_shape,
         x_strides,
@@ -1664,7 +1666,7 @@ template <
         scales,
         biases,
         y,
-        M * N,
+        N,
         x_batch_ndims,
         x_shape,
         x_strides,
@@ -1913,7 +1915,7 @@ template <
       lhs_indices,
       rhs_indices,
       y,
-      M * N,
+      N,
       batch_ndims,
       batch_shape,
       lhs_strides,
@@ -1981,7 +1983,7 @@ template <
       lhs_indices,
       rhs_indices,
       y,
-      M * N,
+      N,
       batch_ndims,
       batch_shape,
       lhs_strides,
