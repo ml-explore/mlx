@@ -68,8 +68,7 @@ bool is_reduction(const Primitive& p) {
 }
 
 bool is_fusable(const Primitive& p) {
-  return is_unary(p) || is_binary(p) || is_ternary(p) || is_broadcast(p) ||
-      is_noop(p);
+  return is_unary(p) || is_binary(p) || is_ternary(p) || is_broadcast(p);
 }
 
 Compiled::Compiled(
