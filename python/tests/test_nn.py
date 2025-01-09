@@ -1835,6 +1835,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertFalse(mx.any(mx.isnan(mask)))
         self.assertTrue(mask[0, -1].item() < 0)
 
+    def test_attention(self):
+        attn = nn.MultiHeadAttention(32, 4)
+        x = mx.random.normal(shape=(2, 5, 32))
+        out = attn(x, x, x)
+        self.assertEqual(out.shape, x.shape)
+
 
 if __name__ == "__main__":
     unittest.main()
