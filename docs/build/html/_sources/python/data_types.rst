@@ -66,3 +66,4 @@ documentation for more information. Use :func:`issubdtype` to determine if one
    Dtype
    DtypeCategory
    issubdtype
+   finfo

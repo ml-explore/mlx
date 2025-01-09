@@ -1,23 +1,6 @@
 var searchData=
 [
-  ['randombits_0',['RandomBits',['../classmlx_1_1core_1_1_random_bits.html',1,'mlx::core']]],
-  ['reader_1',['Reader',['../classmlx_1_1core_1_1io_1_1_reader.html',1,'mlx::core::io']]],
-  ['readvector_2',['ReadVector',['../structmlx_1_1steel_1_1_block_loader_1_1_read_vector.html',1,'mlx::steel::BlockLoader']]],
-  ['readwriter_3',['ReadWriter',['../struct_read_writer.html',1,'']]],
-  ['real_4',['Real',['../structmlx_1_1core_1_1detail_1_1_real.html',1,'mlx::core::detail::Real'],['../classmlx_1_1core_1_1_real.html',1,'mlx::core::Real'],['../struct_real.html',1,'Real']]],
-  ['recv_5',['Recv',['../classmlx_1_1core_1_1distributed_1_1_recv.html',1,'mlx::core::distributed']]],
-  ['reduce_6',['Reduce',['../classmlx_1_1core_1_1_reduce.html',1,'mlx::core']]],
-  ['reductionplan_7',['ReductionPlan',['../structmlx_1_1core_1_1_reduction_plan.html',1,'mlx::core']]],
-  ['remainder_8',['Remainder',['../structmlx_1_1core_1_1detail_1_1_remainder.html',1,'mlx::core::detail::Remainder'],['../classmlx_1_1core_1_1_remainder.html',1,'mlx::core::Remainder'],['../struct_remainder.html',1,'Remainder']]],
-  ['reshape_9',['Reshape',['../classmlx_1_1core_1_1_reshape.html',1,'mlx::core']]],
-  ['residencyset_10',['ResidencySet',['../classmlx_1_1core_1_1metal_1_1_residency_set.html',1,'mlx::core::metal']]],
-  ['retaingraph_11',['RetainGraph',['../structmlx_1_1core_1_1detail_1_1_retain_graph.html',1,'mlx::core::detail']]],
-  ['rev_5fiter_12',['rev_iter',['../classpocketfft_1_1detail_1_1rev__iter.html',1,'pocketfft::detail']]],
-  ['rfftp_13',['rfftp',['../classpocketfft_1_1detail_1_1rfftp.html',1,'pocketfft::detail']]],
-  ['rightshift_14',['RightShift',['../structmlx_1_1core_1_1detail_1_1_right_shift.html',1,'mlx::core::detail::RightShift'],['../struct_right_shift.html',1,'RightShift']]],
-  ['rmsnorm_15',['RMSNorm',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html',1,'mlx::core::fast']]],
-  ['rmsnormvjp_16',['RMSNormVJP',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html',1,'mlx::core::fast']]],
-  ['rope_17',['RoPE',['../classmlx_1_1core_1_1fast_1_1_ro_p_e.html',1,'mlx::core::fast']]],
-  ['round_18',['Round',['../structmlx_1_1core_1_1detail_1_1_round.html',1,'mlx::core::detail::Round'],['../classmlx_1_1core_1_1_round.html',1,'mlx::core::Round'],['../struct_round.html',1,'Round']]],
-  ['rsqrt_19',['Rsqrt',['../structmlx_1_1core_1_1detail_1_1_rsqrt.html',1,'mlx::core::detail::Rsqrt'],['../struct_rsqrt.html',1,'Rsqrt']]]
+  ['qrf_0',['QRF',['../classmlx_1_1core_1_1_q_r_f.html',1,'mlx::core']]],
+  ['quantizedblockloader_1',['QuantizedBlockLoader',['../struct_quantized_block_loader.html',1,'']]],
+  ['quantizedmatmul_2',['QuantizedMatmul',['../classmlx_1_1core_1_1_quantized_matmul.html',1,'mlx::core']]]
 ];

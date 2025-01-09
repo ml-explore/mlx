@@ -1,0 +1,27 @@
+var transforms_8h =
+[
+    [ "mlx::core::SimpleValueAndGradFn", "namespacemlx_1_1core.html#a2689b8f1181648cb1685204fea9f3066", null ],
+    [ "mlx::core::ValueAndGradFn", "namespacemlx_1_1core.html#ab79d66ddf1ec38b2f2c01234892a2230", null ],
+    [ "mlx::core::async_eval", "namespacemlx_1_1core.html#abf8dae3b87a03a409711691cd9c097b6", null ],
+    [ "mlx::core::async_eval", "namespacemlx_1_1core.html#a15dda19aa7fa1fc5fca35df5cf963297", null ],
+    [ "mlx::core::checkpoint", "namespacemlx_1_1core.html#a42fa813d72c15132f76ef5fd1213ed71", null ],
+    [ "mlx::core::custom_function", "namespacemlx_1_1core.html#a8d3ca5fbaecdb995660c24cde5aeebaf", null ],
+    [ "mlx::core::custom_vjp", "namespacemlx_1_1core.html#a9290596250fa308df4c69b44483bb8aa", null ],
+    [ "mlx::core::eval", "namespacemlx_1_1core.html#adb14f689c9f75f7901edb196c2bfb971", null ],
+    [ "mlx::core::eval", "namespacemlx_1_1core.html#a7d6e097d8effed52f4713672e471f299", null ],
+    [ "mlx::core::grad", "namespacemlx_1_1core.html#a64bc619876b0f8cc81a2637ca81c99f7", null ],
+    [ "mlx::core::grad", "namespacemlx_1_1core.html#a3d2b2929ed4636e9e2b86e125b2e57d9", null ],
+    [ "mlx::core::grad", "namespacemlx_1_1core.html#af482f6c64acd77c57ef5bb4b7be9726c", null ],
+    [ "mlx::core::jvp", "namespacemlx_1_1core.html#af38e7582db29519bb39326f6fa531d20", null ],
+    [ "mlx::core::jvp", "namespacemlx_1_1core.html#a179a632200366c223d6ab56d3e032592", null ],
+    [ "mlx::core::value_and_grad", "namespacemlx_1_1core.html#a5a64dc878b29403d27e50bd7a288cc04", null ],
+    [ "mlx::core::value_and_grad", "namespacemlx_1_1core.html#a7620f1ae298127cb6181db9162f012a7", null ],
+    [ "mlx::core::value_and_grad", "namespacemlx_1_1core.html#a2f69ffc30d66b1fca8f24b65be161a51", null ],
+    [ "mlx::core::value_and_grad", "namespacemlx_1_1core.html#abf49b337a00997231c0f7fd389efa8f3", null ],
+    [ "mlx::core::value_and_grad", "namespacemlx_1_1core.html#a7b987f404b8699de00f9e0099ab6b1b0", null ],
+    [ "mlx::core::vjp", "namespacemlx_1_1core.html#a2065a11249c3f4356ffd69b7a8c487ff", null ],
+    [ "mlx::core::vjp", "namespacemlx_1_1core.html#a1b33e2c2e3471420490cf0be2de6de18", null ],
+    [ "mlx::core::vmap", "namespacemlx_1_1core.html#ac3caec2fa65375ed4c3bf1206177b84c", null ],
+    [ "mlx::core::vmap", "namespacemlx_1_1core.html#a8481a3bb4c12c2b7dc6ba576c2be3d0d", null ],
+    [ "mlx::core::vmap", "namespacemlx_1_1core.html#a95a7757e8d18fced38acfc6a3e8d686a", null ]
+];

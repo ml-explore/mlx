@@ -45,6 +45,7 @@ are the CPU and GPU.
    usage/numpy
    usage/distributed
    usage/using_streams
+   usage/export
 
 .. toctree::
    :caption: Examples
@@ -61,6 +62,7 @@ are the CPU and GPU.
    python/array
    python/data_types
    python/devices_and_streams
+   python/export
    python/ops
    python/random
    python/transforms
@@ -86,3 +88,4 @@ are the CPU and GPU.
    dev/extensions
    dev/metal_debugger
    dev/custom_metal_kernels
+   dev/mlx_in_cpp

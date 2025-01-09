@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.nn.HardShrink &#8212; MLX 0.21.1 documentation</title>
+    <title>mlx.nn.HardShrink &#8212; MLX 0.22.0 documentation</title>
   
   
   
@@ -16,8 +16,8 @@
     document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
     document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
   </script>
-  <!-- 
-    this give us a css class that will be invisible only if js is disabled 
+  <!--
+    this give us a css class that will be invisible only if js is disabled
   -->
   <noscript>
     <style>
@@ -27,19 +27,19 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=26a4bc78f4c0ddb94549" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=26a4bc78f4c0ddb94549" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
 
-    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/sphinx-book-theme.css?v=a3416100" />
   
   <!-- So that users can add custom icons -->
-  <script src="../../../_static/scripts/fontawesome.js?digest=26a4bc78f4c0ddb94549"></script>
+  <script src="../../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../_static/documentation_options.js?v=acb17c73"></script>
+    <script src="../../../_static/documentation_options.js?v=c952a61b"></script>
     <script src="../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -52,7 +52,7 @@
     <link rel="prev" title="mlx.nn.GRU" href="mlx.nn.GRU.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.21.1" />
+  <meta name="docsearch:version" content="0.22.0" />
   </head>
   
   
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.21.1 documentation - Home"/>
-    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.21.1 documentation - Home"/>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.22.0 documentation - Home"/>
+    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.22.0 documentation - Home"/>
   
   
 </a></div>
@@ -161,6 +161,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/distributed.html">Distributed Communication</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/using_streams.html">Using Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage/export.html">Exporting Functions</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="nav bd-sidenav">
@@ -229,6 +230,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.Dtype.html">mlx.core.Dtype</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.DtypeCategory.html">mlx.core.DtypeCategory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.issubdtype.html">mlx.core.issubdtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.finfo.html">mlx.core.finfo</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../devices_and_streams.html">Devices and Streams</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -241,6 +243,13 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.set_default_stream.html">mlx.core.set_default_stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.stream.html">mlx.core.stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.synchronize.html">mlx.core.synchronize</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../export.html">Export Functions</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.export_function.html">mlx.core.export_function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.import_function.html">mlx.core.import_function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.exporter.html">mlx.core.exporter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.export_to_dot.html">mlx.core.export_to_dot</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../ops.html">Operations</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -325,6 +334,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.isneginf.html">mlx.core.isneginf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.isposinf.html">mlx.core.isposinf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.issubdtype.html">mlx.core.issubdtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.kron.html">mlx.core.kron</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.left_shift.html">mlx.core.left_shift</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
@@ -380,6 +390,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.sign.html">mlx.core.sign</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.sin.html">mlx.core.sin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.sinh.html">mlx.core.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.slice.html">mlx.core.slice</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.slice_update.html">mlx.core.slice_update</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.softmax.html">mlx.core.softmax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.sort.html">mlx.core.sort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.split.html">mlx.core.split</a></li>
@@ -404,6 +416,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tri.html">mlx.core.tri</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tril.html">mlx.core.tril</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.triu.html">mlx.core.triu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.unflatten.html">mlx.core.unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.var.html">mlx.core.var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.view.html">mlx.core.view</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.where.html">mlx.core.where</a></li>
@@ -696,6 +709,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../dev/extensions.html">Custom Extensions in MLX</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../dev/metal_debugger.html">Metal Debugger</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../dev/custom_metal_kernels.html">Custom Metal Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../dev/mlx_in_cpp.html">Using MLX in C++</a></li>
 </ul>
 
     </div>
@@ -704,9 +718,14 @@
   
   
   <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
   </div>
-  
-  <div id="rtd-footer-container"></div>
 
 
       </div>
@@ -980,8 +999,8 @@ By MLX Contributors
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=26a4bc78f4c0ddb94549"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=26a4bc78f4c0ddb94549"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
 
   <footer class="bd-footer">
   </footer>

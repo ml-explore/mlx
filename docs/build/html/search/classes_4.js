@@ -10,5 +10,7 @@ var searchData=
   ['divide_7',['Divide',['../struct_divide.html',1,'Divide'],['../structmlx_1_1core_1_1detail_1_1_divide.html',1,'mlx::core::detail::Divide'],['../classmlx_1_1core_1_1_divide.html',1,'mlx::core::Divide']]],
   ['divmod_8',['DivMod',['../struct_div_mod.html',1,'DivMod'],['../classmlx_1_1core_1_1_div_mod.html',1,'mlx::core::DivMod']]],
   ['divop_9',['DivOp',['../struct_div_op.html',1,'']]],
-  ['dtype_10',['Dtype',['../structmlx_1_1core_1_1_dtype.html',1,'mlx::core']]]
+  ['dtype_10',['Dtype',['../structmlx_1_1core_1_1_dtype.html',1,'mlx::core']]],
+  ['dynamicslice_11',['DynamicSlice',['../classmlx_1_1core_1_1_dynamic_slice.html',1,'mlx::core']]],
+  ['dynamicsliceupdate_12',['DynamicSliceUpdate',['../classmlx_1_1core_1_1_dynamic_slice_update.html',1,'mlx::core']]]
 ];
