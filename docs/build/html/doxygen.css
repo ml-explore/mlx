@@ -1,4 +1,4 @@
-/* The standard CSS for doxygen 1.12.0*/
+/* The standard CSS for doxygen 1.13.1*/
 
 html {
 /* page base colors */
@@ -1810,6 +1810,11 @@ dl.invariant dt, dl.pre dt, dl.post dt {
 	padding: 2px 0px;
 }
 
+#side-nav #projectname
+{
+	font-size: 130%;
+}
+
 #projectbrief
 {
 	font-size: 90%;
@@ -2197,9 +2202,13 @@ th.markdownTableHeadCenter, td.markdownTableBodyCenter {
 	text-align: center
 }
 
-tt, code, kbd, samp
+tt, code, kbd
 {
   display: inline-block;
+}
+tt, code, kbd
+{
+  vertical-align: top;
 }
 /* @end */
 
