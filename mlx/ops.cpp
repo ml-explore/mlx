@@ -824,7 +824,7 @@ array slice_update(
 
   // Broadcast update with unspecified axes
   auto up_shape = update.shape();
-  auto dim_diff = std::max(src.ndim() - update.ndim(), 0ul);
+  auto dim_diff = std::max(src.ndim() - update.ndim(), size_t(0));
   up_shape.insert(
       up_shape.begin(), src.shape().begin(), src.shape().begin() + dim_diff);
   for (int d = dim_diff; d < src.ndim(); ++d) {
