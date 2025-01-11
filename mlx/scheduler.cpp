@@ -56,8 +56,12 @@ namespace scheduler {
 
 /** A singleton scheduler to manage devices, streams, and task execution. */
 Scheduler& scheduler() {
-  static Scheduler scheduler;
-  return scheduler;
+  // By creating the |scheduler| on heap, the destructor of Scheduler will not
+  // be called on exit and stream threads will not be joined. This is because
+  // the threads may already be destroyed by OS (especially on Windows) during
+  // process exit.
+  static Scheduler* scheduler = new Scheduler;
+  return *scheduler;
 }
 
 } // namespace scheduler
