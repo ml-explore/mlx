@@ -9,6 +9,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/utils.h"
@@ -263,12 +264,7 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.event().signal();
   };
   scheduler::enqueue(io_stream(), std::move(signal_task));
-  auto& d = metal::device(stream().device);
-  d.end_encoding(stream().index);
-  auto command_buffer = d.get_command_buffer(stream().index);
-  command_buffer->encodeWait(
-      static_cast<MTL::Event*>(out.event().raw_event().get()),
-      out.event().value());
+  encode_wait(out.event());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {

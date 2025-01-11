@@ -6,6 +6,26 @@
 
 namespace mlx::core {
 
+void encode_wait(Event e) {
+  auto& d = metal::device(e.stream().device);
+  d.end_encoding(e.stream().index);
+  auto command_buffer = d.get_command_buffer(e.stream().index);
+  command_buffer->encodeWait(
+      static_cast<MTL::Event*>(e.raw_event().get()), e.value());
+  command_buffer->addCompletedHandler(
+      [e = std::move(e)](MTL::CommandBuffer* cbuf) {});
+}
+
+void encode_signal(Event e) {
+  auto& d = metal::device(e.stream().device);
+  d.end_encoding(e.stream().index);
+  auto command_buffer = d.get_command_buffer(e.stream().index);
+  command_buffer->encodeSignalEvent(
+      static_cast<MTL::Event*>(e.raw_event().get()), e.value());
+  command_buffer->addCompletedHandler(
+      [e = std::move(e)](MTL::CommandBuffer* cbuf) {});
+}
+
 Event::Event(const Stream& stream) : stream_(stream) {
   auto dtor = [](void* ptr) {
     auto p = metal::new_scoped_memory_pool();
