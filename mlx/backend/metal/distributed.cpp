@@ -5,24 +5,18 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/event.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core::distributed {
 
-void signal_and_wait(const array& in, const array& out, const Stream& s) {
-  auto& d = metal::device(s.device);
-  d.end_encoding(s.index);
-  auto command_buffer = d.get_command_buffer(s.index);
+void signal_and_wait(const array& in, const array& out) {
   if (in.event().valid()) {
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(in.event().raw_event().get()),
-        in.event().value());
+    encode_signal(in.event());
   }
-  command_buffer->encodeWait(
-      static_cast<MTL::Event*>(out.event().raw_event().get()),
-      out.event().value());
+  encode_wait(out.event());
 }
 
 void AllReduce::eval_gpu(
@@ -58,7 +52,7 @@ void AllReduce::eval_gpu(
   };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
 
-  signal_and_wait(in, out, stream());
+  signal_and_wait(in, out);
 }
 
 void AllGather::eval_gpu(
@@ -79,7 +73,7 @@ void AllGather::eval_gpu(
     out.event().signal();
   };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
-  signal_and_wait(in, out, stream());
+  signal_and_wait(in, out);
 }
 
 void Send::eval_gpu(
@@ -104,14 +98,8 @@ void Send::eval_gpu(
 
   // Encode a signal event for the input but not a wait since we don't need to
   // wait on the output.
-  auto& s = stream();
-  auto& d = metal::device(s.device);
-  d.end_encoding(s.index);
-  auto command_buffer = d.get_command_buffer(s.index);
   if (in.event().valid()) {
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(in.event().raw_event().get()),
-        in.event().value());
+    encode_signal(in.event());
   }
 }
 
@@ -133,13 +121,7 @@ void Recv::eval_gpu(
   scheduler::enqueue(detail::communication_stream(), std::move(task));
 
   // Encode a wait event as there is no input for the recv to encode a signal.
-  auto& s = stream();
-  auto& d = metal::device(s.device);
-  d.end_encoding(s.index);
-  auto command_buffer = d.get_command_buffer(s.index);
-  command_buffer->encodeWait(
-      static_cast<MTL::Event*>(out.event().raw_event().get()),
-      out.event().value());
+  encode_wait(out.event());
 }
 
 } // namespace mlx::core::distributed
