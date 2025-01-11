@@ -63,6 +63,7 @@ struct CommandEncoder {
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
+  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
 
   void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
     enc_->setComputePipelineState(kernel);
@@ -110,6 +111,10 @@ struct CommandEncoder {
     return all_outputs_;
   };
 
+  void barrier() {
+    enc_->memoryBarrier(MTL::BarrierScopeBuffers);
+  }
+
  private:
   MTL::ComputeCommandEncoder* enc_;
   bool needs_barrier_{false};
@@ -136,6 +141,7 @@ struct DeviceStream {
     if (buffer != nullptr) {
       buffer->release();
     }
+    event_fence->release();
   };
   MTL::CommandQueue* queue;
   // A map of prior command encoder outputs to their corresponding fence
@@ -153,6 +159,7 @@ struct DeviceStream {
   std::unique_ptr<CommandEncoder> encoder{nullptr};
   std::shared_ptr<Fence> fence;
   std::vector<array> temporaries;
+  MTL::Fence* event_fence;
 };
 
 class Device {
@@ -177,6 +184,8 @@ class Device {
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
+  void barrier(int index);
+  MTL::Fence* get_event_fence(int index);
 
   void register_library(
       const std::string& lib_name,

@@ -134,6 +134,13 @@ CommandEncoder::~CommandEncoder() {
   enc_->release();
 }
 
+void CommandEncoder::set_buffer(
+    const MTL::Buffer* buf,
+    int idx,
+    int64_t offset /* = 0 */) {
+  enc_->setBuffer(buf, offset, idx);
+}
+
 void CommandEncoder::set_input_array(
     const array& a,
     int idx,
@@ -219,9 +226,14 @@ void Device::new_queue(int index) {
         "[metal::Device] Failed to make new command queue.");
   }
   stream_map_.emplace(index, q);
+  stream_map_.at(index).event_fence = device_->newFence();
   if (residency_set_ != nullptr) {
     q->addResidencySet(residency_set_);
   }
+}
+
+MTL::Fence* Device::get_event_fence(int index) {
+  return get_stream_(index).event_fence;
 }
 
 int Device::get_command_buffer_ops(int index) {
@@ -267,6 +279,27 @@ void Device::add_temporaries(std::vector<array> arrays, int index) {
       stream.temporaries.end(),
       std::make_move_iterator(arrays.begin()),
       std::make_move_iterator(arrays.end()));
+}
+
+void Device::barrier(int index) {
+  // If there is an active command encoder, add a barrier
+  auto& stream = get_stream_(index);
+
+  if (stream.encoder != nullptr) {
+    stream.encoder->barrier();
+  } else {
+    get_command_encoder(index);
+  }
+  std::unordered_set<std::shared_ptr<Fence>> waiting_on;
+  std::lock_guard<std::mutex> lk(stream.fence_mtx);
+  for (auto it = stream.outputs.begin(); it != stream.outputs.end(); ++it) {
+    if (waiting_on.find(it->second) == waiting_on.end()) {
+      stream.encoder->wait_for_fence(it->second->fence);
+      waiting_on.insert(it->second);
+    }
+  }
+  stream.buffer->addCompletedHandler(
+      [waiting_on = std::move(waiting_on)](MTL::CommandBuffer*) {});
 }
 
 void Device::end_encoding(int index) {
@@ -338,6 +371,7 @@ CommandEncoder& Device::get_command_encoder(int index) {
   if (stream.encoder == nullptr) {
     stream.encoder = std::make_unique<CommandEncoder>(stream.buffer);
     stream.fence = std::make_shared<Fence>(device_->newFence());
+    stream.encoder->wait_for_fence(stream.event_fence);
   }
   return *stream.encoder;
 }

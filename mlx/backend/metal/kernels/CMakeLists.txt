@@ -46,6 +46,10 @@ build_kernel(rms_norm)
 build_kernel(rope)
 build_kernel(scaled_dot_product_attention sdpa_vector.h)
 
+if(MLX_FAST_SYNCHRONIZE)
+  build_kernel(events)
+endif()
+
 set(STEEL_HEADERS
     steel/defines.h
     steel/utils.h

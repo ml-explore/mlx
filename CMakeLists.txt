@@ -22,6 +22,7 @@ option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+option(MLX_FAST_SYNCHRONIZE "Experimental fast synchronization" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
