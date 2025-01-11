@@ -139,6 +139,8 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.value_and_grad(fun, (None, None))
         with self.assertRaises(ValueError):
             mx.value_and_grad(fun, tuple())
+        with self.assertRaises(ValueError):
+            mx.grad(fun, argnums=(0, 0))
 
     def test_auxiliary_values(self):
         def fun(x, y):
