@@ -63,6 +63,10 @@ class EmptyGroup : public GroupImpl {
     throw std::runtime_error(
         "Communication not implemented in an empty distributed group.");
   }
+  void barrier() override {
+    throw std::runtime_error(
+        "Barrier not implemented in an empty distributed group.");
+  }
 };
 
 } // namespace detail
@@ -127,6 +131,10 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
   // the graph is evaluated
   detail::communication_stream();
   return Group(group);
+}
+
+void Group::barrier() {
+  return group_->barrier();
 }
 
 } // namespace mlx::core::distributed
