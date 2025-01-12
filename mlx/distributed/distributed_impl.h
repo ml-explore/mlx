@@ -21,6 +21,7 @@ class GroupImpl {
   virtual void all_gather(const array& input, array& output) = 0;
   virtual void send(const array& input, int dst) = 0;
   virtual void recv(array& out, int src) = 0;
+  virtual void barrier() = 0;
 };
 
 /* Return the communication stream. */
