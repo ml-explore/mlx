@@ -349,7 +349,7 @@ class MPIGroup : public GroupImpl {
     });
   }
 
-  void barrier() {
+  void barrier() override {
     mpi().barrier(comm_);
   }
 
@@ -360,40 +360,6 @@ class MPIGroup : public GroupImpl {
   int size_;
 };
 
-MPI_Comm to_comm(Group& group) {
-  return std::static_pointer_cast<MPIGroupImpl>(group.raw_group())->comm();
-}
-
-} // namespace
-
-int Group::rank() {
-  return std::static_pointer_cast<MPIGroupImpl>(group_)->rank();
-}
-
-int Group::size() {
-  return std::static_pointer_cast<MPIGroupImpl>(group_)->size();
-}
-
-Group Group::split(int color, int key) {
-  auto mpi_group = std::static_pointer_cast<MPIGroupImpl>(group_);
-
-  key = (key < 0) ? rank() : key;
-
-  MPI_Comm new_comm;
-  int result = mpi().comm_split(mpi_group->comm(), color, key, &new_comm);
-  if (result != MPI_SUCCESS) {
-    throw std::runtime_error("MPI could not split this group");
-  }
-
-  return Group(std::make_shared<MPIGroupImpl>(new_comm, false));
-}
-
-void Group::barrier() {
-  auto mpi_group = std::static_pointer_cast<MPIGroupImpl>(group_);
-  mpi_group->barrier();
-}
-
->>>>>>> c3ccd4919 (Add MPI barrier)
 bool is_available() {
   return mpi().is_available();
 }
