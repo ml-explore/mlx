@@ -340,36 +340,19 @@ void _recv(int sock, T* data, size_t start, size_t stop) {
 
 template <typename T>
 void _recv_sum(int sock, T* data, size_t start, size_t stop) {
-  static ThreadPool process_pool_(1);
   data += start;
-  char buffer[2 * PACKET_SIZE];
-  char* recv_buffer = buffer;
-  char* process_buffer = buffer + PACKET_SIZE;
-  std::future<void> sum_done;
+  char buffer[PACKET_SIZE];
   size_t len = (stop - start) * sizeof(T);
   while (len > 0) {
-    // Recv the first packet
-    ssize_t r = recv(sock, recv_buffer, std::min(len, PACKET_SIZE), 0);
+    ssize_t r = recv(sock, buffer, std::min(len, PACKET_SIZE), 0);
     if (r <= 0) {
       std::ostringstream msg;
       msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
       throw std::runtime_error(msg.str());
     }
-
-    // There was a previous sum running so wait till it is done.
-    if (sum_done.valid()) {
-      sum_done.wait();
-    }
-
-    sum_done = process_pool_.enqueue(
-        sum_inplace<T>, (const T*)process_buffer, data, r / sizeof(T));
+    sum_inplace((const T*)buffer, data, r / sizeof(T));
     data += r / sizeof(T);
     len -= r;
-  }
-
-  // Wait for the last summation
-  if (sum_done.valid()) {
-    sum_done.wait();
   }
 }
 
@@ -378,7 +361,7 @@ void _recv_sum(int sock, T* data, size_t start, size_t stop) {
 class RingGroup : public GroupImpl {
  public:
   RingGroup(int rank, std::vector<std::vector<address_t>> nodes)
-      : rank_(rank), comm_pool_(MAX_THREADS) {
+      : rank_(rank), pool_(MAX_THREADS) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
           "[ring] Rank cannot be larger than the size of the group");
@@ -487,7 +470,7 @@ class RingGroup : public GroupImpl {
           recv_size / recv_channels + (recv_size % recv_channels > 0);
       for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
         if (i < send_sockets_.size()) {
-          futures.push_back(comm_pool_.enqueue(
+          futures.push_back(pool_.enqueue(
               _send<T>,
               send_sockets_[i],
               data,
@@ -495,7 +478,7 @@ class RingGroup : public GroupImpl {
               std::min(send_stop, send_start + (i + 1) * send_step)));
         }
         if (i < recv_sockets_.size()) {
-          futures.push_back(comm_pool_.enqueue(
+          futures.push_back(pool_.enqueue(
               _recv_sum<T>,
               recv_sockets_[i],
               data,
@@ -531,7 +514,7 @@ class RingGroup : public GroupImpl {
           recv_size / recv_channels + (recv_size % recv_channels > 0);
       for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
         if (i < send_sockets_.size()) {
-          futures.push_back(comm_pool_.enqueue(
+          futures.push_back(pool_.enqueue(
               _send<T>,
               send_sockets_[i],
               data,
@@ -539,7 +522,7 @@ class RingGroup : public GroupImpl {
               std::min(send_stop, send_start + (i + 1) * send_step)));
         }
         if (i < recv_sockets_.size()) {
-          futures.push_back(comm_pool_.enqueue(
+          futures.push_back(pool_.enqueue(
               _recv<T>,
               recv_sockets_[i],
               data,
@@ -562,7 +545,7 @@ class RingGroup : public GroupImpl {
   int rank_;
   int size_;
 
-  ThreadPool comm_pool_;
+  ThreadPool pool_;
 
   std::vector<int> send_sockets_;
   std::vector<int> recv_sockets_;
