@@ -424,7 +424,21 @@ class RingGroup : public GroupImpl {
     }
 
     // All reduce in place
-    SWITCH_TYPE(output, all_sum<T>(output));
+    if (output.size() < size_) {
+      if (output.itemsize() * size_ > 1024) {
+        std::ostringstream msg;
+        msg << "Can't perform the ring all reduce of " << output.size()
+            << " elements with a ring of size " << size_;
+        throw std::runtime_error(msg.str());
+      }
+      char buffer[1024];
+      memset(buffer, 0, size_ * output.itemsize());
+      memcpy(buffer, output.data<char>(), output.nbytes());
+      SWITCH_TYPE(output, all_sum<T>((T*)buffer, size_));
+      memcpy(output.data<char>(), buffer, output.nbytes());
+    } else {
+      SWITCH_TYPE(output, all_sum<T>(output.data<T>(), output.size()));
+    }
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
@@ -442,24 +456,23 @@ class RingGroup : public GroupImpl {
 
  private:
   template <typename T>
-  void all_sum(array& output) {
+  void all_sum(T* data, size_t data_size) {
     size_t send_channels = send_sockets_.size();
     size_t recv_channels = recv_sockets_.size();
     std::vector<std::future<void>> futures;
     futures.reserve(send_channels + recv_channels);
 
-    T* data = output.data<T>();
-    size_t step = output.size() / size_ + (output.size() % size_ > 0);
+    size_t step = data_size / size_ + (data_size % size_ > 0);
 
     // Scatter reduce steps
-    int send_segment = size_ - 1 - rank_;
+    int send_segment = rank_;
     int recv_segment = (send_segment + size_ - 1) % size_;
     for (int i = 0; i < size_ - 1; i++) {
       // Compute the send and recv locations
       size_t send_start = send_segment * step;
-      size_t send_stop = std::min((send_segment + 1) * step, output.size());
+      size_t send_stop = std::min((send_segment + 1) * step, data_size);
       size_t recv_start = recv_segment * step;
-      size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
+      size_t recv_stop = std::min((recv_segment + 1) * step, data_size);
 
       // Send and recv sum
       size_t send_size = send_stop - send_start;
@@ -501,9 +514,9 @@ class RingGroup : public GroupImpl {
     for (int i = 0; i < size_ - 1; i++) {
       // Compute the send and recv locations
       size_t send_start = send_segment * step;
-      size_t send_stop = std::min((send_segment + 1) * step, output.size());
+      size_t send_stop = std::min((send_segment + 1) * step, data_size);
       size_t recv_start = recv_segment * step;
-      size_t recv_stop = std::min((recv_segment + 1) * step, output.size());
+      size_t recv_stop = std::min((recv_segment + 1) * step, data_size);
 
       // Send and recv
       size_t send_size = send_stop - send_start;
