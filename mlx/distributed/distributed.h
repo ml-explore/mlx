@@ -56,6 +56,6 @@ struct Group {
  * distributed subsystem. Otherwise simply return a singleton group which will
  * render communication operations as no-op.
  */
-Group init(bool strict = false, Backend bk = Backend::MPI);
+Group init(bool strict = false, Backend bk = Backend::Any);
 
 } // namespace mlx::core::distributed
