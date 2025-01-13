@@ -76,7 +76,6 @@
 
 namespace mlx::core::distributed::ring {
 
-constexpr const size_t MESSAGE_SIZE = 8 * 1024 * 1024;
 constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
@@ -286,11 +285,6 @@ std::vector<int> make_connections(const std::vector<address_t>& addresses) {
   return sockets;
 }
 
-template <typename T>
-T ceildiv(T a, T b) {
-  return (a + b - 1) / b;
-}
-
 array ensure_row_contiguous(const array& arr) {
   if (arr.flags().row_contiguous) {
     return arr;
@@ -359,37 +353,6 @@ void _recv_sum(int sock, T* data, size_t start, size_t stop) {
     sum_inplace((const T*)buffer, data, r / sizeof(T));
     data += r / sizeof(T);
     len -= r;
-  }
-}
-
-struct Task {
-  enum Type { Send, Recv, RecvSum };
-
-  Task(Type type_, int socket_, size_t start_, size_t stop_)
-      : type(type_), socket(socket_), start(start_), stop(stop_) {}
-
-  Type type;
-  int socket;
-  size_t start;
-  size_t stop;
-};
-
-template <typename T>
-void communication_task(Task t, T* data) {
-  if (t.stop <= t.start) {
-    return;
-  }
-
-  switch (t.type) {
-    case Task::Send:
-      _send<T>(t.socket, data, t.start, t.stop);
-      break;
-    case Task::Recv:
-      _recv<T>(t.socket, data, t.start, t.stop);
-      break;
-    case Task::RecvSum:
-      _recv_sum<T>(t.socket, data, t.start, t.stop);
-      break;
   }
 }
 
@@ -480,95 +443,6 @@ class RingGroup : public GroupImpl {
  private:
   template <typename T>
   void all_sum(array& output) {
-    // Compute some sizes
-    size_t data_size = output.size();
-    size_t segment_size = data_size / size_ + (data_size % size_ > 0);
-    size_t message_size = MESSAGE_SIZE;
-    int n_msgs = ceildiv(segment_size, message_size);
-
-    // Allocate space for the division of the all reduce in smaller tasks.
-    std::vector<Task> tasks;
-    tasks.reserve(2 * n_msgs * 2 * (size_ - 1));
-    std::vector<std::future<void>> futures;
-    futures.reserve(2 * n_msgs);
-
-    // Initial communication segments
-    int send_segment = size_ - 1 - rank_;
-    int recv_segment = (send_segment + size_ - 1) % size_;
-
-    // Scatter reduce steps
-    for (int i = 0; i < size_ - 1; i++) {
-      // Compute the send and recv locations
-      size_t send_start = send_segment * segment_size;
-      size_t send_stop = std::min((send_segment + 1) * segment_size, data_size);
-      size_t recv_start = recv_segment * segment_size;
-      size_t recv_stop = std::min((recv_segment + 1) * segment_size, data_size);
-
-      // Split the step into n_msgs and put the tasks in the task list
-      for (int i = 0; i < n_msgs; i++) {
-        tasks.emplace_back(
-            Task::Send,
-            send_sockets_[i % send_sockets_.size()],
-            send_start + i * message_size,
-            std::min(send_start + (i + 1) * message_size, send_stop));
-        tasks.emplace_back(
-            Task::RecvSum,
-            recv_sockets_[i % recv_sockets_.size()],
-            recv_start + i * message_size,
-            std::min(recv_start + (i + 1) * message_size, recv_stop));
-      }
-
-      send_segment = (send_segment + size_ - 1) % size_;
-      recv_segment = (recv_segment + size_ - 1) % size_;
-    }
-
-    // Gather results
-    for (int i = 0; i < size_ - 1; i++) {
-      // Compute the send and recv locations
-      size_t send_start = send_segment * segment_size;
-      size_t send_stop = std::min((send_segment + 1) * segment_size, data_size);
-      size_t recv_start = recv_segment * segment_size;
-      size_t recv_stop = std::min((recv_segment + 1) * segment_size, data_size);
-
-      for (int i = 0; i < n_msgs; i++) {
-        tasks.emplace_back(
-            Task::Send,
-            send_sockets_[i % send_sockets_.size()],
-            send_start + i * message_size,
-            std::min(send_start + (i + 1) * message_size, send_stop));
-        tasks.emplace_back(
-            Task::Recv,
-            recv_sockets_[i % recv_sockets_.size()],
-            recv_start + i * message_size,
-            std::min(recv_start + (i + 1) * message_size, recv_stop));
-      }
-
-      send_segment = (send_segment + size_ - 1) % size_;
-      recv_segment = (recv_segment + size_ - 1) % size_;
-    }
-
-    // Actually queue the tasks and wait until they previous have finished
-    // before queuing more.
-    //
-    // TODO: Maybe put the waiting into the communication task to avoid
-    // unnecessary
-    //       waiting. Currently we wait for the step to finish while we could
-    //       be already sending the next sub-steps.
-    T* data = output.data<T>();
-    for (int i = 0; i < tasks.size(); i += 2 * n_msgs) {
-      for (int j = 0; j < 2 * n_msgs; j++) {
-        futures.push_back(
-            pool_.enqueue(communication_task<T>, tasks[i + j], data));
-      }
-      for (auto& fut : futures) {
-        fut.wait();
-      }
-      futures.clear();
-    }
-  }
-
-  template <typename T>
-  void _all_sum(array& output) {
     size_t send_channels = send_sockets_.size();
     size_t recv_channels = recv_sockets_.size();
     std::vector<std::future<void>> futures;
