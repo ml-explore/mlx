@@ -672,3 +672,354 @@ winograd_conv_2d_output_transform(
 instantiate_winograd_conv_2d(float32, float);
 instantiate_winograd_conv_2d(bfloat16, bfloat16_t);
 instantiate_winograd_conv_2d(float16, half); // clang-format on
+
+#include "mlx/backend/metal/kernels/steel/attn/mma.h"
+
+template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
+[[kernel]] void winograd_fused(
+    const device T* input [[buffer(0)]],
+    const device T* weight [[buffer(1)]],
+    device T* output [[buffer(2)]],
+    const constant MLXConvParams<2>& params [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 tgp_per_grid [[threadgroups_per_grid]],
+    ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+    ushort simd_lane_id [[thread_index_in_simdgroup]]) {
+  using namespace mlx::steel;
+
+  // Winograd F(n x n, r x r)
+  // n x n output window
+  constexpr short FN = 2;
+  // r x r filter size
+  constexpr short FR = 3;
+  // a x a input window, a = n + r - 1
+  constexpr short FA = 4;
+
+  constexpr short kFragSize = 8; // MMA frag size
+
+  constexpr short BT = 8; // Tile block size
+  constexpr short BO = 8; // Output channel block size
+  constexpr short BC = 8; // Input channel block size
+
+  // clang-format off
+  static_assert(BT % (1 * kFragSize) == 0 && 
+                BO % (1 * kFragSize) == 0 && 
+                BC % kFragSize == 0,
+                "Matmuls sizes must be compatible with fragments");
+  // clang-format on
+
+  // Prepare for matmul
+
+  // Warp tile sizes for matmul
+  constexpr short TM = (FA * FA * BT) / (WM * kFragSize);
+  constexpr short TN = (BO) / (WN * kFragSize);
+  constexpr short TK = (BC) / (kFragSize);
+
+  // Warp primitives
+  using MMAFrag_inp_t = BaseMMAFrag<T, kFragSize, kFragSize>;
+  using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
+
+  // Warp tiles sizes for matmul
+  MMATile<T, TM, TK, MMAFrag_inp_t> Itile;
+  MMATile<T, TK, TN, MMAFrag_inp_t> Wtile;
+  MMATile<AccumType, TM, TN, MMAFrag_acc_t> Otile;
+
+  Otile.clear();
+
+  // Threadgroup memory for Weights and Inputs
+  constexpr short BS = BT > BO ? BT : BO;
+  threadgroup T Wt[FA * FA * BC * BO];
+  threadgroup T It[FA * FA * BS * BS];
+
+  // Get thread position in tile
+  short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
+  const short sm = simd_coord.y;
+  const short sn = simd_coord.x;
+
+  static_assert(FA * FA * BT == 32 * WM * WN, "Each thread loads one pixel.");
+  const int thr_idx = simd_group_id * 32 + simd_lane_id;
+  const int thr_t = thr_idx / (FA * FA);
+  const int thr_hw = thr_idx % (FA * FA);
+  const int thr_h = thr_hw / FA;
+  const int thr_w = thr_hw % FA;
+
+  // Get batch, tile, and output idx for warp
+  const int b_idx = tid.z;
+  const int t_idx = BT * tid.y + thr_t;
+  const int o_idx = BO * tid.x + thr_t;
+
+  // Divide tile into h, w tile
+  uniform<int> oHu = make_uniform(params.oS[0]);
+  uniform<int> oWu = make_uniform(params.oS[1]);
+  uniform<int> tHu = (oHu + make_uniform(FN - 1)) / make_uniform(FN);
+  uniform<int> tWu = (oWu + make_uniform(FN - 1)) / make_uniform(FN);
+
+  const int oH_idx = FN * (t_idx / tWu);
+  const int oW_idx = FN * (t_idx % tWu);
+  const int iH_idx = oH_idx + thr_h - params.pad[0];
+  const int iW_idx = oW_idx + thr_w - params.pad[1];
+
+  // Move to correct location
+
+  // clang-format off
+  input +=  b_idx * int64_t(params.in_strides[0]) + // N
+           iH_idx * int64_t(params.in_strides[1]) + // H
+           iW_idx * int64_t(params.in_strides[2]);  // W
+
+  // output +=  b_idx * int64_t(params.out_strides[0]) + // N
+  //           oH_idx * int64_t(params.out_strides[1]) + // H
+  //           oW_idx * int64_t(params.out_strides[2]) + // W
+  //           o_idx;                                    // C
+
+  weight += o_idx * params.wt_strides[0] + // O
+            thr_h * params.wt_strides[1] + // H 
+            thr_w * params.wt_strides[2];  // W
+  // clang-format on
+
+  // Do edge check prep for input
+  const bool is_edge_w_lo = iH_idx < 0;
+  const bool is_edge_h_lo = iW_idx < 0;
+  const bool is_edge_w_hi = iH_idx >= params.iS[0];
+  const bool is_edge_h_hi = iW_idx >= params.iS[1];
+  const bool is_edge =
+      is_edge_w_lo || is_edge_h_lo || is_edge_w_hi || is_edge_h_hi;
+
+  // Iterate over C
+  for (int c = 0; c < params.C; c += BC) {
+    // Load weight
+
+#define tmp_load_wt_idx(o, h, w, c) o* FA* FA* BC + h* FA* BC + w* BC + c
+#define tmp_load_in_idx(t, h, w, c) t* FA* FA* BC + h* FA* BC + w* BC + c
+
+#define tmp_trns_wt_idx(o, h, w, c) h* FA* BC* BO + w* BC* BO + c* BO + o
+#define tmp_trns_in_idx(t, h, w, c) h* FA* BS* BC + w* BS* BC + t* BC + c
+
+    if (thr_h < FR && thr_w < FR && thr_t < BO) {
+      for (int ic = 0; ic < BC; ic++) {
+        Wt[tmp_load_wt_idx(thr_t, thr_h, thr_w, ic)] = weight[c + ic];
+      }
+    }
+
+    // Load input
+    if (is_edge) {
+      for (int ic = 0; ic < BC; ic++) {
+        It[tmp_load_in_idx(thr_t, thr_h, thr_w, ic)] = T(0);
+      }
+    } else {
+      for (int ic = 0; ic < BC; ic++) {
+        It[tmp_load_in_idx(thr_t, thr_h, thr_w, ic)] = input[c + ic];
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Transform weight
+    if (simd_group_id < 2) {
+      const short ig = simd_group_id * 32 + simd_lane_id;
+      const short ic = ig / BO;
+      const short io = ig % BO;
+
+      T tmp_0[4][4];
+      T tmp_1[4][4];
+
+      for (int ii = 0; ii < 3; ++ii) {
+        for (int jj = 0; jj < 3; ++jj) {
+          tmp_0[ii][jj] = Wt[tmp_load_wt_idx(io, ii, jj, ic)];
+        }
+      }
+
+      tmp_1[0][0] = tmp_0[0][0];
+      tmp_1[0][1] = tmp_0[0][1];
+      tmp_1[0][2] = tmp_0[0][2];
+
+      tmp_1[1][0] = T(0.5) * (tmp_0[0][0] + tmp_0[1][0] + tmp_0[2][0]);
+      tmp_1[1][1] = T(0.5) * (tmp_0[0][1] + tmp_0[1][1] + tmp_0[2][1]);
+      tmp_1[1][2] = T(0.5) * (tmp_0[0][2] + tmp_0[1][2] + tmp_0[2][2]);
+
+      tmp_1[2][0] = tmp_1[1][0] - tmp_0[1][0];
+      tmp_1[2][1] = tmp_1[1][1] - tmp_0[1][1];
+      tmp_1[2][2] = tmp_1[1][2] - tmp_0[1][2];
+
+      tmp_1[3][0] = tmp_0[2][0];
+      tmp_1[3][1] = tmp_0[2][1];
+      tmp_1[3][2] = tmp_0[2][2];
+
+      //////////////////////////////////////////////
+      tmp_0[0][0] = tmp_1[0][0];
+      tmp_0[1][0] = tmp_1[1][0];
+      tmp_0[2][0] = tmp_1[2][0];
+      tmp_0[3][0] = tmp_1[3][0];
+
+      tmp_0[0][1] = T(0.5) * (tmp_1[0][0] + tmp_1[0][1] + tmp_1[0][2]);
+      tmp_0[1][1] = T(0.5) * (tmp_1[1][0] + tmp_1[1][1] + tmp_1[1][2]);
+      tmp_0[2][1] = T(0.5) * (tmp_1[2][0] + tmp_1[2][1] + tmp_1[2][2]);
+      tmp_0[3][1] = T(0.5) * (tmp_1[3][0] + tmp_1[3][1] + tmp_1[3][2]);
+
+      tmp_0[0][2] = tmp_0[0][1] - tmp_1[0][1];
+      tmp_0[1][2] = tmp_0[1][1] - tmp_1[1][1];
+      tmp_0[2][2] = tmp_0[2][1] - tmp_1[2][1];
+      tmp_0[3][2] = tmp_0[3][1] - tmp_1[3][1];
+
+      tmp_0[0][3] = tmp_1[0][2];
+      tmp_0[1][3] = tmp_1[1][2];
+      tmp_0[2][3] = tmp_1[2][2];
+      tmp_0[3][3] = tmp_1[3][2];
+
+      for (int ii = 0; ii < 4; ++ii) {
+        for (int jj = 0; jj < 4; ++jj) {
+          Wt[tmp_trns_wt_idx(io, ii, jj, ic)] = tmp_0[ii][jj];
+        }
+      }
+    }
+
+    // Transform input
+    else { // (simd_group_id >= 2)
+      const short ig = (simd_group_id - 2) * 32 + simd_lane_id;
+      const short it = ig / BC;
+      const short ic = ig % BC;
+
+      T tmp_0[4][4];
+      T tmp_1[4][4];
+
+      for (int ii = 0; ii < 4; ++ii) {
+        for (int jj = 0; jj < 4; ++jj) {
+          tmp_0[ii][jj] = It[tmp_load_in_idx(it, ii, jj, ic)];
+        }
+      }
+
+      tmp_1[0][0] = tmp_0[0][0] - tmp_0[2][0];
+      tmp_1[0][1] = tmp_0[0][1] - tmp_0[2][1];
+      tmp_1[0][2] = tmp_0[0][2] - tmp_0[2][2];
+      tmp_1[0][3] = tmp_0[0][3] - tmp_0[2][3];
+
+      tmp_1[1][0] = tmp_0[1][0] + tmp_0[2][0];
+      tmp_1[1][1] = tmp_0[1][1] + tmp_0[2][1];
+      tmp_1[1][2] = tmp_0[1][2] + tmp_0[2][2];
+      tmp_1[1][3] = tmp_0[1][3] + tmp_0[2][3];
+
+      tmp_1[2][0] = tmp_0[2][0] - tmp_0[1][0];
+      tmp_1[2][1] = tmp_0[2][1] - tmp_0[1][1];
+      tmp_1[2][2] = tmp_0[2][2] - tmp_0[1][2];
+      tmp_1[2][3] = tmp_0[2][3] - tmp_0[1][3];
+
+      tmp_1[3][0] = tmp_0[1][0] - tmp_0[3][0];
+      tmp_1[3][1] = tmp_0[1][1] - tmp_0[3][1];
+      tmp_1[3][2] = tmp_0[1][2] - tmp_0[3][2];
+      tmp_1[3][3] = tmp_0[1][3] - tmp_0[3][3];
+
+      //////////////////////////////////////////////
+      tmp_0[0][0] = tmp_1[0][0] - tmp_1[0][2];
+      tmp_0[1][0] = tmp_1[1][0] - tmp_1[1][2];
+      tmp_0[2][0] = tmp_1[2][0] - tmp_1[2][2];
+      tmp_0[3][0] = tmp_1[3][0] - tmp_1[3][2];
+
+      tmp_0[0][1] = tmp_1[0][1] + tmp_1[0][2];
+      tmp_0[1][1] = tmp_1[1][1] + tmp_1[1][2];
+      tmp_0[2][1] = tmp_1[2][1] + tmp_1[2][2];
+      tmp_0[3][1] = tmp_1[3][1] + tmp_1[3][2];
+
+      tmp_0[0][2] = tmp_1[0][2] - tmp_1[0][1];
+      tmp_0[1][2] = tmp_1[1][2] - tmp_1[1][1];
+      tmp_0[2][2] = tmp_1[2][2] - tmp_1[2][1];
+      tmp_0[3][2] = tmp_1[3][2] - tmp_1[3][1];
+
+      tmp_0[0][3] = tmp_1[0][1] - tmp_1[0][3];
+      tmp_0[1][3] = tmp_1[1][1] - tmp_1[1][3];
+      tmp_0[2][3] = tmp_1[2][1] - tmp_1[2][3];
+      tmp_0[3][3] = tmp_1[3][1] - tmp_1[3][3];
+
+      for (int ii = 0; ii < 4; ++ii) {
+        for (int jj = 0; jj < 4; ++jj) {
+          It[tmp_trns_in_idx(it, ii, jj, ic)] = tmp_0[ii][jj];
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Do matmul
+    Itile.template load<T, 1, 1, BS, 1>(
+        &It[simd_group_id * FA * BS * BS + sm * BS + sn]);
+    simdgroup_barrier(mem_flags::mem_none);
+    Wtile.template load<T, 1, 1, BO, 1>(
+        &Wt[simd_group_id * FA * BC * BO + sm * BC + sn]);
+    simdgroup_barrier(mem_flags::mem_none);
+    tile_matmad(Otile, Itile, Wtile, Otile);
+  }
+
+  // Transform and write output
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  Otile.template store<T, 1, 1, BS, 1>(
+      &It[simd_group_id * FA * BS * BS + sm * BS + sn]);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (thr_idx < BT * (BO / 4)) {
+    const short it = thr_idx / (BO / 4);
+    const short io = thr_idx % (BO / 4);
+
+    metal::vec<T, 4> tmp_0[4][4];
+    metal::vec<T, 4> tmp_1[2][4];
+    metal::vec<T, 4> tmp_2[2][2];
+
+    for (int ii = 0; ii < 4; ++ii) {
+      for (int jj = 0; jj < 4; ++jj) {
+        tmp_0[ii][jj] = ((threadgroup metal::vec<T, 4>*)(&It[tmp_trns_in_idx(
+            it, ii, jj, 4 * io)]))[0];
+      }
+    }
+
+    tmp_1[0][0] = tmp_0[0][0] + tmp_0[1][0] + tmp_0[2][0];
+    tmp_1[0][1] = tmp_0[0][1] + tmp_0[1][1] + tmp_0[2][1];
+    tmp_1[0][2] = tmp_0[0][2] + tmp_0[1][2] + tmp_0[2][2];
+    tmp_1[0][3] = tmp_0[0][3] + tmp_0[1][3] + tmp_0[2][3];
+
+    tmp_1[1][0] = tmp_0[1][0] - tmp_0[2][0] - tmp_0[3][0];
+    tmp_1[1][1] = tmp_0[1][1] - tmp_0[2][1] - tmp_0[3][1];
+    tmp_1[1][2] = tmp_0[1][2] - tmp_0[2][2] - tmp_0[3][2];
+    tmp_1[1][3] = tmp_0[1][3] - tmp_0[2][3] - tmp_0[3][3];
+
+    tmp_2[0][0] = tmp_1[0][0] + tmp_1[0][1] + tmp_1[0][2] - tmp_1[0][3];
+    tmp_2[1][0] = tmp_1[1][0] + tmp_1[1][1] + tmp_1[1][2] - tmp_1[1][3];
+
+    tmp_2[0][1] = tmp_1[0][1] - tmp_1[0][2];
+    tmp_2[1][1] = tmp_1[1][1] - tmp_1[1][2];
+
+    const int oH_i = FN * ((BT * tid.y + it) / tWu);
+    const int oW_i = FN * ((BT * tid.y + it) % tWu);
+
+    // clang-format off
+    output += b_idx * int64_t(params.out_strides[0]) + // N
+              oH_i * int64_t(params.out_strides[1]) + // H
+              oW_i * int64_t(params.out_strides[2]) + // W
+              o_idx + io * 4;                         // C
+
+    // clang-format on
+
+    ((device metal::vec<T, 4>*)(&output[0]))[0] = tmp_2[0][0];
+    ((device metal::vec<T, 4>*)(&output[params.out_strides[2]]))[0] =
+        tmp_2[0][1];
+    ((device metal::vec<T, 4>*)(&output[params.out_strides[1]]))[0] =
+        tmp_2[1][0];
+    ((device metal::vec<
+        T,
+        4>*)(&output[params.out_strides[1] + params.out_strides[2]]))[0] =
+        tmp_2[1][1];
+  }
+}
+
+// clang-format off
+#define instantiate_winograd_conv_2d_fused(name, itype)    \
+  template [[host_name("winograd_conv_2d_fused_" #name)]]              \
+  [[kernel]] void winograd_fused<itype>(                  \
+      const device itype* input [[buffer(0)]],                        \
+      const device itype* weight [[buffer(1)]],                        \
+      device itype* output [[buffer(2)]],                             \
+      const constant MLXConvParams<2>& params [[buffer(3)]],           \
+      uint3 tid [[threadgroup_position_in_grid]],                      \
+      uint3 lid [[thread_position_in_threadgroup]],                    \
+      uint3 tgp_per_grid [[threadgroups_per_grid]],                    \
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],           \
+      ushort simd_lane_id [[thread_index_in_simdgroup]]);
+
+instantiate_winograd_conv_2d_fused(float32, float);
+// instantiate_winograd_conv_2d_fused(float16, float16_t);
+// clang-format on

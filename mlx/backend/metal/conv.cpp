@@ -533,6 +533,43 @@ void implicit_gemm_conv_2D_general_gpu(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void winograd_conv_2D_fused_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array out,
+    const MLXConvParams<2>& conv_params,
+    std::vector<array>& copies_w) {
+  int O_c = conv_params.O;
+  int C_c = conv_params.C;
+
+  int N_tiles_n = conv_params.N;
+  int N_tiles_h = (conv_params.oS[0] + 1) / 2;
+  int N_tiles_w = (conv_params.oS[1] + 1) / 2;
+  int N_tiles = N_tiles_n * N_tiles_h * N_tiles_w;
+
+  int bc = 32;
+  int wm = 4;
+  int wn = 1;
+  std::ostringstream kname;
+  kname << "winograd_conv_2d_fused_" << type_to_name(out);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_input_array(wt, 1);
+  compute_encoder.set_output_array(out, 2);
+
+  compute_encoder.set_bytes(conv_params, 3);
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(O_c / 8, N_tiles_h * N_tiles_w, N_tiles_n);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void winograd_conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -706,13 +743,14 @@ void conv_2D_gpu(
   }
 
   // Direct to winograd conv
-  bool inp_large =
+  bool inp_large = true ||
       (conv_params.N * conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
-  bool channels_large = (conv_params.C + conv_params.O) >= 256;
+  bool channels_large = true || (conv_params.C + conv_params.O) >= 256;
   if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
       channels_large) {
+    return winograd_conv_2D_fused_gpu(s, d, in, wt, out, conv_params, copies);
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
