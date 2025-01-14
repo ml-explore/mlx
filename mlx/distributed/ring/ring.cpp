@@ -86,6 +86,25 @@ using json = nlohmann::json;
 
 namespace {
 
+template <typename T>
+void log(std::ostream& os, T first) {
+  os << first << std::endl;
+}
+
+template <typename T, typename... Args>
+void log(std::ostream& os, T first, Args... args) {
+  log(os << first << " ", args...);
+}
+
+template <typename... Args>
+void log_info(bool verbose, Args... args) {
+  if (!verbose) {
+    return;
+  }
+
+  log(std::cerr, "[ring]", args...);
+}
+
 struct address_t {
   sockaddr_storage addr;
   socklen_t len;
@@ -243,7 +262,9 @@ std::vector<int> accept_connections(const std::vector<address_t>& addresses) {
  * The counterpoint of `accept_connections`. Basically connect to each of the
  * provided addresses.
  */
-std::vector<int> make_connections(const std::vector<address_t>& addresses) {
+std::vector<int> make_connections(
+    const std::vector<address_t>& addresses,
+    bool verbose) {
   std::vector<int> sockets;
   int success;
 
@@ -263,8 +284,15 @@ std::vector<int> make_connections(const std::vector<address_t>& addresses) {
 
       if (attempt > 0) {
         int wait = (1 << (attempt - 1)) * CONN_WAIT;
-        std::cout << "Attempt " << attempt << " wait " << wait << " ms "
-                  << "error: " << errno << std::endl;
+        log_info(
+            verbose,
+            "Attempt",
+            attempt,
+            "wait",
+            wait,
+            "ms (error:",
+            errno,
+            ")");
         std::this_thread::sleep_for(std::chrono::milliseconds(wait));
       }
 
@@ -360,8 +388,8 @@ void _recv_sum(int sock, T* data, size_t start, size_t stop) {
 
 class RingGroup : public GroupImpl {
  public:
-  RingGroup(int rank, std::vector<std::vector<address_t>> nodes)
-      : rank_(rank), pool_(MAX_THREADS) {
+  RingGroup(int rank, std::vector<std::vector<address_t>> nodes, bool verbose)
+      : rank_(rank), verbose_(verbose), pool_(MAX_THREADS) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
           "[ring] Rank cannot be larger than the size of the group");
@@ -373,14 +401,14 @@ class RingGroup : public GroupImpl {
     int success;
 
     if (rank_ < sendto) {
-      std::cout << "Rank " << rank_ << " accepting" << std::endl;
+      log_info(verbose_, "Rank", rank_, "accepting");
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
-      std::cout << "Rank " << rank_ << " connecting to " << sendto << std::endl;
-      send_sockets_ = std::move(make_connections(nodes[sendto]));
+      log_info(verbose_, "Rank", rank_, "connecting to", sendto);
+      send_sockets_ = std::move(make_connections(nodes[sendto], verbose));
     } else {
-      std::cout << "Rank " << rank_ << " connecting to " << sendto << std::endl;
-      send_sockets_ = std::move(make_connections(nodes[sendto]));
-      std::cout << "Rank " << rank_ << " accepting" << std::endl;
+      log_info(verbose_, "Rank", rank_, "connecting to", sendto);
+      send_sockets_ = std::move(make_connections(nodes[sendto], verbose));
+      log_info(verbose_, "Rank", rank_, "accepting");
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
     }
 
@@ -558,6 +586,8 @@ class RingGroup : public GroupImpl {
   int rank_;
   int size_;
 
+  bool verbose_;
+
   ThreadPool pool_;
 
   std::vector<int> send_sockets_;
@@ -571,6 +601,7 @@ bool is_available() {
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   const char* hostfile = std::getenv("MLX_HOSTFILE");
   const char* rank_str = std::getenv("MLX_RANK");
+  const char* ring_verbose = std::getenv("MLX_RING_VERBOSE");
 
   if (!hostfile || !rank_str) {
     if (strict) {
@@ -587,7 +618,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   auto nodes = load_nodes(hostfile);
   int rank = std::atoi(rank_str);
 
-  return std::make_shared<RingGroup>(rank, nodes);
+  return std::make_shared<RingGroup>(rank, nodes, ring_verbose != nullptr);
 }
 
 } // namespace mlx::core::distributed::ring
