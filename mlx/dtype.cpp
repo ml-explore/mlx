@@ -8,7 +8,7 @@ namespace mlx::core {
 
 namespace {
 
-constexpr int num_types = 13;
+constexpr int num_types = 14;
 constexpr int num_cats = 8;
 
 constexpr Dtype::Kind type_kinds[num_types] = {
@@ -23,6 +23,7 @@ constexpr Dtype::Kind type_kinds[num_types] = {
     Dtype::Kind::i, // int64,
     Dtype::Kind::f, // float16,
     Dtype::Kind::f, // float32,
+    Dtype::Kind::f, // float64,
     Dtype::Kind::V, // bfloat16,
     Dtype::Kind::c // complex64,
 };
@@ -31,20 +32,21 @@ constexpr Dtype::Kind type_kinds[num_types] = {
 // https://jax.readthedocs.io/en/latest/type_promotion.html
 // clang-format off
 constexpr Dtype type_rules[num_types][num_types] = {
-// bool       uint8      uint16     uint32     uint64     int8       int16      int32      int64      float16    float32    bfloat16   complex64
-  {bool_,     uint8,     uint16,    uint32,    uint64,    int8,      int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // bool
-  {uint8,     uint8,     uint16,    uint32,    uint64,    int16,     int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // uint8
-  {uint16,    uint16,    uint16,    uint32,    uint64,    int32,     int32,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // uint16
-  {uint32,    uint32,    uint32,    uint32,    uint64,    int64,     int64,     int64,     int64,     float16,   float32,   bfloat16,  complex64}, // uint32
-  {uint64,    uint64,    uint64,    uint64,    uint64,    float32,   float32,   float32,   float32,   float16,   float32,   bfloat16,  complex64}, // uint64
-  {int8,      int16,     int32,     int64,     float32,   int8,      int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // int8
-  {int16,     int16,     int32,     int64,     float32,   int16,     int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // int16
-  {int32,     int32,     int32,     int64,     float32,   int32,     int32,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // int32
-  {int64,     int64,     int64,     int64,     float32,   int64,     int64,     int64,     int64,     float16,   float32,   bfloat16,  complex64}, // int64
-  {float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float32,   float32,   complex64}, // float16
-  {float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   complex64}, // float32
-  {bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  float32,   float32,   bfloat16,  complex64}, // bfloat16
-  {complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64}, // complex64
+// bool       uint8      uint16     uint32     uint64     int8       int16      int32      int64      float16    float32   float64    bfloat16   complex64
+  {bool_,     uint8,     uint16,    uint32,    uint64,    int8,      int16,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // bool
+  {uint8,     uint8,     uint16,    uint32,    uint64,    int16,     int16,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // uint8
+  {uint16,    uint16,    uint16,    uint32,    uint64,    int32,     int32,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // uint16
+  {uint32,    uint32,    uint32,    uint32,    uint64,    int64,     int64,     int64,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // uint32
+  {uint64,    uint64,    uint64,    uint64,    uint64,    float32,   float32,   float32,   float32,   float16,   float32,  float64,   bfloat16,  complex64}, // uint64
+  {int8,      int16,     int32,     int64,     float32,   int8,      int16,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // int8
+  {int16,     int16,     int32,     int64,     float32,   int16,     int16,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // int16
+  {int32,     int32,     int32,     int64,     float32,   int32,     int32,     int32,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // int32
+  {int64,     int64,     int64,     int64,     float32,   int64,     int64,     int64,     int64,     float16,   float32,  float64,   bfloat16,  complex64}, // int64
+  {float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float16,   float32,  float64,   float32,   complex64}, // float16
+  {float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,  float64,   float32,   complex64}, // float32
+  {float64,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,   float32,  float64,   float32,   complex64}, // float64
+  {bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  bfloat16,  float32,   float32,  float64,   bfloat16,  complex64}, // bfloat16
+  {complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64,complex64, complex64, complex64}, // complex64
 };
 
 
@@ -72,6 +74,7 @@ constexpr Dtype::Category type_to_category[num_types] = {
     Dtype::Category::signedinteger, // int64,
     Dtype::Category::floating, // float16,
     Dtype::Category::floating, // float32,
+    Dtype::Category::floating, // float64,
     Dtype::Category::floating, // bfloat16,
     Dtype::Category::complexfloating, // complex64,
 };

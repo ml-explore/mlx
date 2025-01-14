@@ -104,6 +104,9 @@ void unary(const array& a, array& out, Op op) {
     case float32:
       unary_op<float>(a, out, op);
       break;
+    case float64:
+      unary_op<double>(a, out, op);
+      break;
     case bfloat16:
       unary_op<bfloat16_t>(a, out, op);
       break;
@@ -124,6 +127,9 @@ void unary_fp(const array& a, array& out, Op op) {
       break;
     case float32:
       unary_op<float>(a, out, op);
+      break;
+    case float64:
+      unary_op<double>(a, out, op);
       break;
     case complex64:
       unary_op<complex64_t>(a, out, op);

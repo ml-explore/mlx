@@ -54,6 +54,9 @@ inline void PrintFormatter::print(std::ostream& os, bfloat16_t val) {
 inline void PrintFormatter::print(std::ostream& os, float val) {
   os << val;
 }
+inline void PrintFormatter::print(std::ostream& os, double val) {
+  os << val;
+}
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
   os << val;
 }
@@ -234,6 +237,8 @@ std::ostream& operator<<(std::ostream& os, const Dtype& dtype) {
       return os << "float16";
     case float32:
       return os << "float32";
+    case float64:
+      return os << "float64";
     case bfloat16:
       return os << "bfloat16";
     case complex64:
@@ -298,6 +303,9 @@ std::ostream& operator<<(std::ostream& os, array a) {
       break;
     case float32:
       print_array<float>(os, a);
+      break;
+    case float64:
+      print_array<double>(os, a);
       break;
     case complex64:
       print_array<complex64_t>(os, a);

@@ -128,6 +128,7 @@ void init_array(nb::module_& m) {
   m.attr("int64") = nb::cast(mx::int64);
   m.attr("float16") = nb::cast(mx::float16);
   m.attr("float32") = nb::cast(mx::float32);
+  m.attr("float64") = nb::cast(mx::float64);
   m.attr("bfloat16") = nb::cast(mx::bfloat16);
   m.attr("complex64") = nb::cast(mx::complex64);
   nb::enum_<mx::Dtype::Category>(
@@ -163,6 +164,7 @@ void init_array(nb::module_& m) {
               * :ref:`float16 <data_types>`
               * :ref:`bfloat16 <data_types>`
               * :ref:`float32 <data_types>`
+              * :ref:`float64 <data_types>`
 
             * :attr:`~mlx.core.complexfloating`
 
