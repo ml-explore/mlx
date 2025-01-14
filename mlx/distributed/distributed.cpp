@@ -102,11 +102,11 @@ Group init(bool strict /* = false */, Backend bk /* = Backend::Any */) {
       group = ring::init(strict);
       break;
     case Backend::Any:
-      group = mpi::init(false);
-      bk = Backend::MPI;
+      group = ring::init(false);
+      bk = Backend::Ring;
       if (group == nullptr) {
-        group = ring::init(false);
-        bk = Backend::Ring;
+        group = mpi::init(false);
+        bk = Backend::MPI;
       }
       if (group == nullptr && strict) {
         throw std::runtime_error("Couldn't initialize any distributed backend");
