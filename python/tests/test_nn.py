@@ -195,6 +195,20 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
 
+    def test_grad_of_module(self):
+        class Model(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.m1 = nn.Linear(3, 3)
+
+        model = Model()
+
+        def loss_fn(model):
+            return model.m1(x).sum()
+
+        x = mx.zeros((3,))
+        mx.grad(loss_fn)(model)
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
