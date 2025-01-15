@@ -316,13 +316,17 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
     read_task();
     return;
   }
+
   auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
-  auto signal_task = [out = out, fut = std::move(fut)]() {
+
+  auto e = Event(stream());
+  e.set_value(1);
+  encode_wait(e);
+  auto signal_task = [e = std::move(e), fut = std::move(fut)]() mutable {
     fut.wait();
-    out.event().signal();
+    e.signal();
   };
   scheduler::enqueue(io_stream(), std::move(signal_task));
-  encode_wait(out.event());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
