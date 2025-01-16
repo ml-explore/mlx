@@ -79,12 +79,50 @@ namespace mlx::core::distributed::ring {
 constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
-constexpr const int MAX_THREADS = 6;
+constexpr const int MAX_THREADS = 24;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
 
 namespace {
+
+class Barrier {
+ public:
+  explicit Barrier(int n_threads)
+      : n_threads_(n_threads), count_(0), flag_(false) {}
+
+  void arrive_and_wait() {
+    std::unique_lock<std::mutex> lock(mtx_);
+
+    // Keep the flag that marks the current use of the barrier. The next use is
+    // going to have this flag flipped.
+    bool initial_flag = flag_;
+
+    // Increment the count
+    count_++;
+
+    // We are the last thread to arrive so reset the count, change the flag and
+    // notify everybody.
+    if (count_ == n_threads_) {
+      count_ = 0;
+      flag_ = !flag_;
+      cv_.notify_all();
+    }
+
+    // Wait for the rest to arrive
+    else {
+      cv_.wait(lock, [this, initial_flag]() { return initial_flag != flag_; });
+    }
+  }
+
+ private:
+  std::mutex mtx_;
+  std::condition_variable cv_;
+  int n_threads_;
+
+  int count_;
+  bool flag_; // we need this for sequential use of the barrier
+};
 
 template <typename T>
 void log(std::ostream& os, T first) {
@@ -103,6 +141,11 @@ void log_info(bool verbose, Args... args) {
   }
 
   log(std::cerr, "[ring]", args...);
+}
+
+template <typename T, typename U>
+decltype(T() * U()) ceildiv(T a, U b) {
+  return (a + b - 1) / b;
 }
 
 struct address_t {
@@ -384,6 +427,74 @@ void _recv_sum(int sock, T* data, size_t start, size_t stop) {
   }
 }
 
+template <typename T>
+void ring_send(
+    Barrier& barrier,
+    int socket,
+    int rank,
+    int size,
+    T* data,
+    size_t data_size,
+    int direction = -1) {
+  // We split the data into `size_` segments of size `segment_size`
+  size_t segment_size = ceildiv(data_size, size);
+
+  // Initial segment
+  int segment = rank;
+
+  // 1st send
+  for (int i = 0; i < size - 1; i++) {
+    size_t start = segment * segment_size;
+    size_t stop = std::min((segment + 1) * segment_size, data_size);
+    _send<T>(socket, data, start, stop);
+    barrier.arrive_and_wait();
+    segment = (segment + size + direction) % size;
+  }
+
+  // 2nd send
+  for (int i = 0; i < size - 1; i++) {
+    size_t start = segment * segment_size;
+    size_t stop = std::min((segment + 1) * segment_size, data_size);
+    _send<T>(socket, data, start, stop);
+    barrier.arrive_and_wait();
+    segment = (segment + size + direction) % size;
+  }
+}
+
+template <typename T>
+void ring_recv_sum(
+    Barrier& barrier,
+    int socket,
+    int rank,
+    int size,
+    T* data,
+    size_t data_size,
+    int direction = -1) {
+  // We split the data into `size_` segments of size `segment_size`
+  size_t segment_size = ceildiv(data_size, size);
+
+  // Initial segment
+  int segment = (rank + size + direction) % size;
+
+  // Recv sum
+  for (int i = 0; i < size - 1; i++) {
+    size_t start = segment * segment_size;
+    size_t stop = std::min((segment + 1) * segment_size, data_size);
+    _recv_sum<T>(socket, data, start, stop);
+    barrier.arrive_and_wait();
+    segment = (segment + size + direction) % size;
+  }
+
+  // Recv
+  for (int i = 0; i < size - 1; i++) {
+    size_t start = segment * segment_size;
+    size_t stop = std::min((segment + 1) * segment_size, data_size);
+    _recv<T>(socket, data, start, stop);
+    barrier.arrive_and_wait();
+    segment = (segment + size + direction) % size;
+  }
+}
+
 } // namespace
 
 class RingGroup : public GroupImpl {
@@ -396,22 +507,23 @@ class RingGroup : public GroupImpl {
     }
 
     size_ = nodes.size();
-    int sendto = (rank_ + 1) % size_;
+    int connect_to = (rank_ + 1) % size_;
 
-    int success;
-
-    if (rank_ < sendto) {
+    // We define the connection order by having the rank_ == size_ - 1 connect
+    // first and accept after.
+    if (rank_ < connect_to) {
       log_info(verbose_, "Rank", rank_, "accepting");
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
-      log_info(verbose_, "Rank", rank_, "connecting to", sendto);
-      send_sockets_ = std::move(make_connections(nodes[sendto], verbose));
+      log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
+      send_sockets_ = std::move(make_connections(nodes[connect_to], verbose));
     } else {
-      log_info(verbose_, "Rank", rank_, "connecting to", sendto);
-      send_sockets_ = std::move(make_connections(nodes[sendto], verbose));
+      log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
+      send_sockets_ = std::move(make_connections(nodes[connect_to], verbose));
       log_info(verbose_, "Rank", rank_, "accepting");
       recv_sockets_ = std::move(accept_connections(nodes[rank_]));
     }
 
+    // Failure if we couldn't make send or recv sockets
     if (send_sockets_.empty()) {
       std::ostringstream msg;
       msg << "[ring] Rank " << rank_ << " has no send sockets.";
@@ -422,7 +534,19 @@ class RingGroup : public GroupImpl {
       msg << "[ring] Rank " << rank_ << " has no recv sockets.";
       throw std::invalid_argument(msg.str());
     }
+
+    // The following could be relaxed since we can define non-homogeneous rings
+    // but it makes things a bit simpler for now.
+    if (send_sockets_.size() != recv_sockets_.size()) {
+      std::ostringstream msg;
+      msg << "[ring] It is required to have as many connections to the left as "
+          << "to the right but rank " << rank_ << " has "
+          << send_sockets_.size() << " connections to the right and "
+          << recv_sockets_.size() << " to the left.";
+      throw std::invalid_argument(msg.str());
+    }
   }
+
   ~RingGroup() {
     for (auto s : send_sockets_) {
       shutdown(s, 2);
@@ -443,30 +567,7 @@ class RingGroup : public GroupImpl {
   }
 
   void all_sum(const array& input_, array& output) override {
-    // Make sure that the input is row contiguous
-    array input = ensure_row_contiguous(input_);
-
-    // If not inplace all reduce then copy the input to the output first
-    if (input.data<void>() != output.data<void>()) {
-      std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
-    }
-
-    // All reduce in place
-    if (output.size() < size_) {
-      if (output.itemsize() * size_ > 1024) {
-        std::ostringstream msg;
-        msg << "Can't perform the ring all reduce of " << output.size()
-            << " elements with a ring of size " << size_;
-        throw std::runtime_error(msg.str());
-      }
-      char buffer[1024];
-      memset(buffer, 0, size_ * output.itemsize());
-      memcpy(buffer, output.data<char>(), output.nbytes());
-      SWITCH_TYPE(output, all_sum<T>((T*)buffer, size_));
-      memcpy(output.data<char>(), buffer, output.nbytes());
-    } else {
-      SWITCH_TYPE(output, all_sum<T>(output.data<T>(), output.size()));
-    }
+    SWITCH_TYPE(output, all_sum<T>(input_, output));
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
@@ -484,102 +585,187 @@ class RingGroup : public GroupImpl {
 
  private:
   template <typename T>
-  void all_sum(T* data, size_t data_size) {
-    size_t send_channels = send_sockets_.size();
-    size_t recv_channels = recv_sockets_.size();
-    std::vector<std::future<void>> futures;
-    futures.reserve(send_channels + recv_channels);
+  void all_sum(const array& input_, array& output) {
+    // Make sure that the input is row contiguous
+    array input = ensure_row_contiguous(input_);
 
-    size_t step = data_size / size_ + (data_size % size_ > 0);
-
-    // Scatter reduce steps
-    int send_segment = rank_;
-    int recv_segment = (send_segment + size_ - 1) % size_;
-    for (int i = 0; i < size_ - 1; i++) {
-      // Compute the send and recv locations
-      size_t send_start = send_segment * step;
-      size_t send_stop = std::min((send_segment + 1) * step, data_size);
-      size_t recv_start = recv_segment * step;
-      size_t recv_stop = std::min((recv_segment + 1) * step, data_size);
-
-      // Send and recv sum
-      size_t send_size = send_stop - send_start;
-      size_t send_step =
-          send_size / send_channels + (send_size % send_channels > 0);
-      size_t recv_size = recv_stop - recv_start;
-      size_t recv_step =
-          recv_size / recv_channels + (recv_size % recv_channels > 0);
-      for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
-        if (i < send_sockets_.size()) {
-          futures.push_back(pool_.enqueue(
-              _send<T>,
-              send_sockets_[i],
-              data,
-              send_start + i * send_step,
-              std::min(send_stop, send_start + (i + 1) * send_step)));
-        }
-        if (i < recv_sockets_.size()) {
-          futures.push_back(pool_.enqueue(
-              _recv_sum<T>,
-              recv_sockets_[i],
-              data,
-              recv_start + i * recv_step,
-              std::min(recv_stop, recv_start + (i + 1) * recv_step)));
-        }
+    // If the input data cannot be split into size_ segments then copy it and
+    // all reduce a local buffer prefilled with 0s.
+    if (input.size() < size_) {
+      // TODO: Maybe allocate dynamically so we don't have the constraint below?
+      if (input.itemsize() * size_ > 1024) {
+        std::ostringstream msg;
+        msg << "Can't perform the ring all reduce of " << output.size()
+            << " elements with a ring of size " << size_;
+        throw std::runtime_error(msg.str());
       }
 
-      // Wait for all the communication to finish
-      for (auto& f : futures) {
-        f.wait();
-      }
-      futures.clear();
-
-      send_segment = (send_segment + size_ - 1) % size_;
-      recv_segment = (recv_segment + size_ - 1) % size_;
+      std::future<void> sent, recvd;
+      auto barrier = std::make_unique<Barrier>(2);
+      char buffer[1024];
+      std::memset(buffer, 0, size_ * input.itemsize());
+      std::memcpy(buffer, input.data<char>(), input.nbytes());
+      sent = pool_.enqueue(
+          ring_send<T>,
+          std::reference_wrapper(*barrier),
+          send_sockets_[0],
+          rank_,
+          size_,
+          (T*)buffer,
+          size_,
+          -1);
+      recvd = pool_.enqueue(
+          ring_recv_sum<T>,
+          std::reference_wrapper(*barrier),
+          recv_sockets_[0],
+          rank_,
+          size_,
+          (T*)buffer,
+          size_,
+          -1);
+      sent.wait();
+      recvd.wait();
+      std::memcpy(output.data<char>(), buffer, output.nbytes());
+      return;
     }
 
-    // Gather results
-    for (int i = 0; i < size_ - 1; i++) {
-      // Compute the send and recv locations
-      size_t send_start = send_segment * step;
-      size_t send_stop = std::min((send_segment + 1) * step, data_size);
-      size_t recv_start = recv_segment * step;
-      size_t recv_stop = std::min((recv_segment + 1) * step, data_size);
+    // If not inplace all reduce then copy the input to the output first
+    if (input.data<void>() != output.data<void>()) {
+      std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
+    }
 
-      // Send and recv
-      size_t send_size = send_stop - send_start;
-      size_t send_step =
-          send_size / send_channels + (send_size % send_channels > 0);
-      size_t recv_size = recv_stop - recv_start;
-      size_t recv_step =
-          recv_size / recv_channels + (recv_size % recv_channels > 0);
-      for (int i = 0; i < std::max(send_channels, recv_channels); i++) {
-        if (i < send_sockets_.size()) {
-          futures.push_back(pool_.enqueue(
-              _send<T>,
-              send_sockets_[i],
-              data,
-              send_start + i * send_step,
-              std::min(send_stop, send_start + (i + 1) * send_step)));
-        }
-        if (i < recv_sockets_.size()) {
-          futures.push_back(pool_.enqueue(
-              _recv<T>,
-              recv_sockets_[i],
-              data,
-              recv_start + i * recv_step,
-              std::min(recv_stop, recv_start + (i + 1) * recv_step)));
-        }
+    // All reduce in place. We have `send_channels_.size()` bidirectional
+    // channels so let's split the message up and perform as many parallel
+    // ring-reductions as possible.
+    std::vector<std::future<void>> reductions;
+    std::vector<std::unique_ptr<Barrier>> barriers;
+    size_t packets = ceildiv(output.size(), size_ * PACKET_SIZE);
+
+    // Large all reduce territory so let's use all we got
+    if (packets >= 2 * send_sockets_.size()) {
+      size_t segment = ceildiv(output.size(), 2 * send_sockets_.size());
+      for (int i = 0; i < send_sockets_.size(); i++) {
+        // 1st ring reduce
+        barriers.emplace_back(std::make_unique<Barrier>(2));
+        reductions.push_back(pool_.enqueue(
+            ring_send<T>,
+            std::reference_wrapper(*barriers.back()),
+            send_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + 2 * i * segment,
+            std::min(output.size() - 2 * i * segment, segment),
+            -1));
+        reductions.push_back(pool_.enqueue(
+            ring_recv_sum<T>,
+            std::reference_wrapper(*barriers.back()),
+            recv_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + 2 * i * segment,
+            std::min(output.size() - 2 * i * segment, segment),
+            -1));
+
+        // 2nd ring reduce
+        barriers.emplace_back(std::make_unique<Barrier>(2));
+        reductions.push_back(pool_.enqueue(
+            ring_send<T>,
+            std::reference_wrapper(*barriers.back()),
+            recv_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + (2 * i + 1) * segment,
+            std::min(output.size() - (2 * i + 1) * segment, segment),
+            1));
+        reductions.push_back(pool_.enqueue(
+            ring_recv_sum<T>,
+            std::reference_wrapper(*barriers.back()),
+            send_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + (2 * i + 1) * segment,
+            std::min(output.size() - (2 * i + 1) * segment, segment),
+            1));
       }
+    }
 
-      // Wait for all the communication to finish
-      for (auto& f : futures) {
-        f.wait();
+    // At least 2 reductions so we can be from small to medium
+    else if (packets > 1) {
+      size_t segment = ceildiv(output.size(), packets);
+      for (int i = 0; i < send_sockets_.size(); i++) {
+        barriers.emplace_back(std::make_unique<Barrier>(2));
+        reductions.push_back(pool_.enqueue(
+            ring_send<T>,
+            std::reference_wrapper(*barriers.back()),
+            send_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + i * segment,
+            std::min(output.size() - i * segment, segment),
+            -1));
+        reductions.push_back(pool_.enqueue(
+            ring_recv_sum<T>,
+            std::reference_wrapper(*barriers.back()),
+            recv_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + i * segment,
+            std::min(output.size() - i * segment, segment),
+            -1));
       }
-      futures.clear();
+      for (int i = 0; i < packets - send_sockets_.size(); i++) {
+        barriers.emplace_back(std::make_unique<Barrier>(2));
+        reductions.push_back(pool_.enqueue(
+            ring_send<T>,
+            std::reference_wrapper(*barriers.back()),
+            recv_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + (send_sockets_.size() + i) * segment,
+            std::min(
+                output.size() - (send_sockets_.size() + i) * segment, segment),
+            1));
+        reductions.push_back(pool_.enqueue(
+            ring_recv_sum<T>,
+            std::reference_wrapper(*barriers.back()),
+            send_sockets_[i],
+            rank_,
+            size_,
+            output.data<T>() + (send_sockets_.size() + i) * segment,
+            std::min(
+                output.size() - (send_sockets_.size() + i) * segment, segment),
+            1));
+      }
+    }
 
-      send_segment = (send_segment + size_ - 1) % size_;
-      recv_segment = (recv_segment + size_ - 1) % size_;
+    // Small reduction which won't really benefit much from parallelization.
+    // TODO: Verify that this is true cause PACKET_SIZE * size_ can still be a
+    //       fairly large array.
+    else {
+      barriers.emplace_back(std::make_unique<Barrier>(2));
+      reductions.push_back(pool_.enqueue(
+          ring_send<T>,
+          std::reference_wrapper(*barriers.back()),
+          send_sockets_[0],
+          rank_,
+          size_,
+          output.data<T>(),
+          output.size(),
+          -1));
+      reductions.push_back(pool_.enqueue(
+          ring_recv_sum<T>,
+          std::reference_wrapper(*barriers.back()),
+          recv_sockets_[0],
+          rank_,
+          size_,
+          output.data<T>(),
+          output.size(),
+          -1));
+    }
+
+    // Wait for the reductions to finish.
+    for (auto& f : reductions) {
+      f.wait();
     }
   }
 
