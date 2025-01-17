@@ -123,6 +123,9 @@ jobs:
       xcode_version:
         type: string
         default: "15.2.0"
+      deployment_target:
+        type: string
+        default: ""
     macos:
       xcode: << parameters.xcode_version >>
     resource_class: macos.m1.medium.gen1
@@ -209,6 +212,9 @@ jobs:
       xcode_version:
         type: string
         default: "15.2.0"
+      deployment_target:
+        type: string
+        default: ""
       build_env:
         type: string
         default: ""
@@ -237,6 +243,7 @@ jobs:
             source env/bin/activate
             DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
+              CMAKE_ARGS=-DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >> \
               pip install . -v
       - run:
           name: Generate package stubs
@@ -250,6 +257,7 @@ jobs:
             source env/bin/activate
             << parameters.build_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
+              CMAKE_ARGS=-DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >> \
               python -m build -w
       - when:
           condition: << parameters.build_env >>
@@ -332,7 +340,13 @@ workflows:
             parameters:
               xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
       - linux_build_and_test
-      - build_documentation 
+      - build_documentation
+      - build_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              xcode_version: ["15.2.0"]
+              deployment_target: ["", "14.0"]
 
   build_pypi_release:
     when:
@@ -387,7 +401,8 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["15.0.0", "15.2.0"]
+              xcode_version: ["15.2.0"]
+              deployment_target: ["", "14.0"]
   weekly_build:
     when:
       and:
