@@ -5,7 +5,7 @@
 #include <sstream>
 #include <vector>
 
-#include <fmt/format.h>
+#include <format>
 
 namespace mlx::core {
 
@@ -33,7 +33,7 @@ struct VisualStudioInfo {
     arch = "x64";
 #endif
     // Get path of Visual Studio.
-    std::string vs_path = JitCompiler::exec(fmt::format(
+    std::string vs_path = JitCompiler::exec(std::format(
         "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
         " -property installationPath",
         std::getenv("ProgramFiles(x86)")));
@@ -41,7 +41,7 @@ struct VisualStudioInfo {
       throw std::runtime_error("Can not find Visual Studio.");
     }
     // Read the envs from vcvarsall.
-    std::string envs = JitCompiler::exec(fmt::format(
+    std::string envs = JitCompiler::exec(std::format(
         "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",
         vs_path,
         arch));
@@ -55,7 +55,7 @@ struct VisualStudioInfo {
       if (name == "LIB") {
         libpaths = str_split(value, ';');
       } else if (name == "VCToolsInstallDir") {
-        cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
+        cl_exe = std::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
       }
     }
   }
@@ -81,9 +81,9 @@ std::string JitCompiler::build_command(
   const VisualStudioInfo& info = GetVisualStudioInfo();
   std::string libpaths;
   for (const std::string& lib : info.libpaths) {
-    libpaths += fmt::format(" /libpath:\"{0}\"", lib);
+    libpaths += std::format(" /libpath:\"{0}\"", lib);
   }
-  return fmt::format(
+  return std::format(
       "\""
       "cd /D \"{0}\" && "
       "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17 \"{2}\" "
@@ -95,7 +95,7 @@ std::string JitCompiler::build_command(
       shared_lib_name,
       libpaths);
 #else
-  return fmt::format(
+  return std::format(
       "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}' 2>&1",
       (dir / source_file_name).string(),
       (dir / shared_lib_name).string());
@@ -139,7 +139,7 @@ std::string JitCompiler::exec(const std::string& cmd) {
   int code = WEXITSTATUS(status);
 #endif
   if (code != 0) {
-    throw std::runtime_error(fmt::format(
+    throw std::runtime_error(std::format(
         "Failed to execute command with return code {0}: \"{1}\", "
         "the output is: {2}",
         code,

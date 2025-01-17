@@ -223,10 +223,6 @@ target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
 
-# FetchContent_Declare( fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-# GIT_TAG 10.2.1 EXCLUDE_FROM_ALL) FetchContent_MakeAvailable(fmt)
-# target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
-
 if(MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
   find_package(

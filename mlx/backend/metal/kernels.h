@@ -1,6 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
-#include <fmt/format.h>
+#include <format>
 
 #include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
@@ -218,7 +218,7 @@ get_template_definition(std::string name, std::string func, Args... args) {
   };
   (add_arg(args), ...);
   s << ">";
-  return fmt::format(
+  return std::format(
       "\ntemplate [[host_name(\"{0}\")]] [[kernel]] decltype({1}) {1};\n",
       name,
       s.str());

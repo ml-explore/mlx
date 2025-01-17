@@ -66,7 +66,7 @@ array compute_dynamic_offset(
   auto dtype = indices.dtype();
   std::string lib_name = "compute_dynamic_offset_" + type_to_name(dtype);
   auto lib = d.get_library(lib_name, [dtype]() {
-    return fmt::format(
+    return std::format(
         R"(
         [[kernel]] void compute_dynamic_offset_{0}(
             constant const {1}* indices [[buffer(0)]],

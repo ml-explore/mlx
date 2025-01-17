@@ -1,5 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <fmt/format.h>
+#include <format>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -10,8 +10,6 @@
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
-
-using namespace fmt::literals;
 
 namespace mlx::core {
 
@@ -41,7 +39,7 @@ inline void build_kernel(
   int cnt = 0;
 
   // Start the kernel
-  os += fmt::format(
+  os += std::format(
       "[[host_name(\"{0}\")]]\n[[kernel]] void {0}(\n", kernel_name);
 
   // Add the input arguments
@@ -57,7 +55,7 @@ inline void build_kernel(
     if (!is_scalar(x) && !contiguous) {
       add_indices = true;
     }
-    os += fmt::format(
+    os += std::format(
         "    device const {0}* {1} [[buffer({2})]],\n",
         get_type_string(x.dtype()),
         xname,
@@ -65,13 +63,13 @@ inline void build_kernel(
   }
 
   if (add_indices) {
-    os += fmt::format(
+    os += std::format(
         "    constant const int64_t* in_strides [[buffer({0})]],\n", cnt++);
   }
 
   // Add the output arguments
   for (auto& x : outputs) {
-    os += fmt::format(
+    os += std::format(
         "    device {0}* {1} [[buffer({2})]],\n",
         get_type_string(x.dtype()),
         namer.get_name(x),
@@ -79,13 +77,13 @@ inline void build_kernel(
   }
   // Add output strides and shape to extract the indices.
   if (!contiguous) {
-    os += fmt::format(
+    os += std::format(
         "    constant const int64_t* output_strides [[buffer({0})]],\n", cnt++);
-    os += fmt::format(
+    os += std::format(
         "    constant const int* output_shape [[buffer({0})]],\n", cnt++);
   }
   if (dynamic_dims) {
-    os += fmt::format("    constant const int& ndim [[buffer({0})]],\n", cnt++);
+    os += std::format("    constant const int& ndim [[buffer({0})]],\n", cnt++);
   }
 
   // The thread index in the whole grid
@@ -98,15 +96,15 @@ inline void build_kernel(
     // a third grid dimension
     os += "  int64_t index = pos.x + grid.x * int64_t(pos.y);\n";
   } else if (work_per_thread > 1) {
-    os += fmt::format("  constexpr int N_ = {0};\n", work_per_thread);
-    os += fmt::format(
+    os += std::format("  constexpr int N_ = {0};\n", work_per_thread);
+    os += std::format(
         "  int xshape = output_shape[{0}];\n",
         dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1));
-    os += fmt::format(
+    os += std::format(
         "  {0} index = N_ * pos.x + xshape * (pos.y + {0}(grid.y) * pos.z);\n",
         idx_type);
   } else {
-    os += fmt::format(
+    os += std::format(
         "  {0} index = pos.x + grid.x * (pos.y + {0}(grid.y) * pos.z);\n",
         idx_type);
   }
@@ -121,16 +119,16 @@ inline void build_kernel(
       auto type_str = get_type_string(x.dtype());
       std::ostringstream ss;
       print_constant(ss, x);
-      os += fmt::format(
+      os += std::format(
           "  auto tmp_{0} = static_cast<{1}>({2});\n",
           xname,
           get_type_string(x.dtype()),
           ss.str());
     } else if (is_scalar(x)) {
-      os += fmt::format(
+      os += std::format(
           "  {0} tmp_{1} = {1}[0];\n", get_type_string(x.dtype()), xname);
     } else if (contiguous) {
-      os += fmt::format(
+      os += std::format(
           "  {0} tmp_{1} = {1}[index];\n", get_type_string(x.dtype()), xname);
     } else {
       nc_inputs.push_back(x);
@@ -140,30 +138,30 @@ inline void build_kernel(
   // Initialize the indices for non-contiguous inputs
   for (int i = 0; i < nc_inputs.size(); ++i) {
     auto& xname = namer.get_name(nc_inputs[i]);
-    os += fmt::format("  {0} index_{1} = ", idx_type, xname);
+    os += std::format("  {0} index_{1} = ", idx_type, xname);
     if (ndim == 1) {
       int offset = i * ndim;
       os +=
-          fmt::format("elem_to_loc_1<uint>(pos.x, in_strides[{0}]);\n", offset);
+          std::format("elem_to_loc_1<uint>(pos.x, in_strides[{0}]);\n", offset);
     } else if (ndim == 2) {
       int offset = i * ndim;
-      os += fmt::format(
+      os += std::format(
           "elem_to_loc_2<{0}>({{pos.x, pos.y}}, in_strides + {1});\n",
           idx_type,
           offset);
     } else if (ndim == 3) {
       int offset = i * ndim;
-      os += fmt::format(
+      os += std::format(
           "elem_to_loc_3<{0}>(pos, in_strides + {1});\n", idx_type, offset);
     } else if (!dynamic_dims) {
       int offset = (i + 1) * ndim;
-      os += fmt::format(
+      os += std::format(
           "N_ * pos.x * {0}(in_strides[{1}]) + pos.y * {0}(in_strides[{2}]);\n",
           idx_type,
           offset - 1,
           offset - 2);
     } else {
-      os += fmt::format(
+      os += std::format(
           "N_ * pos.x * {0}(in_strides[ndim * {1} + ndim - 1]) + pos.y * {0}(in_strides[ndim * {1} + ndim - 2]);\n",
           idx_type,
           i);
@@ -175,18 +173,18 @@ inline void build_kernel(
     if (dynamic_dims) {
       os += "  for (int d = ndim - 3; d >= 0; --d) {\n";
     } else {
-      os += fmt::format("  for (int d = {0}; d >= 0; --d) {{\n", ndim - 3);
+      os += std::format("  for (int d = {0}; d >= 0; --d) {{\n", ndim - 3);
     }
     os += "    uint l = zpos % output_shape[d];\n";
     for (int i = 0; i < nc_inputs.size(); ++i) {
       auto& xname = namer.get_name(nc_inputs[i]);
-      os += fmt::format("    index_{0} += ", xname);
+      os += std::format("    index_{0} += ", xname);
       if (dynamic_dims) {
         os +=
-            fmt::format("l * {0}(in_strides[{1} * ndim + d]);\n", idx_type, i);
+            std::format("l * {0}(in_strides[{1} * ndim + d]);\n", idx_type, i);
       } else {
         os +=
-            fmt::format("l * {0}(in_strides[{1} + d]);\n", idx_type, i * ndim);
+            std::format("l * {0}(in_strides[{1} + d]);\n", idx_type, i * ndim);
       }
     }
     os += "    zpos /= output_shape[d];\n  }\n";
@@ -202,16 +200,16 @@ inline void build_kernel(
   for (int i = 0; i < nc_inputs.size(); ++i) {
     auto& x = nc_inputs[i];
     auto& xname = namer.get_name(x);
-    os += fmt::format(
+    os += std::format(
         "  {0} tmp_{1} = {1}[index_{1}];\n", get_type_string(x.dtype()), xname);
   }
 
   // Actually write the computation
   for (auto& x : tape) {
-    os += fmt::format(
+    os += std::format(
         "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
     if (is_static_cast(x.primitive())) {
-      os += fmt::format(
+      os += std::format(
           "static_cast<{0}>(tmp_{1});\n",
           get_type_string(x.dtype()),
           namer.get_name(x.inputs()[0]));
@@ -221,15 +219,15 @@ inline void build_kernel(
       os += ss.str();
       os += "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
-        os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
+        os += std::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
       }
-      os += fmt::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
+      os += std::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
     }
   }
 
   // Write the outputs from tmps
   for (auto& x : outputs) {
-    os += fmt::format("  {0}[index] = tmp_{0};\n", namer.get_name(x));
+    os += std::format("  {0}[index] = tmp_{0};\n", namer.get_name(x));
   }
   // Increment indices and close per thread loop
   if (work_per_thread > 1) {
@@ -237,10 +235,10 @@ inline void build_kernel(
       auto& x = nc_inputs[i];
       auto& xname = namer.get_name(x);
       if (!dynamic_dims) {
-        os += fmt::format(
+        os += std::format(
             "  index_{0} += in_strides[{1}];\n", xname, i * ndim + ndim - 1);
       } else {
-        os += fmt::format(
+        os += std::format(
             "  index_{0} += in_strides[{1} * ndim + ndim - 1];\n", xname, i);
       }
     }

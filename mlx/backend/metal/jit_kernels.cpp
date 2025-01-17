@@ -9,8 +9,6 @@
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 
-using namespace fmt::literals;
-
 namespace mlx::core {
 
 std::string op_name(const array& arr) {
@@ -26,7 +24,7 @@ MTL::ComputePipelineState* get_arange_kernel(
   auto lib = d.get_library(kernel_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::arange()
-                  << fmt::format(
+                  << std::format(
                          arange_kernels,
                          kernel_name,
                          get_type_string(out.dtype()));
@@ -259,7 +257,7 @@ MTL::ComputePipelineState* get_softmax_kernel(
   auto lib = d.get_library(lib_name, [&] {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::softmax()
-                  << fmt::format(
+                  << std::format(
                          softmax_kernels,
                          lib_name,
                          get_type_string(out.dtype()),
@@ -445,7 +443,7 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_fused()
-                  << fmt::format(
+                  << std::format(
                          steel_gemm_fused_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
@@ -480,7 +478,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_splitk()
-                  << fmt::format(
+                  << std::format(
                          steel_gemm_splitk_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(in.dtype()),
@@ -510,13 +508,13 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_accum_kernel(
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_splitk()
-                  << fmt::format(
-                         fmt::runtime(
-                             axbpy ? steel_gemm_splitk_accum_axbpy_kernels
-                                   : steel_gemm_splitk_accum_kernels),
-                         "name"_a = lib_name,
-                         "atype"_a = get_type_string(in.dtype()),
-                         "otype"_a = get_type_string(out.dtype()));
+                  << std::vformat(
+                         axbpy ? steel_gemm_splitk_accum_axbpy_kernels
+                               : steel_gemm_splitk_accum_kernels,
+                         std::make_format_args(
+                             "name"_a = lib_name,
+                             "atype"_a = get_type_string(in.dtype()),
+                             "otype"_a = get_type_string(out.dtype())));
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib);
@@ -547,7 +545,7 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
         mask_op.has_value() ? get_type_string((*mask_op).dtype()) : "nomask_t";
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_masked()
-                  << fmt::format(
+                  << std::format(
                          steel_gemm_masked_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
@@ -590,7 +588,7 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
     auto op_mask_type =
         mask_op.has_value() ? get_type_string((*mask_op).dtype()) : "nomask_t";
     kernel_source << metal::utils() << metal::gemv_masked()
-                  << fmt::format(
+                  << std::format(
                          gemv_masked_kernel,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
@@ -624,7 +622,7 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
   auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::conv() << metal::steel_conv()
-                  << fmt::format(
+                  << std::format(
                          steel_conv_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
@@ -654,7 +652,7 @@ MTL::ComputePipelineState* get_steel_conv_general_kernel(
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::conv()
                   << metal::steel_conv_general()
-                  << fmt::format(
+                  << std::format(
                          steel_conv_general_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),

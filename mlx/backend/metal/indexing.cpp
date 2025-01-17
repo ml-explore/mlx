@@ -1,5 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <fmt/format.h>
+#include <format>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/copy.h"
@@ -20,9 +20,9 @@ std::pair<std::string, std::string> make_index_args(
   std::ostringstream idx_args;
   std::ostringstream idx_arr;
   for (int i = 0; i < nidx; ++i) {
-    idx_args << fmt::format(
+    idx_args << std::format(
         "const device {0} *idx{1} [[buffer({2})]],", idx_type, i, 20 + i);
-    idx_arr << fmt::format("idx{0}", i);
+    idx_arr << std::format("idx{0}", i);
     if (i < nidx - 1) {
       idx_args << "\n";
       idx_arr << ",";
@@ -59,7 +59,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool large = large_index || large_src || large_out;
 
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
-  std::string kernel_name = fmt::format(
+  std::string kernel_name = std::format(
       "gather{0}{1}_{2}_{3}_{4}",
       type_to_name(out),
       idx_type_name,
@@ -77,7 +77,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 
     // Index dimension specializations
-    kernel_source += fmt::format(
+    kernel_source += std::format(
         gather_kernels,
         type_to_name(out) + idx_type_name,
         out_type_str,
@@ -238,7 +238,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool large_idx = nidx && (inputs[1].size() > INT32_MAX);
   bool large_upd = upd.size() > INT32_MAX;
   bool large = large_out || large_idx || large_upd;
-  std::string kernel_name = fmt::format(
+  std::string kernel_name = std::format(
       "scatter{0}{1}_{2}_{3}_{4}_nwork{5}_{6}",
       type_to_name(out),
       idx_type_name,
@@ -275,11 +275,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
     }
     if (reduce_type_ != Scatter::None) {
-      op_type = fmt::format(fmt::runtime(op_type), out_type_str);
+      op_type = std::vformat(op_type, std::make_format_args(out_type_str));
     }
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 
-    kernel_source += fmt::format(
+    kernel_source += std::format(
         scatter_kernels,
         type_to_name(out) + idx_type_name + "_" + op_name,
         out_type_str,

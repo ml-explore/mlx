@@ -2,12 +2,11 @@
 
 #include <dlfcn.h>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <list>
 #include <mutex>
 #include <shared_mutex>
-
-#include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/compiled_preamble.h"
@@ -111,7 +110,7 @@ void* compile(
       JitCompiler::exec(JitCompiler::build_command(
           output_dir, source_file_name, shared_lib_name));
     } catch (const std::exception& error) {
-      throw std::runtime_error(fmt::format(
+      throw std::runtime_error(std::format(
           "[Compile::eval_cpu] Failed to compile function {0}: {1}",
           kernel_name,
           error.what()));
