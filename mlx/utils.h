@@ -126,6 +126,11 @@ inline int max_ops_per_buffer() {
   return max_ops_per_buffer_;
 }
 
+inline bool metal_fast_synch() {
+  static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
+  return metal_fast_synch;
+}
+
 } // namespace env
 
 } // namespace mlx::core

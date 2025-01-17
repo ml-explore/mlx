@@ -88,6 +88,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
@@ -107,12 +109,6 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/resident.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
-
-if(MLX_FAST_SYNCHRONIZE)
-  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/kernel_event.cpp)
-else()
-  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp)
-endif()
 
 if(NOT MLX_METAL_PATH)
   set(MLX_METAL_PATH ${CMAKE_CURRENT_BINARY_DIR}/kernels/)

@@ -45,9 +45,8 @@ build_kernel(random)
 build_kernel(rms_norm)
 build_kernel(rope)
 build_kernel(scaled_dot_product_attention sdpa_vector.h)
-
-if(MLX_FAST_SYNCHRONIZE)
-  build_kernel(events)
+if(MLX_METAL_VERSION GREATER_EQUAL 320)
+  build_kernel(fence)
 endif()
 
 set(STEEL_HEADERS

@@ -196,6 +196,10 @@ void CommandEncoder::dispatch_threads(
   enc_->dispatchThreads(grid_dims, group_dims);
 }
 
+void CommandEncoder::barrier() {
+  enc_->memoryBarrier(MTL::BarrierScopeBuffers);
+}
+
 Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
@@ -284,7 +288,6 @@ void Device::add_temporaries(std::vector<array> arrays, int index) {
 void Device::barrier(int index) {
   // If there is an active command encoder, add a barrier
   auto& stream = get_stream_(index);
-
   if (stream.encoder != nullptr) {
     stream.encoder->barrier();
   } else {

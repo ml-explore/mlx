@@ -111,9 +111,7 @@ struct CommandEncoder {
     return all_outputs_;
   };
 
-  void barrier() {
-    enc_->memoryBarrier(MTL::BarrierScopeBuffers);
-  }
+  void barrier();
 
  private:
   MTL::ComputeCommandEncoder* enc_;
