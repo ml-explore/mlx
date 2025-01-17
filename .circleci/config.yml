@@ -346,7 +346,7 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["16.0.0"]
-              deployment_target: ["", "14.0"]
+              deployment_target: ["", "13.5"]
 
   build_pypi_release:
     when:
