@@ -246,6 +246,36 @@ std::vector<array> AddMM::vjp(
   return vjps;
 }
 
+std::vector<array> AddMM::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  std::vector<array> jvp;
+  for (int i = 0; i < argnums.size(); ++i) {
+    auto arg = argnums[i];
+    if (arg == 0) {
+      if (jvp.empty()) {
+        jvp.push_back(matmul(tangents[i], primals[1], stream()));
+      } else {
+        jvp[0] = addmm(jvp[0], tangents[i], primals[1], 1.0f, 1.0f, stream());
+      }
+    } else if (arg == 1) {
+      if (jvp.empty()) {
+        jvp.push_back(matmul(primals[0], tangents[i], stream()));
+      } else {
+        jvp[0] = addmm(jvp[0], primals[0], tangents[i], 1.0f, 1.0f, stream());
+      }
+    } else {
+      if (jvp.empty()) {
+        jvp.push_back(tangents[i]);
+      } else {
+        jvp[0] = add(jvp[0], tangents[i], stream());
+      }
+    }
+  }
+  return jvp;
+}
+
 bool AddMM::is_equivalent(const Primitive& other) const {
   const AddMM& a_other = static_cast<const AddMM&>(other);
   return (alpha_ == a_other.alpha_ && beta_ == a_other.beta_);
@@ -2439,6 +2469,26 @@ std::vector<array> Matmul::vjp(
   return vjps;
 }
 
+std::vector<array> Matmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  std::vector<array> jvp;
+  for (int i = 0; i < argnums.size(); ++i) {
+    auto arg = argnums[i];
+    if (arg == 0 && i == 0) {
+      jvp.push_back(matmul(tangents[0], primals[1], stream()));
+    } else if (arg == 0 && i == 1) {
+      jvp[0] = addmm(jvp[0], tangents[1], primals[1], 1.0f, 1.0f, stream());
+    } else if (i == 0) {
+      jvp.push_back(matmul(primals[0], tangents[0], stream()));
+    } else if (i == 1) {
+      jvp[0] = addmm(jvp[0], primals[0], tangents[1], 1.0f, 1.0f, stream());
+    }
+  }
+  return jvp;
+}
+
 std::pair<std::vector<array>, std::vector<int>> Matmul::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -2833,7 +2883,7 @@ std::pair<std::vector<array>, std::vector<int>> Power::vmap(
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("QuantizedMatmul::vmap NYI");
+  throw std::runtime_error("[QuantizedMatmul::vmap] NYI");
 }
 
 std::vector<array> QuantizedMatmul::vjp(
@@ -2861,7 +2911,7 @@ std::vector<array> QuantizedMatmul::vjp(
     // gradient wrt to w_q, scales or biases
     else {
       throw std::runtime_error(
-          "QuantizedMatmul::vjp no gradient wrt the quantized matrix yet.");
+          "[QuantizedMatmul::vjp] no gradient wrt the quantized matrix yet.");
     }
   }
   return vjps;
@@ -2871,7 +2921,19 @@ std::vector<array> QuantizedMatmul::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("QuantizedMatmul::jvp NYI");
+  if (argnums.size() > 1 || argnums[0] != 0) {
+    throw std::runtime_error(
+        "[QuantizedMatmul::jvp] No JVP wrt the quantized matrix yet.");
+  }
+  return {quantized_matmul(
+      tangents[0],
+      primals[1],
+      primals[2],
+      primals[3],
+      transpose_,
+      group_size_,
+      bits_,
+      stream())};
 }
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
