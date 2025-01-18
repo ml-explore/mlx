@@ -182,7 +182,6 @@ class Device {
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
-  void barrier(int index);
   MTL::Fence* get_event_fence(int index);
 
   void register_library(

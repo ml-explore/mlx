@@ -285,26 +285,6 @@ void Device::add_temporaries(std::vector<array> arrays, int index) {
       std::make_move_iterator(arrays.end()));
 }
 
-void Device::barrier(int index) {
-  // If there is an active command encoder, add a barrier
-  auto& stream = get_stream_(index);
-  if (stream.encoder != nullptr) {
-    stream.encoder->barrier();
-  } else {
-    get_command_encoder(index);
-  }
-  std::unordered_set<std::shared_ptr<Fence>> waiting_on;
-  std::lock_guard<std::mutex> lk(stream.fence_mtx);
-  for (auto it = stream.outputs.begin(); it != stream.outputs.end(); ++it) {
-    if (waiting_on.find(it->second) == waiting_on.end()) {
-      stream.encoder->wait_for_fence(it->second->fence);
-      waiting_on.insert(it->second);
-    }
-  }
-  stream.buffer->addCompletedHandler(
-      [waiting_on = std::move(waiting_on)](MTL::CommandBuffer*) {});
-}
-
 void Device::end_encoding(int index) {
   auto& stream = get_stream_(index);
   if (stream.encoder != nullptr) {

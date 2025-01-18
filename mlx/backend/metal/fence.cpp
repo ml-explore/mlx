@@ -97,8 +97,8 @@ void Fence::update_gpu(const array& in) {
   compute_encoder.set_bytes(nthreads, 1);
   compute_encoder.dispatch_threadgroups(group_dims, grid_dims);
 
-  // Wait until other kernels are done before starting
-  d.barrier(idx);
+  // Barrier on previous kernel
+  compute_encoder.barrier();
 
   // Launch value update kernel
   kernel = d.get_kernel("fence_update");
