@@ -37,7 +37,7 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-std::vector<bool> detail::InTracing::trace_stack{};
+std::vector<char> detail::InTracing::trace_stack{};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
