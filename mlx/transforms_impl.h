@@ -36,7 +36,7 @@ struct InTracing {
   }
 
  private:
-  static std::vector<bool> trace_stack;
+  static std::vector<char> trace_stack;
 };
 
 struct RetainGraph {
