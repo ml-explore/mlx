@@ -149,7 +149,9 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install -e . -v
+            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
+              CMAKE_ARGS=-DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >> \
+              pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
@@ -176,7 +178,11 @@ jobs:
           name: Build CPP only
           command: |
             source env/bin/activate
-            mkdir -p build && cd build && cmake .. && make -j `sysctl -n hw.ncpu`
+            mkdir -p build
+            cd build/
+            cmake .. \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >>
+            make -j `sysctl -n hw.ncpu`
       - run:
           name: Run CPP tests
           command: |
@@ -191,14 +197,15 @@ jobs:
               -DMLX_BUILD_CPU=OFF \
               -DMLX_BUILD_SAFETENSORS=OFF \
               -DMLX_BUILD_GGUF=OFF \
-              -DMLX_METAL_JIT=ON
+              -DMLX_METAL_JIT=ON \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >>
             make -j `sysctl -n hw.ncpu`
       - run:
           name: Run Python tests with JIT
           command: |
             source env/bin/activate
             CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
-              CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
+              CMAKE_ARGS="-DMLX_METAL_JIT=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=<< parameters.deployment_target >>" \
               pip install -e . -v
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
               METAL_DEBUG_ERROR_MODE=0 \
@@ -339,6 +346,7 @@ workflows:
           matrix:
             parameters:
               xcode_version: ["16.0.0"]
+              deployment_target: ["", "13.5"]
       - linux_build_and_test
       - build_documentation
       - build_release:
