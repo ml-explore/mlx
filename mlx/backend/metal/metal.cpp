@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -69,16 +70,13 @@ std::function<void()> make_task(array arr, bool signal) {
 
     if (signal ||
         d.get_command_buffer_ops(s.index) >= env::max_ops_per_buffer()) {
-      d.end_encoding(s.index);
       if (signal) {
-        command_buffer->encodeSignalEvent(
-            static_cast<MTL::Event*>(arr.event().raw_event().get()),
-            arr.event().value());
+        encode_signal(arr.event());
       }
+      d.end_encoding(s.index);
       scheduler::notify_new_task(s);
       command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers), event = arr.event()](
-              MTL::CommandBuffer* cbuf) {
+          [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
             scheduler::notify_task_completion(s);
             check_error(cbuf);
           });

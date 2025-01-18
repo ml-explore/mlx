@@ -134,6 +134,13 @@ CommandEncoder::~CommandEncoder() {
   enc_->release();
 }
 
+void CommandEncoder::set_buffer(
+    const MTL::Buffer* buf,
+    int idx,
+    int64_t offset /* = 0 */) {
+  enc_->setBuffer(buf, offset, idx);
+}
+
 void CommandEncoder::set_input_array(
     const array& a,
     int idx,
@@ -155,6 +162,10 @@ void CommandEncoder::set_output_array(
     int64_t offset /* = 0 */) {
   // Add barriers before adding the output to the output set
   set_input_array(a, idx, offset);
+  register_output_array(a);
+}
+
+void CommandEncoder::register_output_array(array& a) {
   all_outputs_.insert(a.buffer().ptr());
   auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
   if (concurrent_) {
@@ -187,6 +198,10 @@ void CommandEncoder::dispatch_threads(
     MTL::Size group_dims) {
   maybeInsertBarrier();
   enc_->dispatchThreads(grid_dims, group_dims);
+}
+
+void CommandEncoder::barrier() {
+  enc_->memoryBarrier(MTL::BarrierScopeBuffers);
 }
 
 Device::Device() {

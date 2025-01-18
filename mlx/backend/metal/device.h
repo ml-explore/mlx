@@ -60,9 +60,11 @@ struct CommandEncoder {
 
   void set_input_array(const array& a, int idx, int64_t offset = 0);
   void set_output_array(array& a, int idx, int64_t offset = 0);
+  void register_output_array(array& a);
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
+  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
 
   void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
     enc_->setComputePipelineState(kernel);
@@ -109,6 +111,8 @@ struct CommandEncoder {
   std::unordered_set<const void*> outputs() {
     return all_outputs_;
   };
+
+  void barrier();
 
  private:
   MTL::ComputeCommandEncoder* enc_;
