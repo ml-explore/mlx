@@ -9,7 +9,7 @@ class Fence {
   Fence(const Stream& stream);
 
   void update_gpu(const array& x);
-  void wait_gpu();
+  void wait_gpu(array& x);
 
   void wait();
   void update();

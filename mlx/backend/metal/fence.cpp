@@ -34,7 +34,7 @@ Fence::Fence(const Stream& stream) : stream_(stream) {
   }
 }
 
-void Fence::wait_gpu() {
+void Fence::wait_gpu(array& x) {
   gpu_count_++;
   auto& d = metal::device(stream_.device);
   auto idx = stream_.index;
@@ -50,6 +50,11 @@ void Fence::wait_gpu() {
   }
 
   auto& compute_encoder = d.get_command_encoder(idx);
+
+  // Register the output to ensure that no kernels which depends on the
+  // output starts before this one is done
+  compute_encoder.register_output_array(x);
+
   auto kernel = d.get_kernel("fence_wait");
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -59,17 +64,11 @@ void Fence::wait_gpu() {
   compute_encoder.set_bytes(gpu_count_, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
-  // no kernels should start before this one is done
-  // - insert encoder barrier for inside command encoder
-  // - update event fence for between command encoders
-  compute_encoder.barrier();
-  compute_encoder.update_fence(d.get_event_fence(idx));
-
   d.get_command_buffer(idx)->addCompletedHandler(
       [fence = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
-void Fence::update_gpu(const array& in) {
+void Fence::update_gpu(const array& x) {
   gpu_count_++;
   auto& d = metal::device(stream_.device);
   auto idx = stream_.index;
@@ -87,13 +86,13 @@ void Fence::update_gpu(const array& in) {
   // Launch input visibility kernel
   auto& compute_encoder = d.get_command_encoder(idx);
   auto kernel = d.get_kernel("input_coherent");
-  uint32_t nthreads = (in.data_size() * in.itemsize() + sizeof(uint32_t) - 1) /
-      sizeof(uint32_t);
+  uint32_t nthreads =
+      (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) / sizeof(uint32_t);
 
   MTL::Size group_dims = MTL::Size(1024, 1, 1);
   MTL::Size grid_dims = MTL::Size((nthreads + 1024 - 1) / 1024, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_input_array(x, 0);
   compute_encoder.set_bytes(nthreads, 1);
   compute_encoder.dispatch_threadgroups(group_dims, grid_dims);
 

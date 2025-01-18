@@ -33,7 +33,6 @@ void AllReduce::eval_gpu(
   if (in.event().valid()) {
     f.update_gpu(in);
   }
-  f.wait_gpu();
 
   auto& out = outputs[0];
   if (in.is_donatable()) {
@@ -41,6 +40,7 @@ void AllReduce::eval_gpu(
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
+  f.wait_gpu(out);
 
   auto task = [in = in,
                out = out,
@@ -78,7 +78,7 @@ void AllGather::eval_gpu(
   if (in.event().valid()) {
     f.update_gpu(in);
   }
-  f.wait_gpu();
+  f.wait_gpu(out);
 
   auto task =
       [in = in, out = out, f = std::move(f), group = group()]() mutable {
@@ -133,7 +133,7 @@ void Recv::eval_gpu(
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   Fence f{stream()};
-  f.wait_gpu();
+  f.wait_gpu(out);
 
   // Schedule an async recv on the comm stream
   auto task =

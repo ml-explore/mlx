@@ -162,6 +162,10 @@ void CommandEncoder::set_output_array(
     int64_t offset /* = 0 */) {
   // Add barriers before adding the output to the output set
   set_input_array(a, idx, offset);
+  register_output_array(a);
+}
+
+void CommandEncoder::register_output_array(array& a) {
   all_outputs_.insert(a.buffer().ptr());
   auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
   if (concurrent_) {
@@ -230,14 +234,9 @@ void Device::new_queue(int index) {
         "[metal::Device] Failed to make new command queue.");
   }
   stream_map_.emplace(index, q);
-  stream_map_.at(index).event_fence = device_->newFence();
   if (residency_set_ != nullptr) {
     q->addResidencySet(residency_set_);
   }
-}
-
-MTL::Fence* Device::get_event_fence(int index) {
-  return get_stream_(index).event_fence;
 }
 
 int Device::get_command_buffer_ops(int index) {
@@ -354,7 +353,6 @@ CommandEncoder& Device::get_command_encoder(int index) {
   if (stream.encoder == nullptr) {
     stream.encoder = std::make_unique<CommandEncoder>(stream.buffer);
     stream.fence = std::make_shared<Fence>(device_->newFence());
-    stream.encoder->wait_for_fence(stream.event_fence);
   }
   return *stream.encoder;
 }
