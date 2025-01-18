@@ -349,12 +349,6 @@ workflows:
               deployment_target: ["", "13.5"]
       - linux_build_and_test
       - build_documentation
-      - build_release:
-          matrix:
-            parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["16.0.0"]
-              deployment_target: ["", "13.5"]
 
   build_pypi_release:
     when:
@@ -372,7 +366,8 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["15.0.0", "15.2.0"]
+              xcode_version: ["16.0.0"]
+              deployment_target: ["", "13.5"]
               build_env: ["PYPI_RELEASE=1"]
       - build_documentation:
           filters:
@@ -397,6 +392,7 @@ workflows:
           matrix:
             parameters:
               xcode_version: ["16.0.0"]
+              deployment_target: ["", "13.5"]
       - linux_build_and_test:
           requires: [ hold ]
   nightly_build:
@@ -410,7 +406,7 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["16.0.0"]
-              deployment_target: ["", "14.0"]
+              deployment_target: ["", "13.5"]
   weekly_build:
     when:
       and:
@@ -422,6 +418,7 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               xcode_version: ["16.0.0"]
+              deployment_target: ["", "13.5"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when:
