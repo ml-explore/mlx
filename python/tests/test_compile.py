@@ -675,6 +675,10 @@ class TestCompile(mlx_tests.MLXTestCase):
         def mean(x):
             return mx.mean(x, keepdims=True)
 
+        cfun = mx.compile(mean)
+        out = cfun(mx.ones((5, 5)))
+        self.assertTrue(mx.allclose(out, mx.array(1.0)))
+
         cmean = mx.compile(mean, shapeless=True)
 
         x = mx.ones(2)
