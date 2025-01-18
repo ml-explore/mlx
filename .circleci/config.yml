@@ -89,6 +89,10 @@ jobs:
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo add-apt-repository ppa:ubuntu-toolchain-r/ppa -y
+            sudo apt-get update
+            sudo apt install g++-13 gcc-13
+            sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave /usr/bin/g++ g++ /usr/bin/g++-13
       - run:
           name: Install Python package
           command: |
