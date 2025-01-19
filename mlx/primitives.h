@@ -163,9 +163,6 @@ class Abs : public UnaryPrimitive {
   DEFINE_PRINT(Abs)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Add : public UnaryPrimitive {
@@ -226,8 +223,6 @@ class Arange : public UnaryPrimitive {
   double start_;
   double stop_;
   double step_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcCos : public UnaryPrimitive {
@@ -242,9 +237,6 @@ class ArcCos : public UnaryPrimitive {
   DEFINE_PRINT(ArcCos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcCosh : public UnaryPrimitive {
@@ -259,9 +251,6 @@ class ArcCosh : public UnaryPrimitive {
   DEFINE_PRINT(ArcCosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcSin : public UnaryPrimitive {
@@ -276,9 +265,6 @@ class ArcSin : public UnaryPrimitive {
   DEFINE_PRINT(ArcSin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcSinh : public UnaryPrimitive {
@@ -293,9 +279,6 @@ class ArcSinh : public UnaryPrimitive {
   DEFINE_PRINT(ArcSinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcTan : public UnaryPrimitive {
@@ -310,9 +293,6 @@ class ArcTan : public UnaryPrimitive {
   DEFINE_PRINT(ArcTan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcTan2 : public UnaryPrimitive {
@@ -327,7 +307,6 @@ class ArcTan2 : public UnaryPrimitive {
   DEFINE_PRINT(ArcTan2)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
  private:
   void eval(const std::vector<array>& inputs, array& out);
 };
@@ -344,9 +323,6 @@ class ArcTanh : public UnaryPrimitive {
   DEFINE_PRINT(ArcTanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArgPartition : public UnaryPrimitive {
@@ -369,8 +345,6 @@ class ArgPartition : public UnaryPrimitive {
  private:
   int kth_;
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArgReduce : public UnaryPrimitive {
@@ -398,8 +372,6 @@ class ArgReduce : public UnaryPrimitive {
  private:
   ReduceType reduce_type_;
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArgSort : public UnaryPrimitive {
@@ -420,8 +392,6 @@ class ArgSort : public UnaryPrimitive {
 
  private:
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class AsType : public UnaryPrimitive {
@@ -518,8 +488,6 @@ class BlockMaskedMM : public UnaryPrimitive {
 
  private:
   int block_size_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class GatherMM : public UnaryPrimitive {
@@ -537,9 +505,6 @@ class GatherMM : public UnaryPrimitive {
 
   DEFINE_PRINT(GatherMM)
   DEFINE_DEFAULT_IS_EQUIVALENT()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class BroadcastAxes : public UnaryPrimitive {
@@ -603,9 +568,6 @@ class Ceil : public UnaryPrimitive {
   DEFINE_PRINT(Ceil)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Compiled : public Primitive {
@@ -669,8 +631,6 @@ class Concatenate : public UnaryPrimitive {
 
  private:
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Conjugate : public UnaryPrimitive {
@@ -684,9 +644,6 @@ class Conjugate : public UnaryPrimitive {
   DEFINE_PRINT(Conjugate)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Contiguous : public UnaryPrimitive {
@@ -787,9 +744,6 @@ class Cos : public UnaryPrimitive {
   DEFINE_PRINT(Cos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Cosh : public UnaryPrimitive {
@@ -804,9 +758,6 @@ class Cosh : public UnaryPrimitive {
   DEFINE_PRINT(Cosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class CustomTransforms : public Primitive {
@@ -915,9 +866,6 @@ class DivMod : public Primitive {
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
     return std::vector{inputs[0].shape(), inputs[0].shape()};
   }
-
- private:
-  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 class Select : public UnaryPrimitive {
@@ -932,9 +880,6 @@ class Select : public UnaryPrimitive {
   DEFINE_PRINT(Select)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Remainder : public UnaryPrimitive {
@@ -949,9 +894,6 @@ class Remainder : public UnaryPrimitive {
   DEFINE_PRINT(Remainder)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Equal : public UnaryPrimitive {
@@ -979,7 +921,6 @@ class Equal : public UnaryPrimitive {
   };
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
   bool equal_nan_;
 };
 
@@ -995,9 +936,6 @@ class Erf : public UnaryPrimitive {
   DEFINE_PRINT(Erf)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ErfInv : public UnaryPrimitive {
@@ -1012,9 +950,6 @@ class ErfInv : public UnaryPrimitive {
   DEFINE_PRINT(ErfInv)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Exp : public UnaryPrimitive {
@@ -1029,9 +964,6 @@ class Exp : public UnaryPrimitive {
   DEFINE_PRINT(Exp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Expm1 : public UnaryPrimitive {
@@ -1045,9 +977,6 @@ class Expm1 : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Expm1)
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ExpandDims : public UnaryPrimitive {
@@ -1100,8 +1029,6 @@ class FFT : public UnaryPrimitive {
   std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Flatten : public UnaryPrimitive {
@@ -1141,9 +1068,6 @@ class Floor : public UnaryPrimitive {
   DEFINE_PRINT(Floor)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Full : public UnaryPrimitive {
@@ -1182,7 +1106,6 @@ class Gather : public UnaryPrimitive {
   }
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
   std::vector<int> axes_;
   Shape slice_sizes_;
 };
@@ -1199,9 +1122,6 @@ class Greater : public UnaryPrimitive {
   DEFINE_PRINT(Greater)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class GreaterEqual : public UnaryPrimitive {
@@ -1216,9 +1136,6 @@ class GreaterEqual : public UnaryPrimitive {
   DEFINE_PRINT(GreaterEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Hadamard : public UnaryPrimitive {
@@ -1241,8 +1158,6 @@ class Hadamard : public UnaryPrimitive {
 
  private:
   float scale_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Imag : public UnaryPrimitive {
@@ -1271,9 +1186,6 @@ class Less : public UnaryPrimitive {
   DEFINE_PRINT(Less)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class LessEqual : public UnaryPrimitive {
@@ -1288,9 +1200,6 @@ class LessEqual : public UnaryPrimitive {
   DEFINE_PRINT(LessEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Load : public UnaryPrimitive {
@@ -1319,7 +1228,6 @@ class Load : public UnaryPrimitive {
     static Stream io_stream = new_stream(Device::cpu);
     return io_stream;
   };
-  void eval(const std::vector<array>& inputs, array& out);
   std::shared_ptr<io::Reader> reader_;
   size_t offset_;
   bool swap_endianness_;
@@ -1360,7 +1268,6 @@ class Log : public UnaryPrimitive {
 
  private:
   Base base_;
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Log1p : public UnaryPrimitive {
@@ -1374,9 +1281,6 @@ class Log1p : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Log1p)
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class LogicalNot : public UnaryPrimitive {
@@ -1391,9 +1295,6 @@ class LogicalNot : public UnaryPrimitive {
   DEFINE_PRINT(LogicalNot)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class LogicalAnd : public UnaryPrimitive {
@@ -1408,9 +1309,6 @@ class LogicalAnd : public UnaryPrimitive {
   DEFINE_PRINT(LogicalAnd)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class LogicalOr : public UnaryPrimitive {
@@ -1425,9 +1323,6 @@ class LogicalOr : public UnaryPrimitive {
   DEFINE_PRINT(LogicalOr)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class LogAddExp : public UnaryPrimitive {
@@ -1442,9 +1337,6 @@ class LogAddExp : public UnaryPrimitive {
   DEFINE_PRINT(LogAddExp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Matmul : public UnaryPrimitive {
@@ -1473,9 +1365,6 @@ class Maximum : public UnaryPrimitive {
   DEFINE_PRINT(Maximum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Minimum : public UnaryPrimitive {
@@ -1490,9 +1379,6 @@ class Minimum : public UnaryPrimitive {
   DEFINE_PRINT(Minimum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Multiply : public UnaryPrimitive {
@@ -1524,9 +1410,6 @@ class Negative : public UnaryPrimitive {
   DEFINE_PRINT(Negative)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class NotEqual : public UnaryPrimitive {
@@ -1541,9 +1424,6 @@ class NotEqual : public UnaryPrimitive {
   DEFINE_PRINT(NotEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class NumberOfElements : public UnaryPrimitive {
@@ -1606,8 +1486,6 @@ class Pad : public UnaryPrimitive {
   std::vector<int> axes_;
   Shape low_pad_size_;
   Shape high_pad_size_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Partition : public UnaryPrimitive {
@@ -1630,8 +1508,6 @@ class Partition : public UnaryPrimitive {
  private:
   int kth_;
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Power : public UnaryPrimitive {
@@ -1706,8 +1582,6 @@ class GatherQMM : public UnaryPrimitive {
   int group_size_;
   int bits_;
   bool transpose_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class RandomBits : public UnaryPrimitive {
@@ -1728,8 +1602,6 @@ class RandomBits : public UnaryPrimitive {
  private:
   Shape shape_;
   int width_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Real : public UnaryPrimitive {
@@ -1837,9 +1709,6 @@ class Round : public UnaryPrimitive {
   DEFINE_PRINT(Round)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Scan : public UnaryPrimitive {
@@ -1936,7 +1805,6 @@ class Scatter : public UnaryPrimitive {
   };
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
   ReduceType reduce_type_;
   std::vector<int> axes_;
 };
@@ -1953,9 +1821,6 @@ class Sigmoid : public UnaryPrimitive {
   DEFINE_PRINT(Sigmoid)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Sign : public UnaryPrimitive {
@@ -1970,9 +1835,6 @@ class Sign : public UnaryPrimitive {
   DEFINE_PRINT(Sign)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Sin : public UnaryPrimitive {
@@ -1987,9 +1849,6 @@ class Sin : public UnaryPrimitive {
   DEFINE_PRINT(Sin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Sinh : public UnaryPrimitive {
@@ -2004,9 +1863,6 @@ class Sinh : public UnaryPrimitive {
   DEFINE_PRINT(Sinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Slice : public UnaryPrimitive {
@@ -2036,7 +1892,6 @@ class Slice : public UnaryPrimitive {
   Shape start_indices_;
   Shape end_indices_;
   Shape strides_;
-
   void eval(const std::vector<array>& inputs, array& out);
 };
 
@@ -2068,8 +1923,6 @@ class SliceUpdate : public UnaryPrimitive {
   Shape start_indices_;
   Shape end_indices_;
   Shape strides_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class DynamicSlice : public UnaryPrimitive {
@@ -2159,8 +2012,6 @@ class Sort : public UnaryPrimitive {
 
  private:
   int axis_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Split : public Primitive {
@@ -2200,9 +2051,6 @@ class Square : public UnaryPrimitive {
   DEFINE_PRINT(Square)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Sqrt : public UnaryPrimitive {
@@ -2230,7 +2078,6 @@ class Sqrt : public UnaryPrimitive {
   }
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
   bool recip_;
 };
 
@@ -2304,9 +2151,6 @@ class Tan : public UnaryPrimitive {
   DEFINE_PRINT(Tan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Tanh : public UnaryPrimitive {
@@ -2321,9 +2165,6 @@ class Tanh : public UnaryPrimitive {
   DEFINE_PRINT(Tanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Unflatten : public UnaryPrimitive {
@@ -2404,9 +2245,6 @@ class QRF : public Primitive {
       override;
 
   DEFINE_PRINT(QRF)
-
- private:
-  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 /* SVD primitive. */
@@ -2421,9 +2259,6 @@ class SVD : public Primitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(SVD)
-
- private:
-  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 /* Matrix inversion primitive. */
@@ -2442,7 +2277,6 @@ class Inverse : public UnaryPrimitive {
   }
 
  private:
-  void eval(const std::vector<array>& inputs, array& output);
   bool tri_;
   bool upper_;
 };
@@ -2462,7 +2296,6 @@ class Cholesky : public UnaryPrimitive {
   DEFINE_PRINT(Cholesky)
 
  private:
-  void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
 };
 
@@ -2489,7 +2322,6 @@ class Eigh : public Primitive {
   }
 
  private:
-  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
   std::string uplo_;
   bool compute_eigenvectors_;
 };

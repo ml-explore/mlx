@@ -9,10 +9,8 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/arange.h"
 #include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/ops.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/threefry.h"
-#include "mlx/backend/common/unary.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -58,91 +56,54 @@ int64_t compute_dynamic_offset(
   }
 }
 
-void Abs::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (issubdtype(in.dtype(), unsignedinteger)) {
-    // No-op for unsigned types
-    out.copy_shared_buffer(in);
-  } else {
-    unary(in, out, detail::Abs());
-  }
+void AsStrided::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void Broadcast::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void BroadcastAxes::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void Copy::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void CustomTransforms::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+void Depends::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+void ExpandDims::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void NumberOfElements::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void Slice::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void Split::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+void Squeeze::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void StopGradient::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+void Transpose::eval_cpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
 }
 
-void Arange::eval(const std::vector<array>& inputs, array& out) {
+void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
   arange(inputs, out, start_, step_);
-}
-
-void ArcCos::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcCos());
-  } else {
-    throw std::invalid_argument(
-        "[arccos] Cannot compute inverse cosine of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void ArcCosh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcCosh());
-  } else {
-    throw std::invalid_argument(
-        "[arccosh] Cannot compute inverse hyperbolic cosine of elements in"
-        " array with non floating point type.");
-  }
-}
-
-void ArcSin::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcSin());
-  } else {
-    throw std::invalid_argument(
-        "[arcsin] Cannot compute inverse sine of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void ArcSinh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcSinh());
-  } else {
-    throw std::invalid_argument(
-        "[arcsinh] Cannot compute inverse hyperbolic sine of elements in"
-        " array with non floating point type.");
-  }
-}
-
-void ArcTan::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcTan());
-  } else {
-    throw std::invalid_argument(
-        "[arctan] Cannot compute inverse tangent of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void ArcTanh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::ArcTanh());
-  } else {
-    throw std::invalid_argument(
-        "[arctanh] Cannot compute inverse hyperbolic tangent of elements in"
-        " array with non floating point type.");
-  }
 }
 
 void AsType::eval(const std::vector<array>& inputs, array& out) {
@@ -152,18 +113,7 @@ void AsType::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
-void Ceil::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (issubdtype(in.dtype(), inexact)) {
-    unary_fp(in, out, detail::Ceil());
-  } else {
-    // No-op integer types
-    out.copy_shared_buffer(in);
-  }
-}
-
-void Concatenate::eval(const std::vector<array>& inputs, array& out) {
+void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
   std::vector<int> sizes;
   sizes.push_back(0);
   for (auto& p : inputs) {
@@ -187,17 +137,6 @@ void Concatenate::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Conjugate::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == complex64) {
-    unary_fp(in, out, detail::Conjugate());
-  } else {
-    throw std::invalid_argument(
-        "[conjugate] conjugate must be called on complex input.");
-  }
-}
-
 void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
@@ -209,111 +148,12 @@ void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Cos::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Cos());
-  } else {
-    throw std::invalid_argument(
-        "[cos] Cannot compute cosine of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void Cosh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Cosh());
-  } else {
-    throw std::invalid_argument(
-        "[cosh] Cannot compute hyperbolic cosine of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void Erf::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  switch (out.dtype()) {
-    case float32:
-      unary_op<float>(in, out, detail::Erf());
-      break;
-    case float16:
-      unary_op<float16_t>(in, out, detail::Erf());
-      break;
-    case bfloat16:
-      unary_op<bfloat16_t>(in, out, detail::Erf());
-      break;
-    default:
-      throw std::invalid_argument(
-          "[erf] Error function only defined for arrays"
-          " with real floating point type.");
-  }
-}
-
-void ErfInv::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  switch (out.dtype()) {
-    case float32:
-      unary_op<float>(in, out, detail::ErfInv());
-      break;
-    case float16:
-      unary_op<float16_t>(in, out, detail::ErfInv());
-      break;
-    case bfloat16:
-      unary_op<bfloat16_t>(in, out, detail::ErfInv());
-      break;
-    default:
-      throw std::invalid_argument(
-          "[erf_inv] Inverse error function only defined for arrays"
-          " with real floating point type.");
-  }
-}
-
-void Exp::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Exp());
-  } else {
-    throw std::invalid_argument(
-        "[exp] Cannot exponentiate elements in array"
-        " with non floating point type.");
-  }
-}
-
-void Expm1::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Expm1());
-  } else {
-    throw std::invalid_argument(
-        "[expm1] Cannot exponentiate elements in array"
-        " with non floating point type.");
-  }
-}
-
 void Flatten::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
 }
 
 void Unflatten::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
-}
-
-void Floor::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (issubdtype(in.dtype(), inexact)) {
-    unary_fp(in, out, detail::Floor());
-  } else {
-    // No-op integer types
-    out.copy_shared_buffer(in);
-  }
 }
 
 void Full::eval(const std::vector<array>& inputs, array& out) {
@@ -331,57 +171,7 @@ void Full::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
-void Imag::eval_cpu(const std::vector<array>& inputs, array& out) {
-  unary_op<complex64_t, float>(inputs[0], out, detail::Imag());
-}
-
-void Log::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    switch (base_) {
-      case Base::e:
-        unary_fp(in, out, detail::Log());
-        break;
-      case Base::two:
-        unary_fp(in, out, detail::Log2());
-        break;
-      case Base::ten:
-        unary_fp(in, out, detail::Log10());
-        break;
-    }
-  } else {
-    throw std::invalid_argument(
-        "[log] Cannot compute log of elements in array with"
-        " non floating point type.");
-  }
-}
-
-void Log1p::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Log1p());
-  } else {
-    throw std::invalid_argument(
-        "[log1p] Cannot compute log of elements in array with"
-        " non floating point type.");
-  }
-}
-
-void LogicalNot::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  unary(in, out, detail::LogicalNot());
-}
-
-void Negative::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  unary(in, out, detail::Negative());
-}
-
-void Pad::eval(const std::vector<array>& inputs, array& out) {
+void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Inputs must be base input array and scalar val array
   assert(inputs.size() == 2);
   auto& in = inputs[0];
@@ -412,7 +202,7 @@ void Pad::eval(const std::vector<array>& inputs, array& out) {
   copy_inplace(in, out_slice, CopyType::GeneralGeneral);
 }
 
-void RandomBits::eval(const std::vector<array>& inputs, array& out) {
+void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
@@ -460,69 +250,8 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Real::eval_cpu(const std::vector<array>& inputs, array& out) {
-  unary_op<complex64_t, float>(inputs[0], out, detail::Real());
-}
-
 void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
-}
-
-void Round::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (issubdtype(in.dtype(), inexact)) {
-    unary_fp(in, out, detail::Round());
-  } else {
-    // No-op integer types
-    out.copy_shared_buffer(in);
-  }
-}
-
-void Sigmoid::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Sigmoid());
-  } else {
-    throw std::invalid_argument(
-        "[sigmoid] Cannot sigmoid of elements in array with"
-        " non floating point type.");
-  }
-}
-
-void Sign::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (in.dtype() == bool_) {
-    out.copy_shared_buffer(in);
-  } else {
-    unary(in, out, detail::Sign());
-  }
-}
-
-void Sin::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Sin());
-  } else {
-    throw std::invalid_argument(
-        "[sin] Cannot compute sine of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void Sinh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Sinh());
-  } else {
-    throw std::invalid_argument(
-        "[sinh] Cannot compute hyperbolic sine of elements in array"
-        " with non floating point type.");
-  }
 }
 
 void Slice::eval(const std::vector<array>& inputs, array& out) {
@@ -596,7 +325,7 @@ void DynamicSliceUpdate::eval_cpu(
       /* CopyType ctype = */ CopyType::GeneralGeneral);
 }
 
-void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
+void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
     out.set_data(nullptr);
@@ -630,46 +359,6 @@ void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
       /* int64_t i_offset = */ 0,
       /* int64_t o_offset = */ data_offset,
       /* CopyType ctype = */ CopyType::GeneralGeneral);
-}
-
-void Square::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  unary(in, out, detail::Square());
-}
-
-void Sqrt::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (recip_) {
-    unary_fp(in, out, detail::Rsqrt());
-  } else {
-    unary_fp(in, out, detail::Sqrt());
-  }
-}
-
-void Tan::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Tan());
-  } else {
-    throw std::invalid_argument(
-        "[tan] Cannot compute tangent of elements in array"
-        " with non floating point type.");
-  }
-}
-
-void Tanh::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, detail::Tanh());
-  } else {
-    throw std::invalid_argument(
-        "[tanh] Cannot compute hyperbolic tangent of elements in array"
-        " with non floating point type.");
-  }
 }
 
 void View::eval_cpu(const std::vector<array>& inputs, array& out) {

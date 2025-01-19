@@ -8,7 +8,7 @@
 
 namespace mlx::core {
 
-void FFT::eval(const std::vector<array>& inputs, array& out) {
+void FFT::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
   std::vector<std::ptrdiff_t> strides_in(
       in.strides().begin(), in.strides().end());

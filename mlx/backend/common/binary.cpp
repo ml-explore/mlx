@@ -77,7 +77,7 @@ void Add::eval(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, detail::Add());
 }
 
-void DivMod::eval(
+void DivMod::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 2);
@@ -139,14 +139,14 @@ void Divide::eval(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, detail::Divide());
 }
 
-void Remainder::eval(const std::vector<array>& inputs, array& out) {
+void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   binary(a, b, out, detail::Remainder());
 }
 
-void Equal::eval(const std::vector<array>& inputs, array& out) {
+void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (equal_nan_) {
     comparison_op(inputs[0], inputs[1], out, detail::NaNEqual());
@@ -155,27 +155,27 @@ void Equal::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Greater::eval(const std::vector<array>& inputs, array& out) {
+void Greater::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op(inputs[0], inputs[1], out, detail::Greater());
 }
 
-void GreaterEqual::eval(const std::vector<array>& inputs, array& out) {
+void GreaterEqual::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op(inputs[0], inputs[1], out, detail::GreaterEqual());
 }
 
-void Less::eval(const std::vector<array>& inputs, array& out) {
+void Less::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op(inputs[0], inputs[1], out, detail::Less());
 }
 
-void LessEqual::eval(const std::vector<array>& inputs, array& out) {
+void LessEqual::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op(inputs[0], inputs[1], out, detail::LessEqual());
 }
 
-void LogAddExp::eval(const std::vector<array>& inputs, array& out) {
+void LogAddExp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -196,28 +196,28 @@ void LogAddExp::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void LogicalAnd::eval(const std::vector<array>& inputs, array& out) {
+void LogicalAnd::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2); // LogicalAnd requires two input arrays
   auto& in1 = inputs[0];
   auto& in2 = inputs[1];
   binary(in1, in2, out, detail::LogicalAnd());
 }
 
-void LogicalOr::eval(const std::vector<array>& inputs, array& out) {
+void LogicalOr::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2); // LogicalOr requires two input arrays
   auto& in1 = inputs[0];
   auto& in2 = inputs[1];
   binary(in1, in2, out, detail::LogicalOr());
 }
 
-void Maximum::eval(const std::vector<array>& inputs, array& out) {
+void Maximum::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   binary(a, b, out, detail::Maximum());
 }
 
-void Minimum::eval(const std::vector<array>& inputs, array& out) {
+void Minimum::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -231,7 +231,7 @@ void Multiply::eval(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, detail::Multiply());
 }
 
-void NotEqual::eval(const std::vector<array>& inputs, array& out) {
+void NotEqual::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   comparison_op(inputs[0], inputs[1], out, detail::NotEqual());
 }

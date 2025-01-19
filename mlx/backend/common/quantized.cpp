@@ -411,7 +411,7 @@ void QuantizedMatmul::eval(const std::vector<array>& inputs, array& out) {
   _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
 }
 
-void GatherQMM::eval(const std::vector<array>& inputs, array& out) {
+void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 6);
 
   auto& x_pre = inputs[0];

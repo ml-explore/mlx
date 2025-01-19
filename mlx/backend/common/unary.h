@@ -38,9 +38,7 @@ void unary_op(const array& a, array& out, Op op) {
   if (a.flags().contiguous) {
     set_unary_output_data(a, out);
     U* dst = out.data<U>();
-    for (size_t i = 0; i < a.data_size(); ++i) {
-      dst[i] = op(a_ptr[i]);
-    }
+    op(a_ptr, dst, a.data_size());
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     U* dst = out.data<U>();

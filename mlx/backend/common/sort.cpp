@@ -287,7 +287,7 @@ void argpartition(const array& in, array& out, int axis, int kth) {
 
 } // namespace
 
-void ArgSort::eval(const std::vector<array>& inputs, array& out) {
+void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 
@@ -321,7 +321,7 @@ void ArgSort::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Sort::eval(const std::vector<array>& inputs, array& out) {
+void Sort::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 
@@ -355,7 +355,7 @@ void Sort::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void ArgPartition::eval(const std::vector<array>& inputs, array& out) {
+void ArgPartition::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 
@@ -389,7 +389,7 @@ void ArgPartition::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Partition::eval(const std::vector<array>& inputs, array& out) {
+void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 

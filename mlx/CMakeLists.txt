@@ -38,6 +38,7 @@ endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/distributed)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 if(MLX_BUILD_ACCELERATE)
+  add_compile_definitions(MLX_BUILD_ACCELERATE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
 elseif(MLX_BUILD_CPU)
   target_sources(

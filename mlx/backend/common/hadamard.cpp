@@ -82,7 +82,7 @@ void hadamard(array& out, int n, int m, float scale) {
   }
 }
 
-void Hadamard::eval(const std::vector<array>& inputs, array& out) {
+void Hadamard::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 

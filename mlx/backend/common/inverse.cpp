@@ -110,7 +110,7 @@ void inverse_impl(const array& a, array& inv, bool tri, bool upper) {
   }
 }
 
-void Inverse::eval(const std::vector<array>& inputs, array& output) {
+void Inverse::eval_cpu(const std::vector<array>& inputs, array& output) {
   if (inputs[0].dtype() != float32) {
     throw std::runtime_error("[Inverse::eval] only supports float32.");
   }

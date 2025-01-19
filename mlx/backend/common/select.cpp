@@ -61,7 +61,7 @@ void select_op(
 
 } // namespace
 
-void Select::eval(const std::vector<array>& inputs, array& out) {
+void Select::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 3);
   const auto& condition = inputs[0];
   const auto& a = inputs[1];

@@ -64,7 +64,7 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   }
 }
 
-void Cholesky::eval(const std::vector<array>& inputs, array& output) {
+void Cholesky::eval_cpu(const std::vector<array>& inputs, array& output) {
   if (inputs[0].dtype() != float32) {
     throw std::runtime_error("[Cholesky::eval] only supports float32.");
   }

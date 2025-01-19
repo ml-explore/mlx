@@ -11,93 +11,7 @@
 #include "mlx/backend/common/unary.h"
 #include "mlx/primitives.h"
 
-#define DEFAULT(primitive)                                                 \
-  void primitive::eval_cpu(const std::vector<array>& inputs, array& out) { \
-    primitive::eval(inputs, out);                                          \
-  }
-
-#define DEFAULT_MULTI(primitive)                                       \
-  void primitive::eval_cpu(                                            \
-      const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    primitive::eval(inputs, outputs);                                  \
-  }
-
 namespace mlx::core {
-
-// Use the default implementation for the following primitives
-DEFAULT(Arange)
-DEFAULT(ArgPartition)
-DEFAULT(ArgReduce)
-DEFAULT(ArgSort)
-DEFAULT(AsStrided)
-DEFAULT(BlockMaskedMM)
-DEFAULT(Broadcast)
-DEFAULT(BroadcastAxes)
-DEFAULT(Ceil)
-DEFAULT(Concatenate)
-DEFAULT(Conjugate)
-DEFAULT(Copy)
-DEFAULT_MULTI(CustomTransforms)
-DEFAULT_MULTI(Depends)
-DEFAULT_MULTI(DivMod)
-DEFAULT(NumberOfElements)
-DEFAULT(Equal)
-DEFAULT(Erf)
-DEFAULT(ErfInv)
-DEFAULT(ExpandDims)
-DEFAULT(FFT)
-DEFAULT(Floor)
-DEFAULT(Gather)
-DEFAULT(GatherMM)
-DEFAULT(GatherQMM)
-DEFAULT(Greater)
-DEFAULT(GreaterEqual)
-DEFAULT(Hadamard)
-DEFAULT(Less)
-DEFAULT(LessEqual)
-DEFAULT(Load)
-DEFAULT(LogicalNot)
-DEFAULT(LogicalAnd)
-DEFAULT(LogicalOr)
-DEFAULT(LogAddExp)
-DEFAULT(Maximum)
-DEFAULT(Minimum)
-DEFAULT(NotEqual)
-DEFAULT(Pad)
-DEFAULT(Partition)
-DEFAULT_MULTI(QRF)
-DEFAULT(RandomBits)
-DEFAULT(Remainder)
-DEFAULT(Round)
-DEFAULT(Scatter)
-DEFAULT(Select)
-DEFAULT(Sigmoid)
-DEFAULT(Sign)
-DEFAULT(Slice)
-DEFAULT(SliceUpdate)
-DEFAULT_MULTI(Split)
-DEFAULT(Sort)
-DEFAULT(Squeeze)
-DEFAULT(StopGradient)
-DEFAULT_MULTI(SVD)
-DEFAULT(Transpose)
-DEFAULT(Inverse)
-DEFAULT(Cholesky)
-DEFAULT_MULTI(Eigh)
-
-void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (in.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    vDSP_vabs(in.data<float>(), 1, out.data<float>(), 1, in.data_size());
-  } else if (in.dtype() == int32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    vDSP_vabsi(in.data<int>(), 1, out.data<int>(), 1, in.data_size());
-  } else {
-    eval(inputs, out);
-  }
-}
 
 void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
@@ -139,66 +53,6 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void ArcCos::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvacosf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void ArcCosh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvacoshf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void ArcSin::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvasinf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void ArcSinh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvasinhf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void ArcTan::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvatanf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
 void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -214,18 +68,6 @@ void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
     int size = a.data_size();
     vvatan2f(out.data<float>(), a.data<float>(), b.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void ArcTanh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvatanhf(out.data<float>(), in.data<float>(), &size);
   } else {
     eval(inputs, out);
   }
@@ -258,30 +100,6 @@ void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   }
   eval(inputs, out);
-}
-
-void Cos::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvcosf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Cosh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvcoshf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
 }
 
 void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -322,31 +140,6 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    auto size = in.data_size();
-    vvexpf(out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Expm1::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    auto size = in.data_size();
-    vvexpm1f(
-        out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else {
-    eval(inputs, out);
-  }
-}
-
 void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
@@ -354,44 +147,6 @@ void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (in.data_size() == 1 && out.dtype() == float32) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     vDSP_vfill(in.data<float>(), out.data<float>(), 1, out.size());
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Log::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    auto size = in.data_size();
-    switch (base_) {
-      case Base::e:
-        vvlogf(
-            out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-        break;
-      case Base::two:
-        vvlog2f(
-            out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-        break;
-      case Base::ten:
-        vvlog10f(
-            out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-        break;
-    }
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Log1p::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    auto size = in.data_size();
-    vvlog1pf(
-        out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
   } else {
     eval(inputs, out);
   }
@@ -417,17 +172,6 @@ void Multiply::eval_cpu(const std::vector<array>& inputs, array& out) {
         [](const auto* a, const auto* b, auto* o, auto n) {
           vDSP_vmul((const float*)a, 1, (const float*)b, 1, (float*)o, 1, n);
         });
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Negative::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (in.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    vDSP_vneg(in.data<float>(), 1, out.data<float>(), 1, in.data_size());
   } else {
     eval(inputs, out);
   }
@@ -484,58 +228,6 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Sin::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvsinf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Sinh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvsinhf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Square::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (in.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    auto size = in.data_size();
-    vDSP_vsq(in.data<float>(), 1, out.data<float>(), 1, size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Sqrt::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  if (in.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    if (recip_) {
-      vvrsqrtf(out.data<float>(), in.data<float>(), &size);
-    } else {
-      vvsqrtf(out.data<float>(), in.data<float>(), &size);
-    }
-  } else {
-    eval(inputs, out);
-  }
-}
-
 void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -571,30 +263,6 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vsaddi((const int*)vec, 1, &val, (int*)o, 1, n);
         },
         UseDefaultBinaryOp());
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Tan::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvtanf(out.data<float>(), in.data<float>(), &size);
-  } else {
-    eval(inputs, out);
-  }
-}
-
-void Tanh::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == float32 && in.flags().contiguous) {
-    set_unary_output_data(in, out);
-    int size = in.data_size();
-    vvtanhf(out.data<float>(), in.data<float>(), &size);
   } else {
     eval(inputs, out);
   }
