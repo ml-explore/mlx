@@ -79,7 +79,6 @@ namespace mlx::core::distributed::ring {
 constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
-constexpr const int MAX_THREADS = 24;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -500,7 +499,7 @@ void ring_recv_sum(
 class RingGroup : public GroupImpl {
  public:
   RingGroup(int rank, std::vector<std::vector<address_t>> nodes, bool verbose)
-      : rank_(rank), verbose_(verbose), pool_(MAX_THREADS) {
+      : rank_(rank), verbose_(verbose), pool_(0) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
           "[ring] Rank cannot be larger than the size of the group");
@@ -545,6 +544,10 @@ class RingGroup : public GroupImpl {
           << recv_sockets_.size() << " to the left.";
       throw std::invalid_argument(msg.str());
     }
+
+    // Start the necessary threads for completely parallel operation on all
+    // channels. One thread to send, one to receive per socket.
+    pool_.resize(send_sockets_.size() * 2 * 2);
   }
 
   ~RingGroup() {
