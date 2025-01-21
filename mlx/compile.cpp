@@ -197,8 +197,10 @@ std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
 class CompilerCache {
  public:
   struct CacheEntry {
-    CacheEntry(Stream stream) : stream(stream) {};
+    CacheEntry(Stream stream, bool shapeless)
+        : stream(stream), shapeless(shapeless) {};
     Stream stream;
+    bool shapeless;
     std::vector<array> inputs;
     std::vector<array> outputs;
     std::vector<array> tape;
@@ -245,6 +247,9 @@ class CompilerCache {
       if (entry.stream != stream) {
         continue;
       }
+      if (entry.shapeless != shapeless) {
+        continue;
+      }
 
       // Check the inputs match and return if so
       if (has_same_shape_and_dtype(inputs, entry.inputs) &&
@@ -253,7 +258,7 @@ class CompilerCache {
       }
     }
     // Otherwise append a new cache entry
-    entries.push_back(CacheEntry{stream});
+    entries.push_back(CacheEntry{stream, shapeless});
     return entries.back();
   }
 
