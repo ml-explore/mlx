@@ -70,8 +70,8 @@ jobs:
                  git push -f origin gh-pages
 
   linux_build_and_test:
-    docker:
-      - image: cimg/python:3.9
+    machine:
+      image: ubuntu-2404:2024.11.1
 
     steps:
       - checkout
@@ -84,34 +84,33 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            pip install --upgrade cmake
-            pip install nanobind==2.4.0
-            pip install numpy
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt-get update -y
+            sudo apt-get install -y python3.9 python3.9-distutils python3.9-dev
+            python3.9 -m pip install --upgrade cmake
+            python3.9 -m pip install nanobind==2.4.0
+            python3.9 -m pip install numpy
             sudo apt-get update
-            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
-            sudo add-apt-repository ppa:ubuntu-toolchain-r/ppa -y
-            sudo apt-get update
-            sudo apt install g++-13 gcc-13
-            sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+            sudo apt-get install libopenblas-dev liblapacke-dev openmpi-bin libopenmpi-dev
       - run:
           name: Install Python package
           command: |
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF -DPython_EXECUTABLE=/usr/bin/python3.9" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
-              python3 setup.py build_ext --inplace
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+              python3.9 setup.py build_ext --inplace
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF -DPython_EXECUTABLE=/usr/bin/python3.9" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
-              python3 setup.py develop
+              python3.9 setup.py develop
       - run:
           name: Generate package stubs
           command: |
             echo "stubs"
-            pip install typing_extensions
-            python setup.py generate_stubs 
+            python3.9 -m pip install typing_extensions
+            python3.9 setup.py generate_stubs 
       - run:
           name: Run Python tests
           command: |
-            python3 -m unittest discover python/tests -v
+            python3.9 -m unittest discover python/tests -v
       - run:
           name: Build CPP only
           command: |
