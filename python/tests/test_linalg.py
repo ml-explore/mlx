@@ -103,7 +103,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
         Q, R = mx.linalg.qr(A, stream=mx.cpu)
         out = Q @ R
         self.assertTrue(mx.allclose(out, A))
-        out = Q @ Q
+        out = Q.T @ Q
         self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
         self.assertTrue(mx.allclose(mx.tril(R, -1), mx.zeros_like(R)))
         self.assertEqual(Q.dtype, mx.float32)
@@ -116,9 +116,20 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for a, q, r in zip(A, Q, R):
             out = q @ r
             self.assertTrue(mx.allclose(out, a))
-            out = q @ q
+            out = q.T @ q
             self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
             self.assertTrue(mx.allclose(mx.tril(r, -1), mx.zeros_like(r)))
+
+        # Non square matrices
+        for shape in [(4, 8), (8, 4)]:
+            A = mx.random.uniform(shape=shape)
+            Q, R = mx.linalg.qr(A, stream=mx.cpu)
+            out = Q @ R
+            self.assertTrue(mx.allclose(out, A, rtol=1e-4, atol=1e-6))
+            out = Q.T @ Q
+            self.assertTrue(
+                mx.allclose(out, mx.eye(min(A.shape)), rtol=1e-4, atol=1e-6)
+            )
 
     def test_svd_decomposition(self):
         A = mx.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=mx.float32)

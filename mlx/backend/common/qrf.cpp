@@ -41,7 +41,7 @@ template <typename T>
 void qrf_impl(const array& a, array& q, array& r) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
-  const int lda = std::max(M, N);
+  const int lda = M;
   size_t num_matrices = a.size() / (M * N);
   int num_reflectors = std::min(M, N);
   auto tau =
@@ -89,13 +89,16 @@ void qrf_impl(const array& a, array& q, array& r) {
   allocator::free(work);
 
   r.set_data(allocator::malloc_or_wait(r.nbytes()));
-  copy_inplace(in, r, CopyType::General);
 
   for (int i = 0; i < num_matrices; ++i) {
-    // Zero lower triangle
+    /// num_reflectors x N
     for (int j = 0; j < r.shape(-2); ++j) {
       for (int k = 0; k < j; ++k) {
-        r.data<T>()[i * N * M + j * N + k] = 0;
+        r.data<T>()[i * N * num_reflectors + j * N + k] = 0;
+      }
+      for (int k = j; k < r.shape(-1); ++k) {
+        r.data<T>()[i * N * num_reflectors + j * N + k] =
+            in.data<T>()[i * N * M + j + k * M];
       }
     }
   }
@@ -104,7 +107,7 @@ void qrf_impl(const array& a, array& q, array& r) {
   lwork = -1;
   lpack<T>::xorgqr(
       &M,
-      &N,
+      &num_reflectors,
       &num_reflectors,
       nullptr,
       &lda,
@@ -120,7 +123,7 @@ void qrf_impl(const array& a, array& q, array& r) {
     // Compute Q
     lpack<T>::xorgqr(
         &M,
-        &N,
+        &num_reflectors,
         &num_reflectors,
         in.data<float>() + M * N * i,
         &lda,
@@ -131,7 +134,15 @@ void qrf_impl(const array& a, array& q, array& r) {
   }
 
   q.set_data(allocator::malloc_or_wait(q.nbytes()));
-  copy_inplace(in, q, CopyType::General);
+  for (int i = 0; i < num_matrices; ++i) {
+    // M x num_reflectors
+    for (int j = 0; j < q.shape(-2); ++j) {
+      for (int k = 0; k < q.shape(-1); ++k) {
+        q.data<T>()[i * M * num_reflectors + j * num_reflectors + k] =
+            in.data<T>()[i * N * M + j + k * M];
+      }
+    }
+  }
 
   // Cleanup
   allocator::free(work);

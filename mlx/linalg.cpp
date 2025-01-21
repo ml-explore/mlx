@@ -187,13 +187,13 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (a.shape(-1) != a.shape(-2)) {
-    throw std::invalid_argument(
-        "[linalg::qr] Support for non-square matrices NYI.");
-  }
-
+  int k = std::min(a.shape(-2), a.shape(-1));
+  auto q_shape = a.shape();
+  q_shape.back() = k;
+  auto r_shape = a.shape();
+  r_shape[r_shape.size() - 2] = k;
   auto out = array::make_arrays(
-      {a.shape(), a.shape()},
+      {std::move(q_shape), std::move(r_shape)},
       {a.dtype(), a.dtype()},
       std::make_shared<QRF>(to_stream(s)),
       {astype(a, a.dtype(), s)});
