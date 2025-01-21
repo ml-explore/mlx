@@ -151,7 +151,7 @@ struct address_t {
   sockaddr_storage addr;
   socklen_t len;
 
-  const sockaddr* sockaddr() const {
+  const sockaddr* get() const {
     return (struct sockaddr*)&addr;
   }
 };
@@ -262,7 +262,7 @@ std::vector<int> accept_connections(const std::vector<address_t>& addresses) {
     }
 
     // Bind the socket to the address and port
-    success = bind(sock, address.sockaddr(), address.len);
+    success = bind(sock, address.get(), address.len);
     if (success < 0) {
       shutdown(sock, 2);
       close(sock);
@@ -338,7 +338,7 @@ std::vector<int> make_connections(
         std::this_thread::sleep_for(std::chrono::milliseconds(wait));
       }
 
-      success = connect(sock, address.sockaddr(), address.len);
+      success = connect(sock, address.get(), address.len);
       if (success == 0) {
         break;
       }
