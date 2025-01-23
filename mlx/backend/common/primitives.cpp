@@ -106,7 +106,7 @@ void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
   arange(inputs, out, start_, step_);
 }
 
-void AsType::eval(const std::vector<array>& inputs, array& out) {
+void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
@@ -156,7 +156,7 @@ void Unflatten::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
 }
 
-void Full::eval(const std::vector<array>& inputs, array& out) {
+void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   assert(in.dtype() == out.dtype());

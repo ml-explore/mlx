@@ -2,143 +2,71 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <cmath>
-#include <complex>
-
-#include "mlx/backend/common/math.h"
+#include "mlx/backend/common/simd/simd.h"
 
 namespace mlx::core::detail {
 
-struct Add {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x + y;
-  }
-};
+using namespace mlx::core::simd;
 
-struct ArcTan2 {
-  template <typename T>
-  T operator()(T y, T x) {
-    return std::atan2(y, x);
-  }
-};
-
-struct Divide {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x / y;
-  }
-};
-
-struct Remainder {
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T> & !std::is_signed_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    return numerator % denominator;
+#define BINARY_SINGLE()                                 \
+  template <typename T>                                 \
+  T operator()(T x, T y) {                              \
+    return (*this)(Simd<T, 1>(x), Simd<T, 1>(y)).value; \
   }
 
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T> & std::is_signed_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    auto r = numerator % denominator;
-    if (r != 0 && (r < 0 != denominator < 0))
-      r += denominator;
-    return r;
-  }
+#define DEFAULT_OP(Op, op)                              \
+  struct Op {                                           \
+    template <int N, typename T>                        \
+    Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) { \
+      return op(x, y);                                  \
+    }                                                   \
+    BINARY_SINGLE()                                     \
+  };
 
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    auto r = std::fmod(numerator, denominator);
-    if (r != 0 && (r < 0 != denominator < 0)) {
-      r += denominator;
-    }
-    return r;
-  }
+DEFAULT_OP(Add, operator+)
+DEFAULT_OP(ArcTan2, atan2)
+DEFAULT_OP(Divide, operator/)
+DEFAULT_OP(Multiply, operator*)
+DEFAULT_OP(Subtract, operator-)
+DEFAULT_OP(LogicalAnd, operator&&)
+DEFAULT_OP(LogicalOr, operator||)
+DEFAULT_OP(BitwiseAnd, operator&)
+DEFAULT_OP(BitwiseOr, operator|)
+DEFAULT_OP(BitwiseXor, operator^)
+DEFAULT_OP(LeftShift, operator<<)
+DEFAULT_OP(RightShift, operator>>)
+DEFAULT_OP(Remainder, remainder)
+DEFAULT_OP(Maximum, maximum)
+DEFAULT_OP(Minimum, minimum)
+DEFAULT_OP(Power, pow)
 
-  complex64_t operator()(complex64_t numerator, complex64_t denominator) {
-    return numerator % denominator;
-  }
-};
+#define DEFAULT_BOOL_OP(Op, op)                            \
+  struct Op {                                              \
+    template <int N, typename T>                           \
+    Simd<bool, N> operator()(Simd<T, N> x, Simd<T, N> y) { \
+      return op(x, y);                                     \
+    }                                                      \
+    template <typename T>                                  \
+    bool operator()(T x, T y) {                            \
+      return (*this)(Simd<T, 1>(x), Simd<T, 1>(y)).value;  \
+    }                                                      \
+  };
 
-struct Equal {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x == y;
-  }
-};
+DEFAULT_BOOL_OP(Equal, operator==)
+DEFAULT_BOOL_OP(Greater, operator>)
+DEFAULT_BOOL_OP(GreaterEqual, operator>=)
+DEFAULT_BOOL_OP(Less, operator<)
+DEFAULT_BOOL_OP(LessEqual, operator<=)
+DEFAULT_BOOL_OP(NotEqual, operator!=)
 
 struct NaNEqual {
+  template <int N, typename T>
+  Simd<bool, N> operator()(Simd<T, N> x, Simd<T, N> y) {
+    return x == y || (isnan(x) && isnan(y));
+  }
   template <typename T>
   bool operator()(T x, T y) {
-    if constexpr (std::is_integral_v<T>) {
-      // isnan always returns false for integers, and MSVC refuses to compile.
-      return x == y;
-    } else {
-      return x == y || (std::isnan(x) && std::isnan(y));
-    }
-  }
-};
-
-struct Greater {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x > y;
-  }
-};
-
-struct GreaterEqual {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x >= y;
-  }
-};
-
-struct Less {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x < y;
-  }
-};
-
-struct LessEqual {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x <= y;
-  }
-};
-
-struct Maximum {
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(T x, T y) {
-    return (x > y) ? x : y;
-  }
-
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(T x, T y) {
-    if (std::isnan(x)) {
-      return x;
-    }
-    return (x > y) ? x : y;
-  }
-};
-
-struct Minimum {
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(T x, T y) {
-    return x < y ? x : y;
-  }
-
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(T x, T y) {
-    if (std::isnan(x)) {
-      return x;
-    }
-    return x < y ? x : y;
+    return (*this)(Simd<T, 1>(x), Simd<T, 1>(y)).value;
   }
 };
 
@@ -150,105 +78,29 @@ struct LogAddExp {
     auto minval = Minimum()(x, y);
     return (minval == -inf || maxval == inf)
         ? maxval
-        : static_cast<decltype(x)>(
-              maxval + std::log1p(fast_exp(minval - maxval)));
-  }
-};
-
-struct Multiply {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x * y;
-  }
-};
-
-struct NotEqual {
-  template <typename T>
-  bool operator()(T x, T y) {
-    return x != y;
-  }
-};
-
-struct Power {
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(T base, T exp) {
-    return std::pow(base, exp);
+        : static_cast<T>(maxval + std::log1p(fast_exp(minval - maxval)));
   }
 
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(T base, T exp) {
-    T res = 1;
-    while (exp) {
-      if (exp & 1) {
-        res *= base;
-      }
-      exp >>= 1;
-      base *= base;
-    }
-    return res;
-  }
-};
-
-struct Subtract {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x - y;
-  }
-};
-
-struct LogicalAnd {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x && y;
-  }
-};
-
-struct LogicalOr {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x || y;
+  template <int N, typename T>
+  Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) {
+    auto maxval = maximum(x, y);
+    auto minval = minimum(x, y);
+    auto mask = minval == -inf || maxval == inf;
+    auto out = maxval + log1p(exp(minval - maxval));
+    return select(mask, maxval, out);
   }
 };
 
 struct Select {
   template <typename T>
   T operator()(bool condition, T x, T y) {
-    return condition ? x : y;
+    return (*this)(Simd<bool, 1>(condition), Simd<T, 1>(x), Simd<T, 1>(y))
+        .value;
   }
-};
 
-struct BitwiseAnd {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x & y;
-  }
-};
-
-struct BitwiseOr {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x | y;
-  }
-};
-
-struct BitwiseXor {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x ^ y;
-  }
-};
-
-struct LeftShift {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x << y;
-  }
-};
-
-struct RightShift {
-  template <typename T>
-  T operator()(T x, T y) {
-    return x >> y;
+  template <int N, typename T>
+  Simd<T, N> operator()(Simd<bool, N> condition, Simd<T, N> x, Simd<T, N> y) {
+    return select(condition, x, y);
   }
 };
 

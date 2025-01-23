@@ -3,8 +3,8 @@
 #pragma once
 #include "mlx/allocator.h"
 #include "mlx/array.h"
-#include "mlx/backend/common/ops.h"
 #include "mlx/backend/common/utils.h"
+
 namespace mlx::core {
 
 namespace {

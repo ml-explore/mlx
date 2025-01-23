@@ -4,6 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
@@ -14,8 +15,16 @@ template <typename SrcT, typename DstT>
 void copy_single(const array& src, array& dst) {
   auto val = static_cast<DstT>(src.data<SrcT>()[0]);
   auto dst_ptr = dst.data<DstT>();
-  for (int i = 0; i < dst.size(); ++i) {
-    dst_ptr[i] = val;
+  constexpr int step = simd::max_size<DstT>;
+  size_t size = dst.size();
+  while (size >= step) {
+    simd::store(dst_ptr, simd::Simd<DstT, step>(val));
+    dst_ptr += step;
+    size -= step;
+  }
+  while (size-- > 0) {
+    *dst_ptr = val;
+    dst_ptr++;
   }
 }
 
@@ -23,7 +32,20 @@ template <typename SrcT, typename DstT>
 void copy_vector(const array& src, array& dst) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
-  std::copy(src_ptr, src_ptr + src.data_size(), dst_ptr);
+  size_t size = src.data_size();
+  constexpr int step = std::min(simd::max_size<SrcT>, simd::max_size<DstT>);
+  while (size >= step) {
+    simd::store(
+        dst_ptr, simd::Simd<DstT, step>(simd::load<SrcT, step>(src_ptr)));
+    src_ptr += step;
+    dst_ptr += step;
+    size -= step;
+  }
+  while (size-- > 0) {
+    *dst_ptr = DstT(*src_ptr);
+    src_ptr++;
+    dst_ptr++;
+  }
 }
 
 template <typename SrcT, typename DstT, int D>

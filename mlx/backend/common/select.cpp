@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "mlx/backend/common/binary_ops.h"
 #include "mlx/backend/common/ternary.h"
 #include "mlx/primitives.h"
 

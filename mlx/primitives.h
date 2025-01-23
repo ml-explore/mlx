@@ -177,9 +177,6 @@ class Add : public UnaryPrimitive {
   DEFINE_PRINT(Add)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class AddMM : public UnaryPrimitive {
@@ -307,8 +304,6 @@ class ArcTan2 : public UnaryPrimitive {
   DEFINE_PRINT(ArcTan2)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class ArcTanh : public UnaryPrimitive {
@@ -413,8 +408,6 @@ class AsType : public UnaryPrimitive {
 
  private:
   Dtype dtype_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class AsStrided : public UnaryPrimitive {
@@ -845,9 +838,6 @@ class Divide : public UnaryPrimitive {
   DEFINE_PRINT(Divide)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class DivMod : public Primitive {
@@ -1081,9 +1071,6 @@ class Full : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Full)
   DEFINE_DEFAULT_IS_EQUIVALENT()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Gather : public UnaryPrimitive {
@@ -1393,9 +1380,6 @@ class Multiply : public UnaryPrimitive {
   DEFINE_PRINT(Multiply)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Negative : public UnaryPrimitive {
@@ -1522,9 +1506,6 @@ class Power : public UnaryPrimitive {
   DEFINE_PRINT(Power)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class QuantizedMatmul : public UnaryPrimitive {
@@ -2109,9 +2090,6 @@ class Subtract : public UnaryPrimitive {
   DEFINE_PRINT(Subtract)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Squeeze : public UnaryPrimitive {

@@ -4,6 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/array.h"
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/utils.h"
 
@@ -38,7 +39,19 @@ void unary_op(const array& a, array& out, Op op) {
   if (a.flags().contiguous) {
     set_unary_output_data(a, out);
     U* dst = out.data<U>();
-    op(a_ptr, dst, a.data_size());
+    size_t size = a.data_size();
+    while (size >= simd::max_size<T>) {
+      simd::store(dst, op(simd::load<T, simd::max_size<T>>(a_ptr)));
+      size -= simd::max_size<T>;
+      a_ptr += simd::max_size<T>;
+      dst += simd::max_size<T>;
+    }
+    while (size > 0) {
+      *dst = op(*a_ptr);
+      size--;
+      dst++;
+      a_ptr++;
+    }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     U* dst = out.data<U>();

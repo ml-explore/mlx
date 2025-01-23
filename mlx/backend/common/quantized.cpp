@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/ops.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"

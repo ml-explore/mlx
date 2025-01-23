@@ -25,7 +25,8 @@ add_custom_command(
           ${PROJECT_SOURCE_DIR}/mlx/types/fp16.h
           ${PROJECT_SOURCE_DIR}/mlx/types/bf16.h
           ${PROJECT_SOURCE_DIR}/mlx/types/complex.h
-          ops.h)
+          unary_ops.h
+          binary_ops.h)
 
 add_custom_target(cpu_compiled_preamble DEPENDS compiled_preamble.cpp)
 

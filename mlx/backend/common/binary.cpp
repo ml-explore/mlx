@@ -6,8 +6,8 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/binary.h"
+#include "mlx/backend/common/binary_ops.h"
 #include "mlx/backend/common/binary_two.h"
-#include "mlx/backend/common/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -70,7 +70,7 @@ void comparison_op(const array& a, const array& b, array& out, Op op) {
 
 } // namespace
 
-void Add::eval(const std::vector<array>& inputs, array& out) {
+void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -132,7 +132,7 @@ void DivMod::eval_cpu(
   }
 }
 
-void Divide::eval(const std::vector<array>& inputs, array& out) {
+void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -148,10 +148,28 @@ void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[0];
   if (equal_nan_) {
-    comparison_op(inputs[0], inputs[1], out, detail::NaNEqual());
+    switch (a.dtype()) {
+      case float16:
+        comparison_op<float16_t, bool>(a, b, out, detail::NaNEqual());
+        break;
+      case float32:
+        comparison_op<float, bool>(a, b, out, detail::NaNEqual());
+        break;
+      case bfloat16:
+        comparison_op<bfloat16_t, bool>(a, b, out, detail::NaNEqual());
+        break;
+      case complex64:
+        comparison_op<complex64_t, bool>(a, b, out, detail::NaNEqual());
+        break;
+      default:
+        throw std::runtime_error(
+            "[NanEqual::eval_cpu] Only for floating point types.");
+    }
   } else {
-    comparison_op(inputs[0], inputs[1], out, detail::Equal());
+    comparison_op(a, b, out, detail::Equal());
   }
 }
 
@@ -224,7 +242,7 @@ void Minimum::eval_cpu(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, detail::Minimum());
 }
 
-void Multiply::eval(const std::vector<array>& inputs, array& out) {
+void Multiply::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -236,14 +254,14 @@ void NotEqual::eval_cpu(const std::vector<array>& inputs, array& out) {
   comparison_op(inputs[0], inputs[1], out, detail::NotEqual());
 }
 
-void Power::eval(const std::vector<array>& inputs, array& out) {
+void Power::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   binary(a, b, out, detail::Power());
 }
 
-void Subtract::eval(const std::vector<array>& inputs, array& out) {
+void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -307,7 +325,7 @@ void BitwiseBinary::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void ArcTan2::eval(const std::vector<array>& inputs, array& out) {
+void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   const auto& a = inputs[0];
   const auto& b = inputs[1];

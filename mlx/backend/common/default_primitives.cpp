@@ -21,19 +21,13 @@
 
 namespace mlx::core {
 
-DEFAULT(Add)
-DEFAULT(ArcTan2)
 DEFAULT(AsType)
 DEFAULT(Convolution)
-DEFAULT(Divide)
 DEFAULT(Full)
-DEFAULT(Multiply)
-DEFAULT(Power)
 DEFAULT(QuantizedMatmul)
 DEFAULT(Reduce)
 DEFAULT(Scan)
 DEFAULT(Softmax)
-DEFAULT(Subtract)
 
 namespace {
 
