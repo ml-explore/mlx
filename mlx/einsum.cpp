@@ -669,7 +669,7 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
     bool have_ellipsis = false;
     int cnt_before = 0, cnt_after = 0;
     for (int i = 0; i < subscript.size(); i++) {
-      if (!isalpha(subscripts[i])) {
+      if (!isalpha(subscript[i])) {
         if (i + 2 >= subscript.size() || subscript[i] != '.' ||
             subscript[i + 1] != '.' || subscript[i + 2] != '.') {
           std::ostringstream msg;
