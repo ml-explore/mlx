@@ -414,12 +414,17 @@ void _recv_sum(int sock, T* data, size_t start, size_t stop) {
   char buffer[PACKET_SIZE];
   size_t len = (stop - start) * sizeof(T);
   while (len > 0) {
-    ssize_t r = recv(sock, buffer, std::min(len, PACKET_SIZE), 0);
-    if (r <= 0) {
-      std::ostringstream msg;
-      msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
+    ssize_t r = 0;
+    do {
+      ssize_t partial_r =
+          recv(sock, buffer + r, std::min(len, PACKET_SIZE) - r, 0);
+      if (partial_r <= 0) {
+        std::ostringstream msg;
+        msg << "Recv of " << len << " bytes failed (errno: " << errno << ")";
+        throw std::runtime_error(msg.str());
+      }
+      r += partial_r;
+    } while (r % sizeof(T));
     sum_inplace((const T*)buffer, data, r / sizeof(T));
     data += r / sizeof(T);
     len -= r;
