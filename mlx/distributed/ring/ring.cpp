@@ -376,6 +376,9 @@ void sum_inplace(const T* input, T* output, size_t N) {
 
 template <typename T>
 void _send(int sock, T* data, size_t start, size_t stop) {
+  if (stop <= start) {
+    return;
+  }
   data += start;
   size_t len = (stop - start) * sizeof(T);
   const char* buffer = (const char*)data;
@@ -393,6 +396,9 @@ void _send(int sock, T* data, size_t start, size_t stop) {
 
 template <typename T>
 void _recv(int sock, T* data, size_t start, size_t stop) {
+  if (stop <= start) {
+    return;
+  }
   data += start;
   size_t len = (stop - start) * sizeof(T);
   char* buffer = (char*)data;
@@ -410,6 +416,9 @@ void _recv(int sock, T* data, size_t start, size_t stop) {
 
 template <typename T>
 void _recv_sum(int sock, T* data, size_t start, size_t stop) {
+  if (stop <= start) {
+    return;
+  }
   data += start;
   char buffer[PACKET_SIZE];
   size_t len = (stop - start) * sizeof(T);
