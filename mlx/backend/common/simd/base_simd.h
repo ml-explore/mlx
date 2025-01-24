@@ -1,13 +1,13 @@
 #pragma once
 
 #include <stdint.h>
+#include <algorithm>
 #include <cmath>
 #include <complex>
 
 #include "mlx/backend/common/simd/scalar_math.h"
 
 namespace mlx::core::simd {
-
 template <typename T, int N>
 struct Simd;
 
@@ -18,6 +18,7 @@ template <typename T>
 struct Simd<T, 1> {
   static constexpr int size = 1;
   T value;
+  Simd() {}
   template <typename U>
   Simd(Simd<U, 1> v) : value(v.value) {}
   template <typename U>
@@ -48,15 +49,6 @@ Simd<T, 1> rint(Simd<T, 1> in) {
         T{std::rint(in.value.real()), std::rint(in.value.imag())}};
   } else {
     return Simd<T, 1>{std::rint(in.value)};
-  }
-}
-
-template <typename T>
-Simd<T, 1> exp(Simd<T, 1> in) {
-  if constexpr (is_complex<T>) {
-    return Simd<T, 1>{std::exp(in.value)};
-  } else {
-    return Simd<T, 1>{fast_exp(in.value)};
   }
 }
 
@@ -127,16 +119,18 @@ template <typename T>
 Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
+  T r;
   if constexpr (std::is_integral_v<T>) {
-    T r = a % b;
-    if constexpr (std::is_signed_v<T>) {
-      if (r != 0 && (r < 0 != b < 0))
-        r += b;
-    }
-    return r;
+    r = a % b;
   } else {
-    return std::remainder(a, b);
+    r = std::remainder(a, b);
   }
+  if constexpr (std::is_signed_v<T>) {
+    if (r != 0 && (r < 0 != b < 0)) {
+      r += b;
+    }
+  }
+  return r;
 }
 
 template <typename T>
@@ -191,6 +185,14 @@ Simd<T, 1> atan2(Simd<T, 1> a, Simd<T, 1> b) {
   template <typename T1, typename T2>                       \
   Simd<bool, 1> operator OP(Simd<T1, 1> a, Simd<T2, 1> b) { \
     return a.value OP b.value;                              \
+  }                                                         \
+  template <typename T1, typename T2>                       \
+  Simd<bool, 1> operator OP(T1 a, Simd<T2, 1> b) {          \
+    return a OP b.value;                                    \
+  }                                                         \
+  template <typename T1, typename T2>                       \
+  Simd<bool, 1> operator OP(Simd<T1, 1> a, T2 b) {          \
+    return a.value OP b;                                    \
   }
 
 DEFAULT_COMPARISONS(>)
@@ -200,10 +202,18 @@ DEFAULT_COMPARISONS(<=)
 DEFAULT_COMPARISONS(==)
 DEFAULT_COMPARISONS(!=)
 
-template <typename MaskT, typename T1, typename T2>
-auto select(Simd<MaskT, 1> mask, Simd<T1, 1> x, Simd<T2, 1> y)
-    -> Simd<std::decay_t<decltype(mask.value ? x.value : y.value)>, 1> {
+template <typename MaskT, typename T>
+Simd<T, 1> select(Simd<MaskT, 1> mask, Simd<T, 1> x, Simd<T, 1> y) {
   return mask.value ? x.value : y.value;
 }
 
+template <typename T>
+Simd<T, 1> clamp(Simd<T, 1> v, Simd<T, 1> min, Simd<T, 1> max) {
+  return std::clamp(v.value, min.value, max.value);
+}
+
+template <typename T>
+Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, T z) {
+  return std::fma(x.value, y.value, z);
+}
 } // namespace mlx::core::simd

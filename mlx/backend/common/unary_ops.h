@@ -87,9 +87,10 @@ struct Sign {
     if constexpr (std::is_unsigned_v<T>) {
       return x != z;
     } else if constexpr (std::is_same_v<T, complex64_t>) {
-      return simd::select(x == z, x, x / simd::abs(x));
+      return simd::select(x == z, x, Simd<T, N>(x / simd::abs(x)));
     } else {
-      return (x > z) - (x < z);
+      return simd::select(
+          x < z, Simd<T, N>{-1}, simd::select(x > z, Simd<T, N>{1}, z));
     }
   }
   SINGLE()

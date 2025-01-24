@@ -7,7 +7,7 @@
 #include <cmath>
 #include <complex>
 
-#include "mlx/backend/common/simd/default_simd.h"
+#include "mlx/backend/common/simd/base_simd.h"
 
 namespace mlx::core::simd {
 
@@ -125,24 +125,29 @@ Simd<T, N> operator-(Simd<T, N> v) {
   return -v.value;
 }
 
+template <typename T, int N>
+Simd<bool, N> isnan(Simd<T, N> v) {
+  return asd::convert<char>(v.value != v.value);
+}
+
 // No simd_boolN in accelerate, use int8_t instead
 template <typename T, int N>
 Simd<bool, N> operator!(Simd<T, N> v) {
   return asd::convert<char>(!v.value);
 }
 
-#define SIMD_DEFAULT_BINARY(OP)                           \
-  template <typename T, typename U, int N>                \
-  Simd<T, N> operator OP(Simd<T, N> x, U y) {             \
-    return x.value OP y;                                  \
-  }                                                       \
-  template <typename T, typename U, int N>                \
-  Simd<U, N> operator OP(T x, Simd<U, N> y) {             \
-    return x OP y.value;                                  \
-  }                                                       \
-  template <typename T1, typename T2, int N>              \
-  Simd<T1, N> operator OP(Simd<T1, N> x, Simd<T2, N> y) { \
-    return x.value OP y.value;                            \
+#define SIMD_DEFAULT_BINARY(OP)                                              \
+  template <typename T, typename U, int N>                                   \
+  Simd<T, N> operator OP(Simd<T, N> x, U y) {                                \
+    return asd::convert<typename Simd<T, N>::scalar_t>(x.value OP y);        \
+  }                                                                          \
+  template <typename T1, typename T2, int N>                                 \
+  Simd<T2, N> operator OP(T1 x, Simd<T2, N> y) {                             \
+    return asd::convert<typename Simd<T2, N>::scalar_t>(x OP y.value);       \
+  }                                                                          \
+  template <typename T1, typename T2, int N>                                 \
+  Simd<T1, N> operator OP(Simd<T1, N> x, Simd<T2, N> y) {                    \
+    return asd::convert<typename Simd<T1, N>::scalar_t>(x.value OP y.value); \
   }
 
 SIMD_DEFAULT_BINARY(+)
@@ -179,18 +184,80 @@ SIMD_DEFAULT_COMPARISONS(==)
 SIMD_DEFAULT_COMPARISONS(!=)
 
 template <typename T, int N>
-Simd<T, N> clamp(Simd<T, N> v, Simd<T, N> min, Simd<T, N> max) {
-  return asd::clamp(v.value, min.value, max.value);
+Simd<T, N> atan2(Simd<T, N> a, Simd<T, N> b) {
+  return asd::atan2(a.value, b.value);
+}
+
+template <typename T, int N>
+Simd<T, N> maximum(Simd<T, N> a, Simd<T, N> b) {
+  // TODO add isnan
+  return asd::max(a.value, b.value);
+}
+
+template <typename T, int N>
+Simd<T, N> minimum(Simd<T, N> a, Simd<T, N> b) {
+  // TODO add isnan
+  return asd::min(a.value, b.value);
+}
+
+template <typename T, int N>
+Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
+  Simd<T, N> r;
+  if constexpr (!std::is_integral_v<T>) {
+    r = asd::remainder(a.value, b.value);
+  } else {
+    r = a - b * (a / b);
+  }
+  if constexpr (std::is_signed_v<T>) {
+    auto mask = r != 0 && (r < 0 != b < 0);
+    r = select(mask, r + b, r);
+  }
+  return r;
 }
 
 template <typename MaskT, typename T1, typename T2, int N>
 Simd<T1, N> select(Simd<MaskT, N> mask, Simd<T1, N> x, Simd<T2, N> y) {
-  return asd::bitselect(x.value, y.value, mask.value);
+  if constexpr (sizeof(T1) == 1) {
+    return asd::bitselect(y.value, x.value, asd::convert<char>(mask.value));
+  } else if constexpr (sizeof(T1) == 2) {
+    return asd::bitselect(y.value, x.value, asd::convert<short>(mask.value));
+  } else if constexpr (sizeof(T1) == 4) {
+    return asd::bitselect(y.value, x.value, asd::convert<int>(mask.value));
+  } else {
+    return asd::bitselect(y.value, x.value, asd::convert<long>(mask.value));
+  }
+}
+
+template <typename T, int N>
+Simd<T, N> pow(Simd<T, N> base, Simd<T, N> exp) {
+  if constexpr (!std::is_integral_v<T>) {
+    return asd::pow(base.value, exp.value);
+  } else {
+    Simd<T, N> res = 1;
+    while (any(exp)) {
+      res = select(exp & 1, res * base, res);
+      base = select(exp, base * base, base);
+      exp = exp >> 1;
+    }
+    return res;
+  }
+}
+
+template <typename T, int N>
+Simd<T, N> clamp(Simd<T, N> v, Simd<T, N> min, Simd<T, N> max) {
+  return asd::clamp(v.value, min.value, max.value);
 }
 
 template <typename T, int N>
 Simd<T, N> fma(Simd<T, N> x, Simd<T, N> y, T z) {
   return asd::fma(x.value, y.value, Simd<T, N>(z).value);
+}
+
+// Reductions
+
+template <typename T, int N>
+bool any(Simd<T, N> x) {
+  return asd::any(x.value);
 }
 
 } // namespace mlx::core::simd

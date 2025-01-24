@@ -5,6 +5,18 @@ else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
 endif()
 
+set(COMPILE_DEPS
+    ${PROJECT_SOURCE_DIR}/mlx/types/half_types.h
+    ${PROJECT_SOURCE_DIR}/mlx/types/fp16.h
+    ${PROJECT_SOURCE_DIR}/mlx/types/bf16.h
+    ${PROJECT_SOURCE_DIR}/mlx/types/complex.h
+    simd/simd.h
+    simd/base_simd.h
+    simd/scalar_math.h
+    simd/type.h
+    unary_ops.h
+    binary_ops.h)
+
 if(MSVC)
   set(SHELL_EXT ps1)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
@@ -19,14 +31,8 @@ add_custom_command(
     ${SHELL_CMD} ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.${SHELL_EXT}
     ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp ${COMPILER}
     ${PROJECT_SOURCE_DIR} ${CLANG} ${CMAKE_SYSTEM_PROCESSOR}
-  DEPENDS make_compiled_preamble.${SHELL_EXT}
-          compiled_preamble.h
-          ${PROJECT_SOURCE_DIR}/mlx/types/half_types.h
-          ${PROJECT_SOURCE_DIR}/mlx/types/fp16.h
-          ${PROJECT_SOURCE_DIR}/mlx/types/bf16.h
-          ${PROJECT_SOURCE_DIR}/mlx/types/complex.h
-          unary_ops.h
-          binary_ops.h)
+  DEPENDS make_compiled_preamble.${SHELL_EXT} compiled_preamble.h
+          ${COMPILE_DEPS})
 
 add_custom_target(cpu_compiled_preamble DEPENDS compiled_preamble.cpp)
 

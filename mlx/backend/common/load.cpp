@@ -1,12 +1,9 @@
 // Copyright © 2023 Apple Inc.
 
 #include <algorithm>
-#include <cassert>
 #include <utility>
 
-#include "mlx/allocator.h"
 #include "mlx/backend/common/load.h"
-#include "mlx/primitives.h"
 
 namespace {
 
@@ -49,13 +46,6 @@ void load(
         break;
     }
   }
-}
-
-void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
-
-  load(out, offset_, reader_, swap_endianness_);
 }
 
 } // namespace mlx::core

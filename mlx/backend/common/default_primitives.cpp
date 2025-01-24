@@ -21,9 +21,7 @@
 
 namespace mlx::core {
 
-DEFAULT(AsType)
 DEFAULT(Convolution)
-DEFAULT(Full)
 DEFAULT(QuantizedMatmul)
 DEFAULT(Reduce)
 DEFAULT(Scan)

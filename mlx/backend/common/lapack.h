@@ -11,7 +11,7 @@
 #define lapack_complex_double std::complex<double>
 #endif
 
-#ifdef ACCELERATE_NEW_LAPACK
+#ifdef MLX_USE_ACCELERATE
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>

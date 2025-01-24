@@ -39,12 +39,13 @@ void unary_op(const array& a, array& out, Op op) {
   if (a.flags().contiguous) {
     set_unary_output_data(a, out);
     U* dst = out.data<U>();
+    constexpr int N = simd::max_size<T>;
     size_t size = a.data_size();
-    while (size >= simd::max_size<T>) {
-      simd::store(dst, op(simd::load<T, simd::max_size<T>>(a_ptr)));
-      size -= simd::max_size<T>;
-      a_ptr += simd::max_size<T>;
-      dst += simd::max_size<T>;
+    while (size >= N) {
+      simd::store(dst, op(simd::load<T, N>(a_ptr)));
+      size -= N;
+      a_ptr += N;
+      dst += N;
     }
     while (size > 0) {
       *dst = op(*a_ptr);

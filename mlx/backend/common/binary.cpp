@@ -15,55 +15,47 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T, typename U, typename Op>
-void comparison_op(const array& a, const array& b, array& out, Op op) {
-  DefaultScalarVector<T, U, Op> opsv(op);
-  DefaultVectorScalar<T, U, Op> opvs(op);
-  DefaultVectorVector<T, U, Op> opvv(op);
-  binary_op<T, U>(a, b, out, op, opsv, opvs, opvv);
-}
-
 template <typename Op>
 void comparison_op(const array& a, const array& b, array& out, Op op) {
   switch (a.dtype()) {
     case bool_:
-      comparison_op<bool, bool>(a, b, out, op);
+      binary_op<bool, bool>(a, b, out, op);
       break;
     case uint8:
-      comparison_op<uint8_t, bool>(a, b, out, op);
+      binary_op<uint8_t, bool>(a, b, out, op);
       break;
     case uint16:
-      comparison_op<uint16_t, bool>(a, b, out, op);
+      binary_op<uint16_t, bool>(a, b, out, op);
       break;
     case uint32:
-      comparison_op<uint32_t, bool>(a, b, out, op);
+      binary_op<uint32_t, bool>(a, b, out, op);
       break;
     case uint64:
-      comparison_op<uint64_t, bool>(a, b, out, op);
+      binary_op<uint64_t, bool>(a, b, out, op);
       break;
     case int8:
-      comparison_op<int8_t, bool>(a, b, out, op);
+      binary_op<int8_t, bool>(a, b, out, op);
       break;
     case int16:
-      comparison_op<int16_t, bool>(a, b, out, op);
+      binary_op<int16_t, bool>(a, b, out, op);
       break;
     case int32:
-      comparison_op<int32_t, bool>(a, b, out, op);
+      binary_op<int32_t, bool>(a, b, out, op);
       break;
     case int64:
-      comparison_op<int64_t, bool>(a, b, out, op);
+      binary_op<int64_t, bool>(a, b, out, op);
       break;
     case float16:
-      comparison_op<float16_t, bool>(a, b, out, op);
+      binary_op<float16_t, bool>(a, b, out, op);
       break;
     case float32:
-      comparison_op<float, bool>(a, b, out, op);
+      binary_op<float, bool>(a, b, out, op);
       break;
     case bfloat16:
-      comparison_op<bfloat16_t, bool>(a, b, out, op);
+      binary_op<bfloat16_t, bool>(a, b, out, op);
       break;
     case complex64:
-      comparison_op<complex64_t, bool>(a, b, out, op);
+      binary_op<complex64_t, bool>(a, b, out, op);
       break;
   }
 }
@@ -149,20 +141,20 @@ void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
 void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
-  auto& b = inputs[0];
+  auto& b = inputs[1];
   if (equal_nan_) {
     switch (a.dtype()) {
       case float16:
-        comparison_op<float16_t, bool>(a, b, out, detail::NaNEqual());
+        binary_op<float16_t, bool>(a, b, out, detail::NaNEqual());
         break;
       case float32:
-        comparison_op<float, bool>(a, b, out, detail::NaNEqual());
+        binary_op<float, bool>(a, b, out, detail::NaNEqual());
         break;
       case bfloat16:
-        comparison_op<bfloat16_t, bool>(a, b, out, detail::NaNEqual());
+        binary_op<bfloat16_t, bool>(a, b, out, detail::NaNEqual());
         break;
       case complex64:
-        comparison_op<complex64_t, bool>(a, b, out, detail::NaNEqual());
+        binary_op<complex64_t, bool>(a, b, out, detail::NaNEqual());
         break;
       default:
         throw std::runtime_error(

@@ -9,6 +9,7 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/arange.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/load.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/threefry.h"
 #include "mlx/backend/common/utils.h"
@@ -169,6 +170,13 @@ void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
     ctype = CopyType::General;
   }
   copy(in, out, ctype);
+}
+
+void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 0);
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  load(out, offset_, reader_, swap_endianness_);
 }
 
 void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {

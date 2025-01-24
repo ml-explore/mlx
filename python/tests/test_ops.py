@@ -289,6 +289,9 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(y.tolist(), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
             self.assertEqual(z.tolist(), [0, -4, -3, -2, -1, 0, -4, -3, -2, -1])
 
+        z = -mx.ones(64) % mx.full(64, 2)
+        self.assertTrue(mx.array_equal(z, mx.ones(64)))
+
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
         b = mx.array([-1.0, 2.0, 5.0])

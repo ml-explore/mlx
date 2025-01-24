@@ -14,7 +14,7 @@ using namespace mlx::core::simd;
     return (*this)(Simd<T, 1>(x), Simd<T, 1>(y)).value; \
   }
 
-#define DEFAULT_OP(Op, op)                              \
+#define DEFAULT_BINARY_OP(Op, op)                       \
   struct Op {                                           \
     template <int N, typename T>                        \
     Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) { \
@@ -23,22 +23,22 @@ using namespace mlx::core::simd;
     BINARY_SINGLE()                                     \
   };
 
-DEFAULT_OP(Add, operator+)
-DEFAULT_OP(ArcTan2, atan2)
-DEFAULT_OP(Divide, operator/)
-DEFAULT_OP(Multiply, operator*)
-DEFAULT_OP(Subtract, operator-)
-DEFAULT_OP(LogicalAnd, operator&&)
-DEFAULT_OP(LogicalOr, operator||)
-DEFAULT_OP(BitwiseAnd, operator&)
-DEFAULT_OP(BitwiseOr, operator|)
-DEFAULT_OP(BitwiseXor, operator^)
-DEFAULT_OP(LeftShift, operator<<)
-DEFAULT_OP(RightShift, operator>>)
-DEFAULT_OP(Remainder, remainder)
-DEFAULT_OP(Maximum, maximum)
-DEFAULT_OP(Minimum, minimum)
-DEFAULT_OP(Power, pow)
+DEFAULT_BINARY_OP(Add, operator+)
+DEFAULT_BINARY_OP(ArcTan2, atan2)
+DEFAULT_BINARY_OP(Divide, operator/)
+DEFAULT_BINARY_OP(Multiply, operator*)
+DEFAULT_BINARY_OP(Subtract, operator-)
+DEFAULT_BINARY_OP(LogicalAnd, operator&&)
+DEFAULT_BINARY_OP(LogicalOr, operator||)
+DEFAULT_BINARY_OP(BitwiseAnd, operator&)
+DEFAULT_BINARY_OP(BitwiseOr, operator|)
+DEFAULT_BINARY_OP(BitwiseXor, operator^)
+DEFAULT_BINARY_OP(LeftShift, operator<<)
+DEFAULT_BINARY_OP(RightShift, operator>>)
+DEFAULT_BINARY_OP(Remainder, remainder)
+DEFAULT_BINARY_OP(Maximum, maximum)
+DEFAULT_BINARY_OP(Minimum, minimum)
+DEFAULT_BINARY_OP(Power, pow)
 
 #define DEFAULT_BOOL_OP(Op, op)                            \
   struct Op {                                              \
@@ -71,24 +71,15 @@ struct NaNEqual {
 };
 
 struct LogAddExp {
-  template <typename T>
-  T operator()(T x, T y) {
-    constexpr float inf = std::numeric_limits<float>::infinity();
-    auto maxval = Maximum()(x, y);
-    auto minval = Minimum()(x, y);
-    return (minval == -inf || maxval == inf)
-        ? maxval
-        : static_cast<T>(maxval + std::log1p(fast_exp(minval - maxval)));
-  }
-
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) {
     auto maxval = maximum(x, y);
     auto minval = minimum(x, y);
     auto mask = minval == -inf || maxval == inf;
     auto out = maxval + log1p(exp(minval - maxval));
-    return select(mask, maxval, out);
+    return select(mask, Simd<T, N>(maxval), Simd<T, N>(out));
   }
+  BINARY_SINGLE()
 };
 
 struct Select {
