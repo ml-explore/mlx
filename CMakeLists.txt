@@ -33,6 +33,7 @@ option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
+option(MLX_BUILD_WEBGPU "Build webgpu backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
@@ -63,6 +64,10 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
       set(MLX_BUILD_METAL OFF)
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
+  endif()
+
+  if(MLX_BUILD_WEBGPU AND MLX_BUILD_METAL)
+    message(FATAL_ERROR "Can not build both webgpu and metal backends.")
   endif()
 
 else()
@@ -126,6 +131,17 @@ elseif(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+endif()
+
+if(MLX_BUILD_WEBGPU)
+  FetchContent_Declare(
+    betann
+    GIT_REPOSITORY https://github.com/frost-beta/betann.git
+    GIT_TAG 8aa2701caf63fb29bd4cd2454e656973342c1588
+    EXCLUDE_FROM_ALL)
+  set(BETANN_BUILD_TESTS OFF)
+  FetchContent_MakeAvailable(betann)
+  target_link_libraries(mlx PRIVATE betann)
 endif()
 
 if(WIN32)
