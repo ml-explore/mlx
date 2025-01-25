@@ -10,7 +10,7 @@ namespace mlx::core {
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
-  if (issubdtype(in.dtype(), unsignedinteger)) {
+  if (issubdtype(in.dtype(), unsignedinteger) || in.dtype() == bool_) {
     // No-op for unsigned types
     out.copy_shared_buffer(in);
   } else {

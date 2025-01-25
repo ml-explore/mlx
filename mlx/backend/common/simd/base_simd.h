@@ -52,6 +52,16 @@ Simd<T, 1> rint(Simd<T, 1> in) {
   }
 }
 
+template <typename T>
+Simd<T, 1> rsqrt(Simd<T, 1> in) {
+  return T(1.0) / sqrt(in);
+}
+
+template <typename T>
+Simd<T, 1> recip(Simd<T, 1> in) {
+  return T(1.0) / in;
+}
+
 #define DEFAULT_UNARY(name, op)                                 \
   template <typename T>                                         \
   auto name(Simd<T, 1> in) -> Simd<decltype(op(in.value)), 1> { \

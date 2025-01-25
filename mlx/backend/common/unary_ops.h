@@ -53,6 +53,7 @@ DEFAULT_OP(Round, rint);
 DEFAULT_OP(Sin, sin)
 DEFAULT_OP(Sinh, sinh)
 DEFAULT_OP(Sqrt, sqrt)
+DEFAULT_OP(Rsqrt, rsqrt)
 DEFAULT_OP(Tan, tan)
 DEFAULT_OP(Tanh, tanh)
 
@@ -100,14 +101,6 @@ struct Square {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {
     return x * x;
-  }
-  SINGLE()
-};
-
-struct Rsqrt {
-  template <int N, typename T>
-  Simd<T, N> operator()(Simd<T, N> x) {
-    return 1.0f / simd::sqrt(x);
   }
   SINGLE()
 };

@@ -30,10 +30,9 @@ Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
   } else {
-    Simd<float, N> x_init(in);
+    Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
     Simd<float, N> ipart, fpart;
-    x = clamp(x, Simd<float, N>(-80.0f), Simd<float, N>(80.0f));
     ipart = floor(x + 0.5);
     fpart = x - ipart;
 
@@ -49,9 +48,11 @@ Simd<T, N> exp(Simd<T, N> in) {
     // bitshifting
     Simd<int, N> epart = (Simd<int, N>(ipart) + 127) << 23;
 
-    // Avoid supressing NaNs
-    return Simd<T, N>(
-        select(isnan(x_init), x_init, (*(Simd<float, N>*)&epart) * x));
+    // Deal with NaN and Inf
+    auto result = select(isnan(x_init), x_init, (*(Simd<float, N>*)&epart) * x);
+    result = select(x_init > 88.0f, Simd<float, N>(inf), result);
+    result = select(x_init < -88.0f, Simd<float, N>(0), result);
+    return Simd<T, N>(result);
   }
 }
 

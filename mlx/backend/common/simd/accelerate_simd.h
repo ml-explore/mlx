@@ -37,12 +37,6 @@ struct ScalarT<int64_t, N> {
   using v = long;
 };
 
-// TODO macOS 15+
-template <int N>
-struct ScalarT<__fp16, N> {
-  using v = _Float16;
-};
-
 template <typename T, int N>
 struct Simd {
   static constexpr int size = N;
@@ -57,7 +51,7 @@ struct Simd {
   Simd<T, N>(U v) : value(v){};
 
   T operator[](int idx) const {
-    return reinterpret_cast<const float*>(&value)[idx];
+    return reinterpret_cast<const T*>(&value)[idx];
   }
 
   T& operator[](int idx) {
@@ -96,8 +90,8 @@ static constexpr int max_size<double> = 4;
     return op(v.value);              \
   }
 
-SIMD_DEFAULT_UNARY(abs, asd::abs);
-SIMD_DEFAULT_UNARY(floor, asd::floor);
+SIMD_DEFAULT_UNARY(abs, asd::abs)
+SIMD_DEFAULT_UNARY(floor, asd::floor)
 SIMD_DEFAULT_UNARY(acos, asd::acos)
 SIMD_DEFAULT_UNARY(acosh, asd::acosh)
 SIMD_DEFAULT_UNARY(asin, asd::asin)
@@ -105,7 +99,7 @@ SIMD_DEFAULT_UNARY(asinh, asd::asinh)
 SIMD_DEFAULT_UNARY(atan, asd::atan)
 SIMD_DEFAULT_UNARY(atanh, asd::atanh)
 SIMD_DEFAULT_UNARY(ceil, asd::ceil)
-SIMD_DEFAULT_UNARY(cos, asd::cos);
+SIMD_DEFAULT_UNARY(cos, asd::cos)
 SIMD_DEFAULT_UNARY(cosh, asd::cosh)
 SIMD_DEFAULT_UNARY(erf, asd::erf)
 SIMD_DEFAULT_UNARY(expm1, asd::expm1)
@@ -117,6 +111,8 @@ SIMD_DEFAULT_UNARY(rint, asd::rint)
 SIMD_DEFAULT_UNARY(sin, asd::sin)
 SIMD_DEFAULT_UNARY(sinh, asd::sinh)
 SIMD_DEFAULT_UNARY(sqrt, asd::sqrt)
+SIMD_DEFAULT_UNARY(rsqrt, asd::rsqrt)
+SIMD_DEFAULT_UNARY(recip, asd::recip)
 SIMD_DEFAULT_UNARY(tan, asd::tan)
 SIMD_DEFAULT_UNARY(tanh, asd::tanh)
 
@@ -261,3 +257,7 @@ bool any(Simd<T, N> x) {
 }
 
 } // namespace mlx::core::simd
+
+#if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
+#include "mlx/backend/common/simd/accelerate_fp16_simd.h"
+#endif

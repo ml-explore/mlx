@@ -1,11 +1,12 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
+
 #ifdef __ARM_FEATURE_FP16_SCALAR_ARITHMETIC
 
 #include <arm_fp16.h>
 namespace mlx::core {
-typedef __fp16 float16_t;
+using ::float16_t;
 } // namespace mlx::core
 
 #else
@@ -17,11 +18,12 @@ typedef struct _MLX_Float16 float16_t;
 } // namespace mlx::core
 
 #endif // __ARM_FEATURE_FP16_SCALAR_ARITHMETIC
+
 #ifdef __ARM_FEATURE_BF16
 
 #include <arm_bf16.h>
 namespace mlx::core {
-typedef __bf16 bfloat16_t;
+using ::bfloat16_t;
 } // namespace mlx::core
 
 #else
