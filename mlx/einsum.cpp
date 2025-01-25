@@ -706,21 +706,11 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
       } else {
         ellipsis_length = max_ellipsis_length;
       }
-      std::string new_subscript;
-      new_subscript.reserve(cnt_before + cnt_after + ellipsis_length);
-      new_subscript.insert(
-          new_subscript.end(),
-          subscript.begin(),
-          subscript.begin() + cnt_before);
-      new_subscript.insert(
-          new_subscript.end(),
+      subscript.replace(
+          subscript.begin() + cnt_before,
+          subscript.begin() + cnt_before + 3,
           remaining_chars.end() - ellipsis_length,
           remaining_chars.end());
-      new_subscript.insert(
-          new_subscript.end(),
-          subscript.begin() + cnt_before + 3,
-          subscript.end());
-      subscript = std::move(new_subscript);
     }
   };
 
