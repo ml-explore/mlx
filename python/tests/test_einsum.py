@@ -336,6 +336,13 @@ class TestEinsum(mlx_tests.MLXTestCase):
             ("abcd,c->abd", "...cd,c"),
             ("abcd,c->abd", "...cd,c..."),
             ("abcd,c->abd", "...cd,c...->d..."),
+            ("abc,b->abc", "ab...,b...->ab..."),
+            ("abc,b->abc", "ab...,...b->ab..."),
+            ("abc,b->abc", "ab...,b->ab..."),
+            ("ab,bc->ac", "ab...,b...->a..."),
+            ("ab,bc->ac", "ab...,...bc->a...c"),
+            ("ab,bc->ac", "ab,b...->a..."),
+            ("abcdef,defg->abcg", "...def,defg->...g"),
         ]
         for test_case in tests:
             inputs = inputs_for_case(test_case[0])
