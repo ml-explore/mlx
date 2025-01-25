@@ -329,6 +329,10 @@ TEST_CASE("test matrix cholesky") {
   CHECK_THROWS(linalg::cholesky(
       array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ false, Device::cpu));
 
+  // Non-positive semi-definite throws.
+  CHECK_THROWS(linalg::cholesky(
+      array({1, 2}, {2, 1}), /* upper = */ false, Device::cpu));
+
   const auto prng_key = random::key(220398);
   const auto sqrtA = random::normal({5, 5}, prng_key);
   const auto A = matmul(sqrtA, transpose(sqrtA));

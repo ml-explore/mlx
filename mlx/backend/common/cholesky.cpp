@@ -41,13 +41,17 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
         /* lda = */ &N,
         /* info = */ &info);
 
-    // TODO: We do nothing when the matrix is not positive semi-definite
-    // because throwing an error would result in a crash. If we figure out how
-    // to catch errors from the implementation we should throw.
-    if (info < 0) {
+    if (info != 0) {
       std::stringstream msg;
-      msg << "[cholesky] Cholesky decomposition failed with error code "
-          << info;
+      msg << "[cholesky] ";
+      // https://www.netlib.org/lapack/explore-html/d0/d18/group__ppsv_gab87078282c6c31853cfed4829976c0d9.html
+      if (info > 0) {
+        msg << "The leading principal minor of order " << info
+            << " of the matrix is not positive, so the factorization could not be completed.";
+      } else {
+        msg << "The " << -info
+            << " slot argument to the LAPACK Cholesky decomposition is invalid.";
+      }
       throw std::runtime_error(msg.str());
     }
 
