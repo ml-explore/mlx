@@ -71,6 +71,7 @@ std::pair<std::vector<std::string>, std::string> parse(std::string subscripts) {
   } else {
     // Implicit mode:
     // - repeats are summed
+    // - ellipses are placed in the beginning of the output
     // - remaining output axes are ordered alphabetically
     lhs = subscripts;
     std::unordered_map<char, int> temp;
@@ -78,6 +79,11 @@ std::pair<std::vector<std::string>, std::string> parse(std::string subscripts) {
       if (c == ',') {
         continue;
       }
+      if (c == '.' && rhs.empty()) {
+        rhs += "...";
+        continue;
+      }
+
       auto inserted = temp.insert({c, 0});
       inserted.first->second++;
     }
