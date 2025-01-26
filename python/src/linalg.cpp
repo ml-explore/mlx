@@ -199,7 +199,7 @@ void init_linalg(nb::module_& parent_module) {
               in which case the default stream of the default device is used.
 
         Returns:
-            tuple(array, array): The ``Q`` and ``R`` matrices.
+            tuple(array, array): ``Q`` and ``R`` matrices such that ``Q @ R = a``.
 
         Example:
             >>> A = mx.array([[2., 3.], [1., 2.]])
@@ -310,8 +310,8 @@ void init_linalg(nb::module_& parent_module) {
 
         Returns:
           array: If ``upper = False``, it returns a lower triangular ``L`` matrix such
-          that ``dot(L, L.T) = a``.  If ``upper = True``, it returns an upper triangular
-          ``U`` matrix such that ``dot(U.T, U) = a``.
+          that ``L @ L.T = a``.  If ``upper = True``, it returns an upper triangular
+          ``U`` matrix such that ``U.T @ U = a``.
       )pbdoc");
   m.def(
       "cholesky_inv",
