@@ -9,6 +9,20 @@
 
 #include "mlx/backend/common/simd/base_simd.h"
 
+// There seems to be a bug in sims/base.h
+// __XROS_2_0 is not defined, the expression evaluates
+// to true instead of false setting the SIMD library
+// higher than it should be even on macOS < 15
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 150000 ||  \
+    __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000 || \
+    __WATCH_OS_VERSION_MIN_REQUIRED >= 110000 ||  \
+    __WATCH_OS_VERSION_MIN_REQUIRED >= 110000 ||  \
+    __TV_OS_VERSION_MIN_REQUIRED >= 180000
+#define MLX_SIMD_LIBRARY_VERSION 6
+#else
+#define MLX_SIMD_LIBRARY_VERSION 5
+#endif
+
 namespace mlx::core::simd {
 
 // Apple simd namespace
@@ -254,6 +268,18 @@ Simd<T, N> fma(Simd<T, N> x, Simd<T, N> y, T z) {
 template <typename T, int N>
 bool any(Simd<T, N> x) {
   return asd::any(x.value);
+}
+template <typename T, int N>
+T sum(Simd<T, N> x) {
+  return asd::reduce_add(x.value);
+}
+template <typename T, int N>
+T max(Simd<T, N> x) {
+  return asd::reduce_max(x.value);
+}
+template <typename T, int N>
+T min(Simd<T, N> x) {
+  return asd::reduce_min(x.value);
 }
 
 } // namespace mlx::core::simd

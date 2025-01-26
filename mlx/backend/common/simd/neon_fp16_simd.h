@@ -173,4 +173,27 @@ select(Simd<MaskT, N> mask, Simd<float16_t, N> x, Simd<float16_t, N> y) {
   return vbslq_f16(Simd<uint16_t, N>(mask).value, x.value, y.value);
 }
 
+// Reductions
+inline float16_t max(Simd<float16_t, N> x) {
+  float16x4_t y;
+  y = vpmax_f16(vget_low_f16(x.value), vget_high_f16(x.value));
+  y = vpmax_f16(y, y);
+  y = vpmax_f16(y, y);
+  return vget_lane_f16(y, 0);
+}
+inline float16_t min(Simd<float16_t, N> x) {
+  float16x4_t y;
+  y = vpmin_f16(vget_low_f16(x.value), vget_high_f16(x.value));
+  y = vpmin_f16(y, y);
+  y = vpmin_f16(y, y);
+  return vget_lane_f16(y, 0);
+}
+inline float16_t sum(Simd<float16_t, N> x) {
+  float16x4_t y;
+  y = vpadd_f16(vget_low_f16(x.value), vget_high_f16(x.value));
+  y = vpadd_f16(y, y);
+  y = vpadd_f16(y, y);
+  return vget_lane_f16(y, 0);
+}
+
 } // namespace mlx::core::simd

@@ -2,14 +2,14 @@
 
 #include "mlx/backend/common/simd/base_simd.h"
 
-#if SIMD_LIBRARY_VERSION < 6
+#if MLX_SIMD_LIBRARY_VERSION < 6
 #include "mlx/backend/common/simd/neon_fp16_simd.h"
 #endif
 
 namespace mlx::core::simd {
 
-#if SIMD_LIBRARY_VERSION >= 6
-constexpr int N = 8;
+#if MLX_SIMD_LIBRARY_VERSION >= 6
+constexpr int N = 16;
 template <int N>
 struct ScalarT<float16_t, N> {
   using v = _Float16;

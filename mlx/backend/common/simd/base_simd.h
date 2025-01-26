@@ -226,4 +226,18 @@ template <typename T>
 Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, T z) {
   return std::fma(x.value, y.value, z);
 }
+
+// Reductions
+#define DEFAULT_REDUCTION(name, type) \
+  template <typename T>               \
+  type name(Simd<T, 1> x) {           \
+    return x.value;                   \
+  }
+
+DEFAULT_REDUCTION(max, T)
+DEFAULT_REDUCTION(min, T)
+DEFAULT_REDUCTION(sum, T)
+DEFAULT_REDUCTION(any, bool)
+DEFAULT_REDUCTION(all, bool)
+
 } // namespace mlx::core::simd

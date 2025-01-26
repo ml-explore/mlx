@@ -1536,8 +1536,6 @@ class QuantizedMatmul : public UnaryPrimitive {
   int group_size_;
   int bits_;
   bool transpose_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class GatherQMM : public UnaryPrimitive {
@@ -1970,7 +1968,6 @@ class Softmax : public UnaryPrimitive {
   };
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
   bool precise_;
 };
 

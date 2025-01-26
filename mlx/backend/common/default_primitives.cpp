@@ -22,10 +22,8 @@
 namespace mlx::core {
 
 DEFAULT(Convolution)
-DEFAULT(QuantizedMatmul)
 DEFAULT(Reduce)
 DEFAULT(Scan)
-DEFAULT(Softmax)
 
 namespace {
 
