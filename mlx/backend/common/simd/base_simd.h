@@ -31,7 +31,12 @@ Simd<T, N> load(const T* x) {
 }
 
 template <typename T, int N>
-void store(T* dst, const Simd<T, N>& x) {
+void store(T* dst, Simd<T, N> x) {
+  // Maintain invariant that bool is either 0 or 1 as
+  // simd comparison ops set all bits in the result to 1
+  if constexpr (std::is_same_v<T, bool> && N > 1) {
+    x = x & 1;
+  }
   *(Simd<T, N>*)dst = x;
 }
 
@@ -79,7 +84,6 @@ DEFAULT_UNARY(atan, std::atan)
 DEFAULT_UNARY(atanh, std::atanh)
 DEFAULT_UNARY(ceil, std::ceil)
 DEFAULT_UNARY(conj, std::conj)
-DEFAULT_UNARY(cos, std::cos)
 DEFAULT_UNARY(cosh, std::cosh)
 DEFAULT_UNARY(erf, erf);
 DEFAULT_UNARY(erfinv, erfinv);
@@ -91,7 +95,6 @@ DEFAULT_UNARY(log2, std::log2)
 DEFAULT_UNARY(log10, std::log10)
 DEFAULT_UNARY(log1p, std::log1p)
 DEFAULT_UNARY(real, std::real)
-DEFAULT_UNARY(sin, std::sin)
 DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
@@ -222,9 +225,9 @@ Simd<T, 1> clamp(Simd<T, 1> v, Simd<T, 1> min, Simd<T, 1> max) {
   return std::clamp(v.value, min.value, max.value);
 }
 
-template <typename T>
-Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, T z) {
-  return std::fma(x.value, y.value, z);
+template <typename T, typename U>
+Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, U z) {
+  return std::fma(x.value, y.value, Simd<T, 1>(z).value);
 }
 
 // Reductions

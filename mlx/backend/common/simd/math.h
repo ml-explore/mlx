@@ -65,4 +65,82 @@ Simd<T, N> erfinv(Simd<T, N> in) {
   return out;
 }
 
+/* Implementation from:
+ * https://github.com/JishinMaster/simd_utils/blob/3c1433a86fb38edcc9b02039f3c9a65b16640976/neon_mathfun.h#L357
+ * which originally came from the Cephes math library.
+ */
+template <bool Sine, typename T, int N>
+Simd<T, N> sincos(Simd<T, N> in) {
+  auto sign_mask_sin = in < 0;
+  in = abs(in);
+  Simd<float, N> x = in;
+
+  // scale by 4/Pi
+  auto y = x * 1.27323954473516f;
+
+  // store the integer part of y in mm0
+  Simd<uint32_t, N> emm2 = y;
+
+  // j=(j+1) & (~1) (see the cephes sources)
+  emm2 = emm2 + 1;
+  emm2 = emm2 & ~1;
+
+  y = emm2;
+
+  // Get the polynom selection mask. There is one polynom for 0 <= x <= Pi/4
+  // and another one for Pi/4<x<=Pi/2. Both branches will be computed.
+  auto poly_mask = (emm2 & 2) != 0;
+
+  // The magic pass: "Extended precision modular arithmetic"
+  // x = ((x - y * DP1) - y * DP2) - y * DP3
+  x = fma(y, Simd<float, N>(-0.78515625f), x);
+  x = fma(y, Simd<float, N>(-2.4187564849853515625e-4f), x);
+  x = fma(y, Simd<float, N>(-3.77489497744594108e-8f), x);
+
+  sign_mask_sin = sign_mask_sin ^ ((emm2 & 4) != 0);
+  auto sign_mask_cos = ((emm2 - 2) & 4) != 0;
+
+  // Evaluate the first polynom  (0 <= x <= Pi/4) in y1,
+  // and the second polynom      (Pi/4 <= x <= 0) in y2
+  auto z = x * x;
+
+  auto y1 =
+      fma(z, Simd<float, N>(2.443315711809948e-5f), -1.388731625493765e-3f);
+  auto y2 = fma(z, Simd<float, N>(-1.9515295891e-4f), 8.3321608736e-3f);
+  y1 = fma(y1, z, 4.166664568298827e-2f);
+  y2 = fma(y2, z, -1.6666654611e-1f);
+  y1 = y1 * z;
+  y2 = y2 * z;
+  y1 = y1 * z;
+  y2 = fma(x, y2, x);
+  y1 = fma(z, Simd<float, N>(-0.5f), y1);
+  y1 = y1 + 1.0f;
+
+  if constexpr (Sine) {
+    auto ys = select(poly_mask, y1, y2);
+    return select(sign_mask_sin, -ys, ys);
+  } else {
+    auto yc = select(poly_mask, y2, y1);
+    return select(sign_mask_cos, yc, -yc);
+  }
+}
+
+template <typename T, int N>
+Simd<T, N> sin(Simd<T, N> x) {
+  if constexpr (is_complex<T>) {
+    return std::sin(x.value);
+  } else {
+    return sincos<true>(x);
+  }
+}
+
+template <typename T, int N>
+Simd<T, N> cos(Simd<T, N> x) {
+  if constexpr (is_complex<T>) {
+    return std::cos(x.value);
+  } else {
+    return sincos<false>(x);
+  }
+}
+
 } // namespace mlx::core::simd

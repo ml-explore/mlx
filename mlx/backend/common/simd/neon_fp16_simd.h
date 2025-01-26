@@ -30,6 +30,11 @@ struct Simd<float16_t, N> {
     value = vcvtq_f16_u16(*(uint16x8_t*)(&other.value));
   };
 
+  operator Simd<int16_t, N>() {
+    auto v = vcvtq_s16_f16(value);
+    return load<int16_t, N>((int16_t*)&v);
+  };
+
   operator Simd<float, N>() {
     float32x4x2_t v;
     v.val[0] = vcvt_f32_f16(*(float16x4_t*)(&value));

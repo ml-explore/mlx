@@ -15,7 +15,7 @@ using namespace mlx::core::simd;
 
 template <typename T, typename AccT>
 void softmax(const array& in, array& out) {
-  constexpr bool precise = std::is_same_v<T, AccT>;
+  constexpr bool same_t = std::is_same_v<T, AccT>;
   constexpr int N = std::min(max_size<AccT>, max_size<T>);
 
   const T* in_ptr = in.data<T>();
@@ -51,7 +51,7 @@ void softmax(const array& in, array& out) {
     while (s >= N) {
       Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
       vexp = exp(vexp - maximum);
-      if constexpr (precise) {
+      if constexpr (same_t) {
         store(current_out_ptr, vexp);
       }
       vnormalizer = vnormalizer + vexp;
@@ -62,7 +62,7 @@ void softmax(const array& in, array& out) {
     AccT normalizer = sum(vnormalizer);
     while (s-- > 0) {
       AccT _exp = std::exp(*current_in_ptr - maximum);
-      if constexpr (precise) {
+      if constexpr (same_t) {
         *current_out_ptr = _exp;
       }
       normalizer += _exp;
@@ -76,8 +76,10 @@ void softmax(const array& in, array& out) {
     current_in_ptr = in_ptr;
     s = M;
     while (s >= N) {
-      if constexpr (precise) {
-        store(current_out_ptr, load<T, N>(current_out_ptr) * normalizer);
+      if constexpr (same_t) {
+        store(
+            current_out_ptr,
+            Simd<T, N>(load<T, N>(current_out_ptr) * normalizer));
       } else {
         Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
         vexp = exp(vexp - maximum) * normalizer;
@@ -88,7 +90,7 @@ void softmax(const array& in, array& out) {
       s -= N;
     }
     while (s-- > 0) {
-      if constexpr (precise) {
+      if constexpr (same_t) {
         *current_out_ptr *= normalizer;
       } else {
         AccT _exp = std::exp(*current_in_ptr - maximum);

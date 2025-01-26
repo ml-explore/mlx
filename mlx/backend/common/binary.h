@@ -133,6 +133,13 @@ struct VectorScalar {
   template <typename T, typename U>
   void operator()(const T* a, const T* b, U* dst, int size) {
     T scalar = *b;
+    constexpr int N = simd::max_size<T>;
+    while (size >= N) {
+      simd::store(dst, op(simd::load<T, N>(a), simd::Simd<T, N>(scalar)));
+      dst += N;
+      a += N;
+      size -= N;
+    }
     while (size-- > 0) {
       *dst = op(*a, scalar);
       dst++;
@@ -150,6 +157,13 @@ struct ScalarVector {
   template <typename T, typename U>
   void operator()(const T* a, const T* b, U* dst, int size) {
     T scalar = *a;
+    constexpr int N = simd::max_size<T>;
+    while (size >= N) {
+      simd::store(dst, op(simd::Simd<T, N>(scalar), simd::load<T, N>(b)));
+      dst += N;
+      b += N;
+      size -= N;
+    }
     while (size-- > 0) {
       *dst = op(scalar, *b);
       dst++;

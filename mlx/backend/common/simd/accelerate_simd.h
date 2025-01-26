@@ -113,7 +113,6 @@ SIMD_DEFAULT_UNARY(asinh, asd::asinh)
 SIMD_DEFAULT_UNARY(atan, asd::atan)
 SIMD_DEFAULT_UNARY(atanh, asd::atanh)
 SIMD_DEFAULT_UNARY(ceil, asd::ceil)
-SIMD_DEFAULT_UNARY(cos, asd::cos)
 SIMD_DEFAULT_UNARY(cosh, asd::cosh)
 SIMD_DEFAULT_UNARY(erf, asd::erf)
 SIMD_DEFAULT_UNARY(expm1, asd::expm1)
@@ -122,7 +121,6 @@ SIMD_DEFAULT_UNARY(log2, asd::log2)
 SIMD_DEFAULT_UNARY(log10, asd::log10)
 SIMD_DEFAULT_UNARY(log1p, asd::log1p)
 SIMD_DEFAULT_UNARY(rint, asd::rint)
-SIMD_DEFAULT_UNARY(sin, asd::sin)
 SIMD_DEFAULT_UNARY(sinh, asd::sinh)
 SIMD_DEFAULT_UNARY(sqrt, asd::sqrt)
 SIMD_DEFAULT_UNARY(rsqrt, asd::rsqrt)
@@ -258,9 +256,9 @@ Simd<T, N> clamp(Simd<T, N> v, Simd<T, N> min, Simd<T, N> max) {
   return asd::clamp(v.value, min.value, max.value);
 }
 
-template <typename T, int N>
-Simd<T, N> fma(Simd<T, N> x, Simd<T, N> y, T z) {
-  return asd::fma(x.value, y.value, Simd<T, N>(z).value);
+template <typename T, typename U, int N>
+Simd<T, N> fma(Simd<T, N> x, Simd<T, N> y, U z) {
+  return asd::muladd(x.value, y.value, Simd<T, N>(z).value);
 }
 
 // Reductions
