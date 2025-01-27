@@ -5,8 +5,6 @@
 #include <cmath>
 #include <complex>
 
-#include "mlx/backend/common/simd/scalar_math.h"
-
 namespace mlx::core::simd {
 template <typename T, int N>
 struct Simd;
@@ -67,10 +65,10 @@ Simd<T, 1> recip(Simd<T, 1> in) {
   return T(1.0) / in;
 }
 
-#define DEFAULT_UNARY(name, op)                                 \
-  template <typename T>                                         \
-  auto name(Simd<T, 1> in) -> Simd<decltype(op(in.value)), 1> { \
-    return op(in.value);                                        \
+#define DEFAULT_UNARY(name, op)    \
+  template <typename T>            \
+  Simd<T, 1> name(Simd<T, 1> in) { \
+    return op(in.value);           \
   }
 
 DEFAULT_UNARY(operator-, std::negate{})
@@ -85,21 +83,29 @@ DEFAULT_UNARY(atanh, std::atanh)
 DEFAULT_UNARY(ceil, std::ceil)
 DEFAULT_UNARY(conj, std::conj)
 DEFAULT_UNARY(cosh, std::cosh)
-DEFAULT_UNARY(erf, erf);
-DEFAULT_UNARY(erfinv, erfinv);
 DEFAULT_UNARY(expm1, std::expm1)
 DEFAULT_UNARY(floor, std::floor)
-DEFAULT_UNARY(imag, std::imag)
 DEFAULT_UNARY(log, std::log)
 DEFAULT_UNARY(log2, std::log2)
 DEFAULT_UNARY(log10, std::log10)
 DEFAULT_UNARY(log1p, std::log1p)
-DEFAULT_UNARY(real, std::real)
 DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
-DEFAULT_UNARY(isnan, std::isnan)
+
+template <typename T>
+auto real(Simd<T, 1> in) -> Simd<decltype(std::real(in.value)), 1> {
+  return std::real(in.value);
+}
+template <typename T>
+auto imag(Simd<T, 1> in) -> Simd<decltype(std::imag(in.value)), 1> {
+  return std::imag(in.value);
+}
+template <typename T>
+Simd<bool, 1> isnan(Simd<T, 1> in) {
+  return std::isnan(in.value);
+}
 
 #define DEFAULT_BINARY(OP)                                                 \
   template <typename T1, typename T2>                                      \

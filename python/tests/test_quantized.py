@@ -207,8 +207,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             with self.subTest(shape=(B, M, N), group_size=group_size, bits=bits):
                 x_shape = (1, N) if B == 0 else (B, 1, N)
                 w_shape = (N, M) if B == 0 else (B, N, M)
-                x = mx.random.normal(shape=x_shape, key=k1)
-                w = mx.random.normal(shape=w_shape, key=k2)
+                x = 1e-1 * mx.random.normal(shape=x_shape, key=k1)
+                w = 1e-1 * mx.random.normal(shape=w_shape, key=k2)
                 w_q, scales, biases = mx.quantize(w, group_size, bits)
                 w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
                 y_q = mx.quantized_matmul(

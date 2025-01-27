@@ -12,7 +12,7 @@ set(COMPILE_DEPS
     ${PROJECT_SOURCE_DIR}/mlx/types/complex.h
     simd/simd.h
     simd/base_simd.h
-    simd/scalar_math.h
+    simd/math.h
     simd/type.h
     unary_ops.h
     binary_ops.h)
