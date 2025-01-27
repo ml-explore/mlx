@@ -392,7 +392,7 @@ array rope(
           s);
     };
 
-    auto inv_freqs = inputs.size() == 3 ? astype(reciprocal(inputs[2], s), t)
+    auto inv_freqs = inputs.size() == 3 ? astype(reciprocal(inputs[2], s), t, s)
                                         : default_inv_freqs();
     auto theta =
         multiply(expand_dims(positions, 1, s), expand_dims(inv_freqs, 0, s), s);
