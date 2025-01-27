@@ -553,7 +553,8 @@ void winograd_conv_2D_fused_gpu(
   int wm = 4;
   int wn = 1;
   std::ostringstream kname;
-  kname << "winograd_conv_2d_fused_" << type_to_name(out);
+  kname << "winograd_conv_2d_fused_" << type_to_name(out) << "_flip"
+        << conv_params.flip;
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -597,7 +598,7 @@ void winograd_conv_2D_gpu(
     int bo = 4;
     std::ostringstream kname;
     kname << "winograd_conv_2d_weight_transform_" << type_to_name(out) << "_bc"
-          << bc;
+          << bc << "_flip" << conv_params.flip;
     auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder.set_compute_pipeline_state(kernel);
@@ -744,15 +745,15 @@ void conv_2D_gpu(
   }
 
   // Direct to winograd conv
-  bool inp_large = true ||
-      (conv_params.N * conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
-  bool channels_large = true || (conv_params.C + conv_params.O) >= 256;
-  if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
-      conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
-      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
-      channels_large) {
+  bool img_large = (conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
+  bool channels_large = (conv_params.C + conv_params.O) >= 256;
+  if (is_stride_one && is_kdil_one && is_idil_one && conv_params.wS[0] == 3 &&
+      conv_params.wS[1] == 3 && conv_params.C % 32 == 0 &&
+      conv_params.O % 32 == 0 && conv_params.N <= 1) {
+    if (img_large && channels_large) {
+      return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
+    }
     return winograd_conv_2D_fused_gpu(s, d, in, wt, out, conv_params, copies);
-    return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
   // Direct to implicit gemm conv

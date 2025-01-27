@@ -326,7 +326,13 @@ constant constexpr const float WinogradTransforms<6, 3, 8>::wt_transform[8][8];
 constant constexpr const float WinogradTransforms<6, 3, 8>::in_transform[8][8];
 constant constexpr const float WinogradTransforms<6, 3, 8>::out_transform[8][8];
 
-template <typename T, int BC = 32, int BO = 4, int M = 6, int R = 3>
+template <
+    typename T,
+    int BC = 32,
+    int BO = 4,
+    bool do_flip = false,
+    int M = 6,
+    int R = 3>
 [[kernel, max_total_threads_per_threadgroup(BO * 32)]] void
 winograd_conv_2d_weight_transform(
     const device T* wt_in [[buffer(0)]],
@@ -373,7 +379,12 @@ winograd_conv_2d_weight_transform(
     for (int kh = 0; kh < R; ++kh) {
       for (int kw = 0; kw < R; ++kw) {
         for (int kc = simd_lane_id; kc < BC; kc += 32) {
-          Ws[simd_group_id][kh][kw][kc] = wt_in[kh * R * C + kw * C + kc];
+          if (do_flip) {
+            Ws[simd_group_id][R - 1 - kh][R - 1 - kw][kc] =
+                wt_in[kh * R * C + kw * C + kc];
+          } else {
+            Ws[simd_group_id][kh][kw][kc] = wt_in[kh * R * C + kw * C + kc];
+          }
         }
       }
     }
@@ -398,10 +409,10 @@ winograd_conv_2d_weight_transform(
   }
 }
 
-#define instantiate_winograd_conv_2d_weight_transform_base(name, itype, bc) \
-  template [[host_name("winograd_conv_2d_weight_transform_" #name           \
-                       "_bc" #bc)]] [[kernel]] void                         \
-  winograd_conv_2d_weight_transform<itype, bc>(                             \
+#define instantiate_winograd_conv_2d_weight_tr_base_2(name, itype, bc, f)   \
+  template [[host_name("winograd_conv_2d_weight_transform_" #name "_bc" #bc \
+                       "_flip" #f)]] [[kernel]] void                        \
+  winograd_conv_2d_weight_transform<itype, bc, 4, f>(                       \
       const device itype* wt_in [[buffer(0)]],                              \
       device itype* wt_out [[buffer(1)]],                                   \
       const constant int& C [[buffer(2)]],                                  \
@@ -409,6 +420,10 @@ winograd_conv_2d_weight_transform(
       uint tid [[threadgroup_position_in_grid]],                            \
       uint simd_group_id [[simdgroup_index_in_threadgroup]],                \
       uint simd_lane_id [[thread_index_in_simdgroup]]);
+
+#define instantiate_winograd_conv_2d_weight_transform_base(name, itype, bc) \
+  instantiate_winograd_conv_2d_weight_tr_base_2(name, itype, bc, 0)         \
+      instantiate_winograd_conv_2d_weight_tr_base_2(name, itype, bc, 1)
 
 template <typename T, int BC, int WM, int WN, int M = 6, int R = 3>
 [[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
@@ -675,7 +690,12 @@ instantiate_winograd_conv_2d(float16, half); // clang-format on
 
 #include "mlx/backend/metal/kernels/steel/attn/mma.h"
 
-template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
+template <
+    typename T,
+    bool do_flip = false,
+    int WM = 4,
+    int WN = 1,
+    typename AccumType = float>
 [[kernel]] void winograd_fused(
     const device T* input [[buffer(0)]],
     const device T* weight [[buffer(1)]],
@@ -717,12 +737,12 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
   constexpr short TK = (BC) / (kFragSize);
 
   // Warp primitives
-  using MMAFrag_inp_t = BaseMMAFrag<T, kFragSize, kFragSize>;
+  using MMAFrag_inp_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   // Warp tiles sizes for matmul
-  MMATile<T, 1, TK, MMAFrag_inp_t> Itile;
-  MMATile<T, TK, TN, MMAFrag_inp_t> Wtile;
+  MMATile<AccumType, 1, TK, MMAFrag_acc_t> Itile;
+  MMATile<AccumType, TK, TN, MMAFrag_acc_t> Wtile;
   MMATile<AccumType, 1, TN, MMAFrag_acc_t> Otile[4];
 
   for (int im = 0; im < 4; im++) {
@@ -769,11 +789,6 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
            iH_idx * int64_t(params.in_strides[1]) + // H
            iW_idx * int64_t(params.in_strides[2]);  // W
 
-  // output +=  b_idx * int64_t(params.out_strides[0]) + // N
-  //           oH_idx * int64_t(params.out_strides[1]) + // H
-  //           oW_idx * int64_t(params.out_strides[2]) + // W
-  //           o_idx;                                    // C
-
   weight += o_idx * params.wt_strides[0] + // O
             thr_h * params.wt_strides[1] + // H 
             thr_w * params.wt_strides[2];  // W
@@ -789,18 +804,23 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 
   // Iterate over C
   for (int c = 0; c < params.C; c += BC) {
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    // Load weight
-
 #define tmp_load_wt_idx(o, h, w, c) h* FA* BC* BO + w* BC* BO + c* BO + o
 #define tmp_load_in_idx(t, h, w, c) h* FA* BS* BC + w* BS* BC + t* BC + c
 
 #define tmp_trns_wt_idx(o, h, w, c) h* FA* BC* BO + w* BC* BO + c* BO + o
 #define tmp_trns_in_idx(t, h, w, c) h* FA* BS* BC + w* BS* BC + t* BC + c
 
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Load weight
     if (thr_h < FR && thr_w < FR && thr_t < BO) {
       for (int ic = 0; ic < BC; ic++) {
-        Wt[tmp_load_wt_idx(thr_t, thr_h, thr_w, ic)] = weight[c + ic];
+        if (do_flip) {
+          Wt[tmp_load_wt_idx(thr_t, FR - 1 - thr_h, FR - 1 - thr_w, ic)] =
+              weight[c + ic];
+        } else {
+          Wt[tmp_load_wt_idx(thr_t, thr_h, thr_w, ic)] = weight[c + ic];
+        }
       }
     }
 
@@ -818,7 +838,6 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 
     // Transform weight
     if (lid.z == 0) {
-      const short ig = simd_group_id * 32 + simd_lane_id;
       const short ic = lid.y;
       const short io = lid.x;
 
@@ -878,8 +897,7 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     }
 
     // Transform input
-    else { // (simd_group_id >= 2)
-      const short ig = (simd_group_id - 2) * 32 + simd_lane_id;
+    else {
       const short it = lid.y;
       const short ic = lid.x;
 
@@ -1001,7 +1019,7 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     output += b_idx * int64_t(params.out_strides[0]) + // N
               oH_i * int64_t(params.out_strides[1]) +  // H
               oW_i * int64_t(params.out_strides[2]) +  // W
-              BO * tid.x;                     // C
+              BO * tid.x;                              // C
 
     // clang-format on
 
@@ -1017,19 +1035,24 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 }
 
 // clang-format off
-#define instantiate_winograd_conv_2d_fused(name, itype)    \
-  template [[host_name("winograd_conv_2d_fused_" #name)]]              \
-  [[kernel]] void winograd_fused<itype>(                  \
+#define instantiate_winograd_conv_2d_fused(name, itype, f)            \
+  template [[host_name("winograd_conv_2d_fused_" #name "_flip" #f)]]  \
+  [[kernel]] void winograd_fused<itype, f>(                           \
       const device itype* input [[buffer(0)]],                        \
-      const device itype* weight [[buffer(1)]],                        \
+      const device itype* weight [[buffer(1)]],                       \
       device itype* output [[buffer(2)]],                             \
-      const constant MLXConvParams<2>& params [[buffer(3)]],           \
-      uint3 tid [[threadgroup_position_in_grid]],                      \
-      uint3 lid [[thread_position_in_threadgroup]],                    \
-      uint3 tgp_per_grid [[threadgroups_per_grid]],                    \
-      ushort simd_group_id [[simdgroup_index_in_threadgroup]],           \
+      const constant MLXConvParams<2>& params [[buffer(3)]],          \
+      uint3 tid [[threadgroup_position_in_grid]],                     \
+      uint3 lid [[thread_position_in_threadgroup]],                   \
+      uint3 tgp_per_grid [[threadgroups_per_grid]],                   \
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],        \
       ushort simd_lane_id [[thread_index_in_simdgroup]]);
 
-instantiate_winograd_conv_2d_fused(float32, float);
-// instantiate_winograd_conv_2d_fused(float16, float16_t);
+#define instantiate_winograd_conv_2d_fused_2(name, itype) \
+  instantiate_winograd_conv_2d_fused(name, itype, 0)      \
+  instantiate_winograd_conv_2d_fused(name, itype, 1)
+
+instantiate_winograd_conv_2d_fused_2(float32, float);
+instantiate_winograd_conv_2d_fused_2(float16, float16_t);
+instantiate_winograd_conv_2d_fused_2(bfloat16, bfloat16_t);
 // clang-format on
