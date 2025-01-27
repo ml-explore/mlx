@@ -151,6 +151,31 @@ void _qmm_t(
   }
 }
 
+template <int bits, int S>
+simd::Simd<uint32_t, S> extract_bits_simd(const uint32_t* w) {
+  constexpr int bitmask = (1 << bits) - 1;
+  simd::Simd<uint32_t, S> wi;
+  if constexpr (bits == 4 && S == 8) {
+    constexpr std::array<uint32_t, 8> shifts_ = {{0, 4, 8, 12, 16, 20, 24, 28}};
+    auto shifts(*(simd::Simd<uint32_t, S>*)&shifts_);
+    wi = simd::Simd<uint32_t, S>(*w);
+    wi = wi >> shifts;
+    wi = wi & bitmask;
+  } else if constexpr (bits == 8 && S == 8) {
+    constexpr std::array<uint32_t, 8> shifts_ = {{0, 8, 16, 24, 0, 8, 16, 24}};
+    auto shifts(*(simd::Simd<uint32_t, S>*)&shifts_);
+    auto l = simd::Simd<uint32_t, 4>(*w++);
+    auto r = simd::Simd<uint32_t, 4>(*w);
+    wi = simd::Simd<uint32_t, S>(l, r);
+    wi = wi >> shifts;
+    wi = wi & bitmask;
+  } else {
+    // Appease compiler.. but should never get here
+    throw std::runtime_error("Unsupported combination for simd qmm.");
+  }
+  return wi;
+}
+
 template <typename T, int bits, int group_size>
 void _qmm_t_simd(
     T* result,
@@ -161,7 +186,6 @@ void _qmm_t_simd(
     int M,
     int N,
     int K) {
-  constexpr int bitmask = (1 << bits) - 1;
   constexpr int pack_factor = 32 / bits;
   constexpr int packs_in_group = group_size / pack_factor;
   constexpr int S = simd::max_size<T>;
@@ -182,19 +206,10 @@ void _qmm_t_simd(
         T bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw += packs_per_simd) {
-          // TODO: vectorize this properly
-          simd::Simd<uint32_t, S> wi;
-          for (int e = 0; e < packs_per_simd; e++) {
-            uint32_t wii = *w_local++;
-            for (int p = 0; p < pack_factor; p++) {
-              wi[e * pack_factor + p] = wii & bitmask;
-              wii >>= bits;
-            }
-          }
-          auto wf = simd::Simd<float, S>(wi);
+          auto wf = simd::Simd<float, S>(extract_bits_simd<bits, S>(w_local));
+          w_local += packs_per_simd;
           wf = wf * scale;
           wf = wf + bias;
-
           simd::Simd<float, S> x_simd = simd::load<T, S>(x_local);
           acc = acc + x_simd * wf;
           x_local += S;

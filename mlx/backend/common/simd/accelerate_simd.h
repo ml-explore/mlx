@@ -64,6 +64,11 @@ struct Simd {
   template <typename U>
   Simd<T, N>(U v) : value(v){};
 
+  Simd<T, N>(Simd<T, N / 2> x, Simd<T, N / 2> y) {
+    value = asd::make<typename asd::Vector<scalar_t, N>::packed_t>(
+        x.value, y.value);
+  };
+
   T operator[](int idx) const {
     return reinterpret_cast<const T*>(&value)[idx];
   }
