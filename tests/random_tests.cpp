@@ -421,6 +421,9 @@ TEST_CASE("test random normal") {
 }
 
 TEST_CASE("test random multivariate_normal") {
+  // Scope switch to the cpu for SVDs
+  StreamContext sc(Device::cpu);
+
   {
     auto mean = zeros({3});
     auto cov = eye(3);
