@@ -819,33 +819,17 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     // Transform weight
     if (lid.z == 0) {
       const short ig = simd_group_id * 32 + simd_lane_id;
-      const short ic = lid.x;
-      const short io = lid.y;
+      const short ic = lid.y;
+      const short io = lid.x;
 
       T tmp_0[4][4];
       T tmp_1[4][4];
 
       for (int ii = 0; ii < 3; ++ii) {
         for (int jj = 0; jj < 3; ++jj) {
-          tmp_0[ii][jj] = Wt[tmp_load_wt_idx(io, ii, jj, ic)];
+          tmp_1[ii][jj] = Wt[tmp_load_wt_idx(io, ii, jj, ic)];
         }
       }
-
-      tmp_1[0][0] = tmp_0[0][0];
-      tmp_1[0][1] = tmp_0[0][1];
-      tmp_1[0][2] = tmp_0[0][2];
-
-      tmp_1[1][0] = T(0.5) * (tmp_0[0][0] + tmp_0[1][0] + tmp_0[2][0]);
-      tmp_1[1][1] = T(0.5) * (tmp_0[0][1] + tmp_0[1][1] + tmp_0[2][1]);
-      tmp_1[1][2] = T(0.5) * (tmp_0[0][2] + tmp_0[1][2] + tmp_0[2][2]);
-
-      tmp_1[2][0] = tmp_1[1][0] - tmp_0[1][0];
-      tmp_1[2][1] = tmp_1[1][1] - tmp_0[1][1];
-      tmp_1[2][2] = tmp_1[1][2] - tmp_0[1][2];
-
-      tmp_1[3][0] = tmp_0[2][0];
-      tmp_1[3][1] = tmp_0[2][1];
-      tmp_1[3][2] = tmp_0[2][2];
 
       //////////////////////////////////////////////
       tmp_0[0][0] = tmp_1[0][0];
@@ -868,9 +852,27 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
       tmp_0[2][3] = tmp_1[2][2];
       tmp_0[3][3] = tmp_1[3][2];
 
+      //////////////////////////////////////////////
+
+      tmp_1[0][0] = tmp_0[0][0];
+      tmp_1[0][1] = tmp_0[0][1];
+      tmp_1[0][2] = tmp_0[0][2];
+
+      tmp_1[1][0] = T(0.5) * (tmp_0[0][0] + tmp_0[1][0] + tmp_0[2][0]);
+      tmp_1[1][1] = T(0.5) * (tmp_0[0][1] + tmp_0[1][1] + tmp_0[2][1]);
+      tmp_1[1][2] = T(0.5) * (tmp_0[0][2] + tmp_0[1][2] + tmp_0[2][2]);
+
+      tmp_1[2][0] = tmp_1[1][0] - tmp_0[1][0];
+      tmp_1[2][1] = tmp_1[1][1] - tmp_0[1][1];
+      tmp_1[2][2] = tmp_1[1][2] - tmp_0[1][2];
+
+      tmp_1[3][0] = tmp_0[2][0];
+      tmp_1[3][1] = tmp_0[2][1];
+      tmp_1[3][2] = tmp_0[2][2];
+
       for (int ii = 0; ii < 4; ++ii) {
         for (int jj = 0; jj < 4; ++jj) {
-          Wt[tmp_trns_wt_idx(io, ii, jj, ic)] = tmp_0[ii][jj];
+          Wt[tmp_trns_wt_idx(io, ii, jj, ic)] = tmp_1[ii][jj];
         }
       }
     }
@@ -886,29 +888,9 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 
       for (int ii = 0; ii < 4; ++ii) {
         for (int jj = 0; jj < 4; ++jj) {
-          tmp_0[ii][jj] = It[tmp_load_in_idx(it, ii, jj, ic)];
+          tmp_1[ii][jj] = It[tmp_load_in_idx(it, ii, jj, ic)];
         }
       }
-
-      tmp_1[0][0] = tmp_0[0][0] - tmp_0[2][0];
-      tmp_1[0][1] = tmp_0[0][1] - tmp_0[2][1];
-      tmp_1[0][2] = tmp_0[0][2] - tmp_0[2][2];
-      tmp_1[0][3] = tmp_0[0][3] - tmp_0[2][3];
-
-      tmp_1[1][0] = tmp_0[1][0] + tmp_0[2][0];
-      tmp_1[1][1] = tmp_0[1][1] + tmp_0[2][1];
-      tmp_1[1][2] = tmp_0[1][2] + tmp_0[2][2];
-      tmp_1[1][3] = tmp_0[1][3] + tmp_0[2][3];
-
-      tmp_1[2][0] = tmp_0[2][0] - tmp_0[1][0];
-      tmp_1[2][1] = tmp_0[2][1] - tmp_0[1][1];
-      tmp_1[2][2] = tmp_0[2][2] - tmp_0[1][2];
-      tmp_1[2][3] = tmp_0[2][3] - tmp_0[1][3];
-
-      tmp_1[3][0] = tmp_0[1][0] - tmp_0[3][0];
-      tmp_1[3][1] = tmp_0[1][1] - tmp_0[3][1];
-      tmp_1[3][2] = tmp_0[1][2] - tmp_0[3][2];
-      tmp_1[3][3] = tmp_0[1][3] - tmp_0[3][3];
 
       //////////////////////////////////////////////
       tmp_0[0][0] = tmp_1[0][0] - tmp_1[0][2];
@@ -931,9 +913,31 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
       tmp_0[2][3] = tmp_1[2][1] - tmp_1[2][3];
       tmp_0[3][3] = tmp_1[3][1] - tmp_1[3][3];
 
+      //////////////////////////////////////////////
+
+      tmp_1[0][0] = tmp_0[0][0] - tmp_0[2][0];
+      tmp_1[0][1] = tmp_0[0][1] - tmp_0[2][1];
+      tmp_1[0][2] = tmp_0[0][2] - tmp_0[2][2];
+      tmp_1[0][3] = tmp_0[0][3] - tmp_0[2][3];
+
+      tmp_1[1][0] = tmp_0[1][0] + tmp_0[2][0];
+      tmp_1[1][1] = tmp_0[1][1] + tmp_0[2][1];
+      tmp_1[1][2] = tmp_0[1][2] + tmp_0[2][2];
+      tmp_1[1][3] = tmp_0[1][3] + tmp_0[2][3];
+
+      tmp_1[2][0] = tmp_0[2][0] - tmp_0[1][0];
+      tmp_1[2][1] = tmp_0[2][1] - tmp_0[1][1];
+      tmp_1[2][2] = tmp_0[2][2] - tmp_0[1][2];
+      tmp_1[2][3] = tmp_0[2][3] - tmp_0[1][3];
+
+      tmp_1[3][0] = tmp_0[1][0] - tmp_0[3][0];
+      tmp_1[3][1] = tmp_0[1][1] - tmp_0[3][1];
+      tmp_1[3][2] = tmp_0[1][2] - tmp_0[3][2];
+      tmp_1[3][3] = tmp_0[1][3] - tmp_0[3][3];
+
       for (int ii = 0; ii < 4; ++ii) {
         for (int jj = 0; jj < 4; ++jj) {
-          It[tmp_trns_in_idx(it, ii, jj, ic)] = tmp_0[ii][jj];
+          It[tmp_trns_in_idx(it, ii, jj, ic)] = tmp_1[ii][jj];
         }
       }
     }
