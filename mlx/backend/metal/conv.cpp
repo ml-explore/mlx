@@ -747,13 +747,15 @@ void conv_2D_gpu(
   // Direct to winograd conv
   bool img_large = (conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
   bool channels_large = (conv_params.C + conv_params.O) >= 256;
-  if (is_stride_one && is_kdil_one && is_idil_one && conv_params.wS[0] == 3 &&
-      conv_params.wS[1] == 3 && conv_params.C % 32 == 0 &&
-      conv_params.O % 32 == 0 && conv_params.N <= 1) {
+  if (conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
+      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && is_stride_one &&
+      is_kdil_one && is_idil_one) {
     if (img_large && channels_large) {
       return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
     }
-    return winograd_conv_2D_fused_gpu(s, d, in, wt, out, conv_params, copies);
+    if (conv_params.N <= 1) {
+      return winograd_conv_2D_fused_gpu(s, d, in, wt, out, conv_params, copies);
+    }
   }
 
   // Direct to implicit gemm conv
