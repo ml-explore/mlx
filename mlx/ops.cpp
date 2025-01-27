@@ -3880,6 +3880,21 @@ array conv_general(
       kernel_dilation,
       input_dilation);
 
+  // Check for direct conv
+  if (spatial_dims == 2 && groups == 1 && wt.shape(1) == 1 &&
+      wt.shape(2) == 1 && stride[0] == 1 && stride[1] == 1 &&
+      padding_lo[0] == 1 && padding_lo[1] == 1 && input_dilation[0] == 1 &&
+      input_dilation[1] == 1 && kernel_dilation[0] == 1 &&
+      kernel_dilation[1] == 1) {
+    auto in_rshape = reshape(in, {-1, in.shape(-1)}, s);
+    auto wt_rshape = reshape(wt, {-1, wt.shape(-1)}, s);
+
+    auto out_rshape = matmul(in_rshape, transpose(wt_rshape, {1, 0}, s), s);
+
+    auto out = reshape(out_rshape, out_shape, s);
+    return out;
+  }
+
   return array(
       std::move(out_shape),
       in.dtype(),
