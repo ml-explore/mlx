@@ -708,6 +708,8 @@ template <
     ushort simd_lane_id [[thread_index_in_simdgroup]]) {
   using namespace mlx::steel;
 
+  (void)tgp_per_grid;
+
   // Winograd F(n x n, r x r)
   // n x n output window
   constexpr short FN = 2;
@@ -737,13 +739,12 @@ template <
   constexpr short TK = (BC) / (kFragSize);
 
   // Warp primitives
-  using MMAFrag_inp_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   // Warp tiles sizes for matmul
   MMATile<AccumType, 1, TK, MMAFrag_acc_t> Itile;
   MMATile<AccumType, TK, TN, MMAFrag_acc_t> Wtile;
-  MMATile<AccumType, 1, TN, MMAFrag_acc_t> Otile[4];
+  MMATile<AccumType, 1, TN, MMAFrag_acc_t> Otile[TM];
 
   for (int im = 0; im < 4; im++) {
     Otile[im].clear();
