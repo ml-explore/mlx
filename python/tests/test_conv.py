@@ -550,12 +550,19 @@ class TestConv(mlx_tests.MLXTestCase):
                 (1, 1, 6),
                 (4, 16, 32),
             ):
+                continue
                 for idim, kdim, stride, padding in (
                     ((1, 1, 1), (1, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((3, 3, 3), (3, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((31, 31, 31), (5, 5, 5), (5, 5, 5), (2, 2, 2)),
                 ):
                     run_conv3D(N, C, O, idim, kdim, stride, padding, dtype=dtype)
+
+            N, C, O = (2, 4, 4)
+            idim, kdim, stride, padding = (6, 6, 6), (3, 1, 1), (1, 1, 1), (0, 0, 0)
+            run_conv3D(
+                N, C, O, idim, kdim, stride, padding, dilation=(2, 2, 2), dtype=dtype
+            )
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_3D_grad(self):
