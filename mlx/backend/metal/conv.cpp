@@ -564,7 +564,7 @@ void winograd_conv_2D_fused_gpu(
 
   compute_encoder.set_bytes(conv_params, 3);
 
-  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size group_dims = MTL::Size(8, 8, 2);
   MTL::Size grid_dims =
       MTL::Size(O_c / 8, (N_tiles_h * N_tiles_w) / 8, N_tiles_n);
 

@@ -721,11 +721,13 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   // Warp tiles sizes for matmul
-  MMATile<T, TM, TK, MMAFrag_inp_t> Itile;
+  MMATile<T, 1, TK, MMAFrag_inp_t> Itile;
   MMATile<T, TK, TN, MMAFrag_inp_t> Wtile;
-  MMATile<AccumType, TM, TN, MMAFrag_acc_t> Otile;
+  MMATile<AccumType, 1, TN, MMAFrag_acc_t> Otile[4];
 
-  Otile.clear();
+  for (int im = 0; im < 4; im++) {
+    Otile[im].clear();
+  }
 
   // Threadgroup memory for Weights and Inputs
   constexpr short BS = BT > BO ? BT : BO;
@@ -787,10 +789,11 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 
   // Iterate over C
   for (int c = 0; c < params.C; c += BC) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
     // Load weight
 
-#define tmp_load_wt_idx(o, h, w, c) o* FA* FA* BC + h* FA* BC + w* BC + c
-#define tmp_load_in_idx(t, h, w, c) t* FA* FA* BC + h* FA* BC + w* BC + c
+#define tmp_load_wt_idx(o, h, w, c) h* FA* BC* BO + w* BC* BO + c* BO + o
+#define tmp_load_in_idx(t, h, w, c) h* FA* BS* BC + w* BS* BC + t* BC + c
 
 #define tmp_trns_wt_idx(o, h, w, c) h* FA* BC* BO + w* BC* BO + c* BO + o
 #define tmp_trns_in_idx(t, h, w, c) h* FA* BS* BC + w* BS* BC + t* BC + c
@@ -814,10 +817,10 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Transform weight
-    if (simd_group_id < 2) {
+    if (lid.z == 0) {
       const short ig = simd_group_id * 32 + simd_lane_id;
-      const short ic = ig / BO;
-      const short io = ig % BO;
+      const short ic = lid.x;
+      const short io = lid.y;
 
       T tmp_0[4][4];
       T tmp_1[4][4];
@@ -875,8 +878,8 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     // Transform input
     else { // (simd_group_id >= 2)
       const short ig = (simd_group_id - 2) * 32 + simd_lane_id;
-      const short it = ig / BC;
-      const short ic = ig % BC;
+      const short it = lid.y;
+      const short ic = lid.x;
 
       T tmp_0[4][4];
       T tmp_1[4][4];
@@ -937,33 +940,36 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Do matmul
-    Itile.template load<T, 1, 1, BS, 1>(
-        &It[simd_group_id * FA * BS * BS + sm * BS + sn]);
-    simdgroup_barrier(mem_flags::mem_none);
-    Wtile.template load<T, 1, 1, BO, 1>(
-        &Wt[simd_group_id * FA * BC * BO + sm * BC + sn]);
-    simdgroup_barrier(mem_flags::mem_none);
-    tile_matmad(Otile, Itile, Wtile, Otile);
+    for (int im = 0; im < 4; im++) {
+      Itile.template load<T, 1, 1, BS, 1>(
+          &It[simd_group_id * FA * BS * BS + im * BS * BS + sm * BS + sn]);
+      simdgroup_barrier(mem_flags::mem_none);
+      Wtile.template load<T, 1, 1, BO, 1>(
+          &Wt[simd_group_id * FA * BC * BO + im * BC * BO + sm * BC + sn]);
+      simdgroup_barrier(mem_flags::mem_none);
+      tile_matmad(Otile[im], Itile, Wtile, Otile[im]);
+    }
   }
 
   // Transform and write output
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  Otile.template store<T, 1, 1, BS, 1>(
-      &It[simd_group_id * FA * BS * BS + sm * BS + sn]);
+  for (int im = 0; im < 4; im++) {
+    Otile[im].template store<T, 1, 1, BS, 1>(
+        &It[simd_group_id * FA * BS * BS + im * BS * BS + sm * BS + sn]);
+  }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  if (thr_idx < BT * (BO / 4)) {
-    const short it = thr_idx / (BO / 4);
-    const short io = thr_idx % (BO / 4);
+  if (lid.z == 0) {
+    const short it = lid.y;
+    const short io = lid.x;
 
-    metal::vec<T, 4> tmp_0[4][4];
-    metal::vec<T, 4> tmp_1[2][4];
-    metal::vec<T, 4> tmp_2[2][2];
+    T tmp_0[4][4];
+    T tmp_1[2][4];
+    T tmp_2[2][2];
 
     for (int ii = 0; ii < 4; ++ii) {
       for (int jj = 0; jj < 4; ++jj) {
-        tmp_0[ii][jj] = ((threadgroup metal::vec<T, 4>*)(&It[tmp_trns_in_idx(
-            it, ii, jj, 4 * io)]))[0];
+        tmp_0[ii][jj] = It[tmp_trns_in_idx(it, ii, jj, io)];
       }
     }
 
@@ -988,20 +994,19 @@ template <typename T, int WM = 4, int WN = 1, typename AccumType = float>
 
     // clang-format off
     output += b_idx * int64_t(params.out_strides[0]) + // N
-              oH_i * int64_t(params.out_strides[1]) + // H
-              oW_i * int64_t(params.out_strides[2]) + // W
-              o_idx + io * 4;                         // C
+              oH_i * int64_t(params.out_strides[1]) +  // H
+              oW_i * int64_t(params.out_strides[2]) +  // W
+              BO * tid.x;                     // C
 
     // clang-format on
 
-    ((device metal::vec<T, 4>*)(&output[0]))[0] = tmp_2[0][0];
-    ((device metal::vec<T, 4>*)(&output[params.out_strides[2]]))[0] =
+    output[0 * params.out_strides[1] + 0 * params.out_strides[2] + io] =
+        tmp_2[0][0];
+    output[0 * params.out_strides[1] + 1 * params.out_strides[2] + io] =
         tmp_2[0][1];
-    ((device metal::vec<T, 4>*)(&output[params.out_strides[1]]))[0] =
+    output[1 * params.out_strides[1] + 0 * params.out_strides[2] + io] =
         tmp_2[1][0];
-    ((device metal::vec<
-        T,
-        4>*)(&output[params.out_strides[1] + params.out_strides[2]]))[0] =
+    output[1 * params.out_strides[1] + 1 * params.out_strides[2] + io] =
         tmp_2[1][1];
   }
 }
