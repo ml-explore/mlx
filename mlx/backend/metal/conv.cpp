@@ -745,7 +745,8 @@ void conv_2D_gpu(
   }
 
   // Direct to winograd conv
-  bool img_large = (conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
+  bool img_large =
+      (conv_params.N * conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
   bool channels_large = (conv_params.C + conv_params.O) >= 256;
   if (conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && is_stride_one &&
