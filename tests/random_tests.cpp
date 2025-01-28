@@ -556,7 +556,7 @@ TEST_CASE("test random bernoulli") {
 
   p = array({0.1, 0.2, 0.3});
   // Ask for the wrong shape => throws
-  CHECK_THROWS_AS(random::bernoulli(p, {2}), std::invalid_argument);
+  CHECK_THROWS_AS(random::bernoulli(p, Shape({2})), std::invalid_argument);
 
   // Check wrong key type or shape
   auto key = array({0, 0}, {1, 2});
