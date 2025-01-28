@@ -3540,7 +3540,7 @@ Shape conv_out_shape(
 
     if (out_shape[i] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Spatial dimensions of input after padding "
+      msg << "[conv] Spatial dimensions of input after padding"
           << " cannot be smaller than weight spatial dimensions."
           << " Got error at axis " << i << " for input with shape " << in_shape
           << ", padding low " << pads_lo << ", padding high " << pads_hi

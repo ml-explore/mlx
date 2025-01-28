@@ -159,6 +159,7 @@ class ConvTranspose3d(Module):
             applying the filter. Default: ``1``.
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
+        dilation (int or tuple, optional): The dilation of the convolution.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
@@ -170,6 +171,7 @@ class ConvTranspose3d(Module):
         kernel_size: Union[int, tuple],
         stride: Union[int, tuple] = 1,
         padding: Union[int, tuple] = 0,
+        dilation: Union[int, tuple] = 1,
         bias: bool = True,
     ):
         super().__init__()
@@ -191,16 +193,20 @@ class ConvTranspose3d(Module):
 
         self.padding = padding
         self.stride = stride
+        self.dilation = dilation
 
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1:3]}, stride={self.stride}, "
-            f"padding={self.padding}, bias={'bias' in self}"
+            f"padding={self.padding}, dilation={self.dilation}, "
+            f"bias={'bias' in self}"
         )
 
     def __call__(self, x):
-        y = mx.conv_transpose3d(x, self.weight, self.stride, self.padding)
+        y = mx.conv_transpose3d(
+            x, self.weight, self.stride, self.padding, self.dilation
+        )
         if "bias" in self:
             y = y + self.bias
         return y
