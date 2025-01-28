@@ -57,17 +57,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "init",
-      [](bool strict, const std::string& backend) -> mx::distributed::Group {
-        if (backend == "any") {
-          return mx::distributed::init(strict, mx::distributed::Backend::Any);
-        } else if (backend == "mpi") {
-          return mx::distributed::init(strict, mx::distributed::Backend::MPI);
-        } else if (backend == "ring") {
-          return mx::distributed::init(strict, mx::distributed::Backend::Ring);
-        } else {
-          throw std::invalid_argument("Uknown backend '" + backend + "'");
-        }
-      },
+      &mx::distributed::init,
       "strict"_a = false,
       "backend"_a = "any",
       nb::sig("def init(strict: bool = False, backend: str = 'any') -> Group"),

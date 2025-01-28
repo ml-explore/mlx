@@ -222,7 +222,7 @@ split(const array& a, const Shape& indices, StreamOrDevice s = {});
 std::vector<array> meshgrid(
     const std::vector<array>& arrays,
     bool sparse = false,
-    std::string indexing = "xy",
+    const std::string& indexing = "xy",
     StreamOrDevice s = {});
 
 /**
@@ -274,7 +274,7 @@ array pad(
     const Shape& low_pad_size,
     const Shape& high_pad_size,
     const array& pad_value = array(0),
-    const std::string mode = "constant",
+    const std::string& mode = "constant",
     StreamOrDevice s = {});
 
 /** Pad an array with a constant value along all axes */
@@ -282,19 +282,19 @@ array pad(
     const array& a,
     const std::vector<std::pair<int, int>>& pad_width,
     const array& pad_value = array(0),
-    const std::string mode = "constant",
+    const std::string& mode = "constant",
     StreamOrDevice s = {});
 array pad(
     const array& a,
     const std::pair<int, int>& pad_width,
     const array& pad_value = array(0),
-    const std::string mode = "constant",
+    const std::string& mode = "constant",
     StreamOrDevice s = {});
 array pad(
     const array& a,
     int pad_width,
     const array& pad_value = array(0),
-    const std::string mode = "constant",
+    const std::string& mode = "constant",
     StreamOrDevice s = {});
 
 /** Permutes the dimensions in reverse order. */

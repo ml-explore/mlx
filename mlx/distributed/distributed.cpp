@@ -83,8 +83,8 @@ Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 
-Group init(bool strict /* = false */, Backend bk /* = Backend::Any */) {
-  static std::unordered_map<Backend, std::shared_ptr<detail::GroupImpl>>
+Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+  static std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>
       backends;
 
   // Already initialized so return the group.
@@ -94,31 +94,34 @@ Group init(bool strict /* = false */, Backend bk /* = Backend::Any */) {
 
   // Create the requested communication group
   std::shared_ptr<detail::GroupImpl> group;
-  switch (bk) {
-    case Backend::MPI:
-      group = mpi::init(strict);
-      break;
-    case Backend::Ring:
-      group = ring::init(strict);
-      break;
-    case Backend::Any:
-      group = ring::init(false);
-      bk = Backend::Ring;
-      if (group == nullptr) {
-        group = mpi::init(false);
-        bk = Backend::MPI;
-      }
-      if (group == nullptr && strict) {
-        throw std::runtime_error("Couldn't initialize any distributed backend");
-      }
-      break;
+  std::string bk_ = bk;
+  if (bk == "mpi") {
+    group = mpi::init(strict);
+  } else if (bk == "ring") {
+    group = ring::init(strict);
+  } else if (bk == "any") {
+    group = ring::init(false);
+    bk_ = "ring";
+    if (group == nullptr) {
+      group = mpi::init(false);
+      bk_ = "mpi";
+    }
+    if (group == nullptr && strict) {
+      throw std::runtime_error("[distributed] Couldn't initialize any backend");
+    }
+  } else {
+    std::ostringstream msg;
+    msg << "[distributed] The only valid values for backend are 'any', 'mpi' "
+        << "and 'ring' but '" << bk << "' was provided.";
+    throw std::invalid_argument(msg.str());
   }
+
   if (group == nullptr) {
     group = std::make_shared<detail::EmptyGroup>();
   } else {
-    backends.insert({Backend::Any, group});
+    backends.insert({"any", group});
   }
-  backends.insert({bk, group});
+  backends.insert({std::move(bk_), group});
 
   // Ensure the communication stream is alive before
   // the graph is evaluated
