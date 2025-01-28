@@ -16,7 +16,7 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
-#include "mlx/io/threadpool.h"
+#include "mlx/threadpool.h"
 
 #define SWITCH_TYPE(x, ...)  \
   switch ((x).dtype()) {     \
