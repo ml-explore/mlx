@@ -34,6 +34,8 @@ class TestDistributed(mlx_tests.MLXTestCase):
             mx.int32,
             mx.uint32,
             mx.float32,
+            mx.float16,
+            mx.bfloat16,
             mx.complex64,
         ]
         for dt in dtypes:

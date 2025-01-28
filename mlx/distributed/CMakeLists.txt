@@ -5,3 +5,4 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mpi)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ring)

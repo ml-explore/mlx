@@ -53,6 +53,6 @@ struct Group {
  * distributed subsystem. Otherwise simply return a singleton group which will
  * render communication operations as no-op.
  */
-Group init(bool strict = false);
+Group init(bool strict = false, const std::string& bk = "any");
 
 } // namespace mlx::core::distributed

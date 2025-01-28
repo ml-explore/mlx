@@ -13,7 +13,7 @@
 #include <unistd.h>
 #endif
 
-#include "mlx/io/threadpool.h"
+#include "mlx/threadpool.h"
 
 // Strictly we need to operate on files in binary mode (to avoid \r getting
 // automatically inserted), but every modern system except for Windows no

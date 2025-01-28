@@ -1,8 +1,11 @@
 // Copyright © 2024 Apple Inc.
 
+#include <unordered_map>
+
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/ring/ring.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core::distributed {
@@ -65,7 +68,7 @@ class EmptyGroup : public GroupImpl {
 } // namespace detail
 
 bool is_available() {
-  return mpi::is_available();
+  return mpi::is_available() || ring::is_available();
 }
 
 int Group::rank() const {
@@ -80,20 +83,50 @@ Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 
-Group init(bool strict /* = false */) {
-  auto init_group = [strict]() {
-    auto default_group = mpi::init(strict);
-    if (default_group == nullptr) {
-      default_group = std::make_shared<detail::EmptyGroup>();
+Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+  static std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>
+      backends;
+
+  // Already initialized so return the group.
+  if (auto g = backends.find(bk); g != backends.end()) {
+    return Group(g->second);
+  }
+
+  // Create the requested communication group
+  std::shared_ptr<detail::GroupImpl> group;
+  std::string bk_ = bk;
+  if (bk == "mpi") {
+    group = mpi::init(strict);
+  } else if (bk == "ring") {
+    group = ring::init(strict);
+  } else if (bk == "any") {
+    group = ring::init(false);
+    bk_ = "ring";
+    if (group == nullptr) {
+      group = mpi::init(false);
+      bk_ = "mpi";
     }
-    return default_group;
-  };
-  static std::shared_ptr<detail::GroupImpl> default_group = init_group();
+    if (group == nullptr && strict) {
+      throw std::runtime_error("[distributed] Couldn't initialize any backend");
+    }
+  } else {
+    std::ostringstream msg;
+    msg << "[distributed] The only valid values for backend are 'any', 'mpi' "
+        << "and 'ring' but '" << bk << "' was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (group == nullptr) {
+    group = std::make_shared<detail::EmptyGroup>();
+  } else {
+    backends.insert({"any", group});
+  }
+  backends.insert({std::move(bk_), group});
 
   // Ensure the communication stream is alive before
   // the graph is evaluated
   detail::communication_stream();
-  return Group(default_group);
+  return Group(group);
 }
 
 } // namespace mlx::core::distributed
