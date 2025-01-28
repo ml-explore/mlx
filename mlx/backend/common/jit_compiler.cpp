@@ -133,7 +133,7 @@ std::string JitCompiler::exec(const std::string& cmd) {
   if (status == -1) {
     throw std::runtime_error("pclose() failed.");
   }
-#ifdef _MSC_VER
+#ifdef _WIN32
   int code = status;
 #else
   int code = WEXITSTATUS(status);
