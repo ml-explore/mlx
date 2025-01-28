@@ -10,7 +10,7 @@ if(MSVC)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
 else()
   set(SHELL_EXT sh)
-  set(SHELL_CMD /bin/bash)
+  set(SHELL_CMD bash)
 endif()
 
 add_custom_command(
