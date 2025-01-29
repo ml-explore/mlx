@@ -85,10 +85,6 @@ def make_monitor_script(rank, hostfile, env, command, verbose):
     script += "echo $pidfile\n"
     script += "tmpfile=$(mktemp)\n"
     script += f"echo {shlex.quote(hostfile)} >$tmpfile\n"
-    if verbose:
-        script += "export MLX_RING_VERBOSE=1\n"
-    script += "export MLX_HOSTFILE=$tmpfile\n"
-    script += f"export MLX_RANK={rank}\n"
     for e in env:
         key, *value = e.split("=", maxsplit=1)
         value = shlex.quote(value[0]) if len(value) > 0 else ""
@@ -96,6 +92,10 @@ def make_monitor_script(rank, hostfile, env, command, verbose):
             log_warning(f"'{e}' is an invalid environment variable so it is ignored")
             continue
         script += f"export {key}={value}\n"
+    if verbose:
+        script += "export MLX_RING_VERBOSE=1\n"
+    script += "export MLX_HOSTFILE=$tmpfile\n"
+    script += f"export MLX_RANK={rank}\n"
     script += "\n"
     script += shlex.join(["exec", sys.executable, *command])
     script += "\n"
@@ -175,6 +175,8 @@ def launch_ring(parser, hosts, args, command):
         ring_hosts.append(node)
     hostfile = json.dumps(ring_hosts)
 
+    log(args.verbose, "Running", shlex.join([sys.executable, *command]))
+
     threads = []
     for i, h in enumerate(hosts):
         if i + 1 == len(hosts):
@@ -220,12 +222,12 @@ def launch_mpi(parser, hosts, args, command):
             "--hostfile",
             f.name,
             *sum((["-x", e] for e in args.env), []),
-            *args.mpi_args,
+            *sum([shlex.split(arg) for arg in args.mpi_arg], []),
             "--",
             sys.executable,
             *command,
         ]
-        log(args.verbose, " ".join(cmd))
+        log(args.verbose, "Running", " ".join(cmd))
         try:
             run(cmd)
         except KeyboardInterrupt:
