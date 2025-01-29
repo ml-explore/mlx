@@ -5,7 +5,6 @@ import base64
 import ipaddress
 import json
 import os
-import re
 import shlex
 import sys
 import tempfile
@@ -16,8 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from select import select
 from subprocess import PIPE, Popen, run
-
-ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 @dataclass
@@ -81,14 +78,15 @@ def parse_hostlist(parser, args, hostlist):
     return hosts
 
 
-def make_monitor_script(rank, hostfile, env, command):
+def make_monitor_script(rank, hostfile, env, command, verbose):
     script = ""
     script += "pidfile=$(mktemp)\n"
     script += "echo $$ >$pidfile\n"
     script += "echo $pidfile\n"
     script += "tmpfile=$(mktemp)\n"
     script += f"echo {shlex.quote(hostfile)} >$tmpfile\n"
-    script += "export MLX_RING_VERBOSE=1\n"
+    if verbose:
+        script += "export MLX_RING_VERBOSE=1\n"
     script += "export MLX_HOSTFILE=$tmpfile\n"
     script += f"export MLX_RANK={rank}\n"
     for e in env:
@@ -110,7 +108,7 @@ def launch_ring(parser, hosts, args, command):
     exit_codes = [None] * len(hosts)
 
     def node_thread(rank, host, hostfile):
-        script = make_monitor_script(rank, hostfile, args.env, command)
+        script = make_monitor_script(rank, hostfile, args.env, command, args.verbose)
         script_b64 = base64.b64encode(script.encode()).decode()
         p = Popen(
             f"ssh {host} 'echo \"{script_b64}\" | base64 -d | /bin/bash'",
