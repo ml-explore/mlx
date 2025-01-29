@@ -194,6 +194,7 @@ if __name__ == "__main__":
                 "typing_extensions",
             ],
         },
+        entry_points={"console_scripts": ["mlx.launch = mlx.distributed_run:main"]},
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
         zip_safe=False,
