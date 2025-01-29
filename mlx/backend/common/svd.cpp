@@ -137,7 +137,9 @@ void svd_impl(const array& a, array& u, array& s, array& vt) {
   }
 }
 
-void SVD::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
+void SVD::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
   if (!(inputs[0].dtype() == float32)) {
     throw std::runtime_error("[SVD::eval] only supports float32.");
   }

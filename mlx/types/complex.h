@@ -14,6 +14,7 @@ inline constexpr bool can_convert_to_complex128 =
     !std::is_same_v<T, complex128_t> && std::is_convertible_v<T, double>;
 
 struct complex128_t : public std::complex<double> {
+  complex128_t() : std::complex<double>() {};
   complex128_t(double v, double u) : std::complex<double>(v, u) {};
   complex128_t(std::complex<double> v) : std::complex<double>(v) {};
 
@@ -32,6 +33,7 @@ inline constexpr bool can_convert_to_complex64 =
     !std::is_same_v<T, complex64_t> && std::is_convertible_v<T, float>;
 
 struct complex64_t : public std::complex<float> {
+  complex64_t() : std::complex<float>() {};
   complex64_t(float v, float u) : std::complex<float>(v, u) {};
   complex64_t(std::complex<float> v) : std::complex<float>(v) {};
 

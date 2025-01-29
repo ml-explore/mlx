@@ -162,7 +162,7 @@ void dispatch_gather(
   }
 }
 
-void Gather::eval(const std::vector<array>& inputs, array& out) {
+void Gather::eval_cpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   auto& src = inputs[0];
@@ -337,7 +337,7 @@ void dispatch_scatter(
   }
 }
 
-void Scatter::eval(const std::vector<array>& inputs, array& out) {
+void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() >= 2);
 
   auto& src = inputs[0];

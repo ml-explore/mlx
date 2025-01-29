@@ -53,7 +53,7 @@ inline void mask_matrix(
 
 } // namespace
 
-void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
+void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.dtype() != float32) {
     throw std::runtime_error(
         "[BlockMaskedMM::eval] Currently only supports float32.");
@@ -210,7 +210,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void GatherMM::eval(const std::vector<array>& inputs, array& out) {
+void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.dtype() != float32) {
     throw std::runtime_error(
         "[GatherMM::eval] Currently only supports float32.");

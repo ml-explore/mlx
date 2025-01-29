@@ -741,7 +741,7 @@ void init_array(nb::module_& m) {
           [](const mx::array& a) {
             if (mx::issubdtype(a.dtype(), mx::inexact)) {
               throw std::invalid_argument(
-                  "Floating point types not allowed with or bitwise inversion.");
+                  "Floating point types not allowed with bitwise inversion.");
             }
             if (a.dtype() != mx::bool_) {
               throw std::invalid_argument(
@@ -791,7 +791,7 @@ void init_array(nb::module_& m) {
             if (mx::issubdtype(a.dtype(), mx::inexact) ||
                 mx::issubdtype(b.dtype(), mx::inexact)) {
               throw std::invalid_argument(
-                  "Floating point types not allowed with or bitwise or.");
+                  "Floating point types not allowed with bitwise or.");
             }
             return mx::bitwise_or(a, b);
           },
@@ -806,7 +806,7 @@ void init_array(nb::module_& m) {
             if (mx::issubdtype(a.dtype(), mx::inexact) ||
                 mx::issubdtype(b.dtype(), mx::inexact)) {
               throw std::invalid_argument(
-                  "Floating point types not allowed with or bitwise or.");
+                  "Floating point types not allowed with bitwise or.");
             }
             a.overwrite_descriptor(mx::bitwise_or(a, b));
             return a;
@@ -838,7 +838,7 @@ void init_array(nb::module_& m) {
             if (mx::issubdtype(a.dtype(), mx::inexact) ||
                 mx::issubdtype(b.dtype(), mx::inexact)) {
               throw std::invalid_argument(
-                  "Floating point types not allowed with or left shift.");
+                  "Floating point types not allowed with left shift.");
             }
             a.overwrite_descriptor(mx::left_shift(a, b));
             return a;
@@ -870,7 +870,7 @@ void init_array(nb::module_& m) {
             if (mx::issubdtype(a.dtype(), mx::inexact) ||
                 mx::issubdtype(b.dtype(), mx::inexact)) {
               throw std::invalid_argument(
-                  "Floating point types not allowed with or right shift.");
+                  "Floating point types not allowed with right shift.");
             }
             a.overwrite_descriptor(mx::right_shift(a, b));
             return a;

@@ -4,6 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
@@ -23,6 +24,7 @@ template <typename SrcT, typename DstT>
 void copy_vector(const array& src, array& dst) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
+  size_t size = src.data_size();
   std::copy(src_ptr, src_ptr + src.data_size(), dst_ptr);
 }
 

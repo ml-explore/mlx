@@ -45,7 +45,9 @@ void ssyevd(
 
 } // namespace
 
-void Eigh::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
+void Eigh::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
   const auto& a = inputs[0];
   auto& values = outputs[0];
 

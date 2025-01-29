@@ -147,6 +147,7 @@ if(MLX_BUILD_CPU)
 
   if(MLX_BUILD_ACCELERATE)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
+    add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
   elseif(MLX_BUILD_BLAS_FROM_SOURCE)
     # Download and build OpenBLAS from source code.

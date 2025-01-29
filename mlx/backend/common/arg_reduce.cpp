@@ -61,7 +61,7 @@ void arg_reduce_dispatch(
 
 } // namespace
 
-void ArgReduce::eval(const std::vector<array>& inputs, array& out) {
+void ArgReduce::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   out.set_data(allocator::malloc_or_wait(out.nbytes()));

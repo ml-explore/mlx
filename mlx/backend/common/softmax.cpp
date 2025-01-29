@@ -4,61 +4,107 @@
 #include <cmath>
 
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 namespace {
 
+using namespace mlx::core::simd;
+
 template <typename T, typename AccT>
 void softmax(const array& in, array& out) {
+  constexpr bool same_t = std::is_same_v<T, AccT>;
+  constexpr int N = std::min(max_size<AccT>, max_size<T>);
+
   const T* in_ptr = in.data<T>();
   T* out_ptr = out.data<T>();
-  int N = in.shape().back();
-  int M = in.data_size() / N;
+  int M = in.shape().back();
+  int L = in.data_size() / M;
   const T* current_in_ptr;
   T* current_out_ptr;
 
-  for (int i = 0; i < M; i++, in_ptr += N, out_ptr += N) {
+  for (int i = 0; i < L; i++, in_ptr += M, out_ptr += M) {
     // Find the maximum
     current_in_ptr = in_ptr;
-    AccT maximum = *current_in_ptr;
-    for (int j = 0; j < N; j++, current_in_ptr++) {
-      maximum = (maximum < *current_in_ptr) ? static_cast<AccT>(*current_in_ptr)
-                                            : maximum;
+    Simd<AccT, N> vmaximum(-std::numeric_limits<float>::infinity());
+    size_t s = M;
+    while (s >= N) {
+      Simd<AccT, N> vals = load<T, N>(current_in_ptr);
+      vmaximum = maximum(vals, vmaximum);
+      current_in_ptr += N;
+      s -= N;
+    }
+
+    AccT maximum = max(vmaximum);
+    while (s-- > 0) {
+      maximum = std::max(maximum, static_cast<AccT>(*current_in_ptr));
+      current_in_ptr++;
     }
 
     // Compute the normalizer and the exponentials
-    AccT normalizer = 0;
+    Simd<AccT, N> vnormalizer(0.0);
     current_out_ptr = out_ptr;
     current_in_ptr = in_ptr;
-    for (int j = 0; j < N; j++, current_out_ptr++, current_in_ptr++) {
-      AccT expv = std::exp(*current_in_ptr - maximum);
-      normalizer += expv;
-      if constexpr (std::is_same<T, AccT>::value) {
-        *current_out_ptr = expv;
+    s = M;
+    while (s >= N) {
+      Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
+      vexp = exp(vexp - maximum);
+      if constexpr (same_t) {
+        store(current_out_ptr, vexp);
       }
+      vnormalizer = vnormalizer + vexp;
+      current_in_ptr += N;
+      current_out_ptr += N;
+      s -= N;
+    }
+    AccT normalizer = sum(vnormalizer);
+    while (s-- > 0) {
+      AccT _exp = std::exp(*current_in_ptr - maximum);
+      if constexpr (same_t) {
+        *current_out_ptr = _exp;
+      }
+      normalizer += _exp;
+      current_in_ptr++;
+      current_out_ptr++;
     }
     normalizer = 1 / normalizer;
 
     // Normalize
-    current_in_ptr = in_ptr;
     current_out_ptr = out_ptr;
-    for (int j = 0; j < N; j++, current_out_ptr++) {
-      if constexpr (std::is_same<T, AccT>::value) {
+    current_in_ptr = in_ptr;
+    s = M;
+    while (s >= N) {
+      if constexpr (same_t) {
+        store(
+            current_out_ptr,
+            Simd<T, N>(load<T, N>(current_out_ptr) * normalizer));
+      } else {
+        Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
+        vexp = exp(vexp - maximum) * normalizer;
+        store(current_out_ptr, Simd<T, N>(vexp));
+        current_in_ptr += N;
+      }
+      current_out_ptr += N;
+      s -= N;
+    }
+    while (s-- > 0) {
+      if constexpr (same_t) {
         *current_out_ptr *= normalizer;
       } else {
-        auto v = std::exp(*current_in_ptr - maximum);
-        *current_out_ptr = static_cast<T>(v * normalizer);
+        AccT _exp = std::exp(*current_in_ptr - maximum);
+        *current_out_ptr = static_cast<T>(_exp * normalizer);
         current_in_ptr++;
       }
+      current_out_ptr++;
     }
   }
 }
 
 } // namespace
 
-void Softmax::eval(const std::vector<array>& inputs, array& out) {
+void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
   // Make sure that the last dimension is contiguous
@@ -97,7 +143,7 @@ void Softmax::eval(const std::vector<array>& inputs, array& out) {
     case int16:
     case int32:
     case int64:
-      throw std::invalid_argument(
+      throw std::runtime_error(
           "Softmax is defined only for floating point types");
       break;
     case float32:

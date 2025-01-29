@@ -149,7 +149,9 @@ void qrf_impl(const array& a, array& q, array& r) {
   allocator::free(tau);
 }
 
-void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
+void QRF::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
   if (!(inputs[0].dtype() == float32)) {
     throw std::runtime_error("[QRF::eval] only supports float32.");
   }
