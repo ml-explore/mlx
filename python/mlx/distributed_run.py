@@ -246,10 +246,16 @@ def main():
         help="Which distributed backend to launch",
     )
     parser.add_argument(
-        "--env", nargs="*", default=[], help="Set environment variables for the jobs"
+        "--env",
+        action="append",
+        default=[],
+        help="Set environment variables for the jobs",
     )
     parser.add_argument(
-        "--mpi-args", nargs="*", default=[], help="Arguments to pass directly to mpirun"
+        "--mpi-arg",
+        action="append",
+        default=[],
+        help="Arguments to pass directly to mpirun",
     )
     parser.add_argument(
         "--connections-per-ip",
