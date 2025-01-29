@@ -105,7 +105,7 @@ def make_monitor_script(rank, hostfile, env, command):
     return script
 
 
-def launch_ring(hosts, args, command):
+def launch_ring(parser, hosts, args, command):
     stop = False
     exit_codes = [None] * len(hosts)
 
@@ -161,6 +161,11 @@ def launch_ring(hosts, args, command):
         else:
             log(args.verbose, f"Node with rank {rank} completed")
 
+    if all(len(h.ips) == 0 for h in hosts):
+        parser.error(
+            "The ring backend requires IPs to be provided instead of hostnames"
+        )
+
     port = 5000
     ring_hosts = []
     for h in hosts:
@@ -194,7 +199,7 @@ def launch_ring(hosts, args, command):
         t.join()
 
 
-def launch_mpi(hosts, args, command):
+def launch_mpi(parser, hosts, args, command):
     mpirun = run(["which", "mpirun"], check=True, capture_output=True)
     mpirun = mpirun.stdout.strip().decode()
 
@@ -264,9 +269,9 @@ def main():
         parser.error("One of --hosts or --hostfile must be provided")
 
     if args.backend == "ring":
-        launch_ring(hosts, args, rest)
+        launch_ring(parser, hosts, args, rest)
     elif args.backend == "mpi":
-        launch_mpi(hosts, args, rest)
+        launch_mpi(parser, hosts, args, rest)
 
 
 if __name__ == "__main__":
