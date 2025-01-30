@@ -4,6 +4,7 @@
 #include <stack>
 
 #include "mlx/io.h"
+#include "mlx/io/json.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -117,9 +118,7 @@ SafetensorsLoad load_safetensors(
   // Load the json metadata
   auto rawJson = std::make_unique<char[]>(jsonHeaderLength);
   in_stream->read(rawJson.get(), jsonHeaderLength);
-  // TODO: remove this copy
-  std::string json_str(rawJson.get(), rawJson.get() + jsonHeaderLength);
-  auto metadata = io::parse_json(json_str);
+  auto metadata = io::parse_json(rawJson.get(), jsonHeaderLength);
   // Should always be an object on the top-level
   if (!metadata.is<io::json_object>()) {
     throw std::runtime_error(
@@ -137,8 +136,7 @@ SafetensorsLoad load_safetensors(
       continue;
     }
     const std::string& dtype = item_value["dtype"];
-    // TODO: revert this to Shape
-    const std::vector<int>& shape = item_value["shape"];
+    const Shape& shape = item_value["shape"];
     const std::vector<size_t>& data_offsets = item_value["data_offsets"];
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
@@ -201,9 +199,7 @@ void save_safetensors(
     offset += arr.nbytes();
   }
 
-  std::ostringstream os;
-  os << parent;
-  auto header = os.str();
+  auto header = parent.dump();
   uint64_t header_len = header.length();
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);

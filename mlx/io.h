@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "mlx/array.h"
+#include "mlx/io/json.h"
 #include "mlx/io/load.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"

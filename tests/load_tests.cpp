@@ -271,12 +271,21 @@ TEST_CASE("test single array serialization") {
 
 TEST_CASE("test json") {
   std::string value =
-      R"(   {"dtype"   : "F 32", "nums"   : [ 481.33, 8.1,  3.1e4, 2.32, 17E4, 3.2e-2], "flag": {"one": true, "two": false, "nothing": null}, "data_offsets": [3, 2, 1], "special": "hello\n\t\\est\/\"here"})";
+      R"(   {
+      "dtype"   : "F 32", "nums"   : [ 481.33, 8.1,  3.1e4, 2.32, 17E4, 3.2e-2],
+      "flag": {"one": true, "two": false, "nothing": null},
+      "data_offsets": [3, 2,  1 ],
+      "special": "hello\n\t\\est\/\"here",
+      "unicode": "\u1ea7"
+      })";
   std::istringstream s(value);
   const auto parsed = io::parse_json(s);
+  auto str_parsed = io::parse_json(value);
 
   std::string dtype = parsed["dtype"];
   CHECK_EQ(dtype, "F 32");
+  std::string sdtype = str_parsed["dtype"];
+  CHECK_EQ(sdtype, "F 32");
 
   const bool one = parsed["flag"]["one"];
   const bool two = parsed["flag"]["two"];
@@ -309,6 +318,9 @@ TEST_CASE("test json") {
   std::string special = parsed["special"];
   CHECK_EQ(special, "hello\n\t\\est/\"here");
 
+  std::string unicode = parsed["unicode"];
+  CHECK_EQ(unicode, "\\u1ea7");
+
   // Check the output is reparseable
   std::stringstream os;
   os << parsed;
@@ -330,6 +342,6 @@ TEST_CASE("test json") {
   io::json obj;
   obj["test"] = "something";
   obj["other"] = 481924.124;
-  std::vector<float> shape = {128, 256.7};
+  std::vector<long> shape = {128, 256};
   obj["vec"] = shape;
 }

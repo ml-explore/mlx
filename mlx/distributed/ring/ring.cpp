@@ -14,7 +14,7 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
-#include "mlx/io/load.h"
+#include "mlx/io/json.h"
 #include "mlx/threadpool.h"
 
 #define SWITCH_TYPE(x, ...)  \
