@@ -11,11 +11,10 @@
 #include <sstream>
 #include <thread>
 
-#include <json.hpp>
-
 #include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/io/load.h"
 #include "mlx/threadpool.h"
 
 #define SWITCH_TYPE(x, ...)  \
@@ -81,7 +80,6 @@ constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
-using json = nlohmann::json;
 
 namespace {
 
@@ -212,11 +210,11 @@ std::vector<std::vector<address_t>> load_nodes(const char* hostfile) {
   std::vector<std::vector<address_t>> nodes;
   std::ifstream f(hostfile);
 
-  json hosts = json::parse(f);
+  io::json hosts = io::parse_json(f);
   for (auto& h : hosts) {
     std::vector<address_t> host;
-    for (auto& ips : h) {
-      host.push_back(std::move(parse_address(ips.get<std::string>())));
+    for (std::string ips : h) {
+      host.push_back(std::move(parse_address(ips)));
     }
     nodes.push_back(std::move(host));
   }

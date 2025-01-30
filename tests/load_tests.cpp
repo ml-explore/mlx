@@ -268,3 +268,68 @@ TEST_CASE("test single array serialization") {
     CHECK(array_equal(a, b).item<bool>());
   }
 }
+
+TEST_CASE("test json") {
+  std::string value =
+      R"(   {"dtype"   : "F 32", "nums"   : [ 481.33, 8.1,  3.1e4, 2.32, 17E4, 3.2e-2], "flag": {"one": true, "two": false, "nothing": null}, "data_offsets": [3, 2, 1], "special": "hello\n\t\\est\/\"here"})";
+  std::istringstream s(value);
+  const auto parsed = io::parse_json(s);
+
+  std::string dtype = parsed["dtype"];
+  CHECK_EQ(dtype, "F 32");
+
+  const bool one = parsed["flag"]["one"];
+  const bool two = parsed["flag"]["two"];
+  CHECK_EQ(one, true);
+  CHECK_EQ(two, false);
+
+  std::vector<float> vec = parsed["nums"];
+  float sum = 0;
+  for (float v : parsed["nums"]) {
+    sum += v;
+  }
+  float ref = 481.33 + 8.1 + 31000 + 2.32 + 170000 + 0.032;
+  CHECK_EQ(sum, ref);
+
+  sum = 0;
+  for (float v : parsed["nums"]) {
+    sum += v;
+  }
+  CHECK_EQ(sum, ref);
+
+  std::string flags = "";
+  for (auto& [k, v] : parsed["flag"].items()) {
+    flags += k;
+  }
+
+  for (const auto& [k, v] : parsed["flag"].items()) {
+    flags += k;
+  }
+
+  std::string special = parsed["special"];
+  CHECK_EQ(special, "hello\n\t\\est/\"here");
+
+  // Check the output is reparseable
+  std::stringstream os;
+  os << parsed;
+  const auto reparsed = io::parse_json(os);
+
+  // Check empty
+  for (auto value : {"\"\"", "[]", "{}", "[[]]"}) {
+    std::istringstream s(value);
+    const auto parsed = io::parse_json(s);
+  }
+
+  // Check invalid
+  for (auto value : {"\"hello", "3}", "{3", "3ee2193", "{{}}", "test \\z"}) {
+    std::istringstream s(value);
+    CHECK_THROWS(io::parse_json(s));
+  }
+
+  // Test object creation
+  io::json obj;
+  obj["test"] = "something";
+  obj["other"] = 481924.124;
+  std::vector<float> shape = {128, 256.7};
+  obj["vec"] = shape;
+}

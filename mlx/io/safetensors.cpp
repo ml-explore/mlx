@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 //
-#include <json.hpp>
 #include <memory>
 #include <stack>
 
@@ -9,8 +8,6 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
-
-using json = nlohmann::json;
 
 #define ST_F16 "F16"
 #define ST_BF16 "BF16"
@@ -120,9 +117,11 @@ SafetensorsLoad load_safetensors(
   // Load the json metadata
   auto rawJson = std::make_unique<char[]>(jsonHeaderLength);
   in_stream->read(rawJson.get(), jsonHeaderLength);
-  auto metadata = json::parse(rawJson.get(), rawJson.get() + jsonHeaderLength);
+  // TODO: remove this copy
+  std::string json_str(rawJson.get(), rawJson.get() + jsonHeaderLength);
+  auto metadata = io::parse_json(json_str);
   // Should always be an object on the top-level
-  if (!metadata.is_object()) {
+  if (!metadata.is<io::json_object>()) {
     throw std::runtime_error(
         "[load_safetensors] Invalid json metadata " + in_stream->label());
   }
@@ -130,16 +129,17 @@ SafetensorsLoad load_safetensors(
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
   std::unordered_map<std::string, std::string> metadata_map;
-  for (const auto& item : metadata.items()) {
-    if (item.key() == "__metadata__") {
-      for (const auto& meta_item : item.value().items()) {
-        metadata_map.insert({meta_item.key(), meta_item.value()});
+  for (const auto& [item_key, item_value] : metadata.items()) {
+    if (item_key == "__metadata__") {
+      for (const auto& [meta_key, meta_value] : item_value.items()) {
+        metadata_map.insert({meta_key, meta_value});
       }
       continue;
     }
-    const std::string& dtype = item.value().at("dtype");
-    const Shape& shape = item.value().at("shape");
-    const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
+    const std::string& dtype = item_value["dtype"];
+    // TODO: revert this to Shape
+    const std::vector<int>& shape = item_value["shape"];
+    const std::vector<size_t>& data_offsets = item_value["data_offsets"];
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
         shape,
@@ -147,7 +147,7 @@ SafetensorsLoad load_safetensors(
         std::make_shared<Load>(
             to_stream(s), in_stream, offset + data_offsets.at(0), false),
         std::vector<array>{});
-    res.insert({item.key(), loaded_array});
+    res.insert({item_key, loaded_array});
   }
   return {res, metadata_map};
 }
@@ -169,8 +169,8 @@ void save_safetensors(
 
   ////////////////////////////////////////////////////////
   // Check array map
-  json parent;
-  json _metadata;
+  io::json parent;
+  io::json _metadata;
   for (auto& [key, value] : metadata) {
     _metadata[key] = value;
   }
@@ -193,7 +193,7 @@ void save_safetensors(
           "[save_safetensors] cannot serialize an empty array key: " + key);
     }
 
-    json child;
+    io::json child;
     child["dtype"] = dtype_to_safetensor_str(arr.dtype());
     child["shape"] = arr.shape();
     child["data_offsets"] = std::vector<size_t>{offset, offset + arr.nbytes()};
@@ -201,7 +201,9 @@ void save_safetensors(
     offset += arr.nbytes();
   }
 
-  auto header = parent.dump();
+  std::ostringstream os;
+  os << parent;
+  auto header = os.str();
   uint64_t header_len = header.length();
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);
