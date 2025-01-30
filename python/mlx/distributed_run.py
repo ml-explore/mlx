@@ -250,7 +250,6 @@ def launch_mpi(parser, hosts, args, command):
         for h, n in hosts.items():
             print(f"{h} slots={n}", file=f)
         f.flush()
-        f.seek(0)
 
         cmd = [
             mpirun,
