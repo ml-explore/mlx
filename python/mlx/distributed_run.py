@@ -133,8 +133,12 @@ def launch_ring(parser, hosts, args, command):
             rank, hostfile, args.cwd, args.env, command, args.verbose
         )
         script_b64 = base64.b64encode(script.encode()).decode()
+        if host == "127.0.0.1":
+            to_run = f"echo '{script_b64}' | base64 -d | /bin/bash"
+        else:
+            to_run = f"ssh {host} 'echo \"{script_b64}\" | base64 -d | /bin/bash'"
         p = Popen(
-            f"ssh {host} 'echo \"{script_b64}\" | base64 -d | /bin/bash'",
+            to_run,
             shell=True,
             stdout=PIPE,
             stderr=PIPE,
