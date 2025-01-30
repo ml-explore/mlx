@@ -24,6 +24,13 @@ class Host:
     ips: list[str]
 
 
+def positive_number(x):
+    x = int(x)
+    if x <= 0:
+        raise ValueError("Number should be positive")
+    return x
+
+
 def log(verbose, *args, **kwargs):
     if not verbose:
         return
@@ -268,11 +275,13 @@ def main():
     parser.add_argument(
         "--verbose", action="store_true", help="Print debug messages in stdout"
     )
-    parser.add_argument("--hosts", help="A comma separated list of hosts")
+    parser.add_argument(
+        "--hosts", default="127.0.0.1", help="A comma separated list of hosts"
+    )
     parser.add_argument(
         "--repeat-hosts",
         "-n",
-        type=int,
+        type=positive_number,
         default=1,
         help="Repeat each host a given number of times",
     )
@@ -309,10 +318,8 @@ def main():
     # Try to extract a list of hosts and corresponding ips
     if args.hostfile is not None:
         hosts = parse_hostfile(parser, args.hostfile)
-    elif args.hosts is not None:
-        hosts = parse_hostlist(parser, args.hosts, args.repeat_hosts)
     else:
-        parser.error("One of --hosts or --hostfile must be provided")
+        hosts = parse_hostlist(parser, args.hosts, args.repeat_hosts)
 
     # Check if the script is a file and convert it to a full path
     script = Path(rest[0])
