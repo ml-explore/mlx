@@ -4,6 +4,8 @@
 
 #include <istream>
 #include <sstream>
+#include <unordered_map>
+#include <vector>
 
 namespace mlx::core {
 

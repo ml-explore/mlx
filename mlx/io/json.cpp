@@ -1,3 +1,5 @@
+// Copyright © 2025 Apple Inc.
+
 #include "mlx/io/json.h"
 
 #include <sstream>
