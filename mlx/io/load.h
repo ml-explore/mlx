@@ -274,7 +274,6 @@ struct json {
   }
 
   json& operator[](const char* key) {
-    std::cout << "KEY " << key << std::endl;
     auto& m = std::get<json_object>(this->data);
     if (m.find(key) == m.end()) {
       m.insert({key, nullptr});
@@ -343,9 +342,9 @@ struct json {
       data;
 };
 
-json parse_json(std::istream& s, bool allow_extra = false);
+json parse_json(std::istream& s);
 
-json parse_json(const std::string& s, bool allow_extra = false);
+json parse_json(const std::string& s);
 
 } // namespace io
 } // namespace mlx::core

@@ -510,10 +510,10 @@ json parse_json_helper(std::istream& s) {
   }
 }
 
-json parse_json(std::istream& s, bool allow_extra) {
+json parse_json(std::istream& s) {
   json result = parse_json_helper(s);
   s.get();
-  if (!s.eof() && !allow_extra) {
+  if (!s.eof()) {
     throw std::invalid_argument(
         "[json] json finished before the end of the stream."
         " Pass `allow_extra` to allow this.");
@@ -521,10 +521,10 @@ json parse_json(std::istream& s, bool allow_extra) {
   return result;
 }
 
-json parse_json(const std::string& s, bool allow_extra) {
+json parse_json(const std::string& s) {
   // TODO: remove this copy
   std::istringstream stream(s);
-  return parse_json(stream, allow_extra);
+  return parse_json(stream);
 }
 
 void apply_indent(std::ostream& os, int indent) {
