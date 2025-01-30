@@ -66,7 +66,7 @@ def parse_hostfile(parser, hostfile):
         parser.error(f"Failed to parse hostfile {str(hostfile)} ({str(e)})")
 
 
-def parse_hostlist(parser, args, hostlist):
+def parse_hostlist(parser, hostlist, repeats):
     hosts = []
     for i, h in enumerate(hostlist.split(",")):
         try:
@@ -74,17 +74,31 @@ def parse_hostlist(parser, args, hostlist):
             ips = [h]
         except ValueError:
             ips = []
-        hosts.append(Host(i, h, ips))
+        for i in range(repeats):
+            hosts.append(Host(i, h, ips))
     return hosts
 
 
-def make_monitor_script(rank, hostfile, env, command, verbose):
+def make_monitor_script(rank, hostfile, cwd, env, command, verbose):
     script = ""
+
+    # Write the PID to a file so we can kill the process if needed
     script += "pidfile=$(mktemp)\n"
     script += "echo $$ >$pidfile\n"
     script += "echo $pidfile\n"
-    script += "tmpfile=$(mktemp)\n"
-    script += f"echo {shlex.quote(hostfile)} >$tmpfile\n"
+
+    # Change the working directory if one was requested. Otherwise attempt to
+    # change to change to the current one but don't fail if it wasn't possible.
+    d = cwd or os.getcwd()
+    script += f"if [ -d {shlex.quote(d)} ]; then\n"
+    script += f"    cd {shlex.quote(d)}\n"
+    if cwd is not None:
+        script += "else\n"
+        script += f"    echo Failed to change directory to {shlex.quote(d)} 1>&2\n"
+        script += f"    exit 1\n"
+    script += "fi\n"
+
+    # Add the environment variables that were given to us
     for e in env:
         key, *value = e.split("=", maxsplit=1)
         value = shlex.quote(value[0]) if len(value) > 0 else ""
@@ -92,11 +106,18 @@ def make_monitor_script(rank, hostfile, env, command, verbose):
             log_warning(f"'{e}' is an invalid environment variable so it is ignored")
             continue
         script += f"export {key}={value}\n"
-    if verbose:
-        script += "export MLX_RING_VERBOSE=1\n"
-    script += "export MLX_HOSTFILE=$tmpfile\n"
-    script += f"export MLX_RANK={rank}\n"
-    script += "\n"
+
+    # Add the environment variables to enable the ring distributed backend
+    if hostfile != "":
+        script += "tmpfile=$(mktemp)\n"
+        script += f"echo {shlex.quote(hostfile)} >$tmpfile\n"
+        if verbose:
+            script += "export MLX_RING_VERBOSE=1\n"
+        script += "export MLX_HOSTFILE=$tmpfile\n"
+        script += f"export MLX_RANK={rank}\n"
+        script += "\n"
+
+    # Replace the process with the script
     script += shlex.join(["exec", sys.executable, *command])
     script += "\n"
 
@@ -108,7 +129,9 @@ def launch_ring(parser, hosts, args, command):
     exit_codes = [None] * len(hosts)
 
     def node_thread(rank, host, hostfile):
-        script = make_monitor_script(rank, hostfile, args.env, command, args.verbose)
+        script = make_monitor_script(
+            rank, hostfile, args.cwd, args.env, command, args.verbose
+        )
         script_b64 = base64.b64encode(script.encode()).decode()
         p = Popen(
             f"ssh {host} 'echo \"{script_b64}\" | base64 -d | /bin/bash'",
@@ -173,7 +196,7 @@ def launch_ring(parser, hosts, args, command):
                 node.append(f"{ip}:{port}")
                 port += 1
         ring_hosts.append(node)
-    hostfile = json.dumps(ring_hosts)
+    hostfile = json.dumps(ring_hosts) if len(ring_hosts) > 1 else ""
 
     log(args.verbose, "Running", shlex.join([sys.executable, *command]))
 
@@ -221,6 +244,7 @@ def launch_mpi(parser, hosts, args, command):
             mpirun,
             "--hostfile",
             f.name,
+            *(["-cwd", args.cwd] if args.cwd else []),
             *sum((["-x", e] for e in args.env), []),
             *sum([shlex.split(arg) for arg in args.mpi_arg], []),
             "--",
@@ -240,6 +264,13 @@ def main():
         "--verbose", action="store_true", help="Print debug messages in stdout"
     )
     parser.add_argument("--hosts", help="A comma separated list of hosts")
+    parser.add_argument(
+        "--repeat-hosts",
+        "-n",
+        type=int,
+        default=1,
+        help="Repeat each host a given number of times",
+    )
     parser.add_argument("--hostfile", help="The file containing the hosts")
     parser.add_argument(
         "--backend",
@@ -265,15 +296,25 @@ def main():
         type=int,
         help="How many connections per ip to use for the ring backend",
     )
+    parser.add_argument(
+        "--cwd", help="Set the working directory on each node to the provided one"
+    )
     args, rest = parser.parse_known_args()
 
+    # Try to extract a list of hosts and corresponding ips
     if args.hostfile is not None:
         hosts = parse_hostfile(parser, args.hostfile)
     elif args.hosts is not None:
-        hosts = parse_hostlist(parser, args, args.hosts)
+        hosts = parse_hostlist(parser, args.hosts, args.repeat_hosts)
     else:
         parser.error("One of --hosts or --hostfile must be provided")
 
+    # Check if the script is a file and convert it to a full path
+    script = Path(rest[0])
+    if script.exists():
+        rest[0] = str(script.resolve())
+
+    # Launch
     if args.backend == "ring":
         launch_ring(parser, hosts, args, rest)
     elif args.backend == "mpi":
