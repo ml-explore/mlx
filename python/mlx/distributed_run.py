@@ -129,16 +129,16 @@ def launch_ring(parser, hosts, args, command):
     exit_codes = [None] * len(hosts)
 
     def node_thread(rank, host, hostfile):
+        is_local = host == "127.0.0.1"
         script = make_monitor_script(
             rank, hostfile, args.cwd, args.env, command, args.verbose
         )
         script_b64 = base64.b64encode(script.encode()).decode()
-        if host == "127.0.0.1":
-            to_run = f"echo '{script_b64}' | base64 -d | /bin/bash"
-        else:
-            to_run = f"ssh {host} 'echo \"{script_b64}\" | base64 -d | /bin/bash'"
+        cmd = f'echo "{script_b64}" | base64 -d | /bin/bash'
+        if not is_local:
+            cmd = f"ssh {host} '{cmd}'"
         p = Popen(
-            to_run,
+            cmd,
             shell=True,
             stdout=PIPE,
             stderr=PIPE,
@@ -169,7 +169,6 @@ def launch_ring(parser, hosts, args, command):
 
         # Kill the remote program if possible
         cmd = ""
-        cmd += f"ssh {host} '"
         cmd += f"pid=$(cat {pidfile}); "
         cmd += "if ps -p $pid >/dev/null; then "
         cmd += "    kill $pid; "
@@ -177,7 +176,9 @@ def launch_ring(parser, hosts, args, command):
         cmd += "else "
         cmd += "    echo 0; "
         cmd += "fi; "
-        cmd += f"rm {pidfile}'"
+        cmd += f"rm {pidfile}"
+        if not is_local:
+            cmd = f"ssh {host} '{cmd}'"
         c = run(cmd, check=True, shell=True, capture_output=True, text=True)
         if c.stdout.strip() == "1":
             log_warning(f"Node with rank {rank} was killed")
