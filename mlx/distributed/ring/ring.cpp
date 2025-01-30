@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>

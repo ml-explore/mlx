@@ -12,12 +12,10 @@ namespace mlx::core {
 
 namespace io {
 
-struct json;
-
-using json_array = std::vector<json>;
-using json_object = std::unordered_map<std::string, json>;
-
 struct json {
+  using json_array = std::vector<json>;
+  using json_object = std::unordered_map<std::string, json>;
+
   json() : data(json_object()) {}
 
   template <typename T>

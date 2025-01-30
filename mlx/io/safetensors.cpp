@@ -120,7 +120,7 @@ SafetensorsLoad load_safetensors(
   in_stream->read(rawJson.get(), jsonHeaderLength);
   auto metadata = io::parse_json(rawJson.get(), jsonHeaderLength);
   // Should always be an object on the top-level
-  if (!metadata.is<io::json_object>()) {
+  if (!metadata.is<io::json::json_object>()) {
     throw std::runtime_error(
         "[load_safetensors] Invalid json metadata " + in_stream->label());
   }

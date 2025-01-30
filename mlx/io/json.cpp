@@ -75,7 +75,7 @@ json parse_json_helper(std::istream& s) {
   s >> std::ws >> ch;
   // object
   if (ch == '{') {
-    json_object object;
+    json::json_object object;
     while (true) {
       s >> std::ws >> ch;
       if (ch == '}') {
@@ -101,7 +101,7 @@ json parse_json_helper(std::istream& s) {
     return object;
     // array
   } else if (ch == '[') {
-    json_array array;
+    json::json_array array;
     s >> std::ws;
     while (true) {
       if (s.peek() == ']') {
@@ -168,7 +168,7 @@ void apply_indent(std::ostream& os, int indent) {
 
 void print_json(std::ostream& os, const json& obj, int indent) {
   os << std::boolalpha;
-  if (obj.is<json_array>()) {
+  if (obj.is<json::json_array>()) {
     os << "[" << std::endl;
     bool first = true;
     for (const json& val : obj) {
@@ -183,7 +183,7 @@ void print_json(std::ostream& os, const json& obj, int indent) {
     os << std::endl;
     apply_indent(os, indent);
     os << "]";
-  } else if (obj.is<json_object>()) {
+  } else if (obj.is<json::json_object>()) {
     os << "{" << std::endl;
     bool first = true;
     for (const auto& [key, val] : obj.items()) {
