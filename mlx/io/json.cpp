@@ -120,15 +120,33 @@ json parse_json_helper(std::istream& s) {
     return array;
     // null
   } else if (ch == 'n') {
-    s.seekg(3, std::ios::cur);
+    std::string str = "";
+    for (int i = 0; i < 3; i++) {
+      str += s.get();
+    }
+    if (str != "ull") {
+      throw std::invalid_argument("[json] Invalid keyword.");
+    }
     return json(nullptr);
     // true
   } else if (ch == 't') {
-    s.seekg(3, std::ios::cur);
+    std::string str = "";
+    for (int i = 0; i < 3; i++) {
+      str += s.get();
+    }
+    if (str != "rue") {
+      throw std::invalid_argument("[json] Invalid keyword.");
+    }
     return json(true);
     // false
   } else if (ch == 'f') {
-    s.seekg(4, std::ios::cur);
+    std::string str = "";
+    for (int i = 0; i < 4; i++) {
+      str += s.get();
+    }
+    if (str != "alse") {
+      throw std::invalid_argument("[json] Invalid keyword.");
+    }
     return json(false);
     // string
   } else if (ch == '"') {

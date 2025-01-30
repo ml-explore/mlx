@@ -333,7 +333,16 @@ TEST_CASE("test json") {
   }
 
   // Check invalid
-  for (auto value : {"\"hello", "3}", "{3", "3ee2193", "{{}}", "test \\z"}) {
+  for (auto value :
+       {"\"hello",
+        "3}",
+        "{3",
+        "3ee2193",
+        "{{}}",
+        "test \\z",
+        "fals",
+        "ul",
+        "tr"}) {
     std::istringstream s(value);
     CHECK_THROWS(io::parse_json(s));
   }
