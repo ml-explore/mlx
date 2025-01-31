@@ -1128,7 +1128,7 @@ void conv_3D_cpu(
 
 } // namespace
 
-void Convolution::eval(const std::vector<array>& inputs, array& out) {
+void Convolution::eval_cpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   auto& in = inputs[0];
