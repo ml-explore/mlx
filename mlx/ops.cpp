@@ -3080,19 +3080,63 @@ array take_along_axis(
   // Allow negative axis
   axis = axis < 0 ? a.ndim() + axis : axis;
 
-  // Broadcast indices to input shape ignoring the take axis
+  // Broadcast indices and input ignoring the take axis
   auto inputs = broadcast_arrays({a, indices}, {axis - int(a.ndim())}, s);
-  if (inputs[0].shape() != a.shape()) {
-    std::ostringstream msg;
-    msg << "[take_along_axis] Indices of shape " << indices.shape()
-        << " do not broadcast to array of shape " << a.shape() << "."
-        << std::endl;
-    throw std::invalid_argument(msg.str());
-  }
+
+  auto out_shape = inputs[1].shape();
   return array(
-      inputs[1].shape(),
+      std::move(out_shape),
       a.dtype(),
       std::make_shared<GatherAxis>(to_stream(s), axis),
+      std::move(inputs));
+}
+
+array scatter_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    ScatterAxis::ReduceType mode,
+    StreamOrDevice s) {
+  std::string prefix =
+      (mode == ScatterAxis::None) ? "[put_along_axis]" : "[scatter_add_axis]";
+  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << prefix << " Received invalid axis " << " for array with " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (indices.ndim() != a.ndim()) {
+    std::ostringstream msg;
+    msg << prefix << " Indices of dimension " << indices.ndim()
+        << " does not match array of dimension " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto upd = astype(values, a.dtype(), s);
+
+  // Squeeze leading singletons out of update
+  if (upd.ndim() > indices.ndim()) {
+    std::vector<int> sq_ax(upd.ndim() - indices.ndim());
+    std::iota(sq_ax.begin(), sq_ax.end(), 0);
+    upd = squeeze(upd, sq_ax, s);
+  }
+
+  auto inputs = broadcast_arrays({indices, upd}, s);
+  inputs.insert(inputs.begin(), a);
+
+  // Allow negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  // Broadcast src, indices, values while ignoring the take axis
+  inputs = broadcast_arrays(inputs, {axis - int(a.ndim())}, s);
+
+  auto out_shape = inputs[0].shape();
+  return array(
+      std::move(out_shape),
+      a.dtype(),
+      std::make_shared<ScatterAxis>(to_stream(s), mode, axis),
       std::move(inputs));
 }
 
@@ -3102,41 +3146,16 @@ array put_along_axis(
     const array& values,
     int axis,
     StreamOrDevice s /* = {} */) {
-  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[put_along_axis] Received invalid axis " << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  return scatter_axis(a, indices, values, axis, ScatterAxis::None, s);
+}
 
-  if (indices.ndim() != a.ndim()) {
-    std::ostringstream msg;
-    msg << "[put_along_axis] Indices of dimension " << indices.ndim()
-        << " does not match array of dimension " << a.ndim() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  // Allow negative axis
-  axis = axis < 0 ? a.ndim() + axis : axis;
-
-  auto inputs = broadcast_arrays({indices, values}, s);
-  inputs.insert(inputs.begin(), a);
-
-  // Broadcast indices, values to src shape ignoring the take axis
-  inputs = broadcast_arrays(inputs, {axis - int(a.ndim())}, s);
-  if (inputs[0].shape() != a.shape()) {
-    std::ostringstream msg;
-    msg << "[take_along_axis] Indices of shape " << indices.shape()
-        << " do not broadcast to array of shape " << a.shape() << "."
-        << std::endl;
-    throw std::invalid_argument(msg.str());
-  }
-  inputs[2] = astype(inputs[2], a.dtype(), s);
-  return array(
-      inputs[0].shape(),
-      a.dtype(),
-      std::make_shared<ScatterAxis>(to_stream(s), ScatterAxis::None, axis),
-      std::move(inputs));
+array scatter_add_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  return scatter_axis(a, indices, values, axis, ScatterAxis::Sum, s);
 }
 
 /** Scatter updates to given indices */
@@ -3145,8 +3164,8 @@ array scatter(
     const std::vector<array>& indices,
     const array& updates,
     const std::vector<int>& axes,
-    Scatter::ReduceType mode /*= Scatter::ReduceType::None*/,
-    StreamOrDevice s /*= {}*/) {
+    Scatter::ReduceType mode,
+    StreamOrDevice s) {
   // Checks that indices, dimensions, and slice_sizes are all valid
   if (indices.size() > a.ndim()) {
     std::ostringstream msg;
