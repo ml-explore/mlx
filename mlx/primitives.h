@@ -704,8 +704,6 @@ class Convolution : public UnaryPrimitive {
   std::vector<int> input_dilation_;
   int groups_;
   bool flip_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Copy : public UnaryPrimitive {

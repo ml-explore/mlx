@@ -50,6 +50,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/erf.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cblas.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/masked_mm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp
@@ -70,6 +72,13 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp)
+
+if(MLX_BUILD_ACCELERATE)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/bnns.cpp)
+else()
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/no_fp16.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/gemms/no_bf16.cpp)
+endif()
 
 if(IOS)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled_nocpu.cpp)
