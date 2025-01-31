@@ -68,7 +68,9 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   // Fill output with C
   auto& c = inputs[2];
-  CopyType ctype = c.data_size() == 1 ? CopyType::Scalar : CopyType::General;
+  CopyType ctype = c.data_size() == 1
+      ? CopyType::Scalar
+      : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy(c, out, ctype);
 
   return matmul_general(inputs[0], inputs[1], out, alpha_, beta_);
