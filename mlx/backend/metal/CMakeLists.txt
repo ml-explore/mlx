@@ -35,6 +35,8 @@ make_jit_source(ternary_ops)
 make_jit_source(reduce_utils kernels/atomic.h kernels/reduction/ops.h)
 make_jit_source(scatter kernels/indexing.h)
 make_jit_source(gather kernels/indexing.h)
+make_jit_source(gather_axis)
+make_jit_source(scatter_axis)
 make_jit_source(hadamard)
 
 if(MLX_METAL_JIT)

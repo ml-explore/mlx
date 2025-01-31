@@ -68,7 +68,7 @@ array indices_or_default(
   Shape shape(x.shape().begin(), x.shape().end() - 2);
   int total =
       std::reduce(shape.begin(), shape.end(), 1, std::multiplies<int>());
-  return reshape(arange(total, uint32, s), shape, s);
+  return reshape(arange(total, uint32, s), std::move(shape), s);
 }
 
 std::pair<int, int> extract_quantized_matmul_dims(
@@ -3080,28 +3080,20 @@ array take_along_axis(
   // Allow negative axis
   axis = axis < 0 ? a.ndim() + axis : axis;
 
-  std::vector<array> nd_indices;
-  Shape index_shape(a.ndim(), 1);
-  for (int i = 0; i < a.ndim(); ++i) {
-    if (i == axis) {
-      nd_indices.push_back(indices);
-    } else {
-      // Reshape so they can be broadcast
-      index_shape[i] = a.shape(i);
-      nd_indices.push_back(reshape(arange(a.shape(i), s), index_shape, s));
-      index_shape[i] = 1;
-    }
+  // Broadcast indices to input shape ignoring the take axis
+  auto inputs = broadcast_arrays({a, indices}, {axis - int(a.ndim())}, s);
+  if (inputs[0].shape() != a.shape()) {
+    std::ostringstream msg;
+    msg << "[take_along_axis] Indices of shape " << indices.shape()
+        << " do not broadcast to array of shape " << a.shape() << "."
+        << std::endl;
+    throw std::invalid_argument(msg.str());
   }
-  std::vector<int> dims(a.ndim());
-  std::iota(dims.begin(), dims.end(), 0);
-  Shape slice_sizes(a.ndim(), 1);
-  auto out = gather(a, nd_indices, dims, slice_sizes, s);
-
-  // Squeeze out the slice shape
-  for (auto& d : dims) {
-    d += a.ndim();
-  }
-  return squeeze(out, dims, s);
+  return array(
+      inputs[1].shape(),
+      a.dtype(),
+      std::make_shared<GatherAxis>(to_stream(s), axis),
+      std::move(inputs));
 }
 
 array put_along_axis(
@@ -3127,28 +3119,24 @@ array put_along_axis(
   // Allow negative axis
   axis = axis < 0 ? a.ndim() + axis : axis;
 
-  std::vector<array> nd_indices;
-  Shape index_shape(a.ndim(), 1);
-  for (int i = 0; i < a.ndim(); ++i) {
-    if (i == axis) {
-      nd_indices.push_back(indices);
-    } else {
-      // Reshape so they can be broadcast
-      index_shape[i] = a.shape(i);
-      nd_indices.push_back(reshape(arange(a.shape(i), s), index_shape, s));
-      index_shape[i] = 1;
-    }
-  }
+  auto inputs = broadcast_arrays({indices, values}, s);
+  inputs.insert(inputs.begin(), a);
 
-  auto update = astype(broadcast_to(values, indices.shape(), s), a.dtype(), s);
-  {
-    auto update_shape = update.shape();
-    update_shape.resize(update_shape.size() + a.ndim(), 1);
-    update = reshape(update, std::move(update_shape), s);
+  // Broadcast indices, values to src shape ignoring the take axis
+  inputs = broadcast_arrays(inputs, {axis - int(a.ndim())}, s);
+  if (inputs[0].shape() != a.shape()) {
+    std::ostringstream msg;
+    msg << "[take_along_axis] Indices of shape " << indices.shape()
+        << " do not broadcast to array of shape " << a.shape() << "."
+        << std::endl;
+    throw std::invalid_argument(msg.str());
   }
-  std::vector<int> dims(a.ndim());
-  std::iota(dims.begin(), dims.end(), 0);
-  return scatter(a, nd_indices, update, dims, s);
+  inputs[2] = astype(inputs[2], a.dtype(), s);
+  return array(
+      inputs[0].shape(),
+      a.dtype(),
+      std::make_shared<ScatterAxis>(to_stream(s), ScatterAxis::None, axis),
+      std::move(inputs));
 }
 
 /** Scatter updates to given indices */
@@ -3961,6 +3949,19 @@ array gather_qmm(
   array rhs_indices = indices_or_default(rhs_indices_, w, s);
   std::tie(lhs_indices, rhs_indices) =
       broadcast_arrays(lhs_indices, rhs_indices, s);
+
+  if (!issubdtype(lhs_indices.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[gather_qmm] Got lhs_indices with invalid dtype. Indices must be integral.");
+  }
+
+  if (!issubdtype(rhs_indices.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[gather_qmm] Got rhs_indices with invalid dtype. Indices must be integral.");
+  }
+
+  lhs_indices = astype(lhs_indices, uint32, s);
+  rhs_indices = astype(rhs_indices, uint32, s);
 
   // Compute the full output shape
   auto out_shape = lhs_indices.shape();

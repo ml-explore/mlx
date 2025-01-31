@@ -2098,6 +2098,52 @@ bool Gather::is_equivalent(const Primitive& other) const {
   return axes_ == g_other.axes_ && slice_sizes_ == g_other.slice_sizes_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> GatherAxis::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  return {{inputs[0]}, axes};
+}
+
+std::vector<array> GatherAxis::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (int argnum : argnums) {
+    if (argnum > 0) {
+      // Grads w.r.t. indices are zero
+      vjps.push_back(
+          zeros(primals[argnum].shape(), primals[argnum].dtype(), stream()));
+    } else {
+      auto src = zeros_like(primals[0], stream());
+      vjps.push_back(
+          put_along_axis(src, primals[1], cotangents[0], axis_, stream()));
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> GatherAxis::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  if (argnums.size() > 1 || argnums[0] != 0) {
+    throw std::invalid_argument(
+        "[gather_axis] Cannot calculate JVP with respect to indices.");
+  }
+  return {take_along_axis(tangents[0], primals[1], axis_, stream())};
+}
+
+std::vector<Shape> GatherAxis::output_shapes(const std::vector<array>& inputs) {
+  return {inputs[1].shape()};
+}
+
+bool GatherAxis::is_equivalent(const Primitive& other) const {
+  auto& g_other = static_cast<const GatherAxis&>(other);
+  return axis_ == g_other.axis_;
+}
+
 std::vector<Shape> Gather::output_shapes(const std::vector<array>& inputs) {
   Shape out_shape;
   if (inputs.size() > 1) {
@@ -2106,7 +2152,6 @@ std::vector<Shape> Gather::output_shapes(const std::vector<array>& inputs) {
   out_shape.insert(out_shape.end(), slice_sizes_.begin(), slice_sizes_.end());
   return {std::move(out_shape)};
 }
-
 std::pair<std::vector<array>, std::vector<int>> Greater::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -3619,6 +3664,16 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
       std::move(inputs));
 
   return {{out}, {src_ax}};
+}
+
+std::vector<Shape> ScatterAxis::output_shapes(
+    const std::vector<array>& inputs) {
+  return {inputs[0].shape()};
+}
+
+bool ScatterAxis::is_equivalent(const Primitive& other) const {
+  auto& s_other = static_cast<const ScatterAxis&>(other);
+  return reduce_type_ == s_other.reduce_type_ && axis_ == s_other.axis_;
 }
 
 std::vector<array> Sigmoid::vjp(

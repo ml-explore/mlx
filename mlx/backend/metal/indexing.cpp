@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/indexing.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -385,6 +386,219 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error("[Scatter::eval_gpu] Invalid number of threads");
   }
   MTL::Size group_dims = get_block_dims(upd_size, grid_y, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& src = inputs[0];
+  auto& idx = inputs[1];
+
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  size_t ndim = src.ndim();
+
+  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+
+  std::string kernel_name = fmt::format(
+      "gather_axis{0}{1}_{2}",
+      type_to_name(out),
+      type_to_name(idx),
+      large ? "int64_t" : "int");
+  std::string lib_name = kernel_name;
+  kernel_name += src.flags().row_contiguous ? "c" : "nc";
+  kernel_name += idx.flags().row_contiguous ? "c" : "nc";
+
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::gather_axis();
+    std::string out_type_str = get_type_string(out.dtype());
+    std::string idx_type_str = get_type_string(idx.dtype());
+    for (int i = 0; i < 4; ++i) {
+      bool sc = i & 1;
+      bool ic = i & 2;
+      kernel_source += get_template_definition(
+          lib_name + (sc ? "c" : "nc") + (ic ? "c" : "nc"),
+          "gather_axis",
+          out_type_str,
+          idx_type_str,
+          large ? "int64_t" : "int",
+          sc ? "true" : "false",
+          ic ? "true" : "false");
+    }
+    return kernel_source;
+  });
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kernel_name, lib);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Grid [size post, index size, size pre]
+  size_t size_pre = 1;
+  size_t size_post = 1;
+  for (int i = 0; i < axis_; ++i) {
+    size_pre *= idx.shape(i);
+  }
+  for (int i = axis_ + 1; i < idx.ndim(); ++i) {
+    size_post *= idx.shape(i);
+  }
+
+  int idx_ax_size = idx.shape(axis_);
+  auto group_dims = get_block_dims(size_post, idx_ax_size, size_pre);
+  MTL::Size grid_dims = MTL::Size(size_post, idx_ax_size, size_pre);
+
+  // Set all the buffers
+  compute_encoder.set_input_array(src, 0);
+  compute_encoder.set_input_array(idx, 1);
+  compute_encoder.set_output_array(out, 2);
+
+  // Set source info
+  auto shape = idx.shape();
+  shape.erase(shape.begin() + axis_);
+  compute_encoder.set_vector_bytes(shape, 3);
+
+  auto strides = src.strides();
+  strides.erase(strides.begin() + axis_);
+  compute_encoder.set_vector_bytes(strides, 4);
+
+  strides = idx.strides();
+  strides.erase(strides.begin() + axis_);
+  compute_encoder.set_vector_bytes(strides, 5);
+  compute_encoder.set_bytes(ndim - 1, 6);
+  compute_encoder.set_bytes(axis_, 7);
+  compute_encoder.set_bytes(src.shape(axis_), 8);
+  compute_encoder.set_bytes(src.strides(axis_), 9);
+  compute_encoder.set_bytes(idx.strides(axis_), 10);
+
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& src = inputs[0];
+  auto& idx = inputs[1];
+  auto& upd = inputs[2];
+
+  // Copy src into out
+  CopyType copy_type;
+  if (src.data_size() == 1) {
+    copy_type = CopyType::Scalar;
+  } else if (src.flags().row_contiguous) {
+    copy_type = CopyType::Vector;
+  } else {
+    copy_type = CopyType::General;
+  }
+  copy_gpu(src, out, copy_type);
+
+  // Empty update
+  if (upd.size() == 0) {
+    return;
+  }
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  size_t ndim = src.ndim();
+
+  bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
+
+  std::string op_name;
+  switch (reduce_type_) {
+    case ScatterAxis::None:
+      op_name = "none";
+      break;
+    case ScatterAxis::Sum:
+      op_name = "sum";
+      break;
+  }
+
+  std::string kernel_name = fmt::format(
+      "scatter_axis{0}{1}_{2}_{3}",
+      type_to_name(out),
+      type_to_name(idx),
+      op_name,
+      large ? "int64_t" : "int");
+  std::string lib_name = kernel_name;
+  kernel_name += upd.flags().row_contiguous ? "c" : "nc";
+  kernel_name += idx.flags().row_contiguous ? "c" : "nc";
+
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::reduce_utils();
+    kernel_source += metal::scatter_axis();
+    std::string out_type_str = get_type_string(out.dtype());
+    std::string idx_type_str = get_type_string(idx.dtype());
+    std::string op_type;
+    switch (reduce_type_) {
+      case ScatterAxis::None:
+        op_type = "None";
+        break;
+      case ScatterAxis::Sum:
+        op_type = "Sum<" + out_type_str + ">";
+        break;
+    }
+
+    for (int i = 0; i < 4; ++i) {
+      bool uc = i & 1;
+      bool ic = i & 2;
+      kernel_source += get_template_definition(
+          lib_name + (uc ? "c" : "nc") + (ic ? "c" : "nc"),
+          "scatter_axis",
+          out_type_str,
+          idx_type_str,
+          large ? "int64_t" : "int",
+          op_type,
+          uc ? "true" : "false",
+          ic ? "true" : "false");
+    }
+    return kernel_source;
+  });
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kernel_name, lib);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Grid [size post, index size, size pre]
+  size_t size_pre = 1;
+  size_t size_post = 1;
+  for (int i = 0; i < axis_; ++i) {
+    size_pre *= idx.shape(i);
+  }
+  for (int i = axis_ + 1; i < idx.ndim(); ++i) {
+    size_post *= idx.shape(i);
+  }
+
+  int idx_ax_size = idx.shape(axis_);
+  auto group_dims = get_block_dims(size_post, idx_ax_size, size_pre);
+  MTL::Size grid_dims = MTL::Size(size_post, idx_ax_size, size_pre);
+
+  // Set all the buffers
+  compute_encoder.set_input_array(upd, 0);
+  compute_encoder.set_input_array(idx, 1);
+  compute_encoder.set_output_array(out, 2);
+
+  // Set source info
+  auto shape = idx.shape();
+  shape.erase(shape.begin() + axis_);
+  compute_encoder.set_vector_bytes(shape, 3);
+
+  auto strides = upd.strides();
+  strides.erase(strides.begin() + axis_);
+  compute_encoder.set_vector_bytes(strides, 4);
+
+  strides = idx.strides();
+  strides.erase(strides.begin() + axis_);
+  compute_encoder.set_vector_bytes(strides, 5);
+  compute_encoder.set_bytes(ndim - 1, 6);
+  compute_encoder.set_bytes(axis_, 7);
+  compute_encoder.set_bytes(out.shape(axis_), 8);
+  compute_encoder.set_bytes(upd.strides(axis_), 9);
+  compute_encoder.set_bytes(idx.strides(axis_), 10);
+
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
