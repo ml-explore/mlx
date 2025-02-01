@@ -133,7 +133,7 @@ std::string JitCompiler::exec(const std::string& cmd) {
   if (status == -1) {
     throw std::runtime_error("pclose() failed.");
   }
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__FreeBSD__)
   int code = status;
 #else
   int code = WEXITSTATUS(status);
