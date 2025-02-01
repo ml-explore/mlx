@@ -968,6 +968,14 @@ array put_along_axis(
     int axis,
     StreamOrDevice s = {});
 
+/** Add the values into the array at the given indices along the axis */
+array scatter_add_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    StreamOrDevice s = {});
+
 /** Scatter updates to the given indices.
  *
  * The parameters ``indices`` and ``axes`` determine the locations of ``a``
