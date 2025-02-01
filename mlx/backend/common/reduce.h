@@ -88,13 +88,15 @@ void strided_reduce(
 };
 
 template <typename T, typename U, typename Op>
-void contiguous_reduce(const T* x, U* accumulator, int size, Op op) {
+void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
   constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  simd::Simd<U, N> accumulator_v(init);
   while (size >= N) {
-    *accumulator = op(*accumulator, op(simd::load<T, N>(x)));
+    accumulator_v = op(accumulator_v, simd::Simd<U, N>(simd::load<T, N>(x)));
     x += N;
     size -= N;
   }
+  *accumulator = op(*accumulator, op(accumulator_v));
   while (size-- > 0) {
     *accumulator = op(*accumulator, *x);
     x++;
@@ -114,7 +116,7 @@ void reduction_op(
   if (plan.type == ContiguousAllReduce) {
     U* out_ptr = out.data<U>();
     *out_ptr = init;
-    contiguous_reduce(x.data<T>(), out_ptr, x.size(), op);
+    contiguous_reduce(x.data<T>(), out_ptr, x.size(), op, init);
     return;
   }
 
@@ -124,7 +126,7 @@ void reduction_op(
     U* out_ptr = out.data<U>();
     for (int i = 0; i < out.size(); i++, out_ptr++, x_ptr += reduction_size) {
       *out_ptr = init;
-      contiguous_reduce(x_ptr, out_ptr, reduction_size, op);
+      contiguous_reduce(x_ptr, out_ptr, reduction_size, op, init);
     }
     return;
   }
@@ -142,7 +144,7 @@ void reduction_op(
       for (int i = 0; i < out.size(); i++, out_ptr++) {
         int offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
-        contiguous_reduce(x_ptr + offset, out_ptr, reduction_size, op);
+        contiguous_reduce(x_ptr + offset, out_ptr, reduction_size, op, init);
       }
     } else {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
@@ -151,7 +153,11 @@ void reduction_op(
         nd_loop(
             [&](int extra_offset) {
               contiguous_reduce(
-                  x_ptr + offset + extra_offset, out_ptr, reduction_size, op);
+                  x_ptr + offset + extra_offset,
+                  out_ptr,
+                  reduction_size,
+                  op,
+                  init);
             },
             plan.shape,
             plan.strides);

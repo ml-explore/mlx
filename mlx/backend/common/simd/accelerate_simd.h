@@ -287,13 +287,13 @@ template <typename T, int N>
 T min(Simd<T, N> x) {
   return asd::reduce_min(x.value);
 }
+
 template <typename T, int N>
 T prod(Simd<T, N> x) {
-  T out = 1;
-  for (int i = 0; i < N; ++i) {
-    out *= x[i];
-  }
-  return out;
+  auto ptr = (T*)&x;
+  auto lhs = load<T, N / 2>(ptr);
+  auto rhs = load<T, N / 2>(ptr + N / 2);
+  return prod(lhs * rhs);
 }
 
 } // namespace mlx::core::simd
