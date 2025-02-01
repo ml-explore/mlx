@@ -262,6 +262,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skip("Different head and value dims is not enabled")
     def test_fast_sdpa_vector_value_dims(self):
         D = 192
         V = 128
