@@ -246,6 +246,7 @@ Simd<T, 1> fma(Simd<T, 1> x, Simd<T, 1> y, U z) {
 DEFAULT_REDUCTION(max, T)
 DEFAULT_REDUCTION(min, T)
 DEFAULT_REDUCTION(sum, T)
+DEFAULT_REDUCTION(prod, T)
 DEFAULT_REDUCTION(any, bool)
 DEFAULT_REDUCTION(all, bool)
 

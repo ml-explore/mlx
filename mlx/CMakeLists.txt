@@ -37,13 +37,6 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/distributed)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
-if(MLX_BUILD_ACCELERATE)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
-elseif(MLX_BUILD_CPU)
-  target_sources(
-    mlx
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/backend/common/default_primitives.cpp)
-endif()
 
 if(MLX_BUILD_METAL)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/metal)

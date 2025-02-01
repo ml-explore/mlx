@@ -200,5 +200,13 @@ inline float16_t sum(Simd<float16_t, N> x) {
   y = vpadd_f16(y, y);
   return vget_lane_f16(y, 0);
 }
+inline float16_t prod(Simd<float16_t, N> x) {
+  auto hx = vmul_f16(vget_low_f16(x.value), vget_high_f16(x.value));
+  auto out = hx[0];
+  hx[0] *= hx[1];
+  hx[0] *= hx[2];
+  hx[0] *= hx[3];
+  return hx[0];
+}
 
 } // namespace mlx::core::simd

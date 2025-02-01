@@ -1691,8 +1691,6 @@ class Reduce : public UnaryPrimitive {
  private:
   ReduceType reduce_type_;
   std::vector<int> axes_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Round : public UnaryPrimitive {
@@ -1758,8 +1756,6 @@ class Scan : public UnaryPrimitive {
   int axis_;
   bool reverse_;
   bool inclusive_;
-
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class Scatter : public UnaryPrimitive {
