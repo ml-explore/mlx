@@ -268,6 +268,10 @@ Simd<T, N> fma(Simd<T, N> x, Simd<T, N> y, U z) {
 // Reductions
 
 template <typename T, int N>
+bool all(Simd<T, N> x) {
+  return asd::all(x.value);
+}
+template <typename T, int N>
 bool any(Simd<T, N> x) {
   return asd::any(x.value);
 }
@@ -282,6 +286,14 @@ T max(Simd<T, N> x) {
 template <typename T, int N>
 T min(Simd<T, N> x) {
   return asd::reduce_min(x.value);
+}
+template <typename T, int N>
+T prod(Simd<T, N> x) {
+  T out = 1;
+  for (int i = 0; i < N; ++i) {
+    out *= x[i];
+  }
+  return out;
 }
 
 } // namespace mlx::core::simd

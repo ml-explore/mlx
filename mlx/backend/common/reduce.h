@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
@@ -60,45 +61,52 @@ std::pair<Shape, Strides> shapes_without_reduction_axes(
     const std::vector<int>& axes);
 
 template <typename T, typename U, typename Op>
-struct DefaultStridedReduce {
-  Op op;
-
-  DefaultStridedReduce(Op op_) : op(op_) {}
-
-  void operator()(const T* x, U* accumulator, int size, size_t stride) {
-    for (int i = 0; i < size; i++) {
-      U* moving_accumulator = accumulator;
-      for (int j = 0; j < stride; j++) {
-        op(moving_accumulator, *x);
-        moving_accumulator++;
-        x++;
-      }
+void strided_reduce(
+    const T* x,
+    U* accumulator,
+    int size,
+    size_t stride,
+    Op op) {
+  constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  for (int i = 0; i < size; i++) {
+    U* moving_accumulator = accumulator;
+    auto s = stride;
+    while (s >= N) {
+      auto acc = simd::load<U, N>(moving_accumulator);
+      auto v = simd::Simd<U, N>(simd::load<T, N>(x));
+      simd::store<U, N>(moving_accumulator, op(acc, v));
+      moving_accumulator += N;
+      x += N;
+      s -= N;
     }
-  }
-};
-
-template <typename T, typename U, typename Op>
-struct DefaultContiguousReduce {
-  Op op;
-
-  DefaultContiguousReduce(Op op_) : op(op_) {}
-
-  void operator()(const T* x, U* accumulator, int size) {
-    while (size-- > 0) {
-      op(accumulator, *x);
+    while (s-- > 0) {
+      *moving_accumulator = op(*moving_accumulator, *x);
+      moving_accumulator++;
       x++;
     }
   }
 };
 
-template <typename T, typename U, typename OpS, typename OpC, typename Op>
+template <typename T, typename U, typename Op>
+void contiguous_reduce(const T* x, U* accumulator, int size, Op op) {
+  constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  while (size >= N) {
+    *accumulator = op(*accumulator, op(simd::load<T, N>(x)));
+    x += N;
+    size -= N;
+  }
+  while (size-- > 0) {
+    *accumulator = op(*accumulator, *x);
+    x++;
+  }
+}
+
+template <typename T, typename U, typename Op>
 void reduction_op(
     const array& x,
     array& out,
     const std::vector<int>& axes,
     U init,
-    OpS ops,
-    OpC opc,
     Op op) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   ReductionPlan plan = get_reduction_plan(x, axes);
@@ -106,7 +114,7 @@ void reduction_op(
   if (plan.type == ContiguousAllReduce) {
     U* out_ptr = out.data<U>();
     *out_ptr = init;
-    opc(x.data<T>(), out_ptr, x.size());
+    contiguous_reduce(x.data<T>(), out_ptr, x.size(), op);
     return;
   }
 
@@ -116,7 +124,7 @@ void reduction_op(
     U* out_ptr = out.data<U>();
     for (int i = 0; i < out.size(); i++, out_ptr++, x_ptr += reduction_size) {
       *out_ptr = init;
-      opc(x_ptr, out_ptr, reduction_size);
+      contiguous_reduce(x_ptr, out_ptr, reduction_size, op);
     }
     return;
   }
@@ -134,7 +142,7 @@ void reduction_op(
       for (int i = 0; i < out.size(); i++, out_ptr++) {
         int offset = elem_to_loc(i, shape, strides);
         *out_ptr = init;
-        opc(x_ptr + offset, out_ptr, reduction_size);
+        contiguous_reduce(x_ptr + offset, out_ptr, reduction_size, op);
       }
     } else {
       for (int i = 0; i < out.size(); i++, out_ptr++) {
@@ -142,7 +150,8 @@ void reduction_op(
         *out_ptr = init;
         nd_loop(
             [&](int extra_offset) {
-              opc(x_ptr + offset + extra_offset, out_ptr, reduction_size);
+              contiguous_reduce(
+                  x_ptr + offset + extra_offset, out_ptr, reduction_size, op);
             },
             plan.shape,
             plan.strides);
@@ -160,7 +169,7 @@ void reduction_op(
     U* out_ptr = out.data<U>();
     for (int i = 0; i < out.size(); i += reduction_stride) {
       std::fill_n(out_ptr, reduction_stride, init);
-      ops(x_ptr, out_ptr, reduction_size, reduction_stride);
+      strided_reduce(x_ptr, out_ptr, reduction_size, reduction_stride, op);
       x_ptr += reduction_stride * reduction_size;
       out_ptr += reduction_stride;
     }
@@ -180,7 +189,8 @@ void reduction_op(
       for (int i = 0; i < out.size(); i += reduction_stride) {
         int offset = elem_to_loc(i, shape, strides);
         std::fill_n(out_ptr, reduction_stride, init);
-        ops(x_ptr + offset, out_ptr, reduction_size, reduction_stride);
+        strided_reduce(
+            x_ptr + offset, out_ptr, reduction_size, reduction_stride, op);
         out_ptr += reduction_stride;
       }
     } else {
@@ -189,10 +199,12 @@ void reduction_op(
         std::fill_n(out_ptr, reduction_stride, init);
         nd_loop(
             [&](int extra_offset) {
-              ops(x_ptr + offset + extra_offset,
+              strided_reduce(
+                  x_ptr + offset + extra_offset,
                   out_ptr,
                   reduction_size,
-                  reduction_stride);
+                  reduction_stride,
+                  op);
             },
             plan.shape,
             plan.strides);
@@ -210,24 +222,14 @@ void reduction_op(
       int offset = elem_to_loc(i, shape, strides);
       U val = init;
       nd_loop(
-          [&](int extra_offset) { op(&val, *(x_ptr + offset + extra_offset)); },
+          [&](int extra_offset) {
+            val = op(val, *(x_ptr + offset + extra_offset));
+          },
           plan.shape,
           plan.strides);
       *out_ptr = val;
     }
   }
-}
-
-template <typename T, typename U, typename Op>
-void reduction_op(
-    const array& x,
-    array& out,
-    const std::vector<int>& axes,
-    U init,
-    Op op) {
-  DefaultStridedReduce<T, U, Op> ops(op);
-  DefaultContiguousReduce<T, U, Op> opc(op);
-  reduction_op<T, U>(x, out, axes, init, ops, opc, op);
 }
 
 } // namespace mlx::core

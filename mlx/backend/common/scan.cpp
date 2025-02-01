@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/simd/simd.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 
@@ -11,184 +12,178 @@ namespace mlx::core {
 namespace {
 
 template <typename T, typename U, typename Op>
-struct DefaultContiguousScan {
-  Op op;
-  U init;
-
-  DefaultContiguousScan(Op op_, U init_) : op(op_), init(init_) {}
-
-  void operator()(
-      const T* input,
-      U* output,
-      int count,
-      int stride,
-      bool reverse,
-      bool inclusive) {
-    if (!reverse) {
-      if (inclusive) {
-        for (int i = 0; i < count; i++) {
-          *output = *input;
-          for (int j = 1; j < stride; j++) {
-            input++;
-            output++;
-            op(output, output - 1, input);
-          }
-          output++;
+void contiguous_scan(
+    const T* input,
+    U* output,
+    int count,
+    int stride,
+    bool reverse,
+    bool inclusive,
+    const Op& op,
+    U init) {
+  if (!reverse) {
+    if (inclusive) {
+      for (int i = 0; i < count; i++) {
+        *output = *input;
+        for (int j = 1; j < stride; j++) {
           input++;
-        }
-      } else {
-        for (int i = 0; i < count; i++) {
-          *output = init;
-          for (int j = 1; j < stride; j++) {
-            op(output + 1, output, input);
-            input++;
-            output++;
-          }
           output++;
-          input++;
+          *output = op(*(output - 1), *input);
         }
+        output++;
+        input++;
       }
     } else {
-      if (inclusive) {
-        for (int i = 0; i < count; i++) {
-          output += stride - 1;
-          input += stride - 1;
-          *output = *input;
-          for (int j = 1; j < stride; j++) {
-            input--;
-            output--;
-            op(output, output + 1, input);
-          }
-          output += stride;
-          input += stride;
+      for (int i = 0; i < count; i++) {
+        *output = init;
+        for (int j = 1; j < stride; j++) {
+          *(output + 1) = op(*output, *input);
+          input++;
+          output++;
         }
-      } else {
-        for (int i = 0; i < count; i++) {
-          output += stride - 1;
-          input += stride - 1;
-          *output = init;
-          for (int j = 1; j < stride; j++) {
-            op(output - 1, output, input);
-            input--;
-            output--;
-          }
-          output += stride;
-          input += stride;
+        output++;
+        input++;
+      }
+    }
+  } else {
+    if (inclusive) {
+      for (int i = 0; i < count; i++) {
+        output += stride - 1;
+        input += stride - 1;
+        *output = *input;
+        for (int j = 1; j < stride; j++) {
+          input--;
+          output--;
+          *output = op(*(output + 1), *input);
         }
+        output += stride;
+        input += stride;
+      }
+    } else {
+      for (int i = 0; i < count; i++) {
+        output += stride - 1;
+        input += stride - 1;
+        *output = init;
+        for (int j = 1; j < stride; j++) {
+          *(output - 1) = op(*output, *input);
+          input--;
+          output--;
+        }
+        output += stride;
+        input += stride;
       }
     }
   }
 };
 
 template <typename T, typename U, typename Op>
-struct DefaultStridedScan {
-  Op op;
-  U init;
-
-  DefaultStridedScan(Op op_, U init_) : op(op_), init(init_) {}
-
-  void operator()(
-      const T* input,
-      U* output,
-      int count,
-      int size,
-      int stride,
-      bool reverse,
-      bool inclusive) {
-    // TODO: Vectorize the following naive implementation
-    if (!reverse) {
-      if (inclusive) {
-        for (int i = 0; i < count; i++) {
-          std::copy(input, input + stride, output);
-          output += stride;
-          input += stride;
-          for (int j = 1; j < size; j++) {
-            for (int k = 0; k < stride; k++) {
-              op(output, output - stride, input);
-              output++;
-              input++;
-            }
-          }
-        }
-      } else {
-        for (int i = 0; i < count; i++) {
-          std::fill(output, output + stride, init);
-          output += stride;
-          input += stride;
-          for (int j = 1; j < size; j++) {
-            for (int k = 0; k < stride; k++) {
-              op(output, output - stride, input - stride);
-              output++;
-              input++;
-            }
+void strided_scan(
+    const T* input,
+    U* output,
+    int count,
+    int size,
+    int stride,
+    bool reverse,
+    bool inclusive,
+    const Op& op,
+    U init) {
+  // TODO: Vectorize the following naive implementation
+  if (!reverse) {
+    if (inclusive) {
+      for (int i = 0; i < count; i++) {
+        std::copy(input, input + stride, output);
+        output += stride;
+        input += stride;
+        for (int j = 1; j < size; j++) {
+          for (int k = 0; k < stride; k++) {
+            *output = op(*(output - stride), *input);
+            output++;
+            input++;
           }
         }
       }
     } else {
-      if (inclusive) {
-        for (int i = 0; i < count; i++) {
-          output += (size - 1) * stride;
-          input += (size - 1) * stride;
-          std::copy(input, input + stride, output);
-          for (int j = 1; j < size; j++) {
-            for (int k = 0; k < stride; k++) {
-              output--;
-              input--;
-              op(output, output + stride, input);
-            }
+      for (int i = 0; i < count; i++) {
+        std::fill(output, output + stride, init);
+        output += stride;
+        input += stride;
+        for (int j = 1; j < size; j++) {
+          for (int k = 0; k < stride; k++) {
+            *output = op(*(output - stride), *(input - stride));
+            output++;
+            input++;
           }
-          output += size * stride;
-          input += size * stride;
         }
-      } else {
-        for (int i = 0; i < count; i++) {
-          output += (size - 1) * stride;
-          input += (size - 1) * stride;
-          std::fill(output, output + stride, init);
-          for (int j = 1; j < size; j++) {
-            for (int k = 0; k < stride; k++) {
-              output--;
-              input--;
-              op(output, output + stride, input + stride);
-            }
+      }
+    }
+  } else {
+    if (inclusive) {
+      for (int i = 0; i < count; i++) {
+        output += (size - 1) * stride;
+        input += (size - 1) * stride;
+        std::copy(input, input + stride, output);
+        for (int j = 1; j < size; j++) {
+          for (int k = 0; k < stride; k++) {
+            output--;
+            input--;
+            *output = op(*(output + stride), *input);
           }
-          output += size * stride;
-          input += size * stride;
         }
+        output += size * stride;
+        input += size * stride;
+      }
+    } else {
+      for (int i = 0; i < count; i++) {
+        output += (size - 1) * stride;
+        input += (size - 1) * stride;
+        std::fill(output, output + stride, init);
+        for (int j = 1; j < size; j++) {
+          for (int k = 0; k < stride; k++) {
+            output--;
+            input--;
+            *output = op(*(output + stride), *(input + stride));
+          }
+        }
+        output += size * stride;
+        input += size * stride;
       }
     }
   }
 };
 
-template <typename T, typename U, typename OpCS, typename OpSS>
+template <typename T, typename U, typename Op>
 void scan_op(
-    OpCS opcs,
-    OpSS opss,
     const array& input,
     array& output,
     int axis,
     bool reverse,
-    bool inclusive) {
+    bool inclusive,
+    const Op& op,
+    U init) {
   output.set_data(allocator::malloc_or_wait(output.nbytes()));
 
   if (input.flags().row_contiguous) {
     if (input.strides()[axis] == 1) {
-      opcs(
+      contiguous_scan(
           input.data<T>(),
           output.data<U>(),
           input.size() / input.shape(axis),
           input.shape(axis),
           reverse,
-          inclusive);
+          inclusive,
+          op,
+          init);
     } else {
-      opss(
+      strided_scan(
           input.data<T>(),
           output.data<U>(),
           input.size() / input.shape(axis) / input.strides()[axis],
           input.shape(axis),
           input.strides()[axis],
           reverse,
-          inclusive);
+          inclusive,
+          op,
+          init);
     }
   } else {
     throw std::runtime_error("Scan op supports only contiguous inputs");
@@ -205,39 +200,31 @@ void scan_dispatch(
     bool inclusive) {
   switch (rtype) {
     case Scan::Sum: {
-      auto op = [](U* o, const U* y, const T* x) { *o = *y + *x; };
+      auto op = [](U y, T x) { return y + x; };
       auto init = static_cast<U>(0);
-      auto opcs = DefaultContiguousScan<T, U, decltype(op)>(op, init);
-      auto opss = DefaultStridedScan<T, U, decltype(op)>(op, init);
-      scan_op<T, U>(opcs, opss, input, output, axis, reverse, inclusive);
+      scan_op<T, U>(input, output, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Prod: {
-      auto op = [](U* o, const U* y, const T* x) { *o = *y * (*x); };
+      auto op = [](U y, T x) { return y * x; };
       auto init = static_cast<U>(1);
-      auto opcs = DefaultContiguousScan<T, U, decltype(op)>(op, init);
-      auto opss = DefaultStridedScan<T, U, decltype(op)>(op, init);
-      scan_op<T, U>(opcs, opss, input, output, axis, reverse, inclusive);
+      scan_op<T, U>(input, output, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Min: {
-      auto op = [](U* o, const U* y, const T* x) { *o = (*x < *y) ? *x : *y; };
+      auto op = [](U y, T x) { return x < y ? x : y; };
       auto init = (issubdtype(input.dtype(), floating))
           ? static_cast<U>(std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::max();
-      auto opcs = DefaultContiguousScan<T, U, decltype(op)>(op, init);
-      auto opss = DefaultStridedScan<T, U, decltype(op)>(op, init);
-      scan_op<T, U>(opcs, opss, input, output, axis, reverse, inclusive);
+      scan_op<T, U>(input, output, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Max: {
-      auto op = [](U* o, const U* y, const T* x) { *o = (*x < *y) ? *y : *x; };
+      auto op = [](U y, T x) { return x < y ? y : x; };
       auto init = (issubdtype(input.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
-      auto opcs = DefaultContiguousScan<T, U, decltype(op)>(op, init);
-      auto opss = DefaultStridedScan<T, U, decltype(op)>(op, init);
-      scan_op<T, U>(opcs, opss, input, output, axis, reverse, inclusive);
+      scan_op<T, U>(input, output, axis, reverse, inclusive, op, init);
       break;
     }
   }
@@ -245,7 +232,7 @@ void scan_dispatch(
 
 } // namespace
 
-void Scan::eval(const std::vector<array>& inputs, array& out) {
+void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
   // Ensure contiguity
