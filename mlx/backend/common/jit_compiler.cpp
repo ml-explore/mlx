@@ -96,7 +96,7 @@ std::string JitCompiler::build_command(
       libpaths);
 #else
   return fmt::format(
-      "g++ -std=c++17 -O3 -Wall -fPIC -shared '{0}' -o '{1}' 2>&1",
+      "g++ -std=c++17 -O3 -Wall -fPIC -shared \"{0}\" -o \"{1}\" 2>&1",
       (dir / source_file_name).string(),
       (dir / shared_lib_name).string());
 #endif
@@ -133,7 +133,7 @@ std::string JitCompiler::exec(const std::string& cmd) {
   if (status == -1) {
     throw std::runtime_error("pclose() failed.");
   }
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(__FreeBSD__)
   int code = status;
 #else
   int code = WEXITSTATUS(status);
