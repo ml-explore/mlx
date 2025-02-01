@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/compile_impl.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 

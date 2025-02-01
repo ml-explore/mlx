@@ -1,6 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/common/gemm.h"
+#include "mlx/backend/cpu/gemm.h"
 
 namespace mlx::core {
 
