@@ -3081,7 +3081,7 @@ array take_along_axis(
   axis = axis < 0 ? a.ndim() + axis : axis;
 
   // Broadcast indices and input ignoring the take axis
-  auto inputs = broadcast_arrays({a, indices}, {axis - int(a.ndim())}, s);
+  auto inputs = broadcast_arrays({a, indices}, std::vector<int>{axis - int(a.ndim())}, s);
 
   auto out_shape = inputs[1].shape();
   return array(
