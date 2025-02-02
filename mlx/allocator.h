@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 
+#include "mlx/device.h"
+
 namespace mlx::core::allocator {
 
 // Simple wrapper around buffer pointers
@@ -34,12 +36,19 @@ void free(Buffer buffer);
 
 // Wait for running tasks to finish and free up memory
 // if allocation fails
-Buffer malloc_or_wait(size_t size);
+Buffer malloc_or_wait(const Device& device, size_t size);
+inline Buffer malloc_or_wait(size_t size) {
+  return malloc_or_wait(Device::cpu, size);
+}
 
 class Allocator {
   /** Abstract base class for a memory allocator. */
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) = 0;
+  virtual Buffer
+  malloc(const Device& device, size_t size, bool allow_swap = false) {
+    return malloc(size, allow_swap);
+  }
   virtual void free(Buffer buffer) = 0;
   virtual size_t size(Buffer buffer) const = 0;
 

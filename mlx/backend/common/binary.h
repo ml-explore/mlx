@@ -6,6 +6,7 @@
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/primitives.h"
 
 #include "mlx/backend/common/simd/simd.h"
 
@@ -47,10 +48,14 @@ void set_binary_op_output_data(
     bool donate_with_move = false) {
   bool b_donatable = is_donatable(b, out);
   bool a_donatable = is_donatable(a, out);
+  const Device& device = out.primitive().device();
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
       out.set_data(
-          allocator::malloc_or_wait(out.itemsize()), 1, a.strides(), a.flags());
+          allocator::malloc_or_wait(device, out.itemsize()),
+          1,
+          a.strides(),
+          a.flags());
       break;
     case BinaryOpType::ScalarVector:
       if (b_donatable) {
@@ -61,7 +66,7 @@ void set_binary_op_output_data(
         }
       } else {
         out.set_data(
-            allocator::malloc_or_wait(b.data_size() * out.itemsize()),
+            allocator::malloc_or_wait(device, b.data_size() * out.itemsize()),
             b.data_size(),
             b.strides(),
             b.flags());
@@ -76,7 +81,7 @@ void set_binary_op_output_data(
         }
       } else {
         out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            allocator::malloc_or_wait(device, a.data_size() * out.itemsize()),
             a.data_size(),
             a.strides(),
             a.flags());
@@ -97,7 +102,7 @@ void set_binary_op_output_data(
         }
       } else {
         out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            allocator::malloc_or_wait(device, a.data_size() * out.itemsize()),
             a.data_size(),
             a.strides(),
             a.flags());
@@ -118,7 +123,7 @@ void set_binary_op_output_data(
           out.copy_shared_buffer(b);
         }
       } else {
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+        out.set_data(allocator::malloc_or_wait(device, out.nbytes()));
       }
       break;
   }

@@ -1,9 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
+
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -52,15 +54,19 @@ void set_ternary_op_output_data(
     return false;
   };
 
+  const Device& device = out.primitive().device();
   switch (topt) {
     case TernaryOpType::ScalarScalarScalar:
       out.set_data(
-          allocator::malloc_or_wait(out.itemsize()), 1, b.strides(), b.flags());
+          allocator::malloc_or_wait(device, out.itemsize()),
+          1,
+          b.strides(),
+          b.flags());
       break;
     case TernaryOpType::VectorVectorVector:
       if (!(maybe_donate(a) || maybe_donate(b) || maybe_donate(c))) {
         out.set_data(
-            allocator::malloc_or_wait(out.itemsize() * b.data_size()),
+            allocator::malloc_or_wait(device, out.itemsize() * b.data_size()),
             b.data_size(),
             b.strides(),
             b.flags());
@@ -71,7 +77,7 @@ void set_ternary_op_output_data(
       if (!((a.flags().row_contiguous && maybe_donate(a)) ||
             (b.flags().row_contiguous && maybe_donate(b)) ||
             (c.flags().row_contiguous && maybe_donate(c)))) {
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+        out.set_data(allocator::malloc_or_wait(device, out.nbytes()));
       }
       break;
   }
