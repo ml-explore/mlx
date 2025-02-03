@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <sstream>
+#include <variant>
 
 #include <fcntl.h>
 #ifdef _MSC_VER
