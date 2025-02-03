@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
@@ -49,7 +48,7 @@ void unary_op_gpu_inplace(
   } else {
     kernel_name = "gn" + std::to_string(work_per_thread);
     if (large) {
-      kernel_name += "_large";
+      kernel_name += "large";
     }
   }
   concatenate(kernel_name, "_", op, type_to_name(in), type_to_name(out));

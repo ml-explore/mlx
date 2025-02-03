@@ -499,8 +499,8 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
       ? CopyType::Vector
       : CopyType::General;
   copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
-
-  auto [data_offset, out_strides] = prepare_slice(in, start_indices_, strides_);
+  auto [data_offset, out_strides] =
+      prepare_slice(out, start_indices_, strides_);
 
   // Do copy
   copy_gpu_inplace(

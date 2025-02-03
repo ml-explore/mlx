@@ -11,7 +11,7 @@
   instantiate_kernel(                                                                 \
       "gn1_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 1, int)        \
   instantiate_kernel(                                                                 \
-      "gn4large" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
+      "gn4large_" #op #in_tname #out_tname, unary_g, in_type, out_type, op, 4)
 
 #define instantiate_unary_all_same(op, tname, type)   \
   instantiate_unary_all(op, tname, tname, type, type)

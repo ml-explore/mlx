@@ -14,18 +14,7 @@ void slice_gpu(
     const Shape& start_indices,
     const Shape& strides,
     const Stream& s) {
-  // Calculate out strides and initial offset
-  auto [data_offset, inp_strides] = prepare_slice(in, start_indices, strides);
-
-  size_t data_end = 1;
-  for (int i = 0; i < strides.size(); ++i) {
-    if (in.shape()[i] > 1) {
-      auto end_idx = start_indices[i] + out.shape()[i] * strides[i] - 1;
-      data_end += end_idx * in.strides()[i];
-    }
-  }
-  size_t data_size = data_end - data_offset;
-  shared_buffer_slice(in, inp_strides, data_offset, data_size, out);
+  slice(in, out, start_indices, strides);
 }
 
 void concatenate_gpu(

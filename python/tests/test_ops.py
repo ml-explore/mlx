@@ -2807,6 +2807,12 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.shape, (3, 4, 2))
         self.assertEqual(b.shape, (3, 4, 2))
 
+    def test_slice_update_reversed(self):
+        a = mx.array([1, 2, 3, 4])
+        b = a[::-1]
+        b[::2] = 0
+        self.assertTrue(mx.array_equal(b, mx.array([0, 3, 0, 1])))
+
 
 if __name__ == "__main__":
     unittest.main()

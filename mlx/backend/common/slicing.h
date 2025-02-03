@@ -11,11 +11,10 @@ std::tuple<int64_t, Strides> prepare_slice(
     const Shape& start_indices,
     const Shape& strides);
 
-void shared_buffer_slice(
+void slice(
     const array& in,
-    const Strides& out_strides,
-    size_t data_offset,
-    size_t data_size,
-    array& out);
+    array& out,
+    const Shape& start_indices,
+    const Shape& strides);
 
 } // namespace mlx::core
