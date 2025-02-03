@@ -253,6 +253,8 @@ def launch_mpi(parser, hosts, args, command):
 
         cmd = [
             mpirun,
+            "--output",
+            ":raw",  # do not line buffer output
             "--hostfile",
             f.name,
             *(["-cwd", args.cwd] if args.cwd else []),
