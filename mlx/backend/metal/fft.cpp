@@ -6,6 +6,7 @@
 #include <set>
 
 #include "mlx/3rdparty/pocketfft.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/binary.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/kernels.h"

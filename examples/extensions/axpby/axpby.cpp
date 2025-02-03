@@ -6,6 +6,7 @@
 
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/copy.h"
 #include "mlx/utils.h"
 
 #include "axpby/axpby.h"

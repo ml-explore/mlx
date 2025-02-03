@@ -29,8 +29,10 @@ if(WIN32)
   set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
 endif()
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
+
 if(MLX_BUILD_CPU)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/cpu)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_cpu)
 endif()

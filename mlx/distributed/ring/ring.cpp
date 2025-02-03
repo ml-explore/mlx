@@ -13,7 +13,7 @@
 
 #include <json.hpp>
 
-#include "mlx/backend/common/copy.h"
+#include "mlx/backend/cpu/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/threadpool.h"
