@@ -53,6 +53,34 @@ distributed setting similar to the one below:
     if world.size() > 1:
         x = mx.distributed.all_sum(x)
 
+Running distributed programs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+MLX provides ``mlx.launch`` a helper script to launch distributed programs.
+Continuing with our initial example we can run it on localhost with 4 processes using
+
+.. code:: shell
+
+    $ mlx.launch -n 4 my_script.py
+    3 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    2 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    1 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    0 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+
+we can also run it on some remote hosts by providing their IPs (provided that
+the script exists on all hosts and they are reachable by ssh)
+
+.. code:: shell
+
+    $ mlx.launch --hosts ip1,ip2,ip3,ip4 my_script.py
+    3 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    2 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    1 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+    0 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
+
+Consult the dedicated :doc:`usage guide<launching_distributed>` for more
+information on using ``mlx.launch``.
+
 Selecting Backend
 ^^^^^^^^^^^^^^^^^
 
@@ -62,9 +90,9 @@ initialize the ``ring`` backend and if it fails the ``mpi`` backend. If they
 both fail then a singleton group is created.
 
 .. note::
-   After a distributed backend is successfully initialized, calling
-   :func:`init` with backend set to ``any`` will return the first backend that
-   was successfully initialized.
+   After a distributed backend is successfully initialized :func:`init` wil
+   return **the same backend** if called without arguments or with backend set to
+   ``any``.
 
 The following examples aim to clarify the backend initialization logic in MLX:
 
@@ -149,7 +177,7 @@ together and perform fewer discrete communication steps.
 This is the purpose of :func:`mlx.nn.average_gradients`. Specifically, it
 replaces the need for writing ``tree_map`` ourselves while improving the
 achieved bandwidth due to concatenating smaller gradients into one large
-gradient array. The final code looks almos identical to the example above
+gradient array. The final code looks almost identical to the example above
 
 .. code:: python
 
@@ -243,11 +271,11 @@ Tuning MPI All Reduce
 ^^^^^^^^^^^^^^^^^^^^^
 
 We are working on improving the performance of all reduce on MLX but for now
-the two main things one can do to extract the most out of distributed training with MLX are:
+the two main things one can do to extract the most out of distributed training with MPI are:
 
 1. Perform a few large reductions instead of many small ones to improve
    bandwidth and latency (see :func:`mlx.nn.average_gradients`)
-2. Pass ``--mca btl_tcp_links 4`` to ``mpirun`` to configure it to use 4 tcp
+2. Pass ``--mca btl_tcp_links 2`` to ``mpirun`` to configure it to use 2 tcp
    connections between each host to improve bandwidth
 3. Force MPI to use the most performant network interface by setting ``--mca
    btl_tcp_if_include <iface>`` where ``<iface>`` should be the interface you want
@@ -256,4 +284,40 @@ the two main things one can do to extract the most out of distributed training w
 Getting Started with Ring
 -------------------------
 
+The ring backend does not depend on any third party library so it is always
+available. It uses TCP sockets so the nodes need to be reachable via a network.
+As the name suggests the nodes are connected in a ring which means that rank 1
+can only communicate with rank 0 and rank 2, rank 2 only with rank 1 and rank 3
+and so on and so forth. As a result :func:`send` and :func:`recv` with
+arbitrary sender and receiver is not supported in the ring backend.
 
+Defining a Ring
+^^^^^^^^^^^^^^^
+
+The easiest way to define and use a ring is via a JSON hostfile and the
+``mlx.launch`` :doc:`helper script <launching_distributed>`. For each node one
+defines a hostname to ssh into to run commands on this node and one or more IPs
+that this node will listen to for connections.
+
+For example the hostfile below defines a 4 node ring. ``hostname1`` will be
+rank 0, ``hostname2`` rank 1 etc.
+
+.. code:: json
+
+    [
+        {"ssh": "hostname1", "ips": ["123.123.123.1"]},
+        {"ssh": "hostname2", "ips": ["123.123.123.2"]},
+        {"ssh": "hostname3", "ips": ["123.123.123.3"]},
+        {"ssh": "hostname4", "ips": ["123.123.123.4"]}
+    ]
+
+Running ``mlx.launch --hostfile ring-4.json my_script.py`` will ssh into each
+node, run the script which will listen for connections in each of the provided
+IPs. Specifically, ``hostname1`` will connect to ``123.123.123.2`` and accept a
+connection from ``123.123.123.4`` and so on and so forth.
+
+Thunderbolt Ring
+^^^^^^^^^^^^^^^^
+
+The ring backend enables using thunderbolt for high bandwidth distributed
+communication. 
