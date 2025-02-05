@@ -76,6 +76,7 @@ typedef std::function<std::vector<array>(
     std::vector<std::pair<std::string, TemplateArg>>,
     std::optional<float>,
     bool,
+    bool,
     StreamOrDevice)>
     MetalKernelFunction;
 

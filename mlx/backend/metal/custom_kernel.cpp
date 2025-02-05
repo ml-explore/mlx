@@ -72,12 +72,23 @@ void CustomKernel::eval_gpu(
     index++;
   }
 
-  const auto [tx, ty, tz] = threadgroup_;
-  const auto [gx, gy, gz] = grid_;
-  MTL::Size group_dims =
-      MTL::Size(std::min(tx, gx), std::min(ty, gy), std::min(tz, gz));
-  MTL::Size grid_dims = MTL::Size(gx, gy, gz);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  if (use_optimal_threadgroups_) {
+    const auto w = kernel->threadExecutionWidth();
+    const auto h = kernel->maxTotalThreadsPerThreadgroup() / w;
+    const auto [gx, gy, gz] = grid_;
+    MTL::Size numThreadgroups =
+        MTL::Size((gx * gy * gz + (w * h - 1)) / (w * h), 1, 1);
+    MTL::Size threadsPerThreadgroup = MTL::Size(w * h, 1, 1);
+    compute_encoder.dispatch_threadgroups(
+        numThreadgroups, threadsPerThreadgroup);
+  } else {
+    const auto [tx, ty, tz] = threadgroup_;
+    const auto [gx, gy, gz] = grid_;
+    MTL::Size group_dims =
+        MTL::Size(std::min(tx, gx), std::min(ty, gy), std::min(tz, gz));
+    MTL::Size grid_dims = MTL::Size(gx, gy, gz);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
 
   d.add_temporaries(std::move(copies), s.index);
 }

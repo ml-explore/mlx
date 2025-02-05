@@ -1192,6 +1192,7 @@ MetalKernelFunction metal_kernel(
                  template_args = {},
              std::optional<float> init_value = std::nullopt,
              bool verbose = false,
+             bool use_optimal_threadgroups = true,
              StreamOrDevice s_ = {}) {
     if (inputs.size() != input_names.size()) {
       std::ostringstream msg;
@@ -1274,7 +1275,8 @@ MetalKernelFunction metal_kernel(
             threadgroup,
             shape_infos,
             ensure_row_contiguous,
-            init_value),
+            init_value,
+            use_optimal_threadgroups),
         std::move(inputs));
   };
 }
