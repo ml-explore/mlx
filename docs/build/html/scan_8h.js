@@ -2,7 +2,7 @@ var scan_8h =
 [
     [ "CumSum< U >", "struct_cum_sum.html", null ],
     [ "CumProd< U >", "struct_cum_prod.html", null ],
-    [ "CumProd< bool >", "struct_cum_prod.html", "struct_cum_prod" ],
+    [ "CumProd< bool >", "struct_cum_prod_3_01bool_01_4.html", "struct_cum_prod_3_01bool_01_4" ],
     [ "CumMax< U >", "struct_cum_max.html", "struct_cum_max" ],
     [ "CumMin< U >", "struct_cum_min.html", "struct_cum_min" ],
     [ "DEFINE_SIMD_EXCLUSIVE_SCAN", "scan_8h.html#a185f66aac8c5317587e6abd43f3013fc", null ],
