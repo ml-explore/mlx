@@ -1,6 +1,4 @@
 var searchData=
 [
-  ['params_2eh_0',['params.h',['../attn_2params_8h.html',1,'(Global Namespace)'],['../conv_2params_8h.html',1,'(Global Namespace)'],['../gemm_2params_8h.html',1,'(Global Namespace)']]],
-  ['pocketfft_2eh_1',['pocketfft.h',['../pocketfft_8h.html',1,'']]],
-  ['primitives_2eh_2',['primitives.h',['../distributed_2primitives_8h.html',1,'(Global Namespace)'],['../primitives_8h.html',1,'(Global Namespace)']]]
+  ['ops_2eh_0',['ops.h',['../backend_2metal_2kernels_2reduction_2ops_8h.html',1,'(Global Namespace)'],['../distributed_2ops_8h.html',1,'(Global Namespace)'],['../ops_8h.html',1,'(Global Namespace)']]]
 ];
