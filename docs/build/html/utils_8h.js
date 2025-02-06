@@ -11,6 +11,7 @@ var utils_8h =
     [ "mlx::core::env::get_var", "namespacemlx_1_1core_1_1env.html#a0efecbf9efe695adafad12b5a4945df3", null ],
     [ "mlx::core::is_power_of_2", "namespacemlx_1_1core.html#adacbc4526e8964b267a8ec3eb1bc1a32", null ],
     [ "mlx::core::env::max_ops_per_buffer", "namespacemlx_1_1core_1_1env.html#aedbf4e739553024c33dd0094dd9107aa", null ],
+    [ "mlx::core::env::metal_fast_synch", "namespacemlx_1_1core_1_1env.html#afa1ecf087fe0c633d5460ddb2c31c945", null ],
     [ "mlx::core::next_power_of_2", "namespacemlx_1_1core.html#a685c0530e338aabc622325685846ce93", null ],
     [ "mlx::core::normalize_axis_index", "namespacemlx_1_1core.html#a1cc130b06d9cdd03dddc74a3b1db0167", null ],
     [ "mlx::core::operator<<", "namespacemlx_1_1core.html#a123331f01188bd76e37623b63b6b4340", null ],

@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['general_0',['General',['../namespacemlx_1_1core.html#abd84ff6c5245e4e170b2ef5247594337a0db377921f4ce762c62526131097968f',1,'mlx::core']]],
+  ['general_0',['General',['../namespacemlx_1_1core.html#a546e3d3c8957fbf2758f9504f4a2d0b6a0db377921f4ce762c62526131097968f',1,'mlx::core::General'],['../namespacemlx_1_1core.html#abd84ff6c5245e4e170b2ef5247594337a0db377921f4ce762c62526131097968f',1,'mlx::core::General'],['../namespacemlx_1_1core.html#ac2b8997537c7f25dd2b244d4c0a865a1a0db377921f4ce762c62526131097968f',1,'mlx::core::General']]],
   ['generalcontiguousreduce_1',['GeneralContiguousReduce',['../namespacemlx_1_1core.html#a12412984a1cabfe1189942c898f8fe65a540cf31fe6858115a02e789938297cdb',1,'mlx::core']]],
   ['generalgeneral_2',['GeneralGeneral',['../namespacemlx_1_1core.html#abd84ff6c5245e4e170b2ef5247594337a6fe62e8ce1fae1e70cb9eeaa67d29dab',1,'mlx::core']]],
   ['generalreduce_3',['GeneralReduce',['../namespacemlx_1_1core.html#a12412984a1cabfe1189942c898f8fe65a3622f95ed0ec99657f9ad8ef39ec2184',1,'mlx::core']]],
