@@ -192,7 +192,8 @@ class Module(dict):
                         f"shape {v_new.shape} for parameter {k}"
                     )
 
-        self.update(tree_unflatten(weights))
+        if len(weights) != 0:
+            self.update(tree_unflatten(weights))
         return self
 
     def save_weights(self, file: str):
