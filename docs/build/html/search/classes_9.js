@@ -9,11 +9,10 @@ var searchData=
   ['integral_5fconstant_3c_20bool_2c_20b_20_3e_3c_20false_20_3e_6',['integral_constant&lt; bool, B &gt;&lt; false &gt;',['../structmlx_1_1steel_1_1integral__constant.html',1,'mlx::steel']]],
   ['integral_5fconstant_3c_20bool_2c_20b_20_3e_3c_20true_20_3e_7',['integral_constant&lt; bool, B &gt;&lt; true &gt;',['../structmlx_1_1steel_1_1integral__constant.html',1,'mlx::steel']]],
   ['integral_5fconstant_3c_20int_2c_20val_20_3e_8',['integral_constant&lt; int, val &gt;',['../structmlx_1_1steel_1_1integral__constant.html',1,'mlx::steel']]],
-  ['intorfloat_9',['IntOrFloat',['../unionmlx_1_1core_1_1detail_1_1_int_or_float.html',1,'mlx::core::detail']]],
-  ['intracing_10',['InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html',1,'mlx::core::detail']]],
-  ['inverse_11',['Inverse',['../classmlx_1_1core_1_1_inverse.html',1,'mlx::core']]],
-  ['is_5fempty_12',['is_empty',['../structmetal_1_1is__empty.html',1,'metal']]],
-  ['is_5fintegral_13',['is_integral',['../structmlx_1_1steel_1_1is__integral.html',1,'mlx::steel']]],
-  ['is_5fintegral_3c_20integral_5fconstant_3c_20t_2c_20v_20_3e_20_3e_14',['is_integral&lt; integral_constant&lt; T, v &gt; &gt;',['../structmlx_1_1steel_1_1is__integral.html',1,'mlx::steel']]],
-  ['is_5fstatic_15',['is_static',['../structmetal_1_1is__static.html',1,'metal']]]
+  ['intracing_9',['InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html',1,'mlx::core::detail']]],
+  ['inverse_10',['Inverse',['../classmlx_1_1core_1_1_inverse.html',1,'mlx::core']]],
+  ['is_5fempty_11',['is_empty',['../structmetal_1_1is__empty.html',1,'metal']]],
+  ['is_5fintegral_12',['is_integral',['../structmlx_1_1steel_1_1is__integral.html',1,'mlx::steel']]],
+  ['is_5fintegral_3c_20integral_5fconstant_3c_20t_2c_20v_20_3e_20_3e_13',['is_integral&lt; integral_constant&lt; T, v &gt; &gt;',['../structmlx_1_1steel_1_1is__integral_3_01integral__constant_3_01_t_00_01v_01_4_01_4.html',1,'mlx::steel']]],
+  ['is_5fstatic_14',['is_static',['../structmetal_1_1is__static.html',1,'metal']]]
 ];
