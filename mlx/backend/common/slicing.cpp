@@ -45,7 +45,7 @@ void slice(
     return;
   }
 
-  // Calculate out strides, initial offset and if copy needs to be made
+  // Calculate out strides, initial offset
   auto [data_offset, inp_strides] = prepare_slice(in, start_indices, strides);
   int64_t data_end = 1;
   for (int i = 0; i < start_indices.size(); ++i) {
