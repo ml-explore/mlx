@@ -167,6 +167,9 @@ class TestBase(mlx_tests.MLXTestCase):
                 ]
             )
 
+        # Empty weights is ok if strict is false
+        m.load_weights([], strict=False)
+
     def test_module_state(self):
         m = nn.Linear(10, 1)
         m.state["hello"] = "world"
