@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#pragma once
+
 #include <fmt/format.h>
 
 #include "mlx/array.h"
