@@ -5,7 +5,7 @@ var searchData=
   ['device_2',['device',['../structmlx_1_1core_1_1_stream.html#a406b1b0162287a4162fab1f70e2ff3bb',1,'mlx::core::Stream']]],
   ['digits_3',['digits',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#af6a681edff230c8d734a1feefb8d1879',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
   ['digits10_4',['digits10',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#a0f48dd0c8a2d2dfa825067fb212b2e6b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
-  ['dim_5',['dim',['../struct_looped_elem_to_loc.html#af8285112846769aba2c0d8615f6f1364',1,'LoopedElemToLoc']]],
+  ['dim_5',['dim',['../struct_looped_elem_to_loc.html#af8285112846769aba2c0d8615f6f1364',1,'LoopedElemToLoc::dim'],['../struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01true_01_4.html#a7be6bf560080472d61e74b522979ef1e',1,'LoopedElemToLoc&lt; 1, OffsetT, true &gt;::dim'],['../struct_looped_elem_to_loc.html#af8285112846769aba2c0d8615f6f1364',1,'LoopedElemToLoc&lt; 1, OffsetT, false &gt;::dim'],['../struct_looped_elem_to_loc.html#af8285112846769aba2c0d8615f6f1364',1,'LoopedElemToLoc&lt; 1, OffsetT, true &gt;::dim']]],
   ['do_5faxpby_6',['do_axpby',['../steel__gemm__fused_8h.html#a703f06c849c89c37af7b1d27b0804a29',1,'steel_gemm_fused.h']]],
   ['do_5fgather_7',['do_gather',['../steel__gemm__fused_8h.html#a60efac3ac3b7cd64d096bbae38a3ac69',1,'steel_gemm_fused.h']]],
   ['do_5fread_8',['do_read',['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader.html#a13eb86acf6abe288c19645935a47d2ad',1,'mlx::steel::Conv2DWeightBlockLoader::do_read'],['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader_small_channels.html#a640155880483e1042ec5f647b9adaac6',1,'mlx::steel::Conv2DWeightBlockLoaderSmallChannels::do_read']]],
