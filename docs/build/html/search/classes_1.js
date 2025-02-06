@@ -4,7 +4,7 @@ var searchData=
   ['accumhelper_1',['AccumHelper',['../structmlx_1_1steel_1_1_accum_helper.html',1,'mlx::steel']]],
   ['add_2',['Add',['../struct_add.html',1,'Add'],['../classmlx_1_1core_1_1_add.html',1,'mlx::core::Add'],['../structmlx_1_1core_1_1detail_1_1_add.html',1,'mlx::core::detail::Add']]],
   ['add_5fvec_3',['add_vec',['../structpocketfft_1_1detail_1_1add__vec.html',1,'pocketfft::detail']]],
-  ['add_5fvec_3c_20cmplx_3c_20t_20_3e_20_3e_4',['add_vec&lt; cmplx&lt; T &gt; &gt;',['../structpocketfft_1_1detail_1_1add__vec.html',1,'pocketfft::detail']]],
+  ['add_5fvec_3c_20cmplx_3c_20t_20_3e_20_3e_4',['add_vec&lt; cmplx&lt; T &gt; &gt;',['../structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4.html',1,'pocketfft::detail']]],
   ['addmm_5',['AddMM',['../classmlx_1_1core_1_1_add_m_m.html',1,'mlx::core']]],
   ['affinequantize_6',['AffineQuantize',['../classmlx_1_1core_1_1fast_1_1_affine_quantize.html',1,'mlx::core::fast']]],
   ['aligned_5fallocator_7',['aligned_allocator',['../structpocketfft_1_1detail_1_1threading_1_1aligned__allocator.html',1,'pocketfft::detail::threading']]],

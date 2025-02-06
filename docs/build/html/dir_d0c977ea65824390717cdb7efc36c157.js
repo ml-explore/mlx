@@ -6,6 +6,8 @@ var dir_d0c977ea65824390717cdb7efc36c157 =
     [ "binary.h", "metal_2binary_8h.html", "metal_2binary_8h" ],
     [ "copy.h", "metal_2copy_8h.html", "metal_2copy_8h" ],
     [ "device.h", "backend_2metal_2device_8h.html", "backend_2metal_2device_8h" ],
+    [ "event.h", "backend_2metal_2event_8h.html", "backend_2metal_2event_8h" ],
+    [ "fence.h", "fence_8h.html", "fence_8h" ],
     [ "kernels.h", "kernels_8h.html", "kernels_8h" ],
     [ "matmul.h", "matmul_8h.html", "matmul_8h" ],
     [ "metal.h", "metal_8h.html", "metal_8h" ],
