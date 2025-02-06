@@ -1921,7 +1921,6 @@ class Slice : public UnaryPrimitive {
   Shape start_indices_;
   Shape end_indices_;
   Shape strides_;
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 class SliceUpdate : public UnaryPrimitive {
