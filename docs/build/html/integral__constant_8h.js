@@ -2,7 +2,7 @@ var integral__constant_8h =
 [
     [ "mlx::steel::integral_constant< T, v >", "structmlx_1_1steel_1_1integral__constant.html", "structmlx_1_1steel_1_1integral__constant" ],
     [ "mlx::steel::is_integral< T >", "structmlx_1_1steel_1_1is__integral.html", null ],
-    [ "mlx::steel::is_integral< integral_constant< T, v > >", "structmlx_1_1steel_1_1is__integral.html", null ],
+    [ "mlx::steel::is_integral< integral_constant< T, v > >", "structmlx_1_1steel_1_1is__integral_3_01integral__constant_3_01_t_00_01v_01_4_01_4.html", null ],
     [ "integral_const_binop", "integral__constant_8h.html#ab28d2705f6fd4f54faccbb78fd5ddfb6", null ],
     [ "mlx::steel::bool_constant", "namespacemlx_1_1steel.html#adbb34bcf0d2dca6b9fb803d591d00da9", null ],
     [ "mlx::steel::false_type", "namespacemlx_1_1steel.html#ab0ef721cedc2b5a97f60d76b765aff2e", null ],

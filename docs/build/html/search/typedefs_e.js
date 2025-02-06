@@ -1,7 +1,12 @@
 var searchData=
 [
-  ['templatearg_0',['TemplateArg',['../namespacemlx_1_1core_1_1fast.html#a9390693ff7be931f3ef3428e2ea4c3f9',1,'mlx::core::fast']]],
-  ['thread_5fsort_5ft_1',['thread_sort_t',['../struct_block_merge_sort.html#ad2474d16721f4ceb954125728a0e2ea2',1,'BlockMergeSort']]],
-  ['true_5ftype_2',['true_type',['../namespacemlx_1_1steel.html#a594a6ccb75b38b5ae4ddd0d9ad047b3a',1,'mlx::steel']]],
-  ['type_3',['type',['../structpocketfft_1_1detail_1_1add__vec.html#a7568dc83136c1b41eb71dcb78527227e',1,'pocketfft::detail::add_vec::type'],['../structmlx_1_1steel_1_1integral__constant.html#a6492c15b37d160d3a33e1cbe770aa3f1',1,'mlx::steel::integral_constant::type'],['../structmetal_1_1make__void.html#a53b29d640a06df62047fffdec0571392',1,'metal::make_void::type'],['../struct_conditional_type.html#a00bac71c43763817c4422bf0363dc92b',1,'ConditionalType::type']]]
+  ['safetensorsload_0',['SafetensorsLoad',['../namespacemlx_1_1core.html#a688cd7917b1365065e8059e9964c3d45',1,'mlx::core']]],
+  ['scalar_5ft_1',['scalar_t',['../structmlx_1_1core_1_1simd_1_1_simd.html#a26040194a37172b6aed7c5d1685362fb',1,'mlx::core::simd::Simd::scalar_t'],['../structmlx_1_1core_1_1simd_1_1_simd_3_01float16__t_00_01_n_01_4.html#a422e15f018cd242dd62617f4213dace0',1,'mlx::core::simd::Simd&lt; float16_t, N &gt;::scalar_t'],['../structmlx_1_1core_1_1simd_1_1_simd.html#a26040194a37172b6aed7c5d1685362fb',1,'mlx::core::simd::Simd&lt; T, 1 &gt;::scalar_t'],['../structmlx_1_1core_1_1simd_1_1_simd.html#a26040194a37172b6aed7c5d1685362fb',1,'mlx::core::simd::Simd&lt; float16_t, N &gt;::scalar_t']]],
+  ['shape_2',['Shape',['../namespacemlx_1_1core.html#a694e23f2d59606643728ad443d621416',1,'mlx::core']]],
+  ['shape_5ft_3',['shape_t',['../namespacepocketfft_1_1detail.html#a885ee37fcf564a268a5c8ca9ea8603e1',1,'pocketfft::detail::shape_t'],['../namespacepocketfft.html#a885ee37fcf564a268a5c8ca9ea8603e1',1,'pocketfft::shape_t']]],
+  ['shapeelem_4',['ShapeElem',['../namespacemlx_1_1core.html#a167cdec84c0ae62b5b299c617384346e',1,'mlx::core']]],
+  ['simplevalueandgradfn_5',['SimpleValueAndGradFn',['../namespacemlx_1_1core.html#a2689b8f1181648cb1685204fea9f3066',1,'mlx::core']]],
+  ['streamordevice_6',['StreamOrDevice',['../namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58',1,'mlx::core']]],
+  ['stride_5ft_7',['stride_t',['../namespacepocketfft_1_1detail.html#afb987c919e9424a996d0fc8b3c23cc84',1,'pocketfft::detail::stride_t'],['../namespacepocketfft.html#afb987c919e9424a996d0fc8b3c23cc84',1,'pocketfft::stride_t']]],
+  ['strides_8',['Strides',['../namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c',1,'mlx::core']]]
 ];
