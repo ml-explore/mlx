@@ -57,7 +57,7 @@ with the Anaconda package manager as follows:
 
 .. code:: shell
 
-    $ conda install openmpi
+    $ conda install conda-forge::openmpi
 
 Installing with Homebrew may require specifying the location of ``libmpi.dyld``
 so that MLX can find it and load it at runtime. This can simply be achieved by

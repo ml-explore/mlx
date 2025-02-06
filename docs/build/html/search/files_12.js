@@ -1,10 +1,19 @@
 var searchData=
 [
-  ['ternary_2eh_0',['ternary.h',['../common_2ternary_8h.html',1,'(Global Namespace)'],['../metal_2kernels_2ternary_8h.html',1,'(Global Namespace)'],['../metal_2ternary_8h.html',1,'(Global Namespace)']]],
-  ['ternary_5fops_2eh_1',['ternary_ops.h',['../ternary__ops_8h.html',1,'']]],
-  ['threadpool_2eh_2',['threadpool.h',['../threadpool_8h.html',1,'']]],
-  ['threefry_2eh_3',['threefry.h',['../threefry_8h.html',1,'']]],
-  ['transforms_2eh_4',['transforms.h',['../backend_2metal_2kernels_2steel_2attn_2transforms_8h.html',1,'(Global Namespace)'],['../backend_2metal_2kernels_2steel_2gemm_2transforms_8h.html',1,'(Global Namespace)'],['../transforms_8h.html',1,'(Global Namespace)']]],
-  ['transforms_5fimpl_2eh_5',['transforms_impl.h',['../transforms__impl_8h.html',1,'']]],
-  ['type_5ftraits_2eh_6',['type_traits.h',['../type__traits_8h.html',1,'']]]
+  ['scan_2eh_0',['scan.h',['../scan_8h.html',1,'']]],
+  ['scatter_2eh_1',['scatter.h',['../scatter_8h.html',1,'']]],
+  ['scatter_5faxis_2eh_2',['scatter_axis.h',['../scatter__axis_8h.html',1,'']]],
+  ['scheduler_2eh_3',['scheduler.h',['../scheduler_8h.html',1,'']]],
+  ['sdpa_5fvector_2eh_4',['sdpa_vector.h',['../sdpa__vector_8h.html',1,'']]],
+  ['simd_2eh_5',['simd.h',['../simd_8h.html',1,'']]],
+  ['slicing_2eh_6',['slicing.h',['../common_2slicing_8h.html',1,'(Global Namespace)'],['../cpu_2slicing_8h.html',1,'(Global Namespace)'],['../metal_2slicing_8h.html',1,'(Global Namespace)']]],
+  ['softmax_2eh_7',['softmax.h',['../jit_2softmax_8h.html',1,'(Global Namespace)'],['../kernels_2softmax_8h.html',1,'(Global Namespace)']]],
+  ['sort_2eh_8',['sort.h',['../sort_8h.html',1,'']]],
+  ['steel_5fattention_2eh_9',['steel_attention.h',['../steel__attention_8h.html',1,'']]],
+  ['steel_5fconv_2eh_10',['steel_conv.h',['../steel__conv_8h.html',1,'']]],
+  ['steel_5fconv_5fgeneral_2eh_11',['steel_conv_general.h',['../steel__conv__general_8h.html',1,'']]],
+  ['steel_5fgemm_5ffused_2eh_12',['steel_gemm_fused.h',['../steel__gemm__fused_8h.html',1,'']]],
+  ['steel_5fgemm_5fmasked_2eh_13',['steel_gemm_masked.h',['../steel__gemm__masked_8h.html',1,'']]],
+  ['steel_5fgemm_5fsplitk_2eh_14',['steel_gemm_splitk.h',['../steel__gemm__splitk_8h.html',1,'']]],
+  ['stream_2eh_15',['stream.h',['../stream_8h.html',1,'']]]
 ];

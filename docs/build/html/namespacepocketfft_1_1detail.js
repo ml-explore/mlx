@@ -2,7 +2,7 @@ var namespacepocketfft_1_1detail =
 [
     [ "threading", "namespacepocketfft_1_1detail_1_1threading.html", "namespacepocketfft_1_1detail_1_1threading" ],
     [ "add_vec", "structpocketfft_1_1detail_1_1add__vec.html", "structpocketfft_1_1detail_1_1add__vec" ],
-    [ "add_vec< cmplx< T > >", "structpocketfft_1_1detail_1_1add__vec.html", "structpocketfft_1_1detail_1_1add__vec" ],
+    [ "add_vec< cmplx< T > >", "structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4.html", "structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4" ],
     [ "arr", "classpocketfft_1_1detail_1_1arr.html", "classpocketfft_1_1detail_1_1arr" ],
     [ "arr_info", "classpocketfft_1_1detail_1_1arr__info.html", "classpocketfft_1_1detail_1_1arr__info" ],
     [ "cfftp", "classpocketfft_1_1detail_1_1cfftp.html", "classpocketfft_1_1detail_1_1cfftp" ],

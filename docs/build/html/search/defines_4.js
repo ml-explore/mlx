@@ -1,11 +1,21 @@
 var searchData=
 [
-  ['define_5fdefault_5fis_5fequivalent_0',['DEFINE_DEFAULT_IS_EQUIVALENT',['../primitives_8h.html#a0fb9d19207dc4869aca35abfbdf4d70a',1,'primitives.h']]],
-  ['define_5fgrads_1',['DEFINE_GRADS',['../primitives_8h.html#a77abdcb55bc2eb0f9a45edc5ee639bf6',1,'primitives.h']]],
-  ['define_5finput_5foutput_5fshape_2',['DEFINE_INPUT_OUTPUT_SHAPE',['../primitives_8h.html#a649a06267b75e007224ea4ddefedb999',1,'primitives.h']]],
-  ['define_5fprint_3',['DEFINE_PRINT',['../primitives_8h.html#a1d3a37af519e16f6a703b1e9ebd0f592',1,'primitives.h']]],
-  ['define_5fsimd_5fexclusive_5fscan_4',['DEFINE_SIMD_EXCLUSIVE_SCAN',['../scan_8h.html#a185f66aac8c5317587e6abd43f3013fc',1,'scan.h']]],
-  ['define_5fsimd_5freduce_5',['DEFINE_SIMD_REDUCE',['../backend_2metal_2kernels_2reduction_2ops_8h.html#acacf99e0ba629ed062ccc3c2eba89b05',1,'ops.h']]],
-  ['define_5fsimd_5fscan_6',['DEFINE_SIMD_SCAN',['../scan_8h.html#a0d8d6a9b0f3a1263629380bda8eca7bc',1,'scan.h']]],
-  ['define_5fvmap_7',['DEFINE_VMAP',['../primitives_8h.html#adc0fbd79fe0d1114dc85da4ed99798bd',1,'primitives.h']]]
+  ['default_5fbinary_0',['DEFAULT_BINARY',['../base__simd_8h.html#a1d01fad7230543d56f4facf17dcc4047',1,'base_simd.h']]],
+  ['default_5fbinary_5fop_1',['DEFAULT_BINARY_OP',['../cpu_2binary__ops_8h.html#a3f97e0a58306201b54eb73fac0affc8a',1,'binary_ops.h']]],
+  ['default_5fbool_5fop_2',['DEFAULT_BOOL_OP',['../cpu_2binary__ops_8h.html#a98fb0ee78e9fd26ad6d0a2b365f7caa7',1,'binary_ops.h']]],
+  ['default_5fcomparisons_3',['DEFAULT_COMPARISONS',['../base__simd_8h.html#af5153f51cdd18d56d1de24b5da9f4366',1,'base_simd.h']]],
+  ['default_5fop_4',['DEFAULT_OP',['../cpu_2unary__ops_8h.html#a83702f31e6dbd79c339a6aad67319f64',1,'unary_ops.h']]],
+  ['default_5freduction_5',['DEFAULT_REDUCTION',['../base__simd_8h.html#a0adf6d25084019eff671abc59031573e',1,'base_simd.h']]],
+  ['default_5funary_6',['DEFAULT_UNARY',['../base__simd_8h.html#a122d6a2fa4dcfe78b221e52155419124',1,'base_simd.h']]],
+  ['define_5fdefault_5fis_5fequivalent_7',['DEFINE_DEFAULT_IS_EQUIVALENT',['../primitives_8h.html#a0fb9d19207dc4869aca35abfbdf4d70a',1,'primitives.h']]],
+  ['define_5fgrads_8',['DEFINE_GRADS',['../primitives_8h.html#a77abdcb55bc2eb0f9a45edc5ee639bf6',1,'primitives.h']]],
+  ['define_5finput_5foutput_5fshape_9',['DEFINE_INPUT_OUTPUT_SHAPE',['../primitives_8h.html#a649a06267b75e007224ea4ddefedb999',1,'primitives.h']]],
+  ['define_5fneon_5fbinary_5fop_10',['DEFINE_NEON_BINARY_OP',['../neon__fp16__simd_8h.html#a63ba6e115ef14e134081310f7d4579a5',1,'neon_fp16_simd.h']]],
+  ['define_5fneon_5fcomparison_11',['DEFINE_NEON_COMPARISON',['../neon__fp16__simd_8h.html#a9fcd94c7369a6b4437f9c310a805c79d',1,'neon_fp16_simd.h']]],
+  ['define_5fneon_5funary_5fop_12',['DEFINE_NEON_UNARY_OP',['../neon__fp16__simd_8h.html#af8138a463be93b9e0c9b685e94a1fd00',1,'neon_fp16_simd.h']]],
+  ['define_5fprint_13',['DEFINE_PRINT',['../primitives_8h.html#a1d3a37af519e16f6a703b1e9ebd0f592',1,'primitives.h']]],
+  ['define_5fsimd_5fexclusive_5fscan_14',['DEFINE_SIMD_EXCLUSIVE_SCAN',['../scan_8h.html#a185f66aac8c5317587e6abd43f3013fc',1,'scan.h']]],
+  ['define_5fsimd_5freduce_15',['DEFINE_SIMD_REDUCE',['../backend_2metal_2kernels_2reduction_2ops_8h.html#acacf99e0ba629ed062ccc3c2eba89b05',1,'ops.h']]],
+  ['define_5fsimd_5fscan_16',['DEFINE_SIMD_SCAN',['../scan_8h.html#a0d8d6a9b0f3a1263629380bda8eca7bc',1,'scan.h']]],
+  ['define_5fvmap_17',['DEFINE_VMAP',['../primitives_8h.html#adc0fbd79fe0d1114dc85da4ed99798bd',1,'primitives.h']]]
 ];

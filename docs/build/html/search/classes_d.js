@@ -9,7 +9,7 @@ var searchData=
   ['min_6',['Min',['../struct_min.html',1,'']]],
   ['minimum_7',['Minimum',['../struct_minimum.html',1,'Minimum'],['../structmlx_1_1core_1_1detail_1_1_minimum.html',1,'mlx::core::detail::Minimum'],['../classmlx_1_1core_1_1_minimum.html',1,'mlx::core::Minimum']]],
   ['mlx_5fatomic_8',['mlx_atomic',['../structmlx__atomic.html',1,'']]],
-  ['mlx_5fatomic_3c_20t_2c_20enable_5fif_5ft_3c_20is_5fmetal_5fatomic_3c_20t_20_3e_20_3e_20_3e_9',['mlx_atomic&lt; T, enable_if_t&lt; is_metal_atomic&lt; T &gt; &gt; &gt;',['../structmlx__atomic.html',1,'']]],
+  ['mlx_5fatomic_3c_20t_2c_20enable_5fif_5ft_3c_20is_5fmetal_5fatomic_3c_20t_20_3e_20_3e_20_3e_9',['mlx_atomic&lt; T, enable_if_t&lt; is_metal_atomic&lt; T &gt; &gt; &gt;',['../structmlx__atomic_3_01_t_00_01enable__if__t_3_01is__metal__atomic_3_01_t_01_4_01_4_01_4.html',1,'']]],
   ['mlxconvparams_10',['MLXConvParams',['../struct_m_l_x_conv_params.html',1,'']]],
   ['mlxconvparams_3c_202_20_3e_11',['MLXConvParams&lt; 2 &gt;',['../struct_m_l_x_conv_params.html',1,'']]],
   ['mmatile_12',['MMATile',['../structmlx_1_1steel_1_1_m_m_a_tile.html',1,'mlx::steel']]],

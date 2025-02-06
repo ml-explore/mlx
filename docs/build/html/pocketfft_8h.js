@@ -26,7 +26,7 @@ var pocketfft_8h =
     [ "pocketfft::detail::rev_iter", "classpocketfft_1_1detail_1_1rev__iter.html", "classpocketfft_1_1detail_1_1rev__iter" ],
     [ "pocketfft::detail::VTYPE< T >", "structpocketfft_1_1detail_1_1_v_t_y_p_e.html", null ],
     [ "pocketfft::detail::add_vec< T >", "structpocketfft_1_1detail_1_1add__vec.html", "structpocketfft_1_1detail_1_1add__vec" ],
-    [ "pocketfft::detail::add_vec< cmplx< T > >", "structpocketfft_1_1detail_1_1add__vec.html", "structpocketfft_1_1detail_1_1add__vec" ],
+    [ "pocketfft::detail::add_vec< cmplx< T > >", "structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4.html", "structpocketfft_1_1detail_1_1add__vec_3_01cmplx_3_01_t_01_4_01_4" ],
     [ "pocketfft::detail::ExecC2C", "structpocketfft_1_1detail_1_1_exec_c2_c.html", "structpocketfft_1_1detail_1_1_exec_c2_c" ],
     [ "pocketfft::detail::ExecHartley", "structpocketfft_1_1detail_1_1_exec_hartley.html", "structpocketfft_1_1detail_1_1_exec_hartley" ],
     [ "pocketfft::detail::ExecDcst", "structpocketfft_1_1detail_1_1_exec_dcst.html", "structpocketfft_1_1detail_1_1_exec_dcst" ],
