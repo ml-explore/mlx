@@ -2010,6 +2010,15 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([1, 3, 0, 2], dtype=mx.uint32)
         self.assertTrue(mx.array_equal(out, expected))
 
+        # Test array with singleton dim
+        out = mx.sort(mx.array([1, 2, 3]), axis=0)
+        self.assertTrue(mx.array_equal(out, mx.array([1, 2, 3])))
+
+        x = np.random.uniform(size=(1, 4, 8, 1)).astype(np.float32)
+        y_np = np.sort(x, axis=-2)
+        y_mx = mx.sort(mx.array(x), axis=-2)
+        self.assertTrue(np.array_equal(y_np, y_mx))
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
