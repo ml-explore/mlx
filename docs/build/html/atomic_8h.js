@@ -1,7 +1,7 @@
 var atomic_8h =
 [
     [ "mlx_atomic< T, typename >", "structmlx__atomic.html", "structmlx__atomic" ],
-    [ "mlx_atomic< T, enable_if_t< is_metal_atomic< T > > >", "structmlx__atomic.html", "structmlx__atomic" ],
+    [ "mlx_atomic< T, enable_if_t< is_metal_atomic< T > > >", "structmlx__atomic_3_01_t_00_01enable__if__t_3_01is__metal__atomic_3_01_t_01_4_01_4_01_4.html", "structmlx__atomic_3_01_t_00_01enable__if__t_3_01is__metal__atomic_3_01_t_01_4_01_4_01_4" ],
     [ "mlx_atomic_compare_exchange_weak_explicit", "atomic_8h.html#ad7f32327ff66354cfa2f0cfdac79316f", null ],
     [ "mlx_atomic_compare_exchange_weak_explicit", "atomic_8h.html#aa8f47b2e9b95d4b00ad51f08b070deb5", null ],
     [ "mlx_atomic_fetch_add_explicit", "atomic_8h.html#aad448d9e06e001700b65ca8317216a3b", null ],

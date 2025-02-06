@@ -1,5 +1,6 @@
 var structmlx_1_1core_1_1complex64__t =
 [
+    [ "complex64_t", "structmlx_1_1core_1_1complex64__t.html#ad27bed7d6b7966bfcf563af06bedddf3", null ],
     [ "complex64_t", "structmlx_1_1core_1_1complex64__t.html#a697cc973ae27d63c8e00d830e780bd8c", null ],
     [ "complex64_t", "structmlx_1_1core_1_1complex64__t.html#ae065e39938f9c4374b4116f4c67d4d09", null ],
     [ "complex64_t", "structmlx_1_1core_1_1complex64__t.html#a2232cbbe591a9d2bc228cb23fac38b50", null ],

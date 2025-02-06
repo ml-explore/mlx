@@ -6,5 +6,5 @@ var searchData=
   ['compiled_5fpreamble_2eh_3',['compiled_preamble.h',['../compiled__preamble_8h.html',1,'']]],
   ['complex_2eh_4',['complex.h',['../backend_2metal_2kernels_2complex_8h.html',1,'(Global Namespace)'],['../types_2complex_8h.html',1,'(Global Namespace)']]],
   ['conv_2eh_5',['conv.h',['../conv_8h.html',1,'']]],
-  ['copy_2eh_6',['copy.h',['../common_2copy_8h.html',1,'(Global Namespace)'],['../metal_2copy_8h.html',1,'(Global Namespace)'],['../metal_2kernels_2copy_8h.html',1,'(Global Namespace)']]]
+  ['copy_2eh_6',['copy.h',['../common_2copy_8h.html',1,'(Global Namespace)'],['../cpu_2copy_8h.html',1,'(Global Namespace)'],['../metal_2copy_8h.html',1,'(Global Namespace)'],['../metal_2kernels_2copy_8h.html',1,'(Global Namespace)']]]
 ];
