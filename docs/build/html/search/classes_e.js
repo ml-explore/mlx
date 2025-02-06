@@ -8,7 +8,7 @@ var searchData=
   ['notequal_5',['NotEqual',['../structmlx_1_1core_1_1detail_1_1_not_equal.html',1,'mlx::core::detail::NotEqual'],['../classmlx_1_1core_1_1_not_equal.html',1,'mlx::core::NotEqual'],['../struct_not_equal.html',1,'NotEqual']]],
   ['numberofelements_6',['NumberOfElements',['../classmlx_1_1core_1_1_number_of_elements.html',1,'mlx::core']]],
   ['numeric_5flimits_7',['numeric_limits',['../structmlx_1_1core_1_1numeric__limits.html',1,'mlx::core']]],
-  ['numeric_5flimits_3c_20bfloat16_5ft_20_3e_8',['numeric_limits&lt; bfloat16_t &gt;',['../structmlx_1_1core_1_1numeric__limits.html',1,'mlx::core']]],
-  ['numeric_5flimits_3c_20float_20_3e_9',['numeric_limits&lt; float &gt;',['../structmlx_1_1core_1_1numeric__limits.html',1,'mlx::core']]],
-  ['numeric_5flimits_3c_20float16_5ft_20_3e_10',['numeric_limits&lt; float16_t &gt;',['../structmlx_1_1core_1_1numeric__limits.html',1,'mlx::core']]]
+  ['numeric_5flimits_3c_20bfloat16_5ft_20_3e_8',['numeric_limits&lt; bfloat16_t &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html',1,'mlx::core']]],
+  ['numeric_5flimits_3c_20float_20_3e_9',['numeric_limits&lt; float &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float_01_4.html',1,'mlx::core']]],
+  ['numeric_5flimits_3c_20float16_5ft_20_3e_10',['numeric_limits&lt; float16_t &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html',1,'mlx::core']]]
 ];
