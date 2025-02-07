@@ -62,8 +62,8 @@ void abort_with_exception(const std::exception& error);
 struct finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
-  float min;
-  float max;
+  double min;
+  double max;
 };
 
 /** The type from promoting the arrays' types with one another. */

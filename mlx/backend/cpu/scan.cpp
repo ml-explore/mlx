@@ -299,6 +299,10 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
       scan_dispatch<float, float>(
           reduce_type_, in, out, axis_, reverse_, inclusive_);
       break;
+    case float64:
+      scan_dispatch<double, double>(
+          reduce_type_, in, out, axis_, reverse_, inclusive_);
+      break;
     case bfloat16:
       scan_dispatch<bfloat16_t, bfloat16_t>(
           reduce_type_, in, out, axis_, reverse_, inclusive_);

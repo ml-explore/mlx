@@ -46,6 +46,9 @@ void matmul_general(
   } else if (out.dtype() == bfloat16) {
     matmul<bfloat16_t>(
         a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta);
+  } else if (out.dtype() == float64) {
+    matmul<double>(
+        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta);
   } else {
     throw std::runtime_error("[Matmul::eval_cpu] Invalid type.");
   }

@@ -51,6 +51,9 @@ void select_op(
     case float32:
       ternary_op<bool, float, float, float>(a, b, c, out, op);
       break;
+    case float64:
+      ternary_op<bool, double, double, double>(a, b, c, out, op);
+      break;
     case bfloat16:
       ternary_op<bool, bfloat16_t, bfloat16_t, bfloat16_t>(a, b, c, out, op);
       break;

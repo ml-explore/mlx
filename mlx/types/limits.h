@@ -13,6 +13,9 @@ template <>
 struct numeric_limits<float> : public std::numeric_limits<float> {};
 
 template <>
+struct numeric_limits<double> : public std::numeric_limits<double> {};
+
+template <>
 struct numeric_limits<float16_t> {
  private:
   union half_or_bits {

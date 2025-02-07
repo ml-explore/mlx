@@ -62,6 +62,9 @@ void arange(
     case float32:
       arange<float>(start, start + step, out, out.size());
       break;
+    case float64:
+      arange<double>(start, start + step, out, out.size());
+      break;
     case bfloat16:
       arange<bfloat16_t>(start, start + step, out, out.size());
       break;

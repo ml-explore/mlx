@@ -103,6 +103,9 @@ void ArgReduce::eval_cpu(const std::vector<array>& inputs, array& out) {
     case bfloat16:
       arg_reduce_dispatch<bfloat16_t>(in, out, reduce_type_, axis_);
       break;
+    case float64:
+      arg_reduce_dispatch<double>(in, out, reduce_type_, axis_);
+      break;
     case complex64:
       arg_reduce_dispatch<complex64_t>(in, out, reduce_type_, axis_);
       break;

@@ -42,6 +42,9 @@ std::string type_to_name(const Dtype& t) {
     case float32:
       tname = "float32";
       break;
+    case float64:
+      tname = "double";
+      break;
     case bfloat16:
       tname = "bfloat16";
       break;

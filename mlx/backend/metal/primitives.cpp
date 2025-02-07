@@ -151,8 +151,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
     case bfloat16:
       arange_set_scalars<bfloat16_t>(start_, start_ + step_, compute_encoder);
       break;
-    case complex64:
-      throw std::runtime_error("[Arange::eval_gpu] Does not support complex64");
+    default:
+      throw std::runtime_error("[Arange::eval_gpu] Does not support type.");
   }
 
   compute_encoder.set_output_array(out, 2);

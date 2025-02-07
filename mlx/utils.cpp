@@ -345,7 +345,7 @@ int get_var(const char* name, int default_value) {
 } // namespace env
 
 template <typename T>
-void set_finfo_limits(float& min, float& max) {
+void set_finfo_limits(double& min, double& max) {
   min = numeric_limits<T>::lowest();
   max = numeric_limits<T>::max();
 }
@@ -362,6 +362,8 @@ finfo::finfo(Dtype dtype) : dtype(dtype) {
     set_finfo_limits<float16_t>(min, max);
   } else if (dtype == bfloat16) {
     set_finfo_limits<bfloat16_t>(min, max);
+  } else if (dtype == float64) {
+    set_finfo_limits<double>(min, max);
   } else if (dtype == complex64) {
     this->dtype = float32;
     set_finfo_limits<float>(min, max);
