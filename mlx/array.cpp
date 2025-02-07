@@ -27,7 +27,7 @@ array::array(
           std::move(primitive),
           std::move(inputs))) {
   if (has_primitive() && this->primitive().stream().device == Device::gpu) {
-    for (auto& in : inputs) {
+    for (auto& in : this->inputs()) {
       if (in.dtype() == float64) {
         throw std::invalid_argument("float64 is not supported on the GPU");
       }
