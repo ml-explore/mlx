@@ -34,6 +34,9 @@ void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
       case float32:
         unary_op<float>(in, out, op);
         break;
+      case float64:
+        unary_op<double>(in, out, op);
+        break;
       case bfloat16:
         unary_op<bfloat16_t>(in, out, op);
         break;
@@ -120,6 +123,9 @@ void Erf::eval_cpu(const std::vector<array>& inputs, array& out) {
     case float16:
       unary_op<float16_t>(in, out, detail::Erf());
       break;
+    case float64:
+      unary_op<double>(in, out, detail::Erf());
+      break;
     case bfloat16:
       unary_op<bfloat16_t>(in, out, detail::Erf());
       break;
@@ -139,6 +145,9 @@ void ErfInv::eval_cpu(const std::vector<array>& inputs, array& out) {
       break;
     case float16:
       unary_op<float16_t>(in, out, detail::ErfInv());
+      break;
+    case float64:
+      unary_op<double>(in, out, detail::ErfInv());
       break;
     case bfloat16:
       unary_op<bfloat16_t>(in, out, detail::ErfInv());

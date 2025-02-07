@@ -23,6 +23,7 @@ struct Dtype {
     int64,
     float16,
     float32,
+    float64,
     bfloat16,
     complex64,
   };
@@ -78,6 +79,7 @@ inline constexpr Dtype int64{Dtype::Val::int64, sizeof(int64_t)};
 
 inline constexpr Dtype float16{Dtype::Val::float16, sizeof(uint16_t)};
 inline constexpr Dtype float32{Dtype::Val::float32, sizeof(float)};
+inline constexpr Dtype float64{Dtype::Val::float64, sizeof(double)};
 inline constexpr Dtype bfloat16{Dtype::Val::bfloat16, sizeof(uint16_t)};
 inline constexpr Dtype complex64{Dtype::Val::complex64, sizeof(complex64_t)};
 

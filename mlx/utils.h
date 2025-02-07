@@ -47,6 +47,7 @@ struct PrintFormatter {
   inline void print(std::ostream& os, float16_t val);
   inline void print(std::ostream& os, bfloat16_t val);
   inline void print(std::ostream& os, float val);
+  inline void print(std::ostream& os, double val);
   inline void print(std::ostream& os, complex64_t val);
 
   bool capitalize_bool{false};
@@ -61,8 +62,8 @@ void abort_with_exception(const std::exception& error);
 struct finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
-  float min;
-  float max;
+  double min;
+  double max;
 };
 
 /** The type from promoting the arrays' types with one another. */

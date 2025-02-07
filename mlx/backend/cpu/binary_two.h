@@ -205,6 +205,9 @@ void binary(
     case float32:
       binary_op<float>(a, b, outputs, op);
       break;
+    case float64:
+      binary_op<double>(a, b, outputs, op);
+      break;
     case bfloat16:
       binary_op<bfloat16_t>(a, b, outputs, op);
       break;

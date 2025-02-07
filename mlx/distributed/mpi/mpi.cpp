@@ -95,6 +95,7 @@ struct MPIWrapper {
     LOAD_SYMBOL(ompi_mpi_int64_t, mpi_int64_);
     LOAD_SYMBOL(ompi_mpi_uint64_t, mpi_uint64_);
     LOAD_SYMBOL(ompi_mpi_float, mpi_float_);
+    LOAD_SYMBOL(ompi_mpi_double, mpi_double_);
     LOAD_SYMBOL(ompi_mpi_c_complex, mpi_complex_);
   }
 
@@ -164,6 +165,8 @@ struct MPIWrapper {
         return mpi_float16_;
       case bfloat16:
         return mpi_bfloat16_;
+      case float64:
+        return mpi_double_;
     }
   }
 
@@ -218,6 +221,7 @@ struct MPIWrapper {
   MPI_Datatype mpi_int64_;
   MPI_Datatype mpi_uint64_;
   MPI_Datatype mpi_float_;
+  MPI_Datatype mpi_double_;
   MPI_Datatype mpi_complex_;
   MPI_Datatype mpi_float16_;
   MPI_Datatype mpi_bfloat16_;

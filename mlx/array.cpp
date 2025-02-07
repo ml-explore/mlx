@@ -25,7 +25,18 @@ array::array(
           std::move(shape),
           dtype,
           std::move(primitive),
-          std::move(inputs))) {}
+          std::move(inputs))) {
+  if (has_primitive() && this->primitive().stream().device == Device::gpu) {
+    for (auto& in : this->inputs()) {
+      if (in.dtype() == float64) {
+        throw std::invalid_argument("float64 is not supported on the GPU");
+      }
+    }
+    if (this->dtype() == float64) {
+      throw std::invalid_argument("float64 is not supported on the GPU");
+    }
+  }
+}
 
 std::vector<array> array::make_arrays(
     std::vector<Shape> shapes,

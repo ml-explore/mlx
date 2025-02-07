@@ -51,6 +51,9 @@ void comparison_op(const array& a, const array& b, array& out, Op op) {
     case float32:
       binary_op<float, bool>(a, b, out, op);
       break;
+    case float64:
+      binary_op<double, bool>(a, b, out, op);
+      break;
     case bfloat16:
       binary_op<bfloat16_t, bool>(a, b, out, op);
       break;
@@ -114,6 +117,9 @@ void DivMod::eval_cpu(
     case float32:
       binary_op<float>(a, b, outputs, float_op);
       break;
+    case float64:
+      binary_op<double>(a, b, outputs, float_op);
+      break;
     case bfloat16:
       binary_op<bfloat16_t>(a, b, outputs, float_op);
       break;
@@ -149,6 +155,9 @@ void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
         break;
       case float32:
         binary_op<float, bool>(a, b, out, detail::NaNEqual());
+        break;
+      case float64:
+        binary_op<double, bool>(a, b, out, detail::NaNEqual());
         break;
       case bfloat16:
         binary_op<bfloat16_t, bool>(a, b, out, detail::NaNEqual());
@@ -189,20 +198,22 @@ void LogAddExp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  if (out.dtype() == float32) {
-    binary_op<float>(a, b, out, detail::LogAddExp());
-  } else if (out.dtype() == float16) {
-    binary_op<float16_t>(a, b, out, detail::LogAddExp());
-  } else if (out.dtype() == bfloat16) {
-    binary_op<bfloat16_t>(a, b, out, detail::LogAddExp());
-  } else if (issubdtype(out.dtype(), inexact)) {
-    std::ostringstream err;
-    err << "[logaddexp] Does not support " << out.dtype();
-    throw std::invalid_argument(err.str());
-  } else {
-    throw std::invalid_argument(
-        "[logaddexp] Cannot compute logaddexp for arrays with"
-        " non floating point type.");
+  switch (out.dtype()) {
+    case float16:
+      binary_op<float16_t>(a, b, out, detail::LogAddExp());
+      break;
+    case float32:
+      binary_op<float>(a, b, out, detail::LogAddExp());
+      break;
+    case float64:
+      binary_op<double>(a, b, out, detail::LogAddExp());
+      break;
+    case bfloat16:
+      binary_op<bfloat16_t>(a, b, out, detail::LogAddExp());
+      break;
+    default:
+      throw std::runtime_error(
+          "[LogAddExp::eval_cpu] Only supports non-complex floating point types.");
   }
 }
 
@@ -321,20 +332,22 @@ void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   const auto& a = inputs[0];
   const auto& b = inputs[1];
-  if (out.dtype() == float32) {
-    binary_op<float>(a, b, out, detail::ArcTan2());
-  } else if (out.dtype() == float16) {
-    binary_op<float16_t>(a, b, out, detail::ArcTan2());
-  } else if (out.dtype() == bfloat16) {
-    binary_op<bfloat16_t>(a, b, out, detail::ArcTan2());
-  } else if (issubdtype(out.dtype(), inexact)) {
-    std::ostringstream err;
-    err << "[arctan2] Does not support " << out.dtype();
-    throw std::invalid_argument(err.str());
-  } else {
-    throw std::invalid_argument(
-        "[arctan2] Cannot compute inverse tangent for arrays"
-        " with non floating point type.");
+  switch (out.dtype()) {
+    case float16:
+      binary_op<float16_t>(a, b, out, detail::ArcTan2());
+      break;
+    case float32:
+      binary_op<float>(a, b, out, detail::ArcTan2());
+      break;
+    case float64:
+      binary_op<double>(a, b, out, detail::ArcTan2());
+      break;
+    case bfloat16:
+      binary_op<bfloat16_t>(a, b, out, detail::ArcTan2());
+      break;
+    default:
+      throw std::runtime_error(
+          "[ArcTan2::eval_cpu] Only supports non-complex floating point types.");
   }
 }
 

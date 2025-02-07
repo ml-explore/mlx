@@ -148,6 +148,9 @@ void dispatch_gather(
     case float32:
       gather<float, IdxT>(src, inds, out, axes, size);
       break;
+    case float64:
+      gather<double, IdxT>(src, inds, out, axes, size);
+      break;
     case bfloat16:
       gather<bfloat16_t, IdxT>(src, inds, out, axes, size);
       break;
@@ -287,6 +290,9 @@ void dispatch_gather_axis(
       break;
     case float32:
       gather_axis<float, IdxT>(src, inds, out, axis);
+      break;
+    case float64:
+      gather_axis<double, IdxT>(src, inds, out, axis);
       break;
     case bfloat16:
       gather_axis<bfloat16_t, IdxT>(src, inds, out, axis);
@@ -499,6 +505,9 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
     case float32:
       dispatch_scatter<float>(out, inds, updates, axes_, reduce_type_);
       break;
+    case float64:
+      dispatch_scatter<double>(out, inds, updates, axes_, reduce_type_);
+      break;
     case bfloat16:
       dispatch_scatter<bfloat16_t>(out, inds, updates, axes_, reduce_type_);
       break;
@@ -660,6 +669,9 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
       break;
     case float32:
       dispatch_scatter_axis<float>(out, idx, updates, axis_, reduce_type_);
+      break;
+    case float64:
+      dispatch_scatter_axis<double>(out, idx, updates, axis_, reduce_type_);
       break;
     case bfloat16:
       dispatch_scatter_axis<bfloat16_t>(out, idx, updates, axis_, reduce_type_);

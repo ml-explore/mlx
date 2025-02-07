@@ -193,6 +193,9 @@ void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
     case float32:
       copy<SrcT, float>(src, dst, ctype, std::forward<Args>(args)...);
       break;
+    case float64:
+      copy<SrcT, double>(src, dst, ctype, std::forward<Args>(args)...);
+      break;
     case bfloat16:
       copy<SrcT, bfloat16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
@@ -241,6 +244,9 @@ inline void copy_inplace_dispatch(
       break;
     case float32:
       copy<float>(src, dst, ctype, std::forward<Args>(args)...);
+      break;
+    case float64:
+      copy<double>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case bfloat16:
       copy<bfloat16_t>(src, dst, ctype, std::forward<Args>(args)...);

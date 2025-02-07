@@ -151,6 +151,9 @@ void NumberOfElements::eval(const std::vector<array>& inputs, array& out) {
     case bfloat16:
       *out.data<bfloat16_t>() = static_cast<bfloat16_t>(numel);
       break;
+    case float64:
+      *out.data<double>() = static_cast<double>(numel);
+      break;
     case complex64:
       *out.data<complex64_t>() = static_cast<complex64_t>(numel);
       break;

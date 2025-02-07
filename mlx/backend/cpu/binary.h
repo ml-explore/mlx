@@ -358,6 +358,9 @@ void binary(const array& a, const array& b, array& out, Op op) {
     case float32:
       binary_op<float>(a, b, out, op);
       break;
+    case float64:
+      binary_op<double>(a, b, out, op);
+      break;
     case bfloat16:
       binary_op<bfloat16_t>(a, b, out, op);
       break;

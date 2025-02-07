@@ -51,9 +51,18 @@ The default floating point type is ``float32`` and the default integer type is
    * - ``float32``
      - 4 
      - 32-bit float
+   * - ``float64``
+     - 4 
+     - 64-bit double
    * - ``complex64``
      - 8 
      - 64-bit complex float
+
+
+.. note::
+
+    Arrays with type ``float64`` only work with CPU operations. Using
+    ``float64`` arrays on the GPU will result in an exception.
 
 
 Data type are aranged in a hierarchy. See the :obj:`DtypeCategory` object

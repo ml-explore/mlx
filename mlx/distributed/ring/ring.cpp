@@ -68,6 +68,10 @@
       using T = float;       \
       __VA_ARGS__;           \
     } break;                 \
+    case float64: {          \
+      using T = double;      \
+      __VA_ARGS__;           \
+    } break;                 \
     case complex64: {        \
       using T = complex64_t; \
       __VA_ARGS__;           \
