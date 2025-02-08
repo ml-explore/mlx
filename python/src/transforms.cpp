@@ -543,9 +543,9 @@ struct PyCompiledFun {
 
     tree_cache().erase(fun_id);
     mx::detail::compile_erase(fun_id);
-    fun.release().dec_ref();
-    captured_inputs.release().dec_ref();
-    captured_outputs.release().dec_ref();
+    fun.reset();
+    captured_inputs.reset();
+    captured_outputs.reset();
   }
 };
 
@@ -555,7 +555,7 @@ class PyCheckpointedFun {
   ~PyCheckpointedFun() {
     nb::gil_scoped_acquire gil;
 
-    fun_.release().dec_ref();
+    fun_.reset();
   }
 
   struct InnerFunction {
@@ -573,8 +573,8 @@ class PyCheckpointedFun {
     ~InnerFunction() {
       nb::gil_scoped_acquire gil;
 
-      fun_.release().dec_ref();
-      args_structure_.release().dec_ref();
+      fun_.reset();
+      args_structure_.reset();
     }
 
     std::vector<mx::array> operator()(const std::vector<mx::array>& inputs) {
@@ -609,6 +609,10 @@ class PyCheckpointedFun {
   nb::callable fun_;
 };
 
+int py_custom_function_tp_traverse(PyObject* self, visitproc visit, void* arg);
+
+int py_custom_function_tp_clear(PyObject* self);
+
 /**
  * PyCustomFunction is the class that implements the python decorator
  * `mx.custom_function`.
@@ -641,17 +645,7 @@ class PyCustomFunction {
   PyCustomFunction(nb::callable fun) : fun_(std::move(fun)) {}
   ~PyCustomFunction() {
     nb::gil_scoped_acquire gil;
-
-    fun_.release().dec_ref();
-    if (vjp_fun_.has_value()) {
-      (*vjp_fun_).release().dec_ref();
-    }
-    if (jvp_fun_.has_value()) {
-      (*jvp_fun_).release().dec_ref();
-    }
-    if (vmap_fun_.has_value()) {
-      (*vmap_fun_).release().dec_ref();
-    }
+    reset();
   }
 
   struct InnerFunction {
@@ -669,10 +663,10 @@ class PyCustomFunction {
     ~InnerFunction() {
       nb::gil_scoped_acquire gil;
 
-      fun_.release().dec_ref();
-      input_structure_.release().dec_ref();
+      fun_.reset();
+      input_structure_.reset();
       if (output_structure_.use_count() == 1) {
-        output_structure_->release().dec_ref();
+        output_structure_->reset();
       }
     }
 
@@ -703,10 +697,10 @@ class PyCustomFunction {
     ~InnerVJPFunction() {
       nb::gil_scoped_acquire gil;
 
-      vjp_fun_.release().dec_ref();
-      input_structure_.release().dec_ref();
+      vjp_fun_.reset();
+      input_structure_.reset();
       if (output_structure_.use_count() == 1) {
-        output_structure_->release().dec_ref();
+        output_structure_->reset();
       }
     }
 
@@ -746,8 +740,8 @@ class PyCustomFunction {
     ~InnerJVPFunction() {
       nb::gil_scoped_acquire gil;
 
-      jvp_fun_.release().dec_ref();
-      input_structure_.release().dec_ref();
+      jvp_fun_.reset();
+      input_structure_.reset();
     }
 
     std::vector<mx::array> operator()(
@@ -801,8 +795,8 @@ class PyCustomFunction {
     ~InnerVmapFunction() {
       nb::gil_scoped_acquire gil;
 
-      vmap_fun_.release().dec_ref();
-      input_structure_.release().dec_ref();
+      vmap_fun_.reset();
+      input_structure_.reset();
     }
 
     std::pair<std::vector<mx::array>, std::vector<int>> operator()(
@@ -904,6 +898,20 @@ class PyCustomFunction {
     vmap_fun_ = vmap_fun;
     return *this;
   }
+  void reset() {
+    fun_.reset();
+    if (vjp_fun_.has_value()) {
+      (*vjp_fun_).reset();
+    }
+    if (jvp_fun_.has_value()) {
+      (*jvp_fun_).reset();
+    }
+    if (vmap_fun_.has_value()) {
+      (*vmap_fun_).reset();
+    }
+  }
+
+  friend int py_custom_function_tp_traverse(PyObject*, visitproc, void*);
 
  private:
   std::optional<InnerVJPFunction> make_vjp_function(
@@ -940,10 +948,40 @@ class PyCustomFunction {
   std::optional<nb::callable> vmap_fun_;
 };
 
+int py_custom_function_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+  auto* p = nb::inst_ptr<PyCustomFunction>(self);
+  nb::handle v = nb::find(p->fun_);
+  Py_VISIT(v.ptr());
+  if (p->vjp_fun_.has_value()) {
+    nb::handle v = nb::find(*(p->vjp_fun_));
+    Py_VISIT(v.ptr());
+  }
+  if (p->jvp_fun_.has_value()) {
+    nb::handle v = nb::find(*(p->jvp_fun_));
+    Py_VISIT(v.ptr());
+  }
+  if (p->vmap_fun_.has_value()) {
+    nb::handle v = nb::find(*(p->vmap_fun_));
+    Py_VISIT(v.ptr());
+  }
+  Py_VISIT(Py_TYPE(self));
+  return 0;
+}
+int py_custom_function_tp_clear(PyObject* self) {
+  auto* p = nb::inst_ptr<PyCustomFunction>(self);
+  p->reset();
+  return 0;
+}
+PyType_Slot py_custom_function_slots[] = {
+    {Py_tp_traverse, (void*)py_custom_function_tp_traverse},
+    {Py_tp_clear, (void*)py_custom_function_tp_clear},
+    {0, 0}};
+
 void init_transforms(nb::module_& m) {
   nb::class_<PyCustomFunction>(
       m,
       "custom_function",
+      nb::type_slots(py_custom_function_slots),
       R"pbdoc(
       Set up a function for custom gradient and vmap definitions.
 
