@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <functional>
 
 namespace mlx::core::simd {
 template <typename T, int N>
