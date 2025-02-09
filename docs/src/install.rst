@@ -47,6 +47,31 @@ should be ``arm``. If it is ``i386`` (and you have M series machine) then you
 are using a non-native Python. Switch your Python to a native Python. A good
 way to do this is with `Conda <https://stackoverflow.com/q/65415996>`_.
 
+*The installation of the editable package fails.*
+
+If the following command fails:
+
+.. code-block:: shell
+
+  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e ".[dev]"
+
+then check your Python environment is consistent.
+
+Using miniconda is the recommended way to manage your Python environment.
+Assuming you have the brew package manager installed, and are using zsh 
+as your shell, try:
+
+.. code-block:: shell
+
+    brew install --cask miniconda
+    conda init "$(basename "${SHELL}")"
+    source ~/.zshrc
+    conda create --name myenv python=3.13.0
+    conda activate myenv
+    pip install --upgrade pip
+    CMAKE_BUILD_PARALLEL_LEVEL=8 pip install ".[dev]"
+    CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e ".[dev]"
+
 
 Build from source
 -----------------
