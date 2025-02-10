@@ -554,6 +554,12 @@ void Eigh::eval_gpu(
   throw std::runtime_error("[Eigvalsh::eval_gpu] Metal Eigh NYI.");
 }
 
+void LUF::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
+}
+
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
   auto ibytes = size_of(in.dtype());
