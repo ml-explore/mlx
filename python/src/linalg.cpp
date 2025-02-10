@@ -14,17 +14,6 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-namespace {
-nb::tuple svd_helper(const mx::array& a, mx::StreamOrDevice s /* = {} */) {
-  const auto result = mx::linalg::svd(a, s);
-  return nb::make_tuple(result.at(0), result.at(1), result.at(2));
-}
-nb::tuple lu_helper(const array& a, StreamOrDevice s /* = {} */) {
-  const auto result = lu(a, s);
-  return nb::make_tuple(result.at(0), result.at(1), result.at(2));
-}
-} // namespace
-
 void init_linalg(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "linalg", "mlx.core.linalg: linear algebra routines.");
@@ -217,7 +206,10 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "svd",
-      &svd_helper,
+      [](const mx::array& a, mx::StreamOrDevice s /* = {} */) {
+        const auto result = mx::linalg::svd(a, s);
+        return nb::make_tuple(result.at(0), result.at(1), result.at(2));
+      },
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -489,7 +481,10 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "lu",
-      &lu_helper,
+      [](const mx::array& a, mx::StreamOrDevice s /* = {} */) {
+        auto result = mx::linalg::lu(a, s);
+        return nb::make_tuple(result.at(0), result.at(1), result.at(2));
+      },
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -498,17 +493,29 @@ void init_linalg(nb::module_& parent_module) {
       R"pbdoc(
         Compute the LU factorization of the given matrix ``A``.
 
+        Note, unlike the default behavior of ``scipy.linalg.lu``, the pivots
+        are indices. To reconstruct the input use ``L[P, :] @ U`` for 2
+        dimensions or ``mx.take_along_axis(L, P[..., None], axis=-2) @ U``
+        for more than 2 dimensions.
+
+        To construct the full permuation matrix do:
+
+        .. code-block::
+
+          P = mx.put_along_axis(mx.zeros_like(L), p[..., None], mx.array(1.0), axis=-1)
+
         Args:
             a (array): Input array.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
         Returns:
-            tuple(array, array, array): The ``P``, ``L``, and ``U`` matrices, such that ``A = P @ L @ U``
+            tuple(array, array, array):
+              The ``p``, ``L``, and ``U`` arrays, such that ``A = L[P, :] @ U``
       )pbdoc");
   m.def(
       "lu_factor",
-      &lu_factor,
+      &mx::linalg::lu_factor,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -527,7 +534,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "solve",
-      &solve,
+      &mx::linalg::solve,
       "a"_a,
       "b"_a,
       nb::kw_only(),
@@ -548,21 +555,22 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "solve_triangular",
-      &solve_triangular,
+      &mx::linalg::solve_triangular,
       "a"_a,
       "b"_a,
-      "upper"_a = false,
       nb::kw_only(),
+      "upper"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def solve_triangular(a: array, b: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def solve_triangular(a: array, b: array, *, upper: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Computes the solution of a triangular system of linear equations ``AX = B``.
 
         Args:
             a (array): Input array.
             b (array): Input array.
-            upper (bool, optional): Whether the array is upper or lower triangular. Default ``False``.
+            upper (bool, optional): Whether the array is upper or lower
+              triangular. Default: ``False``.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 

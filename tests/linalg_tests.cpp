@@ -470,19 +470,22 @@ TEST_CASE("test lu") {
   // Test 2x2 matrix
   array a = array({1., 2., 3., 4.}, {2, 2});
   auto out = linalg::lu(a, Device::cpu);
-  array expected = matmul(matmul(out[0], out[1]), out[2]);
+  auto L = take_along_axis(out[1], expand_dims(out[0], -1), -2);
+  array expected = matmul(L, out[2]);
   CHECK(allclose(a, expected).item<bool>());
 
   // Test 3x3 matrix
   a = array({1., 2., 3., 4., 5., 6., 7., 8., 10.}, {3, 3});
   out = linalg::lu(a, Device::cpu);
-  expected = matmul(matmul(out[0], out[1]), out[2]);
+  L = take_along_axis(out[1], expand_dims(out[0], -1), -2);
+  expected = matmul(L, out[2]);
   CHECK(allclose(a, expected).item<bool>());
 
   // Test batch dimension
   a = broadcast_to(a, {3, 3, 3});
   out = linalg::lu(a, Device::cpu);
-  expected = matmul(matmul(out[0], out[1]), out[2]);
+  L = take_along_axis(out[1], expand_dims(out[0], -1), -2);
+  expected = matmul(L, out[2]);
   CHECK(allclose(a, expected).item<bool>());
 }
 

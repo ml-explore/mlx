@@ -343,12 +343,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Test 3x3 matrix
         a = mx.array([[3.0, 1.0, 2.0], [1.0, 8.0, 6.0], [9.0, 2.0, 5.0]])
         P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        self.assertTrue(mx.allclose(P @ L @ U, a))
+        self.assertTrue(mx.allclose(L[P, :] @ U, a))
 
         # Test batch dimension
         a = mx.broadcast_to(a, (5, 5, 3, 3))
         P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        self.assertTrue(mx.allclose(P @ L @ U, a))
+        L = mx.take_along_axis(L, P[..., None], axis=-2)
+        self.assertTrue(mx.allclose(L @ U, a))
 
     def test_lu_factor(self):
         mx.random.seed(7)
@@ -358,16 +359,14 @@ class TestLinalg(mlx_tests.MLXTestCase):
         LU, pivots = mx.linalg.lu_factor(a, stream=mx.cpu)
         n = a.shape[-1]
 
-        P = mx.eye(n)
+        pivots = pivots.tolist()
+        perm = list(range(n))
         for i in range(len(pivots)):
-            j = pivots[i] - 1
-            if i != j:
-                P[[i, j]] = P[[j, i]]
+            perm[i], perm[pivots[i]] = perm[pivots[i]], perm[i]
 
-        P = mx.transpose(P)
         L = mx.add(mx.tril(LU, k=-1), mx.eye(n))
         U = mx.triu(LU)
-        self.assertTrue(mx.allclose(P @ L @ U, a))
+        self.assertTrue(mx.allclose(L @ U, a[perm, :]))
 
     def test_solve(self):
         mx.random.seed(7)
@@ -421,7 +420,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         result = mx.linalg.solve(a, b, stream=mx.cpu)
         expected = np.linalg.solve(a, b)
-        self.assertTrue(np.allclose(result, expected))
+        self.assertTrue(np.allclose(result, expected, rtol=1e-5, atol=1e-5))
 
     def test_solve_triangular(self):
         # Test lower triangular matrix

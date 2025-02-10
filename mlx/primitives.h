@@ -2359,9 +2359,6 @@ class LUF : public Primitive {
       override;
 
   DEFINE_PRINT(LUF)
-
- private:
-  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 } // namespace mlx::core
