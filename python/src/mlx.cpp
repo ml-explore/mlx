@@ -7,6 +7,7 @@
 
 namespace nb = nanobind;
 
+void init_mlx_func(nb::module_&);
 void init_array(nb::module_&);
 void init_device(nb::module_&);
 void init_stream(nb::module_&);
@@ -28,6 +29,7 @@ NB_MODULE(core, m) {
   nb::module_::import_("mlx._os_warning");
   nb::set_leak_warnings(false);
 
+  init_mlx_func(m);
   init_device(m);
   init_stream(m);
   init_array(m);

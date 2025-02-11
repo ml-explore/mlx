@@ -17,6 +17,7 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/mlx_func.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
