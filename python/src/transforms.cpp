@@ -19,6 +19,7 @@
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
+#include "python/src/mlx_func.h"
 #include "python/src/trees.h"
 
 namespace mx = mlx::core;
@@ -1262,8 +1263,10 @@ void init_transforms(nb::module_& m) {
          const StrOrSet& argnames) {
         auto [argnums_vec, argnames_set] =
             validate_argnums_argnames(argnums, argnames);
-        return nb::cpp_function(py_value_and_grad(
-            fun, argnums_vec, argnames_set, "[value_and_grad]", false));
+        return mlx_func(
+            py_value_and_grad(
+                fun, argnums_vec, argnames_set, "[value_and_grad]", false),
+            fun);
       },
       "fun"_a,
       "argnums"_a = nb::none(),
@@ -1328,9 +1331,11 @@ void init_transforms(nb::module_& m) {
             validate_argnums_argnames(argnums, argnames);
         auto fn =
             py_value_and_grad(fun, argnums_vec, argnames_set, "[grad]", true);
-        return nb::cpp_function([fn](nb::args& args, nb::kwargs& kwargs) {
-          return fn(args, kwargs).second;
-        });
+        return mlx_func(
+            [fn = std::move(fn)](nb::args& args, nb::kwargs& kwargs) {
+              return fn(args, kwargs).second;
+            },
+            fun);
       },
       "fun"_a,
       "argnums"_a = nb::none(),
@@ -1362,7 +1367,8 @@ void init_transforms(nb::module_& m) {
       [](const nb::callable& fun,
          const nb::object& in_axes,
          const nb::object& out_axes) {
-        return nb::cpp_function(py_vmap(fun, in_axes, out_axes));
+        return mlx_func(
+            py_vmap(fun, in_axes, out_axes), fun, in_axes, out_axes);
       },
       "fun"_a,
       "in_axes"_a = 0,
@@ -1417,11 +1423,15 @@ void init_transforms(nb::module_& m) {
             d.is_none() ? "MLX compiled function." : nb::cast<std::string>(d);
 
         auto sig_str = sig.str();
-        return nb::cpp_function(
-            PyCompiledFun{fun, inputs, outputs, shapeless},
-            nb::name(name.c_str()),
-            nb::sig(sig_str.c_str()),
-            doc.c_str());
+        return mlx_func(
+            nb::cpp_function(
+                PyCompiledFun{fun, inputs, outputs, shapeless},
+                nb::name(name.c_str()),
+                nb::sig(sig_str.c_str()),
+                doc.c_str()),
+            fun,
+            inputs,
+            outputs);
       },
       "fun"_a,
       "inputs"_a = nb::none(),
@@ -1473,7 +1483,7 @@ void init_transforms(nb::module_& m) {
       )pbdoc");
   m.def(
       "checkpoint",
-      [](nb::callable fun) { return nb::cpp_function(PyCheckpointedFun{fun}); },
+      [](nb::callable fun) { return mlx_func(PyCheckpointedFun{fun}, fun); },
       "fun"_a);
 
   // Register static Python object cleanup before the interpreter exits

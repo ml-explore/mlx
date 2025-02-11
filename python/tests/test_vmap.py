@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import gc
 import unittest
 
 import mlx.core as mx
@@ -607,6 +608,32 @@ class TestVmap(mlx_tests.MLXTestCase):
         fy = mx.vmap(fun, in_axes=1)(y)
         self.assertEqual(fx.shape, (5, 6, 7))
         self.assertEqual(fy.shape, (4, 5, 6, 7))
+
+    def test_leaks(self):
+        if mx.metal.is_available():
+            mem_pre = mx.metal.get_active_memory()
+        else:
+            mem_pre = 0
+
+        def outer():
+            d = {}
+
+            def f(x):
+                return d["x"]
+
+            d["f"] = mx.vmap(f)
+            d["x"] = mx.array([0] * 1000)
+
+        for _ in range(5):
+            outer()
+            gc.collect()
+
+        if mx.metal.is_available():
+            mem_post = mx.metal.get_active_memory()
+        else:
+            mem_post = 0
+
+        self.assertEqual(mem_pre, mem_post)
 
 
 if __name__ == "__main__":
