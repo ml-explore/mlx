@@ -781,6 +781,15 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(grads[0].item(), 1.0)
         self.assertEqual(grads[2].item(), 1.0)
 
+    def test_grad_ids_pre_post(self):
+        def fun(arrs):
+            return arrs[0]
+
+        arrs = [mx.array(1.0)]
+        init_id = id(arrs[0])
+        mx.grad(fun)(arrs)
+        self.assertEqual(init_id, id(arrs[0]))
+
 
 if __name__ == "__main__":
     unittest.main()
