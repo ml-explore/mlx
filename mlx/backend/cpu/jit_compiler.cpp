@@ -54,7 +54,7 @@ struct VisualStudioInfo {
       std::string value = line.substr(pos + 1);
       if (name == "LIB") {
         libpaths = str_split(value, ';');
-      } else if (name == "VCToolsInstallDir") {
+      } else if (name == "VCToolsInstallDir" || name == "VCTOOLSINSTALLDIR") {
         cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
       }
     }
