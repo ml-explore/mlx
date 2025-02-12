@@ -174,6 +174,21 @@ class TestDistributed(mlx_tests.MLXTestCase):
         finally:
             mx.distributed.all_sum = original_all_sum
 
+    def test_donation(self):
+        x = mx.random.normal((1024,))
+        mx.eval(x)
+
+        mx.metal.reset_peak_memory()
+        scale = mx.array(2.0)
+        y = mx.distributed.all_sum(x)
+        mx.eval(y)
+        all_sum_only = mx.metal.get_peak_memory()
+        y = mx.distributed.all_sum(x) * scale
+        mx.eval(y)
+        all_sum_with_binary = mx.metal.get_peak_memory()
+
+        self.assertEqual(all_sum_only, all_sum_with_binary)
+
 
 if __name__ == "__main__":
     unittest.main()

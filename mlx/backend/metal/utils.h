@@ -69,4 +69,19 @@ void concatenate(std::string& acc, T first, Args... args) {
   concatenate(acc, args...);
 }
 
+/**
+ * Get a new array that refers to the same data but has a non-owning pointer to
+ * them.
+ */
+inline array unsafe_weak_copy(const array& x) {
+  return array(
+      x.buffer(),
+      x.shape(),
+      x.dtype(),
+      x.strides(),
+      x.data_size(),
+      x.flags(),
+      [](auto b) {});
+}
+
 } // namespace mlx::core

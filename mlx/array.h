@@ -243,6 +243,18 @@ class array {
     bool col_contiguous : 1;
   };
 
+  /** Build an array from all the info held by the array description. Including
+   * the buffer, strides, flags.
+   */
+  explicit array(
+      allocator::Buffer data,
+      Shape shape,
+      Dtype dtype,
+      Strides strides,
+      size_t data_size,
+      Flags flags,
+      Deleter deleter = allocator::free);
+
   /** The array's primitive. */
   Primitive& primitive() const {
     return *(array_desc_->primitive);
