@@ -76,6 +76,18 @@ array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
   set_data(data, deleter);
 }
 
+array::array(
+    allocator::Buffer data,
+    Shape shape,
+    Dtype dtype,
+    Strides strides,
+    size_t data_size,
+    Flags flags,
+    Deleter deleter)
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
+  set_data(data, data_size, std::move(strides), flags, deleter);
+}
+
 void array::detach() {
   for (auto& s : array_desc_->siblings) {
     s.array_desc_->inputs.clear();
@@ -217,6 +229,17 @@ array::~array() {
       }
     }
   }
+}
+
+array array::unsafe_weak_copy() const {
+  return array(
+      array_desc_->data->buffer,
+      shape(),
+      dtype(),
+      strides(),
+      data_size(),
+      flags(),
+      [](auto b) {});
 }
 
 void array::ArrayDesc::init() {

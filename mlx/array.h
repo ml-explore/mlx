@@ -72,6 +72,12 @@ class array {
   array(const array& other) = default;
   array(array&& other) = default;
 
+  /**
+   * Get a new array that refers to the same data but has a non-owning pointer
+   * to them.
+   */
+  array unsafe_weak_copy() const;
+
   array& operator=(const array& other) & {
     if (this->id() != other.id()) {
       this->array_desc_ = other.array_desc_;
@@ -242,6 +248,18 @@ class array {
     // range(1, ndim))
     bool col_contiguous : 1;
   };
+
+  /** Build an array from all the info held by the array description. Including
+   * the buffer, strides, flags.
+   */
+  explicit array(
+      allocator::Buffer data,
+      Shape shape,
+      Dtype dtype,
+      Strides strides,
+      size_t data_size,
+      Flags flags,
+      Deleter deleter = allocator::free);
 
   /** The array's primitive. */
   Primitive& primitive() const {
