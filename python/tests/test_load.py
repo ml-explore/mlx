@@ -356,6 +356,23 @@ class TestLoad(mlx_tests.MLXTestCase):
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))
 
+    def test_load_donation(self):
+        x = mx.random.normal((1024,))
+        mx.eval(x)
+        save_file = os.path.join(self.test_dir, "donation.npy")
+        mx.save(save_file, x)
+
+        mx.metal.reset_peak_memory()
+        scale = mx.array(2.0)
+        y = mx.load(save_file)
+        mx.eval(y)
+        load_only = mx.metal.get_peak_memory()
+        y = mx.load(save_file) * scale
+        mx.eval(y)
+        load_with_binary = mx.metal.get_peak_memory()
+
+        self.assertEqual(load_only, load_with_binary)
+
 
 if __name__ == "__main__":
     unittest.main()
