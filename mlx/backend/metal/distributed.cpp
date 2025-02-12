@@ -43,7 +43,7 @@ void AllReduce::eval_gpu(
   f.wait_gpu(out);
 
   auto task = [in = in,
-               out = out,
+               out = out.unsafe_weak_copy(),
                f = std::move(f),
                reduce_type = reduce_type_,
                group = group()]() mutable {
@@ -80,14 +80,16 @@ void AllGather::eval_gpu(
   }
   f.wait_gpu(out);
 
-  auto task =
-      [in = in, out = out, f = std::move(f), group = group()]() mutable {
-        if (in.event().valid()) {
-          f.wait();
-        }
-        distributed::detail::all_gather(group, in, out);
-        f.update();
-      };
+  auto task = [in = in,
+               out = out.unsafe_weak_copy(),
+               f = std::move(f),
+               group = group()]() mutable {
+    if (in.event().valid()) {
+      f.wait();
+    }
+    distributed::detail::all_gather(group, in, out);
+    f.update();
+  };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
 }
 
@@ -110,7 +112,7 @@ void Send::eval_gpu(
 
   // Schedule an async send on the comm stream
   auto task = [in = in,
-               out = out,
+               out = out.unsafe_weak_copy(),
                f = std::move(f),
                group = group(),
                dst = dst_]() mutable {
@@ -136,11 +138,13 @@ void Recv::eval_gpu(
   f.wait_gpu(out);
 
   // Schedule an async recv on the comm stream
-  auto task =
-      [out = out, f = std::move(f), group = group(), src = src_]() mutable {
-        distributed::detail::recv(group, out, src);
-        f.update();
-      };
+  auto task = [out = out.unsafe_weak_copy(),
+               f = std::move(f),
+               group = group(),
+               src = src_]() mutable {
+    distributed::detail::recv(group, out, src);
+    f.update();
+  };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
 }
 
