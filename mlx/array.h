@@ -72,12 +72,6 @@ class array {
   array(const array& other) = default;
   array(array&& other) = default;
 
-  /**
-   * Get a new array that refers to the same data but has a non-owning pointer
-   * to them.
-   */
-  array unsafe_weak_copy() const;
-
   array& operator=(const array& other) & {
     if (this->id() != other.id()) {
       this->array_desc_ = other.array_desc_;

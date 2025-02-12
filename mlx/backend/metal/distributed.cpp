@@ -7,6 +7,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/fence.h"
+#include "mlx/backend/metal/utils.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/scheduler.h"
@@ -43,7 +44,7 @@ void AllReduce::eval_gpu(
   f.wait_gpu(out);
 
   auto task = [in = in,
-               out = out.unsafe_weak_copy(),
+               out = unsafe_weak_copy(out),
                f = std::move(f),
                reduce_type = reduce_type_,
                group = group()]() mutable {
@@ -81,7 +82,7 @@ void AllGather::eval_gpu(
   f.wait_gpu(out);
 
   auto task = [in = in,
-               out = out.unsafe_weak_copy(),
+               out = unsafe_weak_copy(out),
                f = std::move(f),
                group = group()]() mutable {
     if (in.event().valid()) {
@@ -112,7 +113,7 @@ void Send::eval_gpu(
 
   // Schedule an async send on the comm stream
   auto task = [in = in,
-               out = out.unsafe_weak_copy(),
+               out = unsafe_weak_copy(out),
                f = std::move(f),
                group = group(),
                dst = dst_]() mutable {
@@ -138,7 +139,7 @@ void Recv::eval_gpu(
   f.wait_gpu(out);
 
   // Schedule an async recv on the comm stream
-  auto task = [out = out.unsafe_weak_copy(),
+  auto task = [out = unsafe_weak_copy(out),
                f = std::move(f),
                group = group(),
                src = src_]() mutable {

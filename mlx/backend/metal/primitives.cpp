@@ -303,7 +303,7 @@ void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
-  auto read_task = [out = out.unsafe_weak_copy(),
+  auto read_task = [out = unsafe_weak_copy(out),
                     offset = offset_,
                     reader = reader_,
                     swap_endianness = swap_endianness_]() mutable {

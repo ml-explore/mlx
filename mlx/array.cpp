@@ -231,17 +231,6 @@ array::~array() {
   }
 }
 
-array array::unsafe_weak_copy() const {
-  return array(
-      array_desc_->data->buffer,
-      shape(),
-      dtype(),
-      strides(),
-      data_size(),
-      flags(),
-      [](auto b) {});
-}
-
 void array::ArrayDesc::init() {
   strides.resize(shape.size());
   size = 1;
