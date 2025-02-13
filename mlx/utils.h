@@ -122,9 +122,16 @@ inline int bfs_max_width() {
   return bfs_max_width_;
 }
 
-inline int max_ops_per_buffer() {
-  static int max_ops_per_buffer_ = get_var("MLX_MAX_OPS_PER_BUFFER", 10);
+inline int max_ops_per_buffer(int default_value) {
+  static int max_ops_per_buffer_ =
+      get_var("MLX_MAX_OPS_PER_BUFFER", default_value);
   return max_ops_per_buffer_;
+}
+
+inline int max_mb_per_buffer(int default_value) {
+  static int max_mb_per_buffer_ =
+      get_var("MLX_MAX_MB_PER_BUFFER", default_value);
+  return max_mb_per_buffer_;
 }
 
 inline bool metal_fast_synch() {

@@ -29,7 +29,6 @@ std::function<void()> make_task(array arr, bool signal) {
     auto s = arr.primitive().stream();
     auto& d = metal::device(s.device);
     auto command_buffer = d.get_command_buffer(s.index);
-    d.increment_command_buffer_ops(s.index);
 
     for (auto& input : arr.inputs()) {
       if (input.event().valid() &&
@@ -68,8 +67,7 @@ std::function<void()> make_task(array arr, bool signal) {
       out.set_status(array::Status::evaluated);
     }
 
-    if (signal ||
-        d.get_command_buffer_ops(s.index) >= env::max_ops_per_buffer()) {
+    if (signal || d.command_buffer_needs_commit(s.index)) {
       if (signal) {
         encode_signal(arr.event());
       }
