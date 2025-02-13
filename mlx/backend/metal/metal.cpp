@@ -70,7 +70,11 @@ std::function<void()> make_task(array arr, bool signal) {
     // Erase any input buffers that have a use count > 1
     // to keep them elligible for donation
     for (auto it = buffers.begin(); it != buffers.end();) {
-      if (it->use_count() > 1) {
+      // Always hold buffers which could belong to outputs
+      // TODO: this shouldn't be necessary, but metal validation
+      // complains if buffers get released before the command buffer is
+      // finished, even if the ready signal has fired
+      if (!signal && it->use_count() > 1) {
         it = buffers.erase(it);
       } else {
         ++it;
