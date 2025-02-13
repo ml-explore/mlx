@@ -29,11 +29,11 @@
   instantiate_unary_all_same(op, int8, int8_t)     \
   instantiate_unary_all_same(op, int16, int16_t)   \
   instantiate_unary_all_same(op, int32, int32_t)   \
-  instantiate_unary_all_same(op, int64, int64_t)   \
+  instantiate_unary_all_same(op, int64, int64_t)
 
 #define instantiate_unary_types(op)                \
   instantiate_unary_all_same(op, bool_, bool)      \
-  instatiate_unary_int(op)                         \
+  instantiate_unary_int(op)                        \
   instantiate_unary_float(op)
 
 instantiate_unary_types(Abs)
