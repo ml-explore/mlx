@@ -4522,6 +4522,14 @@ std::pair<std::vector<array>, std::vector<int>> Tanh::vmap(
   return {{tanh(inputs[0], stream())}, axes};
 }
 
+std::pair<std::vector<array>, std::vector<int>> BitwiseInvert::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{bitwise_invert(inputs[0], stream())}, axes};
+}
+
 std::vector<array> BlockMaskedMM::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

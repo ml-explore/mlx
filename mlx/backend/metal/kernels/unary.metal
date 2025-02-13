@@ -21,8 +21,7 @@
   instantiate_unary_all_same(op, float32, float)       \
   instantiate_unary_all_same(op, bfloat16, bfloat16_t)
 
-#define instantiate_unary_types(op)                \
-  instantiate_unary_all_same(op, bool_, bool)      \
+#define instantiate_unary_int(op)                  \
   instantiate_unary_all_same(op, uint8, uint8_t)   \
   instantiate_unary_all_same(op, uint16, uint16_t) \
   instantiate_unary_all_same(op, uint32, uint32_t) \
@@ -30,7 +29,11 @@
   instantiate_unary_all_same(op, int8, int8_t)     \
   instantiate_unary_all_same(op, int16, int16_t)   \
   instantiate_unary_all_same(op, int32, int32_t)   \
-  instantiate_unary_all_same(op, int64, int64_t)   \
+  instantiate_unary_all_same(op, int64, int64_t)
+
+#define instantiate_unary_types(op)                \
+  instantiate_unary_all_same(op, bool_, bool)      \
+  instantiate_unary_int(op)                        \
   instantiate_unary_float(op)
 
 instantiate_unary_types(Abs)
@@ -63,6 +66,7 @@ instantiate_unary_float(Rsqrt)
 instantiate_unary_float(Tan)
 instantiate_unary_float(Tanh)
 instantiate_unary_float(Round)
+instantiate_unary_int(BitwiseInvert)
 
 instantiate_unary_all_same(Abs, complex64, complex64_t)
 instantiate_unary_all_same(Conjugate, complex64, complex64_t)

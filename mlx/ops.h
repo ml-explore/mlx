@@ -1476,6 +1476,10 @@ array operator<<(const array& a, const array& b);
 array right_shift(const array& a, const array& b, StreamOrDevice s = {});
 array operator>>(const array& a, const array& b);
 
+/** Invert the bits. */
+array bitwise_invert(const array& a, StreamOrDevice s = {});
+array operator~(const array& a);
+
 array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
 
 /** Roll elements along an axis and introduce them on the other side */

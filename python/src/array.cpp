@@ -745,11 +745,10 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise inversion.");
             }
-            if (a.dtype() != mx::bool_) {
-              throw std::invalid_argument(
-                  "Bitwise inversion not yet supported for integer types.");
+            if (a.dtype() == mx::bool_) {
+              return mx::logical_not(a);
             }
-            return mx::logical_not(a);
+            return mx::bitwise_invert(a);
           })
       .def(
           "__and__",
