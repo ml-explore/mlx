@@ -4853,22 +4853,19 @@ array operator>>(const array& a, const array& b) {
   return right_shift(a, b);
 }
 
-array bitwise_inverse(const array& a, StreamOrDevice s /* = {} */) {
+array bitwise_invert(const array& a, StreamOrDevice s /* = {} */) {
   if (issubdtype(a.dtype(), inexact)) {
     throw std::invalid_argument(
-        "[bitwise_inverse] Bitwise inverse only allowed on integer types.");
+        "[bitwise_invert] Bitwise inverse only allowed on integer types.");
   } else if (a.dtype() == bool_) {
     return logical_not(a, s);
   }
   return array(
-      a.shape(),
-      a.dtype(),
-      std::make_shared<BitwiseInverse>(to_stream(s)),
-      {a});
+      a.shape(), a.dtype(), std::make_shared<BitwiseInvert>(to_stream(s)), {a});
 }
 
 array operator~(const array& a) {
-  return bitwise_inverse(a);
+  return bitwise_invert(a);
 }
 
 array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {

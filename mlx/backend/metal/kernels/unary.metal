@@ -66,7 +66,7 @@ instantiate_unary_float(Rsqrt)
 instantiate_unary_float(Tan)
 instantiate_unary_float(Tanh)
 instantiate_unary_float(Round)
-instantiate_unary_int(BitwiseInverse)
+instantiate_unary_int(BitwiseInvert)
 
 instantiate_unary_all_same(Abs, complex64, complex64_t)
 instantiate_unary_all_same(Conjugate, complex64, complex64_t)

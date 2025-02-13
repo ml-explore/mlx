@@ -96,7 +96,7 @@ DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
 
 template <typename T>
-Simd<T, 1> bitwise_inverse(Simd<T, 1> in) {
+Simd<T, 1> bitwise_invert(Simd<T, 1> in) {
   return ~in.value;
 }
 

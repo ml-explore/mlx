@@ -459,15 +459,15 @@ class BitwiseBinary : public UnaryPrimitive {
   Op op_;
 };
 
-class BitwiseInverse : public UnaryPrimitive {
+class BitwiseInvert : public UnaryPrimitive {
  public:
-  explicit BitwiseInverse(Stream stream) : UnaryPrimitive(stream) {}
+  explicit BitwiseInvert(Stream stream) : UnaryPrimitive(stream) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
-  DEFINE_PRINT(BitwiseInverse)
+  DEFINE_PRINT(BitwiseInvert)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 };

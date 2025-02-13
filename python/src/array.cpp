@@ -748,7 +748,7 @@ void init_array(nb::module_& m) {
             if (a.dtype() == mx::bool_) {
               return mx::logical_not(a);
             }
-            return mx::bitwise_inverse(a);
+            return mx::bitwise_invert(a);
           })
       .def(
           "__and__",

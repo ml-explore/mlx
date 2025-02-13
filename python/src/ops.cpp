@@ -4834,16 +4834,16 @@ void init_ops(nb::module_& m) {
             array: The bitwise right shift ``a >> b``.
       )pbdoc");
   m.def(
-      "bitwise_inverse",
+      "bitwise_invert",
       [](const ScalarOrArray& a_, mx::StreamOrDevice s) {
         auto a = to_array(a_);
-        return mx::bitwise_inverse(a, s);
+        return mx::bitwise_invert(a, s);
       },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bitwise_inverse(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+          "def bitwise_invert(a: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Element-wise bitwise inverse.
 

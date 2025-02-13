@@ -2581,8 +2581,8 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = ~a_np
             self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
-            out_mlx = mx.bitwise_inverse(a_mlx)
-            out_np = mx.bitwise_inverse(a_np)
+            out_mlx = mx.bitwise_invert(a_mlx)
+            out_np = mx.bitwise_invert(a_np)
             self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
         # Check broadcasting
