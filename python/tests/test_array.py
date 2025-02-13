@@ -352,6 +352,18 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array(0.0)
         self.assertFalse(x)
 
+    def test_int_type(self):
+        x = mx.array(1)
+        self.assertTrue(x.dtype == mx.int32)
+        x = mx.array(2**32 - 1)
+        self.assertTrue(x.dtype == mx.int64)
+        x = mx.array(2**40)
+        self.assertTrue(x.dtype == mx.int64)
+        x = mx.array(2**32 - 1, dtype=mx.uint32)
+        self.assertTrue(x.dtype == mx.uint32)
+        x = mx.array([1, 2], dtype=mx.int64) + 0x80000000
+        self.assertTrue(x.dtype == mx.int64)
+
     def test_construction_from_lists(self):
         x = mx.array([])
         self.assertEqual(x.size, 0)
