@@ -96,6 +96,16 @@ DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
 
 template <typename T>
+Simd<T, 1> bitwise_inverse(Simd<T, 1> in) {
+  return ~in.value;
+}
+
+template <typename T>
+Simd<T, 1> operator~(Simd<T, 1> in) {
+  return ~in.value;
+}
+
+template <typename T>
 auto real(Simd<T, 1> in) -> Simd<decltype(std::real(in.value)), 1> {
   return std::real(in.value);
 }

@@ -85,6 +85,13 @@ struct ArcTanh {
   };
 };
 
+struct BitwiseInverse {
+  template <typename T>
+  T operator()(T x) {
+    return ~x;
+  };
+};
+
 struct Ceil {
   template <typename T>
   T operator()(T x) {

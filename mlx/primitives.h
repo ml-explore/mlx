@@ -459,6 +459,20 @@ class BitwiseBinary : public UnaryPrimitive {
   Op op_;
 };
 
+class BitwiseInverse : public UnaryPrimitive {
+ public:
+  explicit BitwiseInverse(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  // DEFINE_VMAP()
+  // DEFINE_GRADS()
+  DEFINE_PRINT(BitwiseInverse)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class BlockMaskedMM : public UnaryPrimitive {
  public:
   explicit BlockMaskedMM(Stream stream, int block_size)

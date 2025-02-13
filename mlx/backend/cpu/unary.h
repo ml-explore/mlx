@@ -141,4 +141,38 @@ void unary_fp(const array& a, array& out, Op op) {
   }
 }
 
+template <typename Op>
+void unary_int(const array& a, array& out, Op op) {
+  switch (out.dtype()) {
+    case uint8:
+      unary_op<uint8_t>(a, out, op);
+      break;
+    case uint16:
+      unary_op<uint16_t>(a, out, op);
+      break;
+    case uint32:
+      unary_op<uint32_t>(a, out, op);
+      break;
+    case uint64:
+      unary_op<uint64_t>(a, out, op);
+      break;
+    case int8:
+      unary_op<int8_t>(a, out, op);
+      break;
+    case int16:
+      unary_op<int16_t>(a, out, op);
+      break;
+    case int32:
+      unary_op<int32_t>(a, out, op);
+      break;
+    case int64:
+      unary_op<int64_t>(a, out, op);
+      break;
+    default:
+      std::ostringstream err;
+      err << "[unary_int] Does not support " << out.dtype();
+      throw std::runtime_error(err.str());
+  }
+}
+
 } // namespace mlx::core

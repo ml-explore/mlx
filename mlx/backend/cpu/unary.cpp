@@ -85,6 +85,12 @@ void ArcTanh::eval_cpu(const std::vector<array>& inputs, array& out) {
   unary_fp(in, out, detail::ArcTanh());
 }
 
+void BitwiseInverse::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  unary_int(in, out, detail::BitwiseInverse());
+}
+
 void Ceil::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];

@@ -32,6 +32,7 @@ Operations
    atleast_2d
    atleast_3d
    bitwise_and
+   bitwise_inverse
    bitwise_or
    bitwise_xor
    block_masked_mm

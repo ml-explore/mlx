@@ -138,6 +138,11 @@ Simd<T, N> operator-(Simd<T, N> v) {
 }
 
 template <typename T, int N>
+Simd<T, N> operator~(Simd<T, N> v) {
+  return ~v.value;
+}
+
+template <typename T, int N>
 Simd<bool, N> isnan(Simd<T, N> v) {
   return asd::convert<char>(v.value != v.value);
 }
