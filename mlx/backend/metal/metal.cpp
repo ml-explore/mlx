@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
+
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/utils.h"
@@ -53,34 +54,16 @@ std::function<void()> make_task(array arr, bool signal) {
         abort_with_exception(error);
       }
     }
-
-    // Use a set to de-dup input buffers
-    std::unordered_set<std::shared_ptr<array::Data>> buffers;
+    std::vector<std::shared_ptr<array::Data>> buffers;
     for (auto& in : arr.inputs()) {
-      if (in.data_shared_ptr() != nullptr) {
-        buffers.insert(in.data_shared_ptr());
-      }
+      buffers.push_back(in.data_shared_ptr());
     }
     for (auto& s : arr.siblings()) {
-      buffers.insert(s.data_shared_ptr());
+      buffers.push_back(s.data_shared_ptr());
     }
     if (!arr.is_tracer()) {
       arr.detach();
     }
-    // Erase any input buffers that have a use count > 1
-    // to keep them elligible for donation
-    for (auto it = buffers.begin(); it != buffers.end();) {
-      // Always hold buffers which could belong to outputs
-      // TODO: this shouldn't be necessary, but metal validation
-      // complains if buffers get released before the command buffer is
-      // finished, even if the ready signal has fired
-      if (!signal && it->use_count() > 1) {
-        it = buffers.erase(it);
-      } else {
-        ++it;
-      }
-    }
-
     for (auto& out : outputs) {
       out.set_status(array::Status::evaluated);
     }
