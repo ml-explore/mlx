@@ -34,7 +34,7 @@ bool is_unary(const Primitive& p) {
       typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
       typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh) ||
       typeid(p) == typeid(Expm1) || typeid(p) == typeid(Real) ||
-      typeid(p) == typeid(Imag));
+      typeid(p) == typeid(Imag) || typeid(p) == typeid(BitwiseInvert));
 }
 
 bool is_binary(const Primitive& p) {
