@@ -175,19 +175,21 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertEqual(pre, post)
 
     def test_donation_multiple_inputs(self):
-        def fun(its):
-            x = mx.zeros((128, 128))
-            y = mx.zeros((128, 128))
+        def fun(its, x, y):
             for _ in range(its):
                 a = x + y  # y should donate
                 b = x + a  # x should donate
                 x, y = a, b
             return x, y
 
+        x = mx.zeros((128, 128))
+        y = mx.zeros((128, 128))
         mx.metal.reset_peak_memory()
-        mx.eval(fun(2))
+        a, b = fun(2, x, y)
+        mx.eval(a, b)
         mem2 = mx.metal.get_peak_memory()
-        mx.eval(fun(10))
+        a, b = fun(10, x, y)
+        mx.eval(a, b)
         mem10 = mx.metal.get_peak_memory()
         self.assertEqual(mem2, mem10)
 
