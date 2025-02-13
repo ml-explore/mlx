@@ -214,19 +214,31 @@ Device::Device() {
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
   arch_ = std::string(device_->architecture()->name()->utf8String());
-  auto d_size = arch_.back();
-  switch (d_size) {
-    case 'g': // Base, pro
+  auto arch = arch_.back();
+  switch (arch) {
+    case 'p': // phone
+      max_ops_per_buffer_ = 20;
+      max_mb_per_buffer_ = 40;
       break;
-    case 's': // Max
+    case 'g': // base, pro
+      max_ops_per_buffer_ = 40;
+      max_mb_per_buffer_ = 40;
       break;
-    case 'd': // Ultra
+    case 's': // max
+      max_ops_per_buffer_ = 50;
+      max_mb_per_buffer_ = 50;
       break;
-    default:
+    case 'd': // ultra
+      max_ops_per_buffer_ = 50;
+      max_mb_per_buffer_ = 50;
+      break;
+    default: // default to medium
+      max_ops_per_buffer_ = 40;
+      max_mb_per_buffer_ = 40;
       break;
   }
-  max_ops_per_buffer_ = env::max_ops_per_buffer(10);
-  max_mb_per_buffer_ = env::max_mb_per_buffer(40);
+  max_ops_per_buffer_ = env::max_ops_per_buffer(max_ops_per_buffer_);
+  max_mb_per_buffer_ = env::max_mb_per_buffer(max_mb_per_buffer_);
 }
 
 Device::~Device() {
