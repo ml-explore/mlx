@@ -313,7 +313,7 @@ void qmm_op(
       int bo = 8;
       int bd = 32;
       group_dims = MTL::Size(bd, 2, 1);
-      grid_dims = MTL::Size(O / bo, B, N);
+      grid_dims = MTL::Size(B, O / bo, N);
     } else if (B < 6) {
       name += "qmv";
       int bo = 8;
