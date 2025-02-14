@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Operations &#8212; MLX 0.22.1 documentation</title>
+    <title>Operations &#8212; MLX 0.23.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../_static/documentation_options.js?v=72ae2406"></script>
+    <script src="../_static/documentation_options.js?v=358893f7"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -51,7 +51,7 @@
     <link rel="prev" title="mlx.utils.tree_reduce" href="../python/_autosummary/mlx.utils.tree_reduce.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.22.1" />
+  <meta name="docsearch:version" content="0.23.0" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.22.1 documentation - Home"/>
-    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.22.1 documentation - Home"/>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.23.0 documentation - Home"/>
+    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.23.0 documentation - Home"/>
   
   
 </a></div>
@@ -276,6 +276,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.atleast_2d.html">mlx.core.atleast_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.atleast_3d.html">mlx.core.atleast_3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_and.html">mlx.core.bitwise_and</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_invert.html">mlx.core.bitwise_invert</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
@@ -486,6 +487,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.eigvalsh.html">mlx.core.linalg.eigvalsh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/metal.html">Metal</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -1174,6 +1179,8 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4lsRK5arrayRK5array"><code class="docutils literal notranslate"><span class="pre">operator&lt;&lt;()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv411right_shiftRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">right_shift()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4rsRK5arrayRK5array"><code class="docutils literal notranslate"><span class="pre">operator&gt;&gt;()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv414bitwise_invertRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">bitwise_invert()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4coRK5array"><code class="docutils literal notranslate"><span class="pre">operator~()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44viewRK5arrayRK5Dtype14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">view()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44rollRK5arrayi14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">roll()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44rollRK5arrayRK5Shape14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">roll()</span></code></a></li>
@@ -2983,6 +2990,17 @@
 <dd></dd></dl>
 
 <dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv414bitwise_invertRK5array14StreamOrDevice">
+<span id="_CPPv314bitwise_invertRK5array14StreamOrDevice"></span><span id="_CPPv214bitwise_invertRK5array14StreamOrDevice"></span><span id="bitwise_invert__arrayCR.StreamOrDevice"></span><span class="target" id="group__ops_1gaf1182ae7c049fbc9ee190f3e0fffbf83"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">bitwise_invert</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv414bitwise_invertRK5array14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
+<dd><p>Invert the bits. </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4coRK5array">
+<span id="_CPPv3coRK5array"></span><span id="_CPPv2coRK5array"></span><span id="inv-operator__arrayCR"></span><span class="target" id="group__ops_1ga849365a62878579a33b3d3ad09bbc7be"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">~</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4coRK5array" title="Link to this definition">#</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv44viewRK5arrayRK5Dtype14StreamOrDevice">
 <span id="_CPPv34viewRK5arrayRK5Dtype14StreamOrDevice"></span><span id="_CPPv24viewRK5arrayRK5Dtype14StreamOrDevice"></span><span id="view__arrayCR.DtypeCR.StreamOrDevice"></span><span class="target" id="group__ops_1ga3602aa91b7b124a0b41ec1b2137a1b02"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">view</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">Dtype</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">dtype</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv44viewRK5arrayRK5Dtype14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
 <dd></dd></dl>
@@ -3386,6 +3404,8 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4lsRK5arrayRK5array"><code class="docutils literal notranslate"><span class="pre">operator&lt;&lt;()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv411right_shiftRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">right_shift()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4rsRK5arrayRK5array"><code class="docutils literal notranslate"><span class="pre">operator&gt;&gt;()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv414bitwise_invertRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">bitwise_invert()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv4coRK5array"><code class="docutils literal notranslate"><span class="pre">operator~()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44viewRK5arrayRK5Dtype14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">view()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44rollRK5arrayi14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">roll()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44rollRK5arrayRK5Shape14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">roll()</span></code></a></li>
