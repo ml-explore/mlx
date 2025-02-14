@@ -14,7 +14,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     bool shapeless = false);
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    std::vector<array>(fun)(const std::vector<array>&),
+    std::vector<array> (*fun)(const std::vector<array>&),
     bool shapeless = false);
 
 // Convert capture-less lambdas to function pointers.
