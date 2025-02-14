@@ -3882,7 +3882,7 @@ array conv_general(
 
   return array(
       std::move(out_shape),
-      in.dtype(),
+      out_type,
       std::make_shared<Convolution>(
           to_stream(s),
           stride,
