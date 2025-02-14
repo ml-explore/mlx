@@ -219,6 +219,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:af5ad83605d4eea81561246873bee1d7c" id="r_af5ad83605d4eea81561246873bee1d7c"><td class="memItemLeft" align="right" valign="top">std::uintptr_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af5ad83605d4eea81561246873bee1d7c">primitive_id</a> () const</td></tr>
 <tr class="memdesc:af5ad83605d4eea81561246873bee1d7c"><td class="mdescLeft">&#160;</td><td class="mdescRight">A unique identifier for an arrays primitive.  <br /></td></tr>
 <tr class="separator:af5ad83605d4eea81561246873bee1d7c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2476f987ec7a5afb7665d3b3974db0b2" id="r_a2476f987ec7a5afb7665d3b3974db0b2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2476f987ec7a5afb7665d3b3974db0b2">array</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">allocator::Buffer</a> <a class="el" href="#a72e3ce6c03fefe272cadf214bd127b95">data</a>, <a class="el" href="namespacemlx_1_1core.html#a694e23f2d59606643728ad443d621416">Shape</a> <a class="el" href="#a1d06c76b0f3010a5c329d0e9e29e0597">shape</a>, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> <a class="el" href="#ae29e7d6fbfbea1e5e321a8d1ea3cfacd">dtype</a>, <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> <a class="el" href="#a28cf1928f5ec2f972a94ff1c0e71187d">strides</a>, size_t <a class="el" href="#afaf2a370fa35d96af1b27a4b814e3bfd">data_size</a>, <a class="el" href="structmlx_1_1core_1_1array_1_1_flags.html">Flags</a> <a class="el" href="#a0a20a6065ae71b64c1e3aa22a45fd8a1">flags</a>, <a class="el" href="namespacemlx_1_1core.html#af834c1e18d6f11c4f233a2e1ce814a4b">Deleter</a> deleter=<a class="el" href="namespacemlx_1_1core_1_1allocator.html#a77f0a1215be242db6485612bcb273af5">allocator::free</a>)</td></tr>
+<tr class="memdesc:a2476f987ec7a5afb7665d3b3974db0b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build an array from all the info held by the array description.  <br /></td></tr>
+<tr class="separator:a2476f987ec7a5afb7665d3b3974db0b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a790548666511d8c6d9f92ee79d2ce14c" id="r_a790548666511d8c6d9f92ee79d2ce14c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a790548666511d8c6d9f92ee79d2ce14c">primitive</a> () const</td></tr>
 <tr class="memdesc:a790548666511d8c6d9f92ee79d2ce14c"><td class="mdescLeft">&#160;</td><td class="mdescRight">The array's primitive.  <br /></td></tr>
 <tr class="separator:a790548666511d8c6d9f92ee79d2ce14c"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -331,7 +334,7 @@ Static Public Member Functions</h2></td></tr>
 </div>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a75fac72da3ce214fa3737df92a64b232" name="a75fac72da3ce214fa3737df92a64b232"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a75fac72da3ce214fa3737df92a64b232">&#9670;&#160;</a></span>array() <span class="overload">[1/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a75fac72da3ce214fa3737df92a64b232">&#9670;&#160;</a></span>array() <span class="overload">[1/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -364,7 +367,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a6db4b8c28c767cc16ad2785ece496dca" name="a6db4b8c28c767cc16ad2785ece496dca"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6db4b8c28c767cc16ad2785ece496dca">&#9670;&#160;</a></span>array() <span class="overload">[2/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6db4b8c28c767cc16ad2785ece496dca">&#9670;&#160;</a></span>array() <span class="overload">[2/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -393,7 +396,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="abcc030a1c2434ec75ad9425751bffdc7" name="abcc030a1c2434ec75ad9425751bffdc7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abcc030a1c2434ec75ad9425751bffdc7">&#9670;&#160;</a></span>array() <span class="overload">[3/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abcc030a1c2434ec75ad9425751bffdc7">&#9670;&#160;</a></span>array() <span class="overload">[3/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -429,7 +432,7 @@ template&lt;typename It&gt; </div>
 </div>
 </div>
 <a id="a87f170384f4fb93decf2b80ae7280f00" name="a87f170384f4fb93decf2b80ae7280f00"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a87f170384f4fb93decf2b80ae7280f00">&#9670;&#160;</a></span>array() <span class="overload">[4/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a87f170384f4fb93decf2b80ae7280f00">&#9670;&#160;</a></span>array() <span class="overload">[4/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -460,7 +463,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a46642301da11e3eb4312c37349fbc9d7" name="a46642301da11e3eb4312c37349fbc9d7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a46642301da11e3eb4312c37349fbc9d7">&#9670;&#160;</a></span>array() <span class="overload">[5/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a46642301da11e3eb4312c37349fbc9d7">&#9670;&#160;</a></span>array() <span class="overload">[5/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -485,7 +488,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a5e1812029394bfb1a706c83611286f49" name="a5e1812029394bfb1a706c83611286f49"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5e1812029394bfb1a706c83611286f49">&#9670;&#160;</a></span>array() <span class="overload">[6/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e1812029394bfb1a706c83611286f49">&#9670;&#160;</a></span>array() <span class="overload">[6/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -514,7 +517,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a89a7b0c02366ca456232d347ebb11507" name="a89a7b0c02366ca456232d347ebb11507"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a89a7b0c02366ca456232d347ebb11507">&#9670;&#160;</a></span>array() <span class="overload">[7/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a89a7b0c02366ca456232d347ebb11507">&#9670;&#160;</a></span>array() <span class="overload">[7/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -550,7 +553,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a485399a6680a370cabb08470306b63d4" name="a485399a6680a370cabb08470306b63d4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a485399a6680a370cabb08470306b63d4">&#9670;&#160;</a></span>array() <span class="overload">[8/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a485399a6680a370cabb08470306b63d4">&#9670;&#160;</a></span>array() <span class="overload">[8/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -589,7 +592,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="a297df274e2da5cb884257bbeffd6b187" name="a297df274e2da5cb884257bbeffd6b187"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a297df274e2da5cb884257bbeffd6b187">&#9670;&#160;</a></span>array() <span class="overload">[9/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a297df274e2da5cb884257bbeffd6b187">&#9670;&#160;</a></span>array() <span class="overload">[9/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -614,7 +617,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="ab6cbccbba66cc54acda4390b19f0397c" name="ab6cbccbba66cc54acda4390b19f0397c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab6cbccbba66cc54acda4390b19f0397c">&#9670;&#160;</a></span>array() <span class="overload">[10/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab6cbccbba66cc54acda4390b19f0397c">&#9670;&#160;</a></span>array() <span class="overload">[10/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -639,7 +642,7 @@ template&lt;typename T&gt; </div>
 </div>
 </div>
 <a id="abc26528271076510822e374d1668a94b" name="abc26528271076510822e374d1668a94b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abc26528271076510822e374d1668a94b">&#9670;&#160;</a></span>array() <span class="overload">[11/11]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abc26528271076510822e374d1668a94b">&#9670;&#160;</a></span>array() <span class="overload">[11/12]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -669,6 +672,63 @@ template&lt;typename T&gt; </div>
 
 <p>The following methods should be used with caution. </p>
 <p>They are intended for use by the backend implementation and the API may change. </p>
+
+</div>
+</div>
+<a id="a2476f987ec7a5afb7665d3b3974db0b2" name="a2476f987ec7a5afb7665d3b3974db0b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2476f987ec7a5afb7665d3b3974db0b2">&#9670;&#160;</a></span>array() <span class="overload">[12/12]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">mlx::core::array::array </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">allocator::Buffer</a></td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a694e23f2d59606643728ad443d621416">Shape</a></td>          <td class="paramname"><span class="paramname"><em>shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a></td>          <td class="paramname"><span class="paramname"><em>dtype</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a></td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>data_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1array_1_1_flags.html">Flags</a></td>          <td class="paramname"><span class="paramname"><em>flags</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#af834c1e18d6f11c4f233a2e1ce814a4b">Deleter</a></td>          <td class="paramname"><span class="paramname"><em>deleter</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1core_1_1allocator.html#a77f0a1215be242db6485612bcb273af5">allocator::free</a></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel explicit">explicit</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Build an array from all the info held by the array description. </p>
+<p>Including the buffer, strides, flags. </p>
 
 </div>
 </div>

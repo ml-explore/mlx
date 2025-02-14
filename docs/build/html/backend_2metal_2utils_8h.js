@@ -10,5 +10,6 @@ var backend_2metal_2utils_8h =
     [ "mlx::core::get_primitive_string", "namespacemlx_1_1core.html#ad4be35b310a252edd80d9cf04f094a60", null ],
     [ "mlx::core::make_string", "namespacemlx_1_1core.html#aed148d95e7b5221f1312473deded0d27", null ],
     [ "mlx::core::type_to_name", "namespacemlx_1_1core.html#af1fdfdaa5644394362e6baba30701bae", null ],
-    [ "mlx::core::type_to_name", "namespacemlx_1_1core.html#aef60e3a8d9c987c9c338b193673d2164", null ]
+    [ "mlx::core::type_to_name", "namespacemlx_1_1core.html#aef60e3a8d9c987c9c338b193673d2164", null ],
+    [ "mlx::core::unsafe_weak_copy", "namespacemlx_1_1core.html#a357f4172305d2021bde8cf07d99adb7d", null ]
 ];

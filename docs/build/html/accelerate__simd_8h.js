@@ -88,6 +88,7 @@ var accelerate__simd_8h =
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#ab380b8f73672727a38ea0931e731fe4a", null ],
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#ab2bc61c02b9096163e9db91a3f88788f", null ],
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#ac34f6b278627949d2ee68cdbf3d2f50f", null ],
+    [ "mlx::core::simd::operator~", "namespacemlx_1_1core_1_1simd.html#a290787dda17296d27af7afdef3c732a9", null ],
     [ "mlx::core::simd::pow", "namespacemlx_1_1core_1_1simd.html#ab18b3a88a2439fd026b6551b38d1f14a", null ],
     [ "mlx::core::simd::prod", "namespacemlx_1_1core_1_1simd.html#a271cedfc48efc69db43813e8c424bf7c", null ],
     [ "mlx::core::simd::recip", "namespacemlx_1_1core_1_1simd.html#ae344abefc91c7d9c0a9506c868a84d61", null ],

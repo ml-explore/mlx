@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Functions &#8212; MLX 0.22.1 documentation</title>
+    <title>Functions &#8212; MLX 0.23.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../_static/documentation_options.js?v=72ae2406"></script>
+    <script src="../../_static/documentation_options.js?v=358893f7"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -52,7 +52,7 @@
     <link rel="prev" title="mlx.nn.Upsample" href="_autosummary/mlx.nn.Upsample.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.22.1" />
+  <meta name="docsearch:version" content="0.23.0" />
   </head>
   
   
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.22.1 documentation - Home"/>
-    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.22.1 documentation - Home"/>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.23.0 documentation - Home"/>
+    <img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.23.0 documentation - Home"/>
   
   
 </a></div>
@@ -277,6 +277,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.atleast_2d.html">mlx.core.atleast_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.atleast_3d.html">mlx.core.atleast_3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.bitwise_and.html">mlx.core.bitwise_and</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.bitwise_invert.html">mlx.core.bitwise_invert</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
@@ -487,6 +488,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.eigvalsh.html">mlx.core.linalg.eigvalsh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../metal.html">Metal</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -878,77 +883,77 @@
 simple functions.</p>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.elu.html#mlx.nn.elu" title="mlx.nn.elu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">elu</span></code></a>(x[, alpha])</p></td>
-<td><p>Applies the Exponential Linear Unit.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.elu.html#mlx.nn.elu" title="mlx.nn.elu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">elu</span></code></a></p></td>
+<td><p>elu(x, alpha=1.0)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.celu.html#mlx.nn.celu" title="mlx.nn.celu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">celu</span></code></a>(x[, alpha])</p></td>
-<td><p>Applies the Continuously Differentiable Exponential Linear Unit.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.celu.html#mlx.nn.celu" title="mlx.nn.celu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">celu</span></code></a></p></td>
+<td><p>celu(x, alpha=1.0)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu.html#mlx.nn.gelu" title="mlx.nn.gelu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu</span></code></a>(x)</p></td>
-<td><p>Applies the Gaussian Error Linear Units function.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu.html#mlx.nn.gelu" title="mlx.nn.gelu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu</span></code></a></p></td>
+<td><p>gelu(x) -&gt; mlx.core.array</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_approx.html#mlx.nn.gelu_approx" title="mlx.nn.gelu_approx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu_approx</span></code></a>(x)</p></td>
-<td><p>An approximation to Gaussian Error Linear Unit.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_approx.html#mlx.nn.gelu_approx" title="mlx.nn.gelu_approx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu_approx</span></code></a></p></td>
+<td><p>gelu_approx(x)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_fast_approx.html#mlx.nn.gelu_fast_approx" title="mlx.nn.gelu_fast_approx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu_fast_approx</span></code></a>(x)</p></td>
-<td><p>A fast approximation to Gaussian Error Linear Unit.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_fast_approx.html#mlx.nn.gelu_fast_approx" title="mlx.nn.gelu_fast_approx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gelu_fast_approx</span></code></a></p></td>
+<td><p>gelu_fast_approx(x)</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.glu.html#mlx.nn.glu" title="mlx.nn.glu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">glu</span></code></a>(x[, axis])</p></td>
 <td><p>Applies the gated linear unit function.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hard_shrink.html#mlx.nn.hard_shrink" title="mlx.nn.hard_shrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hard_shrink</span></code></a>(x[, lambd])</p></td>
-<td><p>Applies the HardShrink activation function.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hard_shrink.html#mlx.nn.hard_shrink" title="mlx.nn.hard_shrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hard_shrink</span></code></a></p></td>
+<td><p>hard_shrink(x, lambd=0.5)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hard_tanh.html#mlx.nn.hard_tanh" title="mlx.nn.hard_tanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hard_tanh</span></code></a>(x[, min_val, max_val])</p></td>
-<td><p>Applies the HardTanh function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hard_tanh.html#mlx.nn.hard_tanh" title="mlx.nn.hard_tanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hard_tanh</span></code></a></p></td>
+<td><p>hard_tanh(x, min_val=-1.0, max_val=1.0)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hardswish.html#mlx.nn.hardswish" title="mlx.nn.hardswish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hardswish</span></code></a>(x)</p></td>
-<td><p>Applies the hardswish function, element-wise.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.hardswish.html#mlx.nn.hardswish" title="mlx.nn.hardswish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">hardswish</span></code></a></p></td>
+<td><p>hardswish(x)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.leaky_relu.html#mlx.nn.leaky_relu" title="mlx.nn.leaky_relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">leaky_relu</span></code></a>(x[, negative_slope])</p></td>
-<td><p>Applies the Leaky Rectified Linear Unit.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.leaky_relu.html#mlx.nn.leaky_relu" title="mlx.nn.leaky_relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">leaky_relu</span></code></a></p></td>
+<td><p>leaky_relu(x, negative_slope=0.01)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.log_sigmoid.html#mlx.nn.log_sigmoid" title="mlx.nn.log_sigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_sigmoid</span></code></a>(x)</p></td>
-<td><p>Applies the Log Sigmoid function.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.log_sigmoid.html#mlx.nn.log_sigmoid" title="mlx.nn.log_sigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_sigmoid</span></code></a></p></td>
+<td><p>log_sigmoid(x)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.log_softmax.html#mlx.nn.log_softmax" title="mlx.nn.log_softmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_softmax</span></code></a>(x[, axis])</p></td>
-<td><p>Applies the Log Softmax function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.log_softmax.html#mlx.nn.log_softmax" title="mlx.nn.log_softmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log_softmax</span></code></a></p></td>
+<td><p>log_softmax(x, axis=-1)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html#mlx.nn.mish" title="mlx.nn.mish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mish</span></code></a>(x)</p></td>
-<td><p>Applies the Mish function, element-wise.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html#mlx.nn.mish" title="mlx.nn.mish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mish</span></code></a></p></td>
+<td><p>mlx.core.array) -&gt; mlx.core.array</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html#mlx.nn.prelu" title="mlx.nn.prelu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prelu</span></code></a>(x, alpha)</p></td>
-<td><p>Applies the element-wise parametric ReLU.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html#mlx.nn.prelu" title="mlx.nn.prelu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prelu</span></code></a></p></td>
+<td><p>mlx.core.array) -&gt; mlx.core.array</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html#mlx.nn.relu" title="mlx.nn.relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relu</span></code></a>(x)</p></td>
-<td><p>Applies the Rectified Linear Unit.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html#mlx.nn.relu" title="mlx.nn.relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relu</span></code></a></p></td>
+<td><p>relu(x)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.relu6.html#mlx.nn.relu6" title="mlx.nn.relu6"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relu6</span></code></a>(x)</p></td>
-<td><p>Applies the Rectified Linear Unit 6.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.relu6.html#mlx.nn.relu6" title="mlx.nn.relu6"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relu6</span></code></a></p></td>
+<td><p>relu6(x)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html#mlx.nn.selu" title="mlx.nn.selu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">selu</span></code></a>(x)</p></td>
-<td><p>Applies the Scaled Exponential Linear Unit.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html#mlx.nn.selu" title="mlx.nn.selu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">selu</span></code></a></p></td>
+<td><p>selu(x)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.sigmoid.html#mlx.nn.sigmoid" title="mlx.nn.sigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sigmoid</span></code></a>(x)</p></td>
-<td><p>Applies the sigmoid function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.sigmoid.html#mlx.nn.sigmoid" title="mlx.nn.sigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sigmoid</span></code></a></p></td>
+<td><p>sigmoid(x)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html#mlx.nn.silu" title="mlx.nn.silu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">silu</span></code></a>(x)</p></td>
-<td><p>Applies the Sigmoid Linear Unit.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html#mlx.nn.silu" title="mlx.nn.silu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">silu</span></code></a></p></td>
+<td><p>silu(x)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softmax.html#mlx.nn.softmax" title="mlx.nn.softmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softmax</span></code></a>(x[, axis])</p></td>
-<td><p>Applies the Softmax function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softmax.html#mlx.nn.softmax" title="mlx.nn.softmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softmax</span></code></a></p></td>
+<td><p>softmax(x, axis=-1)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softmin.html#mlx.nn.softmin" title="mlx.nn.softmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softmin</span></code></a>(x[, axis])</p></td>
-<td><p>Applies the Softmin function.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softmin.html#mlx.nn.softmin" title="mlx.nn.softmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softmin</span></code></a></p></td>
+<td><p>softmin(x, axis=-1)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softplus.html#mlx.nn.softplus" title="mlx.nn.softplus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softplus</span></code></a>(x)</p></td>
-<td><p>Applies the Softplus function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softplus.html#mlx.nn.softplus" title="mlx.nn.softplus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softplus</span></code></a></p></td>
+<td><p>softplus(x)</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softshrink.html#mlx.nn.softshrink" title="mlx.nn.softshrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softshrink</span></code></a>(x[, lambd])</p></td>
-<td><p>Applies the Softshrink activation function.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.softshrink.html#mlx.nn.softshrink" title="mlx.nn.softshrink"><code class="xref py py-obj docutils literal notranslate"><span class="pre">softshrink</span></code></a></p></td>
+<td><p>float = 0.5)</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html#mlx.nn.step" title="mlx.nn.step"><code class="xref py py-obj docutils literal notranslate"><span class="pre">step</span></code></a>(x[, threshold])</p></td>
-<td><p>Applies the Step Activation Function.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html#mlx.nn.step" title="mlx.nn.step"><code class="xref py py-obj docutils literal notranslate"><span class="pre">step</span></code></a></p></td>
+<td><p>float = 0.0)</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.tanh.html#mlx.nn.tanh" title="mlx.nn.tanh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tanh</span></code></a>(x)</p></td>
 <td><p>Applies the hyperbolic tangent function.</p></td>

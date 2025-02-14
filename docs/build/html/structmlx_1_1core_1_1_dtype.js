@@ -30,6 +30,7 @@ var structmlx_1_1core_1_1_dtype =
       [ "int64", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daaff9b3f96d37353c528517bc3656a00a8", null ],
       [ "float16", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daa098e7844282e240fdee28a9dac11c1c6", null ],
       [ "float32", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daad33ec2b0bbea6d471a4706cea030e1e3", null ],
+      [ "float64", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daafb7fa22ede616c04c68a7663d0f81e92", null ],
       [ "bfloat16", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daa444fe01f3a7a54d1809aef0912846a47", null ],
       [ "complex64", "structmlx_1_1core_1_1_dtype.html#ade845ef5dcebead13a37fe696436e1daa8c022579455bcd2c681f007e84f4e2cf", null ]
     ] ],

@@ -20,6 +20,7 @@ var classmlx_1_1core_1_1array =
     [ "array", "classmlx_1_1core_1_1array.html#a297df274e2da5cb884257bbeffd6b187", null ],
     [ "array", "classmlx_1_1core_1_1array.html#ab6cbccbba66cc54acda4390b19f0397c", null ],
     [ "array", "classmlx_1_1core_1_1array.html#abc26528271076510822e374d1668a94b", null ],
+    [ "array", "classmlx_1_1core_1_1array.html#a2476f987ec7a5afb7665d3b3974db0b2", null ],
     [ "~array", "classmlx_1_1core_1_1array.html#a2f16c1ef8ee248d2fba95520c86dfad2", null ],
     [ "attach_event", "classmlx_1_1core_1_1array.html#a000c3cfe13cb378bf0523b62816190da", null ],
     [ "begin", "classmlx_1_1core_1_1array.html#a76b258b169d7d73419ebbf85340fb914", null ],

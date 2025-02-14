@@ -120,78 +120,81 @@ $(function(){initNavTree('limits_8h_source.html',''); initResizable(true); });
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float_01_4.html">   13</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;float&gt; : <span class="keyword">public</span> std::numeric_limits&lt;float&gt; {};</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span> </div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="keyword">template</span> &lt;&gt;</div>
-<div class="foldopen" id="foldopen00016" data-start="{" data-end="};">
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html">   16</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;<a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a>&gt; {</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span> <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>  <span class="keyword">union </span>half_or_bits {</div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>    uint16_t bits;</div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>    <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> value;</div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  };</div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> bits_to_half(uint16_t v) {</div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keywordflow">return</span> half_or_bits{v}.value;</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>  }</div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> <span class="keyword">public</span>:</div>
-<div class="foldopen" id="foldopen00027" data-start="{" data-end="}">
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">   27</a></span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">lowest</a>() {</div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    <span class="keywordflow">return</span> bits_to_half(0xFBFF);</div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>  }</div>
-</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01double_01_4.html">   16</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;double&gt; : <span class="keyword">public</span> std::numeric_limits&lt;double&gt; {};</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span> </div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="keyword">template</span> &lt;&gt;</div>
+<div class="foldopen" id="foldopen00019" data-start="{" data-end="};">
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html">   19</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;<a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a>&gt; {</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">union </span>half_or_bits {</div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>    uint16_t bits;</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> value;</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>  };</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> bits_to_half(uint16_t v) {</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keywordflow">return</span> half_or_bits{v}.value;</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>  }</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span> </div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> <span class="keyword">public</span>:</div>
 <div class="foldopen" id="foldopen00030" data-start="{" data-end="}">
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">   30</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">max</a>() {</div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>    <span class="keywordflow">return</span> bits_to_half(0x7BFF);</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">   30</a></span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">lowest</a>() {</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>    <span class="keywordflow">return</span> bits_to_half(0xFBFF);</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span>  }</div>
 </div>
 <div class="foldopen" id="foldopen00033" data-start="{" data-end="}">
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">   33</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">infinity</a>() {</div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <span class="keywordflow">return</span> bits_to_half(0x7C00);</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">   33</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">max</a>() {</div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>    <span class="keywordflow">return</span> bits_to_half(0x7BFF);</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>  }</div>
 </div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>};</div>
+<div class="foldopen" id="foldopen00036" data-start="{" data-end="}">
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">   36</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">float16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">infinity</a>() {</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <span class="keywordflow">return</span> bits_to_half(0x7C00);</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>  }</div>
 </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">template</span> &lt;&gt;</div>
-<div class="foldopen" id="foldopen00039" data-start="{" data-end="};">
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html">   39</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;<a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a>&gt; {</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>  <span class="keyword">union </span>bfloat_or_bits {</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    uint16_t bits;</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> value;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>  };</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> bits_to_bfloat(uint16_t v) {</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keywordflow">return</span> bfloat_or_bits{v}.value;</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  }</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span> </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> <span class="keyword">public</span>:</div>
-<div class="foldopen" id="foldopen00050" data-start="{" data-end="}">
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">   50</a></span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">lowest</a>() {</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    <span class="keywordflow">return</span> bits_to_bfloat(0xFF7F);</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>  }</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>};</div>
 </div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="keyword">template</span> &lt;&gt;</div>
+<div class="foldopen" id="foldopen00042" data-start="{" data-end="};">
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html">   42</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1numeric__limits.html">numeric_limits</a>&lt;<a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a>&gt; {</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span> <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>  <span class="keyword">union </span>bfloat_or_bits {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    uint16_t bits;</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> value;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  };</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> bits_to_bfloat(uint16_t v) {</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="keywordflow">return</span> bfloat_or_bits{v}.value;</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>  }</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span> </div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span> <span class="keyword">public</span>:</div>
 <div class="foldopen" id="foldopen00053" data-start="{" data-end="}">
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">   53</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">max</a>() {</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <span class="keywordflow">return</span> bits_to_bfloat(0x7F7F);</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">   53</a></span>  <span class="keyword">constexpr</span> <span class="keyword">static</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">lowest</a>() {</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <span class="keywordflow">return</span> bits_to_bfloat(0xFF7F);</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>  }</div>
 </div>
 <div class="foldopen" id="foldopen00056" data-start="{" data-end="}">
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">   56</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">infinity</a>() {</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordflow">return</span> bits_to_bfloat(0x7F80);</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">   56</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">max</a>() {</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordflow">return</span> bits_to_bfloat(0x7F7F);</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>  }</div>
 </div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>};</div>
+<div class="foldopen" id="foldopen00059" data-start="{" data-end="}">
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">   59</a></span>  <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">bfloat16_t</a> <a class="code hl_function" href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">infinity</a>() {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keywordflow">return</span> bits_to_bfloat(0x7F80);</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>  }</div>
 </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span> </div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>} <span class="comment">// namespace mlx::core</span></div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>};</div>
+</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span> </div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>} <span class="comment">// namespace mlx::core</span></div>
 <div class="ttc" id="ahalf__types_8h_html"><div class="ttname"><a href="half__types_8h.html">half_types.h</a></div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html"><div class="ttname"><a href="namespacemlx_1_1core.html">mlx::core</a></div><div class="ttdef"><b>Definition</b> allocator.h:7</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_acb5d16c9b83778c7621c38e522e0060b"><div class="ttname"><a href="namespacemlx_1_1core.html#acb5d16c9b83778c7621c38e522e0060b">mlx::core::bfloat16_t</a></div><div class="ttdeci">struct _MLX_BFloat16 bfloat16_t</div><div class="ttdef"><b>Definition</b> half_types.h:34</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_afbd2769c30e721afc85a7b9fb55b8e52"><div class="ttname"><a href="namespacemlx_1_1core.html#afbd2769c30e721afc85a7b9fb55b8e52">mlx::core::float16_t</a></div><div class="ttdeci">struct _MLX_Float16 float16_t</div><div class="ttdef"><b>Definition</b> half_types.h:17</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a01712fcb04266320225c168a0e6f619a"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">mlx::core::numeric_limits&lt; bfloat16_t &gt;::max</a></div><div class="ttdeci">static constexpr bfloat16_t max()</div><div class="ttdef"><b>Definition</b> limits.h:53</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a3623580fbfd92ceb69cdd8e329e18fa8"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">mlx::core::numeric_limits&lt; bfloat16_t &gt;::lowest</a></div><div class="ttdeci">static constexpr bfloat16_t lowest()</div><div class="ttdef"><b>Definition</b> limits.h:50</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a974982399d0211786599526abdb843b8"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">mlx::core::numeric_limits&lt; bfloat16_t &gt;::infinity</a></div><div class="ttdeci">static constexpr bfloat16_t infinity()</div><div class="ttdef"><b>Definition</b> limits.h:56</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_a2a8f3f489b47b7e8398bec9895ae0c27"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">mlx::core::numeric_limits&lt; float16_t &gt;::infinity</a></div><div class="ttdeci">static constexpr float16_t infinity()</div><div class="ttdef"><b>Definition</b> limits.h:33</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_a6dd1fadd4cc7c2cec6223977c238c334"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">mlx::core::numeric_limits&lt; float16_t &gt;::max</a></div><div class="ttdeci">static constexpr float16_t max()</div><div class="ttdef"><b>Definition</b> limits.h:30</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_abc2d9cd8d0a90219f7eb6fd05b98e4ac"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">mlx::core::numeric_limits&lt; float16_t &gt;::lowest</a></div><div class="ttdeci">static constexpr float16_t lowest()</div><div class="ttdef"><b>Definition</b> limits.h:27</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a01712fcb04266320225c168a0e6f619a"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a01712fcb04266320225c168a0e6f619a">mlx::core::numeric_limits&lt; bfloat16_t &gt;::max</a></div><div class="ttdeci">static constexpr bfloat16_t max()</div><div class="ttdef"><b>Definition</b> limits.h:56</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a3623580fbfd92ceb69cdd8e329e18fa8"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a3623580fbfd92ceb69cdd8e329e18fa8">mlx::core::numeric_limits&lt; bfloat16_t &gt;::lowest</a></div><div class="ttdeci">static constexpr bfloat16_t lowest()</div><div class="ttdef"><b>Definition</b> limits.h:53</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4_html_a974982399d0211786599526abdb843b8"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html#a974982399d0211786599526abdb843b8">mlx::core::numeric_limits&lt; bfloat16_t &gt;::infinity</a></div><div class="ttdeci">static constexpr bfloat16_t infinity()</div><div class="ttdef"><b>Definition</b> limits.h:59</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_a2a8f3f489b47b7e8398bec9895ae0c27"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a2a8f3f489b47b7e8398bec9895ae0c27">mlx::core::numeric_limits&lt; float16_t &gt;::infinity</a></div><div class="ttdeci">static constexpr float16_t infinity()</div><div class="ttdef"><b>Definition</b> limits.h:36</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_a6dd1fadd4cc7c2cec6223977c238c334"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#a6dd1fadd4cc7c2cec6223977c238c334">mlx::core::numeric_limits&lt; float16_t &gt;::max</a></div><div class="ttdeci">static constexpr float16_t max()</div><div class="ttdef"><b>Definition</b> limits.h:33</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4_html_abc2d9cd8d0a90219f7eb6fd05b98e4ac"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html#abc2d9cd8d0a90219f7eb6fd05b98e4ac">mlx::core::numeric_limits&lt; float16_t &gt;::lowest</a></div><div class="ttdeci">static constexpr float16_t lowest()</div><div class="ttdef"><b>Definition</b> limits.h:30</div></div>
 <div class="ttc" id="astructmlx_1_1core_1_1numeric__limits_html"><div class="ttname"><a href="structmlx_1_1core_1_1numeric__limits.html">mlx::core::numeric_limits</a></div><div class="ttdef"><b>Definition</b> limits.h:10</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Conversion to NumPy and Other Frameworks &#8212; MLX 0.22.1 documentation</title>
+    <title>Conversion to NumPy and Other Frameworks &#8212; MLX 0.23.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../_static/documentation_options.js?v=72ae2406"></script>
+    <script src="../_static/documentation_options.js?v=358893f7"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -51,7 +51,7 @@
     <link rel="prev" title="Compilation" href="compile.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.22.1" />
+  <meta name="docsearch:version" content="0.23.0" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.22.1 documentation - Home"/>
-    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.22.1 documentation - Home"/>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.23.0 documentation - Home"/>
+    <img src="../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.23.0 documentation - Home"/>
   
   
 </a></div>
@@ -276,6 +276,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.atleast_2d.html">mlx.core.atleast_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.atleast_3d.html">mlx.core.atleast_3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_and.html">mlx.core.bitwise_and</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_invert.html">mlx.core.bitwise_invert</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
@@ -486,6 +487,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.eigvalsh.html">mlx.core.linalg.eigvalsh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/metal.html">Metal</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -901,11 +906,13 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Since NumPy does not support <code class="docutils literal notranslate"><span class="pre">bfloat16</span></code> arrays, you will need to convert to <code class="docutils literal notranslate"><span class="pre">float16</span></code> or <code class="docutils literal notranslate"><span class="pre">float32</span></code> first:
-<code class="docutils literal notranslate"><span class="pre">np.array(a.astype(mx.float32))</span></code>.
-Otherwise, you will receive an error like: <code class="docutils literal notranslate"><span class="pre">Item</span> <span class="pre">size</span> <span class="pre">2</span> <span class="pre">for</span> <span class="pre">PEP</span> <span class="pre">3118</span> <span class="pre">buffer</span> <span class="pre">format</span> <span class="pre">string</span> <span class="pre">does</span> <span class="pre">not</span> <span class="pre">match</span> <span class="pre">the</span> <span class="pre">dtype</span> <span class="pre">V</span> <span class="pre">item</span> <span class="pre">size</span> <span class="pre">0.</span></code></p>
+<p>Since NumPy does not support <code class="docutils literal notranslate"><span class="pre">bfloat16</span></code> arrays, you will need to convert
+to <code class="docutils literal notranslate"><span class="pre">float16</span></code> or <code class="docutils literal notranslate"><span class="pre">float32</span></code> first: <code class="docutils literal notranslate"><span class="pre">np.array(a.astype(mx.float32))</span></code>.
+Otherwise, you will receive an error like: <code class="docutils literal notranslate"><span class="pre">Item</span> <span class="pre">size</span> <span class="pre">2</span> <span class="pre">for</span> <span class="pre">PEP</span> <span class="pre">3118</span>
+<span class="pre">buffer</span> <span class="pre">format</span> <span class="pre">string</span> <span class="pre">does</span> <span class="pre">not</span> <span class="pre">match</span> <span class="pre">the</span> <span class="pre">dtype</span> <span class="pre">V</span> <span class="pre">item</span> <span class="pre">size</span> <span class="pre">0.</span></code></p>
 </div>
-<p>By default, NumPy copies data to a new array. This can be prevented by creating an array view:</p>
+<p>By default, NumPy copies data to a new array. This can be prevented by creating
+an array view:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <span class="n">a_view</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">a_view</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">owndata</span><span class="p">)</span> <span class="c1"># False</span>
@@ -913,9 +920,15 @@ Otherwise, you will receive an error like: <code class="docutils literal notrans
 <span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="c1"># 1</span>
 </pre></div>
 </div>
-<p>A NumPy array view is a normal NumPy array, except that it does not own its memory.
-This means writing to the view is reflected in the original array.</p>
-<p>While this is quite powerful to prevent copying arrays, it should be noted that external changes to the memory of arrays cannot be reflected in gradients.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>NumPy arrays with type <code class="docutils literal notranslate"><span class="pre">float64</span></code> will be default converted to MLX arrays
+with type <code class="docutils literal notranslate"><span class="pre">float32</span></code>.</p>
+</div>
+<p>A NumPy array view is a normal NumPy array, except that it does not own its
+memory. This means writing to the view is reflected in the original array.</p>
+<p>While this is quite powerful to prevent copying arrays, it should be noted that
+external changes to the memory of arrays cannot be reflected in gradients.</p>
 <p>Let’s demonstrate this in an example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
     <span class="n">x_view</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -929,11 +942,12 @@ This means writing to the view is reflected in the original array.</p>
 </pre></div>
 </div>
 <p>The function <code class="docutils literal notranslate"><span class="pre">f</span></code> indirectly modifies the array <code class="docutils literal notranslate"><span class="pre">x</span></code> through a memory view.
-However, this modification is not reflected in the gradient, as seen in the last line outputting <code class="docutils literal notranslate"><span class="pre">1.0</span></code>,
-representing the gradient of the sum operation alone.
-The squaring of <code class="docutils literal notranslate"><span class="pre">x</span></code> occurs externally to MLX, meaning that no gradient is incorporated.
-It’s important to note that a similar issue arises during array conversion and copying.
-For instance, a function defined as <code class="docutils literal notranslate"><span class="pre">mx.array(np.array(x)**2).sum()</span></code> would also result in an incorrect gradient,
+However, this modification is not reflected in the gradient, as seen in the
+last line outputting <code class="docutils literal notranslate"><span class="pre">1.0</span></code>, representing the gradient of the sum operation
+alone.  The squaring of <code class="docutils literal notranslate"><span class="pre">x</span></code> occurs externally to MLX, meaning that no
+gradient is incorporated.  It’s important to note that a similar issue arises
+during array conversion and copying.  For instance, a function defined as
+<code class="docutils literal notranslate"><span class="pre">mx.array(np.array(x)**2).sum()</span></code> would also result in an incorrect gradient,
 even though no in-place operations on MLX memory are executed.</p>
 <section id="pytorch">
 <h2>PyTorch<a class="headerlink" href="#pytorch" title="Link to this heading">#</a></h2>
@@ -942,7 +956,8 @@ even though no in-place operations on MLX memory are executed.</p>
 <p>PyTorch Support for <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a> is experimental and can break for
 multi-dimensional arrays. Casting to NumPy first is advised for now.</p>
 </div>
-<p>PyTorch supports the buffer protocol, but it requires an explicit <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>.</p>
+<p>PyTorch supports the buffer protocol, but it requires an explicit
+<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">mlx.core</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mx</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
@@ -951,7 +966,8 @@ multi-dimensional arrays. Casting to NumPy first is advised for now.</p>
 <span class="n">c</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span>
 </pre></div>
 </div>
-<p>Conversion from PyTorch tensors back to arrays must be done via intermediate NumPy arrays with <code class="docutils literal notranslate"><span class="pre">numpy()</span></code>.</p>
+<p>Conversion from PyTorch tensors back to arrays must be done via intermediate
+NumPy arrays with <code class="docutils literal notranslate"><span class="pre">numpy()</span></code>.</p>
 </section>
 <section id="jax">
 <h2>JAX<a class="headerlink" href="#jax" title="Link to this heading">#</a></h2>
@@ -967,7 +983,8 @@ multi-dimensional arrays. Casting to NumPy first is advised for now.</p>
 </section>
 <section id="tensorflow">
 <h2>TensorFlow<a class="headerlink" href="#tensorflow" title="Link to this heading">#</a></h2>
-<p>TensorFlow supports the buffer protocol, but it requires an explicit <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>.</p>
+<p>TensorFlow supports the buffer protocol, but it requires an explicit
+<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">mlx.core</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mx</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
 

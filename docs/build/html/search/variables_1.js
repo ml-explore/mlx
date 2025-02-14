@@ -30,6 +30,7 @@ var searchData=
   ['buf_27',['buf',['../struct_read_writer.html#a23bac3c96dd0265ddbee1f256be45ff5',1,'ReadWriter']]],
   ['buffer_28',['buffer',['../structmlx_1_1core_1_1array_1_1_data.html#a9a51e2d12ba505027cc0fca86bdd39ad',1,'mlx::core::array::Data::buffer'],['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a99183c92599edfeb75f7fa0f37e1d9eb',1,'mlx::core::metal::DeviceStream::buffer']]],
   ['buffer_5fops_29',['buffer_ops',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#ab6048b329e65a59033834f3bdd351782',1,'mlx::core::metal::DeviceStream']]],
-  ['buffers_30',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]],
-  ['bytes_5fper_5fpack_31',['bytes_per_pack',['../struct_quantized_block_loader.html#ad00fe6d8bd395206a41693a8ed65d4db',1,'QuantizedBlockLoader']]]
+  ['buffer_5fsizes_30',['buffer_sizes',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#ae7054233303b06329c67177382ded459',1,'mlx::core::metal::DeviceStream']]],
+  ['buffers_31',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]],
+  ['bytes_5fper_5fpack_32',['bytes_per_pack',['../struct_quantized_block_loader.html#ad00fe6d8bd395206a41693a8ed65d4db',1,'QuantizedBlockLoader']]]
 ];

@@ -10,6 +10,7 @@ var namespacemlx_1_1core_1_1detail =
     [ "ArcTan2", "structmlx_1_1core_1_1detail_1_1_arc_tan2.html", "structmlx_1_1core_1_1detail_1_1_arc_tan2" ],
     [ "ArcTanh", "structmlx_1_1core_1_1detail_1_1_arc_tanh.html", "structmlx_1_1core_1_1detail_1_1_arc_tanh" ],
     [ "BitwiseAnd", "structmlx_1_1core_1_1detail_1_1_bitwise_and.html", "structmlx_1_1core_1_1detail_1_1_bitwise_and" ],
+    [ "BitwiseInvert", "structmlx_1_1core_1_1detail_1_1_bitwise_invert.html", "structmlx_1_1core_1_1detail_1_1_bitwise_invert" ],
     [ "BitwiseOr", "structmlx_1_1core_1_1detail_1_1_bitwise_or.html", "structmlx_1_1core_1_1detail_1_1_bitwise_or" ],
     [ "BitwiseXor", "structmlx_1_1core_1_1detail_1_1_bitwise_xor.html", "structmlx_1_1core_1_1detail_1_1_bitwise_xor" ],
     [ "Ceil", "structmlx_1_1core_1_1detail_1_1_ceil.html", "structmlx_1_1core_1_1detail_1_1_ceil" ],

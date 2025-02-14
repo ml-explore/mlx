@@ -34,5 +34,6 @@ var searchData=
   ['loopalignment_31',['LoopAlignment',['../structmlx_1_1steel_1_1_loop_alignment.html',1,'mlx::steel']]],
   ['loopedelemtoloc_32',['LoopedElemToLoc',['../struct_looped_elem_to_loc.html',1,'']]],
   ['loopedelemtoloc_3c_201_2c_20offsett_2c_20false_20_3e_33',['LoopedElemToLoc&lt; 1, OffsetT, false &gt;',['../struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01false_01_4.html',1,'']]],
-  ['loopedelemtoloc_3c_201_2c_20offsett_2c_20true_20_3e_34',['LoopedElemToLoc&lt; 1, OffsetT, true &gt;',['../struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01true_01_4.html',1,'']]]
+  ['loopedelemtoloc_3c_201_2c_20offsett_2c_20true_20_3e_34',['LoopedElemToLoc&lt; 1, OffsetT, true &gt;',['../struct_looped_elem_to_loc_3_011_00_01_offset_t_00_01true_01_4.html',1,'']]],
+  ['luf_35',['LUF',['../classmlx_1_1core_1_1_l_u_f.html',1,'mlx::core']]]
 ];

@@ -6,6 +6,8 @@ var linalg_8h =
     [ "mlx::core::linalg::eigh", "namespacemlx_1_1core_1_1linalg.html#a2180be504f639fd471ea622641c1b0ca", null ],
     [ "mlx::core::linalg::eigvalsh", "namespacemlx_1_1core_1_1linalg.html#a00c8e24432b0773dac64b8602bd142ba", null ],
     [ "mlx::core::linalg::inv", "namespacemlx_1_1core_1_1linalg.html#ad966a0b6bff176c9f933534ed62389a2", null ],
+    [ "mlx::core::linalg::lu", "namespacemlx_1_1core_1_1linalg.html#a7a426a92cb02c0d125e41f8915e66f7f", null ],
+    [ "mlx::core::linalg::lu_factor", "namespacemlx_1_1core_1_1linalg.html#abf10561bef3450b83a45aef161ee8b6e", null ],
     [ "mlx::core::linalg::norm", "namespacemlx_1_1core_1_1linalg.html#aba765b8e95e9a1d33d31f727a185919d", null ],
     [ "mlx::core::linalg::norm", "namespacemlx_1_1core_1_1linalg.html#acaa85b4146821c268abecec2422c02d2", null ],
     [ "mlx::core::linalg::norm", "namespacemlx_1_1core_1_1linalg.html#a229018071d5602e38d6248230f334a10", null ],
@@ -14,6 +16,8 @@ var linalg_8h =
     [ "mlx::core::linalg::norm", "namespacemlx_1_1core_1_1linalg.html#a44250cff34238f01471fd61e76036f03", null ],
     [ "mlx::core::linalg::pinv", "namespacemlx_1_1core_1_1linalg.html#ad9f8348091e5ff4f74ad456e9fbd3e01", null ],
     [ "mlx::core::linalg::qr", "namespacemlx_1_1core_1_1linalg.html#ae6d97829459353fe3b31c8a0867c0ca2", null ],
+    [ "mlx::core::linalg::solve", "namespacemlx_1_1core_1_1linalg.html#a66590bfcec381e952b27630da0a31953", null ],
+    [ "mlx::core::linalg::solve_triangular", "namespacemlx_1_1core_1_1linalg.html#a5e6e53f7a04688baa1329d166511febe", null ],
     [ "mlx::core::linalg::svd", "namespacemlx_1_1core_1_1linalg.html#a64364b880e99914cf47bf756fa8dbaf0", null ],
     [ "mlx::core::linalg::tri_inv", "namespacemlx_1_1core_1_1linalg.html#aba1994571326326717b5b5e38c2e0661", null ]
 ];

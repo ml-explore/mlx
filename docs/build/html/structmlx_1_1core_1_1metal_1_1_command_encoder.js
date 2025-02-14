@@ -1,7 +1,7 @@
 var structmlx_1_1core_1_1metal_1_1_command_encoder =
 [
     [ "ConcurrentContext", "structmlx_1_1core_1_1metal_1_1_command_encoder_1_1_concurrent_context.html", "structmlx_1_1core_1_1metal_1_1_command_encoder_1_1_concurrent_context" ],
-    [ "CommandEncoder", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a2334774486f447213ee997e55c2e52a3", null ],
+    [ "CommandEncoder", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a7320b3acfa075ffdce5ea38fe107f186", null ],
     [ "CommandEncoder", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#ac68ca977b5bde5434284ce7979647f14", null ],
     [ "~CommandEncoder", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a9b6dd221ccd2d939d544004cb6279198", null ],
     [ "barrier", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a7f028c6ca48e75bf2c1806b5b8cfc90e", null ],
