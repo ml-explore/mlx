@@ -858,6 +858,39 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
     wt = arr_copy;
   }
 
+  // Check for 1x1 conv
+  auto is_one = [](int x) { return x == 1; };
+  auto is_zero = [](int x) { return x == 0; };
+  if (groups_ == 1 && (wt.shape(0) * wt.shape(-1) == wt.size()) &&
+      std::all_of(wt.shape().begin() + 1, wt.shape().end() - 1, is_one) &&
+      std::all_of(kernel_strides_.begin(), kernel_strides_.end(), is_one) &&
+      std::all_of(input_dilation_.begin(), input_dilation_.end(), is_one) &&
+      std::all_of(kernel_dilation_.begin(), kernel_dilation_.end(), is_one) &&
+      std::all_of(padding_.begin(), padding_.end(), is_zero)) {
+    std::vector<array> empty_copies;
+    steel_matmul_regular(
+        s,
+        d,
+        /*a = */ in,
+        /*b = */ wt,
+        /*c = */ out,
+        /*M = */ in.size() / in.shape(-1),
+        /*N = */ wt.shape(0),
+        /*K = */ in.shape(-1),
+        /*batch_size_out = */ 1,
+        /*lda = */ in.shape(-1),
+        /*ldb = */ wt.shape(-1),
+        /*ldd = */ wt.shape(0),
+        /*transpose_a = */ false,
+        /*transpose_b = */ true,
+        /*batch_shape = */ {1},
+        /*batch_strides = */ {1},
+        /*A_batch_stride = */ 0,
+        /*B_batch_stride = */ 0,
+        /*matrix_stride_out = */ 0,
+        /*copies = */ empty_copies);
+  }
+
   // 3D conv
   if (out.ndim() == 5) {
     conv_3D_gpu(
