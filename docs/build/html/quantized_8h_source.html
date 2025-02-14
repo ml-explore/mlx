@@ -780,14 +780,14 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00648" name="l00648"></a><span class="lineno">  648</span>  <span class="comment">// Adjust positions</span></div>
 <div class="line"><a id="l00649" name="l00649"></a><span class="lineno">  649</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> in_vec_size_w = in_vec_size * bytes_per_pack / pack_factor;</div>
 <div class="line"><a id="l00650" name="l00650"></a><span class="lineno">  650</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> in_vec_size_g = in_vec_size / group_size;</div>
-<div class="line"><a id="l00651" name="l00651"></a><span class="lineno">  651</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_row = tid.x * (num_simdgroups * results_per_simdgroup) +</div>
+<div class="line"><a id="l00651" name="l00651"></a><span class="lineno">  651</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_row = tid.y * (num_simdgroups * results_per_simdgroup) +</div>
 <div class="line"><a id="l00652" name="l00652"></a><span class="lineno">  652</span>      simd_gid * results_per_simdgroup;</div>
 <div class="line"><a id="l00653" name="l00653"></a><span class="lineno">  653</span> </div>
 <div class="line"><a id="l00654" name="l00654"></a><span class="lineno">  654</span>  ws += out_row * in_vec_size_w + simd_lid * packs_per_thread * bytes_per_pack;</div>
 <div class="line"><a id="l00655" name="l00655"></a><span class="lineno">  655</span>  scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
 <div class="line"><a id="l00656" name="l00656"></a><span class="lineno">  656</span>  biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
-<div class="line"><a id="l00657" name="l00657"></a><span class="lineno">  657</span>  x += tid.y * in_vec_size + simd_lid * values_per_thread;</div>
-<div class="line"><a id="l00658" name="l00658"></a><span class="lineno">  658</span>  y += tid.y * out_vec_size + out_row;</div>
+<div class="line"><a id="l00657" name="l00657"></a><span class="lineno">  657</span>  x += tid.x * in_vec_size + simd_lid * values_per_thread;</div>
+<div class="line"><a id="l00658" name="l00658"></a><span class="lineno">  658</span>  y += tid.x * out_vec_size + out_row;</div>
 <div class="line"><a id="l00659" name="l00659"></a><span class="lineno">  659</span> </div>
 <div class="line"><a id="l00660" name="l00660"></a><span class="lineno">  660</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> k = 0; k &lt; in_vec_size; k += block_size) {</div>
 <div class="line"><a id="l00661" name="l00661"></a><span class="lineno">  661</span>    U sum = <a class="code hl_function" href="quantized_8h.html#a8dbace41de9e1e21dd59d016db11b3e9">load_vector&lt;T, U, values_per_thread, bits&gt;</a>(x, x_thread);</div>
@@ -850,7 +850,7 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00716" name="l00716"></a><span class="lineno">  716</span>  <span class="comment">// Adjust positions</span></div>
 <div class="line"><a id="l00717" name="l00717"></a><span class="lineno">  717</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> in_vec_size_w = in_vec_size * bytes_per_pack / pack_factor;</div>
 <div class="line"><a id="l00718" name="l00718"></a><span class="lineno">  718</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> in_vec_size_g = in_vec_size / group_size;</div>
-<div class="line"><a id="l00719" name="l00719"></a><span class="lineno">  719</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_row = tid.x * (num_simdgroups * results_per_simdgroup) +</div>
+<div class="line"><a id="l00719" name="l00719"></a><span class="lineno">  719</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_row = tid.y * (num_simdgroups * results_per_simdgroup) +</div>
 <div class="line"><a id="l00720" name="l00720"></a><span class="lineno">  720</span>      simd_gid * results_per_simdgroup;</div>
 <div class="line"><a id="l00721" name="l00721"></a><span class="lineno">  721</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> used_out_row = <a class="code hl_function" href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">min</a>(out_vec_size - results_per_simdgroup, out_row);</div>
 <div class="line"><a id="l00722" name="l00722"></a><span class="lineno">  722</span> </div>
@@ -865,8 +865,8 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00731" name="l00731"></a><span class="lineno">  731</span>        out_row * in_vec_size_w + simd_lid * packs_per_thread * bytes_per_pack;</div>
 <div class="line"><a id="l00732" name="l00732"></a><span class="lineno">  732</span>    scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
 <div class="line"><a id="l00733" name="l00733"></a><span class="lineno">  733</span>    biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
-<div class="line"><a id="l00734" name="l00734"></a><span class="lineno">  734</span>    x += tid.y * in_vec_size + simd_lid * values_per_thread;</div>
-<div class="line"><a id="l00735" name="l00735"></a><span class="lineno">  735</span>    y += tid.y * out_vec_size + out_row;</div>
+<div class="line"><a id="l00734" name="l00734"></a><span class="lineno">  734</span>    x += tid.x * in_vec_size + simd_lid * values_per_thread;</div>
+<div class="line"><a id="l00735" name="l00735"></a><span class="lineno">  735</span>    y += tid.x * out_vec_size + out_row;</div>
 <div class="line"><a id="l00736" name="l00736"></a><span class="lineno">  736</span> </div>
 <div class="line"><a id="l00737" name="l00737"></a><span class="lineno">  737</span>    <span class="keywordtype">int</span> k = 0;</div>
 <div class="line"><a id="l00738" name="l00738"></a><span class="lineno">  738</span>    <span class="keywordflow">for</span> (; k &lt; in_vec_size - block_size; k += block_size) {</div>
@@ -922,8 +922,8 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00788" name="l00788"></a><span class="lineno">  788</span>        simd_lid * packs_per_thread * bytes_per_pack;</div>
 <div class="line"><a id="l00789" name="l00789"></a><span class="lineno">  789</span>    scales += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
 <div class="line"><a id="l00790" name="l00790"></a><span class="lineno">  790</span>    biases += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;</div>
-<div class="line"><a id="l00791" name="l00791"></a><span class="lineno">  791</span>    x += tid.y * in_vec_size + simd_lid * values_per_thread;</div>
-<div class="line"><a id="l00792" name="l00792"></a><span class="lineno">  792</span>    y += tid.y * out_vec_size + used_out_row;</div>
+<div class="line"><a id="l00791" name="l00791"></a><span class="lineno">  791</span>    x += tid.x * in_vec_size + simd_lid * values_per_thread;</div>
+<div class="line"><a id="l00792" name="l00792"></a><span class="lineno">  792</span>    y += tid.x * out_vec_size + used_out_row;</div>
 <div class="line"><a id="l00793" name="l00793"></a><span class="lineno">  793</span> </div>
 <div class="line"><a id="l00794" name="l00794"></a><span class="lineno">  794</span>    <span class="keywordtype">int</span> k = 0;</div>
 <div class="line"><a id="l00795" name="l00795"></a><span class="lineno">  795</span>    <span class="keywordflow">for</span> (; k &lt; in_vec_size - block_size; k += block_size) {</div>
@@ -1012,12 +1012,12 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00876" name="l00876"></a><span class="lineno">  876</span>  <span class="comment">// Adjust positions</span></div>
 <div class="line"><a id="l00877" name="l00877"></a><span class="lineno">  877</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_vec_size_w = out_vec_size * bytes_per_pack / pack_factor;</div>
 <div class="line"><a id="l00878" name="l00878"></a><span class="lineno">  878</span>  <span class="keyword">const</span> <span class="keywordtype">int</span> out_vec_size_g = out_vec_size / group_size;</div>
-<div class="line"><a id="l00879" name="l00879"></a><span class="lineno">  879</span>  <span class="keywordtype">int</span> out_col = pack_factor * tn * (tid.x * num_simdgroups + simd_gid);</div>
+<div class="line"><a id="l00879" name="l00879"></a><span class="lineno">  879</span>  <span class="keywordtype">int</span> out_col = pack_factor * tn * (tid.y * num_simdgroups + simd_gid);</div>
 <div class="line"><a id="l00880" name="l00880"></a><span class="lineno">  880</span>  ws += out_col * bytes_per_pack / pack_factor + simd_lid * out_vec_size_w;</div>
 <div class="line"><a id="l00881" name="l00881"></a><span class="lineno">  881</span>  scales += out_col / group_size + simd_lid * out_vec_size_g;</div>
 <div class="line"><a id="l00882" name="l00882"></a><span class="lineno">  882</span>  biases += out_col / group_size + simd_lid * out_vec_size_g;</div>
-<div class="line"><a id="l00883" name="l00883"></a><span class="lineno">  883</span>  x += tid.y * in_vec_size + simd_lid;</div>
-<div class="line"><a id="l00884" name="l00884"></a><span class="lineno">  884</span>  y += tid.y * out_vec_size + out_col;</div>
+<div class="line"><a id="l00883" name="l00883"></a><span class="lineno">  883</span>  x += tid.x * in_vec_size + simd_lid;</div>
+<div class="line"><a id="l00884" name="l00884"></a><span class="lineno">  884</span>  y += tid.x * out_vec_size + out_col;</div>
 <div class="line"><a id="l00885" name="l00885"></a><span class="lineno">  885</span> </div>
 <div class="line"><a id="l00886" name="l00886"></a><span class="lineno">  886</span>  <span class="keywordflow">if</span> (out_col &gt;= out_vec_size) {</div>
 <div class="line"><a id="l00887" name="l00887"></a><span class="lineno">  887</span>    <span class="keywordflow">return</span>;</div>
