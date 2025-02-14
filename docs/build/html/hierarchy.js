@@ -48,6 +48,8 @@ var hierarchy =
     [ "_MLX_BFloat16::bits_to_bfloat_struct", "struct___m_l_x___b_float16_1_1bits__to__bfloat__struct.html", null ],
     [ "BitwiseAnd", "struct_bitwise_and.html", null ],
     [ "mlx::core::detail::BitwiseAnd", "structmlx_1_1core_1_1detail_1_1_bitwise_and.html", null ],
+    [ "BitwiseInvert", "struct_bitwise_invert.html", null ],
+    [ "mlx::core::detail::BitwiseInvert", "structmlx_1_1core_1_1detail_1_1_bitwise_invert.html", null ],
     [ "BitwiseOr", "struct_bitwise_or.html", null ],
     [ "mlx::core::detail::BitwiseOr", "structmlx_1_1core_1_1detail_1_1_bitwise_or.html", null ],
     [ "BitwiseXor", "struct_bitwise_xor.html", null ],
@@ -239,6 +241,7 @@ var hierarchy =
     [ "NotEqual", "struct_not_equal.html", null ],
     [ "mlx::core::numeric_limits< T >", "structmlx_1_1core_1_1numeric__limits.html", null ],
     [ "std::numeric_limits", null, [
+      [ "mlx::core::numeric_limits< double >", "structmlx_1_1core_1_1numeric__limits_3_01double_01_4.html", null ],
       [ "mlx::core::numeric_limits< float >", "structmlx_1_1core_1_1numeric__limits_3_01float_01_4.html", null ]
     ] ],
     [ "mlx::core::numeric_limits< bfloat16_t >", "structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html", null ],
@@ -259,6 +262,7 @@ var hierarchy =
       [ "mlx::core::Depends", "classmlx_1_1core_1_1_depends.html", null ],
       [ "mlx::core::DivMod", "classmlx_1_1core_1_1_div_mod.html", null ],
       [ "mlx::core::Eigh", "classmlx_1_1core_1_1_eigh.html", null ],
+      [ "mlx::core::LUF", "classmlx_1_1core_1_1_l_u_f.html", null ],
       [ "mlx::core::QRF", "classmlx_1_1core_1_1_q_r_f.html", null ],
       [ "mlx::core::SVD", "classmlx_1_1core_1_1_s_v_d.html", null ],
       [ "mlx::core::Split", "classmlx_1_1core_1_1_split.html", null ],
@@ -280,6 +284,7 @@ var hierarchy =
         [ "mlx::core::AsStrided", "classmlx_1_1core_1_1_as_strided.html", null ],
         [ "mlx::core::AsType", "classmlx_1_1core_1_1_as_type.html", null ],
         [ "mlx::core::BitwiseBinary", "classmlx_1_1core_1_1_bitwise_binary.html", null ],
+        [ "mlx::core::BitwiseInvert", "classmlx_1_1core_1_1_bitwise_invert.html", null ],
         [ "mlx::core::BlockMaskedMM", "classmlx_1_1core_1_1_block_masked_m_m.html", null ],
         [ "mlx::core::Broadcast", "classmlx_1_1core_1_1_broadcast.html", null ],
         [ "mlx::core::BroadcastAxes", "classmlx_1_1core_1_1_broadcast_axes.html", null ],

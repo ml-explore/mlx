@@ -86,6 +86,7 @@ var base__simd_8h =
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#a7a1c3be1c37d41e450469f2e98cd9dde", null ],
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#aad2d440fbb9e5478b5ed24400a859942", null ],
     [ "mlx::core::simd::operator||", "namespacemlx_1_1core_1_1simd.html#a0c8bd67982681ecd53cd8d739be3a5a9", null ],
+    [ "mlx::core::simd::operator~", "namespacemlx_1_1core_1_1simd.html#a4c6ed06d523db05f99df7ef21b374c41", null ],
     [ "mlx::core::simd::pow", "namespacemlx_1_1core_1_1simd.html#afe3d50bc4a11061898aa57377fa9536d", null ],
     [ "mlx::core::simd::prod", "namespacemlx_1_1core_1_1simd.html#ac27cdc630e86b25ad607ca409de2b274", null ],
     [ "mlx::core::simd::real", "namespacemlx_1_1core_1_1simd.html#acdf822b7626bbab6a495552aea3457b5", null ],
