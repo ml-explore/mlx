@@ -7,6 +7,7 @@ var metal_2kernels_2unary__ops_8h =
     [ "ArcSinh", "struct_arc_sinh.html", "struct_arc_sinh" ],
     [ "ArcTan", "struct_arc_tan.html", "struct_arc_tan" ],
     [ "ArcTanh", "struct_arc_tanh.html", "struct_arc_tanh" ],
+    [ "BitwiseInvert", "struct_bitwise_invert.html", "struct_bitwise_invert" ],
     [ "Ceil", "struct_ceil.html", "struct_ceil" ],
     [ "Cos", "struct_cos.html", "struct_cos" ],
     [ "Cosh", "struct_cosh.html", "struct_cosh" ],

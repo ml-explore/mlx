@@ -236,6 +236,8 @@ var namespacemlx_1_1core_1_1simd =
     [ "operator||", "namespacemlx_1_1core_1_1simd.html#aa9ac1951153211b2ff95dd34a3427797", null ],
     [ "operator||", "namespacemlx_1_1core_1_1simd.html#a0c8bd67982681ecd53cd8d739be3a5a9", null ],
     [ "operator||", "namespacemlx_1_1core_1_1simd.html#ac34f6b278627949d2ee68cdbf3d2f50f", null ],
+    [ "operator~", "namespacemlx_1_1core_1_1simd.html#a4c6ed06d523db05f99df7ef21b374c41", null ],
+    [ "operator~", "namespacemlx_1_1core_1_1simd.html#a290787dda17296d27af7afdef3c732a9", null ],
     [ "pow", "namespacemlx_1_1core_1_1simd.html#a19d535de1fc179cc39ec9643c9863cbc", null ],
     [ "pow", "namespacemlx_1_1core_1_1simd.html#afe3d50bc4a11061898aa57377fa9536d", null ],
     [ "pow", "namespacemlx_1_1core_1_1simd.html#ab18b3a88a2439fd026b6551b38d1f14a", null ],
