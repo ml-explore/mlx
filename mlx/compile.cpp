@@ -922,7 +922,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    std::vector<array>(fun)(const std::vector<array>&),
+    std::vector<array> (*fun)(const std::vector<array>&),
     bool shapeless /* = false */) {
   if (detail::skip_compile()) {
     return fun;
