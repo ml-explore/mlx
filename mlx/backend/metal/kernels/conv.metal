@@ -473,8 +473,8 @@ winograd_conv_2d_input_transform(
       is_edge_w_lo || is_edge_h_lo || is_edge_w_hi || is_edge_h_hi;
 
   // Move to the correct input tile
-  inp_in += tid.z * params.in_strides[0] + bh * int64_t(params.in_strides[1]) +
-      bw * int64_t(params.in_strides[2]);
+  inp_in += tid.z * params.in_strides[0] + bh * params.in_strides[1] +
+      bw * params.in_strides[2];
 
   // Pre compute strides
   int jump_in[TH][TW];
@@ -786,9 +786,9 @@ template <
   // Move to correct location
 
   // clang-format off
-  input +=  b_idx * int64_t(params.in_strides[0]) + // N
-           iH_idx * int64_t(params.in_strides[1]) + // H
-           iW_idx * int64_t(params.in_strides[2]);  // W
+  input +=  b_idx * params.in_strides[0] + // N
+           iH_idx * params.in_strides[1] + // H
+           iW_idx * params.in_strides[2];  // W
 
   weight += o_idx * params.wt_strides[0] + // O
             thr_h * params.wt_strides[1] + // H 
@@ -1017,10 +1017,10 @@ template <
     const int oW_i = FN * ((BT * tid.y + it) % tWu);
 
     // clang-format off
-    output += b_idx * int64_t(params.out_strides[0]) + // N
-              oH_i * int64_t(params.out_strides[1]) +  // H
-              oW_i * int64_t(params.out_strides[2]) +  // W
-              BO * tid.x;                              // C
+    output += b_idx * params.out_strides[0] + // N
+              oH_i * params.out_strides[1] +  // H
+              oW_i * params.out_strides[2] +  // W
+              BO * tid.x;                     // C
 
     // clang-format on
 
