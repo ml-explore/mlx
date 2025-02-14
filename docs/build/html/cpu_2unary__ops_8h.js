@@ -7,6 +7,7 @@ var cpu_2unary__ops_8h =
     [ "mlx::core::detail::ArcSinh", "structmlx_1_1core_1_1detail_1_1_arc_sinh.html", "structmlx_1_1core_1_1detail_1_1_arc_sinh" ],
     [ "mlx::core::detail::ArcTan", "structmlx_1_1core_1_1detail_1_1_arc_tan.html", "structmlx_1_1core_1_1detail_1_1_arc_tan" ],
     [ "mlx::core::detail::ArcTanh", "structmlx_1_1core_1_1detail_1_1_arc_tanh.html", "structmlx_1_1core_1_1detail_1_1_arc_tanh" ],
+    [ "mlx::core::detail::BitwiseInvert", "structmlx_1_1core_1_1detail_1_1_bitwise_invert.html", "structmlx_1_1core_1_1detail_1_1_bitwise_invert" ],
     [ "mlx::core::detail::Ceil", "structmlx_1_1core_1_1detail_1_1_ceil.html", "structmlx_1_1core_1_1detail_1_1_ceil" ],
     [ "mlx::core::detail::Conjugate", "structmlx_1_1core_1_1detail_1_1_conjugate.html", "structmlx_1_1core_1_1detail_1_1_conjugate" ],
     [ "mlx::core::detail::Cos", "structmlx_1_1core_1_1detail_1_1_cos.html", "structmlx_1_1core_1_1detail_1_1_cos" ],

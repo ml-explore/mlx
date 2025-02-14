@@ -15,6 +15,7 @@ var dtype_8h =
     [ "mlx::core::complexfloating", "namespacemlx_1_1core.html#a70b8e88c9df750af984757105af33423", null ],
     [ "mlx::core::float16", "namespacemlx_1_1core.html#abf228ee9d8ec48c03bb15adcc4e1f3ec", null ],
     [ "mlx::core::float32", "namespacemlx_1_1core.html#a6894543b340321193dfb8052c438a319", null ],
+    [ "mlx::core::float64", "namespacemlx_1_1core.html#a474bf5eb8bca8c380207c9f659aef3b1", null ],
     [ "mlx::core::floating", "namespacemlx_1_1core.html#ac9f9ea13cf0661e671569d37d14a128a", null ],
     [ "mlx::core::generic", "namespacemlx_1_1core.html#a34d69c4d46aa9b2a4a79dba7aba093d2", null ],
     [ "mlx::core::inexact", "namespacemlx_1_1core.html#a54c6fae21b7f2fea8e6f80011ef38534", null ],

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.nn.Transformer &#8212; MLX 0.22.1 documentation</title>
+    <title>mlx.nn.Transformer &#8212; MLX 0.23.0 documentation</title>
   
   
   
@@ -39,7 +39,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="../../../_static/documentation_options.js?v=72ae2406"></script>
+    <script src="../../../_static/documentation_options.js?v=358893f7"></script>
     <script src="../../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -51,7 +51,7 @@
     <link rel="prev" title="mlx.nn.Tanh" href="mlx.nn.Tanh.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.22.1" />
+  <meta name="docsearch:version" content="0.23.0" />
   </head>
   
   
@@ -130,8 +130,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.22.1 documentation - Home"/>
-    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.22.1 documentation - Home"/>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.23.0 documentation - Home"/>
+    <img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark pst-js-only" alt="MLX 0.23.0 documentation - Home"/>
   
   
 </a></div>
@@ -276,6 +276,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.atleast_2d.html">mlx.core.atleast_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.atleast_3d.html">mlx.core.atleast_3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_and.html">mlx.core.bitwise_and</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_invert.html">mlx.core.bitwise_invert</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
@@ -486,6 +487,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.eigvalsh.html">mlx.core.linalg.eigvalsh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../metal.html">Metal</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -885,7 +890,7 @@
 <h1>mlx.nn.Transformer<a class="headerlink" href="#mlx-nn-transformer" title="Link to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.nn.Transformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Transformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">dims:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">512,</span> <span class="pre">num_heads:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">8,</span> <span class="pre">num_encoder_layers:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">6,</span> <span class="pre">num_decoder_layers:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">6,</span> <span class="pre">mlp_dims:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">dropout:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">activation:</span> <span class="pre">~typing.Callable[[~typing.Any],</span> <span class="pre">~typing.Any]</span> <span class="pre">=</span> <span class="pre">&lt;nanobind.nb_func</span> <span class="pre">object&gt;,</span> <span class="pre">custom_encoder:</span> <span class="pre">~typing.Any</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">custom_decoder:</span> <span class="pre">~typing.Any</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">norm_first:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">checkpoint:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.Transformer" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Transformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">dims:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">512,</span> <span class="pre">num_heads:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">8,</span> <span class="pre">num_encoder_layers:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">6,</span> <span class="pre">num_decoder_layers:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">6,</span> <span class="pre">mlp_dims:</span> <span class="pre">int</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">dropout:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0,</span> <span class="pre">activation:</span> <span class="pre">~typing.Callable[[~typing.Any],</span> <span class="pre">~typing.Any]</span> <span class="pre">=</span> <span class="pre">&lt;mlx.gc_func</span> <span class="pre">object&gt;,</span> <span class="pre">custom_encoder:</span> <span class="pre">~typing.Any</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">custom_decoder:</span> <span class="pre">~typing.Any</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">norm_first:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">True,</span> <span class="pre">checkpoint:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.Transformer" title="Link to this definition">#</a></dt>
 <dd><p>Implements a standard Transformer model.</p>
 <p>The implementation is based on <a class="reference external" href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a>.</p>
 <p>The Transformer model contains an encoder and a decoder. The encoder
