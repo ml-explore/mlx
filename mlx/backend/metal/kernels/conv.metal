@@ -773,9 +773,7 @@ template <
   const int o_idx = BO * tid.x + thr_t;
 
   // Divide tile into h, w tile
-  uniform<int> oHu = make_uniform(params.oS[0]);
   uniform<int> oWu = make_uniform(params.oS[1]);
-  uniform<int> tHu = (oHu + make_uniform(FN - 1)) / make_uniform(FN);
   uniform<int> tWu = (oWu + make_uniform(FN - 1)) / make_uniform(FN);
 
   const int oH_idx = FN * (t_idx / tWu);
