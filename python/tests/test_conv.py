@@ -341,7 +341,7 @@ class TestConv(mlx_tests.MLXTestCase):
                     atol, rtol = 1e-1, 1e-3
                 else:
                     atol, rtol = 1e-5, 1e-6
-                self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
+                self.assertTrue(np.allclose(out_pt, out_mx, atol=atol, rtol=rtol))
 
         for dtype in ("float32", "bfloat16"):
             for N, C, O in (
