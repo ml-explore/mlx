@@ -890,9 +890,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         /*matrix_stride_out = */ 0,
         /*copies = */ empty_copies);
   }
-
   // 3D conv
-  if (out.ndim() == 5) {
+  else if (out.ndim() == 5) {
     conv_3D_gpu(
         s,
         d,
