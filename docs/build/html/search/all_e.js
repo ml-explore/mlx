@@ -45,6 +45,7 @@ var searchData=
   ['numberofelements_42',['NumberOfElements',['../classmlx_1_1core_1_1_number_of_elements.html',1,'mlx::core::NumberOfElements'],['../classmlx_1_1core_1_1_number_of_elements.html#ac64d7c40ae29d687f8b7d2fa33e13b06',1,'mlx::core::NumberOfElements::NumberOfElements()']]],
   ['numeric_5flimits_43',['numeric_limits',['../structmlx_1_1core_1_1numeric__limits.html',1,'mlx::core']]],
   ['numeric_5flimits_3c_20bfloat16_5ft_20_3e_44',['numeric_limits&lt; bfloat16_t &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01bfloat16__t_01_4.html',1,'mlx::core']]],
-  ['numeric_5flimits_3c_20float_20_3e_45',['numeric_limits&lt; float &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float_01_4.html',1,'mlx::core']]],
-  ['numeric_5flimits_3c_20float16_5ft_20_3e_46',['numeric_limits&lt; float16_t &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html',1,'mlx::core']]]
+  ['numeric_5flimits_3c_20double_20_3e_45',['numeric_limits&lt; double &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01double_01_4.html',1,'mlx::core']]],
+  ['numeric_5flimits_3c_20float_20_3e_46',['numeric_limits&lt; float &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float_01_4.html',1,'mlx::core']]],
+  ['numeric_5flimits_3c_20float16_5ft_20_3e_47',['numeric_limits&lt; float16_t &gt;',['../structmlx_1_1core_1_1numeric__limits_3_01float16__t_01_4.html',1,'mlx::core']]]
 ];
