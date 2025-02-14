@@ -109,7 +109,7 @@ std::tuple<bool, int64_t, array> check_transpose(
 ///////////////////////////////////////////////////////////////////////////////
 
 #define GEMM_TPARAM_MACRO(devc)                                           \
-  if (devc == 'g') { /* Small device */                                   \
+  if (devc == 'g' || devc == 'p') { /* Small device */                    \
     if (!transpose_a && transpose_b) { /* nt */                           \
       bm = 64;                                                            \
       bn = 32;                                                            \
