@@ -8,7 +8,7 @@
 namespace mlx::core {
 
 template <typename T>
-void qrf_impl(const array& a, array& q, array& r) {
+void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
   const int lda = M;
@@ -29,7 +29,7 @@ void qrf_impl(const array& a, array& q, array& r) {
   strides[in.ndim() - 1] = M;
   in.set_data(
       allocator::malloc_or_wait(in.nbytes()), in.nbytes(), strides, flags);
-  copy_inplace(a, in, CopyType::GeneralGeneral);
+  copy_inplace(a, in, CopyType::GeneralGeneral, stream);
 
   T optimal_work;
   int lwork = -1;
@@ -123,10 +123,10 @@ void QRF::eval_cpu(
     std::vector<array>& outputs) {
   switch (inputs[0].dtype()) {
     case float32:
-      qrf_impl<float>(inputs[0], outputs[0], outputs[1]);
+      qrf_impl<float>(inputs[0], outputs[0], outputs[1], stream());
       break;
     case float64:
-      qrf_impl<double>(inputs[0], outputs[0], outputs[1]);
+      qrf_impl<double>(inputs[0], outputs[0], outputs[1], stream());
       break;
     default:
       throw std::runtime_error(

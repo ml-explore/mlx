@@ -9,10 +9,11 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/fence.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
@@ -43,9 +44,6 @@ int detail::RetainGraph::tracing_counter{0};
 array eval_impl(std::vector<array> outputs, bool async) {
   std::deque<array> tape;
 
-  // stream events to use for synchronization
-  std::unordered_map<uint32_t, Event> events;
-
   // Make an effort to choose a good output stream
   Stream stream = default_stream(default_device());
   for (auto& o : outputs) {
@@ -55,14 +53,18 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
-  std::unordered_set<uintptr_t> needs_signal;
+  // Map of array id that needs fence and stream it's computed on
+  std::unordered_map<uintptr_t, uint32_t> needs_fence;
 
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
-  needs_signal.insert(synchronizer.id());
 
-  // Make an event for the synchronizer stream
-  events.emplace(stream.index, Event{stream});
+  // Stream fences for inter-stream synchronization
+  std::unordered_map<uint32_t, Fence> fences;
+  std::vector<Stream> streams;
+
+  // Event for signaling the computation is complete
+  auto event = Event{};
 
   {
     // Record the degree of each input
@@ -104,7 +106,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 "https://github.com/ml-explore/mlx/issues.");
           }
           if (a.primitive().stream() != in.primitive().stream()) {
-            needs_signal.insert(in.id());
+            needs_fence.emplace(in.id(), in.primitive().stream().index);
           }
         }
 
@@ -179,21 +181,16 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
+  event.set_value(tape.size());
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
 
-    // Lookup corresponding event and increment counter
-    auto e = events.find(stream.index);
-    if (e == events.end()) {
-      e = events.emplace(stream.index, Event{stream}).first;
-    }
-    e->second.set_value(e->second.value() + 1);
-    arr.attach_event(e->second);
+    arr.attach_event(event);
     for (auto& s : arr.siblings()) {
-      s.attach_event(e->second);
+      s.attach_event(event);
     }
 
     // Set the status of the array and siblings.
@@ -202,45 +199,36 @@ array eval_impl(std::vector<array> outputs, bool async) {
       s.set_status(array::Status::scheduled);
     }
 
-    std::vector<std::shared_future<void>> arr_deps;
-    bool signal = needs_signal.find(arr.id()) != needs_signal.end();
-
-    if (arr.primitive().device() == Device::gpu) {
-      if (!metal::is_available()) {
-        throw std::runtime_error("Metal GPU is not available.");
+    for (auto in : arr.inputs()) {
+      if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
+        // Get the input array's stream fence and wait on the
+        // output arrays stream
+        fences[it->second].wait(stream, in);
       }
-      scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
+    }
+
+    bool signal = tape.empty();
+    if (arr.primitive().device() == Device::gpu) {
+      metal::eval(arr, signal);
     } else {
-      auto task = [arr = std::move(arr), stream, signal]() mutable {
-        for (auto& input : arr.inputs()) {
-          if (input.event().valid() &&
-              input.event().stream() != arr.primitive().stream()) {
-            input.event().wait();
-          }
-        }
-        scheduler::notify_new_task(stream);
-        auto outputs = arr.outputs();
-        try {
-          arr.primitive().eval_cpu(arr.inputs(), outputs);
-        } catch (const std::exception& error) {
-          abort_with_exception(error);
-        }
-        if (!arr.is_tracer()) {
-          arr.detach();
-        }
-        for (auto& out : outputs) {
-          out.set_status(array::Status::available);
-        }
-
-        if (signal) {
-          arr.event().signal();
-        }
-
-        scheduler::notify_task_completion(stream);
-      };
-      scheduler::enqueue(stream, std::move(task));
+      cpu::eval(arr, signal);
+    }
+    if (needs_fence.find(arr.id()) != needs_fence.end()) {
+      // TODO add siblings here
+      auto it = fences.find(stream.index);
+      if (it == fences.end()) {
+        it = fences.emplace(stream.index, Fence{}).first;
+        streams.push_back(stream);
+      }
+      it->second.update(stream, {arr});
     }
   }
+  for (auto s : streams) {
+    if (s.device == Device::gpu) {
+      metal::finalize(s);
+    }
+  }
+
   return synchronizer;
 }
 

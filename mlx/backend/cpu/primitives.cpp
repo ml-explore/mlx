@@ -22,7 +22,7 @@ void reshape(const array& in, array& out) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    copy_inplace(in, out, CopyType::General);
+    copy_inplace(in, out, CopyType::General, out.primitive().stream());
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }
@@ -111,7 +111,7 @@ void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy(in, out, ctype);
+  copy(in, out, ctype, stream());
 }
 
 void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -134,7 +134,7 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
     size_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
-    copy_inplace(inputs[i], out_slice, CopyType::GeneralGeneral);
+    copy_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
   }
 }
 
@@ -145,7 +145,7 @@ void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
       (allow_col_major_ && in.flags().col_contiguous)) {
     out.copy_shared_buffer(in);
   } else {
-    copy(in, out, CopyType::General);
+    copy(in, out, CopyType::General, stream());
   }
 }
 
@@ -169,7 +169,7 @@ void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else {
     ctype = CopyType::General;
   }
-  copy(in, out, ctype);
+  copy(in, out, ctype, stream());
 }
 
 void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -192,7 +192,7 @@ void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(val.dtype() == in.dtype() && in.dtype() == out.dtype());
 
   // Fill output with val
-  copy(val, out, CopyType::Scalar);
+  copy(val, out, CopyType::Scalar, stream());
 
   // Find offset for start of input values
   size_t data_offset = 0;
@@ -207,7 +207,7 @@ void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
       out, out.strides(), out.flags(), out_slice.size(), data_offset);
 
   // Copy input values into the slice
-  copy_inplace(in, out_slice, CopyType::GeneralGeneral);
+  copy_inplace(in, out_slice, CopyType::GeneralGeneral, stream());
 }
 
 void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -278,7 +278,8 @@ void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
       /* const Strides& o_strides = */ out.strides(),
       /* int64_t i_offset = */ i_offset,
       /* int64_t o_offset = */ 0,
-      /* CopyType ctype = */ CopyType::GeneralGeneral);
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      stream());
 }
 
 void DynamicSliceUpdate::eval_cpu(
@@ -296,7 +297,7 @@ void DynamicSliceUpdate::eval_cpu(
   auto ctype = in.flags().contiguous && in.size() == in.data_size()
       ? CopyType::Vector
       : CopyType::General;
-  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype);
+  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
   auto o_offset = compute_dynamic_offset(inputs[2], out.strides(), axes_);
   copy_inplace(
@@ -307,7 +308,8 @@ void DynamicSliceUpdate::eval_cpu(
       /* const std::vector<stride_t>& o_strides = */ out.strides(),
       /* int64_t i_offset = */ 0,
       /* int64_t o_offset = */ o_offset,
-      /* CopyType ctype = */ CopyType::GeneralGeneral);
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      stream());
 }
 
 void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -329,7 +331,7 @@ void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto ctype = in.flags().contiguous && in.size() == in.data_size()
       ? CopyType::Vector
       : CopyType::General;
-  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype);
+  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
   // Calculate out strides, initial offset and if copy needs to be made
   auto [data_offset, out_strides] =
@@ -344,7 +346,8 @@ void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
       /* const std::vector<stride_t>& o_strides = */ out_strides,
       /* int64_t i_offset = */ 0,
       /* int64_t o_offset = */ data_offset,
-      /* CopyType ctype = */ CopyType::GeneralGeneral);
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      stream());
 }
 
 void View::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -372,9 +375,9 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
     if (in.dtype() == bool_) {
       auto in_tmp = array(in.shape(), uint8, nullptr, {});
       in_tmp.copy_shared_buffer(in);
-      copy_inplace(in_tmp, tmp, CopyType::General);
+      copy_inplace(in_tmp, tmp, CopyType::General, stream());
     } else {
-      copy_inplace(in, tmp, CopyType::General);
+      copy_inplace(in, tmp, CopyType::General, stream());
     }
 
     auto flags = out.flags();
@@ -382,7 +385,7 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
     flags.row_contiguous = true;
     auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
     flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
-    out.move_shared_buffer(tmp, out.strides(), flags, out.size());
+    out.copy_shared_buffer(tmp, out.strides(), flags, out.size());
   }
 }
 

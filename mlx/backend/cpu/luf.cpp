@@ -10,7 +10,7 @@
 namespace mlx::core {
 
 template <typename T>
-void luf_impl(const array& a, array& lu, array& pivots, array& row_indices) {
+void luf_impl(const array& a, array& lu, array& pivots, array& row_indices, Stream stream) {
   int M = a.shape(-2);
   int N = a.shape(-1);
 
@@ -26,7 +26,15 @@ void luf_impl(const array& a, array& lu, array& pivots, array& row_indices) {
   lu.set_data(
       allocator::malloc_or_wait(lu.nbytes()), lu.nbytes(), strides, flags);
   copy_inplace(
-      a, lu, a.shape(), a.strides(), strides, 0, 0, CopyType::GeneralGeneral);
+      a,
+      lu,
+      a.shape(),
+      a.strides(),
+      strides,
+      0,
+      0,
+      CopyType::GeneralGeneral,
+      stream);
 
   auto a_ptr = lu.data<T>();
 
@@ -85,10 +93,10 @@ void LUF::eval_cpu(
   assert(inputs.size() == 1);
   switch (inputs[0].dtype()) {
     case float32:
-      luf_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      luf_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2], stream());
       break;
     case float64:
-      luf_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      luf_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2], stream());
       break;
     default:
       throw std::runtime_error(

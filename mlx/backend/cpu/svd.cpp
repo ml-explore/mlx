@@ -8,7 +8,7 @@
 namespace mlx::core {
 
 template <typename T>
-void svd_impl(const array& a, T* u_data, T* s_data, T* vt_data) {
+void svd_impl(const array& a, T* u_data, T* s_data, T* vt_data, Stream stream) {
   // Lapack uses the column-major convention. To avoid having to transpose
   // the input and then transpose the outputs, we swap the indices/sizes of the
   // matrices and take advantage of the following identity (see
@@ -33,7 +33,11 @@ void svd_impl(const array& a, T* u_data, T* s_data, T* vt_data) {
 
   // lapack clobbers the input, so we have to make a copy.
   array in(a.shape(), a.dtype(), nullptr, {});
-  copy(a, in, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      in,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream);
 
   auto job_u = (u_data && vt_data) ? "V" : "N";
   auto job_vt = (u_data && vt_data) ? "V" : "N";
@@ -133,7 +137,7 @@ void svd_impl(const array& a, T* u_data, T* s_data, T* vt_data) {
 }
 
 template <typename T>
-void compute_svd(const array& a, bool compute_uv, std::vector<array>& outputs) {
+void compute_svd(const array& a, bool compute_uv, std::vector<array>& outputs, Stream stream) {
   if (compute_uv) {
     array& u = outputs[0];
     array& s = outputs[1];
@@ -143,13 +147,13 @@ void compute_svd(const array& a, bool compute_uv, std::vector<array>& outputs) {
     s.set_data(allocator::malloc_or_wait(s.nbytes()));
     vt.set_data(allocator::malloc_or_wait(vt.nbytes()));
 
-    svd_impl<T>(a, u.data<T>(), s.data<T>(), vt.data<T>());
+    svd_impl<T>(a, u.data<T>(), s.data<T>(), vt.data<T>(), stream());
   } else {
     array& s = outputs[0];
 
     s.set_data(allocator::malloc_or_wait(s.nbytes()));
 
-    svd_impl<T>(a, nullptr, s.data<T>(), nullptr);
+    svd_impl<T>(a, nullptr, s.data<T>(), nullptr, stream());
   }
 }
 
@@ -158,10 +162,10 @@ void SVD::eval_cpu(
     std::vector<array>& outputs) {
   switch (inputs[0].dtype()) {
     case float32:
-      compute_svd<float>(inputs[0], compute_uv_, outputs);
+      compute_svd<float>(inputs[0], compute_uv_, outputs, stream());
       break;
     case float64:
-      compute_svd<double>(inputs[0], compute_uv_, outputs);
+      compute_svd<double>(inputs[0], compute_uv_, outputs, stream());
       break;
     default:
       throw std::runtime_error(

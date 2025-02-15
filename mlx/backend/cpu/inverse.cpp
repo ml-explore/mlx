@@ -103,14 +103,23 @@ void tri_inv(array& inv, int N, int i, bool upper) {
 }
 
 template <typename T>
-void inverse_impl(const array& a, array& inv, bool tri, bool upper) {
+void inverse_impl(
+    const array& a,
+    array& inv,
+    bool tri,
+    bool upper,
+    Stream stream) {
   // Lapack uses the column-major convention. We take advantage of the following
   // identity to avoid transposing (see
   // https://math.stackexchange.com/a/340234):
   //   (A⁻¹)ᵀ = (Aᵀ)⁻¹
 
   // The inverse is computed in place, so just copy the input to the output.
-  copy(a, inv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      inv,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream);
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
@@ -127,10 +136,10 @@ void inverse_impl(const array& a, array& inv, bool tri, bool upper) {
 void Inverse::eval_cpu(const std::vector<array>& inputs, array& output) {
   switch (inputs[0].dtype()) {
     case float32:
-      inverse_impl<float>(inputs[0], output, tri_, upper_);
+      inverse_impl<float>(inputs[0], output, tri_, upper_, stream());
       break;
     case float64:
-      inverse_impl<double>(inputs[0], output, tri_, upper_);
+      inverse_impl<double>(inputs[0], output, tri_, upper_, stream());
       break;
     default:
       throw std::runtime_error(

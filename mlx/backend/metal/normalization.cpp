@@ -37,7 +37,7 @@ void RMSNorm::eval_gpu(
   const array& w = inputs[1];
 
   if (x.is_donatable()) {
-    out.move_shared_buffer(x);
+    out.copy_shared_buffer(x);
   } else {
     out.set_data(
         allocator::malloc_or_wait(x.data_size() * x.itemsize()),
@@ -125,10 +125,10 @@ void RMSNormVJP::eval_gpu(
   bool x_in_gx = false;
   bool g_in_gx = false;
   if (x.is_donatable()) {
-    gx.move_shared_buffer(x);
+    gx.copy_shared_buffer(x);
     x_in_gx = true;
   } else if (g.is_donatable()) {
-    gx.move_shared_buffer(g);
+    gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
     gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
@@ -144,7 +144,7 @@ void RMSNormVJP::eval_gpu(
   bool g_in_gw = false;
   if (has_w) {
     if (!g_in_gx && g.is_donatable()) {
-      gw_temp.move_shared_buffer(g);
+      gw_temp.copy_shared_buffer(g);
       g_in_gw = true;
     } else {
       gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
@@ -236,7 +236,7 @@ void LayerNorm::eval_gpu(
   const array& b = inputs[2];
 
   if (x.is_donatable()) {
-    out.move_shared_buffer(x);
+    out.copy_shared_buffer(x);
   } else {
     out.set_data(
         allocator::malloc_or_wait(x.data_size() * x.itemsize()),
@@ -329,10 +329,10 @@ void LayerNormVJP::eval_gpu(
   bool x_in_gx = false;
   bool g_in_gx = false;
   if (x.is_donatable()) {
-    gx.move_shared_buffer(x);
+    gx.copy_shared_buffer(x);
     x_in_gx = true;
   } else if (g.is_donatable()) {
-    gx.move_shared_buffer(g);
+    gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
     gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
@@ -348,7 +348,7 @@ void LayerNormVJP::eval_gpu(
   bool g_in_gw = false;
   if (has_w) {
     if (!g_in_gx && g.is_donatable()) {
-      gw_temp.move_shared_buffer(g);
+      gw_temp.copy_shared_buffer(g);
       g_in_gw = true;
     } else {
       gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));

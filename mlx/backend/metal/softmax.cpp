@@ -39,7 +39,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   const array& in = check_input(inputs[0]);
   if (in.is_donatable()) {
-    out.move_shared_buffer(in);
+    out.copy_shared_buffer(in);
   } else {
     out.set_data(
         allocator::malloc_or_wait(in.data_size() * in.itemsize()),
@@ -82,8 +82,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        in.data_shared_ptr() == nullptr ? out : in, 0);
+    compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(axis_size, 2);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
