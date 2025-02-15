@@ -104,10 +104,10 @@ struct StridedIterator {
 };
 
 template <typename T, typename IdxT = uint32_t>
-void sort(const array& in, array& out, int axis) {
+void sort(const array& in, array& out, int axis, Stream stream) {
   // Copy input to output
   CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy(in, out, ctype);
+  copy(in, out, ctype, stream);
 
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
@@ -138,7 +138,7 @@ void sort(const array& in, array& out, int axis) {
 }
 
 template <typename T, typename IdxT = uint32_t>
-void argsort(const array& in, array& out, int axis) {
+void argsort(const array& in, array& out, int axis, Stream stream) {
   // Allocate output
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
@@ -192,10 +192,10 @@ void argsort(const array& in, array& out, int axis) {
 }
 
 template <typename T, typename IdxT = uint32_t>
-void partition(const array& in, array& out, int axis, int kth) {
+void partition(const array& in, array& out, int axis, int kth, Stream stream) {
   // Copy input to output
   CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy(in, out, ctype);
+  copy(in, out, ctype, stream);
 
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
@@ -229,7 +229,12 @@ void partition(const array& in, array& out, int axis, int kth) {
 }
 
 template <typename T, typename IdxT = uint32_t>
-void argpartition(const array& in, array& out, int axis, int kth) {
+void argpartition(
+    const array& in,
+    array& out,
+    int axis,
+    int kth,
+    Stream stream) {
   // Allocate output
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
@@ -293,33 +298,33 @@ void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   switch (in.dtype()) {
     case bool_:
-      return argsort<bool>(in, out, axis_);
+      return argsort<bool>(in, out, axis_, stream());
     case uint8:
-      return argsort<uint8_t>(in, out, axis_);
+      return argsort<uint8_t>(in, out, axis_, stream());
     case uint16:
-      return argsort<uint16_t>(in, out, axis_);
+      return argsort<uint16_t>(in, out, axis_, stream());
     case uint32:
-      return argsort<uint32_t>(in, out, axis_);
+      return argsort<uint32_t>(in, out, axis_, stream());
     case uint64:
-      return argsort<uint64_t>(in, out, axis_);
+      return argsort<uint64_t>(in, out, axis_, stream());
     case int8:
-      return argsort<int8_t>(in, out, axis_);
+      return argsort<int8_t>(in, out, axis_, stream());
     case int16:
-      return argsort<int16_t>(in, out, axis_);
+      return argsort<int16_t>(in, out, axis_, stream());
     case int32:
-      return argsort<int32_t>(in, out, axis_);
+      return argsort<int32_t>(in, out, axis_, stream());
     case int64:
-      return argsort<int64_t>(in, out, axis_);
+      return argsort<int64_t>(in, out, axis_, stream());
     case float32:
-      return argsort<float>(in, out, axis_);
+      return argsort<float>(in, out, axis_, stream());
     case float64:
-      return argsort<double>(in, out, axis_);
+      return argsort<double>(in, out, axis_, stream());
     case float16:
-      return argsort<float16_t>(in, out, axis_);
+      return argsort<float16_t>(in, out, axis_, stream());
     case bfloat16:
-      return argsort<bfloat16_t>(in, out, axis_);
+      return argsort<bfloat16_t>(in, out, axis_, stream());
     case complex64:
-      return argsort<complex64_t>(in, out, axis_);
+      return argsort<complex64_t>(in, out, axis_, stream());
   }
 }
 
@@ -329,33 +334,33 @@ void Sort::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   switch (in.dtype()) {
     case bool_:
-      return sort<bool>(in, out, axis_);
+      return sort<bool>(in, out, axis_, stream());
     case uint8:
-      return sort<uint8_t>(in, out, axis_);
+      return sort<uint8_t>(in, out, axis_, stream());
     case uint16:
-      return sort<uint16_t>(in, out, axis_);
+      return sort<uint16_t>(in, out, axis_, stream());
     case uint32:
-      return sort<uint32_t>(in, out, axis_);
+      return sort<uint32_t>(in, out, axis_, stream());
     case uint64:
-      return sort<uint64_t>(in, out, axis_);
+      return sort<uint64_t>(in, out, axis_, stream());
     case int8:
-      return sort<int8_t>(in, out, axis_);
+      return sort<int8_t>(in, out, axis_, stream());
     case int16:
-      return sort<int16_t>(in, out, axis_);
+      return sort<int16_t>(in, out, axis_, stream());
     case int32:
-      return sort<int32_t>(in, out, axis_);
+      return sort<int32_t>(in, out, axis_, stream());
     case int64:
-      return sort<int64_t>(in, out, axis_);
+      return sort<int64_t>(in, out, axis_, stream());
     case float32:
-      return sort<float>(in, out, axis_);
+      return sort<float>(in, out, axis_, stream());
     case float64:
-      return sort<double>(in, out, axis_);
+      return sort<double>(in, out, axis_, stream());
     case float16:
-      return sort<float16_t>(in, out, axis_);
+      return sort<float16_t>(in, out, axis_, stream());
     case bfloat16:
-      return sort<bfloat16_t>(in, out, axis_);
+      return sort<bfloat16_t>(in, out, axis_, stream());
     case complex64:
-      return sort<complex64_t>(in, out, axis_);
+      return sort<complex64_t>(in, out, axis_, stream());
   }
 }
 
@@ -365,33 +370,33 @@ void ArgPartition::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   switch (in.dtype()) {
     case bool_:
-      return argpartition<bool>(in, out, axis_, kth_);
+      return argpartition<bool>(in, out, axis_, kth_, stream());
     case uint8:
-      return argpartition<uint8_t>(in, out, axis_, kth_);
+      return argpartition<uint8_t>(in, out, axis_, kth_, stream());
     case uint16:
-      return argpartition<uint16_t>(in, out, axis_, kth_);
+      return argpartition<uint16_t>(in, out, axis_, kth_, stream());
     case uint32:
-      return argpartition<uint32_t>(in, out, axis_, kth_);
+      return argpartition<uint32_t>(in, out, axis_, kth_, stream());
     case uint64:
-      return argpartition<uint64_t>(in, out, axis_, kth_);
+      return argpartition<uint64_t>(in, out, axis_, kth_, stream());
     case int8:
-      return argpartition<int8_t>(in, out, axis_, kth_);
+      return argpartition<int8_t>(in, out, axis_, kth_, stream());
     case int16:
-      return argpartition<int16_t>(in, out, axis_, kth_);
+      return argpartition<int16_t>(in, out, axis_, kth_, stream());
     case int32:
-      return argpartition<int32_t>(in, out, axis_, kth_);
+      return argpartition<int32_t>(in, out, axis_, kth_, stream());
     case int64:
-      return argpartition<int64_t>(in, out, axis_, kth_);
+      return argpartition<int64_t>(in, out, axis_, kth_, stream());
     case float32:
-      return argpartition<float>(in, out, axis_, kth_);
+      return argpartition<float>(in, out, axis_, kth_, stream());
     case float64:
-      return argpartition<double>(in, out, axis_, kth_);
+      return argpartition<double>(in, out, axis_, kth_, stream());
     case float16:
-      return argpartition<float16_t>(in, out, axis_, kth_);
+      return argpartition<float16_t>(in, out, axis_, kth_, stream());
     case bfloat16:
-      return argpartition<bfloat16_t>(in, out, axis_, kth_);
+      return argpartition<bfloat16_t>(in, out, axis_, kth_, stream());
     case complex64:
-      return argpartition<complex64_t>(in, out, axis_, kth_);
+      return argpartition<complex64_t>(in, out, axis_, kth_, stream());
   }
 }
 
@@ -401,33 +406,33 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   switch (in.dtype()) {
     case bool_:
-      return partition<bool>(in, out, axis_, kth_);
+      return partition<bool>(in, out, axis_, kth_, stream());
     case uint8:
-      return partition<uint8_t>(in, out, axis_, kth_);
+      return partition<uint8_t>(in, out, axis_, kth_, stream());
     case uint16:
-      return partition<uint16_t>(in, out, axis_, kth_);
+      return partition<uint16_t>(in, out, axis_, kth_, stream());
     case uint32:
-      return partition<uint32_t>(in, out, axis_, kth_);
+      return partition<uint32_t>(in, out, axis_, kth_, stream());
     case uint64:
-      return partition<uint64_t>(in, out, axis_, kth_);
+      return partition<uint64_t>(in, out, axis_, kth_, stream());
     case int8:
-      return partition<int8_t>(in, out, axis_, kth_);
+      return partition<int8_t>(in, out, axis_, kth_, stream());
     case int16:
-      return partition<int16_t>(in, out, axis_, kth_);
+      return partition<int16_t>(in, out, axis_, kth_, stream());
     case int32:
-      return partition<int32_t>(in, out, axis_, kth_);
+      return partition<int32_t>(in, out, axis_, kth_, stream());
     case int64:
-      return partition<int64_t>(in, out, axis_, kth_);
+      return partition<int64_t>(in, out, axis_, kth_, stream());
     case float32:
-      return partition<float>(in, out, axis_, kth_);
+      return partition<float>(in, out, axis_, kth_, stream());
     case float64:
-      return partition<double>(in, out, axis_, kth_);
+      return partition<double>(in, out, axis_, kth_, stream());
     case float16:
-      return partition<float16_t>(in, out, axis_, kth_);
+      return partition<float16_t>(in, out, axis_, kth_, stream());
     case bfloat16:
-      return partition<bfloat16_t>(in, out, axis_, kth_);
+      return partition<bfloat16_t>(in, out, axis_, kth_, stream());
     case complex64:
-      return partition<complex64_t>(in, out, axis_, kth_);
+      return partition<complex64_t>(in, out, axis_, kth_, stream());
   }
 }
 

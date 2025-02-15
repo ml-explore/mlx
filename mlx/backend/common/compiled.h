@@ -62,7 +62,6 @@ void compiled_allocate_outputs(
     std::vector<array>& outputs,
     const std::vector<array>& inputs_,
     const std::unordered_set<uintptr_t>& constant_ids_,
-    bool contiguous,
-    bool move_buffers = false);
+    bool contiguous);
 
 } // namespace mlx::core

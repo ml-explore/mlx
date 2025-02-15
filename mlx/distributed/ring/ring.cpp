@@ -18,7 +18,6 @@
 
 #include <json.hpp>
 
-#include "mlx/backend/cpu/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/threadpool.h"
@@ -495,16 +494,6 @@ std::vector<int> make_connections(
   return sockets;
 }
 
-array ensure_row_contiguous(const array& arr) {
-  if (arr.flags().row_contiguous) {
-    return arr;
-  } else {
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy(arr, arr_copy, CopyType::General);
-    return arr_copy;
-  }
-}
-
 template <typename T>
 void sum_inplace(const T* input, T* output, size_t N) {
   while (N-- > 0) {
@@ -655,10 +644,7 @@ class RingGroup : public GroupImpl {
 
  private:
   template <typename T>
-  void all_sum(const array& input_, array& output) {
-    // Make sure that the input is row contiguous
-    array input = ensure_row_contiguous(input_);
-
+  void all_sum(const array& input, array& output) {
     // If the input data cannot be split into size_ segments then copy it and
     // all reduce a local buffer prefilled with 0s.
     if (input.size() < size_) {

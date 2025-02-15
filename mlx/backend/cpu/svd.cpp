@@ -8,7 +8,7 @@
 namespace mlx::core {
 
 template <typename T>
-void svd_impl(const array& a, array& u, array& s, array& vt) {
+void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
   // Lapack uses the column-major convention. To avoid having to transpose
   // the input and then transpose the outputs, we swap the indices/sizes of the
   // matrices and take advantage of the following identity (see
@@ -33,7 +33,11 @@ void svd_impl(const array& a, array& u, array& s, array& vt) {
 
   // lapack clobbers the input, so we have to make a copy.
   array in(a.shape(), a.dtype(), nullptr, {});
-  copy(a, in, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      in,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream);
 
   // Allocate outputs.
   u.set_data(allocator::malloc_or_wait(u.nbytes()));
@@ -141,10 +145,10 @@ void SVD::eval_cpu(
     std::vector<array>& outputs) {
   switch (inputs[0].dtype()) {
     case float32:
-      svd_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      svd_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2], stream());
       break;
     case float64:
-      svd_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      svd_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2], stream());
       break;
     default:
       throw std::runtime_error(

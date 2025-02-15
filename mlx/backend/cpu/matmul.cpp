@@ -12,9 +12,10 @@ void matmul_general(
     const array& a_pre,
     const array& b_pre,
     array& out,
+    Stream stream,
     float alpha = 1.0f,
     float beta = 0.0f) {
-  auto check_transpose = [](const array& arr) {
+  auto check_transpose = [stream](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
@@ -23,7 +24,7 @@ void matmul_general(
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      copy(arr, arr_copy, CopyType::General, stream);
       stx = arr.shape(-1);
       return std::make_tuple(false, stx, arr_copy);
     }
@@ -60,7 +61,7 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     std::memset(out.data<void>(), 0, out.nbytes());
     return;
   }
-  return matmul_general(inputs[0], inputs[1], out);
+  return matmul_general(inputs[0], inputs[1], out, stream());
 }
 
 void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -74,9 +75,9 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   CopyType ctype = c.data_size() == 1
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-  copy(c, out, ctype);
+  copy(c, out, ctype, stream());
 
-  return matmul_general(inputs[0], inputs[1], out, alpha_, beta_);
+  return matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 
 } // namespace mlx::core

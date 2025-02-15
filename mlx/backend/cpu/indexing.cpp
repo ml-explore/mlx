@@ -469,7 +469,7 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype);
+  copy(src, out, ctype, stream());
 
   switch (src.dtype()) {
     case bool_:
@@ -634,7 +634,7 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype);
+  copy(src, out, ctype, stream());
 
   switch (src.dtype()) {
     case bool_:

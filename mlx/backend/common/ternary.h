@@ -36,15 +36,10 @@ inline void set_ternary_op_output_data(
     const array& b,
     const array& c,
     array& out,
-    TernaryOpType topt,
-    bool donate_with_move = false) {
-  auto maybe_donate = [&out, donate_with_move](const array& x) {
+    TernaryOpType topt) {
+  auto maybe_donate = [&out](const array& x) {
     if (is_donatable(x, out)) {
-      if (donate_with_move) {
-        out.move_shared_buffer(x);
-      } else {
-        out.copy_shared_buffer(x);
-      }
+      out.copy_shared_buffer(x);
       return true;
     }
     return false;
