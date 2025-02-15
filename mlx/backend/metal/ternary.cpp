@@ -71,12 +71,9 @@ void ternary_op_gpu_inplace(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
-  bool donate_a = a.data_shared_ptr() == nullptr;
-  bool donate_b = b.data_shared_ptr() == nullptr;
-  bool donate_c = c.data_shared_ptr() == nullptr;
-  compute_encoder.set_input_array(donate_a ? out : a, 0);
-  compute_encoder.set_input_array(donate_b ? out : b, 1);
-  compute_encoder.set_input_array(donate_c ? out : c, 2);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(c, 2);
   compute_encoder.set_output_array(out, 3);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
@@ -129,7 +126,7 @@ void ternary_op_gpu(
   auto& b = inputs[1];
   auto& c = inputs[2];
   TernaryOpType topt = get_ternary_op_type(a, b, c);
-  set_ternary_op_output_data(a, b, c, out, topt, true /* donate_with_move */);
+  set_ternary_op_output_data(a, b, c, out, topt);
   ternary_op_gpu_inplace(inputs, out, op, s);
 }
 

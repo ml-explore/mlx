@@ -469,12 +469,12 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& scales_pre = inputs[2];
   auto& biases_pre = inputs[3];
 
-  auto ensure_row_contiguous = [](const array& arr) {
+  auto ensure_row_contiguous = [s = stream()](const array& arr) {
     if (arr.flags().row_contiguous) {
       return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      copy(arr, arr_copy, CopyType::General, s);
       return arr_copy;
     }
   };
@@ -498,14 +498,14 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& lhs_indices = inputs[4];
   auto& rhs_indices = inputs[5];
 
-  auto ensure_row_contiguous_last_dims = [](const array& arr) {
+  auto ensure_row_contiguous_last_dims = [s = stream()](const array& arr) {
     auto stride_0 = arr.strides()[arr.ndim() - 2];
     auto stride_1 = arr.strides()[arr.ndim() - 1];
     if (stride_0 == arr.shape(-1) && stride_1 == 1) {
       return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      copy(arr, arr_copy, CopyType::General, s);
       return arr_copy;
     }
   };
@@ -596,12 +596,12 @@ void quantize(
 void fast::AffineQuantize::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto ensure_row_contiguous = [](const array& arr) {
+  auto ensure_row_contiguous = [s = stream()](const array& arr) {
     if (arr.flags().row_contiguous) {
       return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      copy(arr, arr_copy, CopyType::General, s);
       return arr_copy;
     }
   };

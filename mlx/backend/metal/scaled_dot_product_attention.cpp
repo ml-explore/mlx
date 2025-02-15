@@ -152,7 +152,7 @@ void sdpa_vector(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
-  compute_encoder.set_input_array(q.data_shared_ptr() == nullptr ? out : q, 0);
+  compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
   compute_encoder.set_input_array(v, 2);
   compute_encoder.set_output_array(out, 3);
@@ -242,7 +242,7 @@ void sdpa_vector_2pass(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
-  compute_encoder.set_input_array(q.data_shared_ptr() == nullptr ? out : q, 0);
+  compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
   compute_encoder.set_input_array(v, 2);
   compute_encoder.set_output_array(intermediate, 3);
@@ -357,7 +357,7 @@ void ScaledDotProductAttention::eval_gpu(
     // Donate the query if possible
     if (q.is_donatable() && (q.shape(2) == 1 || !q.flags().row_contiguous) &&
         q.size() == o.size()) {
-      o.move_shared_buffer(q);
+      o.copy_shared_buffer(q);
     } else {
       if (o.shape(2) == 1) {
         o.set_data(allocator::malloc_or_wait(o.nbytes()));

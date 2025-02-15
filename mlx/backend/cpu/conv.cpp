@@ -712,6 +712,7 @@ void explicit_gemm_conv_1D_cpu(
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation) {
+  auto stream = out.primitive().stream();
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = in.shape(1); // Input spatial dim
   const int C = in.shape(2); // Input channels
@@ -730,7 +731,7 @@ void explicit_gemm_conv_1D_cpu(
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar);
+  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset = padding[0] * in_padded.strides()[1];
@@ -743,7 +744,7 @@ void explicit_gemm_conv_1D_cpu(
       data_offset);
 
   // Copy input values into the slice
-  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
+  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
 
   // Make strided view
   Shape strided_shape = {N, oH, wH, C};
@@ -767,7 +768,7 @@ void explicit_gemm_conv_1D_cpu(
   // Materialize strided view
   Shape strided_reshape = {N * oH, wH * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
-  copy(in_strided_view, in_strided, CopyType::General);
+  copy(in_strided_view, in_strided, CopyType::General, stream);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -784,12 +785,12 @@ void explicit_gemm_conv_1D_cpu(
         wt.size(),
         0);
     gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});
-    copy(wt_transpose, gemm_wt, CopyType::General);
+    copy(wt_transpose, gemm_wt, CopyType::General, stream);
   } else if (wt.dtype() != float32 || !wt.flags().row_contiguous) {
     auto ctype =
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
-    copy(wt, gemm_wt, ctype);
+    copy(wt, gemm_wt, ctype, stream);
   }
 
   if (out.dtype() != float32) {
@@ -818,7 +819,7 @@ void explicit_gemm_conv_1D_cpu(
 
     // Copy results if needed
     if (out.dtype() != float32) {
-      copy(gemm_out, out, CopyType::Vector);
+      copy(gemm_out, out, CopyType::Vector, stream);
     }
   }
 }
@@ -830,6 +831,7 @@ void explicit_gemm_conv_2D_cpu(
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation) {
+  auto stream = out.primitive().stream();
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = in.shape(1); // Input spatial dim
   const int iW = in.shape(2); // Input spatial dim
@@ -847,7 +849,7 @@ void explicit_gemm_conv_2D_cpu(
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar);
+  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset =
@@ -861,7 +863,7 @@ void explicit_gemm_conv_2D_cpu(
       data_offset);
 
   // Copy input values into the slice
-  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
+  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
 
   // Make strided view
   Shape strided_shape = {N, oH, oW, wH, wW, C};
@@ -882,7 +884,7 @@ void explicit_gemm_conv_2D_cpu(
   // Materialize strided view
   Shape strided_reshape = {N * oH * oW, wH * wW * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
-  copy(in_strided_view, in_strided, CopyType::General);
+  copy(in_strided_view, in_strided, CopyType::General, stream);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -892,7 +894,7 @@ void explicit_gemm_conv_2D_cpu(
     auto ctype =
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
-    copy(wt, gemm_wt, ctype);
+    copy(wt, gemm_wt, ctype, stream);
   }
 
   if (out.dtype() != float32) {
@@ -920,7 +922,7 @@ void explicit_gemm_conv_2D_cpu(
 
   // Copy results if needed
   if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector);
+    copy(gemm_out, out, CopyType::Vector, stream);
   }
 }
 
@@ -932,6 +934,7 @@ void explicit_gemm_conv_ND_cpu(
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
     const bool flip) {
+  auto stream = out.primitive().stream();
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const auto iDim =
       Shape(in.shape().begin() + 1, in.shape().end() - 1); // Input spatial dim
@@ -954,7 +957,7 @@ void explicit_gemm_conv_ND_cpu(
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar);
+  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset = 0;
@@ -970,7 +973,7 @@ void explicit_gemm_conv_ND_cpu(
       data_offset);
 
   // Copy input values into the slice
-  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
+  copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
 
   // Make strided view
   Shape strided_shape(oDim.size() + wDim.size() + 2);
@@ -1008,7 +1011,7 @@ void explicit_gemm_conv_ND_cpu(
   }
 
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
-  copy(in_strided_view, in_strided, CopyType::General);
+  copy(in_strided_view, in_strided, CopyType::General, stream);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -1018,12 +1021,12 @@ void explicit_gemm_conv_ND_cpu(
     auto ctype =
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
-    copy(wt, gemm_wt, ctype);
+    copy(wt, gemm_wt, ctype, stream);
   }
 
   if (flip) {
     auto gemm_wt_ = array(gemm_wt.shape(), float32, nullptr, {});
-    copy(gemm_wt, gemm_wt_, CopyType::Vector);
+    copy(gemm_wt, gemm_wt_, CopyType::Vector, stream);
 
     flip_spatial_dims_inplace<float>(gemm_wt_);
     gemm_wt = gemm_wt_;
@@ -1054,7 +1057,7 @@ void explicit_gemm_conv_ND_cpu(
 
   // Copy results if needed
   if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector);
+    copy(gemm_out, out, CopyType::Vector, stream);
   }
 }
 

@@ -10,9 +10,7 @@ namespace mlx::core {
 
 class Event {
  public:
-  Event() = default;
-
-  Event(const Stream& steam);
+  Event();
 
   // Wait for the event to be signaled at its current value
   void wait();
@@ -36,22 +34,11 @@ class Event {
     value_ = v;
   }
 
-  const Stream& stream() const {
-    if (!valid()) {
-      throw std::runtime_error(
-          "[Event::stream] Cannot access stream on invalid event.");
-    }
-    return stream_;
-  }
-
   const std::shared_ptr<void>& raw_event() const {
     return event_;
   }
 
  private:
-  // Default constructed stream should never be used
-  // since the event is not yet valid
-  Stream stream_{0, Device::cpu};
   std::shared_ptr<void> event_;
   uint64_t value_{0};
 };

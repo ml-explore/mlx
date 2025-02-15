@@ -174,27 +174,6 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-void array::move_shared_buffer(
-    array other,
-    const Strides& strides,
-    Flags flags,
-    size_t data_size,
-    size_t offset /* = 0 */) {
-  array_desc_->data = std::move(other.array_desc_->data);
-  array_desc_->strides = strides;
-  array_desc_->flags = flags;
-  array_desc_->data_size = data_size;
-  auto char_offset = sizeof(char) * itemsize() * offset;
-  auto data_ptr = other.array_desc_->data_ptr;
-  other.array_desc_->data_ptr = nullptr;
-  array_desc_->data_ptr =
-      static_cast<void*>(static_cast<char*>(data_ptr) + char_offset);
-}
-
-void array::move_shared_buffer(array other) {
-  move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
-}
-
 array::~array() {
   if (array_desc_ == nullptr) {
     return;

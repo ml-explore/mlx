@@ -8,8 +8,8 @@
 
 namespace mlx::core {
 
-void copy(const array& src, array& dst, CopyType ctype);
-void copy_inplace(const array& src, array& dst, CopyType ctype);
+void copy(const array& src, array& dst, CopyType ctype, Stream stream);
+void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream);
 
 void copy_inplace(
     const array& src,
@@ -19,6 +19,7 @@ void copy_inplace(
     const Strides& o_strides,
     int64_t i_offset,
     int64_t o_offset,
-    CopyType ctype);
+    CopyType ctype,
+    Stream stream);
 
 } // namespace mlx::core

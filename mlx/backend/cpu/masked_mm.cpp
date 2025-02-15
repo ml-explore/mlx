@@ -64,26 +64,26 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b_pre = inputs[1];
 
   auto check_transpose =
-      [](const array& arr, bool do_copy, bool expand_all = false) {
+      [s = stream()](const array& arr, bool do_copy, bool expand_all = false) {
         auto stx = arr.strides()[arr.ndim() - 2];
         auto sty = arr.strides()[arr.ndim() - 1];
         if (!expand_all && stx == arr.shape(-1) && sty == 1) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector);
+            copy(arr, arr_copy, CopyType::Vector, s);
             return std::make_tuple(false, stx, arr_copy);
           }
           return std::make_tuple(false, stx, arr);
         } else if (!expand_all && stx == 1 && sty == arr.shape(-2)) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector);
+            copy(arr, arr_copy, CopyType::Vector, s);
             return std::make_tuple(true, sty, arr_copy);
           }
           return std::make_tuple(true, sty, arr);
         } else {
           array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-          copy(arr, arr_copy, CopyType::General);
+          copy(arr, arr_copy, CopyType::General, s);
           int64_t stx = arr.shape(-1);
           return std::make_tuple(false, stx, arr_copy);
         }
@@ -220,7 +220,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
 
-  auto check_transpose = [](const array& arr) {
+  auto check_transpose = [s = stream()](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
@@ -229,7 +229,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      copy(arr, arr_copy, CopyType::General, s);
       int64_t stx = arr.shape(-1);
       return std::make_tuple(false, stx, arr_copy);
     }

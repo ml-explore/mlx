@@ -109,7 +109,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
   // Make sure that the last dimension is contiguous
-  auto check_input = [](array x) {
+  auto check_input = [s = stream()](array x) {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
@@ -119,7 +119,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
       return x;
     } else {
       array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy(x, x_copy, CopyType::General);
+      copy(x, x_copy, CopyType::General, s);
       return x_copy;
     }
   };
