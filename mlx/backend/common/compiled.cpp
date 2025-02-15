@@ -161,8 +161,7 @@ void compiled_allocate_outputs(
     std::vector<array>& outputs,
     const std::vector<array>& inputs_,
     const std::unordered_set<uintptr_t>& constant_ids_,
-    bool contiguous,
-    bool move_buffers /* = false */) {
+    bool contiguous) {
   if (contiguous) {
     int o = 0;
     Strides strides;
@@ -178,11 +177,7 @@ void compiled_allocate_outputs(
       if (in.itemsize() == outputs[o].itemsize() && !is_scalar(in) &&
           in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
-        if (move_buffers) {
-          outputs[o++].move_shared_buffer(in);
-        } else {
-          outputs[o++].copy_shared_buffer(in);
-        }
+        outputs[o++].copy_shared_buffer(in);
       }
       // Get representative input flags to properly set non-donated outputs
       if (strides.empty() && in.size() == outputs[0].size()) {
@@ -210,13 +205,8 @@ void compiled_allocate_outputs(
       if (in.flags().row_contiguous && in.size() == outputs[o].size() &&
           in.itemsize() == outputs[o].itemsize() && in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
-        if (move_buffers) {
-          outputs[o].move_shared_buffer(
-              in, outputs[o].strides(), in.flags(), in.data_size());
-        } else {
-          outputs[o].copy_shared_buffer(
-              in, outputs[o].strides(), in.flags(), in.data_size());
-        }
+        outputs[o].copy_shared_buffer(
+            in, outputs[o].strides(), in.flags(), in.data_size());
         o++;
       }
     }

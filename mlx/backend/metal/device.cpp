@@ -168,9 +168,10 @@ void CommandEncoder::set_output_array(
   register_output_array(a);
 }
 
-void CommandEncoder::register_output_array(array& a) {
+void CommandEncoder::register_output_array(const array& a) {
   all_outputs_.insert(a.buffer().ptr());
-  auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
+
+  auto buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
   if (concurrent_) {
     concurrent_outputs_.insert(buf);
   } else {

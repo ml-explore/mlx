@@ -8,7 +8,7 @@
 
 namespace mlx::core {
 
-void cholesky_impl(const array& a, array& factor, bool upper) {
+void cholesky_impl(const array& a, array& factor, bool upper, Stream stream) {
   // Lapack uses the column-major convention. We take advantage of the fact that
   // the matrix should be symmetric:
   //   (A)ᵀ = A
@@ -23,7 +23,8 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   copy(
       a,
       factor,
-      a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream);
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
@@ -68,7 +69,7 @@ void Cholesky::eval_cpu(const std::vector<array>& inputs, array& output) {
   if (inputs[0].dtype() != float32) {
     throw std::runtime_error("[Cholesky::eval] only supports float32.");
   }
-  cholesky_impl(inputs[0], output, upper_);
+  cholesky_impl(inputs[0], output, upper_, stream());
 }
 
 } // namespace mlx::core

@@ -356,7 +356,7 @@ void Compiled::eval_cpu(
   });
 
   compiled_allocate_outputs(
-      inputs, outputs, inputs_, constant_ids_, contiguous, false);
+      inputs, outputs, inputs_, constant_ids_, contiguous);
 
   for (auto& x : outputs) {
     args.push_back(x.data<void>());

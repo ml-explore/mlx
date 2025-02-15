@@ -13,7 +13,8 @@ void lu_factor_impl(
     const array& a,
     array& lu,
     array& pivots,
-    array& row_indices) {
+    array& row_indices,
+    Stream stream) {
   int M = a.shape(-2);
   int N = a.shape(-1);
 
@@ -29,7 +30,15 @@ void lu_factor_impl(
   lu.set_data(
       allocator::malloc_or_wait(lu.nbytes()), lu.nbytes(), strides, flags);
   copy_inplace(
-      a, lu, a.shape(), a.strides(), strides, 0, 0, CopyType::GeneralGeneral);
+      a,
+      lu,
+      a.shape(),
+      a.strides(),
+      strides,
+      0,
+      0,
+      CopyType::GeneralGeneral,
+      stream);
 
   auto a_ptr = lu.data<float>();
 
@@ -86,7 +95,7 @@ void LUF::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 1);
-  lu_factor_impl(inputs[0], outputs[0], outputs[1], outputs[2]);
+  lu_factor_impl(inputs[0], outputs[0], outputs[1], outputs[2], stream());
 }
 
 } // namespace mlx::core

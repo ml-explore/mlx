@@ -60,7 +60,8 @@ void Eigh::eval_cpu(
   copy(
       a,
       vectors,
-      a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream());
 
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors
@@ -78,7 +79,7 @@ void Eigh::eval_cpu(
         flags.col_contiguous = true;
       }
     }
-    vectors.move_shared_buffer(vectors, strides, flags, vectors.data_size());
+    vectors.copy_shared_buffer(vectors, strides, flags, vectors.data_size());
   }
 
   auto vec_ptr = vectors.data<float>();
