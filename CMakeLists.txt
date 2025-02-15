@@ -30,7 +30,6 @@ endif()
 add_compile_definitions("MLX_VERSION=${MLX_VERSION}")
 
 # --------------------- Processor tests -------------------------
-
 message(
   STATUS
     "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
@@ -64,6 +63,7 @@ include(FetchContent)
 cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
+set_target_properties(mlx PROPERTIES COMPILE_WARNING_AS_ERROR ON)
 
 if(MLX_BUILD_METAL)
   set(METAL_LIB "-framework Metal")
