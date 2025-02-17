@@ -171,7 +171,7 @@ class CommunicationThread {
       : comm_thread_(&CommunicationThread::worker, this), stop_(false) {}
   ~CommunicationThread() {
     {
-      std::unique_lock<std::mutex> lock(queue_mutex_);
+      std::unique_lock lock(queue_mutex_);
       stop_ = true;
       send_tasks_.clear();
       recv_tasks_.clear();
@@ -181,7 +181,7 @@ class CommunicationThread {
   }
 
   void add(int socket) {
-    std::unique_lock<std::mutex> lock(queue_mutex_);
+    std::unique_lock lock(queue_mutex_);
     sockets_.add(socket);
     send_tasks_.emplace(
         std::piecewise_construct,
@@ -194,7 +194,7 @@ class CommunicationThread {
   }
 
   void add(const std::vector<int>& sockets) {
-    std::unique_lock<std::mutex> lock(queue_mutex_);
+    std::unique_lock lock(queue_mutex_);
     for (auto s : sockets) {
       sockets_.add(s);
       send_tasks_.emplace(
@@ -223,7 +223,7 @@ class CommunicationThread {
     }
 
     {
-      std::unique_lock<std::mutex> lock(queue_mutex_);
+      std::unique_lock lock(queue_mutex_);
       send_tasks_[socket].emplace(
           SocketTask(buffer, size, std::move(send_completed_promise)));
     }
@@ -246,7 +246,7 @@ class CommunicationThread {
     }
 
     {
-      std::unique_lock<std::mutex> lock(queue_mutex_);
+      std::unique_lock lock(queue_mutex_);
       recv_tasks_[socket].emplace(
           SocketTask(buffer, size, std::move(recv_completed_promise)));
     }
@@ -281,17 +281,27 @@ class CommunicationThread {
 
   void worker() {
     while (true) {
-      if (!have_tasks()) {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        condition_.wait(lock, [this] { return stop_ || have_tasks(); });
-        if (stop_ && !have_tasks()) {
+      {
+        std::unique_lock lock(queue_mutex_);
+
+        if (stop_) {
           return;
+        }
+
+        if (!have_tasks()) {
+          condition_.wait(lock, [this] { return stop_ || have_tasks(); });
+          if (stop_) {
+            return;
+          }
         }
       }
 
       auto [read, write] = sockets_.select();
-      handle_reads(read);
-      handle_writes(write);
+      {
+        std::unique_lock lock(queue_mutex_);
+        handle_reads(read);
+        handle_writes(write);
+      }
     }
   }
 
@@ -307,7 +317,6 @@ class CommunicationThread {
       auto& task = tasks[sock].front();
       ssize_t r = operation(sock, task.buffer, task.size);
       if (r == task.size) {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
         task.promise.set_value();
         tasks[sock].pop();
       } else if (r > 0) {
