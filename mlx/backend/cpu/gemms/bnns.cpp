@@ -43,6 +43,8 @@ void matmul_bnns(
 
   BNNSDataType bnns_dtype = to_bnns_dtype(out.dtype());
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   const BNNSLayerParametersBroadcastMatMul gemm_params{
       /* float alpha = */ alpha,
       /* float beta = */ beta,
@@ -124,6 +126,7 @@ void matmul_bnns(
   }
 
   BNNSFilterDestroy(bnns_filter);
+#pragma GCC diagnostic pop
 }
 
 template <>
