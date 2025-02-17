@@ -1,15 +1,21 @@
 // Copyright © 2024 Apple Inc.
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
+#include <sys/event.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <chrono>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <list>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <json.hpp>
 
@@ -80,12 +86,16 @@
 
 namespace mlx::core::distributed::ring {
 
+constexpr const size_t ALL_SUM_SIZE = 8 * 1024 * 1024;
+constexpr const size_t ALL_SUM_BUFFERS = 2;
 constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
+using namespace std::chrono_literals;
+using namespace std::placeholders;
 
 namespace {
 
@@ -125,6 +135,243 @@ class Barrier {
 
   int count_;
   bool flag_; // we need this for sequential use of the barrier
+};
+
+class KQueue {
+ public:
+  KQueue() {
+    kq_ = kqueue();
+  }
+  KQueue(KQueue&&) = delete;
+  KQueue(const KQueue&) = delete;
+
+  ~KQueue() {
+    while (!fds_.empty()) {
+      remove(*fds_.begin());
+    }
+  }
+
+  void add(int fd) {
+    if (fds_.find(fd) != fds_.end()) {
+      return;
+    }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    struct kevent ev[2];
+    EV_SET(ev + 0, fd, EVFILT_WRITE, EV_ADD, 0, 0, nullptr);
+    EV_SET(ev + 1, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+    kevent(kq_, ev, 2, nullptr, 0, nullptr);
+    fds_.insert(fd);
+  }
+
+  void remove(int fd) {
+    if (fds_.find(fd) == fds_.end()) {
+      return;
+    }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+    struct kevent ev[2];
+    EV_SET(ev + 0, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    EV_SET(ev + 1, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    kevent(kq_, ev, 2, nullptr, 0, nullptr);
+    fds_.erase(fd);
+  }
+
+  std::pair<const std::vector<int>&, const std::vector<int>&> select() {
+    read_list_.clear();
+    write_list_.clear();
+
+    struct kevent ev[32];
+    int num_events = kevent(kq_, nullptr, 0, ev, 32, nullptr);
+    for (int i = 0; i < num_events; i++) {
+      if (ev[i].filter == EVFILT_READ) {
+        read_list_.push_back(static_cast<int>(ev[i].ident));
+      } else if (ev[i].filter == EVFILT_WRITE) {
+        write_list_.push_back(static_cast<int>(ev[i].ident));
+      }
+    }
+
+    return {read_list_, write_list_};
+  }
+
+ private:
+  int kq_;
+  std::unordered_set<int> fds_;
+  std::vector<int> read_list_;
+  std::vector<int> write_list_;
+};
+
+class CommunicationThread {
+ public:
+  CommunicationThread()
+      : comm_thread_(&CommunicationThread::worker, this), stop_(false) {}
+  ~CommunicationThread() {
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      stop_ = true;
+      send_tasks_.clear();
+      recv_tasks_.clear();
+    }
+    condition_.notify_all();
+    comm_thread_.join();
+  }
+
+  void add(int socket) {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    sockets_.add(socket);
+    send_tasks_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(socket),
+        std::forward_as_tuple());
+    recv_tasks_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(socket),
+        std::forward_as_tuple());
+  }
+
+  void add(const std::vector<int>& sockets) {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    for (auto s : sockets) {
+      sockets_.add(s);
+      send_tasks_.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(s),
+          std::forward_as_tuple());
+      recv_tasks_.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(s),
+          std::forward_as_tuple());
+    }
+  }
+
+  template <typename T>
+  std::future<void> send(int socket, T* buffer, size_t size) {
+    return send<void>(socket, buffer, size * sizeof(T));
+  }
+
+  template <>
+  std::future<void> send<void>(int socket, void* buffer, size_t size) {
+    std::promise<void> send_completed_promise;
+    auto send_completed_future = send_completed_promise.get_future();
+    if (size == 0) {
+      send_completed_promise.set_value();
+      return send_completed_future;
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      send_tasks_[socket].emplace(
+          SocketTask(buffer, size, std::move(send_completed_promise)));
+    }
+    condition_.notify_one();
+    return send_completed_future;
+  }
+
+  template <typename T>
+  std::future<void> recv(int socket, T* buffer, size_t size) {
+    return recv<void>(socket, buffer, size * sizeof(T));
+  }
+
+  template <>
+  std::future<void> recv<void>(int socket, void* buffer, size_t size) {
+    std::promise<void> recv_completed_promise;
+    auto recv_completed_future = recv_completed_promise.get_future();
+    if (size == 0) {
+      recv_completed_promise.set_value();
+      return recv_completed_future;
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      recv_tasks_[socket].emplace(
+          SocketTask(buffer, size, std::move(recv_completed_promise)));
+    }
+    condition_.notify_one();
+    return recv_completed_future;
+  }
+
+ private:
+  struct SocketTask {
+    SocketTask(void* b, size_t s, std::promise<void>&& p)
+        : buffer(b), size(s), promise(std::move(p)) {}
+    SocketTask(SocketTask&& t)
+        : buffer(t.buffer), size(t.size), promise(std::move(t.promise)) {}
+    void* buffer;
+    size_t size;
+    std::promise<void> promise;
+  };
+
+  bool have_tasks() {
+    for (auto& [_, tasks] : send_tasks_) {
+      if (!tasks.empty()) {
+        return true;
+      }
+    }
+    for (auto& [_, tasks] : recv_tasks_) {
+      if (!tasks.empty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void worker() {
+    while (true) {
+      if (!have_tasks()) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        condition_.wait(lock, [this] { return stop_ || have_tasks(); });
+        if (stop_ && !have_tasks()) {
+          return;
+        }
+      }
+
+      auto [read, write] = sockets_.select();
+      handle_reads(read);
+      handle_writes(write);
+    }
+  }
+
+  void handle_socket_tasks(
+      std::unordered_map<int, std::queue<SocketTask>>& tasks,
+      const std::vector<int>& sockets,
+      std::function<ssize_t(int, void*, size_t)> operation) {
+    for (auto sock : sockets) {
+      if (tasks[sock].empty()) {
+        continue;
+      }
+
+      auto& task = tasks[sock].front();
+      ssize_t r = operation(sock, task.buffer, task.size);
+      if (r == task.size) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        task.promise.set_value();
+        tasks[sock].pop();
+      } else if (r > 0) {
+        task.buffer = static_cast<char*>(task.buffer) + r;
+        task.size -= r;
+      } else {
+        // TODO: Handle error
+      }
+    }
+  }
+
+  void handle_reads(const std::vector<int>& read) {
+    handle_socket_tasks(recv_tasks_, read, std::bind(::recv, _1, _2, _3, 0));
+  }
+
+  void handle_writes(const std::vector<int>& write) {
+    handle_socket_tasks(send_tasks_, write, std::bind(::send, _1, _2, _3, 0));
+  }
+
+  std::thread comm_thread_;
+  bool stop_;
+  KQueue sockets_;
+  std::mutex queue_mutex_;
+  std::condition_variable condition_;
+  std::unordered_map<int, std::queue<SocketTask>> send_tasks_;
+  std::unordered_map<int, std::queue<SocketTask>> recv_tasks_;
 };
 
 template <typename T>
@@ -565,7 +812,15 @@ class RingGroup : public GroupImpl {
 
     // Start the necessary threads for completely parallel operation on all
     // channels. One thread to send, one to receive per socket.
-    pool_.resize(send_sockets_.size() * 2 * 2);
+    // pool_.resize(send_sockets_.size() * 2 * 2);
+
+    // Register the sockets with the communication thread. This also converts
+    // them to non-blocking.
+    comm_.add(send_sockets_);
+    comm_.add(recv_sockets_);
+
+    // Allocate buffers for the all sum
+    buffers_.resize(send_sockets_.size() * ALL_SUM_BUFFERS * ALL_SUM_SIZE);
   }
 
   ~RingGroup() {
@@ -621,31 +876,15 @@ class RingGroup : public GroupImpl {
         throw std::runtime_error(msg.str());
       }
 
-      std::future<void> sent, recvd;
-      auto barrier = std::make_unique<Barrier>(2);
       char buffer[1024];
       std::memset(buffer, 0, size_ * input.itemsize());
       std::memcpy(buffer, input.data<char>(), input.nbytes());
-      sent = pool_.enqueue(
-          ring_send<T>,
-          std::reference_wrapper(*barrier),
+      all_sum<T>(
+          reinterpret_cast<T*>(buffer),
+          size_,
           send_sockets_[0],
-          rank_,
-          size_,
-          (T*)buffer,
-          size_,
-          -1);
-      recvd = pool_.enqueue(
-          ring_recv_sum<T>,
-          std::reference_wrapper(*barrier),
           recv_sockets_[0],
-          rank_,
-          size_,
-          (T*)buffer,
-          size_,
           -1);
-      sent.wait();
-      recvd.wait();
       std::memcpy(output.data<char>(), buffer, output.nbytes());
       return;
     }
@@ -654,6 +893,15 @@ class RingGroup : public GroupImpl {
     if (input.data<void>() != output.data<void>()) {
       std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
     }
+
+    //
+    all_sum<T>(
+        output.data<T>(),
+        output.size(),
+        send_sockets_[0],
+        recv_sockets_[0],
+        -1);
+    return;
 
     // All reduce in place. We have `send_channels_.size()` bidirectional
     // channels so let's split the message up and perform as many parallel
@@ -790,6 +1038,150 @@ class RingGroup : public GroupImpl {
     }
   }
 
+  template <typename T>
+  void all_sum(
+      T* data,
+      size_t data_size,
+      int socket_right,
+      int socket_left,
+      int direction) {
+    // Choose which socket we send to and recv from
+    int socket_send = (direction < 0) ? socket_right : socket_left;
+    int socket_recv = (direction < 0) ? socket_left : socket_right;
+
+    // We split the data into `size_` segments of size `segment_size` and each
+    // of these in smaller segments of ALL_SUM_SIZE which we 'll call packets.
+    size_t segment_size = ceildiv(data_size, size_);
+    size_t BUFFER_SIZE = ALL_SUM_SIZE / sizeof(T);
+    size_t n_packets = ceildiv(segment_size, BUFFER_SIZE);
+
+    // Initial segments
+    int send_segment = rank_;
+    int recv_segment = (rank_ + direction + size_) % size_;
+
+    // Plan the whole reduce in terms of sends and recvs as indices in data.
+    std::vector<std::pair<size_t, size_t>> send_plan;
+    std::vector<std::pair<size_t, size_t>> recv_plan;
+
+    // Two times the same send/recv operations, first scatter reduce and then
+    // gather.
+    for (int k = 0; k < 2; k++) {
+      for (int i = 0; i < size_ - 1; i++) {
+        size_t send_start = send_segment * segment_size;
+        size_t send_stop =
+            std::min((send_segment + 1) * segment_size, data_size);
+        size_t recv_start = recv_segment * segment_size;
+        size_t recv_stop =
+            std::min((recv_segment + 1) * segment_size, data_size);
+
+        for (size_t j = 0; j < n_packets; j++) {
+          send_plan.emplace_back(
+              std::min(send_start + j * BUFFER_SIZE, send_stop),
+              std::min(send_start + (j + 1) * BUFFER_SIZE, send_stop));
+          recv_plan.emplace_back(
+              std::min(recv_start + j * BUFFER_SIZE, recv_stop),
+              std::min(recv_start + (j + 1) * BUFFER_SIZE, recv_stop));
+        }
+
+        send_segment = (send_segment + size_ + direction) % size_;
+        recv_segment = (recv_segment + size_ + direction) % size_;
+      }
+    }
+
+    // Sends and recvs can come out of sync so long as one doesn't run ahead
+    // more than n_packets or we run out of recv buffers for the scatter reduce
+    // part.
+    T* recv_buffers[ALL_SUM_BUFFERS];
+    for (int i = 0; i < ALL_SUM_BUFFERS; i++) {
+      recv_buffers[i] = reinterpret_cast<T*>(buffers_.data()) + i * BUFFER_SIZE;
+    }
+    std::list<std::pair<std::future<void>, int>> sends, recvs;
+    int i = 0, j = 0;
+    while (i < send_plan.size() || j < recv_plan.size()) {
+      // There is a send to do and the current send is less than n_packets away
+      // from the last successfully completed recv.
+      if (i < send_plan.size() && i - j + recvs.size() <= n_packets) {
+        sends.emplace_back(
+            comm_.send(
+                socket_send,
+                data + send_plan[i].first,
+                send_plan[i].second - send_plan[i].first),
+            i);
+        i++;
+      }
+
+      // First make sure that the recv always follows the send.
+      if (j <= i) {
+        // Doing a recv sum and we have a buffer available
+        if (2 * j < recv_plan.size() && recvs.size() < ALL_SUM_BUFFERS) {
+          recvs.emplace_back(
+              comm_.recv(
+                  socket_recv,
+                  recv_buffers[j % ALL_SUM_BUFFERS],
+                  recv_plan[j].second - recv_plan[j].first),
+              j);
+          j++;
+        }
+
+        // Doing a simple recv
+        else if (j < recv_plan.size()) {
+          recvs.emplace_back(
+              comm_.recv(
+                  socket_recv,
+                  data + recv_plan[j].first,
+                  recv_plan[j].second - recv_plan[j].first),
+              j);
+          j++;
+        }
+      }
+
+      // Mark the sends as completed
+      for (auto it = sends.begin(); it != sends.end();) {
+        if (it->first.wait_for(0s) != std::future_status::ready) {
+          break;
+        }
+        it = sends.erase(it);
+      }
+
+      // Mark recvs as completed and also perform the sum if needed
+      for (auto it = recvs.begin(); it != recvs.end();) {
+        if (i >= j &&
+            ((2 * it->second < recv_plan.size() &&
+              recvs.size() == ALL_SUM_BUFFERS) ||
+             (2 * it->second >= recv_plan.size() &&
+              recvs.size() == n_packets))) {
+          it->first.wait();
+        } else if (it->first.wait_for(0s) != std::future_status::ready) {
+          break;
+        }
+        if (2 * it->second < recv_plan.size()) {
+          sum_inplace<T>(
+              recv_buffers[it->second % ALL_SUM_BUFFERS],
+              data + recv_plan[it->second].first,
+              recv_plan[it->second].second - recv_plan[it->second].first);
+        }
+        it = recvs.erase(it);
+      }
+    }
+
+    // Wait for the futures and save them or perform the sum
+    for (auto it = recvs.begin(); it != recvs.end();) {
+      it->first.wait();
+      if (2 * it->second < recv_plan.size()) {
+        sum_inplace<T>(
+            recv_buffers[it->second % ALL_SUM_BUFFERS],
+            data + recv_plan[it->second].first,
+            recv_plan[it->second].second - recv_plan[it->second].first);
+      }
+      it = recvs.erase(it);
+    }
+    // Wait for the final sends to be done
+    for (auto it = sends.begin(); it != sends.end();) {
+      it->first.wait();
+      it = sends.erase(it);
+    }
+  }
+
   int rank_;
   int size_;
 
@@ -799,6 +1191,10 @@ class RingGroup : public GroupImpl {
 
   std::vector<int> send_sockets_;
   std::vector<int> recv_sockets_;
+
+  CommunicationThread comm_;
+
+  std::vector<char> buffers_;
 };
 
 bool is_available() {
