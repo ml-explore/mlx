@@ -1725,6 +1725,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual((mx.array(True) | False).item(), True)
         self.assertEqual((mx.array(False) | False).item(), False)
         self.assertEqual((~mx.array(False)).item(), True)
+        self.assertEqual((mx.array(False) ^ True).item(), True)
 
     def test_inplace(self):
         iops = [
@@ -1734,6 +1735,7 @@ class TestArray(mlx_tests.MLXTestCase):
             "__ifloordiv__",
             "__imod__",
             "__ipow__",
+            "__ixor__",
         ]
 
         for op in iops:
@@ -1772,6 +1774,10 @@ class TestArray(mlx_tests.MLXTestCase):
         b = a
         b @= a
         self.assertTrue(mx.array_equal(a, b))
+
+        a = mx.array(False)
+        a ^= True
+        self.assertEqual(a.item(), True)
 
     def test_inplace_preserves_ids(self):
         a = mx.array([1.0])
