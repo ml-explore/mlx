@@ -733,8 +733,10 @@ class RingGroup : public GroupImpl {
 
     // Split the all reduces so that each member has at least 4 buffers to
     // send/recv per segment.
-    size_t n_reduces = std::min(
-        send_sockets_.size() * 2, output.nbytes() / (size_ * ALL_SUM_SIZE));
+    size_t n_reduces = std::max(
+        std::min(
+            send_sockets_.size() * 2, output.nbytes() / (size_ * ALL_SUM_SIZE)),
+        1UL);
     size_t step = ceildiv(output.size(), n_reduces);
     std::vector<std::future<void>> all_sums;
 
