@@ -1994,6 +1994,39 @@ class TestArray(mlx_tests.MLXTestCase):
         used = get_mem()
         self.assertEqual(expected, used)
 
+    def test_bincount(self):
+        # Test case 1: Basic functionality
+        input_array = mx.array([0, 1, 1, 2, 2, 2, 3, 3, 3, 3])
+        max_val = 4
+        expected_output = mx.array([1, 2, 3, 4])
+        self.assertTrue(mx.array_equal(mx.array.bincount(input_array, max_val), expected_output))
 
-if __name__ == "__main__":
-    unittest.main()
+        # Test case 2: Input with zeros
+        input_array = mx.array([0, 0, 0, 1, 1, 2])
+        max_val = 3
+        expected_output = mx.array([3, 2, 1])
+        self.assertTrue(mx.array_equal(mx.array.bincount(input_array, max_val), expected_output))
+
+        # Test case 3: Input with negative values (should raise an error)
+        input_array = mx.array([0, -1, 1, 2])
+        max_val = 3
+        with self.assertRaises(ValueError):
+            mx.array.bincount(input_array, max_val)
+
+        # Test case 4: Input with values out of range (should raise an error)
+        input_array = mx.array([0, 1, 2, 3, 4])
+        max_val = 3
+        with self.assertRaises(ValueError):
+            mx.array.bincount(input_array, max_val)
+
+        # Test case 5: Empty input array
+        input_array = mx.array([])
+        max_val = 3
+        expected_output = mx.array([0, 0, 0])
+        self.assertTrue(mx.array_equal(mx.array.bincount(input_array, max_val), expected_output))
+
+        # Test case 6: Input with all values the same
+        input_array = mx.array([2, 2, 2, 2])
+        max_val = 3
+        expected_output = mx.array([0, 0, 4])
+        self.assertTrue(mx.array_equal(mx.array.bincount(input_array, max_val), expected_output))

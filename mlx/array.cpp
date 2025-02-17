@@ -1,4 +1,3 @@
-// Copyright © 2023-2024 Apple Inc.
 #include <functional>
 #include <unordered_map>
 
@@ -340,5 +339,23 @@ array::ArrayIterator::reference array::ArrayIterator::operator*() const {
   end[0] = idx + 1;
   return reshape(slice(arr, start, end), shape);
 };
+
+array bincount(const array& input, int max_val) {
+  std::unordered_map<int, int> counts;
+  for (int i = 0; i < input.size(); ++i) {
+    int val = input.data<int>()[i];
+    if (val < 0 || val >= max_val) {
+      throw std::out_of_range("Input value out of range");
+    }
+    counts[val]++;
+  }
+
+  std::vector<int> result(max_val, 0);
+  for (const auto& [val, count] : counts) {
+    result[val] = count;
+  }
+
+  return array(result);
+}
 
 } // namespace mlx::core

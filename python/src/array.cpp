@@ -1,4 +1,3 @@
-// Copyright © 2023-2024 Apple Inc.
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -1394,5 +1393,22 @@ void init_array(nb::module_& m) {
           "dtype"_a,
           nb::kw_only(),
           "stream"_a = nb::none(),
-          "See :func:`view`.");
+          "See :func:`view`.")
+      .def_static(
+          "bincount",
+          [](const mx::array& input, int max_val) {
+            return mx::array::bincount(input, max_val);
+          },
+          "input"_a,
+          "max_val"_a,
+          R"pbdoc(
+            Count occurrences of each value in an array.
+
+            Args:
+                input (array): Input array.
+                max_val (int): Maximum value in the input array.
+
+            Returns:
+                array: Array with the counts of each value in the input array.
+          )pbdoc");
 }

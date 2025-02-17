@@ -1,4 +1,3 @@
-// Copyright © 2023 Apple Inc.
 #pragma once
 
 #include <algorithm>
@@ -445,6 +444,9 @@ class array {
   }
 
   ~array();
+
+  // Declare the bincount method in the array class
+  static array bincount(const array& input, int max_val);
 
  private:
   // Initialize the arrays data
