@@ -88,7 +88,6 @@ namespace mlx::core::distributed::ring {
 
 constexpr const size_t ALL_SUM_SIZE = 8 * 1024 * 1024;
 constexpr const size_t ALL_SUM_BUFFERS = 2;
-constexpr const size_t PACKET_SIZE = 262144;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 
@@ -649,7 +648,7 @@ class RingGroup : public GroupImpl {
 
     // Start the necessary threads for completely parallel operation on all
     // channels. One thread to send, one to receive per socket.
-    // pool_.resize(send_sockets_.size() * 2 * 2);
+    pool_.resize(send_sockets_.size() * 2);
 
     // Register the sockets with the communication thread. This also converts
     // them to non-blocking.
@@ -657,7 +656,7 @@ class RingGroup : public GroupImpl {
     comm_.add(recv_sockets_);
 
     // Allocate buffers for the all sum
-    buffers_.resize(send_sockets_.size() * ALL_SUM_BUFFERS * ALL_SUM_SIZE);
+    buffers_.resize(2 * send_sockets_.size() * ALL_SUM_BUFFERS * ALL_SUM_SIZE);
   }
 
   ~RingGroup() {
@@ -716,7 +715,8 @@ class RingGroup : public GroupImpl {
       char buffer[1024];
       std::memset(buffer, 0, size_ * input.itemsize());
       std::memcpy(buffer, input.data<char>(), input.nbytes());
-      all_sum<T>(
+      all_sum_impl<T>(
+          reinterpret_cast<T*>(buffers_.data()),
           reinterpret_cast<T*>(buffer),
           size_,
           send_sockets_[0],
@@ -731,17 +731,33 @@ class RingGroup : public GroupImpl {
       std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
     }
 
-    //
-    all_sum<T>(
-        output.data<T>(),
-        output.size(),
-        send_sockets_[0],
-        recv_sockets_[0],
-        -1);
+    // Split the all reduces so that each member has at least 4 buffers to
+    // send/recv per segment.
+    size_t n_reduces = std::min(
+        send_sockets_.size() * 2, output.nbytes() / (size_ * ALL_SUM_SIZE));
+    size_t step = ceildiv(output.size(), n_reduces);
+    std::vector<std::future<void>> all_sums;
+
+    for (int i = 0; i < n_reduces; i++) {
+      all_sums.emplace_back(pool_.enqueue(std::bind(
+          &RingGroup::all_sum_impl<T>,
+          this,
+          reinterpret_cast<T*>(
+              buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
+          output.data<T>() + i * step,
+          std::min(output.size(), (i + 1) * step) - i * step,
+          send_sockets_[i / 2],
+          recv_sockets_[i / 2],
+          (i % 2) ? -1 : 1)));
+    }
+    for (auto& f : all_sums) {
+      f.wait();
+    }
   }
 
   template <typename T>
-  void all_sum(
+  void all_sum_impl(
+      T* buffer,
       T* data,
       size_t data_size,
       int socket_right,
@@ -795,7 +811,7 @@ class RingGroup : public GroupImpl {
     // part.
     T* recv_buffers[ALL_SUM_BUFFERS];
     for (int i = 0; i < ALL_SUM_BUFFERS; i++) {
-      recv_buffers[i] = reinterpret_cast<T*>(buffers_.data()) + i * BUFFER_SIZE;
+      recv_buffers[i] = buffer + i * BUFFER_SIZE;
     }
     std::list<std::pair<std::future<void>, int>> sends, recvs;
     int i = 0, j = 0;
