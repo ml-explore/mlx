@@ -608,24 +608,32 @@ class RingGroup : public GroupImpl {
     // Make sure that the input is row contiguous
     array input = ensure_row_contiguous(input_);
 
-    if (dst == rank_ + 1) {
+    int right = (rank_ + 1) % size_;
+    int left = (rank_ + size_ - 1) % size_;
+    if (dst == right) {
       send(sockets_right_, input.data<char>(), input.nbytes());
-    } else if (dst == rank_ - 1) {
+    } else if (dst == left) {
       send(sockets_left_, input.data<char>(), input.nbytes());
     } else {
-      throw std::runtime_error(
-          "[ring] Send only supported to direct neighbors.");
+      std::ostringstream msg;
+      msg << "[ring] Send only supported to direct neighbors "
+          << "but tried to send to " << dst << " from " << rank_ << std::endl;
+      throw std::runtime_error(msg.str());
     }
   }
 
   void recv(array& out, int src) override {
-    if (src == rank_ + 1) {
-      recv(sockets_right_, out.data<char>(), output.nbytes());
-    } else if (src == rank_ - 1) {
-      recv(sockets_left_, out.data<char>(), output.nbytes());
+    int right = (rank_ + 1) % size_;
+    int left = (rank_ + size_ - 1) % size_;
+    if (src == right) {
+      recv(sockets_right_, out.data<char>(), out.nbytes());
+    } else if (src == left) {
+      recv(sockets_left_, out.data<char>(), out.nbytes());
     } else {
-      throw std::runtime_error(
-          "[ring] Recv only supported from direct neighbors.");
+      std::ostringstream msg;
+      msg << "[ring] Recv only supported from direct neighbors "
+          << "but tried to recv from " << src << " to " << rank_ << std::endl;
+      throw std::runtime_error(msg.str());
     }
   }
 
