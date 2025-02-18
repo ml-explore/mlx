@@ -112,7 +112,7 @@ class SocketThread {
 
   template <typename T>
   std::future<void> send(T* buffer, size_t size) {
-    return send<char>(buffer, size * sizeof(T));
+    return send<char>(reinterpret_cast<char*>(buffer), size * sizeof(T));
   }
 
   template <>
@@ -135,7 +135,7 @@ class SocketThread {
 
   template <typename T>
   std::future<void> recv(T* buffer, size_t size) {
-    return recv<char>(buffer, size * sizeof(T));
+    return recv<char>(reinterpret_cast<char*>(buffer), size * sizeof(T));
   }
 
   template <>
@@ -599,14 +599,34 @@ class RingGroup : public GroupImpl {
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
     throw std::runtime_error("[ring] Group split not supported.");
   }
+
   void all_gather(const array& input, array& output) override {
     throw std::runtime_error("[ring] All gather not supported.");
   }
-  void send(const array& input, int dst) override {
-    throw std::runtime_error("[ring] Send not supported.");
+
+  void send(const array& input_, int dst) override {
+    // Make sure that the input is row contiguous
+    array input = ensure_row_contiguous(input_);
+
+    if (dst == rank_ + 1) {
+      send(sockets_right_, input.data<char>(), input.nbytes());
+    } else if (dst == rank_ - 1) {
+      send(sockets_left_, input.data<char>(), input.nbytes());
+    } else {
+      throw std::runtime_error(
+          "[ring] Send only supported to direct neighbors.");
+    }
   }
+
   void recv(array& out, int src) override {
-    throw std::runtime_error("[ring] Recv not supported.");
+    if (src == rank_ + 1) {
+      recv(sockets_right_, out.data<char>(), output.nbytes());
+    } else if (src == rank_ - 1) {
+      recv(sockets_left_, out.data<char>(), output.nbytes());
+    } else {
+      throw std::runtime_error(
+          "[ring] Recv only supported from direct neighbors.");
+    }
   }
 
  private:
@@ -618,7 +638,8 @@ class RingGroup : public GroupImpl {
     // If the input data cannot be split into size_ segments then copy it and
     // all reduce a local buffer prefilled with 0s.
     if (input.size() < size_) {
-      // TODO: Maybe allocate dynamically so we don't have the constraint below?
+      // TODO: Maybe allocate dynamically so we don't have the constraint
+      // below?
       if (input.itemsize() * size_ > 1024) {
         std::ostringstream msg;
         msg << "Can't perform the ring all reduce of " << output.size()
@@ -695,9 +716,9 @@ class RingGroup : public GroupImpl {
     int send_segment = rank_;
     int recv_segment = (rank_ + direction + size_) % size_;
 
-    // Plan the whole reduce in terms of sends and recvs as indices in data. It
-    // makes the actual async send and recv a bit simpler to follow when there
-    // are less offset calculations around.
+    // Plan the whole reduce in terms of sends and recvs as indices in data.
+    // It makes the actual async send and recv a bit simpler to follow when
+    // there are less offset calculations around.
     std::vector<std::pair<size_t, size_t>> send_plan;
     std::vector<std::pair<size_t, size_t>> recv_plan;
 
@@ -767,6 +788,34 @@ class RingGroup : public GroupImpl {
     }
     sends[b].wait();
     recvs[b].wait();
+  }
+
+  void send(const std::vector<int>& sockets, char* data, size_t data_size) {
+    size_t segment_size = ceildiv(data_size, sockets.size());
+    std::vector<std::future<void>> sends;
+    for (int i = 0; i < sockets.size(); i++) {
+      sends.emplace_back(comm_.send(
+          sockets[i],
+          data + i * segment_size,
+          std::min(data_size, (i + 1) * segment_size) - i * segment_size));
+    }
+    for (auto& f : sends) {
+      f.wait();
+    }
+  }
+
+  void recv(const std::vector<int>& sockets, char* data, size_t data_size) {
+    size_t segment_size = ceildiv(data_size, sockets.size());
+    std::vector<std::future<void>> recvs;
+    for (int i = 0; i < sockets.size(); i++) {
+      recvs.emplace_back(comm_.recv(
+          sockets[i],
+          data + i * segment_size,
+          std::min(data_size, (i + 1) * segment_size) - i * segment_size));
+    }
+    for (auto& f : recvs) {
+      f.wait();
+    }
   }
 
   int rank_;
