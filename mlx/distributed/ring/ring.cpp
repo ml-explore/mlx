@@ -112,11 +112,11 @@ class SocketThread {
 
   template <typename T>
   std::future<void> send(T* buffer, size_t size) {
-    return send<void>(buffer, size * sizeof(T));
+    return send<char>(buffer, size * sizeof(T));
   }
 
   template <>
-  std::future<void> send<void>(void* buffer, size_t size) {
+  std::future<void> send<char>(char* buffer, size_t size) {
     std::promise<void> send_completed_promise;
     auto send_completed_future = send_completed_promise.get_future();
     if (size == 0) {
@@ -135,11 +135,11 @@ class SocketThread {
 
   template <typename T>
   std::future<void> recv(T* buffer, size_t size) {
-    return recv<void>(buffer, size * sizeof(T));
+    return recv<char>(buffer, size * sizeof(T));
   }
 
   template <>
-  std::future<void> recv<void>(void* buffer, size_t size) {
+  std::future<void> recv<char>(char* buffer, size_t size) {
     std::promise<void> recv_completed_promise;
     auto recv_completed_future = recv_completed_promise.get_future();
     if (size == 0) {
