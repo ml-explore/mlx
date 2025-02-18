@@ -473,8 +473,19 @@ array hadamard_transform(
     std::optional<float> scale_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   // Default to an orthonormal Hadamard matrix scaled by 1/sqrt(N)
-  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(a.shape(-1));
+  int n = a.ndim() > 0 ? a.shape(-1) : 1;
+  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(n);
   auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
+
+  // Nothing to do for a scalar
+  if (n == 1) {
+    if (scale == 1) {
+      return a;
+    }
+
+    return multiply(a, array(scale, dtype), s);
+  }
+
   return array(
       a.shape(),
       dtype,

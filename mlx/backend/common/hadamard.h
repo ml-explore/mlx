@@ -99,6 +99,10 @@ inline std::pair<int, int> decompose_hadamard(int n) {
           "[hadamard] Only supports n = m*2^k where m in (1, 12, 20, 28).");
     }
   }
+  if (n > (1 << 26)) {
+    throw std::invalid_argument(
+        "[hadamard] Only supports n = m*2^k where k <= 26");
+  }
   return {n, m};
 }
 
