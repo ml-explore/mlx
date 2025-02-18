@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <sys/event.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -15,7 +14,6 @@
 #include <sstream>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <json.hpp>
 
@@ -688,14 +686,17 @@ class RingGroup : public GroupImpl {
     // We split the data into `size_` segments of size `segment_size` and each
     // of these in smaller segments of ALL_SUM_SIZE which we 'll call packets.
     size_t segment_size = ceildiv(data_size, size_);
-    size_t BUFFER_SIZE = ALL_SUM_SIZE / sizeof(T);
+    size_t BUFFER_SIZE =
+        std::max(32768UL, std::min(ALL_SUM_SIZE / sizeof(T), segment_size / 2));
     size_t n_packets = ceildiv(segment_size, BUFFER_SIZE);
 
     // Initial segments
     int send_segment = rank_;
     int recv_segment = (rank_ + direction + size_) % size_;
 
-    // Plan the whole reduce in terms of sends and recvs as indices in data.
+    // Plan the whole reduce in terms of sends and recvs as indices in data. It
+    // makes the actual async send and recv a bit simpler to follow when there
+    // are less offset calculations around.
     std::vector<std::pair<size_t, size_t>> send_plan;
     std::vector<std::pair<size_t, size_t>> recv_plan;
 
@@ -724,97 +725,78 @@ class RingGroup : public GroupImpl {
       }
     }
 
-    // Sends and recvs can come out of sync so long as one doesn't run ahead
-    // more than n_packets or we run out of recv buffers for the scatter reduce
-    // part.
+    // Running the plan is fairly simple, we keep a send and a recv in flight
+    // while doing the summation.
     T* recv_buffers[ALL_SUM_BUFFERS];
     for (int i = 0; i < ALL_SUM_BUFFERS; i++) {
       recv_buffers[i] = buffer + i * BUFFER_SIZE;
     }
-    std::list<std::pair<std::future<void>, int>> sends, recvs;
-    int i = 0, j = 0;
-    while (i < send_plan.size() || j < recv_plan.size()) {
-      // There is a send to do and the current send is less than n_packets away
-      // from the last successfully completed recv.
-      if (i < send_plan.size() && i - j + recvs.size() <= n_packets) {
-        sends.emplace_back(
-            comm_.send(
-                socket_send,
-                data + send_plan[i].first,
-                send_plan[i].second - send_plan[i].first),
-            i);
-        i++;
-      }
-
-      // First make sure that the recv always follows the send.
-      if (j <= i) {
-        // Doing a recv sum and we have a buffer available
-        if (2 * j < recv_plan.size() && recvs.size() < ALL_SUM_BUFFERS) {
-          recvs.emplace_back(
-              comm_.recv(
-                  socket_recv,
-                  recv_buffers[j % ALL_SUM_BUFFERS],
-                  recv_plan[j].second - recv_plan[j].first),
-              j);
-          j++;
+    std::future<void> sends[2], recvs[2];
+    int a = 0, b = 1;
+    // 1 packet means we can't overlap send/recv and sum
+    if (n_packets == 1) {
+      for (int i = 0; i < send_plan.size(); i++) {
+        sends[a] = comm_.send(
+            socket_send,
+            data + send_plan[i].first,
+            send_plan[i].second - send_plan[i].first);
+        if (2 * i < send_plan.size()) {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              recv_buffers[i % ALL_SUM_BUFFERS],
+              recv_plan[i].second - recv_plan[i].first);
+        } else {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              data + recv_plan[i].first,
+              recv_plan[i].second - recv_plan[i].first);
         }
-
-        // Doing a simple recv
-        else if (j < recv_plan.size()) {
-          recvs.emplace_back(
-              comm_.recv(
-                  socket_recv,
-                  data + recv_plan[j].first,
-                  recv_plan[j].second - recv_plan[j].first),
-              j);
-          j++;
-        }
-      }
-
-      // Mark the sends as completed
-      for (auto it = sends.begin(); it != sends.end();) {
-        if (it->first.wait_for(0s) != std::future_status::ready) {
-          break;
-        }
-        it = sends.erase(it);
-      }
-
-      // Mark recvs as completed and also perform the sum if needed
-      for (auto it = recvs.begin(); it != recvs.end();) {
-        if (i >= j &&
-            ((2 * it->second < recv_plan.size() &&
-              recvs.size() == ALL_SUM_BUFFERS) ||
-             (2 * it->second >= recv_plan.size() &&
-              recvs.size() == n_packets))) {
-          it->first.wait();
-        } else if (it->first.wait_for(0s) != std::future_status::ready) {
-          break;
-        }
-        if (2 * it->second < recv_plan.size()) {
+        sends[a].wait();
+        recvs[a].wait();
+        if (2 * i < send_plan.size()) {
           sum_inplace<T>(
-              recv_buffers[it->second % ALL_SUM_BUFFERS],
-              data + recv_plan[it->second].first,
-              recv_plan[it->second].second - recv_plan[it->second].first);
+              recv_buffers[i % ALL_SUM_BUFFERS],
+              data + recv_plan[i].first,
+              recv_plan[i].second - recv_plan[i].first);
         }
-        it = recvs.erase(it);
       }
     }
 
-    // Wait for the futures and save them or perform the sum
-    for (auto it = recvs.begin(); it != recvs.end();) {
-      it->first.wait();
-      if (2 * it->second < recv_plan.size()) {
-        sum_inplace<T>(
-            recv_buffers[it->second % ALL_SUM_BUFFERS],
-            data + recv_plan[it->second].first,
-            recv_plan[it->second].second - recv_plan[it->second].first);
+    // at least 2 means we can send and recv the next one while finishing the
+    // current one.
+    else {
+      for (int i = 0, j = -1; i < send_plan.size(); j++, i++) {
+        sends[a] = comm_.send(
+            socket_send,
+            data + send_plan[i].first,
+            send_plan[i].second - send_plan[i].first);
+        if (2 * i < send_plan.size()) {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              recv_buffers[i % ALL_SUM_BUFFERS],
+              recv_plan[i].second - recv_plan[i].first);
+        } else {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              data + recv_plan[i].first,
+              recv_plan[i].second - recv_plan[i].first);
+        }
+
+        if (j >= 0) {
+          sends[b].wait();
+          recvs[b].wait();
+          if (2 * j < send_plan.size()) {
+            sum_inplace<T>(
+                recv_buffers[j % ALL_SUM_BUFFERS],
+                data + recv_plan[j].first,
+                recv_plan[j].second - recv_plan[j].first);
+          }
+        }
+
+        std::swap(a, b);
       }
-      it = recvs.erase(it);
-    }
-    // Wait for the final sends to be done
-    for (auto it = sends.begin(); it != sends.end();) {
-      it->first.wait();
-      it = sends.erase(it);
+      sends[b].wait();
+      recvs[b].wait();
     }
   }
 
