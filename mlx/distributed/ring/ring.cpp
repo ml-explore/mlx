@@ -180,10 +180,12 @@ class SocketThread {
         std::unique_lock lock(queue_mutex_);
 
         if (delete_recv) {
+          recvs_.front().promise.set_value();
           recvs_.pop_front();
           delete_recv = false;
         }
         if (delete_send) {
+          sends_.front().promise.set_value();
           sends_.pop_front();
           delete_send = false;
         }
