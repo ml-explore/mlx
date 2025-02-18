@@ -92,7 +92,6 @@ constexpr const int CONN_WAIT = 1000;
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
 using namespace std::chrono_literals;
-using namespace std::placeholders;
 
 namespace {
 
@@ -734,72 +733,40 @@ class RingGroup : public GroupImpl {
       recv_buffers[i] = buffer + i * BUFFER_SIZE;
     }
     std::future<void> sends[2], recvs[2];
-    int a = 0, b = 1;
-    // 1 packet means we can't overlap send/recv and sum
-    if (n_packets == 1) {
-      for (int i = 0; i < send_plan.size(); i++) {
-        sends[a] = comm_.send(
-            socket_send,
-            data + send_plan[i].first,
-            send_plan[i].second - send_plan[i].first);
-        if (2 * i < send_plan.size()) {
-          recvs[a] = comm_.recv(
-              socket_recv,
-              recv_buffers[i % ALL_SUM_BUFFERS],
-              recv_plan[i].second - recv_plan[i].first);
-        } else {
-          recvs[a] = comm_.recv(
-              socket_recv,
-              data + recv_plan[i].first,
-              recv_plan[i].second - recv_plan[i].first);
-        }
-        sends[a].wait();
-        recvs[a].wait();
-        if (2 * i < send_plan.size()) {
+    int a = 0;
+    int b = (n_packets > 1) ? 1 : 0;
+    for (int i = 0, j = -b; i < send_plan.size(); j++, i++) {
+      sends[a] = comm_.send(
+          socket_send,
+          data + send_plan[i].first,
+          send_plan[i].second - send_plan[i].first);
+      if (2 * i < send_plan.size()) {
+        recvs[a] = comm_.recv(
+            socket_recv,
+            recv_buffers[i % ALL_SUM_BUFFERS],
+            recv_plan[i].second - recv_plan[i].first);
+      } else {
+        recvs[a] = comm_.recv(
+            socket_recv,
+            data + recv_plan[i].first,
+            recv_plan[i].second - recv_plan[i].first);
+      }
+
+      if (j >= 0) {
+        sends[b].wait();
+        recvs[b].wait();
+        if (2 * j < send_plan.size()) {
           sum_inplace<T>(
-              recv_buffers[i % ALL_SUM_BUFFERS],
-              data + recv_plan[i].first,
-              recv_plan[i].second - recv_plan[i].first);
+              recv_buffers[j % ALL_SUM_BUFFERS],
+              data + recv_plan[j].first,
+              recv_plan[j].second - recv_plan[j].first);
         }
       }
+
+      std::swap(a, b);
     }
-
-    // at least 2 means we can send and recv the next one while finishing the
-    // current one.
-    else {
-      for (int i = 0, j = -1; i < send_plan.size(); j++, i++) {
-        sends[a] = comm_.send(
-            socket_send,
-            data + send_plan[i].first,
-            send_plan[i].second - send_plan[i].first);
-        if (2 * i < send_plan.size()) {
-          recvs[a] = comm_.recv(
-              socket_recv,
-              recv_buffers[i % ALL_SUM_BUFFERS],
-              recv_plan[i].second - recv_plan[i].first);
-        } else {
-          recvs[a] = comm_.recv(
-              socket_recv,
-              data + recv_plan[i].first,
-              recv_plan[i].second - recv_plan[i].first);
-        }
-
-        if (j >= 0) {
-          sends[b].wait();
-          recvs[b].wait();
-          if (2 * j < send_plan.size()) {
-            sum_inplace<T>(
-                recv_buffers[j % ALL_SUM_BUFFERS],
-                data + recv_plan[j].first,
-                recv_plan[j].second - recv_plan[j].first);
-          }
-        }
-
-        std::swap(a, b);
-      }
-      sends[b].wait();
-      recvs[b].wait();
-    }
+    sends[b].wait();
+    recvs[b].wait();
   }
 
   int rank_;
