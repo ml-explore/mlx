@@ -112,11 +112,26 @@ class SocketThread {
 
   template <typename T>
   std::future<void> send(T* buffer, size_t size) {
-    return send<char>(reinterpret_cast<char*>(buffer), size * sizeof(T));
+    return send_impl(reinterpret_cast<char*>(buffer), size * sizeof(T));
   }
 
-  template <>
-  std::future<void> send<char>(char* buffer, size_t size) {
+  template <typename T>
+  std::future<void> recv(T* buffer, size_t size) {
+    return recv_impl(reinterpret_cast<char*>(buffer), size * sizeof(T));
+  }
+
+ private:
+  struct SocketTask {
+    SocketTask(void* b, size_t s, std::promise<void>&& p)
+        : buffer(b), size(s), promise(std::move(p)) {}
+    SocketTask(SocketTask&& t)
+        : buffer(t.buffer), size(t.size), promise(std::move(t.promise)) {}
+    void* buffer;
+    size_t size;
+    std::promise<void> promise;
+  };
+
+  std::future<void> send_impl(char* buffer, size_t size) {
     std::promise<void> send_completed_promise;
     auto send_completed_future = send_completed_promise.get_future();
     if (size == 0) {
@@ -133,13 +148,7 @@ class SocketThread {
     return send_completed_future;
   }
 
-  template <typename T>
-  std::future<void> recv(T* buffer, size_t size) {
-    return recv<char>(reinterpret_cast<char*>(buffer), size * sizeof(T));
-  }
-
-  template <>
-  std::future<void> recv<char>(char* buffer, size_t size) {
+  std::future<void> recv_impl(char* buffer, size_t size) {
     std::promise<void> recv_completed_promise;
     auto recv_completed_future = recv_completed_promise.get_future();
     if (size == 0) {
@@ -155,17 +164,6 @@ class SocketThread {
     condition_.notify_one();
     return recv_completed_future;
   }
-
- private:
-  struct SocketTask {
-    SocketTask(void* b, size_t s, std::promise<void>&& p)
-        : buffer(b), size(s), promise(std::move(p)) {}
-    SocketTask(SocketTask&& t)
-        : buffer(t.buffer), size(t.size), promise(std::move(t.promise)) {}
-    void* buffer;
-    size_t size;
-    std::promise<void> promise;
-  };
 
   bool have_tasks() {
     return !(sends_.empty() && recvs_.empty());
