@@ -98,122 +98,28 @@ using namespace std::placeholders;
 
 namespace {
 
-class KQueue {
+class SocketThread {
  public:
-  KQueue() {
-    kq_ = kqueue();
-  }
-  KQueue(KQueue&&) = delete;
-  KQueue(const KQueue&) = delete;
-
-  ~KQueue() {
-    while (!fds_.empty()) {
-      remove(*fds_.begin());
-    }
-  }
-
-  void add(int fd) {
-    if (fds_.find(fd) != fds_.end()) {
-      return;
-    }
-
+  SocketThread(int fd)
+      : fd_(fd), stop_(false), worker_(&SocketThread::worker, this) {
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-    struct kevent ev[2];
-    EV_SET(ev + 0, fd, EVFILT_WRITE, EV_ADD, 0, 0, nullptr);
-    EV_SET(ev + 1, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-    kevent(kq_, ev, 2, nullptr, 0, nullptr);
-    fds_.insert(fd);
   }
-
-  void remove(int fd) {
-    if (fds_.find(fd) == fds_.end()) {
-      return;
-    }
-
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-    struct kevent ev[2];
-    EV_SET(ev + 0, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    EV_SET(ev + 1, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    kevent(kq_, ev, 2, nullptr, 0, nullptr);
-    fds_.erase(fd);
-  }
-
-  std::pair<const std::vector<int>&, const std::vector<int>&> select() {
-    read_list_.clear();
-    write_list_.clear();
-
-    struct kevent ev[32];
-    int num_events = kevent(kq_, nullptr, 0, ev, 32, nullptr);
-    for (int i = 0; i < num_events; i++) {
-      if (ev[i].filter == EVFILT_READ) {
-        read_list_.push_back(static_cast<int>(ev[i].ident));
-      } else if (ev[i].filter == EVFILT_WRITE) {
-        write_list_.push_back(static_cast<int>(ev[i].ident));
-      }
-    }
-
-    return {read_list_, write_list_};
-  }
-
- private:
-  int kq_;
-  std::unordered_set<int> fds_;
-  std::vector<int> read_list_;
-  std::vector<int> write_list_;
-};
-
-class CommunicationThread {
- public:
-  CommunicationThread()
-      : comm_thread_(&CommunicationThread::worker, this), stop_(false) {}
-  ~CommunicationThread() {
-    {
-      std::unique_lock lock(queue_mutex_);
-      stop_ = true;
-      send_tasks_.clear();
-      recv_tasks_.clear();
-    }
+  ~SocketThread() {
+    stop_ = true;
     condition_.notify_all();
-    comm_thread_.join();
-  }
-
-  void add(int socket) {
-    std::unique_lock lock(queue_mutex_);
-    sockets_.add(socket);
-    send_tasks_.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(socket),
-        std::forward_as_tuple());
-    recv_tasks_.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(socket),
-        std::forward_as_tuple());
-  }
-
-  void add(const std::vector<int>& sockets) {
-    std::unique_lock lock(queue_mutex_);
-    for (auto s : sockets) {
-      sockets_.add(s);
-      send_tasks_.emplace(
-          std::piecewise_construct,
-          std::forward_as_tuple(s),
-          std::forward_as_tuple());
-      recv_tasks_.emplace(
-          std::piecewise_construct,
-          std::forward_as_tuple(s),
-          std::forward_as_tuple());
-    }
+    worker_.join();
+    int flags = fcntl(fd_, F_GETFL, 0);
+    fcntl(fd_, F_SETFL, flags & ~O_NONBLOCK);
   }
 
   template <typename T>
-  std::future<void> send(int socket, T* buffer, size_t size) {
-    return send<void>(socket, buffer, size * sizeof(T));
+  std::future<void> send(T* buffer, size_t size) {
+    return send<void>(buffer, size * sizeof(T));
   }
 
   template <>
-  std::future<void> send<void>(int socket, void* buffer, size_t size) {
+  std::future<void> send<void>(void* buffer, size_t size) {
     std::promise<void> send_completed_promise;
     auto send_completed_future = send_completed_promise.get_future();
     if (size == 0) {
@@ -223,7 +129,7 @@ class CommunicationThread {
 
     {
       std::unique_lock lock(queue_mutex_);
-      send_tasks_[socket].emplace(
+      sends_.emplace_back(
           SocketTask(buffer, size, std::move(send_completed_promise)));
     }
     condition_.notify_one();
@@ -231,12 +137,12 @@ class CommunicationThread {
   }
 
   template <typename T>
-  std::future<void> recv(int socket, T* buffer, size_t size) {
-    return recv<void>(socket, buffer, size * sizeof(T));
+  std::future<void> recv(T* buffer, size_t size) {
+    return recv<void>(buffer, size * sizeof(T));
   }
 
   template <>
-  std::future<void> recv<void>(int socket, void* buffer, size_t size) {
+  std::future<void> recv<void>(void* buffer, size_t size) {
     std::promise<void> recv_completed_promise;
     auto recv_completed_future = recv_completed_promise.get_future();
     if (size == 0) {
@@ -246,7 +152,7 @@ class CommunicationThread {
 
     {
       std::unique_lock lock(queue_mutex_);
-      recv_tasks_[socket].emplace(
+      recvs_.emplace_back(
           SocketTask(buffer, size, std::move(recv_completed_promise)));
     }
     condition_.notify_one();
@@ -265,23 +171,24 @@ class CommunicationThread {
   };
 
   bool have_tasks() {
-    for (auto& [_, tasks] : send_tasks_) {
-      if (!tasks.empty()) {
-        return true;
-      }
-    }
-    for (auto& [_, tasks] : recv_tasks_) {
-      if (!tasks.empty()) {
-        return true;
-      }
-    }
-    return false;
+    return !(sends_.empty() && recvs_.empty());
   }
 
   void worker() {
+    bool delete_recv = false;
+    bool delete_send = false;
     while (true) {
       {
         std::unique_lock lock(queue_mutex_);
+
+        if (delete_recv) {
+          recvs_.pop_front();
+          delete_recv = false;
+        }
+        if (delete_send) {
+          sends_.pop_front();
+          delete_send = false;
+        }
 
         if (stop_) {
           return;
@@ -295,53 +202,60 @@ class CommunicationThread {
         }
       }
 
-      auto [read, write] = sockets_.select();
-      {
-        std::unique_lock lock(queue_mutex_);
-        handle_reads(read);
-        handle_writes(write);
+      if (!recvs_.empty()) {
+        auto& task = recvs_.front();
+        ssize_t r = ::recv(fd_, task.buffer, task.size, 0);
+        if (r >= 0) {
+          task.buffer = static_cast<char*>(task.buffer) + r;
+          task.size -= r;
+          delete_recv = task.size == 0;
+        } else if (errno != EAGAIN) {
+          // TODO: Handle error
+        }
+      }
+      if (!sends_.empty()) {
+        auto& task = sends_.front();
+        ssize_t r = ::send(fd_, task.buffer, task.size, 0);
+        if (r >= 0) {
+          task.buffer = static_cast<char*>(task.buffer) + r;
+          task.size -= r;
+          delete_send = task.size == 0;
+        } else if (errno != EAGAIN) {
+          // TODO: Handle error
+        }
       }
     }
   }
 
-  void handle_socket_tasks(
-      std::unordered_map<int, std::queue<SocketTask>>& tasks,
-      const std::vector<int>& sockets,
-      std::function<ssize_t(int, void*, size_t)> operation) {
-    for (auto sock : sockets) {
-      if (tasks[sock].empty()) {
-        continue;
-      }
-
-      auto& task = tasks[sock].front();
-      ssize_t r = operation(sock, task.buffer, task.size);
-      if (r == task.size) {
-        task.promise.set_value();
-        tasks[sock].pop();
-      } else if (r > 0) {
-        task.buffer = static_cast<char*>(task.buffer) + r;
-        task.size -= r;
-      } else {
-        // TODO: Handle error
-      }
-    }
-  }
-
-  void handle_reads(const std::vector<int>& read) {
-    handle_socket_tasks(recv_tasks_, read, std::bind(::recv, _1, _2, _3, 0));
-  }
-
-  void handle_writes(const std::vector<int>& write) {
-    handle_socket_tasks(send_tasks_, write, std::bind(::send, _1, _2, _3, 0));
-  }
-
-  std::thread comm_thread_;
+  int fd_;
   bool stop_;
-  KQueue sockets_;
+  std::thread worker_;
   std::mutex queue_mutex_;
   std::condition_variable condition_;
-  std::unordered_map<int, std::queue<SocketTask>> send_tasks_;
-  std::unordered_map<int, std::queue<SocketTask>> recv_tasks_;
+  std::list<SocketTask> sends_;
+  std::list<SocketTask> recvs_;
+};
+
+class CommunicationThreads {
+ public:
+  void add(const std::vector<int>& sockets) {
+    for (int sock : sockets) {
+      threads_.emplace(sock, sock);
+    }
+  }
+
+  template <typename T>
+  std::future<void> send(int socket, T* buffer, size_t size) {
+    return threads_.at(socket).send<T>(buffer, size);
+  }
+
+  template <typename T>
+  std::future<void> recv(int socket, T* buffer, size_t size) {
+    return threads_.at(socket).recv<T>(buffer, size);
+  }
+
+ private:
+  std::unordered_map<int, SocketThread> threads_;
 };
 
 template <typename T>
@@ -650,8 +564,8 @@ class RingGroup : public GroupImpl {
     // channels. One thread to send, one to receive per socket.
     pool_.resize(send_sockets_.size() * 2);
 
-    // Register the sockets with the communication thread. This also converts
-    // them to non-blocking.
+    // Create a communication thread per socket. This also converts them to
+    // non-blocking.
     comm_.add(send_sockets_);
     comm_.add(recv_sockets_);
 
@@ -908,11 +822,10 @@ class RingGroup : public GroupImpl {
   bool verbose_;
 
   ThreadPool pool_;
+  CommunicationThreads comm_;
 
   std::vector<int> send_sockets_;
   std::vector<int> recv_sockets_;
-
-  CommunicationThread comm_;
 
   std::vector<char> buffers_;
 };
