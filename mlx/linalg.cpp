@@ -284,7 +284,7 @@ array tri_inv(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
-  return inv_impl(a, /*tri=*/true, upper, s);
+  return inv_impl(upper ? triu(a) : tril(a), /*tri=*/true, upper, s);
 }
 
 array cholesky(
