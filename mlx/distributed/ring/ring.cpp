@@ -527,58 +527,59 @@ class RingGroup : public GroupImpl {
     // first and accept after.
     if (rank_ < connect_to) {
       log_info(verbose_, "Rank", rank_, "accepting");
-      recv_sockets_ = std::move(accept_connections(nodes[rank_]));
+      sockets_left_ = std::move(accept_connections(nodes[rank_]));
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      send_sockets_ = std::move(make_connections(nodes[connect_to], verbose));
+      sockets_right_ = std::move(make_connections(nodes[connect_to], verbose));
     } else {
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      send_sockets_ = std::move(make_connections(nodes[connect_to], verbose));
+      sockets_right_ = std::move(make_connections(nodes[connect_to], verbose));
       log_info(verbose_, "Rank", rank_, "accepting");
-      recv_sockets_ = std::move(accept_connections(nodes[rank_]));
+      sockets_left_ = std::move(accept_connections(nodes[rank_]));
     }
 
-    // Failure if we couldn't make send or recv sockets
-    if (send_sockets_.empty()) {
+    // Failure if we couldn't make right or left sockets
+    if (sockets_right_.empty()) {
       std::ostringstream msg;
-      msg << "[ring] Rank " << rank_ << " has no send sockets.";
+      msg << "[ring] Rank " << rank_ << " has no sockets to the right.";
       throw std::invalid_argument(msg.str());
     }
-    if (recv_sockets_.empty()) {
+    if (sockets_left_.empty()) {
       std::ostringstream msg;
-      msg << "[ring] Rank " << rank_ << " has no recv sockets.";
+      msg << "[ring] Rank " << rank_ << " has no sockets to the left.";
       throw std::invalid_argument(msg.str());
     }
 
     // The following could be relaxed since we can define non-homogeneous rings
     // but it makes things a bit simpler for now.
-    if (send_sockets_.size() != recv_sockets_.size()) {
+    if (sockets_right_.size() != sockets_left_.size()) {
       std::ostringstream msg;
       msg << "[ring] It is required to have as many connections to the left as "
           << "to the right but rank " << rank_ << " has "
-          << send_sockets_.size() << " connections to the right and "
-          << recv_sockets_.size() << " to the left.";
+          << sockets_right_.size() << " connections to the right and "
+          << sockets_left_.size() << " to the left.";
       throw std::invalid_argument(msg.str());
     }
 
-    // Start the necessary threads for completely parallel operation on all
-    // channels. One thread to send, one to receive per socket.
-    pool_.resize(send_sockets_.size() * 2);
+    // Start the all reduce threads. One all reduce per direction per ring.
+    pool_.resize(sockets_right_.size() + sockets_left_.size());
 
     // Create a communication thread per socket. This also converts them to
     // non-blocking.
-    comm_.add(send_sockets_);
-    comm_.add(recv_sockets_);
+    comm_.add(sockets_right_);
+    comm_.add(sockets_left_);
 
     // Allocate buffers for the all sum
-    buffers_.resize(2 * send_sockets_.size() * ALL_SUM_BUFFERS * ALL_SUM_SIZE);
+    buffers_.resize(
+        (sockets_right_.size() + sockets_left_.size()) * ALL_SUM_BUFFERS *
+        ALL_SUM_SIZE);
   }
 
   ~RingGroup() {
-    for (auto s : send_sockets_) {
+    for (auto s : sockets_right_) {
       shutdown(s, 2);
       close(s);
     }
-    for (auto s : recv_sockets_) {
+    for (auto s : sockets_left_) {
       shutdown(s, 2);
       close(s);
     }
@@ -633,8 +634,8 @@ class RingGroup : public GroupImpl {
           reinterpret_cast<T*>(buffers_.data()),
           reinterpret_cast<T*>(buffer),
           size_,
-          send_sockets_[0],
-          recv_sockets_[0],
+          sockets_right_[0],
+          sockets_left_[0],
           -1);
       std::memcpy(output.data<char>(), buffer, output.nbytes());
       return;
@@ -645,11 +646,12 @@ class RingGroup : public GroupImpl {
       std::memcpy(output.data<char>(), input.data<char>(), input.nbytes());
     }
 
-    // Split the all reduces so that each member has at least 4 buffers to
+    // Split the all reduces so that each member has at least 1 buffer to
     // send/recv per segment.
     size_t n_reduces = std::max(
         std::min(
-            send_sockets_.size() * 2, output.nbytes() / (size_ * ALL_SUM_SIZE)),
+            sockets_right_.size() + sockets_left_.size(),
+            output.nbytes() / (size_ * ALL_SUM_SIZE)),
         1UL);
     size_t step = ceildiv(output.size(), n_reduces);
     std::vector<std::future<void>> all_sums;
@@ -662,8 +664,8 @@ class RingGroup : public GroupImpl {
               buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
           output.data<T>() + i * step,
           std::min(output.size(), (i + 1) * step) - i * step,
-          send_sockets_[i / 2],
-          recv_sockets_[i / 2],
+          sockets_right_[i / 2],
+          sockets_left_[i / 2],
           (i % 2) ? -1 : 1)));
     }
     for (auto& f : all_sums) {
@@ -824,8 +826,8 @@ class RingGroup : public GroupImpl {
   ThreadPool pool_;
   CommunicationThreads comm_;
 
-  std::vector<int> send_sockets_;
-  std::vector<int> recv_sockets_;
+  std::vector<int> sockets_right_;
+  std::vector<int> sockets_left_;
 
   std::vector<char> buffers_;
 };
