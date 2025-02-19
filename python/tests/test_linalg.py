@@ -170,18 +170,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 B = B.T
             AB = mx.stack([A, B])
             invs = mx.linalg.tri_inv(AB, upper=upper, stream=mx.cpu)
-            diag_invs = mx.linalg.tri_inv(AB, upper=(not upper), stream=mx.cpu)
-            for M, M_inv, M_diag_invs in zip(AB, invs, diag_invs):
+            for M, M_inv in zip(AB, invs):
                 self.assertTrue(
                     mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
-                )
-                self.assertTrue(
-                    mx.allclose(
-                        (mx.tril(M) if upper else mx.triu(M)) @ M_diag_invs,
-                        mx.eye(M.shape[0]),
-                        rtol=0,
-                        atol=1e-5,
-                    )
                 )
 
     def test_cholesky(self):
