@@ -2,12 +2,16 @@ cmake_minimum_required(VERSION 3.25)
 
 if(NOT MLX_VERSION)
   set(MLX_VERSION 0.23.1)
+  set(MLX_PROJECT_VERSION ${MLX_VERSION})
+else()
+  string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" MLX_PROJECT_VERSION
+                       ${MLX_VERSION})
 endif()
 
 project(
   mlx
   LANGUAGES C CXX
-  VERSION ${MLX_VERSION})
+  VERSION ${MLX_PROJECT_VERSION})
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
