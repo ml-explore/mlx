@@ -95,6 +95,30 @@ using namespace std::chrono_literals;
 
 namespace {
 
+template <typename T>
+void log(std::ostream& os, T first) {
+  os << first << std::endl;
+}
+
+template <typename T, typename... Args>
+void log(std::ostream& os, T first, Args... args) {
+  log(os << first << " ", args...);
+}
+
+template <typename... Args>
+void log_info(bool verbose, Args... args) {
+  if (!verbose) {
+    return;
+  }
+
+  log(std::cerr, "[ring]", args...);
+}
+
+template <typename T, typename U>
+decltype(T() * U()) ceildiv(T a, U b) {
+  return (a + b - 1) / b;
+}
+
 class SocketThread {
  public:
   SocketThread(int fd)
@@ -207,7 +231,9 @@ class SocketThread {
           task.size -= r;
           delete_recv = task.size == 0;
         } else if (errno != EAGAIN) {
-          // TODO: Handle error
+          log_info(
+              true, "Receiving from socket", fd_, "failed with errno", errno);
+          return;
         }
       }
       if (!sends_.empty()) {
@@ -218,7 +244,8 @@ class SocketThread {
           task.size -= r;
           delete_send = task.size == 0;
         } else if (errno != EAGAIN) {
-          // TODO: Handle error
+          log_info(true, "Sending to socket", fd_, "failed with errno", errno);
+          return;
         }
       }
     }
@@ -254,30 +281,6 @@ class CommunicationThreads {
  private:
   std::unordered_map<int, SocketThread> threads_;
 };
-
-template <typename T>
-void log(std::ostream& os, T first) {
-  os << first << std::endl;
-}
-
-template <typename T, typename... Args>
-void log(std::ostream& os, T first, Args... args) {
-  log(os << first << " ", args...);
-}
-
-template <typename... Args>
-void log_info(bool verbose, Args... args) {
-  if (!verbose) {
-    return;
-  }
-
-  log(std::cerr, "[ring]", args...);
-}
-
-template <typename T, typename U>
-decltype(T() * U()) ceildiv(T a, U b) {
-  return (a + b - 1) / b;
-}
 
 struct address_t {
   sockaddr_storage addr;
