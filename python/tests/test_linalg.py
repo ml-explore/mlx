@@ -175,6 +175,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
                     mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
                 )
 
+        # Ensure that tri_inv will 0-out the supposedly 0 triangle
+        x = mx.random.normal((2, 8, 8))
+        y1 = mx.linalg.tri_inv(x, upper=True, stream=mx.cpu)
+        y2 = mx.linalg.tri_inv(x, upper=False, stream=mx.cpu)
+        self.assertTrue(mx.all(y1 == mx.triu(y1)))
+        self.assertTrue(mx.all(y2 == mx.tril(y2)))
+
     def test_cholesky(self):
         sqrtA = mx.array(
             [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=mx.float32
