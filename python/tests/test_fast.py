@@ -158,7 +158,17 @@ class TestFast(mlx_tests.MLXTestCase):
         )
         self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[mx.float32])
 
+        # Test raises with integer inputs
+        dims, _, base, scale, offset, traditional = defaults
+        x = (mx.random.uniform(shape=(2, T, dims)) * 10).astype(mx.int32)
+        with self.assertRaises(ValueError):
+            y = mx.fast.rope(
+                x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+            )
+
     def test_rope_with_freqs(self):
+        mx.random.seed(0)
+
         # Check throws
         T = 4
         dims = 8
