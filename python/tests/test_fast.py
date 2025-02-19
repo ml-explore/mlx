@@ -167,6 +167,8 @@ class TestFast(mlx_tests.MLXTestCase):
             )
 
     def test_rope_with_freqs(self):
+        mx.random.seed(0)
+
         # Check throws
         T = 4
         dims = 8
