@@ -13,12 +13,20 @@ std::string version() {
   return std::string(TOSTRING(MLX_VERSION));
 }
 
-int version_major() { return MLX_VERSION_MAJOR; }
+constexpr int version_major() {
+  return MLX_VERSION_MAJOR;
+}
 
-int version_minor() { return MLX_VERSION_MINOR; }
+constexpr int version_minor() {
+  return MLX_VERSION_MINOR;
+}
 
-int version_patch() { return MLX_VERSION_PATCH; }
+constexpr int version_patch() {
+  return MLX_VERSION_PATCH;
+}
 
-int version_numeric() { return MLX_VERSION_NUMERIC; }
+constexpr int version_numeric() {
+  return MLX_VERSION_NUMERIC;
+}
 
 } // namespace mlx::core
