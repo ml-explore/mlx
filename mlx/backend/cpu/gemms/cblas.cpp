@@ -8,20 +8,27 @@ namespace mlx::core {
 
 template <>
 void matmul<float>(
-    const array& a,
-    const array& b,
-    array& out,
+    const float* a,
+    const float* b,
+    float* out,
     bool a_transposed,
     bool b_transposed,
     size_t lda,
     size_t ldb,
+    size_t ldc,
     float alpha,
-    float beta) {
-  size_t M = a.shape(-2);
-  size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
+    float beta,
+    size_t batch_size,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides) {
+  auto ndim = a_shape.size();
+  size_t M = a_shape[ndim - 2];
+  size_t N = b_shape[ndim - 1];
+  size_t K = a_shape[ndim - 1];
 
-  for (int i = 0; i < (a.size() / (M * K)); ++i) {
+  for (int i = 0; i < batch_size; ++i) {
     cblas_sgemm(
         CblasRowMajor,
         a_transposed ? CblasTrans : CblasNoTrans, // transA
@@ -29,34 +36,40 @@ void matmul<float>(
         M,
         N,
         K,
-        alpha, // alpha
-        a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
+        alpha,
+        a + elem_to_loc(M * K * i, a_shape, a_strides),
         lda,
-        b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
+        b + elem_to_loc(K * N * i, b_shape, b_strides),
         ldb,
-        beta, // beta
-        out.data<float>() + M * N * i,
-        out.shape(-1) // ldc
-    );
+        beta,
+        out + M * N * i,
+        ldc);
   }
 }
 
 template <>
 void matmul<double>(
-    const array& a,
-    const array& b,
-    array& out,
+    const double* a,
+    const double* b,
+    double* out,
     bool a_transposed,
     bool b_transposed,
     size_t lda,
     size_t ldb,
+    size_t ldc,
     float alpha,
-    float beta) {
-  size_t M = a.shape(-2);
-  size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
+    float beta,
+    size_t batch_size,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides) {
+  auto ndim = a_shape.size();
+  size_t M = a_shape[ndim - 2];
+  size_t N = b_shape[ndim - 1];
+  size_t K = a_shape[ndim - 1];
 
-  for (int i = 0; i < (a.size() / (M * K)); ++i) {
+  for (int i = 0; i < batch_size; ++i) {
     cblas_dgemm(
         CblasRowMajor,
         a_transposed ? CblasTrans : CblasNoTrans, // transA
@@ -64,15 +77,14 @@ void matmul<double>(
         M,
         N,
         K,
-        alpha, // alpha
-        a.data<double>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
+        alpha,
+        a + elem_to_loc(M * K * i, a_shape, a_strides),
         lda,
-        b.data<double>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
+        b + elem_to_loc(K * N * i, b_shape, b_strides),
         ldb,
-        beta, // beta
-        out.data<double>() + M * N * i,
-        out.shape(-1) // ldc
-    );
+        beta,
+        out + M * N * i,
+        ldc);
   }
 }
 

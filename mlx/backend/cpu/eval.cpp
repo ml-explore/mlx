@@ -1,5 +1,4 @@
 // Copyright © 2025 Apple Inc.
-
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -8,11 +7,9 @@
 namespace mlx::core::cpu {
 
 // Changes to make:
-// - try to unify cpu and gpu work submission
-// - CPU should put kernels on the cpu async stream
-// - Fix load, distributed to run on CPU
-// - CPU-only version of fence
+// - Try to unify cpu and gpu work submission
 // - Figure out what to do about time-out issues
+// - Add siblings to fence wait
 
 void eval(array& arr, bool signal) {
   auto s = arr.primitive().stream();

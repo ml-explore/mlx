@@ -365,13 +365,19 @@ void Compiled::eval_cpu(
     args.push_back(x.data<void>());
     encoder.set_output_array(x);
   }
+  Shape out_shape;
   if (!contiguous) {
-    args.push_back((void*)outputs[0].shape().data());
+    out_shape = outputs[0].shape();
+    args.push_back((void*)out_shape.data());
   } else {
     args.push_back((void*)outputs[0].data_size());
   }
   auto fun = (void (*)(void**))fn_ptr;
-  encoder.dispatch(fun, args.data());
+  encoder.dispatch(
+      [fun,
+       args = std::move(args),
+       strides = std::move(strides),
+       out_shape = std::move(out_shape)]() mutable { fun(args.data()); });
 }
 
 } // namespace mlx::core

@@ -8,54 +8,74 @@
 
 namespace mlx::core {
 
-Fence::Fence() {
-  auto d = metal::device(Device::gpu).mtl_device();
-  if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
-    use_fast_ = false;
-  } else if (__builtin_available(macOS 15, iOS 18, *)) {
-    use_fast_ = env::metal_fast_synch();
-  }
-  if (!use_fast_) {
-    // Wraps Metal SharedEvent
-    auto dtor = [](void* ptr) {
+struct FenceImpl {
+  FenceImpl() {
+    auto d = metal::device(Device::gpu).mtl_device();
+    if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
+      use_fast = false;
+    } else if (__builtin_available(macOS 15, iOS 18, *)) {
+      use_fast = env::metal_fast_synch();
+    }
+
+    if (!use_fast) {
       auto p = metal::new_scoped_memory_pool();
-      static_cast<MTL::SharedEvent*>(ptr)->release();
-    };
-    auto p = metal::new_scoped_memory_pool();
-    fence_ = std::shared_ptr<void>(d->newSharedEvent(), dtor);
-  } else {
-    auto dtor = [](void* buf) {
-      allocator::free(static_cast<MTL::Buffer*>(buf));
-    };
-    auto buf = allocator::malloc_or_wait(sizeof(uint32_t)).ptr();
-    fence_ = std::shared_ptr<void>(buf, dtor);
-    cpu_value()[0] = 0;
+      fence = static_cast<void*>(d->newSharedEvent());
+    } else {
+      auto buf = allocator::malloc_or_wait(sizeof(uint32_t)).ptr();
+      fence = static_cast<void*>(buf);
+      cpu_value()[0] = 0;
+    }
   }
+
+  ~FenceImpl() {
+    if (!use_fast) {
+      // Wraps Metal SharedEvent
+      auto p = metal::new_scoped_memory_pool();
+      static_cast<MTL::SharedEvent*>(fence)->release();
+    } else {
+      allocator::free(static_cast<MTL::Buffer*>(fence));
+    }
+  }
+  bool use_fast;
+  uint32_t count{0};
+  void* fence;
+
+  std::atomic_uint* cpu_value() {
+    return static_cast<std::atomic_uint*>(
+        static_cast<MTL::Buffer*>(fence)->contents());
+  }
+};
+
+Fence::Fence(Stream) {
+  auto dtor = [](void* ptr) { delete static_cast<FenceImpl*>(ptr); };
+  fence_ = std::shared_ptr<void>(new FenceImpl{}, dtor);
 }
 
 void Fence::wait(Stream stream, const array& array) {
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [*this]() mutable {
-      if (!use_fast_) {
-        if (!static_cast<MTL::SharedEvent*>(fence_.get())
-                 ->waitUntilSignaledValue(count_, -1)) {
-          throw std::runtime_error("[Event::wait] Timed out");
+    scheduler::enqueue(stream, [fence_ = fence_]() mutable {
+      auto& f = *static_cast<FenceImpl*>(fence_.get());
+      if (!f.use_fast) {
+        if (!static_cast<MTL::SharedEvent*>(f.fence)->waitUntilSignaledValue(
+                f.count, -1)) {
+          throw std::runtime_error("[Fence::wait] Timed out");
         }
         return;
       }
-      while (cpu_value()[0] < count_) {
+      while (f.cpu_value()[0] < f.count) {
       }
     });
     return;
   }
 
+  auto& f = *static_cast<FenceImpl*>(fence_.get());
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
 
-  if (!use_fast_) {
+  if (!f.use_fast) {
     d.end_encoding(idx);
     auto command_buffer = d.get_command_buffer(idx);
-    command_buffer->encodeWait(static_cast<MTL::Event*>(fence_.get()), count_);
+    command_buffer->encodeWait(static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
         [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
     return;
@@ -71,38 +91,39 @@ void Fence::wait(Stream stream, const array& array) {
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  auto buf = static_cast<MTL::Buffer*>(fence_.get());
+  auto buf = static_cast<MTL::Buffer*>(f.fence);
   compute_encoder.set_buffer(buf, 0);
-  compute_encoder.set_bytes(count_, 1);
+  compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
-      [fence = fence_](MTL::CommandBuffer* cbuf) {});
+      [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
 void Fence::update(Stream stream, const std::vector<array>& arrays) {
-  count_++;
+  auto& f = *static_cast<FenceImpl*>(fence_.get());
+  f.count++;
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [*this]() mutable {
-      if (!use_fast_) {
-        static_cast<MTL::SharedEvent*>(fence_.get())->setSignaledValue(count_);
+    scheduler::enqueue(stream, [fence_ = fence_]() mutable {
+      auto& f = *static_cast<FenceImpl*>(fence_.get());
+      if (!f.use_fast) {
+        static_cast<MTL::SharedEvent*>(f.fence)->setSignaledValue(f.count);
         return;
       }
 
-      cpu_value()[0] = count_;
+      f.cpu_value()[0] = f.count;
     });
     return;
   }
 
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
-
-  if (!use_fast_) {
+  if (!f.use_fast) {
     d.end_encoding(idx);
     auto command_buffer = d.get_command_buffer(idx);
     command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(fence_.get()), count_);
+        static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
         [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
     return;
@@ -130,18 +151,13 @@ void Fence::update(Stream stream, const std::vector<array>& arrays) {
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  auto buf = static_cast<MTL::Buffer*>(fence_.get());
+  auto buf = static_cast<MTL::Buffer*>(f.fence);
   compute_encoder.set_buffer(buf, 0);
-  compute_encoder.set_bytes(count_, 1);
+  compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
-      [fence = fence_](MTL::CommandBuffer* cbuf) {});
-}
-
-std::atomic_uint* Fence::cpu_value() {
-  return static_cast<std::atomic_uint*>(
-      static_cast<MTL::Buffer*>(fence_.get())->contents());
+      [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
 } // namespace mlx::core

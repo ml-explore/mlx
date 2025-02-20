@@ -43,7 +43,8 @@ void reshape(const array& in, array& out, Stream s) {
     shared_buffer_reshape(in, out_strides, out);
   }
 }
-array compute_dynamic_offset(
+
+static array compute_dynamic_offset(
     const array& indices,
     const Strides& strides,
     const std::vector<int>& axes,
