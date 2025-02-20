@@ -637,6 +637,9 @@ class RingGroup : public GroupImpl {
       throw std::runtime_error(msg.str());
     }
   }
+  void barrier() override {
+    throw std::runtime_error("[ring] Barrier not supported.");
+  }
 
  private:
   template <typename T>

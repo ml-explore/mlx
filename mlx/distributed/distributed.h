@@ -41,6 +41,8 @@ struct Group {
     return group_;
   }
 
+  void barrier();
+
  private:
   std::shared_ptr<detail::GroupImpl> group_{nullptr};
 };
