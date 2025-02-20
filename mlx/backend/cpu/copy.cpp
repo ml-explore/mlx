@@ -6,7 +6,6 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/simd/simd.h"
-#include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core {

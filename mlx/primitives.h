@@ -1231,11 +1231,7 @@ class Load : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         reader_(std::move(reader)),
         offset_(offset),
-        swap_endianness_(swap_endianness) {
-    if (stream.device == Device::gpu) {
-      io_stream();
-    }
-  }
+        swap_endianness_(swap_endianness) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1243,10 +1239,6 @@ class Load : public UnaryPrimitive {
   DEFINE_PRINT(Load)
 
  private:
-  Stream& io_stream() {
-    static Stream io_stream = new_stream(Device::cpu);
-    return io_stream;
-  };
   std::shared_ptr<io::Reader> reader_;
   size_t offset_;
   bool swap_endianness_;
