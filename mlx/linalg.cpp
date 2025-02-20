@@ -539,10 +539,6 @@ void validate_lu(
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-
-  if (a.shape(-1) != a.shape(-2)) {
-    throw std::invalid_argument(fname + " Only defined for square matrices.");
-  }
 }
 
 std::vector<array> lu_helper(const array& a, StreamOrDevice s /* = {} */) {
@@ -552,8 +548,10 @@ std::vector<array> lu_helper(const array& a, StreamOrDevice s /* = {} */) {
   Shape pivots_shape(a.shape().begin(), a.shape().end() - 2);
   pivots_shape.push_back(std::min(m, n));
 
+  Shape row_idx_shape(a.shape().begin(), a.shape().end() - 1);
+
   return array::make_arrays(
-      {a.shape(), pivots_shape, pivots_shape},
+      {a.shape(), pivots_shape, row_idx_shape},
       {a.dtype(), uint32, uint32},
       std::make_shared<LUF>(to_stream(s)),
       {astype(a, a.dtype(), s)});
@@ -565,10 +563,24 @@ std::vector<array> lu(const array& a, StreamOrDevice s /* = {} */) {
   auto out = lu_helper(a, s);
   auto& LU = out[0];
   auto& row_pivots = out[2];
-
-  int N = a.shape(-1);
-  auto L = add(tril(LU, /* k = */ -1, s), eye(N, s), s);
+  auto L = tril(LU, /* k = */ -1, s);
   auto U = triu(LU, /* k = */ 0, s);
+
+  int M = a.shape(-2);
+  int N = a.shape(-1);
+  int K = std::min(M, N);
+  if (N != K) {
+    auto start = Shape(L.ndim(), 0);
+    auto stop = L.shape();
+    stop.back() = K;
+    L = slice(L, std::move(start), std::move(stop), s);
+  } else if (M != K) {
+    auto start = Shape(U.ndim(), 0);
+    auto stop = U.shape();
+    stop[U.ndim() - 2] = K;
+    U = slice(U, std::move(start), std::move(stop), s);
+  }
+  L = add(L, eye(M, K, s), s);
   return {row_pivots, L, U};
 }
 
