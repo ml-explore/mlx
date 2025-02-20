@@ -2,6 +2,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/primitives.h"
 
@@ -22,13 +23,6 @@ void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
   const int N = a.shape(-1);
   const int K = std::min(M, N);
 
-  // A of shape M x N. The leading dimension is N since lapack receives Aᵀ.
-  const int lda = N;
-  // U of shape M x M. (N x N in lapack).
-  const int ldu = N;
-  // Vᵀ of shape N x N. (M x M in lapack).
-  const int ldvt = M;
-
   size_t num_matrices = a.size() / (M * N);
 
   // lapack clobbers the input, so we have to make a copy.
@@ -44,100 +38,122 @@ void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
   s.set_data(allocator::malloc_or_wait(s.nbytes()));
   vt.set_data(allocator::malloc_or_wait(vt.nbytes()));
 
-  static constexpr auto job_u = "V";
-  static constexpr auto job_vt = "V";
-  static constexpr auto range = "A";
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(in);
+  encoder.set_output_array(u);
+  encoder.set_output_array(s);
+  encoder.set_output_array(vt);
+  auto in_ptr = in.data<T>();
+  auto u_ptr = u.data<T>();
+  auto s_ptr = s.data<T>();
+  auto vt_ptr = vt.data<T>();
+  encoder.dispatch([in_ptr, u_ptr, s_ptr, vt_ptr, M, N, K, num_matrices]() {
+    // A of shape M x N. The leading dimension is N since lapack receives Aᵀ.
+    const int lda = N;
+    // U of shape M x M. (N x N in lapack).
+    const int ldu = N;
+    // Vᵀ of shape N x N. (M x M in lapack).
+    const int ldvt = M;
 
-  // Will contain the number of singular values after the call has returned.
-  int ns = 0;
-  T workspace_dimension = 0;
+    static constexpr auto job_u = "V";
+    static constexpr auto job_vt = "V";
+    static constexpr auto range = "A";
 
-  // Will contain the indices of eigenvectors that failed to converge (not used
-  // here but required by lapack).
-  auto iwork = array::Data{allocator::malloc_or_wait(sizeof(int) * 12 * K)};
+    // Will contain the number of singular values after the call has returned.
+    int ns = 0;
+    T workspace_dimension = 0;
 
-  static const int lwork_query = -1;
+    // Will contain the indices of eigenvectors that failed to converge (not
+    // used here but required by lapack).
+    auto iwork = array::Data{allocator::malloc_or_wait(sizeof(int) * 12 * K)};
 
-  static const int ignored_int = 0;
-  static const T ignored_float = 0;
+    static const int lwork_query = -1;
 
-  int info;
+    static const int ignored_int = 0;
+    static const T ignored_float = 0;
 
-  // Compute workspace size.
-  gesvdx<T>(
-      /* jobu = */ job_u,
-      /* jobvt = */ job_vt,
-      /* range = */ range,
-      // M and N are swapped since lapack expects column-major.
-      /* m = */ &N,
-      /* n = */ &M,
-      /* a = */ nullptr,
-      /* lda = */ &lda,
-      /* vl = */ &ignored_float,
-      /* vu = */ &ignored_float,
-      /* il = */ &ignored_int,
-      /* iu = */ &ignored_int,
-      /* ns = */ &ns,
-      /* s = */ nullptr,
-      /* u = */ nullptr,
-      /* ldu = */ &ldu,
-      /* vt = */ nullptr,
-      /* ldvt = */ &ldvt,
-      /* work = */ &workspace_dimension,
-      /* lwork = */ &lwork_query,
-      /* iwork = */ static_cast<int*>(iwork.buffer.raw_ptr()),
-      /* info = */ &info);
+    int info;
 
-  if (info != 0) {
-    std::stringstream ss;
-    ss << "[SVD::eval_cpu] workspace calculation failed with code " << info;
-    throw std::runtime_error(ss.str());
-  }
-
-  const int lwork = workspace_dimension;
-  auto scratch = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
-
-  // Loop over matrices.
-  for (int i = 0; i < num_matrices; i++) {
-    gesvdx<T>(
+    // Compute workspace size.
+    MLX_LAPACK_FUNC(sgesvdx)
+    (
         /* jobu = */ job_u,
         /* jobvt = */ job_vt,
         /* range = */ range,
         // M and N are swapped since lapack expects column-major.
         /* m = */ &N,
         /* n = */ &M,
-        /* a = */ in.data<T>() + M * N * i,
+        /* a = */ nullptr,
         /* lda = */ &lda,
         /* vl = */ &ignored_float,
         /* vu = */ &ignored_float,
         /* il = */ &ignored_int,
         /* iu = */ &ignored_int,
         /* ns = */ &ns,
-        /* s = */ s.data<T>() + K * i,
-        // According to the identity above, lapack will write Vᵀᵀ as U.
-        /* u = */ vt.data<T>() + N * N * i,
+        /* s = */ nullptr,
+        /* u = */ nullptr,
         /* ldu = */ &ldu,
-        // According to the identity above, lapack will write Uᵀ as Vᵀ.
-        /* vt = */ u.data<T>() + M * M * i,
+        /* vt = */ nullptr,
         /* ldvt = */ &ldvt,
-        /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
-        /* lwork = */ &lwork,
+        /* work = */ &workspace_dimension,
+        /* lwork = */ &lwork_query,
         /* iwork = */ static_cast<int*>(iwork.buffer.raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "[SVD::eval_cpu] failed with code " << info;
+      ss << "[SVD::eval_cpu] workspace calculation failed with code "
+         << info;
       throw std::runtime_error(ss.str());
     }
 
-    if (ns != K) {
-      std::stringstream ss;
-      ss << "[SVD::eval_cpu] expected " << K << " singular values, but " << ns
-         << " were computed.";
-      throw std::runtime_error(ss.str());
+    const int lwork = workspace_dimension;
+    auto scratch =
+        array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
+
+    // Loop over matrices.
+    for (int i = 0; i < num_matrices; i++) {
+      MLX_LAPACK_FUNC(sgesvdx)
+      (
+          /* jobu = */ job_u,
+          /* jobvt = */ job_vt,
+          /* range = */ range,
+          // M and N are swapped since lapack expects column-major.
+          /* m = */ &N,
+          /* n = */ &M,
+          /* a = */ in_ptr + M * N * i,
+          /* lda = */ &lda,
+          /* vl = */ &ignored_float,
+          /* vu = */ &ignored_float,
+          /* il = */ &ignored_int,
+          /* iu = */ &ignored_int,
+          /* ns = */ &ns,
+          /* s = */ s_ptr + K * i,
+          // According to the identity above, lapack will write Vᵀᵀ as U.
+          /* u = */ vt_ptr + N * N * i,
+          /* ldu = */ &ldu,
+          // According to the identity above, lapack will write Uᵀ as Vᵀ.
+          /* vt = */ u_ptr + M * M * i,
+          /* ldvt = */ &ldvt,
+          /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
+          /* lwork = */ &lwork,
+          /* iwork = */ static_cast<int*>(iwork.buffer.raw_ptr()),
+          /* info = */ &info);
+
+      if (info != 0) {
+        std::stringstream ss;
+        ss << "svd_impl: sgesvdx_ failed with code " << info;
+        throw std::runtime_error(ss.str());
+      }
+
+      if (ns != K) {
+        std::stringstream ss;
+        ss << "svd_impl: expected " << K << " singular values, but " << ns
+           << " were computed.";
+        throw std::runtime_error(ss.str());
+      }
     }
-  }
+  });
 }
 
 void SVD::eval_cpu(

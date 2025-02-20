@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/utils.h"
@@ -20,6 +22,8 @@ void copy_inplace(
     int64_t i_offset,
     int64_t o_offset,
     CopyType ctype,
-    Stream stream);
+    Stream stream,
+    const std::optional<array>& dynamic_i_offset = std::nullopt,
+    const std::optional<array>& dynamic_o_offset = std::nullopt);
 
 } // namespace mlx::core

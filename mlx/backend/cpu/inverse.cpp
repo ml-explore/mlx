@@ -2,20 +2,21 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 template <typename T>
-void general_inv(array& inv, int N, int i) {
+void general_inv(T* inv, int N) {
   int info;
   auto ipiv = array::Data{allocator::malloc_or_wait(sizeof(int) * N)};
   // Compute LU factorization.
   getrf<T>(
       /* m = */ &N,
       /* n = */ &N,
-      /* a = */ inv.data<T>() + N * N * i,
+      /* a = */ inv,
       /* lda = */ &N,
       /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
       /* info = */ &info);
@@ -53,7 +54,7 @@ void general_inv(array& inv, int N, int i) {
   // Compute inverse.
   getri<T>(
       /* m = */ &N,
-      /* a = */ inv.data<T>() + N * N * i,
+      /* a = */ inv,
       /* lda = */ &N,
       /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
       /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
@@ -68,29 +69,28 @@ void general_inv(array& inv, int N, int i) {
 }
 
 template <typename T>
-void tri_inv(array& inv, int N, int i, bool upper) {
+void tri_inv(T* inv, int N, bool upper) {
   const char uplo = upper ? 'L' : 'U';
   const char diag = 'N';
-  T* data = inv.data<T>() + N * N * i;
   int info;
   trtri<T>(
       /* uplo = */ &uplo,
       /* diag = */ &diag,
       /* N = */ &N,
-      /* a = */ data,
+      /* a = */ inv,
       /* lda = */ &N,
       /* info = */ &info);
 
   // zero out the other triangle
   if (upper) {
     for (int i = 0; i < N; i++) {
-      std::fill(data, data + i, 0.0f);
-      data += N;
+      std::fill(inv, inv + i, 0.0f);
+      inv += N;
     }
   } else {
     for (int i = 0; i < N; i++) {
-      std::fill(data + i + 1, data + N, 0.0f);
-      data += N;
+      std::fill(inv + i + 1, inv + N, 0.0f);
+      inv += N;
     }
   }
 
@@ -124,12 +124,22 @@ void inverse_impl(
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
 
-  for (int i = 0; i < num_matrices; i++) {
-    if (tri) {
-      tri_inv<T>(inv, N, i, upper);
-    } else {
-      general_inv<T>(inv, N, i);
-    }
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_output_array(inv);
+
+  auto inv_ptr = inv.data<float>();
+  if (tri) {
+    encoder.dispatch([inv_ptr, N, num_matrices, upper]() {
+      for (int i = 0; i < num_matrices; i++) {
+        tri_inv<T>(inv_ptr + N * N * i, N, upper);
+      }
+    });
+  } else {
+    encoder.dispatch([inv_ptr, N, num_matrices]() {
+      for (int i = 0; i < num_matrices; i++) {
+        general_inv<T>(inv_ptr + N * N * i, N);
+      }
+    });
   }
 }
 

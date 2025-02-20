@@ -47,7 +47,7 @@ void AllReduce::eval_cpu(
   auto in = donate_or_copy(inputs[0], outputs[0]);
   switch (reduce_type_) {
     case Sum:
-      distributed::detail::all_sum(group(), in, outputs[0]);
+      distributed::detail::all_sum(group(), in, outputs[0], stream());
       break;
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
@@ -63,7 +63,7 @@ void AllGather::eval_cpu(
   auto in = ensure_row_contiguous(inputs[0], stream());
   outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
 
-  distributed::detail::all_gather(group(), in, outputs[0]);
+  distributed::detail::all_gather(group(), in, outputs[0], stream());
 }
 
 void Send::eval_cpu(
@@ -73,7 +73,7 @@ void Send::eval_cpu(
   assert(outputs.size() == 1);
 
   auto in = ensure_row_contiguous(inputs[0], stream());
-  distributed::detail::send(group(), in, dst_);
+  distributed::detail::send(group(), in, dst_, stream());
   outputs[0].copy_shared_buffer(inputs[0]);
 }
 
@@ -84,7 +84,7 @@ void Recv::eval_cpu(
   assert(outputs.size() == 1);
 
   outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
-  distributed::detail::recv(group(), outputs[0], src_);
+  distributed::detail::recv(group(), outputs[0], src_, stream());
 }
 
 } // namespace mlx::core::distributed

@@ -64,7 +64,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
   std::vector<Stream> streams;
 
   // Event for signaling the computation is complete
-  auto event = Event{};
+  auto event = Event{stream};
 
   {
     // Record the degree of each input
@@ -217,7 +217,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
       // TODO add siblings here
       auto it = fences.find(stream.index);
       if (it == fences.end()) {
-        it = fences.emplace(stream.index, Fence{}).first;
+        it = fences.emplace(stream.index, Fence{stream}).first;
         streams.push_back(stream);
       }
       it->second.update(stream, {arr});

@@ -73,7 +73,9 @@ void copy_general_general(
     const Strides& i_strides,
     const Strides& o_strides,
     int64_t i_offset,
-    int64_t o_offset) {
+    int64_t o_offset,
+    const std::optional<array>& dynamic_i_offset,
+    const std::optional<array>& dynamic_o_offset) {
   auto src_ptr = src.data<SrcT>() + i_offset;
   auto dst_ptr = dst.data<DstT>() + o_offset;
 
@@ -81,7 +83,7 @@ void copy_general_general(
   encoder.set_input_array(src);
   encoder.set_output_array(dst);
   if (data_shape.empty()) {
-    encoder.dispatch([src_ptr, dst_ptr]() {
+    encoder.dispatch([src_ptr, dst_ptr]() mutable {
       auto val = static_cast<DstT>(*src_ptr);
       *dst_ptr = val;
     });
@@ -89,13 +91,27 @@ void copy_general_general(
   }
   auto [shape, strides] =
       collapse_contiguous_dims(data_shape, {i_strides, o_strides});
+  auto i_offset_ptr =
+      dynamic_i_offset ? dynamic_i_offset->data<int64_t>() : nullptr;
+  auto o_offset_ptr =
+      dynamic_o_offset ? dynamic_o_offset->data<int64_t>() : nullptr;
+
   int ndim = shape.size();
   if (ndim < 3) {
     encoder.dispatch([src_ptr,
                       dst_ptr,
                       ndim,
                       shape = std::move(shape),
-                      strides = std::move(strides)]() {
+                      strides = std::move(strides),
+                      i_offset_ptr,
+                      o_offset_ptr]() mutable {
+      if (i_offset_ptr) {
+        src_ptr += i_offset_ptr[0];
+      }
+      if (o_offset_ptr) {
+        dst_ptr += o_offset_ptr[0];
+      }
+
       if (ndim == 1) {
         copy_dims<SrcT, DstT, 1>(
             src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
@@ -114,7 +130,16 @@ void copy_general_general(
                     ndim,
                     size = src.size(),
                     shape = std::move(shape),
-                    strides = std::move(strides)]() {
+                    strides = std::move(strides),
+                    i_offset_ptr,
+                    o_offset_ptr]() mutable {
+    if (i_offset_ptr) {
+      src_ptr += i_offset_ptr[0];
+    }
+    if (o_offset_ptr) {
+      dst_ptr += o_offset_ptr[0];
+    }
+
     ContiguousIterator in(shape, strides[0], ndim - 3);
     ContiguousIterator out(shape, strides[1], ndim - 3);
     auto stride = std::accumulate(
@@ -136,7 +161,16 @@ void copy_general_general(
 template <typename SrcT, typename DstT>
 inline void copy_general_general(const array& src, array& dst, Stream stream) {
   copy_general_general<SrcT, DstT>(
-      src, dst, stream, src.shape(), src.strides(), dst.strides(), 0, 0);
+      src,
+      dst,
+      stream,
+      src.shape(),
+      src.strides(),
+      dst.strides(),
+      0,
+      0,
+      std::nullopt,
+      std::nullopt);
 }
 
 template <typename SrcT, typename DstT>
@@ -148,7 +182,9 @@ void copy_general(
     const Strides& i_strides,
     const Strides&,
     int64_t i_offset,
-    int64_t o_offset) {
+    int64_t o_offset,
+    const std::optional<array>& dynamic_i_offset,
+    const std::optional<array>& dynamic_o_offset) {
   copy_general_general<SrcT, DstT>(
       src,
       dst,
@@ -157,7 +193,9 @@ void copy_general(
       i_strides,
       make_contiguous_strides(data_shape),
       i_offset,
-      o_offset);
+      o_offset,
+      dynamic_i_offset,
+      dynamic_o_offset);
 }
 
 template <typename SrcT, typename DstT>
@@ -170,7 +208,9 @@ inline void copy_general(const array& src, array& dst, Stream stream) {
       src.strides(),
       make_contiguous_strides(src.shape()),
       0,
-      0);
+      0,
+      std::nullopt,
+      std::nullopt);
 }
 
 template <typename SrcT, typename DstT, typename... Args>
@@ -337,7 +377,9 @@ void copy_inplace(
     int64_t i_offset,
     int64_t o_offset,
     CopyType ctype,
-    Stream stream) {
+    Stream stream,
+    const std::optional<array>& dynamic_i_offset, /* = std::nullopt */
+    const std::optional<array>& dynamic_o_offset /* = std::nullopt */) {
   switch (ctype) {
     case CopyType::General:
     case CopyType::GeneralGeneral:
@@ -350,7 +392,9 @@ void copy_inplace(
           i_strides,
           o_strides,
           i_offset,
-          o_offset);
+          o_offset,
+          dynamic_i_offset,
+          dynamic_o_offset);
       break;
     case CopyType::Scalar:
     case CopyType::Vector:
