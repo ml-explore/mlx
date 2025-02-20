@@ -200,6 +200,11 @@ SafetensorsLoad load_safetensors(
         "[load_safetensors] Failed to open " + in_stream->label());
   }
 
+  auto stream = to_stream(s, Device::cpu);
+  if (stream.device != Device::cpu) {
+    throw std::runtime_error("[load_safetensors] Must run on a CPU stream.");
+  }
+
   uint64_t jsonHeaderLength = 0;
   // This is the same limit as in the original Rust Safetensors code.
   constexpr uint64_t kMaxJsonHeaderLength = 100000000;
@@ -236,7 +241,7 @@ SafetensorsLoad load_safetensors(
         shape,
         type,
         std::make_shared<Load>(
-            to_stream(s), in_stream, offset + data_offsets.at(0), false),
+            stream, in_stream, offset + data_offsets.at(0), false),
         std::vector<array>{});
     if (dtype == ST_F8_E4M3) {
       loaded_array = f8_e4m3_to_float(loaded_array, bfloat16, s);
