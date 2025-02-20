@@ -178,6 +178,9 @@ class Device {
   }
 
   void new_queue(int index);
+
+  MTL::CommandQueue* get_queue(Stream stream);
+
   MTL::CommandBuffer* get_command_buffer(int index);
   bool command_buffer_needs_commit(int index);
   void commit_command_buffer(int index);

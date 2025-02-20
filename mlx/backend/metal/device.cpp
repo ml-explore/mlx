@@ -254,9 +254,6 @@ Device::~Device() {
 
 void Device::new_queue(int index) {
   auto thread_pool = metal::new_scoped_memory_pool();
-
-  // Multiple threads can ask the device for queues
-  // We lock this as a critical section for safety
   auto q = device_->newCommandQueue(MAX_BUFFERS_PER_QUEUE);
   debug_set_stream_queue_label(q, index);
   if (!q) {
@@ -267,6 +264,10 @@ void Device::new_queue(int index) {
   if (residency_set_ != nullptr) {
     q->addResidencySet(residency_set_);
   }
+}
+
+MTL::CommandQueue* Device::get_queue(Stream stream) {
+  return get_stream_(stream.index).queue;
 }
 
 bool Device::command_buffer_needs_commit(int index) {
