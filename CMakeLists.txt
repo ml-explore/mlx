@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.25)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.23.1)
-  set(MLX_PROJECT_VERSION ${MLX_VERSION})
+  file(STRINGS "mlx/version.h" _mlx_h_version REGEX "^#define MLX_VERSION_.*$")
+  string(REGEX MATCH "#define MLX_VERSION_MAJOR ([0-9]+)" _ "${_mlx_h_version}")
+  set(_major ${CMAKE_MATCH_1})
+  string(REGEX MATCH "#define MLX_VERSION_MINOR ([0-9]+)" _ "${_mlx_h_version}")
+  set(_minor ${CMAKE_MATCH_1})
+  string(REGEX MATCH "#define MLX_VERSION_PATCH ([0-9]+)" _ "${_mlx_h_version}")
+  set(_patch ${CMAKE_MATCH_1})
+  set(MLX_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
 else()
   string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" MLX_PROJECT_VERSION
                        ${MLX_VERSION})
@@ -35,17 +41,7 @@ option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
-math(
-  EXPR
-  MLX_VERSION_NUMERIC
-  "1000000 * ${PROJECT_VERSION_MAJOR} + 1000 * ${PROJECT_VERSION_MINOR} + ${PROJECT_VERSION_PATCH}"
-  OUTPUT_FORMAT DECIMAL)
-add_compile_definitions(
-  "MLX_VERSION=${MLX_VERSION}"
-  "MLX_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}"
-  "MLX_VERSION_MINOR=${PROJECT_VERSION_MINOR}"
-  "MLX_VERSION_PATCH=${PROJECT_VERSION_PATCH}"
-  "MLX_VERSION_NUMERIC=${MLX_VERSION_NUMERIC}")
+add_compile_definitions("MLX_VERSION=${MLX_VERSION}")
 
 # --------------------- Processor tests -------------------------
 message(
