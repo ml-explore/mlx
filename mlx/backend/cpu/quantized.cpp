@@ -164,8 +164,8 @@ simd::Simd<uint32_t, S> extract_bits_simd(const uint32_t* w) {
   } else if constexpr (bits == 8 && S == 8) {
     constexpr std::array<uint32_t, 8> shifts_ = {{0, 8, 16, 24, 0, 8, 16, 24}};
     auto shifts(*(simd::Simd<uint32_t, S>*)&shifts_);
-    auto l = simd::Simd<uint32_t, 4>(*w++);
-    auto r = simd::Simd<uint32_t, 4>(*w);
+    auto l = simd::Simd<uint32_t, S / 2>(*w++);
+    auto r = simd::Simd<uint32_t, S / 2>(*w);
     wi = simd::Simd<uint32_t, S>(l, r);
     wi = wi >> shifts;
     wi = wi & bitmask;
