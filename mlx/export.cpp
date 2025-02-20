@@ -377,7 +377,7 @@ struct PrimitiveFactory {
 };
 
 void write_header(Writer& os, int count, bool shapeless) {
-  serialize(os, version());
+  serialize(os, std::string(version()));
   serialize(os, count);
   serialize(os, shapeless);
 }

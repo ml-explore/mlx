@@ -9,8 +9,8 @@
 
 namespace mlx::core {
 
-std::string version() {
-  return std::string(TOSTRING(MLX_VERSION));
+constexpr const char* version() {
+  return TOSTRING(MLX_VERSION);
 }
 
 constexpr int version_major() {
