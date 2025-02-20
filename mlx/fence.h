@@ -15,22 +15,25 @@ namespace mlx::core {
  * `wait` returns. The array passed to `wait` will not be read until all
  * previous calls to `update` have completed.
  *
- * The fence supports slow (default) and fast mode. Fast mode requires setting
- * the environment variable `MLX_METAL_FAST_SYNCH=1`. Fast mode also requires
- * Metal 3.2+ (macOS 15+, iOS 18+).
+ * Note, calls to `update` should always from the same thread or explicitly
+ * synchronized so that they occur in sequence. Calls to `wait` can be on any
+ * thread.
+ *
+ * For the Metal back-end the fence supports slow (default) and fast mode.
+ * Fast mode requires setting the environment variable
+ * `MLX_METAL_FAST_SYNCH=1`. Fast mode also requires Metal 3.2+ (macOS 15+,
+ * iOS 18+).
  */
 class Fence {
  public:
-  Fence();
+  Fence() {};
+  explicit Fence(Stream stream);
 
   void update(Stream stream, const std::vector<array>& arrays);
   void wait(Stream stream, const array& array);
 
  private:
-  std::shared_ptr<void> fence_;
-  uint32_t count_{0};
-  bool use_fast_;
-  std::atomic_uint* cpu_value();
+  std::shared_ptr<void> fence_{nullptr};
 };
 
 } // namespace mlx::core

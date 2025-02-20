@@ -6,7 +6,7 @@
 
 namespace mlx::core {
 
-Event::Event() {
+Event::Event(Stream) {
   auto dtor = [](void* ptr) {
     auto p = metal::new_scoped_memory_pool();
     static_cast<MTL::SharedEvent*>(ptr)->release();

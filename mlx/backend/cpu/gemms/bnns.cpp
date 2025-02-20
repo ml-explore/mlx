@@ -9,39 +9,46 @@
 
 namespace mlx::core {
 
-BNNSDataType to_bnns_dtype(Dtype mlx_dtype) {
-  uint32_t size_bits = size_of(mlx_dtype) * 8;
-  switch (kindof(mlx_dtype)) {
-    case Dtype::Kind::b:
-      return BNNSDataTypeBoolean;
-    case Dtype::Kind::u:
-      return BNNSDataType(BNNSDataTypeUIntBit | size_bits);
-    case Dtype::Kind::i:
-      return BNNSDataType(BNNSDataTypeIntBit | size_bits);
-    case Dtype::Kind::f:
-      return BNNSDataType(BNNSDataTypeFloatBit | size_bits);
-    case Dtype::Kind::V:
-      return BNNSDataTypeBFloat16;
-    case Dtype::Kind::c:
-      throw std::invalid_argument("BNNS does not support complex types");
-  }
+template <typename T>
+constexpr BNNSDataType to_bnns_dtype();
+
+template <>
+constexpr BNNSDataType to_bnns_dtype<float>() {
+  return BNNSDataType(BNNSDataTypeFloatBit | 32);
+}
+template <>
+constexpr BNNSDataType to_bnns_dtype<float16_t>() {
+  return BNNSDataType(BNNSDataTypeFloatBit | 16);
 }
 
+template <>
+constexpr BNNSDataType to_bnns_dtype<bfloat16_t>() {
+  return BNNSDataTypeBFloat16;
+}
+
+template <typename T>
 void matmul_bnns(
-    const array& a,
-    const array& b,
-    array& out,
+    const T* a,
+    const T* b,
+    T* out,
     bool a_transposed,
     bool b_transposed,
     size_t lda,
     size_t ldb,
+    size_t ldc,
     float alpha,
-    float beta) {
-  size_t M = a.shape(-2);
-  size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
+    float beta,
+    size_t batch_size,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides) {
+  auto ndim = a_shape.size();
+  size_t M = a_shape[ndim - 2];
+  size_t N = b_shape[ndim - 1];
+  size_t K = a_shape[ndim - 1];
 
-  BNNSDataType bnns_dtype = to_bnns_dtype(out.dtype());
+  BNNSDataType bnns_dtype = to_bnns_dtype<T>();
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -115,14 +122,14 @@ void matmul_bnns(
   auto bnns_filter =
       BNNSFilterCreateLayerBroadcastMatMul(&gemm_params, nullptr);
 
-  for (int i = 0; i < (a.size() / (M * K)); ++i) {
+  for (int i = 0; i < batch_size; ++i) {
     BNNSFilterApplyTwoInput(
         bnns_filter,
-        a.data<uint8_t>() +
-            elem_to_loc(M * K * i, a.shape(), a.strides()) * a.itemsize(),
-        b.data<uint8_t>() +
-            elem_to_loc(K * N * i, b.shape(), b.strides()) * b.itemsize(),
-        out.data<uint8_t>() + M * N * i * out.itemsize());
+        reinterpret_cast<const uint8_t*>(
+            a + elem_to_loc(M * K * i, a_shape, a_strides)),
+        reinterpret_cast<const uint8_t*>(
+            b + elem_to_loc(K * N * i, b_shape, b_strides)),
+        reinterpret_cast<uint8_t*>(out + M * N * i));
   }
 
   BNNSFilterDestroy(bnns_filter);
@@ -131,30 +138,72 @@ void matmul_bnns(
 
 template <>
 void matmul<float16_t>(
-    const array& a,
-    const array& b,
-    array& out,
+    const float16_t* a,
+    const float16_t* b,
+    float16_t* out,
     bool a_transposed,
     bool b_transposed,
     size_t lda,
     size_t ldb,
+    size_t ldc,
     float alpha,
-    float beta) {
-  matmul_bnns(a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta);
+    float beta,
+    size_t batch_size,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides) {
+  matmul_bnns(
+      a,
+      b,
+      out,
+      a_transposed,
+      b_transposed,
+      lda,
+      ldb,
+      ldc,
+      alpha,
+      beta,
+      batch_size,
+      a_shape,
+      a_strides,
+      b_shape,
+      b_strides);
 }
 
 template <>
 void matmul<bfloat16_t>(
-    const array& a,
-    const array& b,
-    array& out,
+    const bfloat16_t* a,
+    const bfloat16_t* b,
+    bfloat16_t* out,
     bool a_transposed,
     bool b_transposed,
     size_t lda,
     size_t ldb,
+    size_t ldc,
     float alpha,
-    float beta) {
-  matmul_bnns(a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta);
+    float beta,
+    size_t batch_size,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides) {
+  matmul_bnns(
+      a,
+      b,
+      out,
+      a_transposed,
+      b_transposed,
+      lda,
+      ldb,
+      ldc,
+      alpha,
+      beta,
+      batch_size,
+      a_shape,
+      a_strides,
+      b_shape,
+      b_strides);
 }
 
 } // namespace mlx::core

@@ -10,7 +10,8 @@ namespace mlx::core {
 
 class Event {
  public:
-  Event();
+  Event() {};
+  explicit Event(Stream stream);
 
   // Wait for the event to be signaled at its current value
   void wait();
@@ -39,7 +40,7 @@ class Event {
   }
 
  private:
-  std::shared_ptr<void> event_;
+  std::shared_ptr<void> event_{nullptr};
   uint64_t value_{0};
 };
 

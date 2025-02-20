@@ -3,10 +3,10 @@
 #include <dlfcn.h>
 #include <mpi.h>
 
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
-#include "mlx/scheduler.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \
@@ -270,8 +270,12 @@ class MPIGroup : public GroupImpl {
     return std::make_shared<MPIGroup>(new_comm, false);
   }
 
-  void all_sum(const array& input, array& output) override {
-    mpi().all_reduce(
+  void all_sum(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_reduce,
         (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
                                                     : input.data<void>(),
         output.data<void>(),
@@ -281,8 +285,12 @@ class MPIGroup : public GroupImpl {
         comm_);
   }
 
-  void all_gather(const array& input, array& output) override {
-    mpi().all_gather(
+  void all_gather(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_gather,
         input.data<void>(),
         input.size(),
         mpi().datatype(input),
@@ -292,21 +300,30 @@ class MPIGroup : public GroupImpl {
         comm_);
   }
 
-  void send(const array& input, int dst) override {
-    mpi().send(
-        input.data<void>(), input.size(), mpi().datatype(input), dst, 0, comm_);
+  void send(const array& input, int dst, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.dispatch(
+        mpi().send,
+        input.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        dst,
+        0,
+        comm_);
   }
 
-  void recv(array& out, int src) override {
-    MPI_Status status;
-    mpi().recv(
-        out.data<void>(),
-        out.size(),
-        mpi().datatype(out),
-        src,
-        MPI_ANY_TAG,
-        comm_,
-        &status);
+  void recv(array& out, int src, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(),
+                      out_size = out.size(),
+                      out_type = mpi().datatype(out),
+                      src,
+                      comm = comm_]() {
+      MPI_Status status;
+      mpi().recv(out_ptr, out_size, out_type, src, MPI_ANY_TAG, comm, &status);
+    });
   }
 
  private:
