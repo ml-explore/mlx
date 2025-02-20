@@ -11,6 +11,7 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/cpu/compiled_preamble.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/jit_compiler.h"
 #include "mlx/device.h"
 #include "mlx/graph_utils.h"
@@ -288,6 +289,7 @@ void Compiled::eval_cpu(
   // Figure out which kernel we are using
   auto& shape = outputs[0].shape();
   auto contiguous = compiled_check_contiguity(inputs, shape);
+  auto& encoder = cpu::get_command_encoder(stream());
 
   // Handle all broadcasting and collect function input arguments
   std::vector<void*> args;
@@ -298,6 +300,7 @@ void Compiled::eval_cpu(
       continue;
     }
     auto& x = inputs[i];
+    encoder.set_input_array(x);
     args.push_back((void*)x.data<void>());
 
     if (contiguous || is_scalar(x)) {
@@ -360,6 +363,7 @@ void Compiled::eval_cpu(
 
   for (auto& x : outputs) {
     args.push_back(x.data<void>());
+    encoder.set_output_array(x);
   }
   if (!contiguous) {
     args.push_back((void*)outputs[0].shape().data());
@@ -367,7 +371,7 @@ void Compiled::eval_cpu(
     args.push_back((void*)outputs[0].data_size());
   }
   auto fun = (void (*)(void**))fn_ptr;
-  fun(args.data());
+  encoder.dispatch(fun, args.data());
 }
 
 } // namespace mlx::core
