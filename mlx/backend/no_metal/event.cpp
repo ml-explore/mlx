@@ -13,7 +13,7 @@ struct EventCounter {
   std::condition_variable cv;
 };
 
-Event::Event(const Stream& stream) : stream_(stream) {
+Event::Event(Stream) {
   auto dtor = [](void* ptr) { delete static_cast<EventCounter*>(ptr); };
   event_ = std::shared_ptr<void>(new EventCounter{}, dtor);
 }

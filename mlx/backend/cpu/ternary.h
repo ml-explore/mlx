@@ -5,6 +5,8 @@
 #include "mlx/array.h"
 #include "mlx/backend/common/ternary.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/encoder.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -53,22 +55,18 @@ void ternary_op_dims(
 
 template <typename T1, typename T2, typename T3, typename U, typename Op>
 void ternary_op_dispatch_dims(
-    const array& a,
-    const array& b,
-    const array& c,
-    array& out,
-    Op op) {
-  auto [shape, strides] = collapse_contiguous_dims(
-      a.shape(), {a.strides(), b.strides(), c.strides(), out.strides()});
+    const T1* a_ptr,
+    const T2* b_ptr,
+    const T3* c_ptr,
+    U* out_ptr,
+    Op op,
+    size_t size,
+    Shape& shape,
+    std::vector<Strides>& strides) {
   const auto& a_strides = strides[0];
   const auto& b_strides = strides[1];
   const auto& c_strides = strides[2];
   const auto& out_strides = strides[3];
-
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
-  U* out_ptr = out.data<T3>();
   int ndim = shape.size();
   switch (ndim) {
     case 1:
@@ -105,7 +103,7 @@ void ternary_op_dispatch_dims(
   ContiguousIterator b_it(shape, b_strides, ndim - 2);
   ContiguousIterator c_it(shape, c_strides, ndim - 2);
   auto stride = out_strides[ndim - 3];
-  for (size_t elem = 0; elem < a.size(); elem += stride) {
+  for (size_t elem = 0; elem < size; elem += stride) {
     ternary_op_dims<T1, T2, T3, U, Op, 2>(
         a_ptr + a_it.loc,
         b_ptr + b_it.loc,
@@ -134,23 +132,53 @@ void ternary_op(
   TernaryOpType topt = get_ternary_op_type(a, b, c);
   set_ternary_op_output_data(a, b, c, out, topt);
 
-  // The full computation is scalar-scalar-scalar so we call the base op once.
+  auto& encoder = cpu::get_command_encoder(out.primitive().stream());
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(c);
+  encoder.set_output_array(out);
+
+  const T1* a_ptr = a.data<T1>();
+  const T2* b_ptr = b.data<T2>();
+  const T3* c_ptr = c.data<T3>();
+  U* out_ptr = out.data<U>();
+
   if (topt == TernaryOpType::ScalarScalarScalar) {
-    *(out.data<U>()) = op(*a.data<T1>(), *b.data<T2>(), *c.data<T3>());
+    encoder.dispatch(
+        [a_ptr, b_ptr, c_ptr, out_ptr, op = std::move(op)]() mutable {
+          *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
+        });
   } else if (topt == TernaryOpType::VectorVectorVector) {
-    const T1* a_ptr = a.data<T1>();
-    const T2* b_ptr = b.data<T2>();
-    const T3* c_ptr = c.data<T3>();
-    U* out_ptr = out.data<U>();
-    for (size_t i = 0; i < out.size(); ++i) {
-      *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
-      a_ptr++;
-      b_ptr++;
-      c_ptr++;
-      out_ptr++;
-    }
+    encoder.dispatch([a_ptr,
+                      b_ptr,
+                      c_ptr,
+                      out_ptr,
+                      op = std::move(op),
+                      size = out.size()]() mutable {
+      for (size_t i = 0; i < size; ++i) {
+        *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
+        a_ptr++;
+        b_ptr++;
+        c_ptr++;
+        out_ptr++;
+      }
+    });
   } else {
-    ternary_op_dispatch_dims<T1, T2, T3, U>(a, b, c, out, op);
+    auto [shape, strides] = collapse_contiguous_dims(
+        a.shape(), {a.strides(), b.strides(), c.strides(), out.strides()});
+    encoder.dispatch(
+
+        [a_ptr,
+         b_ptr,
+         c_ptr,
+         out_ptr,
+         op = std::move(op),
+         size = out.size(),
+         shape = std::move(shape),
+         strides = std::move(strides)]() mutable {
+          ternary_op_dispatch_dims<T1, T2, T3, U>(
+              a_ptr, b_ptr, c_ptr, out_ptr, op, size, shape, strides);
+        });
   }
 }
 

@@ -20,6 +20,12 @@ struct CommandEncoder {
   void set_input_array(const array& a) {}
   void set_output_array(array& a) {}
 
+  // Hold onto a temporary until any already scheduled tasks which use it as
+  // an input are complete.
+  void add_temporary(array a) {
+    scheduler::enqueue(stream_, [a = std::move(a)]() {});
+  }
+
   template <class F, class... Args>
   void dispatch(F&& f, Args&&... args) {
     auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
