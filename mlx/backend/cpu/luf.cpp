@@ -59,8 +59,12 @@ void lu_factor_impl(
     }
 
     // Subtract 1 to get 0-based index
-    for (int j = 0; j < pivots.shape(-1); ++j) {
+    int j = 0;
+    for (; j < pivots.shape(-1); ++j) {
       pivots_ptr[j]--;
+      row_indices_ptr[j] = j;
+    }
+    for (; j < row_indices.shape(-1); ++j) {
       row_indices_ptr[j] = j;
     }
     for (int j = pivots.shape(-1) - 1; j >= 0; --j) {
