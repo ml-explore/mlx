@@ -3,8 +3,8 @@
 #include <cassert>
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
 
 namespace mlx::core {
 
@@ -26,28 +26,28 @@ void arg_reduce(
   auto in_ptr = in.data<InT>();
   auto out_ptr = out.data<uint32_t>();
 
-  scheduler::enqueue(
-      stream,
-      [in_ptr,
-       out_ptr,
-       axis_size,
-       axis_stride,
-       op = std::move(op),
-       shape = std::move(shape),
-       strides = std::move(strides),
-       size = out.size()]() {
-        for (uint32_t i = 0; i < size; ++i) {
-          auto loc = elem_to_loc(i, shape, strides);
-          auto local_in_ptr = in_ptr + loc;
-          uint32_t ind_v = 0;
-          InT v = (*local_in_ptr);
-          for (uint32_t j = 0; j < axis_size;
-               ++j, local_in_ptr += axis_stride) {
-            op(j, (*local_in_ptr), &ind_v, &v);
-          }
-          out_ptr[i] = ind_v;
-        }
-      });
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.dispatch([in_ptr,
+                    out_ptr,
+                    axis_size,
+                    axis_stride,
+                    op = std::move(op),
+                    shape = std::move(shape),
+                    strides = std::move(strides),
+                    size = out.size()]() {
+    for (uint32_t i = 0; i < size; ++i) {
+      auto loc = elem_to_loc(i, shape, strides);
+      auto local_in_ptr = in_ptr + loc;
+      uint32_t ind_v = 0;
+      InT v = (*local_in_ptr);
+      for (uint32_t j = 0; j < axis_size; ++j, local_in_ptr += axis_stride) {
+        op(j, (*local_in_ptr), &ind_v, &v);
+      }
+      out_ptr[i] = ind_v;
+    }
+  });
 }
 
 template <typename InT>

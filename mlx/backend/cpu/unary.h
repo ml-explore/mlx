@@ -5,9 +5,9 @@
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -43,11 +43,13 @@ void unary_op(const array& a, array& out, Op) {
 
   const T* src = a.data<T>();
   U* dst = out.data<U>();
-  auto stream = out.primitive().stream();
+  auto& encoder = cpu::get_command_encoder(out.primitive().stream());
+  encoder.set_input_array(a);
+  encoder.set_output_array(out);
 
   if (a.flags().contiguous) {
     constexpr int N = simd::max_size<T>;
-    scheduler::enqueue(stream, [src, dst, size = a.data_size()]() mutable {
+    encoder.dispatch([src, dst, size = a.data_size()]() mutable {
       while (size >= N) {
         simd::store(dst, Op{}(simd::load<T, N>(src)));
         size -= N;
@@ -65,25 +67,23 @@ void unary_op(const array& a, array& out, Op) {
     size_t shape = a.ndim() > 0 ? a.shape(-1) : 1;
     size_t stride = a.ndim() > 0 ? a.strides(-1) : 1;
     if (a.ndim() <= 1) {
-      scheduler::enqueue(stream, [src, dst, shape, stride]() {
+      encoder.dispatch([src, dst, shape, stride]() {
         unary_op<T, U, Op>(src, dst, shape, stride);
       });
       return;
     }
     auto it = ContiguousIterator(a.shape(), a.strides(), a.ndim() - 1);
-    scheduler::enqueue(
-        stream,
-        [src,
-         dst,
-         shape,
-         stride,
-         size = a.size(),
-         it = std::move(it)]() mutable {
-          for (size_t elem = 0; elem < size; elem += shape) {
-            unary_op<T, U, Op>(src + it.loc, dst + elem, shape, stride);
-            it.step();
-          }
-        });
+    encoder.dispatch([src,
+                      dst,
+                      shape,
+                      stride,
+                      size = a.size(),
+                      it = std::move(it)]() mutable {
+      for (size_t elem = 0; elem < size; elem += shape) {
+        unary_op<T, U, Op>(src + it.loc, dst + elem, shape, stride);
+        it.step();
+      }
+    });
   }
 }
 
