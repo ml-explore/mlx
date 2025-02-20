@@ -121,8 +121,8 @@ decltype(T() * U()) ceildiv(T a, U b) {
 
 class SocketThread {
  public:
-  SocketThread(int fd)
-      : fd_(fd), stop_(false), worker_(&SocketThread::worker, this) {
+  SocketThread(int fd) : fd_(fd), stop_(false) {
+    worker_ = std::thread(&SocketThread::worker, this);
     int flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   }
@@ -677,10 +677,11 @@ class RingGroup : public GroupImpl {
 
     // Split the all reduces so that each member has at least 1 buffer to
     // send/recv per segment.
+    constexpr size_t min_send_size = 262144;
     size_t n_reduces = std::max(
         std::min(
             sockets_right_.size() + sockets_left_.size(),
-            output.nbytes() / (size_ * ALL_SUM_SIZE)),
+            output.nbytes() / (size_ * min_send_size)),
         1UL);
     size_t step = ceildiv(output.size(), n_reduces);
     std::vector<std::future<void>> all_sums;
