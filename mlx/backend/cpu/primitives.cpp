@@ -7,7 +7,6 @@
 #include <sstream>
 
 #include "mlx/allocator.h"
-#include "mlx/backend/common/load.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/arange.h"
@@ -104,7 +103,52 @@ void Transpose::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
-  arange(inputs, out, start_, step_);
+  assert(inputs.size() == 0);
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  switch (out.dtype()) {
+    case bool_:
+      throw std::runtime_error("Bool type unsupported for arange.");
+      break;
+    case uint8:
+      arange<uint8_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case uint16:
+      arange<uint16_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case uint32:
+      arange<uint32_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case uint64:
+      arange<uint64_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case int8:
+      arange<int8_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case int16:
+      arange<int16_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case int32:
+      arange<int32_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case int64:
+      arange<int64_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case float16:
+      arange<float16_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case float32:
+      arange<float>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case float64:
+      arange<double>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case bfloat16:
+      arange<bfloat16_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+    case complex64:
+      arange<complex64_t>(start_, start_ + step_, out, out.size(), stream());
+      break;
+  }
 }
 
 void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -170,13 +214,6 @@ void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
     ctype = CopyType::General;
   }
   copy(in, out, ctype, stream());
-}
-
-void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
-
-  load(out, offset_, reader_, swap_endianness_);
 }
 
 void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
