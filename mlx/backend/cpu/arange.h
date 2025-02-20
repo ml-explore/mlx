@@ -3,7 +3,7 @@
 #pragma once
 
 #include "mlx/array.h"
-#include "mlx/scheduler.h"
+#include "mlx/backend/cpu/encoder.h"
 
 namespace mlx::core {
 
@@ -13,7 +13,9 @@ template <typename T>
 void arange(T start, T next, array& out, size_t size, Stream stream) {
   auto ptr = out.data<T>();
   auto step_size = next - start;
-  scheduler::enqueue(stream, [ptr, start, step_size, size]() mutable {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_output_array(out);
+  encoder.dispatch([ptr, start, step_size, size]() mutable {
     for (int i = 0; i < size; ++i) {
       ptr[i] = start;
       start += step_size;

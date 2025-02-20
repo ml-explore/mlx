@@ -5,8 +5,8 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
-#include "mlx/scheduler.h"
 
 namespace mlx::core {
 
@@ -16,7 +16,10 @@ template <typename SrcT, typename DstT>
 void copy_single(const array& src, array& dst, Stream stream) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
-  scheduler::enqueue(stream, [src_ptr, dst_ptr, size = dst.size()]() {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
+  encoder.dispatch([src_ptr, dst_ptr, size = dst.size()]() {
     auto val = static_cast<DstT>(src_ptr[0]);
     for (int i = 0; i < size; ++i) {
       dst_ptr[i] = val;
@@ -29,7 +32,10 @@ void copy_vector(const array& src, array& dst, Stream stream) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
   size_t size = src.data_size();
-  scheduler::enqueue(stream, [src_ptr, dst_ptr, size = src.data_size()]() {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
+  encoder.dispatch([src_ptr, dst_ptr, size = src.data_size()]() {
     std::copy(src_ptr, src_ptr + size, dst_ptr);
   });
 }
@@ -70,8 +76,12 @@ void copy_general_general(
     int64_t o_offset) {
   auto src_ptr = src.data<SrcT>() + i_offset;
   auto dst_ptr = dst.data<DstT>() + o_offset;
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
   if (data_shape.empty()) {
-    scheduler::enqueue(stream, [src_ptr, dst_ptr]() {
+    encoder.dispatch([src_ptr, dst_ptr]() {
       auto val = static_cast<DstT>(*src_ptr);
       *dst_ptr = val;
     });
@@ -81,50 +91,46 @@ void copy_general_general(
       collapse_contiguous_dims(data_shape, {i_strides, o_strides});
   int ndim = shape.size();
   if (ndim < 3) {
-    scheduler::enqueue(
-        stream,
-        [src_ptr,
-         dst_ptr,
-         ndim,
-         shape = std::move(shape),
-         strides = std::move(strides)]() {
-          if (ndim == 1) {
-            copy_dims<SrcT, DstT, 1>(
-                src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-          } else if (ndim == 2) {
-            copy_dims<SrcT, DstT, 2>(
-                src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-          } else if (ndim == 3) {
-            copy_dims<SrcT, DstT, 3>(
-                src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-          }
-        });
+    encoder.dispatch([src_ptr,
+                      dst_ptr,
+                      ndim,
+                      shape = std::move(shape),
+                      strides = std::move(strides)]() {
+      if (ndim == 1) {
+        copy_dims<SrcT, DstT, 1>(
+            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+      } else if (ndim == 2) {
+        copy_dims<SrcT, DstT, 2>(
+            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+      } else if (ndim == 3) {
+        copy_dims<SrcT, DstT, 3>(
+            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+      }
+    });
     return;
   }
-  scheduler::enqueue(
-      stream,
-      [src_ptr,
-       dst_ptr,
-       ndim,
-       size = src.size(),
-       shape = std::move(shape),
-       strides = std::move(strides)]() {
-        ContiguousIterator in(shape, strides[0], ndim - 3);
-        ContiguousIterator out(shape, strides[1], ndim - 3);
-        auto stride = std::accumulate(
-            shape.end() - 3, shape.end(), 1, std::multiplies<int64_t>());
-        for (int64_t elem = 0; elem < size; elem += stride) {
-          copy_dims<SrcT, DstT, 3>(
-              src_ptr + in.loc,
-              dst_ptr + out.loc,
-              shape,
-              strides[0],
-              strides[1],
-              ndim - 3);
-          in.step();
-          out.step();
-        }
-      });
+  encoder.dispatch([src_ptr,
+                    dst_ptr,
+                    ndim,
+                    size = src.size(),
+                    shape = std::move(shape),
+                    strides = std::move(strides)]() {
+    ContiguousIterator in(shape, strides[0], ndim - 3);
+    ContiguousIterator out(shape, strides[1], ndim - 3);
+    auto stride = std::accumulate(
+        shape.end() - 3, shape.end(), 1, std::multiplies<int64_t>());
+    for (int64_t elem = 0; elem < size; elem += stride) {
+      copy_dims<SrcT, DstT, 3>(
+          src_ptr + in.loc,
+          dst_ptr + out.loc,
+          shape,
+          strides[0],
+          strides[1],
+          ndim - 3);
+      in.step();
+      out.step();
+    }
+  });
 }
 
 template <typename SrcT, typename DstT>

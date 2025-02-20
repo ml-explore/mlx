@@ -3,6 +3,7 @@
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/linalg.h"
 #include "mlx/primitives.h"
@@ -84,37 +85,46 @@ void Eigh::eval_cpu(
 
   auto vec_ptr = vectors.data<float>();
   auto eig_ptr = values.data<float>();
-
   char jobz = compute_eigenvectors_ ? 'V' : 'N';
-  auto N = a.shape(-1);
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_output_array(vectors);
+  encoder.set_output_array(values);
+  encoder.dispatch([vec_ptr,
+                    eig_ptr,
+                    jobz,
+                    uplo = uplo_[0],
+                    N = a.shape(-1),
+                    size = a.size()]() mutable {
+    // Work query
+    int lwork;
+    int liwork;
+    {
+      float work;
+      int iwork;
+      ssyevd(jobz, uplo, nullptr, N, nullptr, &work, -1, &iwork, -1);
+      lwork = static_cast<int>(work);
+      liwork = iwork;
+    }
 
-  // Work query
-  int lwork;
-  int liwork;
-  {
-    float work;
-    int iwork;
-    ssyevd(jobz, uplo_[0], nullptr, N, nullptr, &work, -1, &iwork, -1);
-    lwork = static_cast<int>(work);
-    liwork = iwork;
-  }
-
-  auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(float) * lwork)};
-  auto iwork_buf = array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
-  for (size_t i = 0; i < a.size() / (N * N); ++i) {
-    ssyevd(
-        jobz,
-        uplo_[0],
-        vec_ptr,
-        N,
-        eig_ptr,
-        static_cast<float*>(work_buf.buffer.raw_ptr()),
-        lwork,
-        static_cast<int*>(iwork_buf.buffer.raw_ptr()),
-        liwork);
-    vec_ptr += N * N;
-    eig_ptr += N;
-  }
+    auto work_buf =
+        array::Data{allocator::malloc_or_wait(sizeof(float) * lwork)};
+    auto iwork_buf =
+        array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
+    for (size_t i = 0; i < size / (N * N); ++i) {
+      ssyevd(
+          jobz,
+          uplo,
+          vec_ptr,
+          N,
+          eig_ptr,
+          static_cast<float*>(work_buf.buffer.raw_ptr()),
+          lwork,
+          static_cast<int*>(iwork_buf.buffer.raw_ptr()),
+          liwork);
+      vec_ptr += N * N;
+      eig_ptr += N;
+    }
+  });
 }
 
 } // namespace mlx::core
