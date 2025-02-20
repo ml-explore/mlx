@@ -4,9 +4,7 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
-
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
+#include "mlx/version.h"
 
 // clang-format off
 #define SERIALIZE_PRIMITIVE(primitive, ...)  \
@@ -379,7 +377,7 @@ struct PrimitiveFactory {
 };
 
 void write_header(Writer& os, int count, bool shapeless) {
-  serialize(os, std::string(TOSTRING(MLX_VERSION)));
+  serialize(os, std::string(version()));
   serialize(os, count);
   serialize(os, shapeless);
 }
