@@ -11,8 +11,8 @@ namespace mlx::core::cpu {
 // - try to unify cpu and gpu work submission
 // - CPU should put kernels on the cpu async stream
 // - Fix load, distributed to run on CPU
-// - Fix fence to take vector of arrays
 // - CPU-only version of fence
+// - Figure out what to do about time-out issues
 
 void eval(array& arr, bool signal) {
   auto s = arr.primitive().stream();
