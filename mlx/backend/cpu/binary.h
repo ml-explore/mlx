@@ -7,8 +7,8 @@
 #include "mlx/array.h"
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
 
 #include "mlx/backend/cpu/simd/simd.h"
 
@@ -160,17 +160,20 @@ void binary_op(const array& a, const array& b, array& out) {
   auto a_ptr = a.data<T>();
   auto b_ptr = b.data<T>();
   auto out_ptr = out.data<U>();
-  auto s = out.primitive().stream();
+  auto& encoder = cpu::get_command_encoder(out.primitive().stream());
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
 
   if (bopt == BinaryOpType::ScalarScalar) {
-    scheduler::enqueue(
-        s, [a_ptr, b_ptr, out_ptr]() { *out_ptr = Op{}(*a_ptr, *b_ptr); });
+    encoder.dispatch(
+        [a_ptr, b_ptr, out_ptr]() { *out_ptr = Op{}(*a_ptr, *b_ptr); });
     return;
   }
 
   // The full computation is scalar vector so delegate to the op
   if (bopt == BinaryOpType::ScalarVector) {
-    scheduler::enqueue(s, [a_ptr, b_ptr, out_ptr, size = b.data_size()]() {
+    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = b.data_size()]() {
       ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
     });
     return;
@@ -178,7 +181,7 @@ void binary_op(const array& a, const array& b, array& out) {
 
   // The full computation is vector scalar so delegate to the op
   if (bopt == BinaryOpType::VectorScalar) {
-    scheduler::enqueue(s, [a_ptr, b_ptr, out_ptr, size = a.data_size()]() {
+    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = a.data_size()]() {
       VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, size);
     });
     return;
@@ -186,7 +189,7 @@ void binary_op(const array& a, const array& b, array& out) {
 
   // The full computation is vector vector so delegate to the op
   if (bopt == BinaryOpType::VectorVector) {
-    scheduler::enqueue(s, [a_ptr, b_ptr, out_ptr, size = out.size()]() {
+    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = out.size()]() {
       VectorVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
     });
     return;
@@ -246,69 +249,67 @@ void binary_op(const array& a, const array& b, array& out) {
     dim = ndim;
   }
 
-  scheduler::enqueue(
-      s,
-      [bopt,
-       a_ptr,
-       b_ptr,
-       out_ptr,
-       dim,
-       size = a.size(),
-       new_shape = std::move(new_shape),
-       a_strides = std::move(a_strides),
-       b_strides = std::move(b_strides),
-       strides = std::move(strides)]() {
-        switch (bopt) {
-          case BinaryOpType::VectorVector:
-            binary_op_dispatch_dims<T, U, true, VectorVector<Op>>(
-                a_ptr,
-                b_ptr,
-                out_ptr,
-                dim,
-                size,
-                new_shape,
-                a_strides,
-                b_strides,
-                strides);
-            break;
-          case BinaryOpType::VectorScalar:
-            binary_op_dispatch_dims<T, U, true, VectorScalar<Op>>(
-                a_ptr,
-                b_ptr,
-                out_ptr,
-                dim,
-                size,
-                new_shape,
-                a_strides,
-                b_strides,
-                strides);
-            break;
-          case BinaryOpType::ScalarVector:
-            binary_op_dispatch_dims<T, U, true, ScalarVector<Op>>(
-                a_ptr,
-                b_ptr,
-                out_ptr,
-                dim,
-                size,
-                new_shape,
-                a_strides,
-                b_strides,
-                strides);
-            break;
-          default:
-            binary_op_dispatch_dims<T, U, false, Op>(
-                a_ptr,
-                b_ptr,
-                out_ptr,
-                dim,
-                size,
-                new_shape,
-                a_strides,
-                b_strides,
-                strides);
-            break;
-        }
-      });
+  encoder.dispatch([bopt,
+                    a_ptr,
+                    b_ptr,
+                    out_ptr,
+                    dim,
+                    size = a.size(),
+                    new_shape = std::move(new_shape),
+                    a_strides = std::move(a_strides),
+                    b_strides = std::move(b_strides),
+                    strides = std::move(strides)]() {
+    switch (bopt) {
+      case BinaryOpType::VectorVector:
+        binary_op_dispatch_dims<T, U, true, VectorVector<Op>>(
+            a_ptr,
+            b_ptr,
+            out_ptr,
+            dim,
+            size,
+            new_shape,
+            a_strides,
+            b_strides,
+            strides);
+        break;
+      case BinaryOpType::VectorScalar:
+        binary_op_dispatch_dims<T, U, true, VectorScalar<Op>>(
+            a_ptr,
+            b_ptr,
+            out_ptr,
+            dim,
+            size,
+            new_shape,
+            a_strides,
+            b_strides,
+            strides);
+        break;
+      case BinaryOpType::ScalarVector:
+        binary_op_dispatch_dims<T, U, true, ScalarVector<Op>>(
+            a_ptr,
+            b_ptr,
+            out_ptr,
+            dim,
+            size,
+            new_shape,
+            a_strides,
+            b_strides,
+            strides);
+        break;
+      default:
+        binary_op_dispatch_dims<T, U, false, Op>(
+            a_ptr,
+            b_ptr,
+            out_ptr,
+            dim,
+            size,
+            new_shape,
+            a_strides,
+            b_strides,
+            strides);
+        break;
+    }
+  });
 }
 
 template <typename T, typename Op>
