@@ -162,9 +162,6 @@ void scan_op(
     const Op& op,
     U init,
     Stream stream) {
-  // TODO donate?
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
-
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
@@ -249,11 +246,14 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   // Ensure contiguity
   auto in = inputs[0];
+  bool copied = false;
   if (!in.flags().row_contiguous) {
     array arr_copy(in.shape(), in.dtype(), nullptr, {});
     copy(in, arr_copy, CopyType::General, stream());
     in = arr_copy;
+    copied = true;
   }
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   switch (in.dtype()) {
     case bool_: {
@@ -322,6 +322,9 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
     case complex64:
       throw std::runtime_error("Scan ops do not support complex types yet");
       break;
+  }
+  if (copied) {
+    cpu::get_command_encoder(stream()).add_temporary(std::move(in));
   }
 }
 

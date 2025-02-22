@@ -115,11 +115,15 @@ void inverse_impl(
   //   (A⁻¹)ᵀ = (Aᵀ)⁻¹
 
   // The inverse is computed in place, so just copy the input to the output.
-  copy(
-      a,
-      inv,
-      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
-      stream);
+  if (a.flags().row_contiguous && a.is_donatable()) {
+    inv.copy_shared_buffer(a);
+  } else {
+    copy(
+        a,
+        inv,
+        a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+        stream);
+  }
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);

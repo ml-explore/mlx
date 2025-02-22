@@ -49,21 +49,22 @@ void unary_op(const array& a, array& out, Op) {
   encoder.dispatch([src,
                     dst,
                     contig = a.flags().contiguous,
-                    size = a.data_size(),
+                    data_size = a.data_size(),
+                    size = a.size(),
                     shapes = a.shape(),
                     strides = a.strides()]() mutable {
     auto ndim = shapes.size();
     if (contig) {
       constexpr int N = simd::max_size<T>;
-      while (size >= N) {
+      while (data_size >= N) {
         simd::store(dst, Op{}(simd::load<T, N>(src)));
-        size -= N;
+        data_size -= N;
         src += N;
         dst += N;
       }
-      while (size > 0) {
+      while (data_size > 0) {
         *dst = Op{}(*src);
-        size--;
+        data_size--;
         dst++;
         src++;
       }

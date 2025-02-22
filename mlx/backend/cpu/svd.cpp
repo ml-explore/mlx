@@ -154,6 +154,7 @@ void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
       }
     }
   });
+  encoder.add_temporary(in);
 }
 
 void SVD::eval_cpu(

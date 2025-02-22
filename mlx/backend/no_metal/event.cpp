@@ -49,7 +49,7 @@ bool Event::is_signaled() const {
   auto ec = static_cast<EventCounter*>(event_.get());
   {
     std::lock_guard<std::mutex> lk(ec->mtx);
-    return (ec->value > value());
+    return (ec->value >= value());
   }
 }
 } // namespace mlx::core

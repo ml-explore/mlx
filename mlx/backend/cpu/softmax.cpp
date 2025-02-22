@@ -118,30 +118,32 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
   // Make sure that the last dimension is contiguous
-  auto check_input = [s = stream()](array x) {
+  auto set_output = [s = stream(), &out](const array& x) {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
+      if (x.is_donatable()) {
+        out.copy_shared_buffer(x);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            x.data_size(),
+            x.strides(),
+            x.flags());
+      }
       return x;
     } else {
       array x_copy(x.shape(), x.dtype(), nullptr, {});
       copy(x, x_copy, CopyType::General, s);
+      out.copy_shared_buffer(x_copy);
       return x_copy;
     }
   };
-  array in = check_input(std::move(inputs[0]));
-  if (in.is_donatable()) {
-    out.copy_shared_buffer(in);
-  } else {
-    out.set_data(
-        allocator::malloc_or_wait(in.data_size() * in.itemsize()),
-        in.data_size(),
-        in.strides(),
-        in.flags());
-  }
+
+  auto in = set_output(inputs[0]);
 
   switch (in.dtype()) {
     case bool_:

@@ -169,6 +169,8 @@ void binary_op(const array& a, const array& b, array& out) {
                     a_ptr,
                     b_ptr,
                     out_ptr,
+                    a_data_size = a.data_size(),
+                    b_data_size = b.data_size(),
                     size = a.size(),
                     shape = a.shape(),
                     a_strides = a.strides(),
@@ -181,13 +183,13 @@ void binary_op(const array& a, const array& b, array& out) {
 
     // The full computation is scalar vector so delegate to the op
     if (bopt == BinaryOpType::ScalarVector) {
-      ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
+      ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, b_data_size);
       return;
     }
 
     // The full computation is vector scalar so delegate to the op
     if (bopt == BinaryOpType::VectorScalar) {
-      VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, size);
+      VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, a_data_size);
       return;
     }
 
