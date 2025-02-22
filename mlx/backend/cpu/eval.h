@@ -7,6 +7,6 @@
 
 namespace mlx::core::cpu {
 
-void eval(array& arr, bool signal);
+void eval(array& arr);
 
 } // namespace mlx::core::cpu
