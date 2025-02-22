@@ -125,6 +125,9 @@ void Eigh::eval_cpu(
       eig_ptr += N;
     }
   });
+  if (!compute_eigenvectors_) {
+    encoder.add_temporary(vectors);
+  }
 }
 
 } // namespace mlx::core

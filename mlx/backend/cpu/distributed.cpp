@@ -4,23 +4,20 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/primitives.h"
 
 namespace mlx::core::distributed {
 
-namespace {
-
-array ensure_row_contiguous(const array& arr, Stream s) {
+std::pair<array, bool> ensure_row_contiguous(const array& arr, Stream stream) {
   if (arr.flags().row_contiguous) {
-    return arr;
+    return {arr, false};
   } else {
     array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy(arr, arr_copy, CopyType::General, s);
-    return arr_copy;
+    copy(arr, arr_copy, CopyType::General, stream);
+    return {arr_copy, true};
   }
-}
-
-} // namespace
+};
 
 void AllReduce::eval_cpu(
     const std::vector<array>& inputs,
@@ -60,10 +57,13 @@ void AllGather::eval_cpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto in = ensure_row_contiguous(inputs[0], stream());
+  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
   outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
-
   distributed::detail::all_gather(group(), in, outputs[0], stream());
+  if (copied) {
+    auto& enc = cpu::get_command_encoder(stream());
+    enc.add_temporary(in);
+  }
 }
 
 void Send::eval_cpu(
@@ -72,9 +72,13 @@ void Send::eval_cpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto in = ensure_row_contiguous(inputs[0], stream());
+  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
   distributed::detail::send(group(), in, dst_, stream());
   outputs[0].copy_shared_buffer(inputs[0]);
+  if (copied) {
+    auto& enc = cpu::get_command_encoder(stream());
+    enc.add_temporary(in);
+  }
 }
 
 void Recv::eval_cpu(

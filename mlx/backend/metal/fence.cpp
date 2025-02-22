@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include "mlx/fence.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal_impl.h"
@@ -36,7 +35,7 @@ struct FenceImpl {
       allocator::free(static_cast<MTL::Buffer*>(fence));
     }
   }
-  bool use_fast;
+  bool use_fast{false};
   uint32_t count{0};
   void* fence;
 
@@ -52,23 +51,24 @@ Fence::Fence(Stream) {
 }
 
 void Fence::wait(Stream stream, const array& array) {
+  auto& f = *static_cast<FenceImpl*>(fence_.get());
+
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_]() mutable {
+    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
       auto& f = *static_cast<FenceImpl*>(fence_.get());
       if (!f.use_fast) {
         if (!static_cast<MTL::SharedEvent*>(f.fence)->waitUntilSignaledValue(
-                f.count, -1)) {
+                count, -1)) {
           throw std::runtime_error("[Fence::wait] Timed out");
         }
         return;
       }
-      while (f.cpu_value()[0] < f.count) {
+      while (f.cpu_value()[0] < count) {
       }
     });
     return;
   }
 
-  auto& f = *static_cast<FenceImpl*>(fence_.get());
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
 
@@ -105,14 +105,14 @@ void Fence::update(Stream stream, const std::vector<array>& arrays) {
   f.count++;
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_]() mutable {
+    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
       auto& f = *static_cast<FenceImpl*>(fence_.get());
       if (!f.use_fast) {
-        static_cast<MTL::SharedEvent*>(f.fence)->setSignaledValue(f.count);
+        static_cast<MTL::SharedEvent*>(f.fence)->setSignaledValue(count);
         return;
       }
 
-      f.cpu_value()[0] = f.count;
+      f.cpu_value()[0] = count;
     });
     return;
   }

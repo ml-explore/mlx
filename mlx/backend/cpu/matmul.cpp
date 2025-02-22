@@ -71,7 +71,8 @@ void matmul_general(
     Stream stream,
     float alpha = 1.0f,
     float beta = 0.0f) {
-  auto check_transpose = [stream](const array& arr) {
+  std::vector<array> temps;
+  auto check_transpose = [stream, &temps](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
@@ -79,10 +80,10 @@ void matmul_general(
     } else if (stx == 1 && sty == arr.shape(-2)) {
       return std::make_tuple(true, sty, arr);
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General, stream);
+      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
+      copy(arr, temps.back(), CopyType::General, stream);
       stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
+      return std::make_tuple(false, stx, temps.back());
     }
   };
 
@@ -110,6 +111,7 @@ void matmul_general(
   } else {
     throw std::runtime_error("[Matmul::eval_cpu] Invalid type.");
   }
+  cpu::get_command_encoder(stream).add_temporaries(std::move(temps));
 }
 
 void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -122,7 +124,7 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     });
     return;
   }
-  return matmul_general(inputs[0], inputs[1], out, stream());
+  matmul_general(inputs[0], inputs[1], out, stream());
 }
 
 void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -138,7 +140,7 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy(c, out, ctype, stream());
 
-  return matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
+  matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 
 } // namespace mlx::core

@@ -573,13 +573,14 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& scales_pre = inputs[2];
   auto& biases_pre = inputs[3];
 
-  auto ensure_row_contiguous = [s = stream()](const array& arr) {
+  std::vector<array> temps;
+  auto ensure_row_contiguous = [s = stream(), &temps](const array& arr) {
     if (arr.flags().row_contiguous) {
       return arr;
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General, s);
-      return arr_copy;
+      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
+      copy(arr, temps.back(), CopyType::General, s);
+      return temps.back();
     }
   };
 
@@ -591,6 +592,8 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   _qmm_dispatch(
       out, x, w, scales, biases, group_size_, bits_, transpose_, stream());
+  auto& enc = cpu::get_command_encoder(stream());
+  enc.add_temporaries(std::move(temps));
 }
 
 void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -603,15 +606,17 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& lhs_indices = inputs[4];
   auto& rhs_indices = inputs[5];
 
-  auto ensure_row_contiguous_last_dims = [s = stream()](const array& arr) {
+  std::vector<array> temps;
+  auto ensure_row_contiguous_last_dims = [s = stream(),
+                                          &temps](const array& arr) {
     auto stride_0 = arr.strides()[arr.ndim() - 2];
     auto stride_1 = arr.strides()[arr.ndim() - 1];
     if (stride_0 == arr.shape(-1) && stride_1 == 1) {
       return arr;
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General, s);
-      return arr_copy;
+      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
+      copy(arr, temps.back(), CopyType::General, s);
+      return temps.back();
     }
   };
 
@@ -633,6 +638,8 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       bits_,
       transpose_,
       stream());
+  auto& enc = cpu::get_command_encoder(stream());
+  enc.add_temporaries(std::move(temps));
 }
 
 template <typename T, typename U>
@@ -729,15 +736,15 @@ void fast::AffineQuantize::eval_cpu(
     std::vector<array>& outputs) {
   auto ensure_row_contiguous = [s = stream()](const array& arr) {
     if (arr.flags().row_contiguous) {
-      return arr;
+      return std::make_pair(arr, false);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy(arr, arr_copy, CopyType::General, s);
-      return arr_copy;
+      return std::make_pair(arr_copy, true);
     }
   };
-  auto w = ensure_row_contiguous(inputs[0]);
 
+  auto [w, copied] = ensure_row_contiguous(inputs[0]);
   auto& out = outputs[0];
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
@@ -772,6 +779,9 @@ void fast::AffineQuantize::eval_cpu(
   } else {
     throw std::runtime_error(
         "[fast::AffineQuantize::eval_cpu] Only supports floating point inputs");
+  }
+  if (copied) {
+    cpu::get_command_encoder(stream()).add_temporary(w);
   }
 }
 
