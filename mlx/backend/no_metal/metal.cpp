@@ -16,7 +16,7 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   return nullptr;
 }
 
-void eval(array&, bool) {
+void eval(array&) {
   throw std::runtime_error(
       "[metal::eval] Cannot eval on GPU without metal backend");
 }

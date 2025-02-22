@@ -11,7 +11,7 @@ namespace mlx::core::cpu {
 // - Figure out what to do about time-out issues
 // - Add siblings to fence wait
 
-void eval(array& arr, bool signal) {
+void eval(array& arr) {
   auto s = arr.primitive().stream();
 
   scheduler::notify_new_task(s);
@@ -50,17 +50,9 @@ void eval(array& arr, bool signal) {
     out.set_status(array::Status::evaluated);
   }
 
-  if (signal) {
-    scheduler::enqueue(
-        s, [s, buffers = std::move(buffers), e = arr.event()]() mutable {
-          scheduler::notify_task_completion(s);
-          e.signal();
-        });
-  } else {
-    scheduler::enqueue(s, [s, buffers = std::move(buffers)]() {
-      scheduler::notify_task_completion(s);
-    });
-  }
+  scheduler::enqueue(s, [s, buffers = std::move(buffers)]() {
+    scheduler::notify_task_completion(s);
+  });
 }
 
 } // namespace mlx::core::cpu
