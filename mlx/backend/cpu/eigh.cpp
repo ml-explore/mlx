@@ -57,7 +57,7 @@ void eigh_impl(
 
     auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
     auto iwork_buf = array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
-    for (size_t i = 0; i < vectors.size() / (N * N); ++i) {
+    for (size_t i = 0; i < size / (N * N); ++i) {
       syevd<T>(
           &jobz,
           uplo.c_str(),
@@ -80,6 +80,9 @@ void eigh_impl(
       }
     }
   });
+  if (!compute_eigenvectors_) {
+    encoder.add_temporary(vectors);
+  }
 }
 
 } // namespace
@@ -131,7 +134,6 @@ void Eigh::eval_cpu(
       throw std::runtime_error(
           "[Eigh::eval_cpu] only supports float32 or float64.");
   }
-
 }
 
 } // namespace mlx::core

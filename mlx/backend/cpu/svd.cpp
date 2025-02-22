@@ -177,6 +177,7 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
       }
     }
   });
+  encoder.add_temporary(in);
 }
 
 template <typename T>
