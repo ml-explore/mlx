@@ -159,106 +159,100 @@ void binary_op(const array& a, const array& b, array& out) {
   // The full computation is scalar scalar so call the base op once
   auto a_ptr = a.data<T>();
   auto b_ptr = b.data<T>();
+
   auto out_ptr = out.data<U>();
   auto& encoder = cpu::get_command_encoder(out.primitive().stream());
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_output_array(out);
-
-  if (bopt == BinaryOpType::ScalarScalar) {
-    encoder.dispatch(
-        [a_ptr, b_ptr, out_ptr]() { *out_ptr = Op{}(*a_ptr, *b_ptr); });
-    return;
-  }
-
-  // The full computation is scalar vector so delegate to the op
-  if (bopt == BinaryOpType::ScalarVector) {
-    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = b.data_size()]() {
-      ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
-    });
-    return;
-  }
-
-  // The full computation is vector scalar so delegate to the op
-  if (bopt == BinaryOpType::VectorScalar) {
-    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = a.data_size()]() {
-      VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, size);
-    });
-    return;
-  }
-
-  // The full computation is vector vector so delegate to the op
-  if (bopt == BinaryOpType::VectorVector) {
-    encoder.dispatch([a_ptr, b_ptr, out_ptr, size = out.size()]() {
-      VectorVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
-    });
-    return;
-  }
-
-  // General computation so let's try to optimize
-  auto [new_shape, new_strides] = collapse_contiguous_dims(
-      a.shape(), {a.strides(), b.strides(), out.strides()});
-  const auto& a_strides = new_strides[0];
-  const auto& b_strides = new_strides[1];
-  const auto& strides = new_strides[2];
-
-  // Get the left-most dim such that the array is row contiguous after
-  auto leftmost_rc_dim = [&strides](const auto& arr_strides) {
-    int d = arr_strides.size() - 1;
-    for (; d >= 0 && arr_strides[d] == strides[d]; d--) {
-    }
-    return d + 1;
-  };
-  auto a_rc_dim = leftmost_rc_dim(a_strides);
-  auto b_rc_dim = leftmost_rc_dim(b_strides);
-
-  // Get the left-most dim such that the array is a broadcasted "scalar" after
-  auto leftmost_s_dim = [](const auto& arr_strides) {
-    int d = arr_strides.size() - 1;
-    for (; d >= 0 && arr_strides[d] == 0; d--) {
-    }
-    return d + 1;
-  };
-  auto a_s_dim = leftmost_s_dim(a_strides);
-  auto b_s_dim = leftmost_s_dim(b_strides);
-
-  auto ndim = new_shape.size();
-
-  // Case 1: LxM and FxM where L and F are broadcastable and M is row contiguous
-  int dim = ndim;
-  if (int d = std::max(a_rc_dim, b_rc_dim); d < ndim) {
-    bopt = BinaryOpType::VectorVector;
-    dim = d;
-    // Case 2: LxM and Fx1 where L and F are broadcastable and M is row
-    // contiguous
-  } else if (int d = std::max(a_rc_dim, b_s_dim); d < ndim) {
-    bopt = BinaryOpType::VectorScalar;
-    dim = d;
-    // Case 3: Lx1 and FxM where L and F are broadcastable and M is row
-    // contiguous
-  } else if (int d = std::max(a_s_dim, b_rc_dim); d < ndim) {
-    bopt = BinaryOpType::ScalarVector;
-    dim = d;
-  }
-
-  // Can be sure dim > 0 since otherwise we would have used one of the fully
-  // contiguous methods above. Except for the case that the flags do not
-  // correspond to the underlying contiguity.
-  if (dim == 0 || strides[dim - 1] < 16) {
-    bopt = BinaryOpType::General;
-    dim = ndim;
-  }
-
   encoder.dispatch([bopt,
                     a_ptr,
                     b_ptr,
                     out_ptr,
-                    dim,
                     size = a.size(),
-                    new_shape = std::move(new_shape),
-                    a_strides = std::move(a_strides),
-                    b_strides = std::move(b_strides),
-                    strides = std::move(strides)]() {
+                    shape = a.shape(),
+                    a_strides = a.strides(),
+                    b_strides = b.strides(),
+                    strides = out.strides()]() mutable {
+    if (bopt == BinaryOpType::ScalarScalar) {
+      *out_ptr = Op{}(*a_ptr, *b_ptr);
+      return;
+    }
+
+    // The full computation is scalar vector so delegate to the op
+    if (bopt == BinaryOpType::ScalarVector) {
+      ScalarVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
+      return;
+    }
+
+    // The full computation is vector scalar so delegate to the op
+    if (bopt == BinaryOpType::VectorScalar) {
+      VectorScalar<Op>{}(a_ptr, b_ptr, out_ptr, size);
+      return;
+    }
+
+    // The full computation is vector vector so delegate to the op
+    if (bopt == BinaryOpType::VectorVector) {
+      VectorVector<Op>{}(a_ptr, b_ptr, out_ptr, size);
+      return;
+    }
+
+    // General computation so let's try to optimize
+    auto [new_shape, new_strides] = collapse_contiguous_dims(
+        shape,
+        {std::move(a_strides), std::move(b_strides), std::move(strides)});
+    a_strides = new_strides[0];
+    b_strides = new_strides[1];
+    strides = new_strides[2];
+
+    // Get the left-most dim such that the array is row contiguous after
+    auto leftmost_rc_dim = [&strides](const auto& arr_strides) {
+      int d = arr_strides.size() - 1;
+      for (; d >= 0 && arr_strides[d] == strides[d]; d--) {
+      }
+      return d + 1;
+    };
+    auto a_rc_dim = leftmost_rc_dim(a_strides);
+    auto b_rc_dim = leftmost_rc_dim(b_strides);
+
+    // Get the left-most dim such that the array is a broadcasted "scalar" after
+    auto leftmost_s_dim = [](const auto& arr_strides) {
+      int d = arr_strides.size() - 1;
+      for (; d >= 0 && arr_strides[d] == 0; d--) {
+      }
+      return d + 1;
+    };
+    auto a_s_dim = leftmost_s_dim(a_strides);
+    auto b_s_dim = leftmost_s_dim(b_strides);
+
+    auto ndim = new_shape.size();
+
+    // Case 1: LxM and FxM where L and F are broadcastable and M is row
+    // contiguous
+    int dim = ndim;
+    if (int d = std::max(a_rc_dim, b_rc_dim); d < ndim) {
+      bopt = BinaryOpType::VectorVector;
+      dim = d;
+      // Case 2: LxM and Fx1 where L and F are broadcastable and M is row
+      // contiguous
+    } else if (int d = std::max(a_rc_dim, b_s_dim); d < ndim) {
+      bopt = BinaryOpType::VectorScalar;
+      dim = d;
+      // Case 3: Lx1 and FxM where L and F are broadcastable and M is row
+      // contiguous
+    } else if (int d = std::max(a_s_dim, b_rc_dim); d < ndim) {
+      bopt = BinaryOpType::ScalarVector;
+      dim = d;
+    }
+
+    // Can be sure dim > 0 since otherwise we would have used one of the fully
+    // contiguous methods above. Except for the case that the flags do not
+    // correspond to the underlying contiguity.
+    if (dim == 0 || strides[dim - 1] < 16) {
+      bopt = BinaryOpType::General;
+      dim = ndim;
+    }
+
     switch (bopt) {
       case BinaryOpType::VectorVector:
         binary_op_dispatch_dims<T, U, true, VectorVector<Op>>(

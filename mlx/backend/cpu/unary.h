@@ -40,16 +40,21 @@ void unary_op(const T* a, U* out, size_t shape, size_t stride) {
 template <typename T, typename U = T, typename Op>
 void unary_op(const array& a, array& out, Op) {
   set_unary_output_data(a, out);
-
   const T* src = a.data<T>();
   U* dst = out.data<U>();
   auto& encoder = cpu::get_command_encoder(out.primitive().stream());
   encoder.set_input_array(a);
   encoder.set_output_array(out);
 
-  if (a.flags().contiguous) {
-    constexpr int N = simd::max_size<T>;
-    encoder.dispatch([src, dst, size = a.data_size()]() mutable {
+  encoder.dispatch([src,
+                    dst,
+                    contig = a.flags().contiguous,
+                    size = a.data_size(),
+                    shapes = a.shape(),
+                    strides = a.strides()]() mutable {
+    auto ndim = shapes.size();
+    if (contig) {
+      constexpr int N = simd::max_size<T>;
       while (size >= N) {
         simd::store(dst, Op{}(simd::load<T, N>(src)));
         size -= N;
@@ -62,29 +67,20 @@ void unary_op(const array& a, array& out, Op) {
         dst++;
         src++;
       }
-    });
-  } else {
-    size_t shape = a.ndim() > 0 ? a.shape(-1) : 1;
-    size_t stride = a.ndim() > 0 ? a.strides(-1) : 1;
-    if (a.ndim() <= 1) {
-      encoder.dispatch([src, dst, shape, stride]() {
+    } else {
+      size_t shape = ndim > 0 ? shapes.back() : 1;
+      size_t stride = ndim > 0 ? strides.back() : 1;
+      if (ndim <= 1) {
         unary_op<T, U, Op>(src, dst, shape, stride);
-      });
-      return;
-    }
-    auto it = ContiguousIterator(a.shape(), a.strides(), a.ndim() - 1);
-    encoder.dispatch([src,
-                      dst,
-                      shape,
-                      stride,
-                      size = a.size(),
-                      it = std::move(it)]() mutable {
+        return;
+      }
+      auto it = ContiguousIterator(shapes, strides, ndim - 1);
       for (size_t elem = 0; elem < size; elem += shape) {
         unary_op<T, U, Op>(src + it.loc, dst + elem, shape, stride);
         it.step();
       }
-    });
-  }
+    }
+  });
 }
 
 template <typename Op>
