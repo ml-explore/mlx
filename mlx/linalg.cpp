@@ -112,8 +112,16 @@ inline array matrix_norm(
   if (ord == "f" || ord == "fro") {
     return l2_norm(a, axis, keepdims, s);
   } else if (ord == "nuc") {
-    throw std::runtime_error(
-        "[linalg::norm] Nuclear norm not yet implemented.");
+    auto a_moveaxis = moveaxis(a, axis[1], -1, s);
+    a_moveaxis = moveaxis(
+        a_moveaxis, (axis[0] > axis[1] ? axis[0] - 1 : axis[0]), -2, s);
+    auto nuclear_norm = sum(svd(a_moveaxis, false, s).at(0), -1, false, s);
+    if (keepdims) {
+      std::vector<int> sorted_axes(axis);
+      std::sort(sorted_axes.begin(), sorted_axes.end());
+      nuclear_norm = expand_dims(nuclear_norm, sorted_axes, s);
+    }
+    return nuclear_norm;
   } else {
     std::ostringstream msg;
     msg << "[linalg::norm] Invalid ord value '" << ord << "' for matrix norm.";
@@ -210,7 +218,8 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
   return std::make_pair(out[0], out[1]);
 }
 
-std::vector<array> svd(const array& a, StreamOrDevice s /* = {} */) {
+std::vector<array>
+svd(const array& a, bool compute_uv /* = true */, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::svd]");
   if (a.dtype() != float32) {
     std::ostringstream msg;
@@ -230,13 +239,21 @@ std::vector<array> svd(const array& a, StreamOrDevice s /* = {} */) {
   const auto n = a.shape(-1);
   const auto rank = a.ndim();
 
-  auto u_shape = a.shape();
-  u_shape[rank - 2] = m;
-  u_shape[rank - 1] = m;
-
   auto s_shape = a.shape();
   s_shape.pop_back();
   s_shape[rank - 2] = std::min(m, n);
+
+  if (!compute_uv) {
+    return array::make_arrays(
+        {s_shape},
+        {a.dtype()},
+        std::make_shared<SVD>(to_stream(s), compute_uv),
+        {a});
+  }
+
+  auto u_shape = a.shape();
+  u_shape[rank - 2] = m;
+  u_shape[rank - 1] = m;
 
   auto vt_shape = a.shape();
   vt_shape[rank - 2] = n;
@@ -245,7 +262,7 @@ std::vector<array> svd(const array& a, StreamOrDevice s /* = {} */) {
   return array::make_arrays(
       {u_shape, s_shape, vt_shape},
       {a.dtype(), a.dtype(), a.dtype()},
-      std::make_shared<SVD>(to_stream(s)),
+      std::make_shared<SVD>(to_stream(s), compute_uv),
       {a});
 }
 
@@ -337,7 +354,7 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
   int m = a.shape(-2);
   int n = a.shape(-1);
   int k = std::min(m, n);
-  auto outs = linalg::svd(a, s);
+  auto outs = linalg::svd(a, true, s);
   array U = outs[0];
   array S = outs[1];
   array V = outs[2];

@@ -4940,7 +4940,7 @@ std::pair<std::vector<array>, std::vector<int>> SVD::vmap(
     const std::vector<int>& axes) {
   auto ax = axes[0] >= 0 ? 0 : -1;
   auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::svd(a, stream())}, {ax, ax, ax}};
+  return {{linalg::svd(a, true, stream())}, {ax, ax, ax}};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Inverse::vmap(
