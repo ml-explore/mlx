@@ -467,7 +467,7 @@ TEST_CASE("test vmap scatter") {
 
 TEST_CASE("test vmap SVD") {
   auto fun = [](std::vector<array> inputs) {
-    return linalg::svd(inputs.at(0), Device::cpu);
+    return linalg::svd(inputs.at(0), true, Device::cpu);
   };
 
   auto a = astype(reshape(arange(24), {3, 4, 2}), float32);

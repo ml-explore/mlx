@@ -205,7 +205,7 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
   array x({1, 2, 3});
   CHECK_THROWS(norm(x, "fro"));
 
-  x = reshape(arange(9), {3, 3});
+  x = reshape(arange(9, float32), {3, 3});
   CHECK_THROWS(norm(x, "bad ord"));
 
   CHECK_EQ(
@@ -214,8 +214,11 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
   CHECK_EQ(
       norm(x, "fro", std::vector<int>{0, 1}).item<float>(),
       doctest::Approx(14.2828568570857));
+  CHECK_EQ(
+      norm(x, "nuc", std::vector<int>{0, 1}, false, Device::cpu).item<float>(),
+      doctest::Approx(15.491934));
 
-  x = reshape(arange(18), {2, 3, 3});
+  x = reshape(arange(18, float32), {2, 3, 3});
   CHECK(allclose(
             norm(x, "fro", std::vector<int>{0, 1}),
             array({22.24859546, 24.31049156, 26.43860813}))
@@ -223,6 +226,14 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
   CHECK(allclose(
             norm(x, "fro", std::vector<int>{1, 2}),
             array({14.28285686, 39.7617907}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, "nuc", std::vector<int>{0, 1}, false, Device::cpu),
+            array({25.045408, 26.893724, 28.831797}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, "nuc", std::vector<int>{1, 2}, false, Device::cpu),
+            array({15.491934, 40.211937}))
             .item<bool>());
   CHECK(allclose(
             norm(x, "f", std::vector<int>{0, 1}),
@@ -271,7 +282,7 @@ TEST_CASE("test SVD factorization") {
 
   const auto prng_key = random::key(42);
   const auto A = mlx::core::random::normal({5, 4}, prng_key);
-  const auto outs = linalg::svd(A, Device::cpu);
+  const auto outs = linalg::svd(A, true, Device::cpu);
   CHECK_EQ(outs.size(), 3);
 
   const auto& U = outs[0];
@@ -291,6 +302,15 @@ TEST_CASE("test SVD factorization") {
   CHECK_EQ(U.dtype(), float32);
   CHECK_EQ(S.dtype(), float32);
   CHECK_EQ(Vt.dtype(), float32);
+
+  // Test singular values
+  const auto& outs_sv = linalg::svd(A, false, Device::cpu);
+  const auto SV = outs_sv[0];
+
+  CHECK_EQ(SV.shape(), Shape{4});
+  CHECK_EQ(SV.dtype(), float32);
+
+  CHECK(allclose(norm(SV), norm(A, "fro")).item<bool>());
 }
 
 TEST_CASE("test matrix inversion") {

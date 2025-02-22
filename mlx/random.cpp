@@ -244,7 +244,7 @@ array multivariate_normal(
 
   // Compute the square-root of the covariance matrix, using the SVD
   auto covariance = astype(cov, float32, stream);
-  auto SVD = linalg::svd(covariance, stream);
+  auto SVD = linalg::svd(covariance, true, stream);
   auto std = astype(
       matmul(
           multiply(

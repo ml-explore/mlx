@@ -62,7 +62,8 @@ norm(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {}) {
 
 std::pair<array, array> qr(const array& a, StreamOrDevice s = {});
 
-std::vector<array> svd(const array& a, StreamOrDevice s = {});
+std::vector<array>
+svd(const array& a, bool compute_uv = true, StreamOrDevice s = {});
 
 array inv(const array& a, StreamOrDevice s = {});
 
