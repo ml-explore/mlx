@@ -14,7 +14,7 @@ void new_stream(Stream stream);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
-void eval(array& arr, bool signal);
+void eval(array& arr);
 void finalize(Stream s);
 void synchronize(Stream s);
 

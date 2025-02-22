@@ -22,7 +22,7 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
   }
 }
 
-void eval(array& arr, bool signal) {
+void eval(array& arr) {
   auto pool = new_scoped_memory_pool();
   auto s = arr.primitive().stream();
   auto& d = metal::device(s.device);
@@ -63,15 +63,8 @@ void eval(array& arr, bool signal) {
     out.set_status(array::Status::evaluated);
   }
 
-  if (signal || d.command_buffer_needs_commit(s.index)) {
+  if (d.command_buffer_needs_commit(s.index)) {
     d.end_encoding(s.index);
-    if (signal) {
-      auto e = arr.event();
-      command_buffer->encodeSignalEvent(
-          static_cast<MTL::Event*>(e.raw_event().get()), e.value());
-      command_buffer->addCompletedHandler(
-          [e = std::move(e)](MTL::CommandBuffer* cbuf) {});
-    }
     scheduler::notify_new_task(s);
     command_buffer->addCompletedHandler(
         [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
