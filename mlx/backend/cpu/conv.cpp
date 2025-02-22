@@ -845,13 +845,16 @@ void explicit_gemm_conv_1D_cpu(
   const int O_per_group = O / groups;
 
   auto conv_dtype = float32;
+  auto& encoder = cpu::get_command_encoder(stream);
 
   // Pad input
   Shape padded_shape = {N, iH + 2 * padding[0], C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
+  std::vector<array> temps;
+  temps.push_back(array(0, conv_dtype));
+  copy(temps.back(), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset = padding[0] * in_padded.strides()[1];
@@ -862,9 +865,9 @@ void explicit_gemm_conv_1D_cpu(
       in_padded.flags(),
       in_padded_slice.size(),
       data_offset);
-
   // Copy input values into the slice
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
+  temps.push_back(in_padded_slice);
 
   // Make strided view
   Shape strided_shape = {N, oH, wH, C};
@@ -889,6 +892,7 @@ void explicit_gemm_conv_1D_cpu(
   Shape strided_reshape = {N * oH, wH * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General, stream);
+  temps.push_back(in_strided);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -906,19 +910,21 @@ void explicit_gemm_conv_1D_cpu(
         0);
     gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});
     copy(wt_transpose, gemm_wt, CopyType::General, stream);
+    temps.push_back(gemm_wt);
   } else if (wt.dtype() != float32 || !wt.flags().row_contiguous) {
     auto ctype =
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
     copy(wt, gemm_wt, ctype, stream);
+    temps.push_back(gemm_wt);
   }
 
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    temps.push_back(gemm_out);
   }
 
-  auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(in_strided);
   encoder.set_input_array(gemm_wt);
   encoder.set_output_array(gemm_out);
@@ -958,6 +964,7 @@ void explicit_gemm_conv_1D_cpu(
   if (out.dtype() != float32) {
     copy(gemm_out, out, CopyType::Vector, stream);
   }
+  encoder.add_temporaries(std::move(temps));
 }
 
 void explicit_gemm_conv_2D_cpu(
@@ -979,13 +986,16 @@ void explicit_gemm_conv_2D_cpu(
   const int wW = wt.shape(2); // Weight spatial dim
 
   auto conv_dtype = out.dtype();
+  auto& encoder = cpu::get_command_encoder(stream);
 
   // Pad input
   Shape padded_shape = {N, iH + 2 * padding[0], iW + 2 * padding[1], C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
+  std::vector<array> temps;
+  temps.push_back(array(0, conv_dtype));
+  copy(temps.back(), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset =
@@ -997,6 +1007,7 @@ void explicit_gemm_conv_2D_cpu(
       in_padded.flags(),
       in_padded_slice.size(),
       data_offset);
+  temps.push_back(in_padded_slice);
 
   // Copy input values into the slice
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
@@ -1021,6 +1032,7 @@ void explicit_gemm_conv_2D_cpu(
   Shape strided_reshape = {N * oH * oW, wH * wW * C};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General, stream);
+  temps.push_back(in_strided);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -1031,14 +1043,15 @@ void explicit_gemm_conv_2D_cpu(
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
     copy(wt, gemm_wt, ctype, stream);
+    temps.push_back(gemm_wt);
   }
 
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    temps.push_back(gemm_out);
   }
 
-  auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(in_strided);
   encoder.set_input_array(gemm_wt);
   encoder.set_output_array(gemm_out);
@@ -1071,6 +1084,7 @@ void explicit_gemm_conv_2D_cpu(
   if (out.dtype() != float32) {
     copy(gemm_out, out, CopyType::Vector, stream);
   }
+  encoder.add_temporaries(std::move(temps));
 }
 
 void explicit_gemm_conv_ND_cpu(
@@ -1094,6 +1108,8 @@ void explicit_gemm_conv_ND_cpu(
 
   auto conv_dtype = float32;
 
+  auto& encoder = cpu::get_command_encoder(stream);
+
   // Pad input
   Shape padded_shape(in.shape().size());
   padded_shape.front() = N;
@@ -1104,7 +1120,8 @@ void explicit_gemm_conv_ND_cpu(
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
-  copy(array(0, conv_dtype), in_padded, CopyType::Scalar, stream);
+  std::vector<array> temps = {array(0, conv_dtype)};
+  copy(temps.back(), in_padded, CopyType::Scalar, stream);
 
   // Pick input slice from padded
   size_t data_offset = 0;
@@ -1121,6 +1138,7 @@ void explicit_gemm_conv_ND_cpu(
 
   // Copy input values into the slice
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral, stream);
+  temps.push_back(in_padded_slice);
 
   // Make strided view
   Shape strided_shape(oDim.size() + wDim.size() + 2);
@@ -1169,13 +1187,13 @@ void explicit_gemm_conv_ND_cpu(
         wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
     gemm_wt = array(wt.shape(), float32, nullptr, {});
     copy(wt, gemm_wt, ctype, stream);
+    temps.push_back(gemm_wt);
   }
-
-  auto& encoder = cpu::get_command_encoder(stream);
 
   if (flip) {
     auto gemm_wt_ = array(gemm_wt.shape(), float32, nullptr, {});
     copy(gemm_wt, gemm_wt_, CopyType::Vector, stream);
+    temps.push_back(gemm_wt_);
 
     // Calculate the total size of the spatial dimensions
     int spatial_size = 1;
@@ -1196,6 +1214,7 @@ void explicit_gemm_conv_ND_cpu(
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    temps.push_back(gemm_out);
   }
 
   encoder.set_input_array(in_strided);
@@ -1230,6 +1249,7 @@ void explicit_gemm_conv_ND_cpu(
   if (out.dtype() != float32) {
     copy(gemm_out, out, CopyType::Vector, stream);
   }
+  encoder.add_temporaries(std::move(temps));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

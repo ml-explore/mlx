@@ -93,7 +93,15 @@ void Hadamard::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Copy input to output
-  copy(in, out, CopyType::General, stream());
+  if (in.flags().row_contiguous && in.is_donatable()) {
+    out.copy_shared_buffer(in);
+  } else {
+    copy(
+        in,
+        out,
+        in.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+        stream());
+  }
 
   int axis = out.ndim() - 1;
   auto [n, m] = decompose_hadamard(out.shape(axis));

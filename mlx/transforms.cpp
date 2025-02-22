@@ -61,11 +61,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
   // Stream fences for inter-stream synchronization
   std::unordered_map<uint32_t, Fence> fences;
-  std::unordered_map<uint32_t, Stream> streams;
-  streams.emplace(stream.index, stream);
 
-  // Event for signaling the computation is complete
-  auto event = Event{stream};
+  // Stream events for synchronization after eval
+  std::unordered_map<uint32_t, Event> events;
+  events.emplace(stream.index, Event{stream});
 
   {
     // Record the degree of each input
@@ -182,16 +181,21 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
-  event.set_value(tape.size());
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
 
-    arr.attach_event(event);
+    // Lookup corresponding event
+    auto e = events.find(stream.index);
+    if (e == events.end()) {
+      e = events.emplace(stream.index, Event{stream}).first;
+    }
+    e->second.set_value(1);
+    arr.attach_event(e->second);
     for (auto& s : arr.siblings()) {
-      s.attach_event(event);
+      s.attach_event(e->second);
     }
 
     // Set the status of the array and siblings.
@@ -201,15 +205,14 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     for (auto in : arr.inputs()) {
-      // Use event to wait accross async eval
-      if (in.event().valid() && in.event().stream() != stream) {
-        in.event().wait(stream);
-      }
-      // Use fence to wait within a single eval
       if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
+        // Use fence to wait within a single eval
         // Get the input array's stream fence and wait on the
         // output arrays stream
         fences[it->second].wait(stream, in);
+      } else if (in.event().valid() && in.event().stream() != stream) {
+        // Use event to wait across async eval
+        in.event().wait(stream);
       }
     }
 
@@ -223,16 +226,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
       auto it = fences.find(stream.index);
       if (it == fences.end()) {
         it = fences.emplace(stream.index, Fence{stream}).first;
-        streams.emplace(stream.index, stream);
       }
       it->second.update(stream, {arr});
     }
   }
 
   // Signal the event in its stream
-  event.signal(event.stream());
-
-  for (auto& [_, s] : streams) {
+  for (auto& [_, e] : events) {
+    auto s = e.stream();
+    e.signal(s);
     if (s.device == Device::gpu) {
       metal::finalize(s);
     }

@@ -72,29 +72,29 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
             copy(arr, arr_copy, CopyType::Vector, s);
-            return std::make_tuple(false, stx, arr_copy);
+            return std::make_tuple(false, stx, arr_copy, true);
           }
-          return std::make_tuple(false, stx, arr);
+          return std::make_tuple(false, stx, arr, false);
         } else if (!expand_all && stx == 1 && sty == arr.shape(-2)) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
             copy(arr, arr_copy, CopyType::Vector, s);
-            return std::make_tuple(true, sty, arr_copy);
+            return std::make_tuple(true, sty, arr_copy, true);
           }
-          return std::make_tuple(true, sty, arr);
+          return std::make_tuple(true, sty, arr, false);
         } else {
           array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
           copy(arr, arr_copy, CopyType::General, s);
           int64_t stx = arr.shape(-1);
-          return std::make_tuple(false, stx, arr_copy);
+          return std::make_tuple(false, stx, arr_copy, true);
         }
       };
 
   bool has_op_mask = inputs.size() > 3;
   bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
-  auto [a_transposed, lda, a] =
+  auto [a_transposed, lda, a, a_copied] =
       check_transpose(a_pre, has_op_mask, inputs.back().dtype() != bool_);
-  auto [b_transposed, ldb, b] =
+  auto [b_transposed, ldb, b, b_copied] =
       check_transpose(b_pre, has_op_mask, inputs.back().dtype() != bool_);
 
   size_t M = a.shape(-2);
@@ -305,6 +305,12 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       }
     }
   });
+  if (a_copied) {
+    encoder.add_temporary(a);
+  }
+  if (b_copied) {
+    encoder.add_temporary(b);
+  }
 }
 
 void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -317,7 +323,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
 
-  auto check_transpose = [s = stream()](const array& arr) {
+  std::vector<array> temps;
+  auto check_transpose = [s = stream(), &temps](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
@@ -325,10 +332,10 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     } else if (stx == 1 && sty == arr.shape(-2)) {
       return std::make_tuple(true, sty, arr);
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General, s);
+      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
+      copy(arr, temps.back(), CopyType::General, s);
       int64_t stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
+      return std::make_tuple(false, stx, temps.back());
     }
   };
 
@@ -427,6 +434,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           ldc);
     }
   });
+  encoder.add_temporaries(std::move(temps));
 }
 
 } // namespace mlx::core
