@@ -78,33 +78,32 @@ void copy_general_general(
     const std::optional<array>& dynamic_o_offset) {
   auto src_ptr = src.data<SrcT>() + i_offset;
   auto dst_ptr = dst.data<DstT>() + o_offset;
-
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(src);
-  encoder.set_output_array(dst);
-  if (data_shape.empty()) {
-    encoder.dispatch([src_ptr, dst_ptr]() mutable {
-      auto val = static_cast<DstT>(*src_ptr);
-      *dst_ptr = val;
-    });
-    return;
-  }
-  auto [shape, strides] =
-      collapse_contiguous_dims(data_shape, {i_strides, o_strides});
   auto i_offset_ptr =
       dynamic_i_offset ? dynamic_i_offset->data<int64_t>() : nullptr;
   auto o_offset_ptr =
       dynamic_o_offset ? dynamic_o_offset->data<int64_t>() : nullptr;
 
-  int ndim = shape.size();
-  if (ndim < 3) {
-    encoder.dispatch([src_ptr,
-                      dst_ptr,
-                      ndim,
-                      shape = std::move(shape),
-                      strides = std::move(strides),
-                      i_offset_ptr,
-                      o_offset_ptr]() mutable {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
+  encoder.dispatch([src_ptr,
+                    dst_ptr,
+                    size = src.size(),
+                    data_shape = data_shape,
+                    i_strides = i_strides,
+                    o_strides = o_strides,
+                    i_offset_ptr,
+                    o_offset_ptr]() mutable {
+    if (data_shape.empty()) {
+      auto val = static_cast<DstT>(*src_ptr);
+      *dst_ptr = val;
+      return;
+    }
+    auto [shape, strides] =
+        collapse_contiguous_dims(data_shape, {i_strides, o_strides});
+
+    int ndim = shape.size();
+    if (ndim < 3) {
       if (i_offset_ptr) {
         src_ptr += i_offset_ptr[0];
       }
@@ -122,17 +121,8 @@ void copy_general_general(
         copy_dims<SrcT, DstT, 3>(
             src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
       }
-    });
-    return;
-  }
-  encoder.dispatch([src_ptr,
-                    dst_ptr,
-                    ndim,
-                    size = src.size(),
-                    shape = std::move(shape),
-                    strides = std::move(strides),
-                    i_offset_ptr,
-                    o_offset_ptr]() mutable {
+      return;
+    }
     if (i_offset_ptr) {
       src_ptr += i_offset_ptr[0];
     }
