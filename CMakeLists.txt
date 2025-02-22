@@ -1,6 +1,23 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(mlx LANGUAGES C CXX)
+if(NOT MLX_VERSION)
+  file(STRINGS "mlx/version.h" _mlx_h_version REGEX "^#define MLX_VERSION_.*$")
+  string(REGEX MATCH "#define MLX_VERSION_MAJOR ([0-9]+)" _ "${_mlx_h_version}")
+  set(_major ${CMAKE_MATCH_1})
+  string(REGEX MATCH "#define MLX_VERSION_MINOR ([0-9]+)" _ "${_mlx_h_version}")
+  set(_minor ${CMAKE_MATCH_1})
+  string(REGEX MATCH "#define MLX_VERSION_PATCH ([0-9]+)" _ "${_mlx_h_version}")
+  set(_patch ${CMAKE_MATCH_1})
+  set(MLX_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
+else()
+  string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" MLX_PROJECT_VERSION
+                       ${MLX_VERSION})
+endif()
+
+project(
+  mlx
+  LANGUAGES C CXX
+  VERSION ${MLX_PROJECT_VERSION})
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -24,9 +41,6 @@ option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
-if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.23.0)
-endif()
 add_compile_definitions("MLX_VERSION=${MLX_VERSION}")
 
 # --------------------- Processor tests -------------------------

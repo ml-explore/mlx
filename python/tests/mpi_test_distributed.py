@@ -177,6 +177,7 @@ class TestDistributed(mlx_tests.MLXTestCase):
     def test_donation(self):
         x = mx.random.normal((1024,))
         mx.eval(x)
+        mx.synchronize(mx.default_stream(mx.default_device()))
 
         mx.metal.reset_peak_memory()
         scale = mx.array(2.0)

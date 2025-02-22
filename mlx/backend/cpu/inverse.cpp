@@ -81,7 +81,22 @@ void general_inv(array& inv, int N, int i) {
 void tri_inv(array& inv, int N, int i, bool upper) {
   const char uplo = upper ? 'L' : 'U';
   const char diag = 'N';
-  int info = strtri_wrapper(uplo, diag, inv.data<float>() + N * N * i, N);
+  float* data = inv.data<float>() + N * N * i;
+  int info = strtri_wrapper(uplo, diag, data, N);
+
+  // zero out the other triangle
+  if (upper) {
+    for (int i = 0; i < N; i++) {
+      std::fill(data, data + i, 0.0f);
+      data += N;
+    }
+  } else {
+    for (int i = 0; i < N; i++) {
+      std::fill(data + i + 1, data + N, 0.0f);
+      data += N;
+    }
+  }
+
   if (info != 0) {
     std::stringstream ss;
     ss << "inverse_impl: triangular inversion failed with error code " << info;

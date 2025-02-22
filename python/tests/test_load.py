@@ -385,6 +385,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         mx.eval(x)
         save_file = os.path.join(self.test_dir, "donation.npy")
         mx.save(save_file, x)
+        mx.synchronize(mx.default_stream(mx.default_device()))
 
         mx.metal.reset_peak_memory()
         scale = mx.array(2.0)

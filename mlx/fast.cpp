@@ -348,6 +348,11 @@ array rope(
         << x.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+  if (!issubdtype(x.dtype(), floating)) {
+    std::ostringstream msg;
+    msg << "[rope] Input must be a floating type but got " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
   if (offset.size() != 1) {
     std::ostringstream msg;
     msg << "[rope] offset must be a scalar but has shape " << offset.shape()
