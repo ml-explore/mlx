@@ -45,8 +45,7 @@ a hostname to ssh to and a list of IPs to utilize for the communication.
 
     [
         {"ssh": "hostname1", "ips": ["123.123.1.1", "123.123.2.1"]},
-        {"ssh": "hostname2", "ips": ["123.123.1.2", "123.123.2.2"]},
-        ...
+        {"ssh": "hostname2", "ips": ["123.123.1.2", "123.123.2.2"]}
     ]
 
 Setting up Remote Hosts

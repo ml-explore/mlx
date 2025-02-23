@@ -15,11 +15,10 @@ moment we support two different communication backends:
   faster for thunderbolt connections.
 
 The list of all currently supported operations and their documentation can be
-seen in the :ref:`API docs<distributed>`. The MPI backend supports all of these
-operations while the ring backend supports only :func:`all_sum` for now.
+seen in the :ref:`API docs<distributed>`.
 
 .. note::
-   A lot of operations may not be supported or not as fast as they should be.
+   Some operations may not be supported or not as fast as they should be.
    We are adding more and tuning the ones we have as we are figuring out the
    best way to do distributed computing on Macs using MLX.
 
@@ -37,10 +36,10 @@ A distributed program in MLX is as simple as:
     print(world.rank(), x)
 
 The program above sums the array ``mx.ones(10)`` across all
-distributed processes. If simply run with ``python``, however, only one
-process is launched and no distributed communication takes place. Namely, all
-operations in ``mx.distributed`` are noops when the distributed group has a size
-of one. This property allows us to avoid code that checks if we are in a
+distributed processes. However, when this script is ran with ``python`` only
+one process is launched and no distributed communication takes place. Namely,
+all operations in ``mx.distributed`` are noops when the distributed group has a
+size of one. This property allows us to avoid code that checks if we are in a
 distributed setting similar to the one below:
 
 .. code:: python
@@ -319,5 +318,40 @@ connection from ``123.123.123.4`` and so on and so forth.
 Thunderbolt Ring
 ^^^^^^^^^^^^^^^^
 
-The ring backend enables using thunderbolt for high bandwidth distributed
-communication. 
+Although the ring backend can have its benefits over MPI even for Ethernet, its
+main purpose is to use Thunderbolt rings for higher bandwidth communication.
+Setting up such thunderbolt rings can be done manually, but is a relatively
+tedious process. To simplify this, we provide the utility ``mlx.prepare_tb_ring``.
+
+To use ``mlx.prepare_tb_ring`` your computers need to be accessible by ssh via
+Ethernet or Wi-Fi. Subsequently, connect them via thunderbolt cables and then call the
+utility as follows:
+
+.. code:: shell
+
+   mlx.prepare_tb_ring --verbose --hosts host1,host2,host3,host4
+
+By default the script will attempt to discover the thunderbolt ring and provide
+you with the commands to configure each node as well as the ``hostfile.json``
+to use with ``mlx.launch``. If password-less ``sudo`` is available on the nodes
+then ``--auto-setup`` can be used to configure them automatically.
+
+To validate your connection without configuring anything
+``mlx.prepare_tb_ring`` can also plot the ring using DOT format.
+
+.. code:: shell
+
+   mlx.prepare_tb_ring --verbose --hosts host1,host2,host3,host4 --dot >ring.dot
+   dot -Tpng ring.dot >ring.png
+   open ring.png
+
+If you want to go through the process manually, the steps are as follows:
+
+* Disable the thunderbolt bridge interface
+* For the cable connecting rank ``i`` to rank ``i + 1`` find the interfaces
+  corresponding to that cable in nodes ``i`` and ``i + 1``.
+* Set up a unique subnetwork connecting the two nodes for the corresponding
+  interfaces. For instance if the cable corresponds to ``en2`` on node ``i``
+  and ``en2`` also on node ``i + 1`` then we may assign IPs ``192.168.0.1`` and
+  ``192.168.0.2`` respectively to the two nodes. For more details you can see
+  the commands prepared by the utility script.
