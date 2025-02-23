@@ -953,6 +953,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out[1].shape, (2, 2, 5))
 
     def test_leaks(self):
+        gc.collect()
         if mx.metal.is_available():
             mem_pre = mx.metal.get_active_memory()
         else:

@@ -18,13 +18,16 @@ if [ "$CLANG" = "TRUE" ]; then
 #include <complex>
 #include <cstdint>
 #include <vector>
+#ifdef __ARM_FEATURE_FP16_SCALAR_ARITHMETIC
+#include <arm_fp16.h>
+#endif
 EOM
-CC_FLAGS="-arch ${ARCH}"
+CC_FLAGS="-arch ${ARCH} -nobuiltininc -nostdinc"
 else
 CC_FLAGS="-std=c++17"
 fi
 
-CONTENT=$($GCC $CC_FLAGS -I "$SRCDIR" -E "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)
+CONTENT=$($GCC $CC_FLAGS -I "$SRCDIR" -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
 const char* get_kernel_preamble() {
