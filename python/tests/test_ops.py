@@ -898,6 +898,10 @@ class TestOps(mlx_tests.MLXTestCase):
         ).astype(np.float32)
         self.assertTrue(np.allclose(mx.erfinv(x), expected, equal_nan=True))
 
+        result = mx.erfinv(mx.array([0.9999999403953552] * 8))
+        expected = mx.array([3.8325066566467285] * 8)
+        self.assertTrue(mx.allclose(result, expected))
+
     def test_sin(self):
         a = mx.array(
             [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]

@@ -4,6 +4,7 @@ set(BASE_HEADERS
     bf16_math.h
     complex.h
     defines.h
+    erf.h
     expm1f.h
     utils.h)
 
