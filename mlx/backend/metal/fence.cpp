@@ -50,7 +50,7 @@ Fence::Fence(Stream) {
   fence_ = std::shared_ptr<void>(new FenceImpl{}, dtor);
 }
 
-void Fence::wait(Stream stream, const array& array) {
+void Fence::wait(Stream stream, const array& x) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
 
   if (stream.device == Device::cpu) {
@@ -85,7 +85,7 @@ void Fence::wait(Stream stream, const array& array) {
 
   // Register outputs to ensure that no kernels which depends on the
   // output starts before this one is done
-  compute_encoder.register_output_array(array);
+  compute_encoder.register_output_array(x);
 
   auto kernel = d.get_kernel("fence_wait");
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
@@ -100,7 +100,7 @@ void Fence::wait(Stream stream, const array& array) {
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
-void Fence::update(Stream stream, const std::vector<array>& arrays) {
+void Fence::update(Stream stream, const array& x) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
   f.count++;
 
@@ -132,16 +132,14 @@ void Fence::update(Stream stream, const std::vector<array>& arrays) {
   // Launch input visibility kernels
   auto& compute_encoder = d.get_command_encoder(idx);
   auto kernel = d.get_kernel("input_coherent");
-  for (auto& x : arrays) {
-    uint32_t nthreads = (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) /
-        sizeof(uint32_t);
-    MTL::Size group_dims = MTL::Size(1024, 1, 1);
-    MTL::Size grid_dims = MTL::Size((nthreads + 1024 - 1) / 1024, 1, 1);
-    compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
-    compute_encoder.set_bytes(nthreads, 1);
-    compute_encoder.dispatch_threadgroups(group_dims, grid_dims);
-  }
+  uint32_t nthreads =
+      (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  MTL::Size group_dims = MTL::Size(1024, 1, 1);
+  MTL::Size grid_dims = MTL::Size((nthreads + 1024 - 1) / 1024, 1, 1);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_bytes(nthreads, 1);
+  compute_encoder.dispatch_threadgroups(group_dims, grid_dims);
 
   // Barrier on previous kernels
   compute_encoder.barrier();

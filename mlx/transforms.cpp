@@ -80,11 +80,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
 
-        // Ignore arrays already scheduled
-        if (in.status() == array::Status::scheduled) {
-          continue;
-        }
-
         if (in.status() == array::Status::unscheduled) {
           if (async && in.is_tracer()) {
             throw std::invalid_argument(
@@ -198,12 +193,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
       s.attach_event(e->second);
     }
 
-    // Set the status of the array and siblings.
-    arr.set_status(array::Status::scheduled);
-    for (auto& s : arr.siblings()) {
-      s.set_status(array::Status::scheduled);
-    }
-
     for (auto in : arr.inputs()) {
       if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
         // Use fence to wait within a single eval
@@ -221,13 +210,26 @@ array eval_impl(std::vector<array> outputs, bool async) {
     } else {
       cpu::eval(arr);
     }
-    if (needs_fence.find(arr.id()) != needs_fence.end()) {
-      // TODO add siblings here
-      auto it = fences.find(stream.index);
-      if (it == fences.end()) {
-        it = fences.emplace(stream.index, Fence{stream}).first;
+
+    auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
+      if (needs_fence.find(a.id()) != needs_fence.end()) {
+        auto it = fences.find(stream.index);
+        if (it == fences.end()) {
+          it = fences.emplace(stream.index, Fence{stream}).first;
+        }
+        it->second.update(stream, a);
       }
-      it->second.update(stream, {arr});
+    };
+
+    arr.set_status(array::Status::evaluated);
+    maybe_update_fence(arr);
+    for (auto& sib : arr.siblings()) {
+      sib.set_status(array::Status::evaluated);
+      maybe_update_fence(sib);
+    }
+
+    if (!arr.is_tracer()) {
+      arr.detach();
     }
   }
 
