@@ -173,10 +173,10 @@ template <
 
   static_assert(TQ == 1, "Check TQ");
 
-  MMATile<T, TQ, 1, MMAFrag_opr_t> Qtile;
-  MMATile<T, 1, TK, MMAFrag_opr_t> Ktile;
+  MMATile<AccumType, TQ, 1, MMAFrag_opr_t> Qtile;
+  MMATile<AccumType, 1, TK, MMAFrag_opr_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
-  MMATile<T, TK, TD, MMAFrag_opr_t> Vtile;
+  MMATile<AccumType, TK, TD, MMAFrag_opr_t> Vtile;
   MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
 
   Otile.clear();
