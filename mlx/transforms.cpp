@@ -222,12 +222,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
     };
 
     arr.set_status(array::Status::evaluated);
+    // TODO Maybe always want the fence coherent kernel in the same cbuf
+    // as the other kernels?
     maybe_update_fence(arr);
     for (auto& sib : arr.siblings()) {
       sib.set_status(array::Status::evaluated);
       maybe_update_fence(sib);
     }
-
     if (!arr.is_tracer()) {
       arr.detach();
     }
