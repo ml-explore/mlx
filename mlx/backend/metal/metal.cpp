@@ -56,13 +56,6 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
-  if (!arr.is_tracer()) {
-    arr.detach();
-  }
-  for (auto& out : outputs) {
-    out.set_status(array::Status::evaluated);
-  }
-
   if (d.command_buffer_needs_commit(s.index)) {
     d.end_encoding(s.index);
     scheduler::notify_new_task(s);

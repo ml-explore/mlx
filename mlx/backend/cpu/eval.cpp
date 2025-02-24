@@ -6,11 +6,6 @@
 
 namespace mlx::core::cpu {
 
-// Changes to make:
-// - Try to unify cpu and gpu work submission
-// - Figure out what to do about time-out issues
-// - Add siblings to fence wait
-
 void eval(array& arr) {
   auto s = arr.primitive().stream();
 
@@ -41,15 +36,6 @@ void eval(array& arr) {
   if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
     buffers.erase(it);
   }
-
-  if (!arr.is_tracer()) {
-    arr.detach();
-  }
-
-  for (auto& out : outputs) {
-    out.set_status(array::Status::evaluated);
-  }
-
   scheduler::enqueue(s, [s, buffers = std::move(buffers)]() {
     scheduler::notify_task_completion(s);
   });
