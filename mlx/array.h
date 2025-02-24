@@ -333,6 +333,12 @@ class array {
     return array_desc_->data_size;
   }
 
+  /** The offset (in elements) of the underlying buffer the array points to.
+   **/
+  size_t offset() const {
+    return array_desc_->offset;
+  }
+
   allocator::Buffer& buffer() {
     return array_desc_->data->buffer;
   }
@@ -413,6 +419,8 @@ class array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
+  void reset_data_ptr();
+
   void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
 
   void set_data(
@@ -476,6 +484,9 @@ class array {
 
     // The size in elements of the data buffer the array accesses
     size_t data_size;
+
+    // Offset from the shared data in elements
+    size_t offset{0};
 
     // Contains useful meta data about the array
     Flags flags;
