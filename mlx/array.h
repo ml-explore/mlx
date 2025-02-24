@@ -243,18 +243,6 @@ class array {
     bool col_contiguous : 1;
   };
 
-  /** Build an array from all the info held by the array description. Including
-   * the buffer, strides, flags.
-   */
-  explicit array(
-      allocator::Buffer data,
-      Shape shape,
-      Dtype dtype,
-      Strides strides,
-      size_t data_size,
-      Flags flags,
-      Deleter deleter = allocator::free);
-
   /** The array's primitive. */
   Primitive& primitive() const {
     return *(array_desc_->primitive);
@@ -430,15 +418,6 @@ class array {
       size_t offset = 0);
 
   void copy_shared_buffer(const array& other);
-
-  void move_shared_buffer(
-      array other,
-      const Strides& strides,
-      Flags flags,
-      size_t data_size,
-      size_t offset = 0);
-
-  void move_shared_buffer(array other);
 
   void overwrite_descriptor(const array& other) {
     array_desc_ = other.array_desc_;

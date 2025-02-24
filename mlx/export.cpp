@@ -832,7 +832,7 @@ ImportedFunction::ImportedFunction(const std::string& file)
                 std::move(shape),
                 type,
                 std::make_shared<Load>(
-                    default_stream(default_device()), is_ptr, offset),
+                    default_stream(Device::cpu), is_ptr, offset),
                 {}));
             is.seek(offset + tape.back().nbytes());
             constants.insert({id, tape.back()});

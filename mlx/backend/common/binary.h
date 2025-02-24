@@ -38,8 +38,7 @@ inline void set_binary_op_output_data(
     const array& a,
     const array& b,
     array& out,
-    BinaryOpType bopt,
-    bool donate_with_move = false) {
+    BinaryOpType bopt) {
   bool b_donatable = is_donatable(b, out);
   bool a_donatable = is_donatable(a, out);
   switch (bopt) {
@@ -49,11 +48,7 @@ inline void set_binary_op_output_data(
       break;
     case BinaryOpType::ScalarVector:
       if (b_donatable) {
-        if (donate_with_move) {
-          out.move_shared_buffer(b);
-        } else {
-          out.copy_shared_buffer(b);
-        }
+        out.copy_shared_buffer(b);
       } else {
         out.set_data(
             allocator::malloc_or_wait(b.data_size() * out.itemsize()),
@@ -64,11 +59,7 @@ inline void set_binary_op_output_data(
       break;
     case BinaryOpType::VectorScalar:
       if (a_donatable) {
-        if (donate_with_move) {
-          out.move_shared_buffer(a);
-        } else {
-          out.copy_shared_buffer(a);
-        }
+        out.copy_shared_buffer(a);
       } else {
         out.set_data(
             allocator::malloc_or_wait(a.data_size() * out.itemsize()),
@@ -79,17 +70,9 @@ inline void set_binary_op_output_data(
       break;
     case BinaryOpType::VectorVector:
       if (a_donatable) {
-        if (donate_with_move) {
-          out.move_shared_buffer(a);
-        } else {
-          out.copy_shared_buffer(a);
-        }
+        out.copy_shared_buffer(a);
       } else if (b_donatable) {
-        if (donate_with_move) {
-          out.move_shared_buffer(b);
-        } else {
-          out.copy_shared_buffer(b);
-        }
+        out.copy_shared_buffer(b);
       } else {
         out.set_data(
             allocator::malloc_or_wait(a.data_size() * out.itemsize()),
@@ -100,18 +83,10 @@ inline void set_binary_op_output_data(
       break;
     case BinaryOpType::General:
       if (a_donatable && a.flags().row_contiguous && a.size() == out.size()) {
-        if (donate_with_move) {
-          out.move_shared_buffer(a);
-        } else {
-          out.copy_shared_buffer(a);
-        }
+        out.copy_shared_buffer(a);
       } else if (
           b_donatable && b.flags().row_contiguous && b.size() == out.size()) {
-        if (donate_with_move) {
-          out.move_shared_buffer(b);
-        } else {
-          out.copy_shared_buffer(b);
-        }
+        out.copy_shared_buffer(b);
       } else {
         out.set_data(allocator::malloc_or_wait(out.nbytes()));
       }

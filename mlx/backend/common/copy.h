@@ -22,4 +22,25 @@ enum class CopyType {
   GeneralGeneral
 };
 
+inline bool set_copy_output_data(const array& in, array& out, CopyType ctype) {
+  if (ctype == CopyType::Vector) {
+    // If the input is donateable, we are doing a vector copy and the types
+    // have the same size, then the input buffer can hold the output.
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(in);
+      return true;
+    } else {
+      out.set_data(
+          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+      return false;
+    }
+  } else {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    return false;
+  }
+}
+
 } // namespace mlx::core

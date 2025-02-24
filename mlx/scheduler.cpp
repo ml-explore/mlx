@@ -38,14 +38,14 @@ Stream new_stream() {
 }
 
 void synchronize(Stream s) {
-  auto p = std::make_shared<std::promise<void>>();
-  std::future<void> f = p->get_future();
   if (s.device == mlx::core::Device::cpu) {
+    auto p = std::make_shared<std::promise<void>>();
+    std::future<void> f = p->get_future();
     scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
+    f.wait();
   } else {
-    scheduler::enqueue(s, metal::make_synchronize_task(s, std::move(p)));
+    metal::synchronize(s);
   }
-  f.wait();
 }
 
 void synchronize() {
