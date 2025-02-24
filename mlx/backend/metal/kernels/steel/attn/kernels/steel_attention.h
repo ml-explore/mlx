@@ -111,10 +111,16 @@ template <
   constexpr short LDK_tgp = BK + padK;
   constexpr short LDV_tgp = BD + padV;
 
-  threadgroup T Qs[BQ * (BD + padQ)];
-  threadgroup T Ks[(BK + padK) * BD];
-  // threadgroup T Vs[BK * (BD + padV)];
-  threadgroup T* Vs = Ks;
+  constexpr short tgp_mem_0 = (BK + padK) * (BD);
+  constexpr short tgp_mem_1 = BK * (BD + padV);
+  constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
+
+  threadgroup T Q_smem[BQ * (BD + padQ)];
+  threadgroup T KV_smem[tgp_mem_s];
+
+  threadgroup T* Qs = Q_smem;
+  threadgroup T* Ks = KV_smem;
+  threadgroup T* Vs = KV_smem;
 
   // Prepare block loaders
   using QBlockLoader = BlockLoaderT<
@@ -230,7 +236,7 @@ template <
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // STEEL_PRAGMA_UNROLL
+    STEEL_PRAGMA_UNROLL
     for (short dd = 0; dd < TD; dd++) {
       simdgroup_barrier(mem_flags::mem_none);
 
