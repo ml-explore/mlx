@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
 #include <metal_stdlib>
 
