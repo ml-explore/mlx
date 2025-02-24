@@ -10,7 +10,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
-find_package(MLX CONFIG REQUIRED)
 find_package(
   Python 3.8
   COMPONENTS Interpreter Development.Module
@@ -20,6 +19,12 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE MLX_ROOT)
+find_package(MLX CONFIG REQUIRED)
 
 # ----------------------------- Extensions -----------------------------
 
