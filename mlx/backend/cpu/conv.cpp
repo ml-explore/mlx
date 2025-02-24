@@ -962,7 +962,7 @@ void explicit_gemm_conv_1D_cpu(
 
   // Copy results if needed
   if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector, stream);
+    copy_inplace(gemm_out, out, CopyType::Vector, stream);
   }
   encoder.add_temporaries(std::move(temps));
 }
@@ -1082,7 +1082,7 @@ void explicit_gemm_conv_2D_cpu(
 
   // Copy results if needed
   if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector, stream);
+    copy_inplace(gemm_out, out, CopyType::Vector, stream);
   }
   encoder.add_temporaries(std::move(temps));
 }
@@ -1177,6 +1177,7 @@ void explicit_gemm_conv_ND_cpu(
 
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General, stream);
+  temps.push_back(in_strided);
 
   // Check wt dtype and prepare
   auto gemm_wt = wt;
@@ -1247,7 +1248,7 @@ void explicit_gemm_conv_ND_cpu(
 
   // Copy results if needed
   if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector, stream);
+    copy_inplace(gemm_out, out, CopyType::Vector, stream);
   }
   encoder.add_temporaries(std::move(temps));
 }
