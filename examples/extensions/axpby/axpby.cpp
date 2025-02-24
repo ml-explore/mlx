@@ -1,19 +1,13 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
-#include <cassert>
 #include <iostream>
 #include <sstream>
 
-#include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/utils.h"
 
 #include "axpby/axpby.h"
-
-#ifdef ACCELERATE_NEW_LAPACK
-#include <vecLib/cblas_new.h>
-#endif
 
 #ifdef _METAL_
 #include "mlx/backend/metal/device.h"
@@ -76,135 +70,66 @@ void axpby_impl(
     const mx::array& y,
     mx::array& out,
     float alpha_,
-    float beta_) {
-  // We only allocate memory when we are ready to fill the output
-  // malloc_or_wait synchronously allocates available memory
-  // There may be a wait executed here if the allocation is requested
-  // under memory-pressured conditions
+    float beta_,
+    mx::Stream stream) {
+  // Allocate the output with `malloc_or_wait` which synchronously allocates
+  // memory, potentially waiting if the system is under memory pressure
   out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
 
-  // Collect input and output data pointers
-  const T* x_ptr = x.data<T>();
-  const T* y_ptr = y.data<T>();
-  T* out_ptr = out.data<T>();
+  // Get the CPU command encoder and register input and output arrays
+  auto& encoder = mx::cpu::get_command_encoder(stream);
+  encoder.set_input_array(x);
+  encoder.set_input_array(y);
+  encoder.set_output_array(out);
 
-  // Cast alpha and beta to the relevant types
-  T alpha = static_cast<T>(alpha_);
-  T beta = static_cast<T>(beta_);
+  // Launch the CPU kernel
+  encoder.dispatch([x_ptr = x.data<T>(),
+                    y_ptr = y.data<T>(),
+                    out_ptr = out.data<T>(),
+                    size = out.size(),
+                    shape = out.shape(),
+                    x_strides = x.strides(),
+                    y_strides = y.strides(),
+                    alpha_,
+                    beta_]() {
+    // Cast alpha and beta to the relevant types
+    T alpha = static_cast<T>(alpha_);
+    T beta = static_cast<T>(beta_);
 
-  // Do the element-wise operation for each output
-  for (size_t out_idx = 0; out_idx < out.size(); out_idx++) {
-    // Map linear indices to offsets in x and y
-    auto x_offset = mx::elem_to_loc(out_idx, x.shape(), x.strides());
-    auto y_offset = mx::elem_to_loc(out_idx, y.shape(), y.strides());
+    // Do the element-wise operation for each output
+    for (size_t out_idx = 0; out_idx < size; out_idx++) {
+      // Map linear indices to offsets in x and y
+      auto x_offset = mx::elem_to_loc(out_idx, shape, x_strides);
+      auto y_offset = mx::elem_to_loc(out_idx, shape, y_strides);
 
-    // We allocate the output to be contiguous and regularly strided
-    // (defaults to row major) and hence it doesn't need additional mapping
-    out_ptr[out_idx] = alpha * x_ptr[x_offset] + beta * y_ptr[y_offset];
-  }
+      // We allocate the output to be contiguous and regularly strided
+      // (defaults to row major) and hence it doesn't need additional mapping
+      out_ptr[out_idx] = alpha * x_ptr[x_offset] + beta * y_ptr[y_offset];
+    }
+  });
 }
 
-/** Fall back implementation for evaluation on CPU */
-void Axpby::eval(
+void Axpby::eval_cpu(
     const std::vector<mx::array>& inputs,
     std::vector<mx::array>& outputs) {
-  // Check the inputs (registered in the op while constructing the out array)
-  assert(inputs.size() == 2);
   auto& x = inputs[0];
   auto& y = inputs[1];
   auto& out = outputs[0];
 
   // Dispatch to the correct dtype
   if (out.dtype() == mx::float32) {
-    return axpby_impl<float>(x, y, out, alpha_, beta_);
+    return axpby_impl<float>(x, y, out, alpha_, beta_, stream());
   } else if (out.dtype() == mx::float16) {
-    return axpby_impl<mx::float16_t>(x, y, out, alpha_, beta_);
+    return axpby_impl<mx::float16_t>(x, y, out, alpha_, beta_, stream());
   } else if (out.dtype() == mx::bfloat16) {
-    return axpby_impl<mx::bfloat16_t>(x, y, out, alpha_, beta_);
+    return axpby_impl<mx::bfloat16_t>(x, y, out, alpha_, beta_, stream());
   } else if (out.dtype() == mx::complex64) {
-    return axpby_impl<mx::complex64_t>(x, y, out, alpha_, beta_);
+    return axpby_impl<mx::complex64_t>(x, y, out, alpha_, beta_, stream());
   } else {
     throw std::runtime_error(
         "Axpby is only supported for floating point types.");
   }
 }
-
-///////////////////////////////////////////////////////////////////////////////
-// Primitive Accelerate Backend Implementation
-///////////////////////////////////////////////////////////////////////////////
-
-#ifdef ACCELERATE_NEW_LAPACK
-
-template <typename T>
-void axpby_impl_accelerate(
-    const mx::array& x,
-    const mx::array& y,
-    mx::array& out,
-    float alpha_,
-    float beta_) {
-  // Accelerate library provides catlas_saxpby which does
-  // Y = (alpha * X) + (beta * Y) in place
-  // To use it, we first copy the data in y over to the output array
-
-  // This specialization requires both x and y be contiguous in the same mode
-  // i.e: corresponding linear indices in both point to corresponding elements
-  // The data in the output array is allocated to match the strides in y
-  // such that x, y, and out are contiguous in the same mode and
-  // no transposition is needed
-  out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
-
-  // We then copy over the elements using the contiguous vector specialization
-  copy_inplace(y, out, mx::CopyType::Vector);
-
-  // Get x and y pointers for catlas_saxpby
-  const T* x_ptr = x.data<T>();
-  T* y_ptr = out.data<T>();
-
-  T alpha = static_cast<T>(alpha_);
-  T beta = static_cast<T>(beta_);
-
-  // Call the inplace accelerate operator
-  catlas_saxpby(
-      /* N = */ out.size(),
-      /* ALPHA = */ alpha,
-      /* X = */ x_ptr,
-      /* INCX = */ 1,
-      /* BETA = */ beta,
-      /* Y = */ y_ptr,
-      /* INCY = */ 1);
-}
-
-/** Evaluate primitive on CPU using accelerate specializations */
-void Axpby::eval_cpu(
-    const std::vector<mx::array>& inputs,
-    std::vector<mx::array>& outputs) {
-  assert(inputs.size() == 2);
-  auto& x = inputs[0];
-  auto& y = inputs[1];
-  auto& out = outputs[0];
-
-  // Accelerate specialization for contiguous single precision float arrays
-  if (out.dtype() == mx::float32 &&
-      ((x.flags().row_contiguous && y.flags().row_contiguous) ||
-       (x.flags().col_contiguous && y.flags().col_contiguous))) {
-    axpby_impl_accelerate<float>(x, y, out, alpha_, beta_);
-    return;
-  }
-
-  // Fall back to common backend if specializations are not available
-  eval(inputs, outputs);
-}
-
-#else // Accelerate not available
-
-/** Evaluate primitive on CPU falling back to common backend */
-void Axpby::eval_cpu(
-    const std::vector<mx::array>& inputs,
-    std::vector<mx::array>& outputs) {
-  eval(inputs, outputs);
-}
-
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Primitive Metal Backend Implementation
@@ -217,7 +142,6 @@ void Axpby::eval_gpu(
     const std::vector<mx::array>& inputs,
     std::vector<mx::array>& outputs) {
   // Prepare inputs
-  assert(inputs.size() == 2);
   auto& x = inputs[0];
   auto& y = inputs[1];
   auto& out = outputs[0];
