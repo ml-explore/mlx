@@ -50,7 +50,7 @@ struct SubOp {
 struct ExpSubOp {
   template <typename T>
   METAL_FUNC static constexpr T apply(T x, T y) {
-    return fast::exp(x - y);
+    return fast::exp2(x - y);
   }
 };
 
@@ -113,7 +113,8 @@ template <
 
   threadgroup T Qs[BQ * (BD + padQ)];
   threadgroup T Ks[(BK + padK) * BD];
-  threadgroup T Vs[BK * (BD + padV)];
+  // threadgroup T Vs[BK * (BD + padV)];
+  threadgroup T* Vs = Ks;
 
   // Prepare block loaders
   using QBlockLoader = BlockLoaderT<
@@ -151,10 +152,11 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  TransformScale<T> ts(static_cast<T>(params->scale));
+  TransformScale<T> ts(static_cast<T>(params->scale * 1.44269504089));
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
+  using MMAFrag_opr_t = BaseMMAFrag<T, kFragSize, kFragSize>;
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   constexpr int kNWarps = WM * WN;
@@ -171,10 +173,10 @@ template <
 
   static_assert(TQ == 1, "Check TQ");
 
-  MMATile<AccumType, TQ, 1, MMAFrag_acc_t> Qtile;
-  MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
+  MMATile<T, TQ, 1, MMAFrag_opr_t> Qtile;
+  MMATile<T, 1, TK, MMAFrag_opr_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
-  MMATile<AccumType, TK, TD, MMAFrag_acc_t> Vtile;
+  MMATile<T, TK, TD, MMAFrag_opr_t> Vtile;
   MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
 
   Otile.clear();
@@ -229,6 +231,7 @@ template <
     // Do S = Q @ K.T
     Stile.clear();
 
+    // STEEL_PRAGMA_UNROLL
     for (short dd = 0; dd < TD; dd++) {
       simdgroup_barrier(mem_flags::mem_none);
 
@@ -264,7 +267,7 @@ template <
       }
     }
 
-    simdgroup_barrier(mem_flags::mem_none);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Load V blocks
     if (!align_K && kb == (params->NK_aligned)) {
@@ -292,7 +295,7 @@ template <
     // Factor exp(rowmax(Si) - rowmax(Si-1))
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < kRowsPT; ++i) {
-      factor[i] = fast::exp(max_score[i] - new_max[i]);
+      factor[i] = fast::exp2(max_score[i] - new_max[i]);
     }
 
     // Save max for next iteration
@@ -318,7 +321,7 @@ template <
     threadgroup_barrier(mem_flags::mem_threadgroup);
     Vtile.template load<T, 1, 1, LDV_tgp, 1>(&Vs[Vs_offset]);
 
-    simdgroup_barrier(mem_flags::mem_none);
+    // simdgroup_barrier(mem_flags::mem_none);
 
     // Do O = S @ V
     tile_matmad(Otile, Stile, Vtile, Otile);

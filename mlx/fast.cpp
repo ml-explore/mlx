@@ -693,7 +693,7 @@ array scaled_dot_product_attention(
       query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80);
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
   const bool supports_sdpa_full = query_sequence_length >= threshold && !mask &&
       sdpa_full_supported_head_dim && stream.device == Device::gpu;
