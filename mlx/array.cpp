@@ -77,16 +77,18 @@ array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
 }
 
 void array::detach() {
+  array_desc_->primitive = nullptr;
+  for (auto& s : array_desc_->siblings) {
+    s.array_desc_->primitive = nullptr;
+  }
   for (auto& s : array_desc_->siblings) {
     s.array_desc_->inputs.clear();
     s.array_desc_->siblings.clear();
     s.array_desc_->position = 0;
-    s.array_desc_->primitive = nullptr;
   }
   array_desc_->inputs.clear();
   array_desc_->siblings.clear();
   array_desc_->position = 0;
-  array_desc_->primitive = nullptr;
 }
 
 bool array::is_available() const {
@@ -164,6 +166,11 @@ void array::copy_shared_buffer(const array& other) {
 
 array::~array() {
   if (array_desc_ == nullptr) {
+    return;
+  }
+
+  // Detached/detaching
+  if (array_desc_->primitive == nullptr) {
     return;
   }
 
