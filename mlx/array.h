@@ -353,11 +353,6 @@ class array {
     // For example, the status of `x` in `auto x = a + b`.
     unscheduled,
 
-    // The ouptut of a computation which has been scheduled but `eval_*` has
-    // not yet been called on the array's primitive. A possible
-    // status of `x` in `auto x = a + b; eval(x);`
-    scheduled,
-
     // The array's `eval_*` function has been run, but the computation is not
     // necessarily complete. The array will have memory allocated and if it is
     // not a tracer then it will be detached from the graph.

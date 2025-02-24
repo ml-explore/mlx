@@ -11,7 +11,7 @@ namespace mlx::core {
  * Calls to `wait` wait in the given stream until all previous calls to update
  * are complete on their given stream.
  *
- * The arrays passed to `update` are computed and visible after the call to
+ * The array passed to `update` is computed and visible after the call to
  * `wait` returns. The array passed to `wait` will not be read until all
  * previous calls to `update` have completed.
  *
@@ -29,8 +29,8 @@ class Fence {
   Fence() {};
   explicit Fence(Stream stream);
 
-  void update(Stream stream, const std::vector<array>& arrays);
-  void wait(Stream stream, const array& array);
+  void update(Stream stream, const array& x);
+  void wait(Stream stream, const array& x);
 
  private:
   std::shared_ptr<void> fence_{nullptr};

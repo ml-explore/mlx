@@ -20,7 +20,7 @@ Fence::Fence(Stream) {
   fence_ = std::shared_ptr<void>(new FenceImpl{}, dtor);
 }
 
-void Fence::wait(Stream stream, const array& array) {
+void Fence::wait(Stream stream, const array&) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [count = f.count, fence_ = fence_]() mutable {
@@ -36,7 +36,7 @@ void Fence::wait(Stream stream, const array& array) {
   }
 }
 
-void Fence::update(Stream stream, const std::vector<array>& arrays) {
+void Fence::update(Stream stream, const array&) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
   f.count++;
   if (stream.device == Device::cpu) {

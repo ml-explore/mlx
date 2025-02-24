@@ -167,11 +167,6 @@ array::~array() {
     return;
   }
 
-  // Ignore arrays that might be detached during eval
-  if (status() == array::Status::scheduled) {
-    return;
-  }
-
   // Break circular reference for non-detached arrays with siblings
   if (auto n = siblings().size(); n > 0) {
     bool do_detach = true;
