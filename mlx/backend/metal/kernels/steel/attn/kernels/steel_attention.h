@@ -103,9 +103,9 @@ template <
       tidl.x * BQ * params->O_strides[2]; // Seqeunce
 
   // Prepare threadgroup memory
-  constexpr short padQ = 0; // 16 / sizeof(T);
-  constexpr short padK = 0; // 16 / sizeof(T);
-  constexpr short padV = 0; // 16 / sizeof(T);
+  constexpr short padQ = 16 / sizeof(T);
+  constexpr short padK = 16 / sizeof(T);
+  constexpr short padV = 16 / sizeof(T);
 
   constexpr short LDQ_tgp = BD + padQ;
   constexpr short LDK_tgp = BK + padK;
@@ -156,7 +156,6 @@ template <
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
-  using MMAFrag_opr_t = BaseMMAFrag<T, kFragSize, kFragSize>;
   using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   constexpr int kNWarps = WM * WN;
@@ -173,10 +172,10 @@ template <
 
   static_assert(TQ == 1, "Check TQ");
 
-  MMATile<AccumType, TQ, 1, MMAFrag_opr_t> Qtile;
-  MMATile<AccumType, 1, TK, MMAFrag_opr_t> Ktile;
+  MMATile<AccumType, TQ, 1, MMAFrag_acc_t> Qtile;
+  MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
-  MMATile<AccumType, TK, TD, MMAFrag_opr_t> Vtile;
+  MMATile<AccumType, 1, 1, MMAFrag_acc_t> Vtile;
   MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
 
   Otile.clear();
@@ -226,10 +225,10 @@ template <
       loader_k.load_unsafe();
     }
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
     // Do S = Q @ K.T
     Stile.clear();
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // STEEL_PRAGMA_UNROLL
     for (short dd = 0; dd < TD; dd++) {
@@ -319,12 +318,35 @@ template <
 
     // Load V into registers
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    Vtile.template load<T, 1, 1, LDV_tgp, 1>(&Vs[Vs_offset]);
 
-    // simdgroup_barrier(mem_flags::mem_none);
+    STEEL_PRAGMA_UNROLL
+    for (short iq = 0; iq < TQ; iq++) {
+      STEEL_PRAGMA_UNROLL
+      for (short id = 0; id < TD; id++) {
+        STEEL_PRAGMA_UNROLL
+        for (short ik = 0; ik < TK; ik++) {
+          if constexpr (BD == 128) {
+            simdgroup_barrier(mem_flags::mem_none);
+          }
 
-    // Do O = S @ V
-    tile_matmad(Otile, Stile, Vtile, Otile);
+          const short kk = ik * kFragSize;
+          const short dd = id * kFragSize;
+
+          Vtile.template load<T, 1, 1, LDV_tgp, 1>(
+              &Vs[Vs_offset + kk * LDV_tgp + dd]);
+
+          if constexpr (BD == 128) {
+            simdgroup_barrier(mem_flags::mem_none);
+          }
+
+          MMAFrag_acc_t::mma(
+              Otile.frag_at(iq, id),
+              Stile.frag_at(iq, ik),
+              Vtile.frag_at(0, 0),
+              Otile.frag_at(iq, id));
+        }
+      }
+    }
 
     // Prepare for next iteration
     loader_k.next();
