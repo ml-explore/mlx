@@ -249,6 +249,7 @@ Device::~Device() {
   for (auto& l : library_map_) {
     l.second->release();
   }
+  stream_map_.clear();
   device_->release();
 }
 
