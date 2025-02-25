@@ -417,29 +417,6 @@ struct MMATile {
   }
 };
 
-// template <typename T, typename U, int M, int N, int K>
-// METAL_FUNC void tile_matmad(
-//     thread MMATile<T, M, N>& D,
-//     thread MMATile<U, M, K>& A,
-//     thread MMATile<U, K, N>& B,
-//     thread MMATile<T, M, N>& C) {
-//   STEEL_PRAGMA_UNROLL
-//   for (short k = 0; k < K; ++k) {
-//     STEEL_PRAGMA_UNROLL
-//     for (short m = 0; m < M; ++m) {
-//       STEEL_PRAGMA_UNROLL
-//       for (short n = 0; n < N; ++n) {
-//         short n_serp = (m % 2) ? (N - 1 - n) : n;
-//         MMATile<T, M, N>::MMAFrag_t::mma(
-//             D.frag_at(m, n_serp),
-//             A.frag_at(m, k),
-//             B.frag_at(k, n_serp),
-//             C.frag_at(m, n_serp));
-//       }
-//     }
-//   }
-// }
-
 template <
     typename Dtype,
     typename Atype,
