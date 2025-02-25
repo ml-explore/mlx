@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/primitives.h"
+#include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
 
 #define NO_CPU_MULTI(func)                                             \
@@ -75,7 +76,6 @@ NO_CPU(Hadamard)
 NO_CPU(Imag)
 NO_CPU(Less)
 NO_CPU(LessEqual)
-NO_CPU(Load)
 NO_CPU(Log)
 NO_CPU(Log1p)
 NO_CPU(LogicalNot)
@@ -128,5 +128,12 @@ NO_CPU(View)
 namespace fast {
 NO_CPU_MULTI(AffineQuantize)
 } // namespace fast
+
+namespace distributed {
+NO_CPU_MULTI(AllReduce)
+NO_CPU_MULTI(AllGather)
+NO_CPU_MULTI(Send)
+NO_CPU_MULTI(Recv)
+} // namespace distributed
 
 } // namespace mlx::core
