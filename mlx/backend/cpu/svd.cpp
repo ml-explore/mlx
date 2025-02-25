@@ -75,8 +75,7 @@ void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
     int info;
 
     // Compute workspace size.
-    MLX_LAPACK_FUNC(sgesvdx)
-    (
+    gesvdx<T>(
         /* jobu = */ job_u,
         /* jobvt = */ job_vt,
         /* range = */ range,
@@ -102,19 +101,16 @@ void svd_impl(const array& a, array& u, array& s, array& vt, Stream stream) {
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "[SVD::eval_cpu] workspace calculation failed with code "
-         << info;
+      ss << "[SVD::eval_cpu] workspace calculation failed with code " << info;
       throw std::runtime_error(ss.str());
     }
 
     const int lwork = workspace_dimension;
-    auto scratch =
-        array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
+    auto scratch = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
 
     // Loop over matrices.
     for (int i = 0; i < num_matrices; i++) {
-      MLX_LAPACK_FUNC(sgesvdx)
-      (
+      gesvdx<T>(
           /* jobu = */ job_u,
           /* jobvt = */ job_vt,
           /* range = */ range,

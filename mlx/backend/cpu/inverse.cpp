@@ -131,7 +131,7 @@ void inverse_impl(
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(inv);
 
-  auto inv_ptr = inv.data<float>();
+  auto inv_ptr = inv.data<T>();
   if (tri) {
     encoder.dispatch([inv_ptr, N, num_matrices, upper]() {
       for (int i = 0; i < num_matrices; i++) {
