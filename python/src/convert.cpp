@@ -152,6 +152,8 @@ nb::ndarray<NDParams...> mlx_to_nd_array(const mx::array& a) {
       throw nb::type_error("bfloat16 arrays cannot be converted to NumPy.");
     case mx::float32:
       return mlx_to_nd_array_impl<float, NDParams...>(a);
+    case mx::float64:
+      return mlx_to_nd_array_impl<double, NDParams...>(a);
     case mx::complex64:
       return mlx_to_nd_array_impl<std::complex<float>, NDParams...>(a);
     default:
