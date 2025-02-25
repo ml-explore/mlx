@@ -8,6 +8,7 @@
 
 namespace mlx::core {
 
+template <typename T>
 void cholesky_impl(const array& a, array& factor, bool upper) {
   // Lapack uses the column-major convention. We take advantage of the fact that
   // the matrix should be symmetric:
@@ -28,13 +29,12 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
 
-  float* matrix = factor.data<float>();
+  T* matrix = factor.data<T>();
 
   for (int i = 0; i < num_matrices; i++) {
     // Compute Cholesky factorization.
     int info;
-    MLX_LAPACK_FUNC(spotrf)
-    (
+    potrf<T>(
         /* uplo = */ &uplo,
         /* n = */ &N,
         /* a = */ matrix,
@@ -65,10 +65,17 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
 }
 
 void Cholesky::eval_cpu(const std::vector<array>& inputs, array& output) {
-  if (inputs[0].dtype() != float32) {
-    throw std::runtime_error("[Cholesky::eval] only supports float32.");
+  switch (inputs[0].dtype()) {
+    case float32:
+      cholesky_impl<float>(inputs[0], output, upper_);
+      break;
+    case float64:
+      cholesky_impl<double>(inputs[0], output, upper_);
+      break;
+    default:
+      throw std::runtime_error(
+          "[Cholesky::eval_cpu] only supports float32 or float64.");
   }
-  cholesky_impl(inputs[0], output, upper_);
 }
 
 } // namespace mlx::core

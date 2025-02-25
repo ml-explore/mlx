@@ -9,11 +9,8 @@
 
 namespace mlx::core {
 
-void lu_factor_impl(
-    const array& a,
-    array& lu,
-    array& pivots,
-    array& row_indices) {
+template <typename T>
+void luf_impl(const array& a, array& lu, array& pivots, array& row_indices) {
   int M = a.shape(-2);
   int N = a.shape(-1);
 
@@ -31,7 +28,7 @@ void lu_factor_impl(
   copy_inplace(
       a, lu, a.shape(), a.strides(), strides, 0, 0, CopyType::GeneralGeneral);
 
-  auto a_ptr = lu.data<float>();
+  auto a_ptr = lu.data<T>();
 
   pivots.set_data(allocator::malloc_or_wait(pivots.nbytes()));
   row_indices.set_data(allocator::malloc_or_wait(row_indices.nbytes()));
@@ -42,13 +39,13 @@ void lu_factor_impl(
   size_t num_matrices = a.size() / (M * N);
   for (size_t i = 0; i < num_matrices; ++i) {
     // Compute LU factorization of A
-    MLX_LAPACK_FUNC(sgetrf)
-    (/* m */ &M,
-     /* n */ &N,
-     /* a */ a_ptr,
-     /* lda */ &M,
-     /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
-     /* info */ &info);
+    getrf<T>(
+        /* m */ &M,
+        /* n */ &N,
+        /* a */ a_ptr,
+        /* lda */ &M,
+        /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
+        /* info */ &info);
 
     if (info != 0) {
       std::stringstream ss;
@@ -86,7 +83,17 @@ void LUF::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 1);
-  lu_factor_impl(inputs[0], outputs[0], outputs[1], outputs[2]);
+  switch (inputs[0].dtype()) {
+    case float32:
+      luf_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      break;
+    case float64:
+      luf_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      break;
+    default:
+      throw std::runtime_error(
+          "[LUF::eval_cpu] only supports float32 or float64.");
+  }
 }
 
 } // namespace mlx::core

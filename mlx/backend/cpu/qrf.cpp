@@ -8,36 +8,6 @@
 namespace mlx::core {
 
 template <typename T>
-struct lpack;
-
-template <>
-struct lpack<float> {
-  static void xgeqrf(
-      const int* m,
-      const int* n,
-      float* a,
-      const int* lda,
-      float* tau,
-      float* work,
-      const int* lwork,
-      int* info) {
-    sgeqrf_(m, n, a, lda, tau, work, lwork, info);
-  }
-  static void xorgqr(
-      const int* m,
-      const int* n,
-      const int* k,
-      float* a,
-      const int* lda,
-      const float* tau,
-      float* work,
-      const int* lwork,
-      int* info) {
-    sorgqr_(m, n, k, a, lda, tau, work, lwork, info);
-  }
-};
-
-template <typename T>
 void qrf_impl(const array& a, array& q, array& r) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
@@ -48,7 +18,7 @@ void qrf_impl(const array& a, array& q, array& r) {
       allocator::malloc_or_wait(sizeof(T) * num_matrices * num_reflectors);
 
   // Copy A to inplace input and make it col-contiguous
-  array in(a.shape(), float32, nullptr, {});
+  array in(a.shape(), a.dtype(), nullptr, {});
   auto flags = in.flags();
 
   // Copy the input to be column contiguous
@@ -66,8 +36,7 @@ void qrf_impl(const array& a, array& q, array& r) {
   int info;
 
   // Compute workspace size
-  lpack<T>::xgeqrf(
-      &M, &N, nullptr, &lda, nullptr, &optimal_work, &lwork, &info);
+  geqrf<T>(&M, &N, nullptr, &lda, nullptr, &optimal_work, &lwork, &info);
 
   // Update workspace size
   lwork = optimal_work;
@@ -76,10 +45,10 @@ void qrf_impl(const array& a, array& q, array& r) {
   // Loop over matrices
   for (int i = 0; i < num_matrices; ++i) {
     // Solve
-    lpack<T>::xgeqrf(
+    geqrf<T>(
         &M,
         &N,
-        in.data<float>() + M * N * i,
+        in.data<T>() + M * N * i,
         &lda,
         static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
         static_cast<T*>(work.raw_ptr()),
@@ -105,7 +74,7 @@ void qrf_impl(const array& a, array& q, array& r) {
 
   // Get work size
   lwork = -1;
-  lpack<T>::xorgqr(
+  orgqr<T>(
       &M,
       &num_reflectors,
       &num_reflectors,
@@ -121,11 +90,11 @@ void qrf_impl(const array& a, array& q, array& r) {
   // Loop over matrices
   for (int i = 0; i < num_matrices; ++i) {
     // Compute Q
-    lpack<T>::xorgqr(
+    orgqr<T>(
         &M,
         &num_reflectors,
         &num_reflectors,
-        in.data<float>() + M * N * i,
+        in.data<T>() + M * N * i,
         &lda,
         static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
         static_cast<T*>(work.raw_ptr()),
@@ -152,10 +121,17 @@ void qrf_impl(const array& a, array& q, array& r) {
 void QRF::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  if (!(inputs[0].dtype() == float32)) {
-    throw std::runtime_error("[QRF::eval] only supports float32.");
+  switch (inputs[0].dtype()) {
+    case float32:
+      qrf_impl<float>(inputs[0], outputs[0], outputs[1]);
+      break;
+    case float64:
+      qrf_impl<double>(inputs[0], outputs[0], outputs[1]);
+      break;
+    default:
+      throw std::runtime_error(
+          "[QRF::eval_cpu] only supports float32 or float64.");
   }
-  qrf_impl<float>(inputs[0], outputs[0], outputs[1]);
 }
 
 } // namespace mlx::core
