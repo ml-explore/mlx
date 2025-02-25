@@ -11,35 +11,64 @@ namespace mlx::core {
 
 namespace {
 
-void ssyevd(
-    char jobz,
-    char uplo,
-    float* a,
-    int N,
-    float* w,
-    float* work,
-    int lwork,
-    int* iwork,
-    int liwork) {
+template <typename T>
+void eigh_impl(
+    array& vectors,
+    array& values,
+    const std::string& uplo,
+    bool compute_eigenvectors) {
+  auto vec_ptr = vectors.data<T>();
+  auto eig_ptr = values.data<T>();
+
+  char jobz = compute_eigenvectors ? 'V' : 'N';
+  auto N = vectors.shape(-1);
+
+  // Work query
+  int lwork = -1;
+  int liwork = -1;
   int info;
-  MLX_LAPACK_FUNC(ssyevd)
-  (
-      /* jobz = */ &jobz,
-      /* uplo = */ &uplo,
-      /* n = */ &N,
-      /* a = */ a,
-      /* lda = */ &N,
-      /* w = */ w,
-      /* work = */ work,
-      /* lwork = */ &lwork,
-      /* iwork = */ iwork,
-      /* liwork = */ &liwork,
-      /* info = */ &info);
-  if (info != 0) {
-    std::stringstream msg;
-    msg << "[Eigh::eval_cpu] Eigenvalue decomposition failed with error code "
-        << info;
-    throw std::runtime_error(msg.str());
+  {
+    T work;
+    int iwork;
+    syevd<T>(
+        &jobz,
+        uplo.c_str(),
+        &N,
+        nullptr,
+        &N,
+        nullptr,
+        &work,
+        &lwork,
+        &iwork,
+        &liwork,
+        &info);
+    lwork = static_cast<int>(work);
+    liwork = iwork;
+  }
+
+  auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
+  auto iwork_buf = array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
+  for (size_t i = 0; i < vectors.size() / (N * N); ++i) {
+    syevd<T>(
+        &jobz,
+        uplo.c_str(),
+        &N,
+        vec_ptr,
+        &N,
+        eig_ptr,
+        static_cast<T*>(work_buf.buffer.raw_ptr()),
+        &lwork,
+        static_cast<int*>(iwork_buf.buffer.raw_ptr()),
+        &liwork,
+        &info);
+    vec_ptr += N * N;
+    eig_ptr += N;
+    if (info != 0) {
+      std::stringstream msg;
+      msg << "[Eigh::eval_cpu] Eigenvalue decomposition failed with error code "
+          << info;
+      throw std::runtime_error(msg.str());
+    }
   }
 }
 
@@ -80,39 +109,16 @@ void Eigh::eval_cpu(
     }
     vectors.move_shared_buffer(vectors, strides, flags, vectors.data_size());
   }
-
-  auto vec_ptr = vectors.data<float>();
-  auto eig_ptr = values.data<float>();
-
-  char jobz = compute_eigenvectors_ ? 'V' : 'N';
-  auto N = a.shape(-1);
-
-  // Work query
-  int lwork;
-  int liwork;
-  {
-    float work;
-    int iwork;
-    ssyevd(jobz, uplo_[0], nullptr, N, nullptr, &work, -1, &iwork, -1);
-    lwork = static_cast<int>(work);
-    liwork = iwork;
-  }
-
-  auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(float) * lwork)};
-  auto iwork_buf = array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
-  for (size_t i = 0; i < a.size() / (N * N); ++i) {
-    ssyevd(
-        jobz,
-        uplo_[0],
-        vec_ptr,
-        N,
-        eig_ptr,
-        static_cast<float*>(work_buf.buffer.raw_ptr()),
-        lwork,
-        static_cast<int*>(iwork_buf.buffer.raw_ptr()),
-        liwork);
-    vec_ptr += N * N;
-    eig_ptr += N;
+  switch (a.dtype()) {
+    case float32:
+      eigh_impl<float>(vectors, values, uplo_, compute_eigenvectors_);
+      break;
+    case float64:
+      eigh_impl<double>(vectors, values, uplo_, compute_eigenvectors_);
+      break;
+    default:
+      throw std::runtime_error(
+          "[Eigh::eval_cpu] only supports float32 or float64.");
   }
 }
 
