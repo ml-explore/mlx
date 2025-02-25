@@ -194,7 +194,12 @@ if __name__ == "__main__":
                 "typing_extensions",
             ],
         },
-        entry_points={"console_scripts": ["mlx.launch = mlx.distributed_run:main"]},
+        entry_points={
+            "console_scripts": [
+                "mlx.launch = mlx.distributed_run:main",
+                "mlx.prepare_tb_ring = mlx.distributed_run:prepare_tb_ring",
+            ]
+        },
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
         zip_safe=False,
