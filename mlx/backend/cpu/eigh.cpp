@@ -21,15 +21,15 @@ void eigh_impl(
     Stream stream) {
   auto vec_ptr = vectors.data<T>();
   auto eig_ptr = values.data<T>();
-  char jobz = compute_eigenvectors_ ? 'V' : 'N';
+  char jobz = compute_eigenvectors ? 'V' : 'N';
 
-  auto& encoder = cpu::get_command_encoder(stream());
+  auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(vectors);
   encoder.set_output_array(values);
   encoder.dispatch([vec_ptr,
                     eig_ptr,
                     jobz,
-                    uplo = uplo_[0],
+                    uplo = uplo[0],
                     N = vectors.shape(-1),
                     size = vectors.size()]() mutable {
     // Work query
@@ -41,7 +41,7 @@ void eigh_impl(
       int iwork;
       syevd<T>(
           &jobz,
-          uplo.c_str(),
+          &uplo,
           &N,
           nullptr,
           &N,
@@ -56,11 +56,12 @@ void eigh_impl(
     }
 
     auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
-    auto iwork_buf = array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
+    auto iwork_buf =
+        array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
     for (size_t i = 0; i < size / (N * N); ++i) {
       syevd<T>(
           &jobz,
-          uplo.c_str(),
+          &uplo,
           &N,
           vec_ptr,
           &N,
@@ -80,7 +81,7 @@ void eigh_impl(
       }
     }
   });
-  if (!compute_eigenvectors_) {
+  if (!compute_eigenvectors) {
     encoder.add_temporary(vectors);
   }
 }
@@ -128,7 +129,8 @@ void Eigh::eval_cpu(
       eigh_impl<float>(vectors, values, uplo_, compute_eigenvectors_, stream());
       break;
     case float64:
-      eigh_impl<double>(vectors, values, uplo_, compute_eigenvectors_, stream());
+      eigh_impl<double>(
+          vectors, values, uplo_, compute_eigenvectors_, stream());
       break;
     default:
       throw std::runtime_error(

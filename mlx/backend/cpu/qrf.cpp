@@ -61,7 +61,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
       geqrf<T>(
           &M,
           &N,
-          in.data<T>() + M * N * i,
+          in_ptr + M * N * i,
           &lda,
           static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
           static_cast<T*>(work.raw_ptr()),
