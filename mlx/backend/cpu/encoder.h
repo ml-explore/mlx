@@ -22,17 +22,19 @@ struct CommandEncoder {
 
   // Hold onto a temporary until any already scheduled tasks which use it as
   // an input are complete.
-  void add_temporary(array a) {
-    scheduler::enqueue(stream_, [a = std::move(a)]() {});
+  void add_temporary(array arr) {
+    temporaries_.push_back(std::move(arr));
   }
 
-  // Hold onto temporaries until any already scheduled tasks which use it as
-  // an input are complete.
   void add_temporaries(std::vector<array> arrays) {
-    if (arrays.empty()) {
-      return;
-    }
-    scheduler::enqueue(stream_, [arrays = std::move(arrays)]() {});
+    temporaries_.insert(
+        temporaries_.end(),
+        std::make_move_iterator(arrays.begin()),
+        std::make_move_iterator(arrays.end()));
+  }
+
+  std::vector<array>& temporaries() {
+    return temporaries_;
   }
 
   template <class F, class... Args>
@@ -43,6 +45,7 @@ struct CommandEncoder {
 
  private:
   Stream stream_;
+  std::vector<array> temporaries_;
 };
 
 CommandEncoder& get_command_encoder(Stream stream);
