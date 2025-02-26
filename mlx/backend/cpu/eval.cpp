@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 #include "mlx/backend/cpu/eval.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
@@ -36,7 +37,10 @@ void eval(array& arr) {
   if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
     buffers.erase(it);
   }
-  scheduler::enqueue(s, [s, buffers = std::move(buffers)]() {
+  auto& encoder = cpu::get_command_encoder(s);
+  encoder.dispatch([s,
+                    buffers = std::move(buffers),
+                    temps = std::move(encoder.temporaries())]() {
     scheduler::notify_task_completion(s);
   });
 }
