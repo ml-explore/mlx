@@ -21,9 +21,7 @@ void copy_single(const array& src, array& dst, Stream stream) {
   encoder.set_output_array(dst);
   encoder.dispatch([src_ptr, dst_ptr, size = dst.size()]() {
     auto val = static_cast<DstT>(src_ptr[0]);
-    for (int i = 0; i < size; ++i) {
-      dst_ptr[i] = val;
-    }
+    std::fill_n(dst_ptr, size, val);
   });
 }
 

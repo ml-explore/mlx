@@ -633,7 +633,8 @@ class RingGroup : public GroupImpl {
     encoder.set_output_array(out);
     encoder.dispatch(
         [out_ptr = out.data<char>(), nbytes = out.nbytes(), src, this]() {
-          // NOTE: We 'll check the sockets with the opposite order of send so that
+          // NOTE: We 'll check the sockets with the opposite order of send so
+          // that
           //       they work even with 2 nodes where left and right is the same
           //       neighbor.
           int right = (rank_ + 1) % size_;
@@ -645,7 +646,8 @@ class RingGroup : public GroupImpl {
           } else {
             std::ostringstream msg;
             msg << "[ring] Recv only supported from direct neighbors "
-                << "but tried to recv from " << src << " to " << rank_ << std::endl;
+                << "but tried to recv from " << src << " to " << rank_
+                << std::endl;
             throw std::runtime_error(msg.str());
           }
         });
@@ -817,7 +819,8 @@ class RingGroup : public GroupImpl {
     recvs[b].wait();
   }
 
-  void send(const std::vector<int>& sockets, const char* data, size_t data_size) {
+  void
+  send(const std::vector<int>& sockets, const char* data, size_t data_size) {
     size_t segment_size = std::max(1024UL, ceildiv(data_size, sockets.size()));
     std::vector<std::future<void>> sends;
     for (int i = 0; i < sockets.size(); i++) {

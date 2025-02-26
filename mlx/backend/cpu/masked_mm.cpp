@@ -353,8 +353,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cpu::get_command_encoder(stream());
   if (K == 0) {
     encoder.set_output_array(out);
-    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
-      std::memset(out_ptr, 0, nbytes);
+    encoder.dispatch([out_ptr = out.data<float>(), size = out.size()]() {
+      std::fill_n(out_ptr, size, 0);
     });
     return;
   }
