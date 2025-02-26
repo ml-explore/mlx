@@ -9,7 +9,7 @@ set(BASE_HEADERS
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
-  set(METAL_FLAGS -Wall -Wextra -fno-fast-math)
+  set(METAL_FLAGS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()
