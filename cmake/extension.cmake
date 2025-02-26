@@ -1,5 +1,7 @@
 include(CMakeParseArguments)
 
+# clang format off
+#
 # ##############################################################################
 # Build metal library
 #
@@ -11,6 +13,8 @@ include(CMakeParseArguments)
 # of source files INCLUDE_DIRS: List of include dirs DEPS: List of dependency
 # files (like headers)
 #
+# clang format on
+
 macro(mlx_build_metallib)
   # Parse args
   set(oneValueArgs TARGET TITLE OUTPUT_DIRECTORY)
@@ -21,7 +25,7 @@ macro(mlx_build_metallib)
   set(MTLLIB_BUILD_TARGET "${MTLLIB_OUTPUT_DIRECTORY}/${MTLLIB_TITLE}.metallib")
 
   # Collect compile options
-  set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math)
+  set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
 
   # Prepare metallib build command
   add_custom_command(
