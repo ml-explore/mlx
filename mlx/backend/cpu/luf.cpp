@@ -11,7 +11,12 @@
 namespace mlx::core {
 
 template <typename T>
-void luf_impl(const array& a, array& lu, array& pivots, array& row_indices, Stream stream) {
+void luf_impl(
+    const array& a,
+    array& lu,
+    array& pivots,
+    array& row_indices,
+    Stream stream) {
   int M = a.shape(-2);
   int N = a.shape(-1);
   int K = std::min(M, N);
@@ -55,12 +60,13 @@ void luf_impl(const array& a, array& lu, array& pivots, array& row_indices, Stre
         int info;
         for (size_t i = 0; i < num_matrices; ++i) {
           // Compute LU factorization of A
-          getrf<T>(/* m */ &M,
-           /* n */ &N,
-           /* a */ a_ptr,
-           /* lda */ &M,
-           /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
-           /* info */ &info);
+          getrf<T>(
+              /* m */ &M,
+              /* n */ &N,
+              /* a */ a_ptr,
+              /* lda */ &M,
+              /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
+              /* info */ &info);
 
           if (info != 0) {
             std::stringstream ss;
