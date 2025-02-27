@@ -94,7 +94,9 @@ void array::detach() {
 bool array::is_available() const {
   if (status() == Status::available) {
     return true;
-  } else if (status() == Status::evaluated && event().is_signaled()) {
+  } else if (
+      status() == Status::evaluated &&
+      (!event().valid() || event().is_signaled())) {
     set_status(Status::available);
     return true;
   }
@@ -103,9 +105,11 @@ bool array::is_available() const {
 
 void array::wait() {
   if (!is_available()) {
-    event().wait();
+    if (event().valid()) {
+      event().wait();
+      detach_event();
+    }
     set_status(Status::available);
-    detach_event();
   }
 }
 
