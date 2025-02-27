@@ -186,7 +186,7 @@ Simd<T, N> erfinv(Simd<T, N> a_) {
       return a * rhs(t);
     }
   } else {
-    return a * select(t > thresh, lhs(t), rhs(t));
+    return a * select(abs(t) > thresh, lhs(t), rhs(t));
   }
 }
 

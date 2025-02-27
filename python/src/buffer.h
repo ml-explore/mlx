@@ -44,6 +44,8 @@ std::string buffer_format(const mx::array& a) {
       return "f";
     case mx::bfloat16:
       return "B";
+    case mx::float64:
+      return "d";
     case mx::complex64:
       return "Zf\0";
     default: {

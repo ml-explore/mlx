@@ -50,7 +50,7 @@ struct SubOp {
 struct ExpSubOp {
   template <typename T>
   METAL_FUNC static constexpr T apply(T x, T y) {
-    return fast::exp(x - y);
+    return fast::exp2(x - y);
   }
 };
 
@@ -103,17 +103,24 @@ template <
       tidl.x * BQ * params->O_strides[2]; // Seqeunce
 
   // Prepare threadgroup memory
-  constexpr short padQ = 0; // 16 / sizeof(T);
-  constexpr short padK = 0; // 16 / sizeof(T);
-  constexpr short padV = 0; // 16 / sizeof(T);
+  constexpr short padQ = 16 / sizeof(T);
+  constexpr short padK = 16 / sizeof(T);
+  constexpr short padV = 16 / sizeof(T);
 
   constexpr short LDQ_tgp = BD + padQ;
   constexpr short LDK_tgp = BK + padK;
   constexpr short LDV_tgp = BD + padV;
 
-  threadgroup T Qs[BQ * (BD + padQ)];
-  threadgroup T Ks[(BK + padK) * BD];
-  threadgroup T Vs[BK * (BD + padV)];
+  constexpr short tgp_mem_0 = (BK + padK) * (BD);
+  constexpr short tgp_mem_1 = BK * (BD + padV);
+  constexpr short tgp_mem_s = tgp_mem_0 > tgp_mem_1 ? tgp_mem_0 : tgp_mem_1;
+
+  threadgroup T Q_smem[BQ * (BD + padQ)];
+  threadgroup T KV_smem[tgp_mem_s];
+
+  threadgroup T* Qs = Q_smem;
+  threadgroup T* Ks = KV_smem;
+  threadgroup T* Vs = KV_smem;
 
   // Prepare block loaders
   using QBlockLoader = BlockLoaderT<
@@ -151,7 +158,7 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  TransformScale<T> ts(static_cast<T>(params->scale));
+  TransformScale<T> ts(static_cast<T>(params->scale * 1.44269504089));
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
@@ -174,7 +181,7 @@ template <
   MMATile<AccumType, TQ, 1, MMAFrag_acc_t> Qtile;
   MMATile<AccumType, 1, TK, MMAFrag_acc_t> Ktile;
   MMATile<AccumType, TQ, TK, MMAFrag_acc_t> Stile;
-  MMATile<AccumType, TK, TD, MMAFrag_acc_t> Vtile;
+  MMATile<AccumType, 1, 1, MMAFrag_acc_t> Vtile;
   MMATile<AccumType, TQ, TD, MMAFrag_acc_t> Otile;
 
   Otile.clear();
@@ -224,11 +231,12 @@ template <
       loader_k.load_unsafe();
     }
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
     // Do S = Q @ K.T
     Stile.clear();
 
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    STEEL_PRAGMA_UNROLL
     for (short dd = 0; dd < TD; dd++) {
       simdgroup_barrier(mem_flags::mem_none);
 
@@ -264,7 +272,7 @@ template <
       }
     }
 
-    simdgroup_barrier(mem_flags::mem_none);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Load V blocks
     if (!align_K && kb == (params->NK_aligned)) {
@@ -292,7 +300,7 @@ template <
     // Factor exp(rowmax(Si) - rowmax(Si-1))
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < kRowsPT; ++i) {
-      factor[i] = fast::exp(max_score[i] - new_max[i]);
+      factor[i] = fast::exp2(max_score[i] - new_max[i]);
     }
 
     // Save max for next iteration
@@ -316,12 +324,35 @@ template <
 
     // Load V into registers
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    Vtile.template load<T, 1, 1, LDV_tgp, 1>(&Vs[Vs_offset]);
 
-    simdgroup_barrier(mem_flags::mem_none);
+    STEEL_PRAGMA_UNROLL
+    for (short iq = 0; iq < TQ; iq++) {
+      STEEL_PRAGMA_UNROLL
+      for (short id = 0; id < TD; id++) {
+        STEEL_PRAGMA_UNROLL
+        for (short ik = 0; ik < TK; ik++) {
+          if constexpr (BD == 128) {
+            simdgroup_barrier(mem_flags::mem_none);
+          }
 
-    // Do O = S @ V
-    tile_matmad(Otile, Stile, Vtile, Otile);
+          const short kk = ik * kFragSize;
+          const short dd = id * kFragSize;
+
+          Vtile.template load<T, 1, 1, LDV_tgp, 1>(
+              &Vs[Vs_offset + kk * LDV_tgp + dd]);
+
+          if constexpr (BD == 128) {
+            simdgroup_barrier(mem_flags::mem_none);
+          }
+
+          MMAFrag_acc_t::mma(
+              Otile.frag_at(iq, id),
+              Stile.frag_at(iq, ik),
+              Vtile.frag_at(0, 0),
+              Otile.frag_at(iq, id));
+        }
+      }
+    }
 
     // Prepare for next iteration
     loader_k.next();

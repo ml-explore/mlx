@@ -62,6 +62,12 @@ struct BaseMMAFrag<T, 8, 8> {
   typedef metal::vec<T, kElemRows> row_frag_type;
   typedef metal::vec<T, kElemCols> col_frag_type;
 
+  template <typename U>
+  using dtype_mat_t = typename metal::simdgroup_matrix<U, kFragRows, kFragCols>;
+
+  template <typename U>
+  using dtype_frag_t = typename metal::vec<U, kElemsPerFrag>;
+
   METAL_FUNC static constexpr short2 get_coord(ushort simd_lane_id
                                                [[thread_index_in_simdgroup]]) {
     const short qid = simd_lane_id / 4;
@@ -158,30 +164,32 @@ struct BaseMMAFrag<T, 8, 8> {
     }
   }
 
+  template <typename Atype, typename Btype, typename Ctype>
   METAL_FUNC static constexpr void mma(
       thread frag_type& D,
-      thread frag_type& A,
-      thread frag_type& B,
-      thread frag_type& C) {
+      thread dtype_frag_t<Atype>& A,
+      thread dtype_frag_t<Btype>& B,
+      thread dtype_frag_t<Ctype>& C) {
     mat_type D_mat;
-    mat_type A_mat;
-    mat_type B_mat;
-    mat_type C_mat;
+    dtype_mat_t<Atype> A_mat;
+    dtype_mat_t<Btype> B_mat;
+    dtype_mat_t<Ctype> C_mat;
 
-    reinterpret_cast<thread frag_type&>(A_mat.thread_elements()) = A;
-    reinterpret_cast<thread frag_type&>(B_mat.thread_elements()) = B;
-    reinterpret_cast<thread frag_type&>(C_mat.thread_elements()) = C;
+    reinterpret_cast<thread dtype_frag_t<Atype>&>(A_mat.thread_elements()) = A;
+    reinterpret_cast<thread dtype_frag_t<Btype>&>(B_mat.thread_elements()) = B;
+    reinterpret_cast<thread dtype_frag_t<Ctype>&>(C_mat.thread_elements()) = C;
 
     mma(D_mat, A_mat, B_mat, C_mat);
 
     D = reinterpret_cast<thread frag_type&>(D_mat.thread_elements());
   }
 
+  template <typename Atype, typename Btype, typename Ctype>
   METAL_FUNC static constexpr void mma(
       thread mat_type& D,
-      thread mat_type& A,
-      thread mat_type& B,
-      thread mat_type& C) {
+      thread dtype_mat_t<Atype>& A,
+      thread dtype_mat_t<Btype>& B,
+      thread dtype_mat_t<Ctype>& C) {
     simdgroup_multiply_accumulate(D, A, B, C);
   }
 
@@ -242,7 +250,7 @@ struct MMATile {
   typedef typename MMAFrag_t::mat_type mat_type;
   typedef typename MMAFrag_t::frag_type frag_type;
 
-  frag_type val_frags[kNumFrags] = {frag_type(0)};
+  frag_type val_frags[kNumFrags]; // = {frag_type(0)};
 
   METAL_FUNC MMATile() thread {}
 
@@ -409,24 +417,37 @@ struct MMATile {
   }
 };
 
-template <typename T, typename U, int M, int N, int K>
+template <
+    typename Dtype,
+    typename Atype,
+    typename Btype,
+    typename Ctype,
+    int M,
+    int N,
+    int K,
+    class MMAFragD,
+    class MMAFragA,
+    class MMAFragB,
+    class MMAFragC>
 METAL_FUNC void tile_matmad(
-    thread MMATile<T, M, N>& D,
-    thread MMATile<U, M, K>& A,
-    thread MMATile<U, K, N>& B,
-    thread MMATile<T, M, N>& C) {
+    thread MMATile<Dtype, M, N, MMAFragD>& D,
+    thread MMATile<Atype, M, K, MMAFragA>& A,
+    thread MMATile<Btype, K, N, MMAFragB>& B,
+    thread MMATile<Ctype, M, N, MMAFragC>& C) {
   STEEL_PRAGMA_UNROLL
-  for (short k = 0; k < K; ++k) {
+  for (short m = 0; m < M; ++m) {
     STEEL_PRAGMA_UNROLL
-    for (short m = 0; m < M; ++m) {
+    for (short n = 0; n < N; ++n) {
+      short m_serp = m; //(n % 2) ? (M - 1 - m) : m;
+      short n_serp = (m % 2) ? (N - 1 - n) : n;
+
       STEEL_PRAGMA_UNROLL
-      for (short n = 0; n < N; ++n) {
-        short n_serp = (m % 2) ? (N - 1 - n) : n;
-        MMATile<T, M, N>::MMAFrag_t::mma(
-            D.frag_at(m, n_serp),
-            A.frag_at(m, k),
+      for (short k = 0; k < K; ++k) {
+        MMAFragD::mma(
+            D.frag_at(m_serp, n_serp),
+            A.frag_at(m_serp, k),
             B.frag_at(k, n_serp),
-            C.frag_at(m, n_serp));
+            C.frag_at(m_serp, n_serp));
       }
     }
   }

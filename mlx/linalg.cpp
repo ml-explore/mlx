@@ -18,6 +18,14 @@ void check_cpu_stream(const StreamOrDevice& s, const std::string& prefix) {
         "Explicitly pass a CPU stream to run it.");
   }
 }
+void check_float(Dtype dtype, const std::string& prefix) {
+  if (dtype != float32 && dtype != float64) {
+    std::ostringstream msg;
+    msg << prefix << " Arrays must have type float32 or float64. "
+        << "Received array with type " << dtype << ".";
+    throw std::invalid_argument(msg.str());
+  }
+}
 
 Dtype at_least_float(const Dtype& d) {
   return issubdtype(d, inexact) ? d : promote_types(d, float32);
@@ -208,12 +216,8 @@ array norm(
 
 std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::qr]");
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::qr] Arrays must type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), "[linalg::qr]");
+
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::qr] Arrays must have >= 2 dimensions. Received array "
@@ -237,12 +241,8 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
 std::vector<array>
 svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::svd]");
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::svd] Input array must have type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), "[linalg::svd]");
+
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::svd] Input array must have >= 2 dimensions. Received array "
@@ -284,12 +284,8 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
 
 array inv_impl(const array& a, bool tri, bool upper, StreamOrDevice s) {
   check_cpu_stream(s, "[linalg::inv]");
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::inv] Arrays must type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), "[linalg::inv]");
+
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::inv] Arrays must have >= 2 dimensions. Received array "
@@ -325,13 +321,7 @@ array cholesky(
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::cholesky]");
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::cholesky] Arrays must type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
+  check_float(a.dtype(), "[linalg::cholesky]");
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::cholesky] Arrays must have >= 2 dimensions. Received array "
@@ -354,12 +344,8 @@ array cholesky(
 
 array pinv(const array& a, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::pinv]");
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::pinv] Arrays must type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), "[linalg::pinv]");
+
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
@@ -401,12 +387,7 @@ array cholesky_inv(
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::cholesky_inv]");
-  if (L.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::cholesky_inv] Arrays must type float32. Received array "
-        << "with type " << L.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(L.dtype(), "[linalg::cholesky_inv]");
 
   if (L.ndim() < 2) {
     std::ostringstream msg;
@@ -507,12 +488,7 @@ void validate_eigh(
     const StreamOrDevice& stream,
     const std::string fname) {
   check_cpu_stream(stream, fname);
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << fname << " Arrays must have type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), fname);
 
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -557,12 +533,7 @@ void validate_lu(
     const StreamOrDevice& stream,
     const std::string& fname) {
   check_cpu_stream(stream, fname);
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << fname << " Arrays must type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  check_float(a.dtype(), fname);
 
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -660,10 +631,12 @@ void validate_solve(
   }
 
   auto out_type = promote_types(a.dtype(), b.dtype());
-  if (out_type != float32) {
+  if (out_type != float32 && out_type != float64) {
     std::ostringstream msg;
-    msg << fname << " Input arrays must promote to float32. Received arrays "
-        << "with type " << a.dtype() << " and " << b.dtype() << ".";
+    msg << fname
+        << " Input arrays must promote to float32 or float64. "
+           " Received arrays with type "
+        << a.dtype() << " and " << b.dtype() << ".";
     throw std::invalid_argument(msg.str());
   }
 }

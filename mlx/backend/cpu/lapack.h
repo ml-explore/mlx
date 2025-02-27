@@ -31,3 +31,22 @@
 #define MLX_LAPACK_FUNC(f) f##_
 
 #endif
+
+#define INSTANTIATE_LAPACK_TYPES(FUNC)                       \
+  template <typename T, typename... Args>                    \
+  void FUNC(Args... args) {                                  \
+    if constexpr (std::is_same_v<T, float>) {                \
+      MLX_LAPACK_FUNC(s##FUNC)(std::forward<Args>(args)...); \
+    } else if constexpr (std::is_same_v<T, double>) {        \
+      MLX_LAPACK_FUNC(d##FUNC)(std::forward<Args>(args)...); \
+    }                                                        \
+  }
+
+INSTANTIATE_LAPACK_TYPES(geqrf)
+INSTANTIATE_LAPACK_TYPES(orgqr)
+INSTANTIATE_LAPACK_TYPES(syevd)
+INSTANTIATE_LAPACK_TYPES(potrf)
+INSTANTIATE_LAPACK_TYPES(gesvdx)
+INSTANTIATE_LAPACK_TYPES(getrf)
+INSTANTIATE_LAPACK_TYPES(getri)
+INSTANTIATE_LAPACK_TYPES(trtri)
