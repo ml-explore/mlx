@@ -6,6 +6,8 @@ from typing import Optional
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+from mlx.nn.layers.linear import Linear
+from mlx.nn.layers.quantized import QuantizedLinear
 
 
 @lru_cache
@@ -22,6 +24,79 @@ def sum_gradients(group):
         return mx.distributed.all_sum(dx, group=group)
 
     return f
+
+
+def _all_to_sharded(parameters: dict, group: Optional[mx.distributed.Group] = None):
+    group = group or mx.distributed.init()
+    N = group.size()
+    r = group.rank()
+
+    # The multiplication with 1 forces a copy, perhaps change to
+    # something better when available.
+    for k in parameters:
+        if not isinstance(parameters[k], mx.array):
+            continue
+
+        step = parameters[k].shape[-2] // N
+        parameters[k] = parameters[k][..., r * step : (r + 1) * step, :] * 1
+
+    return parameters
+
+
+def _sharded_to_all(parameters: dict, group: Optional[mx.distributed.Group] = None):
+    group = group or mx.distributed.init()
+    N = group.size()
+    r = group.rank()
+
+    # The multiplication with 1 forces a copy, perhaps change to
+    # something better when available.
+    for k in parameters:
+        if not isinstance(parameters[k], mx.array):
+            continue
+        if k == "bias":
+            continue
+
+        step = parameters[k].shape[-1] // N
+        parameters[k] = parameters[k][..., r * step : (r + 1) * step] * 1
+
+    return parameters
+
+
+def _check_sharding(sharding):
+    if sharding not in ("all-to-sharded", "sharded-to-all"):
+        raise ValueError(
+            (
+                f"Sharding type {sharding=} not supported, "
+                "choose one of 'all-to-sharded' or 'sharded-to-all'"
+            )
+        )
+
+
+def shard_inplace(
+    module: Module,
+    sharding: str,
+    group: Optional[mx.distributed.Group] = None,
+):
+    _check_sharding(sharding)
+    shard_function = (
+        _all_to_sharded if sharding == "all-to-sharded" else _sharded_to_all
+    )
+    module.update(shard_function(module.parameters(), group))
+
+
+def shard_linear(
+    module: Module,
+    sharding: str,
+    group: Optional[mx.distributed.Group] = None,
+):
+    _check_sharding(sharding)
+    fns = {
+        ("all-to-sharded", True): AllToShardedLinear.from_linear,
+        ("all-to-sharded", False): QuantizedAllToShardedLinear.from_quantized_linear,
+        ("sharded-to-all", True): ShardedToAllLinear.from_linear,
+        ("sharded-to-all", False): QuantizedShardedToAllLinear.from_quantized_linear,
+    }
+    return fns[sharding, isinstance(module, Linear)](module, group)
 
 
 class AllToShardedLinear(Module):
@@ -94,17 +169,10 @@ class AllToShardedLinear(Module):
         cls, linear_layer: Module, group: Optional[mx.distributed.Group] = None
     ):
         group = group or mx.distributed.init()
-        N = group.size()
-        r = group.rank()
         output_dims, input_dims = linear_layer.weight.shape
-        step = output_dims // N
 
         sl = cls(input_dims, output_dims, False, group)
-        # The multiplication with 1.0 forces a copy, perhaps change to
-        # something better when available.
-        sl.weight = linear_layer.weight[r * step : (r + 1) * step] * 1
-        if "bias" in linear_layer:
-            sl.bias = linear_layer.bias[r * step : (r + 1) * step] * 1
+        sl.update(_all_to_sharded(linear_layer.parameters(), group))
 
         return sl
 
@@ -187,17 +255,10 @@ class ShardedToAllLinear(Module):
         cls, linear_layer: Module, group: Optional[mx.distributed.Group] = None
     ):
         group = group or mx.distributed.init()
-        N = group.size()
-        r = group.rank()
         output_dims, input_dims = linear_layer.weight.shape
-        step = input_dims // N
 
         sl = cls(input_dims, output_dims, False, group)
-        # The multiplication with 1.0 forces a copy, perhaps change to
-        # something better when available.
-        sl.weight = linear_layer.weight[:, r * step : (r + 1) * step] * 1
-        if "bias" in linear_layer:
-            sl.bias = linear_layer.bias
+        sl.update(_sharded_to_all(linear_layer.parameters(), group))
 
         return sl
 
@@ -303,11 +364,8 @@ class QuantizedAllToShardedLinear(Module):
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
-        N = group.size()
-        r = group.rank()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims *= 32 // quantized_linear_layer.bits
-        step = output_dims // N
 
         sl = cls(
             input_dims,
@@ -317,11 +375,7 @@ class QuantizedAllToShardedLinear(Module):
             bits=quantized_linear_layer.bits,
             group=group,
         )
-        sl.weight = quantized_linear_layer.weight[r * step : (r + 1) * step] * 1
-        sl.scales = quantized_linear_layer.scales[r * step : (r + 1) * step] * 1
-        sl.biases = quantized_linear_layer.biases[r * step : (r + 1) * step] * 1
-        if "bias" in quantized_linear_layer:
-            sl.bias = quantized_linear_layer.bias[r * step : (r + 1) * step] * 1
+        sl.update(_all_to_sharded(quantized_linear_layer.parameters(), group))
 
         return sl
 
@@ -426,12 +480,8 @@ class QuantizedShardedToAllLinear(Module):
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
-        N = group.size()
-        r = group.rank()
         output_dims, input_dims = quantized_linear_layer.weight.shape
-        step = input_dims // N
-        step_grouped = quantized_linear_layer.scales.shape[1] // N
-        input_dims *= (32 // quantized_linear_layer.bits) * N
+        input_dims *= 32 // quantized_linear_layer.bits
 
         sl = cls(
             input_dims,
@@ -441,16 +491,6 @@ class QuantizedShardedToAllLinear(Module):
             bits=quantized_linear_layer.bits,
             group=group,
         )
-        sl.weight = quantized_linear_layer.weight[:, r * step : (r + 1) * step] * 1
-        sl.scales = (
-            quantized_linear_layer.scales[:, r * step_grouped : (r + 1) * step_grouped]
-            * 1
-        )
-        sl.biases = (
-            quantized_linear_layer.biases[:, r * step_grouped : (r + 1) * step_grouped]
-            * 1
-        )
-        if "bias" in quantized_linear_layer:
-            sl.bias = quantized_linear_layer.bias
+        sl.update(_sharded_to_all(quantized_linear_layer.parameters(), group))
 
         return sl
