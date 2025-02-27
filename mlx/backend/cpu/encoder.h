@@ -9,8 +9,6 @@
 
 namespace mlx::core::cpu {
 
-constexpr int MAX_ACTIVE_TASKS = 100;
-
 struct CommandEncoder {
   CommandEncoder(Stream stream) : stream_(stream) {}
 
@@ -42,9 +40,6 @@ struct CommandEncoder {
   template <class F, class... Args>
   void dispatch(F&& f, Args&&... args) {
     auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
-    while (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS) {
-      scheduler::wait_for_one();
-    }
     scheduler::enqueue(stream_, std::move(task));
   }
 

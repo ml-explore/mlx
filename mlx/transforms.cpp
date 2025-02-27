@@ -14,11 +14,14 @@
 #include "mlx/fence.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/scheduler.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
+
+static constexpr int MAX_ACTIVE_TASKS = 100;
 
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
@@ -193,7 +196,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
       s.attach_event(e->second);
     }
 
-    for (auto in : arr.inputs()) {
+    for (auto& in : arr.inputs()) {
       if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
         // Use fence to wait within a single eval
         // Get the input array's stream fence and wait on the
@@ -213,6 +216,16 @@ array eval_impl(std::vector<array> outputs, bool async) {
       metal::eval(arr);
     } else {
       cpu::eval(arr);
+    }
+
+    if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS) {
+      // Commit any open streams
+      for (auto& [_, e] : events) {
+        if (e.stream().device == Device::gpu) {
+          metal::finalize(e.stream());
+        }
+      }
+      scheduler::wait_for_one();
     }
 
     auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
