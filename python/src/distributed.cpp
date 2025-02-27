@@ -68,19 +68,21 @@ void init_distributed(nb::module_& parent_module) {
 
         Example:
 
-          import mlx.core as mx
+          .. code:: python
 
-          group = mx.distributed.init(backend="ring")
+            import mlx.core as mx
 
+            group = mx.distributed.init(backend="ring")
 
         Args:
           strict (bool, optional): If set to False it returns a singleton group
             in case ``mx.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
-          backend (str, optional): Select a specific distributed backend to
-            initialize. If set to ``any`` then try all available backends and
-            return the first one that succeeds. Subsequent calls will return
-            the first backend that was initialized. Default: ``any``
+          backend (str, optional): Which distributed backend to initialize.
+            Possible values ``mpi``, ``ring``, ``any``. If set to ``any`` all
+            available backends are tried and the first one that succeeds
+            becomes the global group which will be returned in subsequent
+            calls. Default: ``any``
 
         Returns:
           Group: The group representing all the launched processes.
