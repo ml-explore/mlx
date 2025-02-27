@@ -14,6 +14,7 @@ namespace mlx::core {
 
 using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
 Stream to_stream(StreamOrDevice s);
+Stream to_stream(StreamOrDevice s, Device default_);
 
 struct StreamContext {
  public:
