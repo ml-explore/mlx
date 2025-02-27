@@ -122,7 +122,6 @@ void array::wait() {
       detach_event();
     }
     set_status(Status::available);
-    detach_event();
   }
 }
 
