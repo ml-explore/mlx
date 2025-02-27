@@ -229,14 +229,15 @@ void init_linalg(nb::module_& parent_module) {
 
         Args:
             a (array): Input array.
-            stream (Stream, optional): Stream or device. Defaults to ``None``
-              in which case the default stream of the default device is used.
             compute_uv (bool, optional): If ``True``, return the ``U``, ``S``, and ``Vt`` components.
               If ``False``, return only the ``S`` array. Default: ``True``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
 
         Returns:
-            tuple(array, array, array): If compute_uv is ``True`` returns the ``U``, ``S``, and ``Vt`` matrices, 
-            such that ``A = U @ diag(S) @ Vt``. array: If compute_uv is ``False`` returns singular values array ``S``.
+            Union[tuple(array, ...), array]:
+              If compute_uv is ``True`` returns the ``U``, ``S``, and ``Vt`` matrices, such that 
+              ``A = U @ diag(S) @ Vt``. If compute_uv is ``False`` returns singular values array ``S``.
       )pbdoc");
   m.def(
       "inv",
