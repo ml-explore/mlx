@@ -19,11 +19,7 @@ void eval(array& arr) {
     if (arr.is_tracer()) {
       inputs = arr.inputs();
     }
-    try {
-      arr.primitive().eval_cpu(arr.inputs(), outputs);
-    } catch (const std::exception& error) {
-      abort_with_exception(error);
-    }
+    arr.primitive().eval_cpu(arr.inputs(), outputs);
   }
 
   std::unordered_set<std::shared_ptr<array::Data>> buffers;

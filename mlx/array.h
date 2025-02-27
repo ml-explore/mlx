@@ -389,6 +389,10 @@ class array {
     array_desc_->event = std::move(e);
   }
 
+  void detach_event() const {
+    array_desc_->event = Event{};
+  }
+
   // Mark the array as a tracer array (true) or not.
   void set_tracer(bool is_tracer) {
     array_desc_->is_tracer = is_tracer;

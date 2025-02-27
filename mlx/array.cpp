@@ -105,6 +105,7 @@ void array::wait() {
   if (!is_available()) {
     event().wait();
     set_status(Status::available);
+    detach_event();
   }
 }
 
