@@ -38,11 +38,7 @@ void eval(array& arr) {
     }
 
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
-    try {
-      arr.primitive().eval_gpu(arr.inputs(), outputs);
-    } catch (const std::exception& error) {
-      abort_with_exception(error);
-    }
+    arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
   for (auto& in : arr.inputs()) {
