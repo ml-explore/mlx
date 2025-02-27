@@ -10,7 +10,6 @@ namespace mlx::core::cpu {
 void eval(array& arr) {
   auto s = arr.primitive().stream();
 
-  scheduler::notify_new_task(s);
   auto outputs = arr.outputs();
   {
     // If the array is a tracer hold a reference
@@ -34,6 +33,7 @@ void eval(array& arr) {
     buffers.erase(it);
   }
   auto& encoder = cpu::get_command_encoder(s);
+  scheduler::notify_new_task(s);
   encoder.dispatch([s,
                     buffers = std::move(buffers),
                     temps = std::move(encoder.temporaries())]() {
