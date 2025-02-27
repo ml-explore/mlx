@@ -199,9 +199,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // Get the input array's stream fence and wait on the
         // output arrays stream
         fences[it->second].wait(stream, in);
-      } else if (in.event().valid() && in.event().stream() != stream) {
-        // Use event to wait across async eval
-        in.event().wait(stream);
+      } else if (in.event().valid()) {
+        if (in.event().is_signaled()) {
+          in.detach_event();
+        } else if (in.event().stream() != stream) {
+          // Use event to wait across async eval
+          in.event().wait(stream);
+        }
       }
     }
 
