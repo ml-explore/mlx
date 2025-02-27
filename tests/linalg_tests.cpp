@@ -100,7 +100,7 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
       norm(x, -std::numeric_limits<double>::infinity()).item<float>(),
       doctest::Approx(expected));
 
-  x = reshape(arange(9), {3, 3});
+  x = reshape(arange(9, float32), {3, 3});
 
   CHECK(allclose(
             norm(x, 2.0, 0, false),
@@ -129,10 +129,34 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
   CHECK_EQ(
       norm(x, -1.0, std::vector<int>{1, 0}).item<float>(),
       doctest::Approx(3.0));
+  CHECK_EQ(
+      norm(x, 2.0, std::vector<int>{0, 1}, false, Device::cpu).item<float>(),
+      doctest::Approx(14.226707));
+  CHECK_EQ(
+      norm(x, 2.0, std::vector<int>{1, 0}, false, Device::cpu).item<float>(),
+      doctest::Approx(14.226707));
+  CHECK_EQ(
+      norm(x, -2.0, std::vector<int>{0, 1}, false, Device::cpu).item<float>(),
+      doctest::Approx(0.0));
+  CHECK_EQ(
+      norm(x, -2.0, std::vector<int>{1, 0}, false, Device::cpu).item<float>(),
+      doctest::Approx(0.0));
   CHECK_EQ(norm(x, 1.0, std::vector<int>{0, 1}, true).shape(), Shape{1, 1});
   CHECK_EQ(norm(x, 1.0, std::vector<int>{1, 0}, true).shape(), Shape{1, 1});
   CHECK_EQ(norm(x, -1.0, std::vector<int>{0, 1}, true).shape(), Shape{1, 1});
   CHECK_EQ(norm(x, -1.0, std::vector<int>{1, 0}, true).shape(), Shape{1, 1});
+  CHECK_EQ(
+      norm(x, 2.0, std::vector<int>{0, 1}, true, Device::cpu).shape(),
+      Shape{1, 1});
+  CHECK_EQ(
+      norm(x, 2.0, std::vector<int>{1, 0}, true, Device::cpu).shape(),
+      Shape{1, 1});
+  CHECK_EQ(
+      norm(x, -2.0, std::vector<int>{0, 1}, true, Device::cpu).shape(),
+      Shape{1, 1});
+  CHECK_EQ(
+      norm(x, -2.0, std::vector<int>{1, 0}, true, Device::cpu).shape(),
+      Shape{1, 1});
 
   CHECK_EQ(
       norm(x, -1.0, std::vector<int>{-2, -1}, false).item<float>(),
@@ -140,8 +164,14 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
   CHECK_EQ(
       norm(x, 1.0, std::vector<int>{-2, -1}, false).item<float>(),
       doctest::Approx(15.0));
+  CHECK_EQ(
+      norm(x, -2.0, std::vector<int>{-2, -1}, false, Device::cpu).item<float>(),
+      doctest::Approx(0.0));
+  CHECK_EQ(
+      norm(x, 2.0, std::vector<int>{-2, -1}, false, Device::cpu).item<float>(),
+      doctest::Approx(14.226707));
 
-  x = reshape(arange(18), {2, 3, 3});
+  x = reshape(arange(18, float32), {2, 3, 3});
   CHECK_THROWS(norm(x, 2.0, std::vector{0, 1, 2}));
   CHECK(allclose(
             norm(x, 3.0, 0),
@@ -199,6 +229,22 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             .item<bool>());
   CHECK(allclose(norm(x, -1.0, std::vector<int>{1, 2}), array({9, 36}))
             .item<bool>());
+  CHECK(allclose(
+            norm(x, 2.0, std::vector<int>{0, 1}, false, Device::cpu),
+            array({22.045408, 24.155825, 26.318918}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, 2.0, std::vector<int>{1, 2}, false, Device::cpu),
+            array({14.226707, 39.759212}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, -2.0, std::vector<int>{0, 1}, false, Device::cpu),
+            array({3, 2.7378995, 2.5128777}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, -2.0, std::vector<int>{1, 2}, false, Device::cpu),
+            array({3.78331e-08, 2.65557e-07}))
+            .item<bool>());
 }
 
 TEST_CASE("[mlx.core.linalg.norm] string ord") {
@@ -228,14 +274,6 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
             array({14.28285686, 39.7617907}))
             .item<bool>());
   CHECK(allclose(
-            norm(x, "nuc", std::vector<int>{0, 1}, false, Device::cpu),
-            array({25.045408, 26.893724, 28.831797}))
-            .item<bool>());
-  CHECK(allclose(
-            norm(x, "nuc", std::vector<int>{1, 2}, false, Device::cpu),
-            array({15.491934, 40.211937}))
-            .item<bool>());
-  CHECK(allclose(
             norm(x, "f", std::vector<int>{0, 1}),
             array({22.24859546, 24.31049156, 26.43860813}))
             .item<bool>());
@@ -250,6 +288,18 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
   CHECK(allclose(
             norm(x, "f", std::vector<int>{2, 1}),
             array({14.28285686, 39.7617907}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, "nuc", std::vector<int>{0, 1}, false, Device::cpu),
+            array({25.045408, 26.893724, 28.831797}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, "nuc", std::vector<int>{1, 2}, false, Device::cpu),
+            array({15.491934, 40.211937}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, "nuc", std::vector<int>{-2, -1}, false, Device::cpu),
+            array({15.491934, 40.211937}))
             .item<bool>());
 }
 

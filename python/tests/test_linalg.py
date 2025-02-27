@@ -12,7 +12,7 @@ import numpy as np
 class TestLinalg(mlx_tests.MLXTestCase):
     def test_norm(self):
         vector_ords = [None, 0.5, 0, 1, 2, 3, -1, float("inf"), -float("inf")]
-        matrix_ords = [None, "fro", "nuc", -1, 1, float("inf"), -float("inf")]
+        matrix_ords = [None, "fro", "nuc", -1, 1, -2, 2, float("inf"), -float("inf")]
 
         for shape in [(3,), (2, 3), (2, 3, 3)]:
             x_mx = mx.arange(1, math.prod(shape) + 1, dtype=mx.float32).reshape(shape)
@@ -26,7 +26,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 for axis in itertools.combinations(range(len(shape)), num_axes):
                     for keepdims in [True, False]:
                         for o in ords:
-                            stream = mx.cpu if o == "nuc" else mx.default_device()
+                            stream = (
+                                mx.cpu if o in ["nuc", -2, 2] else mx.default_device()
+                            )
                             out_np = np.linalg.norm(
                                 x_np, ord=o, axis=axis, keepdims=keepdims
                             )
@@ -134,7 +136,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
     def test_svd_decomposition(self):
         A = mx.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=mx.float32)
-        U, S, Vt = mx.linalg.svd(A, stream=mx.cpu)
+        U, S, Vt = mx.linalg.svd(A, compute_uv=True, stream=mx.cpu)
         self.assertTrue(
             mx.allclose(U[:, : len(S)] @ mx.diag(S) @ Vt, A, rtol=1e-5, atol=1e-7)
         )
@@ -149,7 +151,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Multiple matrices
         B = A + 10.0
         AB = mx.stack([A, B])
-        Us, Ss, Vts = mx.linalg.svd(AB, stream=mx.cpu)
+        Us, Ss, Vts = mx.linalg.svd(AB, compute_uv=True, stream=mx.cpu)
         for M, U, S, Vt in zip([A, B], Us, Ss, Vts):
             self.assertTrue(
                 mx.allclose(U[:, : len(S)] @ mx.diag(S) @ Vt, M, rtol=1e-5, atol=1e-7)

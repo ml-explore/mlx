@@ -94,8 +94,21 @@ inline array matrix_norm(
         dtype,
         s);
   } else if (ord == 2.0 || ord == -2.0) {
-    throw std::runtime_error(
-        "[linalg::norm] Singular value norms are not implemented.");
+    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
+    auto a_matrix = (row_axis > col_axis)
+        ? moveaxis(moveaxis(a, row_axis, -1, s), col_axis, -1, s)
+        : moveaxis(moveaxis(a, col_axis, -1, s), row_axis, -2, s);
+    a_matrix = svd(a_matrix, false, s).at(0);
+    a_matrix = (ord == 2.0) ? max(a_matrix, -1, false, s)
+                            : min(a_matrix, -1, false, s);
+    if (keepdims) {
+      std::vector<int> sorted_axes = (row_axis < col_axis)
+          ? std::vector<int>{row_axis, col_axis}
+          : std::vector<int>{col_axis, row_axis};
+      a_matrix = expand_dims(a_matrix, sorted_axes, s);
+    }
+    return astype(a_matrix, dtype, s);
   } else {
     std::ostringstream msg;
     msg << "[linalg::norm] Invalid ord " << ord << " for matrix norm.";
@@ -112,16 +125,19 @@ inline array matrix_norm(
   if (ord == "f" || ord == "fro") {
     return l2_norm(a, axis, keepdims, s);
   } else if (ord == "nuc") {
-    auto a_moveaxis = moveaxis(a, axis[1], -1, s);
-    a_moveaxis = moveaxis(
-        a_moveaxis, (axis[0] > axis[1] ? axis[0] - 1 : axis[0]), -2, s);
-    auto nuclear_norm = sum(svd(a_moveaxis, false, s).at(0), -1, false, s);
+    int row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    int col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
+    auto a_matrix = (row_axis > col_axis)
+        ? moveaxis(moveaxis(a, row_axis, -1, s), col_axis, -1, s)
+        : moveaxis(moveaxis(a, col_axis, -1, s), row_axis, -2, s);
+    a_matrix = sum(svd(a_matrix, false, s).at(0), -1, false, s);
     if (keepdims) {
-      std::vector<int> sorted_axes(axis);
-      std::sort(sorted_axes.begin(), sorted_axes.end());
-      nuclear_norm = expand_dims(nuclear_norm, sorted_axes, s);
+      std::vector<int> sorted_axes = (row_axis < col_axis)
+          ? std::vector<int>{row_axis, col_axis}
+          : std::vector<int>{col_axis, row_axis};
+      a_matrix = expand_dims(a_matrix, sorted_axes, s);
     }
-    return nuclear_norm;
+    return a_matrix;
   } else {
     std::ostringstream msg;
     msg << "[linalg::norm] Invalid ord value '" << ord << "' for matrix norm.";
@@ -219,7 +235,7 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 std::vector<array>
-svd(const array& a, bool compute_uv /* = true */, StreamOrDevice s /* = {} */) {
+svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::svd]");
   if (a.dtype() != float32) {
     std::ostringstream msg;
