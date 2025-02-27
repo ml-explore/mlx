@@ -7,7 +7,8 @@
 
 namespace mlx::core {
 
-void svd_impl(const array& a, float* u_data, float* s_data, float* vt_data) {
+template <typename T>
+void svd_impl(const array& a, T* u_data, T* s_data, T* vt_data) {
   // Lapack uses the column-major convention. To avoid having to transpose
   // the input and then transpose the outputs, we swap the indices/sizes of the
   // matrices and take advantage of the following identity (see
@@ -49,8 +50,8 @@ void svd_impl(const array& a, float* u_data, float* s_data, float* vt_data) {
   static const int lwork_query = -1;
 
   static const int ignored_int = 0;
-  static const float ignored_float = 0;
-  static float ignored_output = 0;
+  static const T ignored_float = 0;
+  static T ignored_output = 0;
 
   int info;
 
@@ -131,18 +132,25 @@ void svd_impl(const array& a, float* u_data, float* s_data, float* vt_data) {
   }
 }
 
-void svd_compute_singular(const array& a, array& s) {
-  s.set_data(allocator::malloc_or_wait(s.nbytes()));
+template <typename T>
+void compute_svd(const array& a, bool compute_uv, std::vector<array>& outputs) {
+  if (compute_uv) {
+    array& u = outputs[0];
+    array& s = outputs[1];
+    array& vt = outputs[2];
 
-  svd_impl(a, nullptr, s.data<float>(), nullptr);
-}
+    u.set_data(allocator::malloc_or_wait(u.nbytes()));
+    s.set_data(allocator::malloc_or_wait(s.nbytes()));
+    vt.set_data(allocator::malloc_or_wait(vt.nbytes()));
 
-void svd_compute_uv(const array& a, array& u, array& s, array& vt) {
-  u.set_data(allocator::malloc_or_wait(u.nbytes()));
-  s.set_data(allocator::malloc_or_wait(s.nbytes()));
-  vt.set_data(allocator::malloc_or_wait(vt.nbytes()));
+    svd_impl<T>(a, u.data<T>(), s.data<T>(), vt.data<T>());
+  } else {
+    array& s = outputs[0];
 
-  svd_impl(a, u.data<float>(), s.data<float>(), vt.data<float>());
+    s.set_data(allocator::malloc_or_wait(s.nbytes()));
+
+    svd_impl<T>(a, nullptr, s.data<T>(), nullptr);
+  }
 }
 
 void SVD::eval_cpu(
@@ -150,19 +158,14 @@ void SVD::eval_cpu(
     std::vector<array>& outputs) {
   switch (inputs[0].dtype()) {
     case float32:
-      svd_impl<float>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      compute_svd<float>(inputs[0], compute_uv_, outputs);
       break;
     case float64:
-      svd_impl<double>(inputs[0], outputs[0], outputs[1], outputs[2]);
+      compute_svd<double>(inputs[0], compute_uv_, outputs);
       break;
     default:
       throw std::runtime_error(
           "[SVD::eval_cpu] only supports float32 or float64.");
-  }
-  if (compute_uv_) {
-    svd_compute_uv(inputs[0], outputs[0], outputs[1], outputs[2]);
-  } else {
-    svd_compute_singular(inputs[0], outputs[0]);
   }
 }
 
