@@ -297,7 +297,7 @@ def launch_ring(parser, hosts, args, command):
             "The ring backend requires IPs to be provided instead of hostnames"
         )
 
-    port = 5000
+    port = args.starting_port
     ring_hosts = []
     for h in hosts:
         node = []
@@ -670,6 +670,11 @@ def distributed_config():
 def main():
     parser = argparse.ArgumentParser(description="Launch an MLX distributed program")
     parser.add_argument(
+        "--print-python",
+        action="store_true",
+        help="Print the path to the current python executable and exit",
+    )
+    parser.add_argument(
         "--verbose", action="store_true", help="Print debug messages in stdout"
     )
     parser.add_argument(
@@ -708,9 +713,23 @@ def main():
         help="How many connections per ip to use for the ring backend",
     )
     parser.add_argument(
+        "--starting-port",
+        "-p",
+        type=int,
+        default=5000,
+        help="For the ring backend listen on this port increasing by 1 per rank and IP",
+    )
+    parser.add_argument(
         "--cwd", help="Set the working directory on each node to the provided one"
     )
     args, rest = parser.parse_known_args()
+
+    if args.print_python:
+        print(sys.executable)
+        return
+
+    if len(rest) == 0:
+        parser.error("No script is provided")
 
     # Try to extract a list of hosts and corresponding ips
     if args.hostfile is not None:
