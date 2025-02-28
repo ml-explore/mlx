@@ -36,7 +36,7 @@ A distributed program in MLX is as simple as:
     print(world.rank(), x)
 
 The program above sums the array ``mx.ones(10)`` across all
-distributed processes. However, when this script is ran with ``python`` only
+distributed processes. However, when this script is run with ``python`` only
 one process is launched and no distributed communication takes place. Namely,
 all operations in ``mx.distributed`` are noops when the distributed group has a
 size of one. This property allows us to avoid code that checks if we are in a
@@ -52,7 +52,7 @@ distributed setting similar to the one below:
     if world.size() > 1:
         x = mx.distributed.all_sum(x)
 
-Running distributed programs
+Running Distributed Programs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 MLX provides ``mlx.launch`` a helper script to launch distributed programs.
@@ -66,7 +66,7 @@ Continuing with our initial example we can run it on localhost with 4 processes 
     1 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
     0 array([4, 4, 4, ..., 4, 4, 4], dtype=float32)
 
-we can also run it on some remote hosts by providing their IPs (provided that
+We can also run it on some remote hosts by providing their IPs (provided that
 the script exists on all hosts and they are reachable by ssh)
 
 .. code:: shell
@@ -89,7 +89,7 @@ initialize the ``ring`` backend and if it fails the ``mpi`` backend. If they
 both fail then a singleton group is created.
 
 .. note::
-   After a distributed backend is successfully initialized :func:`init` wil
+   After a distributed backend is successfully initialized :func:`init` will
    return **the same backend** if called without arguments or with backend set to
    ``any``.
 
@@ -171,12 +171,10 @@ Utilizing ``nn.average_gradients``
 
 Although the code example above works correctly; it performs one communication
 per gradient. It is significantly more efficient to aggregate several gradients
-together and perform fewer discrete communication steps.
+together and perform fewer communication steps.
 
-This is the purpose of :func:`mlx.nn.average_gradients`. Specifically, it
-replaces the need for writing ``tree_map`` ourselves while improving the
-achieved bandwidth due to concatenating smaller gradients into one large
-gradient array. The final code looks almost identical to the example above
+This is the purpose of :func:`mlx.nn.average_gradients`. The final code looks
+almost identical to the example above:
 
 .. code:: python
 
@@ -199,20 +197,24 @@ Getting Started with MPI
 ------------------------
 
 MLX already comes with the ability to "talk" to MPI if it is installed on the
-machine. To launch the program in distributed mode we need to use ``mpirun`` or
-``mpiexec`` depending on the MPI installation. The simplest possible way is the
-following which assuming the minimal example in the beginning of this page
-should result in:
+machine. Launching distributed MLX programs that use MPI can be done with
+``mpirun`` as expected. However, in the following examples we will be using
+``mlx.launch --backend mpi`` which takes care of some nuisances such as setting
+absolute paths for the ``mpirun`` executable and the ``libmpi.dyld`` shared
+library.
+
+The simplest possible usage is the following which, assuming the minimal
+example in the beginning of this page, should result in:
 
 .. code:: shell
 
-    $ mpirun -np 2 python test.py
+    $ mlx.launch --backend mpi -n 2 test.py
     1 array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
     0 array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
 
 The above launches two processes on the same (local) machine and we can see
 both standard output streams. The processes send the array of 1s to each other
-and compute the sum which is printed. Launching with ``mpirun -np 4 ...`` would
+and compute the sum which is printed. Launching with ``mlx.launch -n 4 ...`` would
 print 4 etc.
 
 Installing MPI
@@ -228,11 +230,14 @@ with the Anaconda package manager as follows:
 
 Installing with Homebrew may require specifying the location of ``libmpi.dyld``
 so that MLX can find it and load it at runtime. This can simply be achieved by
-passing the ``DYLD_LIBRARY_PATH`` environment variable to ``mpirun``.
+passing the ``DYLD_LIBRARY_PATH`` environment variable to ``mpirun`` and it is
+done automatically by ``mlx.launch``.
 
 .. code:: shell
 
     $ mpirun -np 2 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python test.py
+    $ # or simply
+    $ mlx.launch -n 2 test.py
 
 Setting up Remote Hosts
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -243,42 +248,24 @@ debug connectivity issues is the following:
 
 * ``ssh hostname`` works from all machines to all machines without asking for
   password or host confirmation
-* ``mpirun`` is accessible on all machines. You can call ``mpirun`` using its
-  full path to force all machines to use a specific path.
+* ``mpirun`` is accessible on all machines.
 * Ensure that the ``hostname`` used by MPI is the one that you have configured
   in the ``.ssh/config`` files on all machines.
-
-.. note::
-  For an example hostname ``foo.bar.com`` MPI may use only ``foo`` as
-  the hostname passed to ssh if the current hostname matches ``*.bar.com``.
-
-An easy way to pass the host names to MPI is using a host file. A host file
-looks like the following, where ``host1`` and ``host2`` should be the fully
-qualified domain names or IPs for these hosts.
-
-.. code::
-
-    host1 slots=1
-    host2 slots=1
-
-When using MLX, it is very likely that you want to use 1 slot per host, ie one
-process per host.  The hostfile also needs to contain the current
-host if you want to run on the local host. Passing the host file to
-``mpirun`` is simply done using the ``--hostfile`` command line argument.
 
 Tuning MPI All Reduce
 ^^^^^^^^^^^^^^^^^^^^^
 
-We are working on improving the performance of all reduce on MLX but for now
-the two main things one can do to extract the most out of distributed training with MPI are:
+.. note::
 
-1. Perform a few large reductions instead of many small ones to improve
-   bandwidth and latency (see :func:`mlx.nn.average_gradients`)
-2. Pass ``--mca btl_tcp_links 2`` to ``mpirun`` to configure it to use 2 tcp
-   connections between each host to improve bandwidth
-3. Force MPI to use the most performant network interface by setting ``--mca
-   btl_tcp_if_include <iface>`` where ``<iface>`` should be the interface you want
-   to use.
+    For faster all reduce consider using the ring backend either with Thunderbolt
+    connections or over Ethernet.
+
+Configure MPI to use N tcp connections between each host to improve bandwidth
+by passing ``--mca btl_tcp_links N``.
+
+Force MPI to use the most performant network interface by setting ``--mca
+btl_tcp_if_include <iface>`` where ``<iface>`` should be the interface you want
+to use.
 
 Getting Started with Ring
 -------------------------
@@ -318,18 +305,18 @@ connection from ``123.123.123.4`` and so on and so forth.
 Thunderbolt Ring
 ^^^^^^^^^^^^^^^^
 
-Although the ring backend can have its benefits over MPI even for Ethernet, its
+Although the ring backend can have benefits over MPI even for Ethernet, its
 main purpose is to use Thunderbolt rings for higher bandwidth communication.
 Setting up such thunderbolt rings can be done manually, but is a relatively
-tedious process. To simplify this, we provide the utility ``mlx.prepare_tb_ring``.
+tedious process. To simplify this, we provide the utility ``mlx.distributed_config``.
 
-To use ``mlx.prepare_tb_ring`` your computers need to be accessible by ssh via
+To use ``mlx.distributed_config`` your computers need to be accessible by ssh via
 Ethernet or Wi-Fi. Subsequently, connect them via thunderbolt cables and then call the
 utility as follows:
 
 .. code:: shell
 
-   mlx.prepare_tb_ring --verbose --hosts host1,host2,host3,host4
+   mlx.distributed_config --verbose --hosts host1,host2,host3,host4
 
 By default the script will attempt to discover the thunderbolt ring and provide
 you with the commands to configure each node as well as the ``hostfile.json``
@@ -337,11 +324,11 @@ to use with ``mlx.launch``. If password-less ``sudo`` is available on the nodes
 then ``--auto-setup`` can be used to configure them automatically.
 
 To validate your connection without configuring anything
-``mlx.prepare_tb_ring`` can also plot the ring using DOT format.
+``mlx.distributed_config`` can also plot the ring using DOT format.
 
 .. code:: shell
 
-   mlx.prepare_tb_ring --verbose --hosts host1,host2,host3,host4 --dot >ring.dot
+   mlx.distributed_config --verbose --hosts host1,host2,host3,host4 --dot >ring.dot
    dot -Tpng ring.dot >ring.png
    open ring.png
 

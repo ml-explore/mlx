@@ -27,11 +27,11 @@ or for testing on localhost
 
     mlx.launch -n 2 my_script.py
 
-The script connects to the provided host and launches the script on each host.
-It monitors each of the launched processes and terminates the rest if one of
-them fails unexpectedly or if ``mlx.launch`` is terminated. It also takes care
-of forwarding the output of each remote process to stdout and stderr
-respectively.
+The ``mlx.launch`` command connects to the provided host and launches the input
+script on each host. It monitors each of the launched processes and terminates
+the rest if one of them fails unexpectedly or if ``mlx.launch`` is terminated.
+It also takes care of forwarding the output of each remote process to stdout
+and stderr respectively.
 
 Providing Hosts
 ^^^^^^^^^^^^^^^^
@@ -48,17 +48,20 @@ a hostname to ssh to and a list of IPs to utilize for the communication.
         {"ssh": "hostname2", "ips": ["123.123.1.2", "123.123.2.2"]}
     ]
 
+You can use ``mlx.distributed_config --over ethernet`` to create a hostfile
+with IPs corresponding to the ``en0`` interface.
+
 Setting up Remote Hosts
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 In order to be able to launch the script on each host we need to be able to
-connect via ssh. Moreover the script and python executable need to be on each
+connect via ssh. Moreover the input script and python binary need to be on each
 host and on the same path. A good checklist to debug errors is the following:
 
 * ``ssh hostname`` works without asking for password or host confirmation
-* the python executable is available on all hosts at the same path. You can use
+* the python binary is available on all hosts at the same path. You can use
   ``mlx.launch --print-python`` to see what that path is.
-* the script is available on all hosts at the same path
+* the script you want to run is available on all hosts at the same path
 
 .. _mpi_specifics:
 
