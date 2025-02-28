@@ -2846,6 +2846,11 @@ class TestOps(mlx_tests.MLXTestCase):
         b[::2] = 0
         self.assertTrue(mx.array_equal(b, mx.array([0, 3, 0, 1])))
 
+    def test_slice_with_negative_stride(self):
+        a = mx.random.uniform(shape=(128, 4))
+        out = a[::-1]
+        self.assertTrue(mx.array_equal(out[-1, :], a[0, :]))
+
 
 if __name__ == "__main__":
     unittest.main()
