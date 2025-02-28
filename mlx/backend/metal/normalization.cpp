@@ -77,7 +77,7 @@ void RMSNorm::eval_gpu(
       group_dims = MTL::Size(threadgroup_size, 1, 1);
     }
 
-    uint32_t w_stride = w.strides()[0];
+    uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(
         x.data_shared_ptr() == nullptr ? out : x, 0);
@@ -179,7 +179,7 @@ void RMSNormVJP::eval_gpu(
       group_dims = MTL::Size(threadgroup_size, 1, 1);
     }
 
-    uint32_t w_stride = w.strides()[0];
+    uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(x_in_gx ? gx : x, 0);
     compute_encoder.set_input_array(w, 1);
@@ -192,10 +192,12 @@ void RMSNormVJP::eval_gpu(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
-  ReductionPlan plan(
-      ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
-  strided_reduce_general_dispatch(
-      gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
+  if (gw.ndim() == 1 && gw.size() == axis_size) {
+    ReductionPlan plan(
+        ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
+    strided_reduce_general_dispatch(
+        gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
+  }
 
   d.add_temporaries(std::move(copies), s.index);
 }

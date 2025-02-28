@@ -10,7 +10,7 @@ namespace mlx::core::fast {
 
 array rms_norm(
     const array& x,
-    const array& weight,
+    const std::optional<array>& weight,
     float eps,
     StreamOrDevice s = {});
 
