@@ -197,7 +197,7 @@ if __name__ == "__main__":
         entry_points={
             "console_scripts": [
                 "mlx.launch = mlx.distributed_run:main",
-                "mlx.prepare_tb_ring = mlx.distributed_run:prepare_tb_ring",
+                "mlx.distributed_config = mlx.distributed_run:distributed_config",
             ]
         },
         ext_modules=[CMakeExtension("mlx.core")],

@@ -133,6 +133,11 @@ def log_warning(*args, **kwargs):
     print("\033[33m[WARN]", *args, "\033[0m", **kwargs)
 
 
+def log_error(*args, **kwargs):
+    kwargs["file"] = sys.stderr
+    print("\033[31m[ERROR]", *args, "\033[0m", **kwargs)
+
+
 def parse_hostfile(parser, hostfile):
     """Parse the json hostfile that contains both the hostnames to ssh into and
     the ips to communicate over when using the ring backend.
@@ -363,37 +368,58 @@ def launch_mpi(parser, hosts, args, command):
             pass
 
 
-def prepare_tb_ring():
-    parser = argparse.ArgumentParser(
-        description="Prepare a thunderbolt ring for use with MLX distributed"
-    )
-    parser.add_argument(
-        "--verbose", action="store_true", help="Print debug messages in stdout"
-    )
-    parser.add_argument(
-        "--hosts", default="127.0.0.1", help="A comma separated list of hosts"
-    )
-    parser.add_argument("--hostfile", help="The file containing the hosts")
-    parser.add_argument(
-        "--dot", action="store_true", help="Output the rings in DOT format and exit"
-    )
-    parser.add_argument(
-        "--hostfile-only", action="store_true", help="If set only compute the hostfile"
-    )
-    parser.add_argument(
-        "--output-hostfile", help="If provided, save the hostfile to this path"
-    )
-    parser.add_argument(
-        "--auto-setup",
-        action="store_true",
-        help="If set we will attempt to automatically configure the machines via ssh",
-    )
-    args = parser.parse_args()
+def check_ssh_connections(hosts):
+    results = [False] * len(hosts)
 
-    if args.hostfile is not None:
-        hosts = parse_hostfile(parser, args.hostfile)
-    else:
-        hosts = parse_hostlist(parser, args.hosts, 1)
+    def _check(hostname, i):
+        result = run(
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=5",
+                hostname,
+                "echo",
+                "success",
+            ],
+            stdout=PIPE,
+            stderr=PIPE,
+        )
+        results[i] = result.returncode == 0
+
+    threads = [
+        threading.Thread(target=_check, args=(h.ssh_hostname, i))
+        for i, h in enumerate(hosts)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    if not all(results):
+        log_error("Could not ssh to the following hosts:")
+        for i, h in enumerate(hosts):
+            if not results[i]:
+                log_error("  - ", h.ssh_hostname)
+        log_error()
+        log_error("Maybe they are not set-up for password-less ssh?")
+        sys.exit(1)
+
+
+def prepare_tb_ring(args, hosts):
+    log(
+        args.verbose,
+        f"Preparing a thunderbolt ring for {', '.join(h.ssh_hostname for h in hosts)}",
+    )
+
+    # Check that we can ssh
+    check_ssh_connections(hosts)
+    if args.auto_setup and args.verbose:
+        log_warning(
+            "--auto-setup is requested which requires password-less sudo",
+            "on the remote hosts",
+        )
 
     # Extract the current connectivity from the remote hosts
     thunderbolt_connections = []
@@ -548,6 +574,61 @@ def prepare_tb_ring():
         print("Hostfile")
         print("========")
         print(json.dumps(hostfile, indent=4))
+
+
+def distributed_config():
+    parser = argparse.ArgumentParser(
+        description="Configure remote machines for use with MLX distributed"
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print debug messages in stdout"
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["ring", "mpi"],
+        default="ring",
+        help="Which distributed backend to configure",
+    )
+    parser.add_argument(
+        "--over",
+        choices=["thunderbolt", "ethernet"],
+        default="thunderbolt",
+        help="What type of connectivity to configure",
+    )
+    parser.add_argument(
+        "--hosts", default="127.0.0.1", help="A comma separated list of hosts"
+    )
+    parser.add_argument("--hostfile", help="The file containing the hosts")
+    parser.add_argument(
+        "--dot", action="store_true", help="Output the topology in DOT format and exit"
+    )
+    parser.add_argument(
+        "--hostfile-only", action="store_true", help="If set only compute the hostfile"
+    )
+    parser.add_argument(
+        "--output-hostfile", help="If provided, save the hostfile to this path"
+    )
+    parser.add_argument(
+        "--auto-setup",
+        action="store_true",
+        help="If set we will attempt to automatically configure the machines via ssh",
+    )
+    args = parser.parse_args()
+
+    if args.backend == "mpi" or args.over == "ethernet":
+        raise ValueError(
+            (
+                f"The configuration of {args.backend} over {args.over} is "
+                "not supported yet by mlx.distributed_config"
+            )
+        )
+
+    if args.hostfile is not None:
+        hosts = parse_hostfile(parser, args.hostfile)
+    else:
+        hosts = parse_hostlist(parser, args.hosts, 1)
+
+    prepare_tb_ring(args, hosts)
 
 
 def main():
