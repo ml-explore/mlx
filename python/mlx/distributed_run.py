@@ -576,6 +576,39 @@ def prepare_tb_ring(args, hosts):
         print(json.dumps(hostfile, indent=4))
 
 
+def prepare_hostfile(args, hosts):
+    log(
+        args.verbose,
+        f"Preparing an ethernet hostfile for {', '.join(h.ssh_hostname for h in hosts)}",
+    )
+
+    # Check that we can ssh
+    check_ssh_connections(hosts)
+
+    # Get the ips for each host
+    for h in hosts:
+        log(args.verbose, "Getting the ip from", h.ssh_hostname)
+        h.ips.append(
+            run(
+                ["ssh", h.ssh_hostname, "ipconfig", "getifaddr", "en0"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        )
+
+    hostfile = []
+    for h in hosts:
+        hostfile.append(dict(ssh=h.ssh_hostname, ips=h.ips))
+
+    if args.output_hostfile:
+        with open(args.output_hostfile, "w") as f:
+            json.dump(hostfile, f, indent=4)
+    else:
+        print("Hostfile")
+        print("========")
+        print(json.dumps(hostfile, indent=4))
+
+
 def distributed_config():
     parser = argparse.ArgumentParser(
         description="Configure remote machines for use with MLX distributed"
@@ -615,10 +648,10 @@ def distributed_config():
     )
     args = parser.parse_args()
 
-    if args.backend == "mpi" or args.over == "ethernet":
+    if args.backend == "mpi" and args.over == "thunderbolt":
         raise ValueError(
             (
-                f"The configuration of {args.backend} over {args.over} is "
+                "The configuration of MPI over thunderbolt is "
                 "not supported yet by mlx.distributed_config"
             )
         )
@@ -628,7 +661,10 @@ def distributed_config():
     else:
         hosts = parse_hostlist(parser, args.hosts, 1)
 
-    prepare_tb_ring(args, hosts)
+    if args.over == "thunderbolt":
+        prepare_tb_ring(args, hosts)
+    else:
+        prepare_hostfile(args, hosts)
 
 
 def main():
