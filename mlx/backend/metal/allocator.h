@@ -43,7 +43,7 @@ class BufferCache {
   void remove_from_list(BufferHolder* to_remove);
 
   MTL::Device* device_;
-  MTL::Heap* heap_;
+  MTL::Heap* heap_{nullptr};
 
   std::multimap<size_t, BufferHolder*> buffer_pool_;
   BufferHolder* head_;
