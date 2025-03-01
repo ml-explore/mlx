@@ -25,12 +25,12 @@ void init_fast(nb::module_& parent_module) {
       "rms_norm",
       &mx::fast::rms_norm,
       "x"_a,
-      "weight"_a,
+      "weight"_a.none(),
       "eps"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rms_norm(x: array, weight: array, eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rms_norm(x: array, weight: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Root Mean Square normalization (RMS norm).
 
@@ -38,9 +38,9 @@ void init_fast(nb::module_& parent_module) {
 
         Args:
             x (array): Input array.
-            weight (array): A multiplicative weight to scale the result by.
+            weight (array, optional): A multiplicative weight to scale the result by.
               The ``weight`` should be one-dimensional with the same size
-              as the last axis of ``x``.
+              as the last axis of ``x``. If set to ``None`` then no scaling happens.
             eps (float): A small additive constant for numerical stability.
 
         Returns:

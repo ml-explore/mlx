@@ -298,6 +298,9 @@ class TestFast(mlx_tests.MLXTestCase):
             rx = rms_norm(x, weight, eps)
             rx_fast = mx.fast.rms_norm(x, weight, eps)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = rms_norm(x, mx.ones_like(weight), eps)
+            rx_fast = mx.fast.rms_norm(x, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
         for eps in epss:
             dtype, _, dims = defaults
@@ -306,6 +309,9 @@ class TestFast(mlx_tests.MLXTestCase):
             rx = rms_norm(x, weight, eps)
             rx_fast = mx.fast.rms_norm(x, weight, eps)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = rms_norm(x, mx.ones_like(weight), eps)
+            rx_fast = mx.fast.rms_norm(x, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
         for dims in dimss:
             dtype, eps, _ = defaults
@@ -313,6 +319,9 @@ class TestFast(mlx_tests.MLXTestCase):
             weight = mx.random.uniform(shape=(dims,)).astype(dtype)
             rx = rms_norm(x, weight, eps)
             rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = rms_norm(x, mx.ones_like(weight), eps)
+            rx_fast = mx.fast.rms_norm(x, None, eps)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
         # Test > 4096
@@ -333,6 +342,8 @@ class TestFast(mlx_tests.MLXTestCase):
         eps = 1e-5
         f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
         f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
+        f3 = lambda x, y: (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
+        f4 = lambda x, y: (mx.fast.rms_norm(x, None, eps) * y).sum()
 
         x = mx.random.uniform(shape=(8, 100, D))
         w = mx.random.uniform(shape=(D,))
@@ -341,6 +352,9 @@ class TestFast(mlx_tests.MLXTestCase):
         gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        gx1 = mx.grad(f3, argnums=(0,))(x, y)
+        gx2 = mx.grad(f4, argnums=(0,))(x, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         D = 8192
         x = mx.random.uniform(shape=(2, 2, D))
@@ -350,6 +364,9 @@ class TestFast(mlx_tests.MLXTestCase):
         gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        gx1 = mx.grad(f3, argnums=(0,))(x, y)
+        gx2 = mx.grad(f4, argnums=(0,))(x, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         def gf(f):
             def inner(x, w, y):
