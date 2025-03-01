@@ -40,7 +40,7 @@ void init_fast(nb::module_& parent_module) {
             x (array): Input array.
             weight (array, optional): A multiplicative weight to scale the result by.
               The ``weight`` should be one-dimensional with the same size
-              as the last axis of ``x``. If set to ``None`` the no scaling happens.
+              as the last axis of ``x``. If set to ``None`` then no scaling happens.
             eps (float): A small additive constant for numerical stability.
 
         Returns:
