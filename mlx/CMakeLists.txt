@@ -43,6 +43,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 
 if(MLX_BUILD_METAL)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/metal)
+elseif(MLX_BUILD_WEBGPU)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/webgpu)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_metal)
 endif()
