@@ -14,6 +14,10 @@ std::tuple<int64_t, Strides> prepare_slice(
     data_offset += start_indices[i] * in.strides()[i];
     inp_strides[i] = in.strides()[i] * strides[i];
   }
+  // Normalize the offset
+  if (data_offset < 0) {
+    data_offset += in.data_size();
+  }
   return std::make_tuple(data_offset, inp_strides);
 }
 
@@ -54,9 +58,10 @@ void slice(
       data_end += end_idx * in.strides()[i];
     }
   }
-  // data_end can be -1
-  size_t data_size =
-      data_end < 0 ? (data_offset - data_end) : (data_end - data_offset);
+  if (data_end < 0) {
+    data_end += in.data_size();
+  }
+  size_t data_size = (data_end - data_offset);
   shared_buffer_slice(in, inp_strides, data_offset, data_size, out);
 }
 
