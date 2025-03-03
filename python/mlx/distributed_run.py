@@ -14,7 +14,6 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from queue import Queue, Empty as QueueEmpty
 from select import select
 from subprocess import PIPE, Popen, run
 from typing import Optional
