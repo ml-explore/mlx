@@ -9,7 +9,11 @@
 namespace mlx::core {
 
 template <typename T>
-void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stream stream) {
+void svd_impl(
+    const array& a,
+    std::vector<array>& outputs,
+    bool compute_uv,
+    Stream stream) {
   // Lapack uses the column-major convention. To avoid having to transpose
   // the input and then transpose the outputs, we swap the indices/sizes of the
   // matrices and take advantage of the following identity (see
@@ -56,12 +60,14 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
 
     s_ptr = s.data<T>();
     u_ptr = u.data<T>();
-    vt_ptr = v.data<T>();
+    vt_ptr = vt.data<T>();
   } else {
+    array& s = outputs[0];
+
     s.set_data(allocator::malloc_or_wait(s.nbytes()));
 
-    array& s = outputs[0];
     encoder.set_output_array(s);
+
     s_ptr = s.data<T>();
     u_ptr = nullptr;
     vt_ptr = nullptr;
@@ -91,7 +97,6 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
 
     static const int ignored_int = 0;
     static const T ignored_float = 0;
-    static T ignored_output = 0;
 
     int info;
 
@@ -110,12 +115,10 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
         /* il = */ &ignored_int,
         /* iu = */ &ignored_int,
         /* ns = */ &ns,
-        /* s = */ s_ptr + K * i,
-        // According to the identity above, lapack will write Vᵀᵀ as U.
-        /* u = */ vt_ptr ? vt_ptr + N * N * i : &ignored_output,
+        /* s = */ nullptr,
+        /* u = */ nullptr,
         /* ldu = */ &ldu,
-        // According to the identity above, lapack will write Uᵀ as Vᵀ.
-        /* vt = */ u_ptr ? u_ptr + M * M * i : &ignored_output,
+        /* vt = */ nullptr,
         /* ldvt = */ &ldvt,
         /* work = */ &workspace_dimension,
         /* lwork = */ &lwork_query,
@@ -149,10 +152,10 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
           /* ns = */ &ns,
           /* s = */ s_ptr + K * i,
           // According to the identity above, lapack will write Vᵀᵀ as U.
-          /* u = */ vt_ptr + N * N * i,
+          /* u = */ vt_ptr ? vt_ptr + N * N * i : nullptr,
           /* ldu = */ &ldu,
           // According to the identity above, lapack will write Uᵀ as Vᵀ.
-          /* vt = */ u_ptr + M * M * i,
+          /* vt = */ u_ptr ? u_ptr + M * M * i : nullptr,
           /* ldvt = */ &ldvt,
           /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
           /* lwork = */ &lwork,
@@ -177,8 +180,11 @@ void svd_impl(const array& a, std::vector<array>& outputs, bool compute_uv, Stre
 }
 
 template <typename T>
-void compute_svd(const array& a, bool compute_uv, std::vector<array>& outputs, Stream stream) {
-}
+void compute_svd(
+    const array& a,
+    bool compute_uv,
+    std::vector<array>& outputs,
+    Stream stream) {}
 
 void SVD::eval_cpu(
     const std::vector<array>& inputs,
