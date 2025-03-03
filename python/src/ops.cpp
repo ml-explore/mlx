@@ -5124,4 +5124,23 @@ void init_ops(nb::module_& m) {
                  [0, 1, 0],
                  [0, 1, 0]], dtype=float32)
       )pbdoc");
+  m.def(
+      "contiguous",
+      &mx::contiguous,
+      nb::arg(),
+      "allow_col_major"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def contiguous(a: array, /, allow_col_major: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Force an array to be row contiguous. Copy if necessary.
+
+      Args:
+        a (array): The input to make contiguous
+        allow_col_major (bool): Consider column major as contiguous and don't copy
+
+      Returns:
+        array: The row or col contiguous output.
+    )pbdoc");
 }

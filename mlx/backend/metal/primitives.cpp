@@ -252,8 +252,10 @@ void Concatenate::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (in.flags().row_contiguous ||
-      (allow_col_major_ && in.flags().col_contiguous)) {
+  constexpr size_t extra_bytes = 16384;
+  if (in.buffer_size() <= out.nbytes() + extra_bytes &&
+      (in.flags().row_contiguous ||
+       (allow_col_major_ && in.flags().col_contiguous))) {
     move_or_copy(in, out);
   } else {
     copy_gpu(in, out, CopyType::General);
