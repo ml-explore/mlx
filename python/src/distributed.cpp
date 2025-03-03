@@ -48,11 +48,7 @@ void init_distributed(nb::module_& parent_module) {
               color (int): A value to group processes into subgroups.
               key (int, optional): A key to optionally change the rank ordering
                 of the processes.
-          )pbdoc")
-      .def(
-          "barrier",
-          &mx::distributed::Group::barrier,
-          "Make a synhronization point for all nodes in the group");
+          )pbdoc");
 
   m.def(
       "is_available",
