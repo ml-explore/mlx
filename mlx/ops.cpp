@@ -993,6 +993,9 @@ array concatenate(
     throw std::invalid_argument(
         "[concatenate] No arrays provided for concatenation");
   }
+  if (arrays.size() == 1) {
+    return arrays[0];
+  }
 
   auto ax = normalize_axis_index(axis, arrays[0].ndim(), "[concatenate] ");
 
