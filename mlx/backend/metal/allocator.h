@@ -43,6 +43,7 @@ class BufferCache {
   void remove_from_list(BufferHolder* to_remove);
 
   MTL::Device* device_;
+  MTL::Heap* heap_{nullptr};
 
   std::multimap<size_t, BufferHolder*> buffer_pool_;
   BufferHolder* head_;
@@ -78,7 +79,15 @@ class MetalAllocator : public allocator::Allocator {
 
  private:
   MTL::Device* device_;
+
+  // The size of allocations which go on the heap until it is full. This size
+  // is chosen because it is the actual minimum size of a buffer allocated from
+  // the heap, a heap can have at most heap.size() / 256 buffers.
+  static constexpr int small_size_ = 256;
+  static constexpr int heap_size_ = 1 << 20;
+  MTL::Heap* heap_;
   MetalAllocator();
+  ~MetalAllocator();
   friend MetalAllocator& allocator();
 
   // Caching allocator
