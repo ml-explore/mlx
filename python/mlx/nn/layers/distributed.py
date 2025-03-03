@@ -2,7 +2,7 @@
 
 import math
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -26,7 +26,20 @@ def sum_gradients(group):
     return f
 
 
-def _all_to_sharded(parameters: dict, group: Optional[mx.distributed.Group] = None):
+def _split(weight, groups, axis):
+    if isinstance(groups, int) or isinstance(groups[0], int):
+        return mx.split(weight, groups, axis=axis)
+
+    N = weight.shape[axis]
+    indices = [int(g * N) for g in groups]
+    return mx.split(weight, indices, axis=axis)
+
+
+def _all_to_sharded(
+    parameters: dict,
+    groups: Union[int, list] = 1,
+    group: Optional[mx.distributed.Group] = None,
+):
     group = group or mx.distributed.init()
     N = group.size()
     r = group.rank()
@@ -37,13 +50,25 @@ def _all_to_sharded(parameters: dict, group: Optional[mx.distributed.Group] = No
         if not isinstance(parameters[k], mx.array):
             continue
 
-        step = parameters[k].shape[-2] // N
-        parameters[k] = parameters[k][..., r * step : (r + 1) * step, :] * 1
+        axis = max(parameters[k].ndim - 2, 0)
+        parameters[k] = mx.contiguous(
+            mx.concatenate(
+                [
+                    _split(part, N, axis)[r]
+                    for part in _split(parameters[k], groups, axis)
+                ],
+                axis=axis,
+            )
+        )
 
     return parameters
 
 
-def _sharded_to_all(parameters: dict, group: Optional[mx.distributed.Group] = None):
+def _sharded_to_all(
+    parameters: dict,
+    groups: Union[int, list] = 1,
+    group: Optional[mx.distributed.Group] = None,
+):
     group = group or mx.distributed.init()
     N = group.size()
     r = group.rank()
@@ -56,8 +81,12 @@ def _sharded_to_all(parameters: dict, group: Optional[mx.distributed.Group] = No
         if k == "bias":
             continue
 
-        step = parameters[k].shape[-1] // N
-        parameters[k] = parameters[k][..., r * step : (r + 1) * step] * 1
+        parameters[k] = mx.contiguous(
+            mx.concatenate(
+                [_split(part, N, -1)[r] for part in _split(parameters[k], groups, -1)],
+                axis=-1,
+            )
+        )
 
     return parameters
 
@@ -75,18 +104,22 @@ def _check_sharding(sharding):
 def shard_inplace(
     module: Module,
     sharding: str,
+    *,
+    groups: Union[int, list] = 1,
     group: Optional[mx.distributed.Group] = None,
 ):
     _check_sharding(sharding)
     shard_function = (
         _all_to_sharded if sharding == "all-to-sharded" else _sharded_to_all
     )
-    module.update(shard_function(module.parameters(), group))
+    module.update(shard_function(module.parameters(), groups=groups, group=group))
 
 
 def shard_linear(
     module: Module,
     sharding: str,
+    *,
+    groups: Union[int, list] = 1,
     group: Optional[mx.distributed.Group] = None,
 ):
     _check_sharding(sharding)
@@ -96,7 +129,7 @@ def shard_linear(
         ("sharded-to-all", True): ShardedToAllLinear.from_linear,
         ("sharded-to-all", False): QuantizedShardedToAllLinear.from_quantized_linear,
     }
-    return fns[sharding, isinstance(module, Linear)](module, group)
+    return fns[sharding, isinstance(module, Linear)](module, groups=groups, group=group)
 
 
 class AllToShardedLinear(Module):
@@ -166,13 +199,19 @@ class AllToShardedLinear(Module):
 
     @classmethod
     def from_linear(
-        cls, linear_layer: Module, group: Optional[mx.distributed.Group] = None
+        cls,
+        linear_layer: Module,
+        *,
+        groups: Union[int, list] = 1,
+        group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = linear_layer.weight.shape
 
-        sl = cls(input_dims, output_dims, False, group)
-        sl.update(_all_to_sharded(linear_layer.parameters(), group))
+        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
+        sl.update(
+            _all_to_sharded(linear_layer.parameters(), groups=groups, group=group)
+        )
 
         return sl
 
@@ -252,13 +291,19 @@ class ShardedToAllLinear(Module):
 
     @classmethod
     def from_linear(
-        cls, linear_layer: Module, group: Optional[mx.distributed.Group] = None
+        cls,
+        linear_layer: Module,
+        *,
+        groups: Union[int, list] = 1,
+        group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = linear_layer.weight.shape
 
-        sl = cls(input_dims, output_dims, False, group)
-        sl.update(_sharded_to_all(linear_layer.parameters(), group))
+        sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
+        sl.update(
+            _sharded_to_all(linear_layer.parameters(), groups=groups, group=group)
+        )
 
         return sl
 
@@ -361,6 +406,8 @@ class QuantizedAllToShardedLinear(Module):
     def from_quantized_linear(
         cls,
         quantized_linear_layer: Module,
+        *,
+        groups: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
@@ -370,12 +417,16 @@ class QuantizedAllToShardedLinear(Module):
         sl = cls(
             input_dims,
             output_dims,
-            False,
+            hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
             group=group,
         )
-        sl.update(_all_to_sharded(quantized_linear_layer.parameters(), group))
+        sl.update(
+            _all_to_sharded(
+                quantized_linear_layer.parameters(), groups=groups, group=group
+            )
+        )
 
         return sl
 
@@ -477,6 +528,8 @@ class QuantizedShardedToAllLinear(Module):
     def from_quantized_linear(
         cls,
         quantized_linear_layer: Module,
+        *,
+        groups: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
@@ -486,11 +539,15 @@ class QuantizedShardedToAllLinear(Module):
         sl = cls(
             input_dims,
             output_dims,
-            False,
+            hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
             group=group,
         )
-        sl.update(_sharded_to_all(quantized_linear_layer.parameters(), group))
+        sl.update(
+            _sharded_to_all(
+                quantized_linear_layer.parameters(), groups=groups, group=group
+            )
+        )
 
         return sl
