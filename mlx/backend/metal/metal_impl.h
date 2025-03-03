@@ -14,10 +14,8 @@ void new_stream(Stream stream);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
-std::function<void()> make_task(array arr, bool signal);
-
-std::function<void()> make_synchronize_task(
-    Stream s,
-    std::shared_ptr<std::promise<void>> p);
+void eval(array& arr);
+void finalize(Stream s);
+void synchronize(Stream s);
 
 } // namespace mlx::core::metal

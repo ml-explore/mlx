@@ -102,16 +102,9 @@ void binary_op_gpu_inplace(
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  // - If a is donated it goes to the first output
-  // - If b is donated it goes to the first output if a was not donated
-  //   otherwise it goes to the second output.
-  // - If there is only one output only one of a and b will be donated.
-  bool donate_a = a.data_shared_ptr() == nullptr;
-  bool donate_b = b.data_shared_ptr() == nullptr;
   int arg_idx = 0;
-  compute_encoder.set_input_array(donate_a ? outputs[0] : a, arg_idx++);
-  compute_encoder.set_input_array(
-      donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, arg_idx++);
+  compute_encoder.set_input_array(a, arg_idx++);
+  compute_encoder.set_input_array(b, arg_idx++);
   compute_encoder.set_output_array(outputs[0], arg_idx++);
   if (outputs.size() == 2) {
     compute_encoder.set_output_array(outputs[1], arg_idx++);
@@ -164,8 +157,8 @@ void binary_op_gpu(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, outputs[0], bopt, true);
-  set_binary_op_output_data(a, b, outputs[1], bopt, true);
+  set_binary_op_output_data(a, b, outputs[0], bopt);
+  set_binary_op_output_data(a, b, outputs[1], bopt);
   binary_op_gpu_inplace(inputs, outputs, op, s);
 }
 
@@ -195,7 +188,7 @@ void binary_op_gpu(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, out, bopt, true);
+  set_binary_op_output_data(a, b, out, bopt);
   binary_op_gpu_inplace(inputs, out, op, s);
 }
 

@@ -159,15 +159,6 @@ inline bool is_donatable(const array& in, const array& out) {
       in.buffer_size() <= out.nbytes() + donation_extra;
 }
 
-void move_or_copy(const array& in, array& out);
-void move_or_copy(
-    const array& in,
-    array& out,
-    const Strides& strides,
-    array::Flags flags,
-    size_t data_size,
-    size_t offset = 0);
-
 std::pair<bool, Strides> prepare_reshape(const array& in, const array& out);
 
 void shared_buffer_reshape(

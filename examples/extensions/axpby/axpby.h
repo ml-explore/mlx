@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
 #pragma once
 
@@ -85,11 +85,6 @@ class Axpby : public mx::Primitive {
  private:
   float alpha_;
   float beta_;
-
-  /** Fall back implementation for evaluation on CPU */
-  void eval(
-      const std::vector<mx::array>& inputs,
-      std::vector<mx::array>& outputs);
 };
 
 } // namespace my_ext

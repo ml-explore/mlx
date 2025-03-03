@@ -82,7 +82,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& in_contiguous = check_input(in);
 
   if (in_contiguous.is_donatable()) {
-    out.move_shared_buffer(in_contiguous);
+    out.copy_shared_buffer(in_contiguous);
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }

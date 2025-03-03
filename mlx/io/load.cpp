@@ -226,6 +226,11 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
     throw std::runtime_error("[load] Failed to open " + in_stream->label());
   }
 
+  auto stream = to_stream(s, Device::cpu);
+  if (stream.device != Device::cpu) {
+    throw std::runtime_error("[load] Must run on a CPU stream.");
+  }
+
   ////////////////////////////////////////////////////////
   // Read header and prepare array details
 
@@ -309,7 +314,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   auto loaded_array = array(
       shape,
       dtype,
-      std::make_shared<Load>(to_stream(s), in_stream, offset, swap_endianness),
+      std::make_shared<Load>(stream, in_stream, offset, swap_endianness),
       std::vector<array>{});
   if (col_contiguous) {
     loaded_array = transpose(loaded_array, s);

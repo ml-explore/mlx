@@ -22,31 +22,32 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
 
   // Make sure that the last dimension is contiguous
-  std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) -> const array& {
+  auto set_output = [&s, &out](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
+      if (x.is_donatable()) {
+        out.copy_shared_buffer(x);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            x.data_size(),
+            x.strides(),
+            x.flags());
+      }
       return x;
     } else {
-      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
-      copy_gpu(x, copies.back(), CopyType::General, s);
-      return copies.back();
+      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
+      copy_gpu(x, x_copy, CopyType::General, s);
+      out.copy_shared_buffer(x_copy);
+      return x_copy;
     }
   };
-  const array& in = check_input(inputs[0]);
-  if (in.is_donatable()) {
-    out.move_shared_buffer(in);
-  } else {
-    out.set_data(
-        allocator::malloc_or_wait(in.data_size() * in.itemsize()),
-        in.data_size(),
-        in.strides(),
-        in.flags());
-  }
+
+  const array in = set_output(inputs[0]);
 
   int axis_size = in.shape().back();
   int n_rows = in.data_size() / axis_size;
@@ -82,14 +83,11 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        in.data_shared_ptr() == nullptr ? out : in, 0);
+    compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_bytes(axis_size, 2);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
-
-  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core

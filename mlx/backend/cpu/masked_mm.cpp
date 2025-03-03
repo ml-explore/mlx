@@ -5,6 +5,7 @@
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/primitives.h"
 
@@ -64,36 +65,36 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b_pre = inputs[1];
 
   auto check_transpose =
-      [](const array& arr, bool do_copy, bool expand_all = false) {
+      [s = stream()](const array& arr, bool do_copy, bool expand_all = false) {
         auto stx = arr.strides()[arr.ndim() - 2];
         auto sty = arr.strides()[arr.ndim() - 1];
         if (!expand_all && stx == arr.shape(-1) && sty == 1) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector);
-            return std::make_tuple(false, stx, arr_copy);
+            copy(arr, arr_copy, CopyType::Vector, s);
+            return std::make_tuple(false, stx, arr_copy, true);
           }
-          return std::make_tuple(false, stx, arr);
+          return std::make_tuple(false, stx, arr, false);
         } else if (!expand_all && stx == 1 && sty == arr.shape(-2)) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector);
-            return std::make_tuple(true, sty, arr_copy);
+            copy(arr, arr_copy, CopyType::Vector, s);
+            return std::make_tuple(true, sty, arr_copy, true);
           }
-          return std::make_tuple(true, sty, arr);
+          return std::make_tuple(true, sty, arr, false);
         } else {
           array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-          copy(arr, arr_copy, CopyType::General);
+          copy(arr, arr_copy, CopyType::General, s);
           int64_t stx = arr.shape(-1);
-          return std::make_tuple(false, stx, arr_copy);
+          return std::make_tuple(false, stx, arr_copy, true);
         }
       };
 
   bool has_op_mask = inputs.size() > 3;
   bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
-  auto [a_transposed, lda, a] =
+  auto [a_transposed, lda, a, a_copied] =
       check_transpose(a_pre, has_op_mask, inputs.back().dtype() != bool_);
-  auto [b_transposed, ldb, b] =
+  auto [b_transposed, ldb, b, b_copied] =
       check_transpose(b_pre, has_op_mask, inputs.back().dtype() != bool_);
 
   size_t M = a.shape(-2);
@@ -104,31 +105,39 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  auto& encoder = cpu::get_command_encoder(stream());
   if (K == 0) {
-    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<void>(), nbytes = out.nbytes()]() {
+      std::memset(out_ptr, 0, nbytes);
+    });
     return;
   }
 
-  auto mask_array = [](const array& mask,
+  auto mask_array = [](const void* mask,
                        float* data,
                        int block_size,
                        int batch_idx,
                        int X,
                        int Y,
                        size_t X_data_str,
-                       size_t Y_data_str) {
+                       size_t Y_data_str,
+                       const Shape& mask_shape,
+                       const Strides& mask_strides,
+                       bool is_bool) {
+    auto ndim = mask_shape.size();
     auto mask_offset = elem_to_loc(
-        mask.shape(-1) * mask.shape(-2) * batch_idx,
-        mask.shape(),
-        mask.strides());
+        mask_shape[ndim - 1] * mask_shape[ndim - 2] * batch_idx,
+        mask_shape,
+        mask_strides);
 
-    auto X_mask_str = mask.strides()[mask.ndim() - 2];
-    auto Y_mask_str = mask.strides()[mask.ndim() - 1];
+    auto X_mask_str = mask_strides[ndim - 2];
+    auto Y_mask_str = mask_strides[ndim - 1];
 
-    if (mask.dtype() == bool_) {
+    if (is_bool) {
       return mask_matrix(
           data,
-          mask.data<bool>(),
+          static_cast<const bool*>(mask),
           block_size,
           X,
           Y,
@@ -140,7 +149,7 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     } else {
       return mask_matrix(
           data,
-          mask.data<float>(),
+          static_cast<const float*>(mask),
           block_size,
           X,
           Y,
@@ -152,61 +161,155 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   };
 
-  for (int i = 0; i < (out.size() / (M * size_t(N))); ++i) {
-    // Adjust pointer
-    float* ai =
-        a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides());
-    float* bi =
-        b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides());
-    float* ci = out.data<float>() + M * N * i;
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  const void* a_mask_ptr;
+  const void* b_mask_ptr;
+  const void* out_mask_ptr;
+  Shape a_mask_shape;
+  Shape b_mask_shape;
+  Shape out_mask_shape;
+  Strides a_mask_strides;
+  Strides b_mask_strides;
+  Strides out_mask_strides;
+  bool a_mask_bool;
+  bool b_mask_bool;
+  bool out_mask_bool;
+  if (has_op_mask) {
+    auto& a_mask = inputs[inputs.size() - 2];
+    auto& b_mask = inputs[inputs.size() - 1];
+    a_mask_ptr = a_mask.data<void>();
+    b_mask_ptr = b_mask.data<void>();
+    a_mask_shape = a_mask.shape();
+    b_mask_shape = b_mask.shape();
+    a_mask_strides = a_mask.strides();
+    b_mask_strides = b_mask.strides();
+    a_mask_bool = (a_mask.dtype() == bool_);
+    b_mask_bool = (b_mask.dtype() == bool_);
+    encoder.set_input_array(a_mask);
+    encoder.set_input_array(b_mask);
+  }
+  if (has_out_mask) {
+    auto& out_mask = inputs[2];
+    out_mask_ptr = out_mask.data<void>();
+    out_mask_bool = (out_mask.dtype() == bool_);
+    encoder.set_input_array(out_mask);
+    out_mask_shape = out_mask.shape();
+    out_mask_strides = out_mask.strides();
+  }
+  encoder.set_output_array(out);
+  auto a_ptr = a.data<float>();
+  auto b_ptr = b.data<float>();
+  auto out_ptr = out.data<float>();
+  size_t num_matrices = out.size() / (M * size_t(N));
+  auto ldc = out.shape(-1);
 
-    // Zero out blocks in a and b if needed
-    if (has_op_mask) {
-      auto& a_mask = inputs[inputs.size() - 2];
-      mask_array(
-          a_mask,
-          ai,
-          block_size_,
-          i,
+  encoder.dispatch([a_ptr,
+                    b_ptr,
+                    out_ptr,
+                    a_mask_ptr,
+                    b_mask_ptr,
+                    out_mask_ptr,
+                    has_op_mask,
+                    has_out_mask,
+                    block_size = block_size_,
+                    num_matrices,
+                    M,
+                    N,
+                    K,
+                    a_transposed = a_transposed,
+                    b_transposed = b_transposed,
+                    lda = lda,
+                    ldb = ldb,
+                    ldc,
+                    a_shape = a.shape(),
+                    a_strides = a.strides(),
+                    b_shape = b.shape(),
+                    b_strides = b.strides(),
+                    a_mask_shape = std::move(a_mask_shape),
+                    b_mask_shape = std::move(b_mask_shape),
+                    out_mask_shape = std::move(out_mask_shape),
+                    a_mask_strides = std::move(a_mask_strides),
+                    b_mask_strides = std::move(b_mask_strides),
+                    out_mask_strides = std::move(out_mask_strides),
+                    mask_array,
+                    a_mask_bool,
+                    b_mask_bool,
+                    out_mask_bool]() {
+    for (int i = 0; i < num_matrices; ++i) {
+      // Adjust pointer
+      float* ai = a_ptr + elem_to_loc(M * K * i, a_shape, a_strides);
+      float* bi = b_ptr + elem_to_loc(K * N * i, b_shape, b_strides);
+      float* ci = out_ptr + M * N * i;
+
+      // Zero out blocks in a and b if needed
+      if (has_op_mask) {
+        mask_array(
+            a_mask_ptr,
+            ai,
+            block_size,
+            i,
+            M,
+            K,
+            a_transposed ? 1 : lda,
+            a_transposed ? lda : 1,
+            a_mask_shape,
+            a_mask_strides,
+            a_mask_bool);
+
+        mask_array(
+            b_mask_ptr,
+            bi,
+            block_size,
+            i,
+            K,
+            N,
+            b_transposed ? 1 : ldb,
+            b_transposed ? ldb : 1,
+            b_mask_shape,
+            b_mask_strides,
+            b_mask_bool);
+      }
+
+      // Do matmul
+      cblas_sgemm(
+          CblasRowMajor,
+          a_transposed ? CblasTrans : CblasNoTrans, // transA
+          b_transposed ? CblasTrans : CblasNoTrans, // transB
           M,
-          K,
-          a_transposed ? 1 : lda,
-          a_transposed ? lda : 1);
-
-      auto& b_mask = inputs[inputs.size() - 1];
-      mask_array(
-          b_mask,
-          bi,
-          block_size_,
-          i,
-          K,
           N,
-          b_transposed ? 1 : ldb,
-          b_transposed ? ldb : 1);
-    }
+          K,
+          1.0, // alpha
+          ai,
+          lda,
+          bi,
+          ldb,
+          0.0, // beta
+          ci,
+          ldc);
 
-    // Do matmul
-    cblas_sgemm(
-        CblasRowMajor,
-        a_transposed ? CblasTrans : CblasNoTrans, // transA
-        b_transposed ? CblasTrans : CblasNoTrans, // transB
-        M,
-        N,
-        K,
-        1.0, // alpha
-        ai,
-        lda,
-        bi,
-        ldb,
-        0.0, // beta
-        ci,
-        out.shape(-1) // ldc
-    );
-
-    // Zero out blocks in out
-    if (has_out_mask) {
-      mask_array(inputs[2], ci, block_size_, i, M, N, N, 1);
+      // Zero out blocks in out
+      if (has_out_mask) {
+        mask_array(
+            out_mask_ptr,
+            ci,
+            block_size,
+            i,
+            M,
+            N,
+            N,
+            1,
+            out_mask_shape,
+            out_mask_strides,
+            out_mask_bool);
+      }
     }
+  });
+  if (a_copied) {
+    encoder.add_temporary(a);
+  }
+  if (b_copied) {
+    encoder.add_temporary(b);
   }
 }
 
@@ -220,7 +323,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
 
-  auto check_transpose = [](const array& arr) {
+  std::vector<array> temps;
+  auto check_transpose = [s = stream(), &temps](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
@@ -228,10 +332,10 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     } else if (stx == 1 && sty == arr.shape(-2)) {
       return std::make_tuple(true, sty, arr);
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
+      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
+      copy(arr, temps.back(), CopyType::General, s);
       int64_t stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
+      return std::make_tuple(false, stx, temps.back());
     }
   };
 
@@ -246,8 +350,12 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  auto& encoder = cpu::get_command_encoder(stream());
   if (K == 0) {
-    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    encoder.set_output_array(out);
+    encoder.dispatch([out_ptr = out.data<float>(), size = out.size()]() {
+      std::fill_n(out_ptr, size, 0);
+    });
     return;
   }
 
@@ -272,29 +380,61 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   const uint32_t* lhs_indices_ptr = lhs_indices.data<uint32_t>();
   const uint32_t* rhs_indices_ptr = rhs_indices.data<uint32_t>();
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(lhs_indices);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(out);
+  auto ldc = out.shape(-1);
 
-  for (int i = 0; i < batch_size_out; i++) {
-    // Get index
-    uint32_t indx_A = lhs_indices_ptr[elem_to_loc(i, lhs_indices)];
-    uint32_t indx_B = rhs_indices_ptr[elem_to_loc(i, rhs_indices)];
+  encoder.dispatch([a_ptr = a.data<float>(),
+                    b_ptr = b.data<float>(),
+                    out_ptr = out.data<float>(),
+                    M,
+                    N,
+                    K,
+                    lda = lda,
+                    ldb = ldb,
+                    a_transposed = a_transposed,
+                    b_transposed = b_transposed,
+                    ldc,
+                    lhs_indices_ptr,
+                    rhs_indices_ptr,
+                    lhs_indices_shape = lhs_indices.shape(),
+                    lhs_indices_strides = lhs_indices.strides(),
+                    rhs_indices_shape = rhs_indices.shape(),
+                    rhs_indices_strides = rhs_indices.strides(),
+                    batch_size_out,
+                    matrix_stride_out,
+                    batch_shape_A = std::move(batch_shape_A),
+                    batch_shape_B = std::move(batch_shape_B),
+                    batch_strides_A = std::move(batch_strides_A),
+                    batch_strides_B = std::move(batch_strides_B)]() {
+    for (int i = 0; i < batch_size_out; i++) {
+      // Get index
+      uint32_t indx_A = lhs_indices_ptr[elem_to_loc(
+          i, lhs_indices_shape, lhs_indices_strides)];
+      uint32_t indx_B = rhs_indices_ptr[elem_to_loc(
+          i, rhs_indices_shape, rhs_indices_strides)];
 
-    cblas_sgemm(
-        CblasRowMajor,
-        a_transposed ? CblasTrans : CblasNoTrans, // transA
-        b_transposed ? CblasTrans : CblasNoTrans, // transB
-        M,
-        N,
-        K,
-        1.0f, // alpha
-        a.data<float>() + elem_to_loc(indx_A, batch_shape_A, batch_strides_A),
-        lda,
-        b.data<float>() + elem_to_loc(indx_B, batch_shape_B, batch_strides_B),
-        ldb,
-        0.0f, // beta
-        out.data<float>() + matrix_stride_out * i,
-        out.shape(-1) // ldc
-    );
-  }
+      cblas_sgemm(
+          CblasRowMajor,
+          a_transposed ? CblasTrans : CblasNoTrans, // transA
+          b_transposed ? CblasTrans : CblasNoTrans, // transB
+          M,
+          N,
+          K,
+          1.0f, // alpha
+          a_ptr + elem_to_loc(indx_A, batch_shape_A, batch_strides_A),
+          lda,
+          b_ptr + elem_to_loc(indx_B, batch_shape_B, batch_strides_B),
+          ldb,
+          0.0f, // beta
+          out_ptr + matrix_stride_out * i,
+          ldc);
+    }
+  });
+  encoder.add_temporaries(std::move(temps));
 }
 
 } // namespace mlx::core
