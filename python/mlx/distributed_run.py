@@ -763,6 +763,8 @@ def main():
 
     if len(rest) == 0:
         parser.error("No script is provided")
+    if rest[0] == "--":
+        rest.pop(0)
 
     # Try to extract a list of hosts and corresponding ips
     if args.hostfile is not None:
