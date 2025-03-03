@@ -134,7 +134,7 @@ void sdpa_vector(
   size_t k_stride = k.strides()[1];
   size_t v_stride = v.strides()[1];
   MTL::Size group_dims(1024, 1, 1);
-  MTL::Size grid_dims(1, B, 1);
+  MTL::Size grid_dims(B, q.shape(2), 1);
 
   bool has_mask = mask.has_value();
   metal::MTLFCList func_consts = {
@@ -161,10 +161,14 @@ void sdpa_vector(
   if (has_mask) {
     auto& m = *mask;
     compute_encoder.set_input_array(m, 9);
-    int32_t seq_stride = m.ndim() >= 1 ? m.strides().back() : 0;
-    int32_t head_stride = m.ndim() >= 3 ? *(m.strides().end() - 3) : 0;
-    compute_encoder.set_bytes(seq_stride, 10);
-    compute_encoder.set_bytes(head_stride, 11);
+    auto nd = m.ndim();
+    int32_t kv_seq_stride =
+        nd >= 1 && m.shape(-1) > 1 ? m.strides()[nd - 1] : 0;
+    int32_t q_seq_stride = nd >= 2 && m.shape(-2) > 1 ? m.strides()[nd - 2] : 0;
+    int32_t head_stride = nd >= 3 && m.shape(-3) > 1 ? m.strides()[nd - 3] : 0;
+    compute_encoder.set_bytes(kv_seq_stride, 10);
+    compute_encoder.set_bytes(q_seq_stride, 11);
+    compute_encoder.set_bytes(head_stride, 12);
   }
 
   // Launch
@@ -198,7 +202,7 @@ void sdpa_vector_2pass(
   auto k_stride = k.strides()[1];
   auto v_stride = v.strides()[1];
   MTL::Size group_dims(8 * 32, 1, 1);
-  MTL::Size grid_dims(1, B, blocks);
+  MTL::Size grid_dims(B, q.shape(2), blocks);
 
   // Allocate the intermediates
   Shape intermediate_shape;
@@ -246,10 +250,14 @@ void sdpa_vector_2pass(
   if (has_mask) {
     auto& m = *mask;
     compute_encoder.set_input_array(m, 11);
-    int32_t seq_stride = m.ndim() >= 1 ? m.strides().back() : 0;
-    int32_t head_stride = m.ndim() >= 3 ? *(m.strides().end() - 3) : 0;
-    compute_encoder.set_bytes(seq_stride, 12);
-    compute_encoder.set_bytes(head_stride, 13);
+    auto nd = m.ndim();
+    int32_t kv_seq_stride =
+        nd >= 1 && m.shape(-1) > 1 ? m.strides()[nd - 1] : 0;
+    int32_t q_seq_stride = nd >= 2 && m.shape(-2) > 1 ? m.strides()[nd - 2] : 0;
+    int32_t head_stride = nd >= 3 && m.shape(-3) > 1 ? m.strides()[nd - 3] : 0;
+    compute_encoder.set_bytes(kv_seq_stride, 12);
+    compute_encoder.set_bytes(q_seq_stride, 13);
+    compute_encoder.set_bytes(head_stride, 14);
   }
 
   // Launch
@@ -274,7 +282,7 @@ void sdpa_vector_2pass(
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
-  grid_dims = MTL::Size(1, B, 1);
+  grid_dims = MTL::Size(B, q.shape(2), 1);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -301,7 +309,7 @@ void ScaledDotProductAttention::eval_gpu(
     if (!predicate(arr)) {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy_gpu(arr, arr_copy, CopyType::General, s);
-      copies.push_back(arr_copy);
+      copies.push_back(std::move(arr_copy));
       return copies.back();
     } else {
       return arr;
@@ -309,8 +317,32 @@ void ScaledDotProductAttention::eval_gpu(
   };
 
   // Checks if arr is fully row contiguous
-  auto is_contiguous = [](const array& arr) {
-    return arr.flags().row_contiguous;
+  auto ensure_seq_head_transposed = [&copies, &s](const array& arr) {
+    if (arr.shape(2) == 1 && arr.flags().row_contiguous) {
+      return arr;
+    }
+    auto& strides = arr.strides();
+    auto& shape = arr.shape();
+    bool no_copy = (strides[3] == 1) && (strides[2] == shape[3] * shape[1]) &&
+        (strides[1] == shape[3]) && (strides[0] == strides[2] * shape[2]);
+    if (no_copy) {
+      return arr;
+    }
+    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+    auto new_strides = arr_copy.strides();
+    std::swap(new_strides[1], new_strides[2]);
+    auto flags = arr.flags();
+    flags.row_contiguous = shape[1] == 1;
+    flags.col_contiguous = false;
+    flags.contiguous = true;
+    arr_copy.set_data(
+        allocator::malloc_or_wait(arr_copy.nbytes()),
+        arr_copy.size(),
+        std::move(new_strides),
+        flags);
+    copy_gpu_inplace(arr, arr_copy, CopyType::GeneralGeneral, s);
+    copies.push_back(std::move(arr_copy));
+    return copies.back();
   };
 
   // Returns true if the array is row contiguous except the sequence length
@@ -328,8 +360,8 @@ void ScaledDotProductAttention::eval_gpu(
   };
 
   // We are in vector mode ie single query
-  if (q_pre.shape(2) == 1) {
-    const auto& q = copy_unless(is_contiguous, q_pre);
+  if (q_pre.shape(2) <= 8) {
+    const auto& q = ensure_seq_head_transposed(q_pre);
     // 1, heads, seq_len, head_dim
     // mask [1, query_heads, 1, seq_len]
     const auto& k = copy_unless(is_contiguous_except_seq_len, k_pre);
@@ -339,7 +371,19 @@ void ScaledDotProductAttention::eval_gpu(
     if (q.is_donatable() && q.size() == o.size()) {
       o.move_shared_buffer(q);
     } else {
-      o.set_data(allocator::malloc_or_wait(o.nbytes()));
+      if (o.shape(2) == 1) {
+        o.set_data(allocator::malloc_or_wait(o.nbytes()));
+      } else {
+        auto strides = o.strides();
+        std::swap(strides[1], strides[2]);
+        auto flags = q.flags();
+        flags.row_contiguous = q.shape(1) == 1;
+        o.set_data(
+            allocator::malloc_or_wait(o.nbytes()),
+            o.size(),
+            std::move(strides),
+            flags);
+      }
     }
 
     auto mask =
