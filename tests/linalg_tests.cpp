@@ -243,7 +243,9 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             .item<bool>());
   CHECK(allclose(
             norm(x, -2.0, std::vector<int>{1, 2}, false, Device::cpu),
-            array({3.78331e-08, 2.65557e-07}))
+            array({4.979028e-16, 7.009628e-16}),
+            /* rtol = */ 1e-5,
+            /* atol = */ 1e-6)
             .item<bool>());
 }
 

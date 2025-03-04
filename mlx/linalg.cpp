@@ -260,11 +260,11 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   s_shape[rank - 2] = std::min(m, n);
 
   if (!compute_uv) {
-    return array::make_arrays(
-        {s_shape},
-        {a.dtype()},
+    return {array(
+        std::move(s_shape),
+        std::move(a.dtype()),
         std::make_shared<SVD>(to_stream(s), compute_uv),
-        {a});
+        {a})};
   }
 
   auto u_shape = a.shape();
