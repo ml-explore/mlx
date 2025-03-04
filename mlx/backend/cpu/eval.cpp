@@ -20,22 +20,15 @@ void eval(array& arr) {
     }
     arr.primitive().eval_cpu(arr.inputs(), outputs);
   }
+}
 
-  std::unordered_set<std::shared_ptr<array::Data>> buffers;
-  for (auto& in : arr.inputs()) {
-    buffers.insert(in.data_shared_ptr());
-  }
-  for (auto& s : arr.siblings()) {
-    buffers.insert(s.data_shared_ptr());
-  }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
-  }
+void finalize(
+    Stream s,
+    std::unordered_set<std::shared_ptr<array::Data>> retain_buffers) {
   auto& encoder = cpu::get_command_encoder(s);
   scheduler::notify_new_task(s);
   encoder.dispatch([s,
-                    buffers = std::move(buffers),
+                    buffers = std::move(retain_buffers),
                     temps = std::move(encoder.temporaries())]() {
     scheduler::notify_task_completion(s);
   });
