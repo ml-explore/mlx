@@ -3,6 +3,7 @@
 #pragma once
 
 #include <optional>
+#include <variant>
 
 #include "mlx/utils.h"
 
@@ -47,7 +48,7 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
-    const std::optional<array>& mask = std::nullopt,
+    const std::variant<std::monostate, std::string, array>& mask = {},
     const std::optional<int> memory_efficient_threshold = std::nullopt,
     StreamOrDevice s = {});
 
