@@ -567,7 +567,7 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
-    const std::optional<array>& mask,
+    const std::variant<std::monostate, std::string, array>& mask /* = {}*/,
     const std::optional<int> memory_efficient_threshold,
     StreamOrDevice s) {
   for (const auto& tensor : {queries, keys, values}) {
@@ -578,10 +578,29 @@ array scaled_dot_product_attention(
       throw std::invalid_argument(msg.str());
     }
   }
-  if (mask && (*mask).ndim() > 4) {
+
+  bool do_casual = false;
+  bool has_mask = !std::holds_alternative<std::monostate>(mask);
+  bool has_str_mask = has_mask && std::holds_alternative<std::string>(mask);
+  bool has_arr_mask = has_mask && std::holds_alternative<array>(mask);
+  bool has_bool_mask = false;
+
+  if (has_str_mask) {
+    if (std::get<std::string>(mask) != "causal") {
+      std::ostringstream msg;
+      msg << "[scaled_dot_product_attention] invalid mask option '"
+          << std::get<std::string>(mask) << "'. Must be 'causal', or an array.";
+      throw std::invalid_argument(msg.str());
+    } else {
+      do_casual = true;
+    }
+  }
+
+  if (has_arr_mask && (std::get<array>(mask)).ndim() > 4) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] the mask with shape "
-        << (*mask).shape() << " expected to have at most rank 4";
+        << (std::get<array>(mask)).shape()
+        << " expected to have at most rank 4";
     throw std::invalid_argument(msg.str());
   }
 
@@ -631,9 +650,11 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  if (mask) {
+  if (has_arr_mask) {
     // Check type
-    if (promote_types(mask->dtype(), final_type) != final_type) {
+    auto mask_arr = std::get<array>(mask);
+    has_bool_mask = mask_arr.dtype() == bool_;
+    if (promote_types(mask_arr.dtype(), final_type) != final_type) {
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] Mask type must promote to output type. "
           << final_type << ".";
@@ -642,9 +663,10 @@ array scaled_dot_product_attention(
     // Check shape
     auto mask_shape = queries.shape();
     mask_shape.back() = keys.shape(-2);
-    if (broadcast_shapes(mask->shape(), mask_shape) != mask_shape) {
+    if (broadcast_shapes(mask_arr.shape(), mask_shape) != mask_shape) {
       std::ostringstream msg;
-      msg << "[scaled_dot_product_attention] Mask with shape " << mask->shape()
+      msg << "[scaled_dot_product_attention] Mask with shape "
+          << mask_arr.shape()
           << " does not broadcast to implicit scores with shape " << mask_shape
           << ".";
       throw std::invalid_argument(msg.str());
@@ -712,27 +734,28 @@ array scaled_dot_product_attention(
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
-  const bool supports_sdpa_full = query_sequence_length >= threshold && !mask &&
-      sdpa_full_supported_head_dim && stream.device == Device::gpu;
+  const bool supports_sdpa_full = query_sequence_length >= threshold &&
+      !has_mask && sdpa_full_supported_head_dim && stream.device == Device::gpu;
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
       (query_sequence_length <= k.shape(-2)) &&
-      (!mask || mask->dtype() == bool_) && sdpa_vector_supported_head_dim &&
+      (!has_mask || has_bool_mask) && sdpa_vector_supported_head_dim &&
       stream.device == Device::gpu;
 
   const bool implementation_supports_use_case =
       supports_sdpa_full || supports_sdpa_vector;
 
   std::vector<array> inputs = {q, k, v};
-  if (mask) {
-    inputs.push_back(*mask);
+  if (has_arr_mask) {
+    inputs.push_back(std::get<array>(mask));
   }
   if (implementation_supports_use_case) {
     auto out_shape = Shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     return array(
         std::move(out_shape),
         final_type,
-        std::make_shared<ScaledDotProductAttention>(stream, fallback, scale),
+        std::make_shared<ScaledDotProductAttention>(
+            stream, fallback, scale, do_casual),
         std::move(inputs));
   }
   return fallback(inputs)[0];
@@ -741,7 +764,7 @@ array scaled_dot_product_attention(
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
-  return scale_ == a_other.scale_;
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_;
 }
 
 array pack_and_quantize(
