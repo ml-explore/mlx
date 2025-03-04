@@ -684,7 +684,7 @@ array scaled_dot_product_attention(
     threshold = std::max(1, memory_efficient_threshold.value());
   }
 
-  auto fallback = [scale, final_type, n_q_heads, n_kv_heads, s](
+  auto fallback = [scale, final_type, n_q_heads, n_kv_heads, do_casual, s](
                       const std::vector<array>& inputs) {
     auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
     int n_repeats = n_q_heads / n_kv_heads;
@@ -698,9 +698,21 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    if (inputs.size() > 3) {
+    if (inputs.size() > 3 || do_casual) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
-      auto mask = inputs[3];
+      auto mask = inputs.back();
+
+      if (do_casual) {
+        int kL = k.shape(-2);
+        int qL = q.shape(-2);
+        int q_off = (kL - qL) < 0 ? 0 : (kL - qL);
+        auto q_idx = arange(q_off, q_off + qL, s);
+        auto k_idx = arange(0, kL, s);
+        q_idx = expand_dims(q_idx, 1, s);
+        k_idx = expand_dims(k_idx, 0, s);
+        mask = less(q_idx, k_idx, s);
+      }
+
       if (n_repeats > 1 && mask.ndim() >= 3) {
         if (mask.shape(-3) == 1) {
           mask = expand_dims(mask, -3, s);

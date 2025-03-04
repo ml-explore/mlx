@@ -477,7 +477,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
         # fmt: on
 
         shapes = shapes_64 + shapes_128
-        masks = [None, "additive", "bool", "causal"][:3]
+        masks = [None, "additive", "bool", "causal"]
         transposes = (False, True)
 
         for dtype in self.dtypes:
