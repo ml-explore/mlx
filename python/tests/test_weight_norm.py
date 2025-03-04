@@ -4,7 +4,12 @@ import unittest
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
-from mlx.nn.layers.weight_norm import WeightNormConv1d, WeightNormLinear, weight_norm
+from mlx.nn.layers.weight_norm import (
+    WeightNormConv1d,
+    WeightNormConv2d,
+    WeightNormLinear,
+    weight_norm,
+)
 from mlx_tests import MLXTestCase
 
 # Import PyTorch for comparison tests if available
@@ -167,15 +172,29 @@ class TestWeightNorm(MLXTestCase):
         self.assertTrue(hasattr(conv1d_wn, "v"))
         self.assertTrue(hasattr(conv1d_wn, "g"))
 
+        # Test WeightNormConv2d
+        conv2d_wn = WeightNormConv2d(16, 32, kernel_size=3)
+        self.assertTrue(hasattr(conv2d_wn, "v"))
+        self.assertTrue(hasattr(conv2d_wn, "g"))
+
         # Test forward passes
         x_linear = mx.array(np.random.normal(0, 1, (5, 10)).astype(np.float32))
         y_linear = linear_wn(x_linear)
         self.assertEqual(y_linear.shape, (5, 20))
 
-        x_conv = mx.array(np.random.normal(0, 1, (2, 10, 16)).astype(np.float32))
-        y_conv = conv1d_wn(x_conv)
-        self.assertEqual(y_conv.shape[0], 2)
-        self.assertEqual(y_conv.shape[2], 32)
+        x_conv1d = mx.array(np.random.normal(0, 1, (2, 10, 16)).astype(np.float32))
+        y_conv1d = conv1d_wn(x_conv1d)
+        self.assertEqual(y_conv1d.shape[0], 2)
+        self.assertEqual(y_conv1d.shape[2], 32)
+
+        # Test Conv2d forward pass
+        x_conv2d = mx.array(np.random.normal(0, 1, (2, 8, 8, 16)).astype(np.float32))
+        y_conv2d = conv2d_wn(x_conv2d)
+        self.assertEqual(y_conv2d.shape[0], 2)  # Batch size
+        self.assertEqual(y_conv2d.shape[3], 32)  # Output channels
+        # Check spatial dimensions (should be 6x6 with kernel=3, padding=0, stride=1)
+        self.assertEqual(y_conv2d.shape[1], 6)
+        self.assertEqual(y_conv2d.shape[2], 6)
 
     def test_github_issue_1888(self):
         """Test the specific example from GitHub issue #1888."""
