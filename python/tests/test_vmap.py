@@ -345,6 +345,7 @@ class TestVmap(mlx_tests.MLXTestCase):
             )
 
     def test_vmap_inverse(self):
+        mx.random.seed(42)
         a = mx.random.uniform(shape=(3, 4, 4))
 
         cpu_inv = lambda x: mx.linalg.inv(x, stream=mx.cpu)

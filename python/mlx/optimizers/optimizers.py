@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.nn import Module
-from mlx.utils import tree_map, tree_reduce
+from mlx.utils import tree_flatten, tree_map, tree_merge, tree_reduce, tree_unflatten
 
 
 class Optimizer:
@@ -152,6 +152,79 @@ class Optimizer:
         else:
             param = mx.array(param)
         self.state[name] = param
+
+
+class MultiOptimizer(Optimizer):
+    """Wraps a list of optimizers with corresponding weight predicates/filters
+    to make it easy to use different optimizers for different weights.
+
+    The predicates take the full "path" of the weight and the weight itself and
+    return True if it should be considered for this optimizer. The last
+    optimizer in the list is a fallback optimizer and no predicate should be
+    given for it.
+
+    Args:
+        optimizers (list[Optimizer]): A list of optimizers to delegate to
+        filters (list[Callable[[str, array], bool]): A list of predicates that
+            should be one less than the provided optimizers.
+    """
+
+    def __init__(self, optimizers, filters: list = []):
+        super().__init__()
+        self._state = {}
+
+        if len(filters) != len(optimizers) - 1:
+            raise ValueError(
+                f"Given {len(filters)} filters but {len(optimizers)-1} needed."
+            )
+
+        self.optimizers = optimizers
+        self.filters = filters + [lambda *args, **kwargs: True]
+
+    def _split_dictionary(self, gradients: dict):
+        if len(self.optimizers) == 1:
+            return [gradients]
+
+        parts = [[] for _ in range(len(self.optimizers))]
+        flat_gradients = tree_flatten(gradients)
+        for k, g in flat_gradients:
+            for i, fn in enumerate(self.filters):
+                if fn(k, g):
+                    parts[i].append((k, g))
+                    break
+
+        return [tree_unflatten(p) for p in parts]
+
+    def init(self, parameters: dict):
+        for o, p in zip(self.optimizers, self._split_dictionary(parameters)):
+            o.init(p)
+
+    def apply_gradients(self, gradients: dict, parameters: dict):
+        tree = {}
+        for o, g in zip(self.optimizers, self._split_dictionary(gradients)):
+            tree = tree_merge(tree, o.apply_gradients(g, parameters))
+        return tree
+
+    @property
+    def state(self):
+        return {"states": [o.state for o in self.optimizers]}
+
+    @state.setter
+    def state(self, state: dict):
+        if "states" not in state or len(state["states"]) != len(self.optimizers):
+            raise ValueError("Invalid state provided")
+
+        for o, s in zip(self.optimizers, state["states"]):
+            o.state = s
+
+    @property
+    def learning_rate(self):
+        return self.optimizers[0].learning_rate
+
+    @learning_rate.setter
+    def learning_rate(self, learning_rate: Union[float, mx.array]):
+        for o in self.optimizers:
+            o.learning_rate = learning_rate
 
 
 class SGD(Optimizer):
