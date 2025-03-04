@@ -137,11 +137,14 @@ void sdpa_vector(
   MTL::Size grid_dims(B, q.shape(2), 1);
 
   bool has_mask = mask.has_value();
+  bool query_transposed = !q.flags().row_contiguous;
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
+      {&query_transposed, MTL::DataType::DataTypeBool, 21},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
+  hash_name += query_transposed ? "_qt" : "_qnt";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -223,11 +226,14 @@ void sdpa_vector_2pass(
   d.add_temporary(maxs, s.index);
 
   bool has_mask = mask.has_value();
+  bool query_transposed = !q.flags().row_contiguous;
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
+      {&query_transposed, MTL::DataType::DataTypeBool, 21},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
+  hash_name += query_transposed ? "_qt" : "_qnt";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -316,33 +322,16 @@ void ScaledDotProductAttention::eval_gpu(
     }
   };
 
-  // Checks if arr is fully row contiguous
-  auto ensure_seq_head_transposed = [&copies, &s](const array& arr) {
-    if (arr.shape(2) == 1 && arr.flags().row_contiguous) {
-      return arr;
+  // Checks if arr is row contiguous or the sequence and head dimension are
+  // transposed
+  auto is_contiguous_or_head_seq_transposed = [](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return true;
     }
     auto& strides = arr.strides();
     auto& shape = arr.shape();
-    bool no_copy = (strides[3] == 1) && (strides[2] == shape[3] * shape[1]) &&
+    return (strides[3] == 1) && (strides[2] == shape[3] * shape[1]) &&
         (strides[1] == shape[3]) && (strides[0] == strides[2] * shape[2]);
-    if (no_copy) {
-      return arr;
-    }
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    auto new_strides = arr_copy.strides();
-    std::swap(new_strides[1], new_strides[2]);
-    auto flags = arr.flags();
-    flags.row_contiguous = shape[1] == 1;
-    flags.col_contiguous = false;
-    flags.contiguous = true;
-    arr_copy.set_data(
-        allocator::malloc_or_wait(arr_copy.nbytes()),
-        arr_copy.size(),
-        std::move(new_strides),
-        flags);
-    copy_gpu_inplace(arr, arr_copy, CopyType::GeneralGeneral, s);
-    copies.push_back(std::move(arr_copy));
-    return copies.back();
   };
 
   // Returns true if the array is row contiguous except the sequence length
@@ -361,21 +350,21 @@ void ScaledDotProductAttention::eval_gpu(
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) <= 8) {
-    const auto& q = ensure_seq_head_transposed(q_pre);
-    // 1, heads, seq_len, head_dim
-    // mask [1, query_heads, 1, seq_len]
+    const auto& q = copy_unless(is_contiguous_or_head_seq_transposed, q_pre);
     const auto& k = copy_unless(is_contiguous_except_seq_len, k_pre);
     const auto& v = copy_unless(is_contiguous_except_seq_len, v_pre);
 
     // Donate the query if possible
-    if (q.is_donatable() && q.size() == o.size()) {
+    if (q.is_donatable() && (q.shape(2) == 1 || !q.flags().row_contiguous) &&
+        q.size() == o.size()) {
       o.move_shared_buffer(q);
     } else {
       if (o.shape(2) == 1) {
         o.set_data(allocator::malloc_or_wait(o.nbytes()));
       } else {
         auto strides = o.strides();
-        std::swap(strides[1], strides[2]);
+        strides[2] = o.shape(1) * o.shape(3);
+        strides[1] = o.shape(3);
         auto flags = q.flags();
         flags.row_contiguous = q.shape(1) == 1;
         o.set_data(
