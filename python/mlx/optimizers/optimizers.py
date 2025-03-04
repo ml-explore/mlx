@@ -158,8 +158,10 @@ class MultiOptimizer(Optimizer):
     """Wraps a list of optimizers with corresponding weight predicates/filters
     to make it easy to use different optimizers for different weights.
 
-    The predicates take the full "path" of the weight and return True if it
-    should be considered for this optimizer.
+    The predicates take the full "path" of the weight and the weight itself and
+    return True if it should be considered for this optimizer. The last
+    optimizer in the list is a fallback optimizer and no predicate should be
+    given for it.
 
     Args:
         optimizers (list[Optimizer]): A list of optimizers to delegate to
@@ -172,7 +174,9 @@ class MultiOptimizer(Optimizer):
         self._state = {}
 
         if len(filters) != len(optimizers) - 1:
-            raise ValueError(f"Given {len(filters)} but {len(optimizers)-1} needed.")
+            raise ValueError(
+                f"Given {len(filters)} filters but {len(optimizers)-1} needed."
+            )
 
         self.optimizers = optimizers
         self.filters = filters + [lambda *args, **kwargs: True]
