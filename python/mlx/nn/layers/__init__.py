@@ -90,9 +90,19 @@ from mlx.nn.layers.transformer import (
     TransformerEncoderLayer,
 )
 from mlx.nn.layers.upsample import Upsample
-from mlx.nn.layers.weight_norm import (
-    WeightNormConv1d,
-    WeightNormConv2d,
-    WeightNormLinear,
-    weight_norm,
-)
+
+
+# Lazy import for weight_norm to avoid circular import
+def _load_weight_norm():
+    from mlx.nn.layers.weight_norm import (
+        WeightNormConv1d,
+        WeightNormConv2d,
+        WeightNormLinear,
+        weight_norm,
+    )
+
+    return WeightNormConv1d, WeightNormConv2d, WeightNormLinear, weight_norm
+
+
+# Execute after all other imports
+WeightNormConv1d, WeightNormConv2d, WeightNormLinear, weight_norm = _load_weight_norm()

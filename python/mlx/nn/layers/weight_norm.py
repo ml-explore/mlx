@@ -1,170 +1,121 @@
-# weight_norm.py
-# Copyright © 2025 Apple Inc.
 import mlx.core as mx
+from mlx.nn.layers.base import Module
 
 
-def weight_norm(module, name="weight", dim=0):
-    """Apply weight normalization to a module's parameter.
+class WeightNormWrapper(Module):
+    r"""Applies weight normalization [1] to a module's parameter.
 
-    Weight normalization is a reparameterization that decouples the magnitude of a weight tensor
-    from its direction:
+    This module wraps another module and applies weight normalization to one of its
+    parameters. Weight normalization reparameterizes the weight vectors in terms of
+    a magnitude (scale) and a direction as:
 
-        w = g * v / ||v||
+    .. math::
 
-    This is achieved by computing normalized weights on-the-fly. In this implementation,
-    we store both the unnormalized parameter 'v' and the magnitude parameter 'g'.
+        w = g \frac{v}{||v||}
+
+    where :math:`g` is a scalar and :math:`v` is a vector. The module computes the
+    normalized weight and updates the wrapped module's parameter with this value.
 
     Args:
-        module: The module to modify (e.g., Conv1d, Linear).
-        name (str, optional): Parameter name to normalize. Default: 'weight'.
-        dim (int, optional): Dimension to keep; norm over others. Default: 0.
-                            Use None for norm over entire tensor.
+        module (Module): The module to wrap.
+        name (str): The name of the parameter to normalize. Default: ``"weight"``.
+        dim (int or None): The dimension along which to normalize. If None, the
+            weight is normalized by its L2 norm. Default: ``0``.
 
-    Returns:
-        The modified module.
-
-    Example:
+    Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn as nn
-        >>> from mlx.nn.layers.weight_norm import weight_norm
-        >>>
-        >>> # Apply to Linear layer
-        >>> linear = nn.Linear(10, 20)
-        >>> linear_wn = weight_norm(linear)
-        >>>
-        >>> # Apply to Conv1d layer
-        >>> conv1d = nn.Conv1d(16, 32, kernel_size=3)
-        >>> conv1d_wn = weight_norm(conv1d)
+        >>> linear = nn.Linear(20, 30)
+        >>> weight_norm_linear = nn.weight_norm(linear)
+        >>> x = mx.random.normal((8, 20))
+        >>> output = weight_norm_linear(x)
+
+    References:
+        [1]: https://arxiv.org/abs/1602.07868
     """
-    params = module.parameters()
-    if name not in params:
-        raise ValueError(f"Parameter '{name}' not found in module")
 
-    # Ensure parameters are materialized
-    mx.eval(params)
+    def __init__(self, module, name="weight", dim=0):
+        super().__init__()
+        self.module = module
+        self.wn_name = name
+        params = module.parameters()
+        if name not in params:
+            raise ValueError(f"Parameter '{name}' not found in module")
+        mx.eval(params)
+        weight = params[name]
+        self.v = mx.array(weight)
+        self.wn_module_type = type(module).__name__
 
-    weight = params[name]
-    v = mx.array(weight)
-
-    # Store original module type for dimension handling
-    module_type = type(module).__name__
-
-    # Compute initial g
-    if dim is None:
-        g = mx.linalg.norm(weight)  # Scalar
-    else:
-        # Handle dimension ordering differences for Conv layers
-        if "Conv" in module_type:
-            # For Conv layers, special handling needed
-            # MLX Conv1d weight shape: [out_channels, kernel_size, in_channels]
-            # MLX Conv2d weight shape: [out_channels, kernel_height, kernel_width, in_channels]
-            if dim == 0:
-                # For Conv1d and Conv2d, flatten all dimensions except out_channels
-                weight_flat = mx.reshape(weight, (weight.shape[0], -1))
-                g = mx.linalg.norm(weight_flat, axis=1, keepdims=True)
-                # Reshape g to match the output channels dimension with singleton dimensions for the rest
-                g_shape = [weight.shape[0]] + [1] * (weight.ndim - 1)
-                g = mx.reshape(g, g_shape)
-            else:
-                dim = dim if dim >= 0 else weight.ndim + dim
-                if dim < 0 or dim >= weight.ndim:
-                    raise ValueError(
-                        f"dim {dim} out of bounds for {weight.ndim} dimensions"
-                    )
-                # For dimensions other than 0, use a single axis for normalization
-                axes = tuple(i for i in range(weight.ndim) if i != dim)
-                # Handle multiple axes if needed
-                if len(axes) > 2:
-                    # Use reshape workaround for >2 axes
-                    weight_flat = mx.reshape(weight, (weight.shape[0], -1))
-                    g = mx.linalg.norm(weight_flat, axis=1, keepdims=True)
-                    g_shape = [weight.shape[0]] + [1] * (weight.ndim - 1)
-                    g = mx.reshape(g, g_shape)
-                else:
-                    g = mx.linalg.norm(weight, axis=axes, keepdims=True)
+        if dim is None:
+            self.g = mx.linalg.norm(weight)
+            self.wn_axes = []
         else:
-            # Standard handling for other layer types
             dim = dim if dim >= 0 else weight.ndim + dim
             if dim < 0 or dim >= weight.ndim:
                 raise ValueError(
                     f"dim {dim} out of bounds for {weight.ndim} dimensions"
                 )
-            axes = tuple(i for i in range(weight.ndim) if i != dim)
-            g = mx.linalg.norm(weight, axis=axes, keepdims=True)
-
-    # Store parameters on module
-    module.v = v
-    module.g = g
-    module.wn_dim = dim
-    module.wn_name = name
-    module.wn_module_type = module_type
-
-    # Override __call__ method to apply weight normalization
-    original_call = module.__call__
-
-    def weight_norm_call(*args, **kwargs):
-        # Update weight before calling the original function
-        params = module.parameters()
-
-        if module.wn_dim is None:
-            v_norm = mx.linalg.norm(module.v)
-        else:
-            # Use dimension handling logic based on module type
-            if "Conv" in module.wn_module_type:
-                # Special handling for Conv layers based on their dimension structure
-                v_flat = mx.reshape(module.v, (module.v.shape[0], -1))
-                v_norm = mx.linalg.norm(v_flat, axis=1, keepdims=True)
-                # Reshape back to match the original shape with singleton dimensions
-                v_norm_shape = [module.v.shape[0]] + [1] * (module.v.ndim - 1)
-                v_norm = mx.reshape(v_norm, v_norm_shape)
+            axes = [i for i in range(weight.ndim) if i != dim]
+            if len(axes) > 2:
+                reshape_dims = [weight.shape[dim], -1]
+                weight_reshaped = mx.reshape(weight, reshape_dims)
+                self.g = mx.linalg.norm(weight_reshaped, axis=1, keepdims=True)
+                g_shape = [1] * weight.ndim
+                g_shape[dim] = weight.shape[dim]
+                self.g = mx.reshape(self.g, g_shape)
+            elif "Conv" in self.wn_module_type and dim == 0:
+                weight_flat = mx.reshape(weight, (weight.shape[0], -1))
+                self.g = mx.linalg.norm(weight_flat, axis=1, keepdims=True)
+                g_shape = [weight.shape[0]] + [1] * (weight.ndim - 1)
+                self.g = mx.reshape(self.g, g_shape)
             else:
-                axes = tuple(i for i in range(module.v.ndim) if i != module.wn_dim)
-                if len(axes) > 2:
-                    # Handle multiple axes with reshape approach
-                    v_flat = mx.reshape(module.v, (module.v.shape[0], -1))
-                    v_norm = mx.linalg.norm(v_flat, axis=1, keepdims=True)
-                    v_norm_shape = [module.v.shape[0]] + [1] * (module.v.ndim - 1)
-                    v_norm = mx.reshape(v_norm, v_norm_shape)
-                else:
-                    v_norm = mx.linalg.norm(module.v, axis=axes, keepdims=True)
+                self.g = mx.linalg.norm(weight, axis=tuple(axes), keepdims=True)
+            self.wn_axes = axes
+        self.wn_dim = dim
 
-        # Compute normalized weight: g * v / ||v||
-        normalized_weight = module.g * module.v / mx.maximum(v_norm, 1e-5)
+    def __call__(self, *args, **kwargs):
+        """Apply weight normalization to the wrapped module and then call it."""
+        normalized_weight = mx.weight_norm(
+            self.v, self.g, axes=None if self.wn_axes == [] else self.wn_axes, eps=1e-5
+        )
+        setattr(self.module, self.wn_name, normalized_weight)
+        return self.module(*args, **kwargs)
 
-        # Update the weight parameter
-        params[name] = normalized_weight
 
-        # Now call the original method
-        return original_call(*args, **kwargs)
+def weight_norm(module, name="weight", dim=0):
+    """Apply weight normalization to a module.
 
-    # Replace the __call__ method
-    module.__call__ = weight_norm_call
+    This is a convenience function that wraps the module with WeightNormWrapper.
 
-    return module
+    Args:
+        module (Module): The module to apply weight normalization to.
+        name (str): The name of the parameter to normalize. Default: ``"weight"``.
+        dim (int): The dimension along which to normalize. Default: ``0``.
+
+    Returns:
+        A WeightNormWrapper instance which wraps the module.
+    """
+    return WeightNormWrapper(module, name, dim)
 
 
 class WeightNormConv1d:
-    """1D convolution with weight normalization.
+    r"""Applies a 1D convolution with weight normalization over an input signal.
 
-    Weight normalization is a reparameterization technique that decouples the magnitude
-    of a weight tensor from its direction. This class applies weight normalization
-    to a Conv1d layer.
+    This module is a convenience wrapper that combines Conv1d with weight normalization.
 
     Args:
-        in_channels (int): Number of channels in the input image
-        out_channels (int): Number of channels produced by the convolution
-        kernel_size (int): Size of the convolving kernel
-        stride (int, optional): Stride of the convolution. Default: 1
-        padding (int, optional): Zero-padding added to both sides of the input. Default: 0
-        dilation (int, optional): Spacing between kernel elements. Default: 1
-        groups (int, optional): Number of blocked connections from input to output channels. Default: 1
-        bias (bool, optional): If True, adds a learnable bias to the output. Default: True
-        dim (int, optional): Dimension to keep; norm over others. Default: 0
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel_size (int): Size of the convolving kernel.
+        stride (int): Stride of the convolution. Default: ``1``.
+        padding (int): Zero-padding added to both sides of the input. Default: ``0``.
+        dilation (int): Spacing between kernel elements. Default: ``1``.
+        groups (int): Number of blocked connections from input to output channels. Default: ``1``.
+        bias (bool): If ``True``, adds a learnable bias to the output. Default: ``True``.
+        dim (int): Dimension along which to normalize weights. Default: ``0``.
 
-    Note:
-        Due to dimension ordering differences between PyTorch and MLX,
-        this implementation properly handles normalization for MLX's Conv1d
-        weight shape: [out_channels, kernel_size, in_channels]
+    Returns:
+        A Conv1d module with weight normalization applied.
     """
 
     def __new__(
@@ -195,27 +146,23 @@ class WeightNormConv1d:
 
 
 class WeightNormConv2d:
-    """2D convolution with weight normalization.
+    r"""Applies a 2D convolution with weight normalization over an input signal.
 
-    Weight normalization is a reparameterization technique that decouples the magnitude
-    of a weight tensor from its direction. This class applies weight normalization
-    to a Conv2d layer.
+    This module is a convenience wrapper that combines Conv2d with weight normalization.
 
     Args:
-        in_channels (int): Number of channels in the input image
-        out_channels (int): Number of channels produced by the convolution
-        kernel_size (int or tuple): Size of the convolving kernel
-        stride (int or tuple, optional): Stride of the convolution. Default: 1
-        padding (int or tuple, optional): Zero-padding added to both sides of the input. Default: 0
-        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1
-        groups (int, optional): Number of blocked connections from input to output channels. Default: 1
-        bias (bool, optional): If True, adds a learnable bias to the output. Default: True
-        dim (int, optional): Dimension to keep; norm over others. Default: 0
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel_size (int or tuple): Size of the convolving kernel.
+        stride (int or tuple): Stride of the convolution. Default: ``1``.
+        padding (int or tuple): Zero-padding added to both sides of the input. Default: ``0``.
+        dilation (int or tuple): Spacing between kernel elements. Default: ``1``.
+        groups (int): Number of blocked connections from input to output channels. Default: ``1``.
+        bias (bool): If ``True``, adds a learnable bias to the output. Default: ``True``.
+        dim (int): Dimension along which to normalize weights. Default: ``0``.
 
-    Note:
-        Due to dimension ordering differences between PyTorch and MLX,
-        this implementation properly handles normalization for MLX's Conv2d
-        weight shape: [out_channels, kernel_height, kernel_width, in_channels]
+    Returns:
+        A Conv2d module with weight normalization applied.
     """
 
     def __new__(
@@ -246,17 +193,18 @@ class WeightNormConv2d:
 
 
 class WeightNormLinear:
-    """Linear layer with weight normalization.
+    r"""Applies a linear transformation with weight normalization to the incoming data.
 
-    Weight normalization is a reparameterization technique that decouples the magnitude
-    of a weight tensor from its direction. This class applies weight normalization
-    to a Linear layer.
+    This module is a convenience wrapper that combines Linear with weight normalization.
 
     Args:
-        in_features (int): Size of each input sample
-        out_features (int): Size of each output sample
-        bias (bool, optional): If True, adds a learnable bias to the output. Default: True
-        dim (int, optional): Dimension to keep; norm over others. Default: 0
+        in_features (int): Size of each input sample.
+        out_features (int): Size of each output sample.
+        bias (bool): If ``True``, adds a learnable bias to the output. Default: ``True``.
+        dim (int): Dimension along which to normalize weights. Default: ``0``.
+
+    Returns:
+        A Linear module with weight normalization applied.
     """
 
     def __new__(cls, in_features, out_features, bias=True, dim=0):
