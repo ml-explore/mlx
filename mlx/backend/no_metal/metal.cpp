@@ -21,7 +21,10 @@ void eval(array&) {
       "[metal::eval] Cannot eval on GPU without metal backend");
 }
 
-void finalize(Stream) {
+void finalize(
+    Stream,
+    std::unordered_set<std::shared_ptr<array::Data>> retain_buffers,
+    bool) {
   throw std::runtime_error(
       "[metal::finalize] Cannot finalize GPU without metal backend");
 }
