@@ -43,11 +43,11 @@ class WeightNormWrapper(Module):
             raise ValueError(f"Parameter '{name}' not found in module")
         mx.eval(params)
         weight = params[name]
-        self.v = mx.array(weight)
+        self.weight_v = mx.array(weight)
         self.wn_module_type = type(module).__name__
 
         if dim is None:
-            self.g = mx.linalg.norm(weight)
+            self.weight_g = mx.linalg.norm(weight)
             self.wn_axes = []
         else:
             dim = dim if dim >= 0 else weight.ndim + dim
@@ -59,24 +59,27 @@ class WeightNormWrapper(Module):
             if len(axes) > 2:
                 reshape_dims = [weight.shape[dim], -1]
                 weight_reshaped = mx.reshape(weight, reshape_dims)
-                self.g = mx.linalg.norm(weight_reshaped, axis=1, keepdims=True)
+                self.weight_g = mx.linalg.norm(weight_reshaped, axis=1, keepdims=True)
                 g_shape = [1] * weight.ndim
                 g_shape[dim] = weight.shape[dim]
-                self.g = mx.reshape(self.g, g_shape)
+                self.weight_g = mx.reshape(self.weight_g, g_shape)
             elif "Conv" in self.wn_module_type and dim == 0:
                 weight_flat = mx.reshape(weight, (weight.shape[0], -1))
-                self.g = mx.linalg.norm(weight_flat, axis=1, keepdims=True)
+                self.weight_g = mx.linalg.norm(weight_flat, axis=1, keepdims=True)
                 g_shape = [weight.shape[0]] + [1] * (weight.ndim - 1)
-                self.g = mx.reshape(self.g, g_shape)
+                self.weight_g = mx.reshape(self.weight_g, g_shape)
             else:
-                self.g = mx.linalg.norm(weight, axis=tuple(axes), keepdims=True)
+                self.weight_g = mx.linalg.norm(weight, axis=tuple(axes), keepdims=True)
             self.wn_axes = axes
         self.wn_dim = dim
 
     def __call__(self, *args, **kwargs):
         """Apply weight normalization to the wrapped module and then call it."""
         normalized_weight = mx.weight_norm(
-            self.v, self.g, axes=None if self.wn_axes == [] else self.wn_axes, eps=1e-5
+            self.weight_v,
+            self.weight_g,
+            axes=None if self.wn_axes == [] else self.wn_axes,
+            eps=1e-5,
         )
         setattr(self.module, self.wn_name, normalized_weight)
         return self.module(*args, **kwargs)
