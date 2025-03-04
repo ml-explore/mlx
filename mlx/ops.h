@@ -1510,6 +1510,53 @@ array contiguous(
     bool allow_col_major = false,
     StreamOrDevice s = {});
 
+/**
+ * Performs weight normalization on a tensor.
+ *
+ * Weight normalization reparameterizes a tensor as:
+ *   weight = g * (v / ||v||)
+ *
+ * Where:
+ * - g is a scalar or vector scaling factor
+ * - v is the unnormalized weight
+ * - ||v|| is the norm of v along specified dimensions
+ *
+ * Args:
+ *   v: Input tensor to be normalized
+ *   g: Scaling factor (should match shape of v with singleton dimensions for
+ * normalized axes) axes: Axes along which to normalize. For more than 2 axes, a
+ * reshape-based approach is used. eps: Small constant for numerical stability
+ *   s: Stream or device
+ *
+ * Returns:
+ *   Normalized weight tensor
+ */
+array weight_norm(
+    const array& v,
+    const array& g,
+    const std::vector<int>& axes,
+    float eps = 1e-5,
+    StreamOrDevice s = {});
+
+/** Weight normalization along a single axis */
+inline array weight_norm(
+    const array& v,
+    const array& g,
+    int axis,
+    float eps = 1e-5,
+    StreamOrDevice s = {}) {
+  return weight_norm(v, g, std::vector<int>{axis}, eps, s);
+}
+
+/** Weight normalization along all axes */
+inline array weight_norm(
+    const array& v,
+    const array& g,
+    float eps = 1e-5,
+    StreamOrDevice s = {}) {
+  return weight_norm(v, g, std::vector<int>{}, eps, s);
+}
+
 /** @} */
 
 } // namespace mlx::core

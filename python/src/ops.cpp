@@ -5124,4 +5124,44 @@ void init_ops(nb::module_& m) {
                  [0, 1, 0],
                  [0, 1, 0]], dtype=float32)
       )pbdoc");
+  m.def(
+      "weight_norm",
+      [](const mx::array& v,
+         const mx::array& g,
+         const std::optional<std::vector<int>>& axes,
+         float eps,
+         mx::StreamOrDevice s) {
+        if (axes) {
+          return mx::weight_norm(v, g, *axes, eps, s);
+        } else {
+          return mx::weight_norm(v, g, eps, s);
+        }
+      },
+      nb::arg(),
+      "g"_a,
+      "axes"_a = nb::none(),
+      "eps"_a = 1e-5,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def weight_norm(v: array, g: array, *, axes: Optional[Sequence[int]] = None, eps: float = 1e-5, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Applies weight normalization to a tensor.
+
+        Weight normalization is a reparameterization that decouples the magnitude
+        of a weight tensor from its direction:
+          weight = g * v / ||v||
+
+        Args:
+          v (array): The weight tensor to normalize
+          g (array): The scaling factor (must have compatible shape with v)
+          axes (sequence of int, optional): The axes along which to normalize.
+            If None, normalize over all axes. When normalizing over more than 2 axes,
+            a reshape-based approach is used internally.
+          eps (float, optional): Small constant for numerical stability.
+            Default: 1e-5.
+
+        Returns:
+          array: The normalized weight tensor.
+      )pbdoc");
 }

@@ -90,3 +90,9 @@ from mlx.nn.layers.transformer import (
     TransformerEncoderLayer,
 )
 from mlx.nn.layers.upsample import Upsample
+from mlx.nn.layers.weight_norm import (
+    WeightNormConv1d,
+    WeightNormConv2d,
+    WeightNormLinear,
+    weight_norm,
+)
