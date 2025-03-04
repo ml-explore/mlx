@@ -4,16 +4,17 @@
 
 #include "mlx/backend/common/hadamard.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 // n = 2^k component
 template <typename T>
-void hadamard_n(array& out, int n, int m, float scale) {
-  for (int b = 0; b < out.size() / n; b++) {
+void hadamard_n(T* out, int n, int m, float scale, size_t size) {
+  for (int b = 0; b < size / n; b++) {
     size_t loc = b * n;
-    T* data_ptr = out.data<T>() + loc;
+    T* data_ptr = out + loc;
     int h = 1;
     int n_over_2 = n / 2;
     while (h < n) {
@@ -36,7 +37,7 @@ void hadamard_n(array& out, int n, int m, float scale) {
 
 // m component
 template <typename T>
-void hadamard_m(array& out, int n, int m, float scale) {
+void hadamard_m(T* out, int n, int m, float scale, size_t size) {
   auto h_matrices = hadamard_matrices();
   auto& matrix = h_matrices[m];
   auto start = 1;
@@ -51,9 +52,9 @@ void hadamard_m(array& out, int n, int m, float scale) {
     end = matrix.find('\n', start);
   }
 
-  for (int b = 0; b < out.size() / m / n; b++) {
+  for (int b = 0; b < size / m / n; b++) {
     size_t loc = b * n * m;
-    T* data_ptr = out.data<T>() + loc;
+    T* data_ptr = out + loc;
     for (int i = 0; i < n; i++) {
       std::vector<float> out(m);
       for (int j = 0; j < m; j++) {
@@ -74,12 +75,17 @@ void hadamard_m(array& out, int n, int m, float scale) {
 }
 
 template <typename T>
-void hadamard(array& out, int n, int m, float scale) {
-  float n_scale = m > 1 ? 1.0 : scale;
-  hadamard_n<T>(out, n, m, n_scale);
-  if (m > 1) {
-    hadamard_m<T>(out, n, m, scale);
-  }
+void hadamard(array& out, int n, int m, float scale, Stream stream) {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_output_array(out);
+  auto out_ptr = out.data<T>();
+  encoder.dispatch([out_ptr, size = out.size(), n, m, scale]() {
+    float n_scale = m > 1 ? 1.0 : scale;
+    hadamard_n<T>(out_ptr, n, m, n_scale, size);
+    if (m > 1) {
+      hadamard_m<T>(out_ptr, n, m, scale, size);
+    }
+  });
 }
 
 void Hadamard::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -87,18 +93,26 @@ void Hadamard::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Copy input to output
-  copy(in, out, CopyType::General);
+  if (in.flags().row_contiguous && in.is_donatable()) {
+    out.copy_shared_buffer(in);
+  } else {
+    copy(
+        in,
+        out,
+        in.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+        stream());
+  }
 
   int axis = out.ndim() - 1;
   auto [n, m] = decompose_hadamard(out.shape(axis));
 
   switch (in.dtype()) {
     case float32:
-      return hadamard<float>(out, n, m, scale_);
+      return hadamard<float>(out, n, m, scale_, stream());
     case float16:
-      return hadamard<float16_t>(out, n, m, scale_);
+      return hadamard<float16_t>(out, n, m, scale_, stream());
     case bfloat16:
-      return hadamard<bfloat16_t>(out, n, m, scale_);
+      return hadamard<bfloat16_t>(out, n, m, scale_, stream());
     default:
       throw std::invalid_argument("[hadamard] Unsupported type.");
   }

@@ -21,7 +21,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto in = inputs[0];
   if (in.flags().contiguous && in.strides()[axis_] != 0) {
     if (donate && in.itemsize() == out.itemsize()) {
-      out.move_shared_buffer(in);
+      out.copy_shared_buffer(in);
     } else {
       out.set_data(
           allocator::malloc_or_wait(in.data_size() * out.itemsize()),
@@ -33,7 +33,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     array arr_copy(in.shape(), in.dtype(), nullptr, {});
     copy_gpu(in, arr_copy, CopyType::General, s);
     in = std::move(arr_copy);
-    out.move_shared_buffer(in);
+    out.copy_shared_buffer(in);
   }
 
   bool contiguous = in.strides()[axis_] == 1;
@@ -68,8 +68,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (contiguous) {
     auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        in.data_shared_ptr() == nullptr ? out : in, 0);
+    compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     size_t size = in.shape(axis_);
     compute_encoder.set_bytes(size, 2);

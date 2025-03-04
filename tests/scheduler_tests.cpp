@@ -37,8 +37,8 @@ TEST_CASE("test stream management") {
 }
 
 TEST_CASE("test asynchronous launch") {
-  auto s1 = default_stream(default_device());
-  auto s2 = new_stream(default_device());
+  auto s1 = default_stream(Device::cpu);
+  auto s2 = new_stream(Device::cpu);
 
   // Make sure streams execute asynchronously
   int x = 1;
@@ -67,8 +67,8 @@ TEST_CASE("test asynchronous launch") {
 }
 
 TEST_CASE("test stream placement") {
-  auto s1 = default_stream(default_device());
-  auto s2 = new_stream(default_device());
+  auto s1 = default_stream(Device::cpu);
+  auto s2 = new_stream(Device::cpu);
 
   {
     // Wait on stream 1

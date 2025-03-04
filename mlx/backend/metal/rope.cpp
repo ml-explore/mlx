@@ -41,7 +41,7 @@ void RoPE::eval_gpu(
   } else if (in.flags().row_contiguous) {
     if (in.is_donatable()) {
       donated = true;
-      out.move_shared_buffer(in);
+      out.copy_shared_buffer(in);
     } else {
       out.set_data(allocator::malloc_or_wait(out.nbytes()));
     }

@@ -2,20 +2,21 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 template <typename T>
-void general_inv(array& inv, int N, int i) {
+void general_inv(T* inv, int N) {
   int info;
   auto ipiv = array::Data{allocator::malloc_or_wait(sizeof(int) * N)};
   // Compute LU factorization.
   getrf<T>(
       /* m = */ &N,
       /* n = */ &N,
-      /* a = */ inv.data<T>() + N * N * i,
+      /* a = */ inv,
       /* lda = */ &N,
       /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
       /* info = */ &info);
@@ -53,7 +54,7 @@ void general_inv(array& inv, int N, int i) {
   // Compute inverse.
   getri<T>(
       /* m = */ &N,
-      /* a = */ inv.data<T>() + N * N * i,
+      /* a = */ inv,
       /* lda = */ &N,
       /* ipiv = */ static_cast<int*>(ipiv.buffer.raw_ptr()),
       /* work = */ static_cast<T*>(scratch.buffer.raw_ptr()),
@@ -68,29 +69,28 @@ void general_inv(array& inv, int N, int i) {
 }
 
 template <typename T>
-void tri_inv(array& inv, int N, int i, bool upper) {
+void tri_inv(T* inv, int N, bool upper) {
   const char uplo = upper ? 'L' : 'U';
   const char diag = 'N';
-  T* data = inv.data<T>() + N * N * i;
   int info;
   trtri<T>(
       /* uplo = */ &uplo,
       /* diag = */ &diag,
       /* N = */ &N,
-      /* a = */ data,
+      /* a = */ inv,
       /* lda = */ &N,
       /* info = */ &info);
 
   // zero out the other triangle
   if (upper) {
     for (int i = 0; i < N; i++) {
-      std::fill(data, data + i, 0.0f);
-      data += N;
+      std::fill(inv, inv + i, 0.0f);
+      inv += N;
     }
   } else {
     for (int i = 0; i < N; i++) {
-      std::fill(data + i + 1, data + N, 0.0f);
-      data += N;
+      std::fill(inv + i + 1, inv + N, 0.0f);
+      inv += N;
     }
   }
 
@@ -103,34 +103,53 @@ void tri_inv(array& inv, int N, int i, bool upper) {
 }
 
 template <typename T>
-void inverse_impl(const array& a, array& inv, bool tri, bool upper) {
+void inverse_impl(
+    const array& a,
+    array& inv,
+    bool tri,
+    bool upper,
+    Stream stream) {
   // Lapack uses the column-major convention. We take advantage of the following
   // identity to avoid transposing (see
   // https://math.stackexchange.com/a/340234):
   //   (A⁻¹)ᵀ = (Aᵀ)⁻¹
 
   // The inverse is computed in place, so just copy the input to the output.
-  copy(a, inv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      inv,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+      stream);
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
 
-  for (int i = 0; i < num_matrices; i++) {
-    if (tri) {
-      tri_inv<T>(inv, N, i, upper);
-    } else {
-      general_inv<T>(inv, N, i);
-    }
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_output_array(inv);
+
+  auto inv_ptr = inv.data<T>();
+  if (tri) {
+    encoder.dispatch([inv_ptr, N, num_matrices, upper]() {
+      for (int i = 0; i < num_matrices; i++) {
+        tri_inv<T>(inv_ptr + N * N * i, N, upper);
+      }
+    });
+  } else {
+    encoder.dispatch([inv_ptr, N, num_matrices]() {
+      for (int i = 0; i < num_matrices; i++) {
+        general_inv<T>(inv_ptr + N * N * i, N);
+      }
+    });
   }
 }
 
 void Inverse::eval_cpu(const std::vector<array>& inputs, array& output) {
   switch (inputs[0].dtype()) {
     case float32:
-      inverse_impl<float>(inputs[0], output, tri_, upper_);
+      inverse_impl<float>(inputs[0], output, tri_, upper_, stream());
       break;
     case float64:
-      inverse_impl<double>(inputs[0], output, tri_, upper_);
+      inverse_impl<double>(inputs[0], output, tri_, upper_, stream());
       break;
     default:
       throw std::runtime_error(
