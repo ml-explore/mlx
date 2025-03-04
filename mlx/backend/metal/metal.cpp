@@ -40,44 +40,30 @@ void eval(array& arr) {
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
-  std::unordered_set<std::shared_ptr<array::Data>> buffers;
-  for (auto& in : arr.inputs()) {
-    buffers.insert(in.data_shared_ptr());
-  }
-  for (auto& s : arr.siblings()) {
-    buffers.insert(s.data_shared_ptr());
-  }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
-  }
+}
 
-  if (d.command_buffer_needs_commit(s.index)) {
+void finalize(
+    Stream s,
+    std::unordered_set<std::shared_ptr<array::Data>> retain_buffers,
+    bool force_commit) {
+  auto pool = new_scoped_memory_pool();
+  auto& d = metal::device(s.device);
+  auto command_buffer = d.get_command_buffer(s.index);
+  if (d.command_buffer_needs_commit(s.index) || force_commit) {
     d.end_encoding(s.index);
     scheduler::notify_new_task(s);
     command_buffer->addCompletedHandler(
-        [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [s, buffers = std::move(retain_buffers)](MTL::CommandBuffer* cbuf) {
           scheduler::notify_task_completion(s);
           check_error(cbuf);
         });
     d.commit_command_buffer(s.index);
-    d.get_command_buffer(s.index);
   } else {
     command_buffer->addCompletedHandler(
-        [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [s, buffers = std::move(retain_buffers)](MTL::CommandBuffer* cbuf) {
           check_error(cbuf);
         });
   }
-}
-
-void finalize(Stream s) {
-  auto pool = new_scoped_memory_pool();
-  auto& d = metal::device(s.device);
-  auto cb = d.get_command_buffer(s.index);
-  d.end_encoding(s.index);
-  cb->addCompletedHandler([s](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
-  d.commit_command_buffer(s.index);
-  d.get_command_buffer(s.index);
 }
 
 void synchronize(Stream s) {

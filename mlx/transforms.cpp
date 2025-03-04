@@ -160,6 +160,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
 
         auto it = cache.find(in.id());
+
         it->second -= 1;
 
         if (it->second != 0) {
@@ -180,6 +181,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
+  std::unordered_map<std::uintptr_t, std::weak_ptr<array::Data>>
+      unretained_buffers;
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
@@ -225,7 +228,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
       // Commit any open streams
       for (auto& [_, e] : events) {
         if (e.stream().device == Device::gpu) {
-          metal::finalize(e.stream());
+          metal::finalize(e.stream(), {}, true);
         }
       }
       scheduler::wait_for_one();
@@ -246,24 +249,59 @@ array eval_impl(std::vector<array> outputs, bool async) {
     };
 
     arr.set_status(array::Status::evaluated);
-    // TODO Maybe always want the fence coherent kernel in the same cbuf
-    // as the other kernels?
+
+    std::unordered_set<std::shared_ptr<array::Data>> retain_buffers;
+
     maybe_update_fence(arr);
     for (auto& sib : arr.siblings()) {
       sib.set_status(array::Status::evaluated);
       maybe_update_fence(sib);
+      retain_buffers.insert(sib.data_shared_ptr());
     }
+
+    for (auto& in : arr.inputs()) {
+      retain_buffers.insert(in.data_shared_ptr());
+    }
+
     if (!arr.is_tracer()) {
       arr.detach();
     }
-  }
 
+    for (auto it = retain_buffers.begin(); it != retain_buffers.end();) {
+      if (it->use_count() > 1) {
+        // At this point the buffer must be in one of two states:
+        // 1. Held by another array
+        // 2. Held from a prevous async_eval
+        unretained_buffers.emplace(std::uintptr_t(it->get()), *it);
+        it = retain_buffers.erase(it);
+      } else {
+        unretained_buffers.erase(std::uintptr_t(it->get()));
+        ++it;
+      }
+    }
+    if (stream.device == Device::gpu) {
+      metal::finalize(stream, std::move(retain_buffers), false);
+    } else {
+      cpu::finalize(stream, std::move(retain_buffers));
+    }
+  }
   // Signal the event in its stream
   for (auto& [_, e] : events) {
     auto s = e.stream();
     e.signal(s);
+    std::unordered_set<std::shared_ptr<array::Data>> retain;
+    if (s == stream) {
+      for (auto& [_, b] : unretained_buffers) {
+        auto ptr = b.lock();
+        if (ptr) {
+          retain.insert(ptr);
+        }
+      }
+    }
     if (s.device == Device::gpu) {
-      metal::finalize(s);
+      metal::finalize(s, std::move(retain), true);
+    } else {
+      cpu::finalize(s, std::move(retain));
     }
   }
 
