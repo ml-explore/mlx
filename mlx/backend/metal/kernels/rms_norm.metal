@@ -7,6 +7,8 @@
 
 using namespace metal;
 
+constant bool has_w [[function_constant(20)]];
+
 template <typename T, int N_READS = RMS_N_READS>
 [[kernel]] void rms_single_row(
     const device T* x,
@@ -243,7 +245,9 @@ template <typename T, int N_READS = RMS_N_READS>
       gx[i] = static_cast<T>(
           thread_g[i] * thread_w[i] * normalizer -
           thread_x[i] * meangwx * normalizer3);
-      gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+      if (has_w) {
+        gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+      }
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
@@ -251,7 +255,9 @@ template <typename T, int N_READS = RMS_N_READS>
         gx[i] = static_cast<T>(
             thread_g[i] * thread_w[i] * normalizer -
             thread_x[i] * meangwx * normalizer3);
-        gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+        if (has_w) {
+          gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
+        }
       }
     }
   }
@@ -351,7 +357,9 @@ template <typename T, int N_READS = RMS_N_READS>
 
         gx[i + r] =
             static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
-        gw[i + r] = static_cast<T>(gi * xi * normalizer);
+        if (has_w) {
+          gw[i + r] = static_cast<T>(gi * xi * normalizer);
+        }
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
@@ -362,7 +370,9 @@ template <typename T, int N_READS = RMS_N_READS>
 
           gx[i + r] =
               static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
-          gw[i + r] = static_cast<T>(gi * xi * normalizer);
+          if (has_w) {
+            gw[i + r] = static_cast<T>(gi * xi * normalizer);
+          }
         }
       }
     }

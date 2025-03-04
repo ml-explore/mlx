@@ -692,12 +692,13 @@ void new_stream(Stream stream) {
   }
 }
 
-std::unordered_map<std::string, std::variant<std::string, size_t>>
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info() {
   auto init_device_info = []()
       -> std::unordered_map<std::string, std::variant<std::string, size_t>> {
     auto pool = new_scoped_memory_pool();
     auto raw_device = device(default_device()).mtl_device();
+    auto name = std::string(raw_device->name()->utf8String());
     auto arch = std::string(raw_device->architecture()->name()->utf8String());
 
     size_t memsize = 0;
@@ -711,6 +712,7 @@ device_info() {
     }
 
     return {
+        {"device_name", name},
         {"architecture", arch},
         {"max_buffer_length", raw_device->maxBufferLength()},
         {"max_recommended_working_set_size",

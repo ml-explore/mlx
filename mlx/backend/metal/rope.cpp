@@ -25,6 +25,10 @@ void RoPE::eval_gpu(
   size_t out_strides[3];
   bool donated = false;
   int ndim = in.ndim();
+  int dispatch_ndim = in.ndim();
+  while (in.shape(-dispatch_ndim) == 1 && dispatch_ndim > 3) {
+    dispatch_ndim--;
+  }
   size_t mat_size = in.shape(-2) * in.shape(-1);
   if (dims_ < in.shape(-1)) {
     donated = true;
@@ -44,12 +48,12 @@ void RoPE::eval_gpu(
     strides[0] = mat_size;
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];
-  } else if (ndim == 3) {
+  } else if (dispatch_ndim == 3) {
     // Handle non-contiguous 3D inputs
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    strides[0] = in.strides()[0];
-    strides[1] = in.strides()[1];
-    strides[2] = in.strides()[2];
+    strides[0] = in.strides()[ndim - 3];
+    strides[1] = in.strides()[ndim - 2];
+    strides[2] = in.strides()[ndim - 1];
   } else {
     // Copy non-contiguous > 3D inputs into the output and treat
     // input as donated
