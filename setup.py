@@ -5,7 +5,6 @@ import os
 import platform
 import re
 import subprocess
-import sys
 from pathlib import Path
 from subprocess import run
 
