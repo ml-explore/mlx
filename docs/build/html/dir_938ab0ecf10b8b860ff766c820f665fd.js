@@ -30,5 +30,6 @@ var dir_938ab0ecf10b8b860ff766c820f665fd =
     [ "threadpool.h", "threadpool_8h.html", "threadpool_8h" ],
     [ "transforms.h", "transforms_8h.html", "transforms_8h" ],
     [ "transforms_impl.h", "transforms__impl_8h.html", "transforms__impl_8h" ],
-    [ "utils.h", "utils_8h.html", "utils_8h" ]
+    [ "utils.h", "utils_8h.html", "utils_8h" ],
+    [ "version.h", "version_8h.html", "version_8h" ]
 ];

@@ -123,6 +123,12 @@ Public Types</h2></td></tr>
 <tr class="separator:a3dcd4301390937f89ed1dde6d28e341f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:adbb262a3c872e26533b68a39db16459e" id="r_adbb262a3c872e26533b68a39db16459e"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a7c212200d86b4e93f274d99addf668bd">kElemCols</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#adbb262a3c872e26533b68a39db16459e">col_frag_type</a></td></tr>
 <tr class="separator:adbb262a3c872e26533b68a39db16459e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a96ce3732fb66feaeb80bd1ea9aadbd7e" id="r_a96ce3732fb66feaeb80bd1ea9aadbd7e"><td class="memTemplParams" colspan="2">template&lt;typename U&gt; </td></tr>
+<tr class="memitem:a96ce3732fb66feaeb80bd1ea9aadbd7e"><td class="memTemplItemLeft" align="right" valign="top">using&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a> = typename metal::simdgroup_matrix&lt;U, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a>&gt;</td></tr>
+<tr class="separator:a96ce3732fb66feaeb80bd1ea9aadbd7e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a51fcc7447804110f2c2c6e9e361bdc02" id="r_a51fcc7447804110f2c2c6e9e361bdc02"><td class="memTemplParams" colspan="2">template&lt;typename U&gt; </td></tr>
+<tr class="memitem:a51fcc7447804110f2c2c6e9e361bdc02"><td class="memTemplItemLeft" align="right" valign="top">using&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a> = typename metal::vec&lt;U, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a>&gt;</td></tr>
+<tr class="separator:a51fcc7447804110f2c2c6e9e361bdc02"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a25675ae18947a97c6e04157b540103a9" id="r_a25675ae18947a97c6e04157b540103a9"><td class="memItemLeft" align="right" valign="top">typedef metal::simdgroup_matrix&lt; T, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a></td></tr>
 <tr class="separator:a25675ae18947a97c6e04157b540103a9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8536bfaa108031c2ea3e9ccdc766ee5b" id="r_a8536bfaa108031c2ea3e9ccdc766ee5b"><td class="memItemLeft" align="right" valign="top">typedef metal::vec&lt; T, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a></td></tr>
@@ -144,10 +150,12 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328" id="r_a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplParams" colspan="2">template&lt;typename DstPtrType, typename StrX, typename StrY, typename LimX, typename LimY, typename OffX, typename OffY&gt; </td></tr>
 <tr class="memitem:a1f0b00daad8eba2f855bb306e70d2328"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1f0b00daad8eba2f855bb306e70d2328">store_safe</a> (const thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;src, DstPtrType dst, StrX str_x, StrY str_y, LimX lim_x, LimY lim_y, OffX off_x=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{}, OffY off_y=<a class="el" href="namespacemlx_1_1steel.html#afe36ddf6725498d273e5eef4f1579891">Int</a>&lt; 0 &gt;{})</td></tr>
 <tr class="separator:a1f0b00daad8eba2f855bb306e70d2328"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8028512f5a3d2b6acaf966be529627a3" id="r_a8028512f5a3d2b6acaf966be529627a3"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8028512f5a3d2b6acaf966be529627a3">mma</a> (thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;D, thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;A, thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;B, thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;C)</td></tr>
-<tr class="separator:a8028512f5a3d2b6acaf966be529627a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1868f57d57c8adedab2c58492ec76946" id="r_a1868f57d57c8adedab2c58492ec76946"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1868f57d57c8adedab2c58492ec76946">mma</a> (thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;D, thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;A, thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;B, thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;C)</td></tr>
-<tr class="separator:a1868f57d57c8adedab2c58492ec76946"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae49be5820609d08885a811ae1d082a4b" id="r_ae49be5820609d08885a811ae1d082a4b"><td class="memTemplParams" colspan="2">template&lt;typename Atype, typename Btype, typename Ctype&gt; </td></tr>
+<tr class="memitem:ae49be5820609d08885a811ae1d082a4b"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae49be5820609d08885a811ae1d082a4b">mma</a> (thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;D, thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Atype &gt; &amp;A, thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Btype &gt; &amp;B, thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Ctype &gt; &amp;C)</td></tr>
+<tr class="separator:ae49be5820609d08885a811ae1d082a4b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afcdc0e744021facfe52347eaa0fc549e" id="r_afcdc0e744021facfe52347eaa0fc549e"><td class="memTemplParams" colspan="2">template&lt;typename Atype, typename Btype, typename Ctype&gt; </td></tr>
+<tr class="memitem:afcdc0e744021facfe52347eaa0fc549e"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#afcdc0e744021facfe52347eaa0fc549e">mma</a> (thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;D, thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Atype &gt; &amp;A, thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Btype &gt; &amp;B, thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Ctype &gt; &amp;C)</td></tr>
+<tr class="separator:afcdc0e744021facfe52347eaa0fc549e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a51d662e4cff88b5ad17d7c44bb6b6970" id="r_a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
 <tr class="memitem:a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC constexpr void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a51d662e4cff88b5ad17d7c44bb6b6970">row_reduce</a> (thread const <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;inp_vals, thread T *reduced_vals)</td></tr>
 <tr class="separator:a51d662e4cff88b5ad17d7c44bb6b6970"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -197,6 +205,42 @@ template&lt;typename T&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">typedef metal::vec&lt;T, <a class="el" href="#a7c212200d86b4e93f274d99addf668bd">kElemCols</a>&gt; <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::col_frag_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a51fcc7447804110f2c2c6e9e361bdc02" name="a51fcc7447804110f2c2c6e9e361bdc02"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51fcc7447804110f2c2c6e9e361bdc02">&#9670;&#160;</a></span>dtype_frag_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<div class="memtemplate">
+template&lt;typename U&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::dtype_frag_t = typename metal::vec&lt;U, <a class="el" href="#a3c34dfdc944db110f4735f1b25307cf0">kElemsPerFrag</a>&gt;</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a96ce3732fb66feaeb80bd1ea9aadbd7e" name="a96ce3732fb66feaeb80bd1ea9aadbd7e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">&#9670;&#160;</a></span>dtype_mat_t</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<div class="memtemplate">
+template&lt;typename U&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="structmlx_1_1steel_1_1_base_m_m_a_frag.html">mlx::steel::BaseMMAFrag</a>&lt; T, 8, 8 &gt;::dtype_mat_t = typename metal::simdgroup_matrix&lt;U, <a class="el" href="#a2fe53db449c692226f23f6b99fb2c0d4">kFragRows</a>, <a class="el" href="#a211102315e2afbcfcd2e2c201b638e9f">kFragCols</a>&gt;</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -550,13 +594,15 @@ template&lt;typename SrcPtrType, typename StrX, typename StrY, typename LimX, ty
 
 </div>
 </div>
-<a id="a8028512f5a3d2b6acaf966be529627a3" name="a8028512f5a3d2b6acaf966be529627a3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8028512f5a3d2b6acaf966be529627a3">&#9670;&#160;</a></span>mma() <span class="overload">[1/4]</span></h2>
+<a id="ae49be5820609d08885a811ae1d082a4b" name="ae49be5820609d08885a811ae1d082a4b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae49be5820609d08885a811ae1d082a4b">&#9670;&#160;</a></span>mma() <span class="overload">[1/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
 template&lt;typename T&gt; </div>
+<div class="memtemplate">
+template&lt;typename Atype, typename Btype, typename Ctype&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -569,17 +615,17 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Atype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Btype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a8536bfaa108031c2ea3e9ccdc766ee5b">frag_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+          <td class="paramtype">thread <a class="el" href="#a51fcc7447804110f2c2c6e9e361bdc02">dtype_frag_t</a>&lt; Ctype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -632,13 +678,15 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a1868f57d57c8adedab2c58492ec76946" name="a1868f57d57c8adedab2c58492ec76946"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1868f57d57c8adedab2c58492ec76946">&#9670;&#160;</a></span>mma() <span class="overload">[3/4]</span></h2>
+<a id="afcdc0e744021facfe52347eaa0fc549e" name="afcdc0e744021facfe52347eaa0fc549e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afcdc0e744021facfe52347eaa0fc549e">&#9670;&#160;</a></span>mma() <span class="overload">[3/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
 template&lt;typename T&gt; </div>
+<div class="memtemplate">
+template&lt;typename Atype, typename Btype, typename Ctype&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
@@ -651,17 +699,17 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Atype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>A</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
+          <td class="paramtype">thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Btype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>B</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread <a class="el" href="#a25675ae18947a97c6e04157b540103a9">mat_type</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
+          <td class="paramtype">thread <a class="el" href="#a96ce3732fb66feaeb80bd1ea9aadbd7e">dtype_mat_t</a>&lt; Ctype &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>C</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
