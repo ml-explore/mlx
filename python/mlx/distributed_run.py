@@ -112,7 +112,12 @@ def extract_rings(hosts, index):
                     break
             if not ring:
                 break
-            rings.append(normalize(concretize(ring, used_ports)))
+            try:
+                rings.append(normalize(concretize(ring, used_ports)))
+            except RuntimeError:
+                if len(rings) > 0:
+                    return rings
+                raise
 
     return rings
 
