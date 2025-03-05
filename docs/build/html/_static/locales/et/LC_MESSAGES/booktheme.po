@@ -8,68 +8,68 @@ msgstr ""
 "Language: et\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Prindi PDF-i"
-
-msgid "Theme by the"
-msgstr "Teema"
-
-msgid "Download source file"
-msgstr "Laadige alla lähtefail"
-
-msgid "open issue"
-msgstr "avatud küsimus"
-
-msgid "Contents"
-msgstr "Sisu"
-
-msgid "previous page"
-msgstr "eelmine leht"
-
-msgid "Download notebook file"
-msgstr "Laadige sülearvuti fail alla"
-
-msgid "Copyright"
-msgstr "Autoriõigus"
-
-msgid "Download this page"
-msgstr "Laadige see leht alla"
-
-msgid "Source repository"
-msgstr "Allikahoidla"
+msgid "By the"
+msgstr "Autor"
 
 msgid "By"
 msgstr "Kõrval"
 
-msgid "repository"
-msgstr "hoidla"
+msgid "Contents"
+msgstr "Sisu"
 
-msgid "Last updated on"
-msgstr "Viimati uuendatud"
+msgid "Copyright"
+msgstr "Autoriõigus"
 
-msgid "Toggle navigation"
-msgstr "Lülita navigeerimine sisse"
+msgid "Download notebook file"
+msgstr "Laadige sülearvuti fail alla"
 
-msgid "Sphinx Book Theme"
-msgstr "Sfinksiraamatu teema"
+msgid "Download source file"
+msgstr "Laadige alla lähtefail"
 
-msgid "suggest edit"
-msgstr "soovita muuta"
-
-msgid "Open an issue"
-msgstr "Avage probleem"
-
-msgid "Launch"
-msgstr "Käivitage"
-
-msgid "Fullscreen mode"
-msgstr "Täisekraanirežiim"
+msgid "Download this page"
+msgstr "Laadige see leht alla"
 
 msgid "Edit this page"
 msgstr "Muutke seda lehte"
 
-msgid "By the"
-msgstr "Autor"
+msgid "Fullscreen mode"
+msgstr "Täisekraanirežiim"
+
+msgid "Last updated on"
+msgstr "Viimati uuendatud"
+
+msgid "Launch"
+msgstr "Käivitage"
+
+msgid "Open an issue"
+msgstr "Avage probleem"
+
+msgid "Print to PDF"
+msgstr "Prindi PDF-i"
+
+msgid "Source repository"
+msgstr "Allikahoidla"
+
+msgid "Sphinx Book Theme"
+msgstr "Sfinksiraamatu teema"
+
+msgid "Theme by the"
+msgstr "Teema"
+
+msgid "Toggle navigation"
+msgstr "Lülita navigeerimine sisse"
 
 msgid "next page"
 msgstr "järgmine leht"
+
+msgid "open issue"
+msgstr "avatud küsimus"
+
+msgid "previous page"
+msgstr "eelmine leht"
+
+msgid "repository"
+msgstr "hoidla"
+
+msgid "suggest edit"
+msgstr "soovita muuta"

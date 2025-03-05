@@ -8,68 +8,68 @@ msgstr ""
 "Language: sl\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Natisni v PDF"
-
-msgid "Theme by the"
-msgstr "Tema avtorja"
-
-msgid "Download source file"
-msgstr "Prenesite izvorno datoteko"
-
-msgid "open issue"
-msgstr "odprto vprašanje"
-
-msgid "Contents"
-msgstr "Vsebina"
-
-msgid "previous page"
-msgstr "Prejšnja stran"
-
-msgid "Download notebook file"
-msgstr "Prenesite datoteko zvezka"
-
-msgid "Copyright"
-msgstr "avtorske pravice"
-
-msgid "Download this page"
-msgstr "Prenesite to stran"
-
-msgid "Source repository"
-msgstr "Izvorno skladišče"
+msgid "By the"
+msgstr "Avtor"
 
 msgid "By"
 msgstr "Avtor"
 
-msgid "repository"
-msgstr "odlagališče"
+msgid "Contents"
+msgstr "Vsebina"
 
-msgid "Last updated on"
-msgstr "Nazadnje posodobljeno dne"
+msgid "Copyright"
+msgstr "avtorske pravice"
 
-msgid "Toggle navigation"
-msgstr "Preklopi navigacijo"
+msgid "Download notebook file"
+msgstr "Prenesite datoteko zvezka"
 
-msgid "Sphinx Book Theme"
-msgstr "Tema knjige Sphinx"
+msgid "Download source file"
+msgstr "Prenesite izvorno datoteko"
 
-msgid "suggest edit"
-msgstr "predlagajte urejanje"
-
-msgid "Open an issue"
-msgstr "Odprite številko"
-
-msgid "Launch"
-msgstr "Kosilo"
-
-msgid "Fullscreen mode"
-msgstr "Celozaslonski način"
+msgid "Download this page"
+msgstr "Prenesite to stran"
 
 msgid "Edit this page"
 msgstr "Uredite to stran"
 
-msgid "By the"
-msgstr "Avtor"
+msgid "Fullscreen mode"
+msgstr "Celozaslonski način"
+
+msgid "Last updated on"
+msgstr "Nazadnje posodobljeno dne"
+
+msgid "Launch"
+msgstr "Kosilo"
+
+msgid "Open an issue"
+msgstr "Odprite številko"
+
+msgid "Print to PDF"
+msgstr "Natisni v PDF"
+
+msgid "Source repository"
+msgstr "Izvorno skladišče"
+
+msgid "Sphinx Book Theme"
+msgstr "Tema knjige Sphinx"
+
+msgid "Theme by the"
+msgstr "Tema avtorja"
+
+msgid "Toggle navigation"
+msgstr "Preklopi navigacijo"
 
 msgid "next page"
 msgstr "Naslednja stran"
+
+msgid "open issue"
+msgstr "odprto vprašanje"
+
+msgid "previous page"
+msgstr "Prejšnja stran"
+
+msgid "repository"
+msgstr "odlagališče"
+
+msgid "suggest edit"
+msgstr "predlagajte urejanje"
