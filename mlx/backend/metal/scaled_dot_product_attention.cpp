@@ -102,7 +102,7 @@ void sdpa_full_self_attention_metal(
 
       /* int qL_rem = */ (qL - NQ_aligned * bq),
       /* int kL_rem = */ (kL - NK_aligned * bk),
-      /* int qL_off = */ ((kL - qL) < 0 ? 0 : (kL - qL)),
+      /* int qL_off = */ (kL - qL),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
