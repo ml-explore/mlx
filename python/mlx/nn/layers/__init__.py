@@ -60,6 +60,12 @@ from mlx.nn.layers.convolution_transpose import (
     ConvTranspose2d,
     ConvTranspose3d,
 )
+from mlx.nn.layers.distributed import (
+    AllToShardedLinear,
+    QuantizedAllToShardedLinear,
+    QuantizedShardedToAllLinear,
+    ShardedToAllLinear,
+)
 from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Bilinear, Identity, Linear
