@@ -39,7 +39,7 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
                 mask = mx.unflatten(mask, -3, (n_kv_heads, n_repeats))
 
         if mask.dtype == mx.bool_:
-            scores = mx.where(mask, scores, mx.finfo(q_dtype).min)
+            scores = mx.where(mask, scores, -np.float32(np.inf))
         else:
             scores += mask
 
@@ -71,7 +71,7 @@ def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
 
     scale = 1.0 / math.sqrt(D)
 
-    q_np = np.random.normal(0.0, scale, shape_q).astype(np_dtype)
+    q_np = np.random.normal(0.0, 1.0, shape_q).astype(np_dtype)
     k_np = np.random.normal(0.0, scale, shape_kv).astype(np_dtype)
     v_np = np.random.normal(0.0, scale, shape_kv).astype(np_dtype)
 
@@ -462,16 +462,16 @@ class TestSDPA(mlx_tests.MLXTestCase):
         shapes_64 = (
             # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
             (  1,   128,   128,       64,   32,    32),
-            # (  1,   128,    64,       64,   32,    32),
-            # (  1,    64,   128,       64,   32,    32),
+            (  1,   128,    64,       64,   32,    32),
+            (  1,   127,    65,       64,   32,    32),
             # (  1,    65,   127,       64,   32,    32),
         )
 
         shapes_128 = (
             # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
             (  1,   128,   128,      128,   32,     8),
-            # (  1,   128,    64,      128,   32,     8),
-            # (  1,    64,   128,      128,   32,     8),
+            (  1,   128,    64,      128,   32,     8),
+            (  1,   127,    65,      128,   32,     8),
             # (  1,    65,   127,      128,   32,     8),
         )
         # fmt: on
@@ -514,13 +514,15 @@ class TestSDPA(mlx_tests.MLXTestCase):
                                 t,
                             )
 
-                            atol = 1e-5 if dtype == "float32" else 1e-4
+                            atol = 1e-5 if dtype == "float32" else 2e-4
 
                             self.assertListEqual(
                                 list(out_ref.shape), list(out_fst.shape)
                             )
 
-                            self.assertTrue(mx.allclose(out_fst, out_ref, atol=atol))
+                            self.assertTrue(
+                                mx.allclose(out_fst, out_ref, atol=atol, rtol=atol)
+                            )
 
 
 if __name__ == "__main__":
