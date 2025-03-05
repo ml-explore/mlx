@@ -2063,8 +2063,8 @@ template <typename T, const int group_size, const int bits>
   // Write out the scales and biases
   size_t gindex = in_index / group_size;
   if (in_index % group_size == 0) {
-    scales[gindex] = scale;
-    biases[gindex] = bias;
+    scales[gindex] = static_cast<T>(scale);
+    biases[gindex] = static_cast<T>(bias);
   }
 
   // We accumulate 3 bytes worth for 3/6 bit so we need a uint32_t

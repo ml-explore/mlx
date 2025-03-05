@@ -588,8 +588,8 @@ void quantize(
         out[out_idx + bytes_per_pack * j + 2] = (out_el & 0xff0000) >> 16;
       }
     }
-    scales[i] = scale;
-    biases[i] = bias;
+    scales[i] = static_cast<T>(scale);
+    biases[i] = static_cast<T>(bias);
   }
 }
 
