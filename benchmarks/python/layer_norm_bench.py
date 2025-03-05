@@ -10,7 +10,12 @@ def layer_norm(x, w, b, eps):
     x = x.astype(mx.float32)
     mu = mx.mean(x, -1, keepdims=True)
     v = mx.var(x, -1, keepdims=True)
-    return (x - mu) * mx.rsqrt(v + eps) * w + b
+    y = (x - mu) * mx.rsqrt(v + eps)
+    if w is not None:
+        y = y * w
+    if b is not None:
+        y = y + b
+    return y
 
 
 def time_layer_norm():
@@ -35,6 +40,28 @@ def time_layer_norm():
     time_fn(layer_norm_loop, g2, x, w, b)
     time_fn(layer_norm_loop, mx.compile(g1), x, w, b)
     time_fn(layer_norm_loop, mx.compile(g2), x, w, b)
+
+    f1 = lambda x, y: (layer_norm(x, None, None, 1e-5) * y).sum()
+    f2 = lambda x, y: (mx.fast.layer_norm(x, None, None, 1e-5) * y).sum()
+    g1 = mx.grad(f1, argnums=(0,))
+    g2 = mx.grad(f2, argnums=(0,))
+
+    x = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
+    w = mx.random.uniform(shape=(4096,)).astype(mx.float16)
+    b = mx.random.uniform(shape=(4096,)).astype(mx.float16)
+    y = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
+    mx.eval(x, w, b, y)
+
+    def layer_norm_loop(g, x):
+        gx = x
+        for _ in range(32):
+            gx = g(gx, y)
+        return gx
+
+    time_fn(layer_norm_loop, g1, x)
+    time_fn(layer_norm_loop, g2, x)
+    time_fn(layer_norm_loop, mx.compile(g1), x)
+    time_fn(layer_norm_loop, mx.compile(g2), x)
 
 
 if __name__ == "__main__":

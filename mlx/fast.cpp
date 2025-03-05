@@ -54,30 +54,34 @@ std::pair<std::vector<array>, std::vector<int>> Custom::vmap(
 
 array rms_norm(
     const array& x,
-    const array& weight,
+    const std::optional<array>& weight,
     float eps,
     StreamOrDevice s_ /* = {} */) {
+  bool has_weight = weight.has_value();
+
   if (x.ndim() == 0) {
     std::ostringstream msg;
     msg << "[rms_norm] Input must have at least 1 dimension but got input with "
            "0 dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (weight.ndim() != 1) {
-    std::ostringstream msg;
-    msg << "[rms_norm] weight must have 1 dimension but has " << weight.ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  if (weight.size() != x.shape(-1)) {
-    std::ostringstream msg;
-    msg << "[rms_norm] weight must have the same size as the last dimension of"
-           " x but has "
-        << weight.size() << " elements.";
-    throw std::invalid_argument(msg.str());
+  if (has_weight) {
+    if ((*weight).ndim() != 1) {
+      std::ostringstream msg;
+      msg << "[rms_norm] (*weight) must have 1 dimension but has "
+          << (*weight).ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if ((*weight).size() != x.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[rms_norm] (*weight) must have the same size as the last dimension of"
+             " x but has "
+          << (*weight).size() << " elements.";
+      throw std::invalid_argument(msg.str());
+    }
   }
 
-  auto out_type = result_type(x, weight);
+  auto out_type = (weight.has_value()) ? result_type(x, (*weight)) : x.dtype();
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[rms_norm] Received unsupported type " << out_type << ".";
@@ -85,27 +89,36 @@ array rms_norm(
   }
 
   auto s = to_stream(s_);
-  auto fallback = [eps, out_type, s](const std::vector<array>& inputs) {
-    auto x = astype(inputs[0], float32, s);
-    x = multiply(
-        x,
-        rsqrt(
-            add(mean(square(x, s), -1, /* keepdims */ true, s),
-                array(eps, float32),
+  auto fallback =
+      [has_weight, eps, out_type, s](const std::vector<array>& inputs) {
+        auto x = astype(inputs[0], float32, s);
+        x = multiply(
+            x,
+            rsqrt(
+                add(mean(square(x, s), -1, /* keepdims */ true, s),
+                    array(eps, float32),
+                    s),
                 s),
-            s),
-        s);
-    x = astype(x, out_type, s);
-    return std::vector<array>{multiply(inputs[1], x, s)};
-  };
+            s);
+        x = astype(x, out_type, s);
+
+        if (has_weight) {
+          x = multiply(x, inputs[1], s);
+        }
+
+        return std::vector<array>{x};
+      };
+
+  auto passed_weight =
+      (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
   if (s.device == Device::gpu) {
     return array(
         x.shape(),
         out_type,
         std::make_shared<RMSNorm>(s, fallback, eps),
-        {astype(x, out_type, s), astype(weight, out_type, s)});
+        {astype(x, out_type, s), passed_weight});
   }
-  return fallback({x, weight})[0];
+  return fallback({x, passed_weight})[0];
 }
 
 std::vector<array> RMSNorm::vjp(
@@ -141,8 +154,12 @@ std::vector<array> RMSNorm::vjp(
     // df/dw
     std::vector<int> axes(g.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
-    vjps.push_back(
-        sum(multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ false, s));
+    if (w.ndim() == 0) {
+      vjps.push_back(zeros_like(w, s));
+    } else {
+      vjps.push_back(sum(
+          multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ false, s));
+    }
 
     return vjps;
   };
@@ -177,28 +194,30 @@ array layer_norm(
     const std::optional<array>& bias,
     float eps,
     StreamOrDevice s_ /* = {} */) {
+  bool has_weight = weight.has_value();
+  bool has_bias = bias.has_value();
+
   if (x.ndim() == 0) {
     std::ostringstream msg;
     msg << "[layer_norm] Input must have at least 1 dimension but got input with "
            "0 dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (weight.has_value() && (*weight).ndim() != 1) {
+  if (has_weight && (*weight).ndim() != 1) {
     std::ostringstream msg;
     msg << "[layer_norm] weight must have 1 dimension but has "
         << (*weight).ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (bias.has_value() && (*bias).ndim() != 1) {
+  if (has_bias && (*bias).ndim() != 1) {
     std::ostringstream msg;
     msg << "[layer_norm] bias must have 1 dimension but has " << (*bias).ndim()
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
-  auto out_type = (weight.has_value())
-      ? ((bias.has_value()) ? result_type(x, *weight, *bias)
-                            : result_type(x, *weight))
+  auto out_type = (has_weight)
+      ? ((has_bias) ? result_type(x, *weight, *bias) : result_type(x, *weight))
       : x.dtype();
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
@@ -207,8 +226,6 @@ array layer_norm(
   }
 
   auto s = to_stream(s_);
-  bool has_weight = weight.has_value();
-  bool has_bias = bias.has_value();
   auto fallback = [has_weight, has_bias, eps, out_type, s](
                       const std::vector<array>& inputs) {
     auto x = astype(inputs[0], float32, s);
@@ -234,9 +251,9 @@ array layer_norm(
   };
 
   auto passed_weight =
-      astype((weight.has_value()) ? *weight : array(1, out_type), out_type);
+      (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
   auto passed_bias =
-      astype((bias.has_value()) ? *bias : array(0, out_type), out_type);
+      (has_bias) ? astype(*bias, out_type, s) : array(0, out_type);
 
   if (s.device == Device::gpu) {
     return array(
@@ -698,7 +715,8 @@ array scaled_dot_product_attention(
   const bool supports_sdpa_full = query_sequence_length >= threshold && !mask &&
       sdpa_full_supported_head_dim && stream.device == Device::gpu;
 
-  const bool supports_sdpa_vector = query_sequence_length == 1 &&
+  const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
+      (query_sequence_length <= k.shape(-2)) &&
       (!mask || mask->dtype() == bool_) && sdpa_vector_supported_head_dim &&
       stream.device == Device::gpu;
 
@@ -809,14 +827,17 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     auto wshape = w.shape();
     wshape.back() = -1;
 
-    array zero(0, w.dtype());
-    array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
-    array eps(1e-7, w.dtype());
+    array zero(0, float32);
+    array n_bins((1 << bits) - 1, float32); // 2**bits - 1
+    array eps(1e-7, float32);
 
     array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
 
     array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
     array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    w_max = astype(w_max, float32, s);
+    w_min = astype(w_min, float32, s);
+
     array mask = greater(abs(w_min, s), abs(w_max, s), s);
     array scales =
         maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
@@ -827,6 +848,9 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     array biases = where(equal(q0, zero, s), zero, edge, s);
 
     packed_w = pack_and_quantize(packed_w, scales, biases, bits, s);
+
+    scales = astype(scales, w.dtype(), s);
+    biases = astype(biases, w.dtype(), s);
     return {
         reshape(packed_w, wshape, s),
         reshape(scales, wshape, s),

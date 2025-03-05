@@ -82,7 +82,7 @@ void start_capture(std::string path = "");
 void stop_capture();
 
 /** Get information about the GPU and system settings. */
-std::unordered_map<std::string, std::variant<std::string, size_t>>
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info();
 
 } // namespace mlx::core::metal
