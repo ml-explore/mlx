@@ -1,5 +1,9 @@
 var NAVTREEINDEX15 =
 {
+"distributed__impl_8h.html":[3,0,0,2,3],
+"distributed__impl_8h_source.html":[3,0,0,2,3],
+"dtype_8h.html":[3,0,0,10],
+"dtype_8h_source.html":[3,0,0,10],
 "einsum_8h.html":[3,0,0,11],
 "einsum_8h_source.html":[3,0,0,11],
 "erf_8h.html":[3,0,0,1,2,1,15],
@@ -245,9 +249,5 @@ var NAVTREEINDEX15 =
 "group__ops.html#ga30d47e08093c03a3676f235f9f559411":[0,0,61],
 "group__ops.html#ga3188638fba3a60e264baf69956a1e08b":[0,0,51],
 "group__ops.html#ga32e106e794e2c32e4e7decee2df2477f":[0,0,195],
-"group__ops.html#ga33638dc3a9972dd02be12d0eb85f9bde":[0,0,83],
-"group__ops.html#ga345aa27af3dae3646b8b4b1068e89a3e":[0,0,16],
-"group__ops.html#ga35b8436c79ff953f6c809598b646f498":[0,0,295],
-"group__ops.html#ga3602aa91b7b124a0b41ec1b2137a1b02":[0,0,312],
-"group__ops.html#ga3627754d7868487bdab1bd83f05d9c81":[0,0,283]
+"group__ops.html#ga33638dc3a9972dd02be12d0eb85f9bde":[0,0,83]
 };
