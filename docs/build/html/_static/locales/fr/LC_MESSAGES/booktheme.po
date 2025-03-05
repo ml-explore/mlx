@@ -8,68 +8,68 @@ msgstr ""
 "Language: fr\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Imprimer au format PDF"
-
-msgid "Theme by the"
-msgstr "Thème par le"
-
-msgid "Download source file"
-msgstr "Télécharger le fichier source"
-
-msgid "open issue"
-msgstr "signaler un problème"
-
-msgid "Contents"
-msgstr "Contenu"
-
-msgid "previous page"
-msgstr "page précédente"
-
-msgid "Download notebook file"
-msgstr "Télécharger le fichier notebook"
-
-msgid "Copyright"
-msgstr "droits d'auteur"
-
-msgid "Download this page"
-msgstr "Téléchargez cette page"
-
-msgid "Source repository"
-msgstr "Dépôt source"
+msgid "By the"
+msgstr "Par le"
 
 msgid "By"
 msgstr "Par"
 
-msgid "repository"
-msgstr "dépôt"
+msgid "Contents"
+msgstr "Contenu"
 
-msgid "Last updated on"
-msgstr "Dernière mise à jour le"
+msgid "Copyright"
+msgstr "droits d'auteur"
 
-msgid "Toggle navigation"
-msgstr "Basculer la navigation"
+msgid "Download notebook file"
+msgstr "Télécharger le fichier notebook"
 
-msgid "Sphinx Book Theme"
-msgstr "Thème du livre Sphinx"
+msgid "Download source file"
+msgstr "Télécharger le fichier source"
 
-msgid "suggest edit"
-msgstr "suggestion de modification"
-
-msgid "Open an issue"
-msgstr "Ouvrez un problème"
-
-msgid "Launch"
-msgstr "lancement"
-
-msgid "Fullscreen mode"
-msgstr "Mode plein écran"
+msgid "Download this page"
+msgstr "Téléchargez cette page"
 
 msgid "Edit this page"
 msgstr "Modifier cette page"
 
-msgid "By the"
-msgstr "Par le"
+msgid "Fullscreen mode"
+msgstr "Mode plein écran"
+
+msgid "Last updated on"
+msgstr "Dernière mise à jour le"
+
+msgid "Launch"
+msgstr "lancement"
+
+msgid "Open an issue"
+msgstr "Ouvrez un problème"
+
+msgid "Print to PDF"
+msgstr "Imprimer au format PDF"
+
+msgid "Source repository"
+msgstr "Dépôt source"
+
+msgid "Sphinx Book Theme"
+msgstr "Thème du livre Sphinx"
+
+msgid "Theme by the"
+msgstr "Thème par le"
+
+msgid "Toggle navigation"
+msgstr "Basculer la navigation"
 
 msgid "next page"
 msgstr "page suivante"
+
+msgid "open issue"
+msgstr "signaler un problème"
+
+msgid "previous page"
+msgstr "page précédente"
+
+msgid "repository"
+msgstr "dépôt"
+
+msgid "suggest edit"
+msgstr "suggestion de modification"

@@ -2185,9 +2185,9 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l02015" name="l02015"></a><span class="lineno"> 2015</span>    device T* biases [[buffer(3)]],</div>
 <div class="line"><a id="l02016" name="l02016"></a><span class="lineno"> 2016</span>    uint2 index [[thread_position_in_grid]],</div>
 <div class="line"><a id="l02017" name="l02017"></a><span class="lineno"> 2017</span>    uint2 grid_dim [[threads_per_grid]]) {</div>
-<div class="line"><a id="l02018" name="l02018"></a><span class="lineno"> 2018</span>  <span class="keyword">constexpr</span> T eps = T(1e-7);</div>
+<div class="line"><a id="l02018" name="l02018"></a><span class="lineno"> 2018</span>  <span class="keyword">constexpr</span> <span class="keywordtype">float</span> eps = 1e-7;</div>
 <div class="line"><a id="l02019" name="l02019"></a><span class="lineno"> 2019</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> = 32;</div>
-<div class="line"><a id="l02020" name="l02020"></a><span class="lineno"> 2020</span>  <span class="keyword">constexpr</span> T n_bins = (1 &lt;&lt; bits) - 1;</div>
+<div class="line"><a id="l02020" name="l02020"></a><span class="lineno"> 2020</span>  <span class="keyword">constexpr</span> <span class="keywordtype">float</span> n_bins = (1 &lt;&lt; bits) - 1;</div>
 <div class="line"><a id="l02021" name="l02021"></a><span class="lineno"> 2021</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> packs_per_int = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;</div>
 <div class="line"><a id="l02022" name="l02022"></a><span class="lineno"> 2022</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> values_per_reduce = group_size / <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>;</div>
 <div class="line"><a id="l02023" name="l02023"></a><span class="lineno"> 2023</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> writes_per_reduce = packs_per_int / values_per_reduce;</div>
@@ -2206,13 +2206,13 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l02036" name="l02036"></a><span class="lineno"> 2036</span>      ? offset * writes_per_pack</div>
 <div class="line"><a id="l02037" name="l02037"></a><span class="lineno"> 2037</span>      : offset * bytes_per_pack / writes_per_reduce;</div>
 <div class="line"><a id="l02038" name="l02038"></a><span class="lineno"> 2038</span> </div>
-<div class="line"><a id="l02039" name="l02039"></a><span class="lineno"> 2039</span>  T w_thread[values_per_reduce];</div>
-<div class="line"><a id="l02040" name="l02040"></a><span class="lineno"> 2040</span>  T w_min = <a class="code hl_variable" href="struct_limits.html#a2f0673b6f9da89ce1d64f9f3d74f50a8">Limits&lt;T&gt;::max</a>;</div>
-<div class="line"><a id="l02041" name="l02041"></a><span class="lineno"> 2041</span>  T w_max = 0;</div>
+<div class="line"><a id="l02039" name="l02039"></a><span class="lineno"> 2039</span>  <span class="keywordtype">float</span> w_thread[values_per_reduce];</div>
+<div class="line"><a id="l02040" name="l02040"></a><span class="lineno"> 2040</span>  <span class="keywordtype">float</span> w_min = <a class="code hl_variable" href="struct_limits.html#a2f0673b6f9da89ce1d64f9f3d74f50a8">Limits&lt;T&gt;::max</a>;</div>
+<div class="line"><a id="l02041" name="l02041"></a><span class="lineno"> 2041</span>  <span class="keywordtype">float</span> w_max = 0;</div>
 <div class="line"><a id="l02042" name="l02042"></a><span class="lineno"> 2042</span> </div>
 <div class="line"><a id="l02043" name="l02043"></a><span class="lineno"> 2043</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
 <div class="line"><a id="l02044" name="l02044"></a><span class="lineno"> 2044</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; values_per_reduce; i++) {</div>
-<div class="line"><a id="l02045" name="l02045"></a><span class="lineno"> 2045</span>    T val = w[in_index + i];</div>
+<div class="line"><a id="l02045" name="l02045"></a><span class="lineno"> 2045</span>    <span class="keywordtype">float</span> val = w[in_index + i];</div>
 <div class="line"><a id="l02046" name="l02046"></a><span class="lineno"> 2046</span>    w_thread[i] = val;</div>
 <div class="line"><a id="l02047" name="l02047"></a><span class="lineno"> 2047</span>    w_min = <a class="code hl_function" href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">min</a>(w_min, val);</div>
 <div class="line"><a id="l02048" name="l02048"></a><span class="lineno"> 2048</span>    w_max = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>(w_max, val);</div>
@@ -2221,20 +2221,20 @@ $(function(){initNavTree('quantized_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l02051" name="l02051"></a><span class="lineno"> 2051</span>  w_min = <a class="code hl_function" href="namespacemetal.html#ae9e2a23e00724ba2d7868bc4112b386b">simd_min</a>(w_min);</div>
 <div class="line"><a id="l02052" name="l02052"></a><span class="lineno"> 2052</span>  w_max = <a class="code hl_function" href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">simd_max</a>(w_max);</div>
 <div class="line"><a id="l02053" name="l02053"></a><span class="lineno"> 2053</span> </div>
-<div class="line"><a id="l02054" name="l02054"></a><span class="lineno"> 2054</span>  T scale = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>((w_max - w_min) / n_bins, eps);</div>
+<div class="line"><a id="l02054" name="l02054"></a><span class="lineno"> 2054</span>  <span class="keywordtype">float</span> scale = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>((w_max - w_min) / n_bins, eps);</div>
 <div class="line"><a id="l02055" name="l02055"></a><span class="lineno"> 2055</span>  <span class="keywordtype">bool</span> side = <a class="code hl_function" href="namespacemetal.html#a87c5122c60f9a12afceb9925a5b78ffb">abs</a>(w_min) &gt; <a class="code hl_function" href="namespacemetal.html#a87c5122c60f9a12afceb9925a5b78ffb">abs</a>(w_max);</div>
 <div class="line"><a id="l02056" name="l02056"></a><span class="lineno"> 2056</span>  scale = side ? scale : -scale;</div>
-<div class="line"><a id="l02057" name="l02057"></a><span class="lineno"> 2057</span>  T edge = side ? w_min : w_max;</div>
-<div class="line"><a id="l02058" name="l02058"></a><span class="lineno"> 2058</span>  T q0 = <a class="code hl_function" href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">round</a>(edge / scale);</div>
+<div class="line"><a id="l02057" name="l02057"></a><span class="lineno"> 2057</span>  <span class="keywordtype">float</span> edge = side ? w_min : w_max;</div>
+<div class="line"><a id="l02058" name="l02058"></a><span class="lineno"> 2058</span>  <span class="keywordtype">float</span> q0 = <a class="code hl_function" href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">round</a>(edge / scale);</div>
 <div class="line"><a id="l02059" name="l02059"></a><span class="lineno"> 2059</span>  <span class="keywordtype">bool</span> at_zero = q0 == 0.0f;</div>
 <div class="line"><a id="l02060" name="l02060"></a><span class="lineno"> 2060</span>  scale = at_zero ? scale : edge / q0;</div>
-<div class="line"><a id="l02061" name="l02061"></a><span class="lineno"> 2061</span>  T bias = at_zero ? T(0) : edge;</div>
+<div class="line"><a id="l02061" name="l02061"></a><span class="lineno"> 2061</span>  <span class="keywordtype">float</span> bias = at_zero ? 0 : edge;</div>
 <div class="line"><a id="l02062" name="l02062"></a><span class="lineno"> 2062</span> </div>
 <div class="line"><a id="l02063" name="l02063"></a><span class="lineno"> 2063</span>  <span class="comment">// Write out the scales and biases</span></div>
 <div class="line"><a id="l02064" name="l02064"></a><span class="lineno"> 2064</span>  <span class="keywordtype">size_t</span> gindex = in_index / group_size;</div>
 <div class="line"><a id="l02065" name="l02065"></a><span class="lineno"> 2065</span>  <span class="keywordflow">if</span> (in_index % group_size == 0) {</div>
-<div class="line"><a id="l02066" name="l02066"></a><span class="lineno"> 2066</span>    scales[gindex] = scale;</div>
-<div class="line"><a id="l02067" name="l02067"></a><span class="lineno"> 2067</span>    biases[gindex] = bias;</div>
+<div class="line"><a id="l02066" name="l02066"></a><span class="lineno"> 2066</span>    scales[gindex] = <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(scale);</div>
+<div class="line"><a id="l02067" name="l02067"></a><span class="lineno"> 2067</span>    biases[gindex] = <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(bias);</div>
 <div class="line"><a id="l02068" name="l02068"></a><span class="lineno"> 2068</span>  }</div>
 <div class="line"><a id="l02069" name="l02069"></a><span class="lineno"> 2069</span> </div>
 <div class="line"><a id="l02070" name="l02070"></a><span class="lineno"> 2070</span>  <span class="comment">// We accumulate 3 bytes worth for 3/6 bit so we need a uint32_t</span></div>
