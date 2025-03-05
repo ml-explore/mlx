@@ -30,7 +30,7 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
             q_offset = max(0, kL - L)
             q_indices = mx.arange(q_offset, q_offset + L)
             k_indices = mx.arange(kL)
-            mask = q_indices[:, None] < k_indices[None]
+            mask = q_indices[:, None] >= k_indices[None]
 
         if n_repeats > 1 and mask.ndim >= 3:
             if mask.shape[-3] == 1:

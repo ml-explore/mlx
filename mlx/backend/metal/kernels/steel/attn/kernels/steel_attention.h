@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-25 Apple Inc.
 
 using namespace mlx::steel;
 
@@ -8,6 +8,9 @@ using namespace mlx::steel;
 
 constant bool align_Q [[function_constant(200)]];
 constant bool align_K [[function_constant(201)]];
+
+constant bool has_mask [[function_constant(300)]];
+constant bool do_causal [[function_constant(301)]];
 
 template <typename T>
 struct TransformScale {
@@ -69,6 +72,7 @@ template <
     int BD,
     int WM,
     int WN,
+    typename MaskType = float,
     typename AccumType = float>
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void attention(
     const device T* Q [[buffer(0)]],
@@ -76,6 +80,8 @@ template <
     const device T* V [[buffer(2)]],
     device T* O [[buffer(3)]],
     const constant AttnParams* params [[buffer(4)]],
+    const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
+    const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -101,6 +107,12 @@ template <
   O += tidl.z * params->O_strides[0] + // Batch
       tidl.y * params->O_strides[1] + // Head
       tidl.x * BQ * params->O_strides[2]; // Seqeunce
+
+  if (has_mask) {
+    mask += tidl.z * mask_params->M_strides[0] + // Batch
+        tidl.y * mask_params->M_strides[1] + // Head
+        tidl.x * BQ * mask_params->M_strides[2]; // Seqeunce
+  }
 
   // Prepare threadgroup memory
   constexpr short padQ = 16 / sizeof(T);
@@ -203,7 +215,7 @@ template <
 
   // Load Q blocks apply scale
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    loader_q.load_safe(short2(BD, params->qL - params->NQ_aligned * BQ));
+    loader_q.load_safe(short2(BD, params->qL_rem));
   } else {
     loader_q.load_unsafe();
   }
@@ -226,7 +238,7 @@ template <
     // Load K block and apply scale
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (!align_K && kb == (params->NK_aligned)) {
-      loader_k.load_safe(short2(BD, params->kL - params->NK_aligned * BK));
+      loader_k.load_safe(short2(BD, params->kL_rem));
     } else {
       loader_k.load_unsafe();
     }
@@ -276,7 +288,7 @@ template <
 
     // Load V blocks
     if (!align_K && kb == (params->NK_aligned)) {
-      loader_v.load_safe(short2(BD, params->kL - params->NK_aligned * BK));
+      loader_v.load_safe(short2(BD, params->kL_rem));
     } else {
       loader_v.load_unsafe();
     }
@@ -367,8 +379,7 @@ template <
   O += (tm + sm) * params->O_strides[2] + sn;
 
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-    auto dst_tile_dims =
-        short2(BD - sn, params->qL - BQ * params->NQ_aligned - (tm + sm));
+    auto dst_tile_dims = short2(BD - sn, params->qL_rem - (tm + sm));
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
