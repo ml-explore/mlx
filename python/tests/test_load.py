@@ -391,9 +391,12 @@ class TestLoad(mlx_tests.MLXTestCase):
         scale = mx.array(2.0)
         y = mx.load(save_file)
         mx.eval(y)
+        mx.synchronize(mx.default_stream(mx.default_device()))
         load_only = mx.metal.get_peak_memory()
+
         y = mx.load(save_file) * scale
         mx.eval(y)
+        mx.synchronize(mx.default_stream(mx.default_device()))
         load_with_binary = mx.metal.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
