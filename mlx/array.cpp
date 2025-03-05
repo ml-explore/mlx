@@ -132,6 +132,13 @@ bool array::is_tracer() const {
       detail::retain_graph();
 }
 
+void array::reset_data_ptr() {
+  void* data_ptr = buffer().raw_ptr();
+  auto char_offset = sizeof(char) * itemsize() * array_desc_->offset;
+  array_desc_->data_ptr =
+      static_cast<void*>(static_cast<char*>(data_ptr) + char_offset);
+}
+
 void array::set_data(allocator::Buffer buffer, Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
   array_desc_->data_ptr = buffer.raw_ptr();
@@ -165,6 +172,7 @@ void array::copy_shared_buffer(
   array_desc_->strides = strides;
   array_desc_->flags = flags;
   array_desc_->data_size = data_size;
+  array_desc_->offset = offset;
   auto char_offset = sizeof(char) * itemsize() * offset;
   array_desc_->data_ptr = static_cast<void*>(
       static_cast<char*>(other.array_desc_->data_ptr) + char_offset);
@@ -184,6 +192,7 @@ void array::move_shared_buffer(
   array_desc_->strides = strides;
   array_desc_->flags = flags;
   array_desc_->data_size = data_size;
+  array_desc_->offset = offset;
   auto char_offset = sizeof(char) * itemsize() * offset;
   auto data_ptr = other.array_desc_->data_ptr;
   other.array_desc_->data_ptr = nullptr;
