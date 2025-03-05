@@ -43,7 +43,7 @@ var searchData=
   ['device_40',['Device',['../structmlx_1_1core_1_1_device.html',1,'mlx::core::Device'],['../classmlx_1_1core_1_1metal_1_1_device.html',1,'mlx::core::metal::Device'],['../classmlx_1_1core_1_1metal_1_1_device.html#ae0db74570eb4b19d8cf19774db91bfd6',1,'mlx::core::metal::Device::Device()'],['../classmlx_1_1core_1_1metal_1_1_device.html#abf59a4addb5473f9e814e3651ba85f06',1,'mlx::core::metal::Device::Device(const Device &amp;)=delete'],['../structmlx_1_1core_1_1_device.html#a481ccfb94d689994396bd353e966b489',1,'mlx::core::Device::Device()']]],
   ['device_41',['device',['../structmlx_1_1core_1_1_stream.html#a406b1b0162287a4162fab1f70e2ff3bb',1,'mlx::core::Stream::device'],['../classmlx_1_1core_1_1_primitive.html#a8ae61e3289c4134232a69295268f8261',1,'mlx::core::Primitive::device()'],['../namespacemlx_1_1core_1_1metal.html#a910797b74824e6ee576fbb533dee8b57',1,'mlx::core::metal::device()']]],
   ['device_2eh_42',['device.h',['../backend_2metal_2device_8h.html',1,'(Global Namespace)'],['../device_8h.html',1,'(Global Namespace)']]],
-  ['device_5finfo_43',['device_info',['../namespacemlx_1_1core_1_1metal.html#a6ad19c44efabb7423f973407926ead61',1,'mlx::core::metal']]],
+  ['device_5finfo_43',['device_info',['../namespacemlx_1_1core_1_1metal.html#aebddc0ae4bc73a1acebc4a844475593b',1,'mlx::core::metal']]],
   ['devicestream_44',['DeviceStream',['../structmlx_1_1core_1_1metal_1_1_device_stream.html',1,'mlx::core::metal::DeviceStream'],['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a573326bc8b48e39076850c7bf52ad0d7',1,'mlx::core::metal::DeviceStream::DeviceStream()']]],
   ['devicetype_45',['DeviceType',['../structmlx_1_1core_1_1_device.html#ac45b3de9b3458d8f31005136cde20fdb',1,'mlx::core::Device']]],
   ['diag_46',['diag',['../group__ops.html#ga11af511875640e1fa88e0ca87e199344',1,'mlx::core']]],
@@ -72,6 +72,8 @@ var searchData=
   ['dtype_69',['Dtype',['../structmlx_1_1core_1_1_dtype.html',1,'mlx::core::Dtype'],['../structmlx_1_1core_1_1_dtype.html#aec17f0a4a51729e5ac40b62f0aa765d1',1,'mlx::core::Dtype::Dtype()']]],
   ['dtype_70',['dtype',['../structmlx_1_1core_1_1finfo.html#a4edcbcfae55c1ef3cb8e61d427ac9124',1,'mlx::core::finfo::dtype'],['../classmlx_1_1core_1_1array.html#ae29e7d6fbfbea1e5e321a8d1ea3cfacd',1,'mlx::core::array::dtype()']]],
   ['dtype_2eh_71',['dtype.h',['../dtype_8h.html',1,'']]],
-  ['dynamicslice_72',['DynamicSlice',['../classmlx_1_1core_1_1_dynamic_slice.html',1,'mlx::core::DynamicSlice'],['../classmlx_1_1core_1_1_dynamic_slice.html#a97f23f7d45b69219dee1a208d9a3063b',1,'mlx::core::DynamicSlice::DynamicSlice()']]],
-  ['dynamicsliceupdate_73',['DynamicSliceUpdate',['../classmlx_1_1core_1_1_dynamic_slice_update.html',1,'mlx::core::DynamicSliceUpdate'],['../classmlx_1_1core_1_1_dynamic_slice_update.html#a16bbd8d756598cf620e3b3c95dd23213',1,'mlx::core::DynamicSliceUpdate::DynamicSliceUpdate()']]]
+  ['dtype_5ffrag_5ft_72',['dtype_frag_t',['../structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a51fcc7447804110f2c2c6e9e361bdc02',1,'mlx::steel::BaseMMAFrag&lt; T, 8, 8 &gt;']]],
+  ['dtype_5fmat_5ft_73',['dtype_mat_t',['../structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a96ce3732fb66feaeb80bd1ea9aadbd7e',1,'mlx::steel::BaseMMAFrag&lt; T, 8, 8 &gt;']]],
+  ['dynamicslice_74',['DynamicSlice',['../classmlx_1_1core_1_1_dynamic_slice.html',1,'mlx::core::DynamicSlice'],['../classmlx_1_1core_1_1_dynamic_slice.html#a97f23f7d45b69219dee1a208d9a3063b',1,'mlx::core::DynamicSlice::DynamicSlice()']]],
+  ['dynamicsliceupdate_75',['DynamicSliceUpdate',['../classmlx_1_1core_1_1_dynamic_slice_update.html',1,'mlx::core::DynamicSliceUpdate'],['../classmlx_1_1core_1_1_dynamic_slice_update.html#a16bbd8d756598cf620e3b3c95dd23213',1,'mlx::core::DynamicSliceUpdate::DynamicSliceUpdate()']]]
 ];
