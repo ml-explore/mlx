@@ -579,7 +579,7 @@ array scaled_dot_product_attention(
     }
   }
 
-  bool do_casual = false;
+  bool do_causal = false;
   bool has_mask = !std::holds_alternative<std::monostate>(mask);
   bool has_str_mask = has_mask && std::holds_alternative<std::string>(mask);
   bool has_arr_mask = has_mask && std::holds_alternative<array>(mask);
@@ -592,7 +592,7 @@ array scaled_dot_product_attention(
           << std::get<std::string>(mask) << "'. Must be 'causal', or an array.";
       throw std::invalid_argument(msg.str());
     } else {
-      do_casual = true;
+      do_causal = true;
     }
   }
 
@@ -684,7 +684,7 @@ array scaled_dot_product_attention(
     threshold = std::max(1, memory_efficient_threshold.value());
   }
 
-  auto fallback = [scale, final_type, n_q_heads, n_kv_heads, do_casual, s](
+  auto fallback = [scale, final_type, n_q_heads, n_kv_heads, do_causal, s](
                       const std::vector<array>& inputs) {
     auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
     int n_repeats = n_q_heads / n_kv_heads;
@@ -698,11 +698,11 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    if (inputs.size() > 3 || do_casual) {
+    if (inputs.size() > 3 || do_causal) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
       auto mask = inputs.back();
 
-      if (do_casual) {
+      if (do_causal) {
         int kL = k.shape(-2);
         int qL = q.shape(-2);
         int q_off = (kL - qL) < 0 ? 0 : (kL - qL);
@@ -748,15 +748,14 @@ array scaled_dot_product_attention(
 
   const bool sdpa_vector_supported_mask = (!has_mask || has_bool_mask);
   const bool sdpa_full_supported_mask = !has_mask;
-  
+
   const bool supports_sdpa_full = query_sequence_length >= threshold &&
       sdpa_full_supported_mask && sdpa_full_supported_head_dim &&
       stream.device == Device::gpu;
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
-      (query_sequence_length <= k.shape(-2)) &&
-      sdpa_vector_supported_mask && sdpa_vector_supported_head_dim &&
-      stream.device == Device::gpu;
+      (query_sequence_length <= k.shape(-2)) && sdpa_vector_supported_mask &&
+      sdpa_vector_supported_head_dim && stream.device == Device::gpu;
 
   const bool implementation_supports_use_case =
       supports_sdpa_full || supports_sdpa_vector;
@@ -771,7 +770,7 @@ array scaled_dot_product_attention(
         std::move(out_shape),
         final_type,
         std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, do_casual),
+            stream, fallback, scale, do_causal),
         std::move(inputs));
   }
   return fallback(inputs)[0];
