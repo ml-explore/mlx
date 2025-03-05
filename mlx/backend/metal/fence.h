@@ -21,6 +21,7 @@ namespace mlx::core {
 class Fence {
  public:
   Fence(const Stream& stream);
+  ~Fence();
 
   void update_gpu(const array& x);
   void wait_gpu(array& x);

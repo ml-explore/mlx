@@ -34,6 +34,12 @@ Fence::Fence(const Stream& stream) : stream_(stream) {
   }
 }
 
+Fence::~Fence() {
+  if (use_fast_) {
+    cpu_value()[0] = INT_MAX;
+  }
+}
+
 void Fence::wait_gpu(array& x) {
   gpu_count_++;
   auto& d = metal::device(stream_.device);
