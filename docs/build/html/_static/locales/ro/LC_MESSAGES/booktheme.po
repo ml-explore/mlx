@@ -8,68 +8,68 @@ msgstr ""
 "Language: ro\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Imprimați în PDF"
-
-msgid "Theme by the"
-msgstr "Tema de"
-
-msgid "Download source file"
-msgstr "Descărcați fișierul sursă"
-
-msgid "open issue"
-msgstr "problema deschisă"
-
-msgid "Contents"
-msgstr "Cuprins"
-
-msgid "previous page"
-msgstr "pagina anterioară"
-
-msgid "Download notebook file"
-msgstr "Descărcați fișierul notebook"
-
-msgid "Copyright"
-msgstr "Drepturi de autor"
-
-msgid "Download this page"
-msgstr "Descarcă această pagină"
-
-msgid "Source repository"
-msgstr "Depozit sursă"
+msgid "By the"
+msgstr "Langa"
 
 msgid "By"
 msgstr "De"
 
-msgid "repository"
-msgstr "repertoriu"
+msgid "Contents"
+msgstr "Cuprins"
 
-msgid "Last updated on"
-msgstr "Ultima actualizare la"
+msgid "Copyright"
+msgstr "Drepturi de autor"
 
-msgid "Toggle navigation"
-msgstr "Comutare navigare"
+msgid "Download notebook file"
+msgstr "Descărcați fișierul notebook"
 
-msgid "Sphinx Book Theme"
-msgstr "Tema Sphinx Book"
+msgid "Download source file"
+msgstr "Descărcați fișierul sursă"
 
-msgid "suggest edit"
-msgstr "sugerează editare"
-
-msgid "Open an issue"
-msgstr "Deschideți o problemă"
-
-msgid "Launch"
-msgstr "Lansa"
-
-msgid "Fullscreen mode"
-msgstr "Modul ecran întreg"
+msgid "Download this page"
+msgstr "Descarcă această pagină"
 
 msgid "Edit this page"
 msgstr "Editați această pagină"
 
-msgid "By the"
-msgstr "Langa"
+msgid "Fullscreen mode"
+msgstr "Modul ecran întreg"
+
+msgid "Last updated on"
+msgstr "Ultima actualizare la"
+
+msgid "Launch"
+msgstr "Lansa"
+
+msgid "Open an issue"
+msgstr "Deschideți o problemă"
+
+msgid "Print to PDF"
+msgstr "Imprimați în PDF"
+
+msgid "Source repository"
+msgstr "Depozit sursă"
+
+msgid "Sphinx Book Theme"
+msgstr "Tema Sphinx Book"
+
+msgid "Theme by the"
+msgstr "Tema de"
+
+msgid "Toggle navigation"
+msgstr "Comutare navigare"
 
 msgid "next page"
 msgstr "pagina următoare"
+
+msgid "open issue"
+msgstr "problema deschisă"
+
+msgid "previous page"
+msgstr "pagina anterioară"
+
+msgid "repository"
+msgstr "repertoriu"
+
+msgid "suggest edit"
+msgstr "sugerează editare"
