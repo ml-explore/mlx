@@ -20,6 +20,9 @@ namespace mlx::core {
  */
 class Fence {
  public:
+  Fence(const Fence&) = delete;
+  Fence& operator=(const Fence&) = delete;
+
   Fence(const Stream& stream);
   ~Fence();
 

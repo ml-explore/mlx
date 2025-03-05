@@ -35,7 +35,7 @@ Fence::Fence(const Stream& stream) : stream_(stream) {
 }
 
 Fence::~Fence() {
-  if (use_fast_) {
+  if (fence_ != nullptr && use_fast_) {
     cpu_value()[0] = INT_MAX;
   }
 }
