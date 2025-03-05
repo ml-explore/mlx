@@ -28,8 +28,7 @@ void finalize(
   auto& encoder = cpu::get_command_encoder(s);
   encoder.dispatch([s,
                     buffers = std::move(retain_buffers),
-                    temps = std::move(encoder.temporaries())]() {
-  });
+                    temps = std::move(encoder.temporaries())]() {});
 }
 
 } // namespace mlx::core::cpu
