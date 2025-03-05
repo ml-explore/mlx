@@ -1,6 +1,8 @@
 var structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4 =
 [
     [ "col_frag_type", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#adbb262a3c872e26533b68a39db16459e", null ],
+    [ "dtype_frag_t", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a51fcc7447804110f2c2c6e9e361bdc02", null ],
+    [ "dtype_mat_t", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a96ce3732fb66feaeb80bd1ea9aadbd7e", null ],
     [ "frag_type", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a8536bfaa108031c2ea3e9ccdc766ee5b", null ],
     [ "frag_type", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a8536bfaa108031c2ea3e9ccdc766ee5b", null ],
     [ "mat_type", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a25675ae18947a97c6e04157b540103a9", null ],
@@ -12,9 +14,9 @@ var structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4 =
     [ "load", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#ac73006b36fc710feda3a7c796e21415c", null ],
     [ "load_safe", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#ad22aaee4a2938cbdd315b39eda84e07d", null ],
     [ "load_safe", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#ad22aaee4a2938cbdd315b39eda84e07d", null ],
+    [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#ae49be5820609d08885a811ae1d082a4b", null ],
     [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a8028512f5a3d2b6acaf966be529627a3", null ],
-    [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a8028512f5a3d2b6acaf966be529627a3", null ],
-    [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a1868f57d57c8adedab2c58492ec76946", null ],
+    [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#afcdc0e744021facfe52347eaa0fc549e", null ],
     [ "mma", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a1868f57d57c8adedab2c58492ec76946", null ],
     [ "row_bin_op", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a318c4279bdc7b39b7919f108b1cd8010", null ],
     [ "row_reduce", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html#a51d662e4cff88b5ad17d7c44bb6b6970", null ],
