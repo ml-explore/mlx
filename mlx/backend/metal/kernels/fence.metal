@@ -29,7 +29,10 @@ constexpr constant metal::thread_scope thread_scope_system =
 [[kernel]] void fence_update(
     volatile coherent(system) device uint* timestamp [[buffer(0)]],
     constant uint& value [[buffer(1)]]) {
-  timestamp[0] = value;
+  uint tmp = timestamp[0];
+  if (tmp < value) {
+    timestamp[0] = value;
+  }
   metal::atomic_thread_fence(
       metal::mem_flags::mem_device,
       metal::memory_order_seq_cst,
