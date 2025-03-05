@@ -199,6 +199,7 @@ class SocketThread {
   }
 
   void worker() {
+    int error_count = 0;
     bool delete_recv = false;
     bool delete_send = false;
     while (true) {
@@ -236,9 +237,9 @@ class SocketThread {
           task.size -= r;
           delete_recv = task.size == 0;
         } else if (errno != EAGAIN) {
+          error_count++;
           log_info(
               true, "Receiving from socket", fd_, "failed with errno", errno);
-          return;
         }
       }
       if (!sends_.empty()) {
@@ -249,9 +250,14 @@ class SocketThread {
           task.size -= r;
           delete_send = task.size == 0;
         } else if (errno != EAGAIN) {
+          error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
-          return;
         }
+      }
+
+      if (error_count >= 10) {
+        log_info(true, "Too many send/recv errors. Aborting...");
+        return;
       }
     }
   }
