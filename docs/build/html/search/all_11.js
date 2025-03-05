@@ -25,9 +25,10 @@ var searchData=
   ['quantized_5fmatmul_22',['quantized_matmul',['../group__ops.html#gabfa4208fb1f9b1cdd0abc563b19175af',1,'mlx::core']]],
   ['quantizedblockloader_23',['QuantizedBlockLoader',['../struct_quantized_block_loader.html',1,'QuantizedBlockLoader&lt; T, BROWS, BCOLS, dst_ld, reduction_dim, tgp_size, group_size, bits &gt;'],['../struct_quantized_block_loader.html#a60713ce7498aa683cbb2a0f19ab16589',1,'QuantizedBlockLoader::QuantizedBlockLoader()']]],
   ['quantizedmatmul_24',['QuantizedMatmul',['../classmlx_1_1core_1_1_quantized_matmul.html',1,'mlx::core::QuantizedMatmul'],['../classmlx_1_1core_1_1_quantized_matmul.html#a5bd164d038d9dc21919f7e0bfdeaa25c',1,'mlx::core::QuantizedMatmul::QuantizedMatmul()']]],
-  ['queue_25',['queue',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a77c75a63c51ea56815a86bd882ed190d',1,'mlx::core::metal::DeviceStream']]],
-  ['quiet_5fnan_26',['quiet_NaN',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#aebeb07c01984be246bc2d1b8f8e4ac7b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
-  ['qvm_27',['qvm',['../quantized_8h.html#a55844c4576fff2182bc1fca171994118',1,'quantized.h']]],
-  ['qvm_5fimpl_28',['qvm_impl',['../quantized_8h.html#a1546533c5b925b2fbb3bec870ec7487a',1,'quantized.h']]],
-  ['qvm_5fsplit_5fk_29',['qvm_split_k',['../quantized_8h.html#aac4440b5ef8f323dd36c85721d00f7e7',1,'quantized.h']]]
+  ['query_5ftransposed_25',['query_transposed',['../sdpa__vector_8h.html#a0c2c54bcc20cc4783a5040d47fa3ba81',1,'sdpa_vector.h']]],
+  ['queue_26',['queue',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a77c75a63c51ea56815a86bd882ed190d',1,'mlx::core::metal::DeviceStream']]],
+  ['quiet_5fnan_27',['quiet_NaN',['../structmetal_1_1__numeric__limits__impl_3_01bfloat16__t_01_4.html#aebeb07c01984be246bc2d1b8f8e4ac7b',1,'metal::_numeric_limits_impl&lt; bfloat16_t &gt;']]],
+  ['qvm_28',['qvm',['../quantized_8h.html#a55844c4576fff2182bc1fca171994118',1,'quantized.h']]],
+  ['qvm_5fimpl_29',['qvm_impl',['../quantized_8h.html#a1546533c5b925b2fbb3bec870ec7487a',1,'quantized.h']]],
+  ['qvm_5fsplit_5fk_30',['qvm_split_k',['../quantized_8h.html#aac4440b5ef8f323dd36c85721d00f7e7',1,'quantized.h']]]
 ];

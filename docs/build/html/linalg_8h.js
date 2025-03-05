@@ -18,6 +18,7 @@ var linalg_8h =
     [ "mlx::core::linalg::qr", "namespacemlx_1_1core_1_1linalg.html#ae6d97829459353fe3b31c8a0867c0ca2", null ],
     [ "mlx::core::linalg::solve", "namespacemlx_1_1core_1_1linalg.html#a66590bfcec381e952b27630da0a31953", null ],
     [ "mlx::core::linalg::solve_triangular", "namespacemlx_1_1core_1_1linalg.html#a5e6e53f7a04688baa1329d166511febe", null ],
+    [ "mlx::core::linalg::svd", "namespacemlx_1_1core_1_1linalg.html#a6358b3b4398289f30ada4c2712a9d88d", null ],
     [ "mlx::core::linalg::svd", "namespacemlx_1_1core_1_1linalg.html#a64364b880e99914cf47bf756fa8dbaf0", null ],
     [ "mlx::core::linalg::tri_inv", "namespacemlx_1_1core_1_1linalg.html#aba1994571326326717b5b5e38c2e0661", null ]
 ];

@@ -8,68 +8,68 @@ msgstr ""
 "Language: lt\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Spausdinti į PDF"
-
-msgid "Theme by the"
-msgstr "Tema"
-
-msgid "Download source file"
-msgstr "Atsisiųsti šaltinio failą"
-
-msgid "open issue"
-msgstr "atviras klausimas"
-
-msgid "Contents"
-msgstr "Turinys"
-
-msgid "previous page"
-msgstr "Ankstesnis puslapis"
-
-msgid "Download notebook file"
-msgstr "Atsisiųsti nešiojamojo kompiuterio failą"
-
-msgid "Copyright"
-msgstr "Autorių teisės"
-
-msgid "Download this page"
-msgstr "Atsisiųskite šį puslapį"
-
-msgid "Source repository"
-msgstr "Šaltinio saugykla"
+msgid "By the"
+msgstr "Prie"
 
 msgid "By"
 msgstr "Iki"
 
-msgid "repository"
-msgstr "saugykla"
+msgid "Contents"
+msgstr "Turinys"
 
-msgid "Last updated on"
-msgstr "Paskutinį kartą atnaujinta"
+msgid "Copyright"
+msgstr "Autorių teisės"
 
-msgid "Toggle navigation"
-msgstr "Perjungti naršymą"
+msgid "Download notebook file"
+msgstr "Atsisiųsti nešiojamojo kompiuterio failą"
 
-msgid "Sphinx Book Theme"
-msgstr "Sfinkso knygos tema"
+msgid "Download source file"
+msgstr "Atsisiųsti šaltinio failą"
 
-msgid "suggest edit"
-msgstr "pasiūlyti redaguoti"
-
-msgid "Open an issue"
-msgstr "Atidarykite problemą"
-
-msgid "Launch"
-msgstr "Paleiskite"
-
-msgid "Fullscreen mode"
-msgstr "Pilno ekrano režimas"
+msgid "Download this page"
+msgstr "Atsisiųskite šį puslapį"
 
 msgid "Edit this page"
 msgstr "Redaguoti šį puslapį"
 
-msgid "By the"
-msgstr "Prie"
+msgid "Fullscreen mode"
+msgstr "Pilno ekrano režimas"
+
+msgid "Last updated on"
+msgstr "Paskutinį kartą atnaujinta"
+
+msgid "Launch"
+msgstr "Paleiskite"
+
+msgid "Open an issue"
+msgstr "Atidarykite problemą"
+
+msgid "Print to PDF"
+msgstr "Spausdinti į PDF"
+
+msgid "Source repository"
+msgstr "Šaltinio saugykla"
+
+msgid "Sphinx Book Theme"
+msgstr "Sfinkso knygos tema"
+
+msgid "Theme by the"
+msgstr "Tema"
+
+msgid "Toggle navigation"
+msgstr "Perjungti naršymą"
 
 msgid "next page"
 msgstr "Kitas puslapis"
+
+msgid "open issue"
+msgstr "atviras klausimas"
+
+msgid "previous page"
+msgstr "Ankstesnis puslapis"
+
+msgid "repository"
+msgstr "saugykla"
+
+msgid "suggest edit"
+msgstr "pasiūlyti redaguoti"

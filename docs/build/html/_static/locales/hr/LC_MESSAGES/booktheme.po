@@ -8,68 +8,68 @@ msgstr ""
 "Language: hr\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Ispis u PDF"
-
-msgid "Theme by the"
-msgstr "Tema autora"
-
-msgid "Download source file"
-msgstr "Preuzmi izvornu datoteku"
-
-msgid "open issue"
-msgstr "otvoreno izdanje"
-
-msgid "Contents"
-msgstr "Sadržaj"
-
-msgid "previous page"
-msgstr "Prethodna stranica"
-
-msgid "Download notebook file"
-msgstr "Preuzmi datoteku bilježnice"
-
-msgid "Copyright"
-msgstr "Autorska prava"
-
-msgid "Download this page"
-msgstr "Preuzmite ovu stranicu"
-
-msgid "Source repository"
-msgstr "Izvorno spremište"
+msgid "By the"
+msgstr "Od strane"
 
 msgid "By"
 msgstr "Po"
 
-msgid "repository"
-msgstr "spremište"
+msgid "Contents"
+msgstr "Sadržaj"
 
-msgid "Last updated on"
-msgstr "Posljednje ažuriranje:"
+msgid "Copyright"
+msgstr "Autorska prava"
 
-msgid "Toggle navigation"
-msgstr "Uključi / isključi navigaciju"
+msgid "Download notebook file"
+msgstr "Preuzmi datoteku bilježnice"
 
-msgid "Sphinx Book Theme"
-msgstr "Tema knjige Sphinx"
+msgid "Download source file"
+msgstr "Preuzmi izvornu datoteku"
 
-msgid "suggest edit"
-msgstr "predloži uređivanje"
-
-msgid "Open an issue"
-msgstr "Otvorite izdanje"
-
-msgid "Launch"
-msgstr "Pokrenite"
-
-msgid "Fullscreen mode"
-msgstr "Način preko cijelog zaslona"
+msgid "Download this page"
+msgstr "Preuzmite ovu stranicu"
 
 msgid "Edit this page"
 msgstr "Uredite ovu stranicu"
 
-msgid "By the"
-msgstr "Od strane"
+msgid "Fullscreen mode"
+msgstr "Način preko cijelog zaslona"
+
+msgid "Last updated on"
+msgstr "Posljednje ažuriranje:"
+
+msgid "Launch"
+msgstr "Pokrenite"
+
+msgid "Open an issue"
+msgstr "Otvorite izdanje"
+
+msgid "Print to PDF"
+msgstr "Ispis u PDF"
+
+msgid "Source repository"
+msgstr "Izvorno spremište"
+
+msgid "Sphinx Book Theme"
+msgstr "Tema knjige Sphinx"
+
+msgid "Theme by the"
+msgstr "Tema autora"
+
+msgid "Toggle navigation"
+msgstr "Uključi / isključi navigaciju"
 
 msgid "next page"
 msgstr "sljedeća stranica"
+
+msgid "open issue"
+msgstr "otvoreno izdanje"
+
+msgid "previous page"
+msgstr "Prethodna stranica"
+
+msgid "repository"
+msgstr "spremište"
+
+msgid "suggest edit"
+msgstr "predloži uređivanje"

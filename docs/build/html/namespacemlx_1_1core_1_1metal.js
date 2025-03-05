@@ -17,7 +17,7 @@ var namespacemlx_1_1core_1_1metal =
     [ "conv", "namespacemlx_1_1core_1_1metal.html#ab1704e853394c725668c06752ebb5c24", null ],
     [ "copy", "namespacemlx_1_1core_1_1metal.html#aa215e631e2680f04a591b88d91571719", null ],
     [ "device", "namespacemlx_1_1core_1_1metal.html#a910797b74824e6ee576fbb533dee8b57", null ],
-    [ "device_info", "namespacemlx_1_1core_1_1metal.html#a6ad19c44efabb7423f973407926ead61", null ],
+    [ "device_info", "namespacemlx_1_1core_1_1metal.html#aebddc0ae4bc73a1acebc4a844475593b", null ],
     [ "fft", "namespacemlx_1_1core_1_1metal.html#a39f43360d9e916fcf7e86c919b419554", null ],
     [ "gather", "namespacemlx_1_1core_1_1metal.html#a545de371fefba1feec2e70b7e9f4187c", null ],
     [ "gather_axis", "namespacemlx_1_1core_1_1metal.html#adc66b1b48b51ac2d2f1f5bfac1b95ee3", null ],

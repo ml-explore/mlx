@@ -15,6 +15,7 @@ var classmlx_1_1core_1_1metal_1_1_device =
     [ "get_kernel", "classmlx_1_1core_1_1metal_1_1_device.html#afa0cac9d800c21a8a7f6cb224256abaf", null ],
     [ "get_kernel", "classmlx_1_1core_1_1metal_1_1_device.html#a6810c4dcbcfbf93fc51d42aa5ff0fc3a", null ],
     [ "get_library", "classmlx_1_1core_1_1metal_1_1_device.html#a75ed55e73baf48013028796518723ff0", null ],
+    [ "get_queue", "classmlx_1_1core_1_1metal_1_1_device.html#ab5f96b1d702e6c5e2d4228c1f2b19a00", null ],
     [ "mtl_device", "classmlx_1_1core_1_1metal_1_1_device.html#a31dba377f2be44a746db10d1b9367653", null ],
     [ "new_queue", "classmlx_1_1core_1_1metal_1_1_device.html#a8135ae2a8c1e6f3861e84d4e60c28b67", null ],
     [ "operator=", "classmlx_1_1core_1_1metal_1_1_device.html#ad1d6382fd18a46b1906e1b43e0bd2e73", null ],

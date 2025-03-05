@@ -8,68 +8,68 @@ msgstr ""
 "Language: ru\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Распечатать в PDF"
+msgid "By the"
+msgstr "Посредством"
 
-msgid "Theme by the"
-msgstr "Тема от"
-
-msgid "Download source file"
-msgstr "Скачать исходный файл"
-
-msgid "open issue"
-msgstr "открытый вопрос"
+msgid "By"
+msgstr "Автор:"
 
 msgid "Contents"
 msgstr "Содержание"
 
-msgid "previous page"
-msgstr "Предыдущая страница"
+msgid "Copyright"
+msgstr "авторское право"
 
 msgid "Download notebook file"
 msgstr "Скачать файл записной книжки"
 
-msgid "Copyright"
-msgstr "авторское право"
+msgid "Download source file"
+msgstr "Скачать исходный файл"
 
 msgid "Download this page"
 msgstr "Загрузите эту страницу"
 
-msgid "Source repository"
-msgstr "Исходный репозиторий"
-
-msgid "By"
-msgstr "По"
-
-msgid "repository"
-msgstr "хранилище"
-
-msgid "Last updated on"
-msgstr "Последнее обновление"
-
-msgid "Toggle navigation"
-msgstr "Переключить навигацию"
-
-msgid "Sphinx Book Theme"
-msgstr "Тема книги Сфинкс"
-
-msgid "suggest edit"
-msgstr "предложить редактировать"
-
-msgid "Open an issue"
-msgstr "Открыть вопрос"
-
-msgid "Launch"
-msgstr "Запуск"
+msgid "Edit this page"
+msgstr "Редактировать эту страницу"
 
 msgid "Fullscreen mode"
 msgstr "Полноэкранный режим"
 
-msgid "Edit this page"
-msgstr "Редактировать эту страницу"
+msgid "Last updated on"
+msgstr "Последнее обновление"
 
-msgid "By the"
-msgstr "Посредством"
+msgid "Launch"
+msgstr "Запуск"
+
+msgid "Open an issue"
+msgstr "Открыть вопрос"
+
+msgid "Print to PDF"
+msgstr "Распечатать в PDF"
+
+msgid "Source repository"
+msgstr "Исходный репозиторий"
+
+msgid "Sphinx Book Theme"
+msgstr "Тема книги Сфинкс"
+
+msgid "Theme by the"
+msgstr "Тема от"
+
+msgid "Toggle navigation"
+msgstr "Переключить навигацию"
 
 msgid "next page"
 msgstr "Следующая страница"
+
+msgid "open issue"
+msgstr "открытый вопрос"
+
+msgid "previous page"
+msgstr "Предыдущая страница"
+
+msgid "repository"
+msgstr "хранилище"
+
+msgid "suggest edit"
+msgstr "предложить редактировать"

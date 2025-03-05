@@ -8,68 +8,68 @@ msgstr ""
 "Language: id\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Cetak ke PDF"
-
-msgid "Theme by the"
-msgstr "Tema oleh"
-
-msgid "Download source file"
-msgstr "Unduh file sumber"
-
-msgid "open issue"
-msgstr "masalah terbuka"
-
-msgid "Contents"
-msgstr "Isi"
-
-msgid "previous page"
-msgstr "halaman sebelumnya"
-
-msgid "Download notebook file"
-msgstr "Unduh file notebook"
-
-msgid "Copyright"
-msgstr "hak cipta"
-
-msgid "Download this page"
-msgstr "Unduh halaman ini"
-
-msgid "Source repository"
-msgstr "Repositori sumber"
+msgid "By the"
+msgstr "Oleh"
 
 msgid "By"
 msgstr "Oleh"
 
-msgid "repository"
-msgstr "gudang"
+msgid "Contents"
+msgstr "Isi"
 
-msgid "Last updated on"
-msgstr "Terakhir diperbarui saat"
+msgid "Copyright"
+msgstr "hak cipta"
 
-msgid "Toggle navigation"
-msgstr "Alihkan navigasi"
+msgid "Download notebook file"
+msgstr "Unduh file notebook"
 
-msgid "Sphinx Book Theme"
-msgstr "Tema Buku Sphinx"
+msgid "Download source file"
+msgstr "Unduh file sumber"
 
-msgid "suggest edit"
-msgstr "menyarankan edit"
-
-msgid "Open an issue"
-msgstr "Buka masalah"
-
-msgid "Launch"
-msgstr "Meluncurkan"
-
-msgid "Fullscreen mode"
-msgstr "Mode layar penuh"
+msgid "Download this page"
+msgstr "Unduh halaman ini"
 
 msgid "Edit this page"
 msgstr "Edit halaman ini"
 
-msgid "By the"
-msgstr "Oleh"
+msgid "Fullscreen mode"
+msgstr "Mode layar penuh"
+
+msgid "Last updated on"
+msgstr "Terakhir diperbarui saat"
+
+msgid "Launch"
+msgstr "Meluncurkan"
+
+msgid "Open an issue"
+msgstr "Buka masalah"
+
+msgid "Print to PDF"
+msgstr "Cetak ke PDF"
+
+msgid "Source repository"
+msgstr "Repositori sumber"
+
+msgid "Sphinx Book Theme"
+msgstr "Tema Buku Sphinx"
+
+msgid "Theme by the"
+msgstr "Tema oleh"
+
+msgid "Toggle navigation"
+msgstr "Alihkan navigasi"
 
 msgid "next page"
 msgstr "halaman selanjutnya"
+
+msgid "open issue"
+msgstr "masalah terbuka"
+
+msgid "previous page"
+msgstr "halaman sebelumnya"
+
+msgid "repository"
+msgstr "gudang"
+
+msgid "suggest edit"
+msgstr "menyarankan edit"

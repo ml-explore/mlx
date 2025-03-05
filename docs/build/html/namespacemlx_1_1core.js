@@ -61,6 +61,7 @@ var namespacemlx_1_1core =
       [ "qr", "namespacemlx_1_1core_1_1linalg.html#ae6d97829459353fe3b31c8a0867c0ca2", null ],
       [ "solve", "namespacemlx_1_1core_1_1linalg.html#a66590bfcec381e952b27630da0a31953", null ],
       [ "solve_triangular", "namespacemlx_1_1core_1_1linalg.html#a5e6e53f7a04688baa1329d166511febe", null ],
+      [ "svd", "namespacemlx_1_1core_1_1linalg.html#a6358b3b4398289f30ada4c2712a9d88d", null ],
       [ "svd", "namespacemlx_1_1core_1_1linalg.html#a64364b880e99914cf47bf756fa8dbaf0", null ],
       [ "tri_inv", "namespacemlx_1_1core_1_1linalg.html#aba1994571326326717b5b5e38c2e0661", null ]
     ] ],
@@ -1129,6 +1130,7 @@ var namespacemlx_1_1core =
     [ "var", "group__ops.html#ga78ddeb966cbe7a5b0aa17e1de43025f2", null ],
     [ "var", "group__ops.html#ga4fbf3e3f98f2e4956faf87af320aa9d0", null ],
     [ "var", "group__ops.html#ga7d7b38d118fa2613214078ef0f7d5a42", null ],
+    [ "version", "namespacemlx_1_1core.html#a4d7bc76b40d028805d32a9e0f7ae7598", null ],
     [ "view", "group__ops.html#ga3602aa91b7b124a0b41ec1b2137a1b02", null ],
     [ "vjp", "namespacemlx_1_1core.html#a2065a11249c3f4356ffd69b7a8c487ff", null ],
     [ "vjp", "namespacemlx_1_1core.html#a1b33e2c2e3471420490cf0be2de6de18", null ],

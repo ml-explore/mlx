@@ -1,7 +1,7 @@
 var metal_8h =
 [
     [ "mlx::core::metal::clear_cache", "namespacemlx_1_1core_1_1metal.html#a22b3384ebd17f2fca198f81b9f1b6dc3", null ],
-    [ "mlx::core::metal::device_info", "namespacemlx_1_1core_1_1metal.html#a6ad19c44efabb7423f973407926ead61", null ],
+    [ "mlx::core::metal::device_info", "namespacemlx_1_1core_1_1metal.html#aebddc0ae4bc73a1acebc4a844475593b", null ],
     [ "mlx::core::metal::get_active_memory", "namespacemlx_1_1core_1_1metal.html#a7b75c2639016ac4d350fa6c9da386667", null ],
     [ "mlx::core::metal::get_cache_memory", "namespacemlx_1_1core_1_1metal.html#a43307654f62ed7c58e014be7fb03909c", null ],
     [ "mlx::core::metal::get_peak_memory", "namespacemlx_1_1core_1_1metal.html#a4b67d680cefa95f0ed5801f0e14e48ce", null ],

@@ -288,7 +288,7 @@ $(function(){initNavTree('math_8h_source.html',''); initResizable(true); });
 <div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>      <span class="keywordflow">return</span> a * rhs(t);</div>
 <div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>    }</div>
 <div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>  } <span class="keywordflow">else</span> {</div>
-<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keywordflow">return</span> a * <a class="code hl_function" href="namespacemlx_1_1core_1_1simd.html#afb3bcbd8d8b34128cd0c8eb677a170ef">select</a>(t &gt; thresh, lhs(t), rhs(t));</div>
+<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    <span class="keywordflow">return</span> a * <a class="code hl_function" href="namespacemlx_1_1core_1_1simd.html#afb3bcbd8d8b34128cd0c8eb677a170ef">select</a>(<a class="code hl_function" href="namespacemlx_1_1core_1_1simd.html#a4f3cc8b2493586e83fd65640df3b60ad">abs</a>(t) &gt; thresh, lhs(t), rhs(t));</div>
 <div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>  }</div>
 <div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>}</div>
 </div>

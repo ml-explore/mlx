@@ -4,5 +4,6 @@ var searchData=
   ['q_5fstrides_1',['Q_strides',['../structmlx_1_1steel_1_1_attn_params.html#a9150df3fb79de521bbccf57c43f6b092',1,'mlx::steel::AttnParams']]],
   ['ql_2',['qL',['../structmlx_1_1steel_1_1_attn_params.html#a59255882cbd78bb6f15e704e3a356a7f',1,'mlx::steel::AttnParams']]],
   ['quad_5fsize_3',['QUAD_SIZE',['../quantized_8h.html#a803e4d5a1459844ba647aea5b004e133',1,'quantized.h']]],
-  ['queue_4',['queue',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a77c75a63c51ea56815a86bd882ed190d',1,'mlx::core::metal::DeviceStream']]]
+  ['query_5ftransposed_4',['query_transposed',['../sdpa__vector_8h.html#a0c2c54bcc20cc4783a5040d47fa3ba81',1,'sdpa_vector.h']]],
+  ['queue_5',['queue',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a77c75a63c51ea56815a86bd882ed190d',1,'mlx::core::metal::DeviceStream']]]
 ];

@@ -122,8 +122,8 @@ Inheritance diagram for mlx::core::SVD:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:ae89ff583e34fa894cccb8e7a475ee6d1" id="r_ae89ff583e34fa894cccb8e7a475ee6d1"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae89ff583e34fa894cccb8e7a475ee6d1">SVD</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>)</td></tr>
-<tr class="separator:ae89ff583e34fa894cccb8e7a475ee6d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1bf0ffc5f7b03720a10975827a616b81" id="r_a1bf0ffc5f7b03720a10975827a616b81"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1bf0ffc5f7b03720a10975827a616b81">SVD</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, bool compute_uv)</td></tr>
+<tr class="separator:a1bf0ffc5f7b03720a10975827a616b81"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a637f5c39fa8b10722c04a066f6c1ada6" id="r_a637f5c39fa8b10722c04a066f6c1ada6"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a637f5c39fa8b10722c04a066f6c1ada6">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
 <tr class="memdesc:a637f5c39fa8b10722c04a066f6c1ada6"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
 <tr class="separator:a637f5c39fa8b10722c04a066f6c1ada6"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -135,6 +135,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab87a4e7ef857936bea66ba9e24662f53" id="r_ab87a4e7ef857936bea66ba9e24662f53"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab87a4e7ef857936bea66ba9e24662f53">print</a> (std::ostream &amp;os) override</td></tr>
 <tr class="memdesc:ab87a4e7ef857936bea66ba9e24662f53"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print the primitive.  <br /></td></tr>
 <tr class="separator:ab87a4e7ef857936bea66ba9e24662f53"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a73f326705aeca762d0dfd63d1577bde1" id="r_a73f326705aeca762d0dfd63d1577bde1"><td class="memItemLeft" align="right" valign="top">auto&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a73f326705aeca762d0dfd63d1577bde1">state</a> () const</td></tr>
+<tr class="separator:a73f326705aeca762d0dfd63d1577bde1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1_primitive"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1_primitive')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1_primitive.html">mlx::core::Primitive</a></td></tr>
 <tr class="memitem:afc69f22ee1f6e8a9ecc2c3a8f43b8fdb inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_afc69f22ee1f6e8a9ecc2c3a8f43b8fdb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#afc69f22ee1f6e8a9ecc2c3a8f43b8fdb">Primitive</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>)</td></tr>
 <tr class="separator:afc69f22ee1f6e8a9ecc2c3a8f43b8fdb inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -168,8 +170,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="ae89ff583e34fa894cccb8e7a475ee6d1" name="ae89ff583e34fa894cccb8e7a475ee6d1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae89ff583e34fa894cccb8e7a475ee6d1">&#9670;&#160;</a></span>SVD()</h2>
+<a id="a1bf0ffc5f7b03720a10975827a616b81" name="a1bf0ffc5f7b03720a10975827a616b81"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1bf0ffc5f7b03720a10975827a616b81">&#9670;&#160;</a></span>SVD()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -180,8 +182,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">mlx::core::SVD::SVD </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>compute_uv</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -285,6 +291,31 @@ Public Member Functions</h2></td></tr>
 <p>Print the primitive. </p>
 
 <p>Implements <a class="el" href="classmlx_1_1core_1_1_primitive.html#ae1aff91354ce036596088a3e19474ecb">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a73f326705aeca762d0dfd63d1577bde1" name="a73f326705aeca762d0dfd63d1577bde1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73f326705aeca762d0dfd63d1577bde1">&#9670;&#160;</a></span>state()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">auto mlx::core::SVD::state </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

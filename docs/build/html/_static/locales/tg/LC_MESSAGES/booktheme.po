@@ -8,68 +8,68 @@ msgstr ""
 "Language: tg\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Чоп ба PDF"
-
-msgid "Theme by the"
-msgstr "Мавзӯъи аз"
-
-msgid "Download source file"
-msgstr "Файли манбаъро зеркашӣ кунед"
-
-msgid "open issue"
-msgstr "барориши кушод"
-
-msgid "Contents"
-msgstr "Мундариҷа"
-
-msgid "previous page"
-msgstr "саҳифаи қаблӣ"
-
-msgid "Download notebook file"
-msgstr "Файли дафтарро зеркашӣ кунед"
-
-msgid "Copyright"
-msgstr "Ҳуқуқи муаллиф"
-
-msgid "Download this page"
-msgstr "Ин саҳифаро зеркашӣ кунед"
-
-msgid "Source repository"
-msgstr "Анбори манбаъ"
+msgid "By the"
+msgstr "Бо"
 
 msgid "By"
 msgstr "Бо"
 
-msgid "repository"
-msgstr "анбор"
+msgid "Contents"
+msgstr "Мундариҷа"
 
-msgid "Last updated on"
-msgstr "Last навсозӣ дар"
+msgid "Copyright"
+msgstr "Ҳуқуқи муаллиф"
 
-msgid "Toggle navigation"
-msgstr "Гузаришро иваз кунед"
+msgid "Download notebook file"
+msgstr "Файли дафтарро зеркашӣ кунед"
 
-msgid "Sphinx Book Theme"
-msgstr "Сфинкс Мавзӯи китоб"
+msgid "Download source file"
+msgstr "Файли манбаъро зеркашӣ кунед"
 
-msgid "suggest edit"
-msgstr "пешниҳод вироиш"
-
-msgid "Open an issue"
-msgstr "Масъаларо кушоед"
-
-msgid "Launch"
-msgstr "Оғоз"
-
-msgid "Fullscreen mode"
-msgstr "Ҳолати экрани пурра"
+msgid "Download this page"
+msgstr "Ин саҳифаро зеркашӣ кунед"
 
 msgid "Edit this page"
 msgstr "Ин саҳифаро таҳрир кунед"
 
-msgid "By the"
-msgstr "Бо"
+msgid "Fullscreen mode"
+msgstr "Ҳолати экрани пурра"
+
+msgid "Last updated on"
+msgstr "Last навсозӣ дар"
+
+msgid "Launch"
+msgstr "Оғоз"
+
+msgid "Open an issue"
+msgstr "Масъаларо кушоед"
+
+msgid "Print to PDF"
+msgstr "Чоп ба PDF"
+
+msgid "Source repository"
+msgstr "Анбори манбаъ"
+
+msgid "Sphinx Book Theme"
+msgstr "Сфинкс Мавзӯи китоб"
+
+msgid "Theme by the"
+msgstr "Мавзӯъи аз"
+
+msgid "Toggle navigation"
+msgstr "Гузаришро иваз кунед"
 
 msgid "next page"
 msgstr "саҳифаи оянда"
+
+msgid "open issue"
+msgstr "барориши кушод"
+
+msgid "previous page"
+msgstr "саҳифаи қаблӣ"
+
+msgid "repository"
+msgstr "анбор"
+
+msgid "suggest edit"
+msgstr "пешниҳод вироиш"

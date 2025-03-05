@@ -56,6 +56,7 @@ var namespacemlx_1_1steel =
     [ "operator||", "namespacemlx_1_1steel.html#a1bb3ac5061a04e407fc4cdcc9f6ea03f", null ],
     [ "sum", "namespacemlx_1_1steel.html#ab4a6ddea4beb7c447cf5b69b9d46cc3b", null ],
     [ "sum", "namespacemlx_1_1steel.html#acd6e194d37b617d7a5818bc384a97fe4", null ],
+    [ "tile_matmad", "namespacemlx_1_1steel.html#ab9fdcb06fb1f639f9120ab14cfedd150", null ],
     [ "tile_matmad", "namespacemlx_1_1steel.html#ad583e6038efc119542410f43b603d4ad", null ],
     [ "is_integral_v", "namespacemlx_1_1steel.html#a92a3465716ea7fd682d22cecc08d45fd", null ]
 ];

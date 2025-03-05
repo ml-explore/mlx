@@ -1,5 +1,9 @@
 var NAVTREEINDEX14 =
 {
+"classpocketfft_1_1detail_1_1arr__info.html#a003a7106f7fa59a3c55ac1f0116313a5":[1,0,2,0,4,4],
+"classpocketfft_1_1detail_1_1arr__info.html#a003a7106f7fa59a3c55ac1f0116313a5":[2,0,2,0,4,4],
+"classpocketfft_1_1detail_1_1arr__info.html#a0dbddb7d86ca306159fc9ef9a453b21e":[1,0,2,0,4,0],
+"classpocketfft_1_1detail_1_1arr__info.html#a0dbddb7d86ca306159fc9ef9a453b21e":[2,0,2,0,4,0],
 "classpocketfft_1_1detail_1_1arr__info.html#a2467e9e01de1ba4d7cd28c1af783da8d":[1,0,2,0,4,7],
 "classpocketfft_1_1detail_1_1arr__info.html#a2467e9e01de1ba4d7cd28c1af783da8d":[2,0,2,0,4,7],
 "classpocketfft_1_1detail_1_1arr__info.html#a9d10aa83a1117e75d36f7396b8c2a093":[1,0,2,0,4,5],
@@ -245,9 +249,5 @@ var NAVTREEINDEX14 =
 "distributed_2primitives_8h.html":[3,0,0,2,5],
 "distributed_2primitives_8h_source.html":[3,0,0,2,5],
 "distributed_8h.html":[3,0,0,2,2],
-"distributed_8h_source.html":[3,0,0,2,2],
-"distributed__impl_8h.html":[3,0,0,2,3],
-"distributed__impl_8h_source.html":[3,0,0,2,3],
-"dtype_8h.html":[3,0,0,10],
-"dtype_8h_source.html":[3,0,0,10]
+"distributed_8h_source.html":[3,0,0,2,2]
 };

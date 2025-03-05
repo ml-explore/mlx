@@ -125,6 +125,8 @@ Functions</h2></td></tr>
 <tr class="separator:a44250cff34238f01471fd61e76036f03"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae6d97829459353fe3b31c8a0867c0ca2" id="r_ae6d97829459353fe3b31c8a0867c0ca2"><td class="memItemLeft" align="right" valign="top">std::pair&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae6d97829459353fe3b31c8a0867c0ca2">qr</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:ae6d97829459353fe3b31c8a0867c0ca2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6358b3b4398289f30ada4c2712a9d88d" id="r_a6358b3b4398289f30ada4c2712a9d88d"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6358b3b4398289f30ada4c2712a9d88d">svd</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, bool compute_uv, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s)</td></tr>
+<tr class="separator:a6358b3b4398289f30ada4c2712a9d88d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a64364b880e99914cf47bf756fa8dbaf0" id="r_a64364b880e99914cf47bf756fa8dbaf0"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a64364b880e99914cf47bf756fa8dbaf0">svd</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:a64364b880e99914cf47bf756fa8dbaf0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad966a0b6bff176c9f933534ed62389a2" id="r_ad966a0b6bff176c9f933534ed62389a2"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad966a0b6bff176c9f933534ed62389a2">inv</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
@@ -691,8 +693,8 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a64364b880e99914cf47bf756fa8dbaf0" name="a64364b880e99914cf47bf756fa8dbaf0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a64364b880e99914cf47bf756fa8dbaf0">&#9670;&#160;</a></span>svd()</h2>
+<a id="a6358b3b4398289f30ada4c2712a9d88d" name="a6358b3b4398289f30ada4c2712a9d88d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6358b3b4398289f30ada4c2712a9d88d">&#9670;&#160;</a></span>svd() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -705,9 +707,43 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>compute_uv</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a64364b880e99914cf47bf756fa8dbaf0" name="a64364b880e99914cf47bf756fa8dbaf0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64364b880e99914cf47bf756fa8dbaf0">&#9670;&#160;</a></span>svd() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::linalg::svd </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span><span class="paramdefsep"> = </span><span class="paramdefval">{}</span>&#160;)</td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
 </div>

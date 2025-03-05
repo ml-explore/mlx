@@ -8,68 +8,68 @@ msgstr ""
 "Language: el\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Εκτύπωση σε PDF"
-
-msgid "Theme by the"
-msgstr "Θέμα από το"
-
-msgid "Download source file"
-msgstr "Λήψη αρχείου προέλευσης"
-
-msgid "open issue"
-msgstr "ανοιχτό ζήτημα"
-
-msgid "Contents"
-msgstr "Περιεχόμενα"
-
-msgid "previous page"
-msgstr "προηγούμενη σελίδα"
-
-msgid "Download notebook file"
-msgstr "Λήψη αρχείου σημειωματάριου"
-
-msgid "Copyright"
-msgstr "Πνευματική ιδιοκτησία"
-
-msgid "Download this page"
-msgstr "Λήψη αυτής της σελίδας"
-
-msgid "Source repository"
-msgstr "Αποθήκη πηγής"
+msgid "By the"
+msgstr "Από το"
 
 msgid "By"
 msgstr "Με"
 
-msgid "repository"
-msgstr "αποθήκη"
+msgid "Contents"
+msgstr "Περιεχόμενα"
 
-msgid "Last updated on"
-msgstr "Τελευταία ενημέρωση στις"
+msgid "Copyright"
+msgstr "Πνευματική ιδιοκτησία"
 
-msgid "Toggle navigation"
-msgstr "Εναλλαγή πλοήγησης"
+msgid "Download notebook file"
+msgstr "Λήψη αρχείου σημειωματάριου"
 
-msgid "Sphinx Book Theme"
-msgstr "Θέμα βιβλίου Sphinx"
+msgid "Download source file"
+msgstr "Λήψη αρχείου προέλευσης"
 
-msgid "suggest edit"
-msgstr "προτείνω επεξεργασία"
-
-msgid "Open an issue"
-msgstr "Ανοίξτε ένα ζήτημα"
-
-msgid "Launch"
-msgstr "Εκτόξευση"
-
-msgid "Fullscreen mode"
-msgstr "ΛΕΙΤΟΥΡΓΙΑ ΠΛΗΡΟΥΣ ΟΘΟΝΗΣ"
+msgid "Download this page"
+msgstr "Λήψη αυτής της σελίδας"
 
 msgid "Edit this page"
 msgstr "Επεξεργαστείτε αυτήν τη σελίδα"
 
-msgid "By the"
-msgstr "Από το"
+msgid "Fullscreen mode"
+msgstr "ΛΕΙΤΟΥΡΓΙΑ ΠΛΗΡΟΥΣ ΟΘΟΝΗΣ"
+
+msgid "Last updated on"
+msgstr "Τελευταία ενημέρωση στις"
+
+msgid "Launch"
+msgstr "Εκτόξευση"
+
+msgid "Open an issue"
+msgstr "Ανοίξτε ένα ζήτημα"
+
+msgid "Print to PDF"
+msgstr "Εκτύπωση σε PDF"
+
+msgid "Source repository"
+msgstr "Αποθήκη πηγής"
+
+msgid "Sphinx Book Theme"
+msgstr "Θέμα βιβλίου Sphinx"
+
+msgid "Theme by the"
+msgstr "Θέμα από το"
+
+msgid "Toggle navigation"
+msgstr "Εναλλαγή πλοήγησης"
 
 msgid "next page"
 msgstr "επόμενη σελίδα"
+
+msgid "open issue"
+msgstr "ανοιχτό ζήτημα"
+
+msgid "previous page"
+msgstr "προηγούμενη σελίδα"
+
+msgid "repository"
+msgstr "αποθήκη"
+
+msgid "suggest edit"
+msgstr "προτείνω επεξεργασία"

@@ -8,68 +8,68 @@ msgstr ""
 "Language: sv\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Print to PDF"
-msgstr "Skriv ut till PDF"
-
-msgid "Theme by the"
-msgstr "Tema av"
-
-msgid "Download source file"
-msgstr "Ladda ner källfil"
-
-msgid "open issue"
-msgstr "öppna problemrapport"
-
-msgid "Contents"
-msgstr "Innehåll"
-
-msgid "previous page"
-msgstr "föregående sida"
-
-msgid "Download notebook file"
-msgstr "Ladda ner notebook-fil"
-
-msgid "Copyright"
-msgstr "Upphovsrätt"
-
-msgid "Download this page"
-msgstr "Ladda ner den här sidan"
-
-msgid "Source repository"
-msgstr "Källkodsrepositorium"
+msgid "By the"
+msgstr "Av den"
 
 msgid "By"
 msgstr "Av"
 
-msgid "repository"
-msgstr "repositorium"
+msgid "Contents"
+msgstr "Innehåll"
 
-msgid "Last updated on"
-msgstr "Senast uppdaterad den"
+msgid "Copyright"
+msgstr "Upphovsrätt"
 
-msgid "Toggle navigation"
-msgstr "Växla navigering"
+msgid "Download notebook file"
+msgstr "Ladda ner notebook-fil"
 
-msgid "Sphinx Book Theme"
-msgstr "Sphinx Boktema"
+msgid "Download source file"
+msgstr "Ladda ner källfil"
 
-msgid "suggest edit"
-msgstr "föreslå ändring"
-
-msgid "Open an issue"
-msgstr "Öppna en problemrapport"
-
-msgid "Launch"
-msgstr "Öppna"
-
-msgid "Fullscreen mode"
-msgstr "Fullskärmsläge"
+msgid "Download this page"
+msgstr "Ladda ner den här sidan"
 
 msgid "Edit this page"
 msgstr "Redigera den här sidan"
 
-msgid "By the"
-msgstr "Av den"
+msgid "Fullscreen mode"
+msgstr "Fullskärmsläge"
+
+msgid "Last updated on"
+msgstr "Senast uppdaterad den"
+
+msgid "Launch"
+msgstr "Öppna"
+
+msgid "Open an issue"
+msgstr "Öppna en problemrapport"
+
+msgid "Print to PDF"
+msgstr "Skriv ut till PDF"
+
+msgid "Source repository"
+msgstr "Källkodsrepositorium"
+
+msgid "Sphinx Book Theme"
+msgstr "Sphinx Boktema"
+
+msgid "Theme by the"
+msgstr "Tema av"
+
+msgid "Toggle navigation"
+msgstr "Växla navigering"
 
 msgid "next page"
 msgstr "nästa sida"
+
+msgid "open issue"
+msgstr "öppna problemrapport"
+
+msgid "previous page"
+msgstr "föregående sida"
+
+msgid "repository"
+msgstr "repositorium"
+
+msgid "suggest edit"
+msgstr "föreslå ändring"
