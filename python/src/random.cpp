@@ -253,7 +253,7 @@ void init_random(nb::module_& parent_module) {
 
         The values are sampled with equal probability from the integers in
         half-open interval ``[low, high)``. The lower and upper bound can be
-        scalars or arrays and must be roadcastable to ``shape``.
+        scalars or arrays and must be broadcastable to ``shape``.
 
         Args:
             low (scalar or array): Lower bound of the interval.
