@@ -63,7 +63,7 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_BUILD_TYPE={cfg}",
             "-DMLX_BUILD_PYTHON_BINDINGS=ON",
             "-DMLX_BUILD_TESTS=OFF",
-            "-DMLX_BUILD_BENCHMARKS=OFF",
+            "-DMLX_BUILD_BENCHMARKS=ON",
             "-DMLX_BUILD_EXAMPLES=OFF",
             f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}{os.sep}",
         ]

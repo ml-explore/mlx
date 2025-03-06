@@ -85,3 +85,5 @@ build/
 
 # Jetbrains
 .cache
+build*/
+*.dylib
