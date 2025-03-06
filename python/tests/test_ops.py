@@ -2237,6 +2237,25 @@ class TestOps(mlx_tests.MLXTestCase):
             np.repeat,
             axis=0,
         )
+        # Test repeat for vector repeat input with single number
+        self.assertCmpNumpy([data, [2]], mx.repeat, np.repeat)
+        # Test repeat for vector repeat input with single number with given axis 0
+        self.assertCmpNumpy([data, [2]], mx.repeat, np.repeat, axis=0)
+        # Test repeat for vector repeat input with single number with given axis 1
+        self.assertCmpNumpy([data, [2]], mx.repeat, np.repeat, axis=1)
+        # Test repeat for vector repeat input
+        self.assertCmpNumpy(
+            [mx.array([[0, 1], [4, 2], [2, 3]]), [1, 0, 2, 1, 2, 1]],
+            mx.repeat,
+            np.repeat,
+        )
+        # Test repeat for vector repeat input with given axis 0
+        self.assertCmpNumpy([data, [1, 0, 2]], mx.repeat, np.repeat, axis=0)
+        # Test repeat for vector repeat input with given axis 1
+        self.assertCmpNumpy([data, [1, 3]], mx.repeat, np.repeat, axis=1)
+        # Test repeat with mx input for repeat
+        ar = mx.array([1, 2, 3, 4])
+        self.assertCmpNumpy([ar, ar], mx.repeat, np.repeat)
 
     def test_tensordot(self):
         # No fp16 matmuls on common cpu backend

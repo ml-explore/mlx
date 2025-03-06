@@ -2963,13 +2963,22 @@ void init_ops(nb::module_& m) {
   m.def(
       "repeat",
       [](const mx::array& array,
-         int repeats,
+         const std::variant<int, std::vector<int>>& repeats,
          std::optional<int> axis,
          mx::StreamOrDevice s) {
-        if (axis.has_value()) {
-          return mx::repeat(array, repeats, axis.value(), s);
+        if (auto rep = std::get_if<int>(&repeats); rep) {
+          if (axis.has_value()) {
+            return mx::repeat(array, *rep, axis.value(), s);
+          } else {
+            return mx::repeat(array, *rep, s);
+          }
         } else {
-          return mx::repeat(array, repeats, s);
+          auto r = std::get<std::vector<int>>(repeats);
+          if (axis.has_value()) {
+            return mx::repeat(array, r, axis.value(), s);
+          } else {
+            return mx::repeat(array, r, s);
+          }
         }
       },
       nb::arg(),

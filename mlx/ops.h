@@ -245,6 +245,12 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
 /** Repeat an array along an axis. */
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s = {});
 array repeat(const array& arr, int repeats, StreamOrDevice s = {});
+array repeat(
+    const array& arr,
+    std::vector<int> repeats,
+    int axis,
+    StreamOrDevice s = {});
+array repeat(const array& arr, std::vector<int> repeats, StreamOrDevice s = {});
 
 array tile(const array& arr, std::vector<int> reps, StreamOrDevice s = {});
 

@@ -1112,6 +1112,52 @@ array repeat(const array& arr, int repeats, StreamOrDevice s) {
   return repeat(flatten(arr, s), repeats, 0, s);
 }
 
+array repeat(
+    const array& arr,
+    std::vector<int> repeats,
+    int axis,
+    StreamOrDevice s) {
+  if (repeats.size() == 1) {
+    return repeat(arr, repeats[0], axis, s);
+  }
+
+  // not adding dimensions!!!
+  axis = normalize_axis_index(axis, arr.ndim(), "[repeat] ");
+
+  Shape shape = arr.shape();
+
+  if (shape[axis] != repeats.size()) {
+    std::ostringstream msg;
+    msg << "[repeat] Needs to be the same length as the input array along axis "
+        << axis << "(" << shape[axis] << ").";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (std::any_of(
+          repeats.begin(), repeats.end(), [](int i) { return i < 0; })) {
+    throw std::invalid_argument(
+        "[repeats] Negative repetitions are not allowed.");
+  }
+
+  std::vector<array> outs;
+  outs.reserve(repeats.size());
+
+  for (int i = 0; i < repeats.size(); ++i) {
+    // if (repeats[i] == 0) continue;
+    shape[axis] = repeats[i];
+    array slice = take(arr, i, axis, s);
+    slice = broadcast_to(expand_dims(slice, axis), shape, s);
+    outs.push_back(slice);
+  };
+
+  // What if all arrays are 0?
+  return concatenate(outs, axis, s);
+}
+
+array repeat(const array& arr, std::vector<int> repeats, StreamOrDevice s) {
+  return repeat(flatten(arr, s), repeats, 0, s);
+}
+
 array tile(
     const array& arr,
     std::vector<int> reps,
@@ -2990,23 +3036,13 @@ array take(
     const array& indices,
     int axis,
     StreamOrDevice s /* = {} */) {
-  // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[take] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  axis = normalize_axis_index(axis, a.ndim(), "[take]");
 
   // Check for valid take
   if (a.size() == 0 && indices.size() != 0) {
     throw std::invalid_argument(
         "[take] Cannot do a non-empty take from an array with zero elements.");
   }
-
-  // Handle negative axis
-  axis = axis < 0 ? a.ndim() + axis : axis;
 
   // Make slice sizes to pass to gather
   Shape slice_sizes = a.shape();
