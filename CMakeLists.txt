@@ -232,6 +232,14 @@ if(MPI_FOUND)
   endif()
 endif()
 
+message(STATUS "Downloading json")
+FetchContent_Declare(
+  json
+  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+target_include_directories(
+  mlx PRIVATE $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>)
+
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 
 target_include_directories(
