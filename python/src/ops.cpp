@@ -2993,7 +2993,9 @@ void init_ops(nb::module_& m) {
 
         Args:
             array (array): Input array.
-            repeats (int): The number of repetitions for each element.
+            repeats (int or list(int)): The number of repetitions for each element.
+              If a list is passed its size should correspond to the size along axis.
+              Each element represent number of repetitions for given index in array.
             axis (int, optional): The axis in which to repeat the array along. If
               unspecified it uses the flattened array of the input and repeats
               along axis 0.
