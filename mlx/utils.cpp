@@ -20,6 +20,16 @@ Stream to_stream(StreamOrDevice s) {
   }
 }
 
+Stream to_stream(StreamOrDevice s, Device default_) {
+  if (std::holds_alternative<std::monostate>(s)) {
+    return default_stream(default_);
+  } else if (std::holds_alternative<Device>(s)) {
+    return default_stream(std::get<Device>(s));
+  } else {
+    return std::get<Stream>(s);
+  }
+}
+
 void PrintFormatter::print(std::ostream& os, bool val) {
   if (capitalize_bool) {
     os << (val ? "True" : "False");

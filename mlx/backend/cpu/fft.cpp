@@ -4,6 +4,7 @@
 
 #include "mlx/3rdparty/pocketfft.h"
 #include "mlx/allocator.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -38,46 +39,78 @@ void FFT::eval_cpu(const std::vector<array>& inputs, array& out) {
         });
     scale /= nelem;
   }
+
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
   if (in.dtype() == complex64 && out.dtype() == complex64) {
     auto in_ptr =
         reinterpret_cast<const std::complex<float>*>(in.data<complex64_t>());
     auto out_ptr =
         reinterpret_cast<std::complex<float>*>(out.data<complex64_t>());
-    pocketfft::c2c(
-        shape,
-        strides_in,
-        strides_out,
-        axes_,
-        !inverse_,
-        in_ptr,
-        out_ptr,
-        scale);
+    encoder.dispatch([shape = std::move(shape),
+                      strides_in = std::move(strides_in),
+                      strides_out = std::move(strides_out),
+                      axes = axes_,
+                      inverse = inverse_,
+                      in_ptr,
+                      out_ptr,
+                      scale]() {
+      pocketfft::c2c(
+          shape,
+          strides_in,
+          strides_out,
+          axes,
+          !inverse,
+          in_ptr,
+          out_ptr,
+          scale);
+    });
   } else if (in.dtype() == float32 && out.dtype() == complex64) {
     auto in_ptr = in.data<float>();
     auto out_ptr =
         reinterpret_cast<std::complex<float>*>(out.data<complex64_t>());
-    pocketfft::r2c(
-        shape,
-        strides_in,
-        strides_out,
-        axes_,
-        !inverse_,
-        in_ptr,
-        out_ptr,
-        scale);
+    encoder.dispatch([shape = std::move(shape),
+                      strides_in = std::move(strides_in),
+                      strides_out = std::move(strides_out),
+                      axes = axes_,
+                      inverse = inverse_,
+                      in_ptr,
+                      out_ptr,
+                      scale]() {
+      pocketfft::r2c(
+          shape,
+          strides_in,
+          strides_out,
+          axes,
+          !inverse,
+          in_ptr,
+          out_ptr,
+          scale);
+    });
   } else if (in.dtype() == complex64 && out.dtype() == float32) {
     auto in_ptr =
         reinterpret_cast<const std::complex<float>*>(in.data<complex64_t>());
     auto out_ptr = out.data<float>();
-    pocketfft::c2r(
-        shape,
-        strides_in,
-        strides_out,
-        axes_,
-        !inverse_,
-        in_ptr,
-        out_ptr,
-        scale);
+    encoder.dispatch([shape = std::move(shape),
+                      strides_in = std::move(strides_in),
+                      strides_out = std::move(strides_out),
+                      axes = axes_,
+                      inverse = inverse_,
+                      in_ptr,
+                      out_ptr,
+                      scale]() {
+      pocketfft::c2r(
+          shape,
+          strides_in,
+          strides_out,
+          axes,
+          !inverse,
+          in_ptr,
+          out_ptr,
+          scale);
+    });
   } else {
     throw std::runtime_error(
         "[FFT] Received unexpected input and output type combination.");

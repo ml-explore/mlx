@@ -44,7 +44,9 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eigh.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/encoder.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
@@ -65,6 +67,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/inverse.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp)
 
 if(MLX_BUILD_ACCELERATE)

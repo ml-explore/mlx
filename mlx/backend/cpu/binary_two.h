@@ -4,6 +4,8 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/binary.h"
+#include "mlx/backend/cpu/encoder.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -55,65 +57,81 @@ void binary_op_dispatch_dims(
     const array& b,
     array& out_a,
     array& out_b,
+    Stream stream,
     Op op) {
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out_a);
+  encoder.set_output_array(out_b);
+
   auto [shape, strides] = collapse_contiguous_dims(
       a.shape(), {a.strides(), b.strides(), out_a.strides()});
-  const auto& a_strides = strides[0];
-  const auto& b_strides = strides[1];
-  const auto& out_strides = strides[2];
   const T* a_ptr = a.data<T>();
   const T* b_ptr = b.data<T>();
   U* out_a_ptr = out_a.data<U>();
   U* out_b_ptr = out_b.data<U>();
 
-  int ndim = shape.size();
-  switch (ndim) {
-    case 1:
-      binary_op_dims<T, U, Op, 1>(
-          a_ptr,
-          b_ptr,
-          out_a_ptr,
-          out_b_ptr,
-          op,
-          shape,
-          a_strides,
-          b_strides,
-          out_strides,
-          0);
-      return;
-    case 2:
-      binary_op_dims<T, U, Op, 2>(
-          a_ptr,
-          b_ptr,
-          out_a_ptr,
-          out_b_ptr,
-          op,
-          shape,
-          a_strides,
-          b_strides,
-          out_strides,
-          0);
-      return;
-  }
+  encoder.dispatch([a_ptr,
+                    b_ptr,
+                    out_a_ptr,
+                    out_b_ptr,
+                    size = a.size(),
+                    shape = std::move(shape),
+                    strides = std::move(strides),
+                    op = std::move(op)]() {
+    const auto& a_strides = strides[0];
+    const auto& b_strides = strides[1];
+    const auto& out_strides = strides[2];
+    int ndim = shape.size();
+    switch (ndim) {
+      case 1:
+        binary_op_dims<T, U, Op, 1>(
+            a_ptr,
+            b_ptr,
+            out_a_ptr,
+            out_b_ptr,
+            op,
+            shape,
+            a_strides,
+            b_strides,
+            out_strides,
+            0);
+        return;
+      case 2:
+        binary_op_dims<T, U, Op, 2>(
+            a_ptr,
+            b_ptr,
+            out_a_ptr,
+            out_b_ptr,
+            op,
+            shape,
+            a_strides,
+            b_strides,
+            out_strides,
+            0);
+        return;
+    }
 
-  ContiguousIterator a_it(shape, a_strides, ndim - 2);
-  ContiguousIterator b_it(shape, b_strides, ndim - 2);
-  auto stride = out_strides[ndim - 3];
-  for (size_t elem = 0; elem < a.size(); elem += stride) {
-    binary_op_dims<T, U, Op, 2>(
-        a_ptr + a_it.loc,
-        b_ptr + b_it.loc,
-        out_a_ptr + elem,
-        out_b_ptr + elem,
-        op,
-        shape,
-        a_strides,
-        b_strides,
-        out_strides,
-        ndim - 2);
-    a_it.step();
-    b_it.step();
-  }
+    ContiguousIterator a_it(shape, a_strides, ndim - 2);
+    ContiguousIterator b_it(shape, b_strides, ndim - 2);
+    auto stride = out_strides[ndim - 3];
+    for (size_t elem = 0; elem < size; elem += stride) {
+      binary_op_dims<T, U, Op, 2>(
+          a_ptr + a_it.loc,
+          b_ptr + b_it.loc,
+          out_a_ptr + elem,
+          out_b_ptr + elem,
+          op,
+          shape,
+          a_strides,
+          b_strides,
+          out_strides,
+          ndim - 2);
+      a_it.step();
+      b_it.step();
+    }
+  });
 }
 
 template <typename T, typename U = T, typename Op>
@@ -128,40 +146,71 @@ void binary_op(
   set_binary_op_output_data(a, b, out_a, bopt);
   set_binary_op_output_data(a, b, out_b, bopt);
 
+  auto stream = out_a.primitive().stream();
   // The full computation is scalar scalar so call the base op once
   if (bopt == BinaryOpType::General) {
-    binary_op_dispatch_dims<T, U, Op>(a, b, out_a, out_b, op);
+    binary_op_dispatch_dims<T, U, Op>(a, b, out_a, out_b, stream, op);
     return;
   }
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out_a);
+  encoder.set_output_array(out_b);
 
   auto a_ptr = a.data<T>();
   auto b_ptr = b.data<T>();
   auto out_a_ptr = out_a.data<U>();
   auto out_b_ptr = out_b.data<U>();
   if (bopt == BinaryOpType::ScalarScalar) {
-    std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
+    encoder.dispatch(
+        [a_ptr, b_ptr, out_a_ptr, out_b_ptr, op = std::move(op)]() mutable {
+          std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
+        });
   } else if (bopt == BinaryOpType::ScalarVector) {
-    for (size_t i = 0; i < b.size(); ++i) {
-      std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
-      out_a_ptr++;
-      out_b_ptr++;
-      b_ptr++;
-    }
+    encoder.dispatch([a_ptr,
+                      b_ptr,
+                      out_a_ptr,
+                      out_b_ptr,
+                      size = b.size(),
+                      op = std::move(op)]() mutable {
+      for (size_t i = 0; i < size; ++i) {
+        std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
+        out_a_ptr++;
+        out_b_ptr++;
+        b_ptr++;
+      }
+    });
   } else if (bopt == BinaryOpType::VectorScalar) {
-    for (size_t i = 0; i < a.size(); ++i) {
-      std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
-      out_a_ptr++;
-      out_b_ptr++;
-      a_ptr++;
-    }
+    encoder.dispatch([a_ptr,
+                      b_ptr,
+                      out_a_ptr,
+                      out_b_ptr,
+                      size = a.size(),
+                      op = std::move(op)]() mutable {
+      for (size_t i = 0; i < size; ++i) {
+        std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
+        out_a_ptr++;
+        out_b_ptr++;
+        a_ptr++;
+      }
+    });
   } else { // VectorVector
-    for (size_t i = 0; i < a.size(); ++i) {
-      std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
-      out_a_ptr++;
-      out_b_ptr++;
-      a_ptr++;
-      b_ptr++;
-    }
+    encoder.dispatch([a_ptr,
+                      b_ptr,
+                      out_a_ptr,
+                      out_b_ptr,
+                      size = a.size(),
+                      op = std::move(op)]() mutable {
+      for (size_t i = 0; i < size; ++i) {
+        std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
+        out_a_ptr++;
+        out_b_ptr++;
+        a_ptr++;
+        b_ptr++;
+      }
+    });
   }
 }
 

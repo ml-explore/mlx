@@ -243,18 +243,6 @@ class array {
     bool col_contiguous : 1;
   };
 
-  /** Build an array from all the info held by the array description. Including
-   * the buffer, strides, flags.
-   */
-  explicit array(
-      allocator::Buffer data,
-      Shape shape,
-      Dtype dtype,
-      Strides strides,
-      size_t data_size,
-      Flags flags,
-      Deleter deleter = allocator::free);
-
   /** The array's primitive. */
   Primitive& primitive() const {
     return *(array_desc_->primitive);
@@ -365,11 +353,6 @@ class array {
     // For example, the status of `x` in `auto x = a + b`.
     unscheduled,
 
-    // The ouptut of a computation which has been scheduled but `eval_*` has
-    // not yet been called on the array's primitive. A possible
-    // status of `x` in `auto x = a + b; eval(x);`
-    scheduled,
-
     // The array's `eval_*` function has been run, but the computation is not
     // necessarily complete. The array will have memory allocated and if it is
     // not a tracer then it will be detached from the graph.
@@ -406,6 +389,10 @@ class array {
     array_desc_->event = std::move(e);
   }
 
+  void detach_event() const {
+    array_desc_->event = Event{};
+  }
+
   // Mark the array as a tracer array (true) or not.
   void set_tracer(bool is_tracer) {
     array_desc_->is_tracer = is_tracer;
@@ -430,15 +417,6 @@ class array {
       size_t offset = 0);
 
   void copy_shared_buffer(const array& other);
-
-  void move_shared_buffer(
-      array other,
-      const Strides& strides,
-      Flags flags,
-      size_t data_size,
-      size_t offset = 0);
-
-  void move_shared_buffer(array other);
 
   void overwrite_descriptor(const array& other) {
     array_desc_ = other.array_desc_;
