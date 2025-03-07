@@ -10,7 +10,7 @@ Reduction = Literal["none", "mean", "sum"]
 
 def _reduce(loss: mx.array, reduction: Reduction = "none"):
     if reduction not in get_args(Reduction):
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+        raise ValueError(f"Invalid reduction. Must be one of {get_args(Reduction)}.")
 
     if reduction == "mean":
         return mx.mean(loss)
