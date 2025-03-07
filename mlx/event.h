@@ -10,15 +10,20 @@ namespace mlx::core {
 
 class Event {
  public:
-  Event() = default;
-
-  Event(const Stream& steam);
+  Event() {};
+  explicit Event(Stream stream);
 
   // Wait for the event to be signaled at its current value
   void wait();
 
   // Signal the event at its current value
   void signal();
+
+  // Wait in the given stream for the event to be signaled at its current value
+  void wait(Stream stream);
+
+  // Signal the event at its current value in the given stream
+  void signal(Stream stream);
 
   // Check if the event has been signaled at its current value
   bool is_signaled() const;
@@ -44,15 +49,11 @@ class Event {
     return stream_;
   }
 
-  const std::shared_ptr<void>& raw_event() const {
-    return event_;
-  }
-
  private:
   // Default constructed stream should never be used
   // since the event is not yet valid
   Stream stream_{0, Device::cpu};
-  std::shared_ptr<void> event_;
+  std::shared_ptr<void> event_{nullptr};
   uint64_t value_{0};
 };
 

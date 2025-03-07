@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/event.h"
+#include "mlx/scheduler.h"
 
 #include <condition_variable>
 #include <mutex>
@@ -13,13 +14,13 @@ struct EventCounter {
   std::condition_variable cv;
 };
 
-Event::Event(const Stream& stream) : stream_(stream) {
+Event::Event(Stream stream) : stream_(stream) {
   auto dtor = [](void* ptr) { delete static_cast<EventCounter*>(ptr); };
   event_ = std::shared_ptr<void>(new EventCounter{}, dtor);
 }
 
 void Event::wait() {
-  auto ec = static_cast<EventCounter*>(raw_event().get());
+  auto ec = static_cast<EventCounter*>(event_.get());
   std::unique_lock<std::mutex> lk(ec->mtx);
   if (ec->value >= value()) {
     return;
@@ -28,7 +29,7 @@ void Event::wait() {
 }
 
 void Event::signal() {
-  auto ec = static_cast<EventCounter*>(raw_event().get());
+  auto ec = static_cast<EventCounter*>(event_.get());
   {
     std::lock_guard<std::mutex> lk(ec->mtx);
     ec->value = value();
@@ -36,11 +37,19 @@ void Event::signal() {
   ec->cv.notify_all();
 }
 
+void Event::wait(Stream stream) {
+  scheduler::enqueue(stream, [*this]() mutable { wait(); });
+}
+
+void Event::signal(Stream stream) {
+  scheduler::enqueue(stream, [*this]() mutable { signal(); });
+}
+
 bool Event::is_signaled() const {
-  auto ec = static_cast<EventCounter*>(raw_event().get());
+  auto ec = static_cast<EventCounter*>(event_.get());
   {
     std::lock_guard<std::mutex> lk(ec->mtx);
-    return (ec->value > value());
+    return (ec->value >= value());
   }
 }
 } // namespace mlx::core

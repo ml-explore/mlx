@@ -16,17 +16,19 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   return nullptr;
 }
 
-std::function<void()> make_task(array, bool) {
+void eval(array&) {
   throw std::runtime_error(
-      "[metal::make_task] Cannot make GPU task without metal backend");
+      "[metal::eval] Cannot eval on GPU without metal backend");
 }
 
-std::function<void()> make_synchronize_task(
-    Stream,
-    std::shared_ptr<std::promise<void>>) {
+void finalize(Stream) {
   throw std::runtime_error(
-      "[metal::make_synchronize_task] Cannot synchronize GPU"
-      " without metal backend");
+      "[metal::finalize] Cannot finalize GPU without metal backend");
+}
+
+void synchronize(Stream) {
+  throw std::runtime_error(
+      "[metal::synchronize] Cannot synchronize GPU without metal backend");
 }
 
 // No-ops when Metal is not available.

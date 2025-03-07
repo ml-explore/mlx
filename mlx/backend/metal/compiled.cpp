@@ -457,7 +457,7 @@ void Compiled::eval_gpu(
   }
 
   compiled_allocate_outputs(
-      inputs, outputs, inputs_, constant_ids_, contiguous, true);
+      inputs, outputs, inputs_, constant_ids_, contiguous);
 
   // Put the outputs in
   for (auto& x : outputs) {

@@ -5,12 +5,10 @@
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/common/load.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/utils.h"
@@ -45,7 +43,8 @@ void reshape(const array& in, array& out, Stream s) {
     shared_buffer_reshape(in, out_strides, out);
   }
 }
-array compute_dynamic_offset(
+
+static array compute_dynamic_offset(
     const array& indices,
     const Strides& strides,
     const std::vector<int>& axes,
@@ -57,7 +56,7 @@ array compute_dynamic_offset(
   bool donate = indices.is_donatable() &&
       (indices.data_size() * indices.itemsize()) >= offset.itemsize();
   if (donate) {
-    offset.move_shared_buffer(indices);
+    offset.copy_shared_buffer(indices);
   } else {
     offset.set_data(allocator::malloc_or_wait(offset.itemsize()));
   }
@@ -88,7 +87,7 @@ array compute_dynamic_offset(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(donate ? offset : indices, 0);
+  compute_encoder.set_input_array(indices, 0);
   compute_encoder.set_output_array(offset, 1);
   compute_encoder.set_vector_bytes(strides, 2);
   compute_encoder.set_vector_bytes(axes, 3);
@@ -254,7 +253,7 @@ void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
   if (in.flags().row_contiguous ||
       (allow_col_major_ && in.flags().col_contiguous)) {
-    move_or_copy(in, out);
+    out.copy_shared_buffer(in);
   } else {
     copy_gpu(in, out, CopyType::General);
   }
@@ -302,31 +301,7 @@ void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
-  auto read_task = [out = unsafe_weak_copy(out),
-                    offset = offset_,
-                    reader = reader_,
-                    swap_endianness = swap_endianness_]() mutable {
-    load(out, offset, reader, swap_endianness);
-  };
-
-  // Limit the size that the command buffer will wait on to avoid timing out
-  // on the event (<4 seconds).
-  if (out.nbytes() > (1 << 28)) {
-    read_task();
-    return;
-  }
-
-  auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
-
-  auto e = Event(stream());
-  e.set_value(1);
-  encode_wait(e);
-  auto signal_task = [e = std::move(e), fut = std::move(fut)]() mutable {
-    fut.wait();
-    e.signal();
-  };
-  scheduler::enqueue(io_stream(), std::move(signal_task));
+  throw std::runtime_error("[Load::eval_gpu] Not implemented.");
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -452,7 +427,7 @@ void DynamicSliceUpdate::eval_gpu(
   auto& start_indices = inputs[2];
 
   if (upd.size() == 0) {
-    move_or_copy(in, out);
+    out.copy_shared_buffer(in);
     return;
   }
 
@@ -491,7 +466,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& upd = inputs[1];
 
   if (upd.size() == 0) {
-    move_or_copy(in, out);
+    out.copy_shared_buffer(in);
     return;
   }
 
@@ -575,8 +550,8 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
       strides[i] *= ibytes;
       strides[i] /= obytes;
     }
-    move_or_copy(
-        in, out, strides, in.flags(), in.data_size() * ibytes / obytes);
+    out.copy_shared_buffer(
+        in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
@@ -587,7 +562,7 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
     flags.row_contiguous = true;
     auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
     flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
-    out.move_shared_buffer(tmp, out.strides(), flags, out.size());
+    out.copy_shared_buffer(tmp, out.strides(), flags, out.size());
   }
 }
 

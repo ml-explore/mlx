@@ -18,33 +18,33 @@ void RMSNorm::eval_gpu(
   auto& out = outputs[0];
 
   // Make sure that the last dimension is contiguous
-  std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) -> const array& {
+  auto set_output = [&s, &out](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
+      if (x.is_donatable()) {
+        out.copy_shared_buffer(x);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            x.data_size(),
+            x.strides(),
+            x.flags());
+      }
       return x;
     } else {
-      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
-      copy_gpu(x, copies.back(), CopyType::General, s);
-      return copies.back();
+      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
+      copy_gpu(x, x_copy, CopyType::General, s);
+      out.copy_shared_buffer(x_copy);
+      return x_copy;
     }
   };
-  const array& x = check_input(inputs[0]);
-  const array& w = inputs[1];
 
-  if (x.is_donatable()) {
-    out.move_shared_buffer(x);
-  } else {
-    out.set_data(
-        allocator::malloc_or_wait(x.data_size() * x.itemsize()),
-        x.data_size(),
-        x.strides(),
-        x.flags());
-  }
+  const array x = set_output(inputs[0]);
+  const array& w = inputs[1];
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
@@ -88,8 +88,6 @@ void RMSNorm::eval_gpu(
     compute_encoder.set_bytes(w_stride, 5);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
-
-  d.add_temporaries(std::move(copies), s.index);
 }
 
 void RMSNormVJP::eval_gpu(
@@ -101,20 +99,22 @@ void RMSNormVJP::eval_gpu(
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
-  auto check_input = [&d, &s](const array& x) -> array {
+  auto check_input = [&d, &s](const array& x) -> std::pair<array, bool> {
     if (x.flags().row_contiguous) {
-      return x;
+      return {x, false};
     }
 
     array x_copy(x.shape(), x.dtype(), nullptr, {});
     copy_gpu(x, x_copy, CopyType::General, s);
-    d.add_temporary(x_copy, s.index);
-
-    return x_copy;
+    return {x_copy, true};
   };
-  const array& x = check_input(inputs[0]);
+  bool donate_x = inputs[0].is_donatable();
+  bool donate_g = inputs[2].is_donatable();
+  auto [x, copied] = check_input(inputs[0]);
+  donate_x |= copied;
   const array& w = inputs[1];
-  const array& g = check_input(inputs[2]);
+  auto [g, g_copied] = check_input(inputs[2]);
+  donate_g |= g_copied;
   array& gx = outputs[0];
   array& gw = outputs[1];
 
@@ -122,16 +122,17 @@ void RMSNormVJP::eval_gpu(
   bool has_w = w.ndim() != 0;
 
   // Allocate space for the outputs
-  bool x_in_gx = false;
   bool g_in_gx = false;
   if (x.is_donatable()) {
-    gx.move_shared_buffer(x);
-    x_in_gx = true;
+    gx.copy_shared_buffer(x);
   } else if (g.is_donatable()) {
-    gx.move_shared_buffer(g);
+    gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
     gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
+  }
+  if (g_copied && !g_in_gx) {
+    d.add_temporary(g, s.index);
   }
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
@@ -141,11 +142,9 @@ void RMSNormVJP::eval_gpu(
   // gradients before they are accumulated.
   array gw_temp =
       (has_w) ? array({n_rows, x.shape().back()}, gw.dtype(), nullptr, {}) : w;
-  bool g_in_gw = false;
   if (has_w) {
-    if (!g_in_gx && g.is_donatable()) {
-      gw_temp.move_shared_buffer(g);
-      g_in_gw = true;
+    if (!g_in_gx && donate_g) {
+      gw_temp.copy_shared_buffer(g);
     } else {
       gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
       d.add_temporary(gw_temp, s.index);
@@ -189,9 +188,9 @@ void RMSNormVJP::eval_gpu(
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x_in_gx ? gx : x, 0);
+    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_input_array(g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
+    compute_encoder.set_input_array(g, 2);
     compute_encoder.set_output_array(gx, 3);
     compute_encoder.set_output_array(gw_temp, 4);
     compute_encoder.set_bytes(eps_, 5);
@@ -216,34 +215,34 @@ void LayerNorm::eval_gpu(
   auto& out = outputs[0];
 
   // Make sure that the last dimension is contiguous
-  std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) -> const array& {
+  auto set_output = [&s, &out](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
+      if (x.is_donatable()) {
+        out.copy_shared_buffer(x);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            x.data_size(),
+            x.strides(),
+            x.flags());
+      }
       return x;
     } else {
-      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
-      copy_gpu(x, copies.back(), CopyType::General, s);
-      return copies.back();
+      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
+      copy_gpu(x, x_copy, CopyType::General, s);
+      out.copy_shared_buffer(x_copy);
+      return x_copy;
     }
   };
-  const array& x = check_input(inputs[0]);
+
+  const array x = set_output(inputs[0]);
   const array& w = inputs[1];
   const array& b = inputs[2];
-
-  if (x.is_donatable()) {
-    out.move_shared_buffer(x);
-  } else {
-    out.set_data(
-        allocator::malloc_or_wait(x.data_size() * x.itemsize()),
-        x.data_size(),
-        x.strides(),
-        x.flags());
-  }
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
@@ -290,8 +289,6 @@ void LayerNorm::eval_gpu(
     compute_encoder.set_bytes(b_stride, 7);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
-
-  d.add_temporaries(std::move(copies), s.index);
 }
 
 void LayerNormVJP::eval_gpu(
@@ -303,21 +300,22 @@ void LayerNormVJP::eval_gpu(
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
-  auto check_input = [&d, &s](const array& x) -> array {
+  auto check_input = [&s](const array& x) -> std::pair<array, bool> {
     if (x.flags().row_contiguous) {
-      return x;
+      return {x, false};
     }
-
     array x_copy(x.shape(), x.dtype(), nullptr, {});
     copy_gpu(x, x_copy, CopyType::General, s);
-    d.add_temporary(x_copy, s.index);
-
-    return x_copy;
+    return {x_copy, true};
   };
-  const array& x = check_input(inputs[0]);
+  bool donate_x = inputs[0].is_donatable();
+  bool donate_g = inputs[3].is_donatable();
+  auto [x, copied] = check_input(inputs[0]);
+  donate_x |= copied;
   const array& w = inputs[1];
   const array& b = inputs[2];
-  const array& g = check_input(inputs[3]);
+  auto [g, g_copied] = check_input(inputs[3]);
+  donate_g |= g_copied;
   array& gx = outputs[0];
   array& gw = outputs[1];
   array& gb = outputs[2];
@@ -326,16 +324,17 @@ void LayerNormVJP::eval_gpu(
   bool has_w = w.ndim() != 0;
 
   // Allocate space for the outputs
-  bool x_in_gx = false;
   bool g_in_gx = false;
-  if (x.is_donatable()) {
-    gx.move_shared_buffer(x);
-    x_in_gx = true;
-  } else if (g.is_donatable()) {
-    gx.move_shared_buffer(g);
+  if (donate_x) {
+    gx.copy_shared_buffer(x);
+  } else if (donate_g) {
+    gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
     gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
+  }
+  if (g_copied && !g_in_gx) {
+    d.add_temporary(g, s.index);
   }
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
@@ -345,15 +344,13 @@ void LayerNormVJP::eval_gpu(
   // gradient accumulators.
   array gw_temp =
       (has_w) ? array({n_rows, x.shape().back()}, gw.dtype(), nullptr, {}) : w;
-  bool g_in_gw = false;
   if (has_w) {
-    if (!g_in_gx && g.is_donatable()) {
-      gw_temp.move_shared_buffer(g);
-      g_in_gw = true;
+    if (!g_in_gx && donate_g) {
+      gw_temp.copy_shared_buffer(g);
     } else {
       gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
+      d.add_temporary(gw_temp, s.index);
     }
-    d.add_temporary(gw_temp, s.index);
   }
   gw.set_data(allocator::malloc_or_wait(gw.nbytes()));
   gb.set_data(allocator::malloc_or_wait(gb.nbytes()));
@@ -364,14 +361,7 @@ void LayerNormVJP::eval_gpu(
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     strided_reduce_general_dispatch(
-        g_in_gx ? gx : (g_in_gw ? gw_temp : g),
-        gb,
-        "sum",
-        plan,
-        {0},
-        compute_encoder,
-        d,
-        s);
+        g, gb, "sum", plan, {0}, compute_encoder, d, s);
   }
 
   const int simd_size = 32;
@@ -409,9 +399,9 @@ void LayerNormVJP::eval_gpu(
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x_in_gx ? gx : x, 0);
+    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_input_array(g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
+    compute_encoder.set_input_array(g, 2);
     compute_encoder.set_output_array(gx, 3);
     compute_encoder.set_output_array(gw_temp, 4);
     compute_encoder.set_bytes(eps_, 5);

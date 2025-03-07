@@ -76,35 +76,27 @@ array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
   set_data(data, deleter);
 }
 
-array::array(
-    allocator::Buffer data,
-    Shape shape,
-    Dtype dtype,
-    Strides strides,
-    size_t data_size,
-    Flags flags,
-    Deleter deleter)
-    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
-  set_data(data, data_size, std::move(strides), flags, deleter);
-}
-
 void array::detach() {
+  array_desc_->primitive = nullptr;
+  for (auto& s : array_desc_->siblings) {
+    s.array_desc_->primitive = nullptr;
+  }
   for (auto& s : array_desc_->siblings) {
     s.array_desc_->inputs.clear();
     s.array_desc_->siblings.clear();
     s.array_desc_->position = 0;
-    s.array_desc_->primitive = nullptr;
   }
   array_desc_->inputs.clear();
   array_desc_->siblings.clear();
   array_desc_->position = 0;
-  array_desc_->primitive = nullptr;
 }
 
 bool array::is_available() const {
   if (status() == Status::available) {
     return true;
-  } else if (status() == Status::evaluated && event().is_signaled()) {
+  } else if (
+      status() == Status::evaluated &&
+      (!event().valid() || event().is_signaled())) {
     set_status(Status::available);
     return true;
   }
@@ -113,7 +105,10 @@ bool array::is_available() const {
 
 void array::wait() {
   if (!is_available()) {
-    event().wait();
+    if (event().valid()) {
+      event().wait();
+      detach_event();
+    }
     set_status(Status::available);
   }
 }
@@ -174,34 +169,13 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-void array::move_shared_buffer(
-    array other,
-    const Strides& strides,
-    Flags flags,
-    size_t data_size,
-    size_t offset /* = 0 */) {
-  array_desc_->data = std::move(other.array_desc_->data);
-  array_desc_->strides = strides;
-  array_desc_->flags = flags;
-  array_desc_->data_size = data_size;
-  auto char_offset = sizeof(char) * itemsize() * offset;
-  auto data_ptr = other.array_desc_->data_ptr;
-  other.array_desc_->data_ptr = nullptr;
-  array_desc_->data_ptr =
-      static_cast<void*>(static_cast<char*>(data_ptr) + char_offset);
-}
-
-void array::move_shared_buffer(array other) {
-  move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
-}
-
 array::~array() {
   if (array_desc_ == nullptr) {
     return;
   }
 
-  // Ignore arrays that might be detached during eval
-  if (status() == array::Status::scheduled) {
+  // Detached/detaching
+  if (array_desc_->primitive == nullptr) {
     return;
   }
 
