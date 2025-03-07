@@ -39,13 +39,14 @@ constexpr constant metal::thread_scope thread_scope_system =
 // single thread kernel to spin wait for timestamp value
 [[kernel]] void fence_wait(
     volatile coherent(system) device uint* timestamp [[buffer(0)]],
-    constant uint& value [[buffer(1)]]) {
+    constant uint& value [[buffer(1)]],
+    volatile coherent(system) device uint* sig_handler [[buffer(2)]]) {
   while (1) {
     metal::atomic_thread_fence(
         metal::mem_flags::mem_device,
         metal::memory_order_seq_cst,
         metal::thread_scope_system);
-    if (timestamp[0] >= value) {
+    if (timestamp[0] >= value || sig_handler[0] >= 0) {
       break;
     }
   }
