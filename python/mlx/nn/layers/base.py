@@ -598,9 +598,7 @@ class Module(dict):
               parameters to the new dtype.
         """
         if predicate is None:
-
-            def predicate(_):
-                return True
+            predicate = lambda _: True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
 
