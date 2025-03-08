@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
+#include <optional>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/copy.h"
@@ -31,7 +32,8 @@ void launch_qmm(
     bool gather,
     bool aligned,
     bool quad,
-    const Stream& s) {
+    const Stream& s,
+    std::optional<int> results_per_simdgroup) {
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];
@@ -79,6 +81,10 @@ void launch_qmm(
   }
   if (!gather) {
     kname << "_batch_" << batched;
+  }
+
+  if (results_per_simdgroup) {
+    kname << "_rps_" << *results_per_simdgroup;
   }
 
   // Encode and dispatch kernel
@@ -298,6 +304,7 @@ void qmm_op(
   bool aligned = false;
   bool quad = false;
 
+  std::optional<int> results_per_simdgroup = std::nullopt;
   if (transpose) {
     if (B < 6 && (D == 128 || D == 64) && is_power_of_2(bits)) {
       name += "qmv_quad";
@@ -309,14 +316,24 @@ void qmm_op(
       grid_dims = MTL::Size((O + bo - 1) / bo, B, N);
       quad = true;
     } else if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
+      if (O < 4096) {
+        results_per_simdgroup = 2;
+      } else {
+        results_per_simdgroup = 1;
+      }
       name += "qmv_fast";
-      int bo = 8;
+      int bo = 2 * (*results_per_simdgroup);
       int bd = 32;
       group_dims = MTL::Size(bd, 2, 1);
       grid_dims = MTL::Size(B, O / bo, N);
     } else if (B < 6) {
       name += "qmv";
-      int bo = 8;
+      if (O < 4096) {
+        results_per_simdgroup = 2;
+      } else {
+        results_per_simdgroup = 1;
+      }
+      int bo = 2 * (*results_per_simdgroup);
       int bd = 32;
       group_dims = MTL::Size(bd, 2, 1);
       grid_dims = MTL::Size(B, (O + bo - 1) / bo, N);
@@ -374,7 +391,8 @@ void qmm_op(
       gather,
       aligned,
       quad,
-      s);
+      s,
+      results_per_simdgroup);
 }
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {

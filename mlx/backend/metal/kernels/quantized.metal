@@ -13,6 +13,16 @@
       group_size,                                                        \
       bits)
 
+#define instantiate_quantized_batched_rps(name, type, group_size, bits, batched, rps)     \
+  instantiate_kernel(                                                    \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched "_rps_" #rps, \
+      name,                                                              \
+      type,                                                              \
+      group_size,                                                        \
+      bits,                                                              \
+      batched, \
+      rps)
+
 #define instantiate_quantized_batched(name, type, group_size, bits, batched)     \
   instantiate_kernel(                                                    \
       #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched, \
@@ -64,9 +74,17 @@
   instantiate_quantized_batched(name, type, group_size, bits, 1)      \
   instantiate_quantized_batched(name, type, group_size, bits, 0)
 
+#define instantiate_quantized_batched_wrap_rps(name, type, group_size, bits) \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 1, 1)    \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 1, 2)    \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 1, 4)    \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 0, 1) \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 0, 2) \
+  instantiate_quantized_batched_rps(name, type, group_size, bits, 0, 4)
+
 #define instantiate_quantized_all_batched(type, group_size, bits) \
-  instantiate_quantized_batched_wrap(qmv_fast, type, group_size, bits)     \
-  instantiate_quantized_batched_wrap(qmv, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap_rps(qmv_fast, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap_rps(qmv, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(qvm, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(qmm_n, type, group_size, bits)
 
