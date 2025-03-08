@@ -210,7 +210,7 @@ class Module(dict):
             mx.save_safetensors(file, params_dict)
         else:
             raise ValueError(
-                "Unsupported file extension. Use '.npz' or '.safetensors'."
+                f"Unsupported file extension for {file}. Use '.npz' or '.safetensors'."
             )
 
     @staticmethod
