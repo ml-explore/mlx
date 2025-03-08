@@ -46,7 +46,7 @@ constexpr constant metal::thread_scope thread_scope_system =
         metal::mem_flags::mem_device,
         metal::memory_order_seq_cst,
         metal::thread_scope_system);
-    if (timestamp[0] >= value || sig_handler[0] >= 0) {
+    if (timestamp[0] >= value || sig_handler[0] > 0) {
       break;
     }
   }
