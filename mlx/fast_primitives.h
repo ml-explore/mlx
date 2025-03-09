@@ -206,8 +206,9 @@ class ScaledDotProductAttention : public Custom {
   explicit ScaledDotProductAttention(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      const float scale)
-      : Custom(stream, fallback), scale_(scale) {}
+      const float scale,
+      const bool do_causal)
+      : Custom(stream, fallback), scale_(scale), do_causal_(do_causal) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -225,12 +226,13 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_PRINT(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_pair(nullptr, scale_);
+    return std::make_tuple(nullptr, scale_, do_causal_);
   }
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
+  bool do_causal_;
 };
 
 class AffineQuantize : public Custom {
