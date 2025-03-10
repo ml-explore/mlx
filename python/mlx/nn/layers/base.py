@@ -81,7 +81,7 @@ class Module(dict):
         """
         return self
 
-    def _extra_repr(self):
+    def _extra_repr(self) -> str:
         return ""
 
     def __repr__(self):
