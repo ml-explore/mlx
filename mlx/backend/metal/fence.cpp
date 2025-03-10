@@ -1,11 +1,38 @@
 // Copyright © 2024 Apple Inc.
-#include "mlx/fence.h"
+#include <csignal>
+
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/fence.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
+
+void signal_handler(int signum);
+
+MTL::Buffer* signal_buffer() {
+  auto init = []() {
+    signal(SIGTERM, signal_handler);
+    auto dtor = [](void* buf) {
+      allocator::free(static_cast<MTL::Buffer*>(buf));
+    };
+    auto buf = std::shared_ptr<void>(
+        allocator::malloc_or_wait(sizeof(uint32_t)).ptr(), dtor);
+    static_cast<uint32_t*>(
+        static_cast<MTL::Buffer*>(buf.get())->contents())[0] = 0;
+    return buf;
+  };
+  static std::shared_ptr<void> buf = init();
+  return static_cast<MTL::Buffer*>(buf.get());
+}
+
+void signal_handler(int signum) {
+  auto buf = signal_buffer();
+  static_cast<std::atomic_uint*>(buf->contents())[0] = 1;
+  signal(signum, SIG_DFL);
+  raise(signum);
+}
 
 struct FenceImpl {
   FenceImpl() {
@@ -94,6 +121,7 @@ void Fence::wait(Stream stream, const array& x) {
   auto buf = static_cast<MTL::Buffer*>(f.fence);
   compute_encoder.set_buffer(buf, 0);
   compute_encoder.set_bytes(f.count, 1);
+  compute_encoder.set_buffer(signal_buffer(), 2);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
