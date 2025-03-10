@@ -177,7 +177,12 @@ MTL::ComputePipelineState* get_copy_kernel(
     kernel_source +=
         get_template_definition("s_" + lib_name, "copy_s", in_type, out_type);
     kernel_source +=
+        get_template_definition("s2_" + lib_name, "copy_s2", in_type, out_type);
+    kernel_source +=
         get_template_definition("v_" + lib_name, "copy_v", in_type, out_type);
+    kernel_source +=
+        get_template_definition("v2_" + lib_name, "copy_v2", in_type, out_type);
+
     kernel_source += get_template_definition(
         "g1_" + lib_name, "copy_g_nd1", in_type, out_type, "int");
     kernel_source += get_template_definition(
