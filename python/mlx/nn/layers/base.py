@@ -81,7 +81,7 @@ class Module(dict):
         """
         return self
 
-    def _extra_repr(self):
+    def _extra_repr(self) -> str:
         return ""
 
     def __repr__(self):
@@ -210,7 +210,7 @@ class Module(dict):
             mx.save_safetensors(file, params_dict)
         else:
             raise ValueError(
-                "Unsupported file extension. Use '.npz' or '.safetensors'."
+                f"Unsupported file extension for {file}. Use '.npz' or '.safetensors'."
             )
 
     @staticmethod
@@ -598,9 +598,7 @@ class Module(dict):
               parameters to the new dtype.
         """
         if predicate is None:
-
-            def predicate(_):
-                return True
+            predicate = lambda _: True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
 
