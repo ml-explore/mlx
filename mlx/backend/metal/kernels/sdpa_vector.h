@@ -32,8 +32,8 @@ template <typename T, int D, int V = D>
   constexpr int BD = 32;
   constexpr int qk_per_thread = D / BD;
   constexpr int v_per_thread = V / BD;
-  int inner_k_stride = BN * k_seq_stride;
-  int inner_v_stride = BN * v_seq_stride;
+  int inner_k_stride = BN * int(k_seq_stride);
+  int inner_v_stride = BN * int(v_seq_stride);
 
   typedef float U;
 
