@@ -29,7 +29,7 @@ set(CMAKE_INSTALL_MESSAGE NEVER)
 # ----------------------------- Configuration -----------------------------
 option(MLX_BUILD_TESTS "Build tests for mlx" ON)
 option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
-option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
+option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" ON)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)

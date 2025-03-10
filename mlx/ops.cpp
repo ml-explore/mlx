@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "mlx/fast.h"
+#include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -5001,6 +5002,95 @@ array contiguous(
       a.dtype(),
       std::make_shared<Contiguous>(to_stream(s), allow_col_major),
       {a});
+}
+
+array weight_norm(
+    const array& v,
+    const array& g,
+    const std::vector<int>& axes,
+    float eps /* = 1e-5 */,
+    StreamOrDevice s /* = {} */) {
+  // If no axes provided, normalize over all axes
+  std::vector<int> norm_axes = axes.empty() ? std::vector<int>{} : axes;
+  if (norm_axes.empty()) {
+    for (int i = 0; i < v.ndim(); ++i) {
+      norm_axes.push_back(i);
+    }
+  }
+
+  // If we have more than 2 axes, use the reshape approach
+  if (norm_axes.size() > 2) {
+    // Find the dimensions to keep (not in norm_axes)
+    std::vector<int> keep_axes;
+    for (int i = 0; i < v.ndim(); ++i) {
+      if (std::find(norm_axes.begin(), norm_axes.end(), i) == norm_axes.end()) {
+        keep_axes.push_back(i);
+      }
+    }
+
+    // Handle based on dimensions to keep
+    if (keep_axes.empty()) {
+      // If normalizing over all dimensions, reshape to 1D
+      array v_flat = reshape(v, {-1}, s);
+      array v_norm = linalg::norm(v_flat, std::vector<int>{0}, true, s);
+      v_norm = reshape(v_norm, std::vector<int>(v.ndim(), 1), s);
+
+      // Add epsilon for numerical stability
+      v_norm = maximum(v_norm, array(eps), s);
+
+      // Normalize v and scale by g
+      return multiply(g, divide(v, v_norm, s), s);
+    } else if (keep_axes.size() == 1) {
+      // Common case: keep one dimension (e.g., output channels)
+      int keep_dim = keep_axes[0];
+      std::vector<int> reshape_dims = {v.shape()[keep_dim], -1};
+      array v_reshaped = reshape(v, reshape_dims, s);
+
+      // Use the 2D norm kernel which is optimized
+      array v_norm = linalg::norm(v_reshaped, std::vector<int>{1}, true, s);
+
+      // Reshape for broadcasting
+      std::vector<int> norm_shape(v.ndim(), 1);
+      norm_shape[keep_dim] = v.shape()[keep_dim];
+      v_norm = reshape(v_norm, norm_shape, s);
+
+      // Add epsilon for numerical stability
+      v_norm = maximum(v_norm, array(eps), s);
+
+      // Normalize v and scale by g
+      return multiply(g, divide(v, v_norm, s), s);
+    } else {
+      // Multiple keep dimensions - more complex case
+      int prod_keep_dims = 1;
+      for (auto dim : keep_axes) {
+        prod_keep_dims *= v.shape()[dim];
+      }
+
+      std::vector<int> reshape_dims = {prod_keep_dims, -1};
+      array v_reshaped = reshape(v, reshape_dims, s);
+
+      array v_norm = linalg::norm(v_reshaped, std::vector<int>{1}, true, s);
+
+      // Reshape back for correct broadcasting
+      std::vector<int> norm_shape(v.ndim(), 1);
+      for (auto dim : keep_axes) {
+        norm_shape[dim] = v.shape()[dim];
+      }
+
+      v_norm = reshape(v_norm, norm_shape, s);
+
+      // Add epsilon for numerical stability
+      v_norm = maximum(v_norm, array(eps), s);
+
+      // Normalize v and scale by g
+      return multiply(g, divide(v, v_norm, s), s);
+    }
+  } else {
+    // Use direct approach for 1-2 axes (leveraging optimized kernels)
+    array v_norm = linalg::norm(v, norm_axes, true, s);
+    v_norm = maximum(v_norm, array(eps), s);
+    return multiply(g, divide(v, v_norm, s), s);
+  }
 }
 
 } // namespace mlx::core
