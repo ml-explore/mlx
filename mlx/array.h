@@ -199,6 +199,13 @@ class array {
       const std::shared_ptr<Primitive>& primitive,
       const std::vector<array>& inputs);
 
+  /**
+   * Get a new array that refers to the same data as the input but with a
+   * non-owning pointer to it. Note the array is detached from the graph and has
+   * no inputs, siblings or primitive.
+   */
+  static array unsafe_weak_copy(const array& other);
+
   /** A unique identifier for an array. */
   std::uintptr_t id() const {
     return reinterpret_cast<std::uintptr_t>(array_desc_.get());

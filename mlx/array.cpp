@@ -56,6 +56,18 @@ std::vector<array> array::make_arrays(
   return outputs;
 }
 
+array array::unsafe_weak_copy(const array& other) {
+  auto cpy = array(other.shape(), other.dtype(), nullptr, {});
+  cpy.set_data(
+      other.buffer(),
+      other.data_size(),
+      other.strides(),
+      other.flags(),
+      [](auto) {});
+  cpy.array_desc_->data_ptr = other.array_desc_->data_ptr;
+  return cpy;
+}
+
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
           Shape{static_cast<ShapeElem>(data.size())},

@@ -1,12 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
-#include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/ternary.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -128,57 +126,28 @@ void ternary_op(
     const array& b,
     const array& c,
     array& out,
-    Op op) {
-  TernaryOpType topt = get_ternary_op_type(a, b, c);
-  set_ternary_op_output_data(a, b, c, out, topt);
-
-  auto& encoder = cpu::get_command_encoder(out.primitive().stream());
-  encoder.set_input_array(a);
-  encoder.set_input_array(b);
-  encoder.set_input_array(c);
-  encoder.set_output_array(out);
-
+    Op op,
+    TernaryOpType topt) {
   const T1* a_ptr = a.data<T1>();
   const T2* b_ptr = b.data<T2>();
   const T3* c_ptr = c.data<T3>();
   U* out_ptr = out.data<U>();
 
   if (topt == TernaryOpType::ScalarScalarScalar) {
-    encoder.dispatch(
-        [a_ptr, b_ptr, c_ptr, out_ptr, op = std::move(op)]() mutable {
-          *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
-        });
+    *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
   } else if (topt == TernaryOpType::VectorVectorVector) {
-    encoder.dispatch([a_ptr,
-                      b_ptr,
-                      c_ptr,
-                      out_ptr,
-                      op = std::move(op),
-                      size = out.size()]() mutable {
-      for (size_t i = 0; i < size; ++i) {
-        *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
-        a_ptr++;
-        b_ptr++;
-        c_ptr++;
-        out_ptr++;
-      }
-    });
+    for (size_t i = 0; i < out.size(); ++i) {
+      *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
+      a_ptr++;
+      b_ptr++;
+      c_ptr++;
+      out_ptr++;
+    }
   } else {
     auto [shape, strides] = collapse_contiguous_dims(
         a.shape(), {a.strides(), b.strides(), c.strides(), out.strides()});
-    encoder.dispatch(
-
-        [a_ptr,
-         b_ptr,
-         c_ptr,
-         out_ptr,
-         op = std::move(op),
-         size = out.size(),
-         shape = std::move(shape),
-         strides = std::move(strides)]() mutable {
-          ternary_op_dispatch_dims<T1, T2, T3, U>(
-              a_ptr, b_ptr, c_ptr, out_ptr, op, size, shape, strides);
-        });
+    ternary_op_dispatch_dims<T1, T2, T3, U>(
+        a_ptr, b_ptr, c_ptr, out_ptr, op, out.size(), shape, strides);
   }
 }
 

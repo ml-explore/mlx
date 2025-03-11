@@ -160,38 +160,29 @@ void scan_op(
     bool reverse,
     bool inclusive,
     const Op& op,
-    U init,
-    Stream stream) {
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
-
+    U init) {
   if (in.flags().row_contiguous) {
     if (in.strides()[axis] == 1) {
-      encoder.dispatch([in_ptr = in.data<T>(),
-                        out_ptr = out.data<U>(),
-                        count = in.size() / in.shape(axis),
-                        stride = in.shape(axis),
-                        reverse,
-                        inclusive,
-                        op = std::move(op),
-                        init]() {
-        contiguous_scan(
-            in_ptr, out_ptr, count, stride, reverse, inclusive, op, init);
-      });
+      contiguous_scan(
+          in.data<T>(),
+          out.data<U>(),
+          in.size() / in.shape(axis),
+          in.shape(axis),
+          reverse,
+          inclusive,
+          op,
+          init);
     } else {
-      encoder.dispatch([in_ptr = in.data<T>(),
-                        out_ptr = out.data<U>(),
-                        count = in.size() / in.shape(axis) / in.strides()[axis],
-                        size = in.shape(axis),
-                        stride = in.strides()[axis],
-                        reverse,
-                        inclusive,
-                        op = std::move(op),
-                        init]() {
-        strided_scan(
-            in_ptr, out_ptr, count, size, stride, reverse, inclusive, op, init);
-      });
+      strided_scan(
+          in.data<T>(),
+          out.data<U>(),
+          in.size() / in.shape(axis) / in.strides()[axis],
+          in.shape(axis),
+          in.strides()[axis],
+          reverse,
+          inclusive,
+          op,
+          init);
     }
   } else {
     throw std::runtime_error("Scan op supports only contiguous inputs");
@@ -205,19 +196,18 @@ void scan_dispatch(
     array& out,
     int axis,
     bool reverse,
-    bool inclusive,
-    Stream stream) {
+    bool inclusive) {
   switch (rtype) {
     case Scan::Sum: {
       auto op = [](U y, T x) { return y + x; };
       auto init = static_cast<U>(0);
-      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init, stream);
+      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Prod: {
       auto op = [](U y, T x) { return y * x; };
       auto init = static_cast<U>(1);
-      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init, stream);
+      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Min: {
@@ -225,7 +215,7 @@ void scan_dispatch(
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::max();
-      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init, stream);
+      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
     case Scan::Max: {
@@ -233,7 +223,7 @@ void scan_dispatch(
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
-      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init, stream);
+      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
   }
@@ -244,88 +234,95 @@ void scan_dispatch(
 void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
+  auto& encoder = cpu::get_command_encoder(stream());
+
   // Ensure contiguity
   auto in = inputs[0];
-  bool copied = false;
   if (!in.flags().row_contiguous) {
     array arr_copy(in.shape(), in.dtype(), nullptr, {});
     copy(in, arr_copy, CopyType::General, stream());
     in = arr_copy;
-    copied = true;
+    encoder.add_temporary(arr_copy);
   }
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-  switch (in.dtype()) {
-    case bool_: {
-      // We could do a full dtype x dtype switch but this is the only case
-      // where we accumulate in a different type, for now.
-      //
-      // TODO: If we add the option to accumulate floats in higher precision
-      //       floats perhaps we should add the full all-to-all dispatch.
-      if (reduce_type_ == Scan::Sum && out.dtype() == int32) {
-        scan_dispatch<bool, int32_t>(
-            reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      } else {
-        scan_dispatch<bool, bool>(
-            reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.dispatch([in = array::unsafe_weak_copy(in),
+                    out = array::unsafe_weak_copy(out),
+                    axis_ = axis_,
+                    reduce_type_ = reduce_type_,
+                    reverse_ = reverse_,
+                    inclusive_ = inclusive_]() mutable {
+    switch (in.dtype()) {
+      case bool_: {
+        // We could do a full dtype x dtype switch but this is the only case
+        // where we accumulate in a different type, for now.
+        //
+        // TODO: If we add the option to accumulate floats in higher precision
+        //       floats perhaps we should add the full all-to-all dispatch.
+        if (reduce_type_ == Scan::Sum && out.dtype() == int32) {
+          scan_dispatch<bool, int32_t>(
+              reduce_type_, in, out, axis_, reverse_, inclusive_);
+        } else {
+          scan_dispatch<bool, bool>(
+              reduce_type_, in, out, axis_, reverse_, inclusive_);
+        }
+        break;
       }
-      break;
+      case uint8:
+        scan_dispatch<uint8_t, uint8_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case uint16:
+        scan_dispatch<uint16_t, uint16_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case uint32:
+        scan_dispatch<uint32_t, uint32_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case uint64:
+        scan_dispatch<uint64_t, uint64_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case int8:
+        scan_dispatch<int8_t, int8_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case int16:
+        scan_dispatch<int16_t, int16_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case int32:
+        scan_dispatch<int32_t, int32_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case int64:
+        scan_dispatch<int64_t, int64_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case float16:
+        scan_dispatch<float16_t, float16_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case float32:
+        scan_dispatch<float, float>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case float64:
+        scan_dispatch<double, double>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case bfloat16:
+        scan_dispatch<bfloat16_t, bfloat16_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
+        break;
+      case complex64:
+        throw std::runtime_error("Scan ops do not support complex types yet");
+        break;
     }
-    case uint8:
-      scan_dispatch<uint8_t, uint8_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case uint16:
-      scan_dispatch<uint16_t, uint16_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case uint32:
-      scan_dispatch<uint32_t, uint32_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case uint64:
-      scan_dispatch<uint64_t, uint64_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case int8:
-      scan_dispatch<int8_t, int8_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case int16:
-      scan_dispatch<int16_t, int16_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case int32:
-      scan_dispatch<int32_t, int32_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case int64:
-      scan_dispatch<int64_t, int64_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case float16:
-      scan_dispatch<float16_t, float16_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case float32:
-      scan_dispatch<float, float>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case float64:
-      scan_dispatch<double, double>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case bfloat16:
-      scan_dispatch<bfloat16_t, bfloat16_t>(
-          reduce_type_, in, out, axis_, reverse_, inclusive_, stream());
-      break;
-    case complex64:
-      throw std::runtime_error("Scan ops do not support complex types yet");
-      break;
-  }
-  if (copied) {
-    cpu::get_command_encoder(stream()).add_temporary(std::move(in));
-  }
+  });
 }
 
 } // namespace mlx::core
