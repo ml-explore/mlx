@@ -183,9 +183,11 @@ class TestDistributed(mlx_tests.MLXTestCase):
         scale = mx.array(2.0)
         y = mx.distributed.all_sum(x)
         mx.eval(y)
+        mx.synchronize(mx.default_stream(mx.default_device()))
         all_sum_only = mx.metal.get_peak_memory()
         y = mx.distributed.all_sum(x) * scale
         mx.eval(y)
+        mx.synchronize(mx.default_stream(mx.default_device()))
         all_sum_with_binary = mx.metal.get_peak_memory()
 
         self.assertEqual(all_sum_only, all_sum_with_binary)

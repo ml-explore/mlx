@@ -13,29 +13,20 @@ namespace mlx::core {
 namespace {
 
 template <typename SrcT, typename DstT>
-void copy_single(const array& src, array& dst, Stream stream) {
+void copy_single(const array& src, array& dst) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(src);
-  encoder.set_output_array(dst);
-  encoder.dispatch([src_ptr, dst_ptr, size = dst.size()]() {
-    auto val = static_cast<DstT>(src_ptr[0]);
-    std::fill_n(dst_ptr, size, val);
-  });
+  auto size = dst.size();
+  auto val = static_cast<DstT>(src_ptr[0]);
+  std::fill_n(dst_ptr, size, val);
 }
 
 template <typename SrcT, typename DstT>
-void copy_vector(const array& src, array& dst, Stream stream) {
+void copy_vector(const array& src, array& dst) {
   auto src_ptr = src.data<SrcT>();
   auto dst_ptr = dst.data<DstT>();
-  size_t size = src.data_size();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(src);
-  encoder.set_output_array(dst);
-  encoder.dispatch([src_ptr, dst_ptr, size = src.data_size()]() {
-    std::copy(src_ptr, src_ptr + size, dst_ptr);
-  });
+  auto size = src.data_size();
+  std::copy(src_ptr, src_ptr + size, dst_ptr);
 }
 
 template <typename SrcT, typename DstT, int D>
@@ -66,7 +57,6 @@ template <typename SrcT, typename DstT>
 void copy_general_general(
     const array& src,
     array& dst,
-    Stream stream,
     const Shape& data_shape,
     const Strides& i_strides,
     const Strides& o_strides,
@@ -80,47 +70,17 @@ void copy_general_general(
       dynamic_i_offset ? dynamic_i_offset->data<int64_t>() : nullptr;
   auto o_offset_ptr =
       dynamic_o_offset ? dynamic_o_offset->data<int64_t>() : nullptr;
+  auto size = src.size();
+  if (data_shape.empty()) {
+    auto val = static_cast<DstT>(*src_ptr);
+    *dst_ptr = val;
+    return;
+  }
+  auto [shape, strides] =
+      collapse_contiguous_dims(data_shape, {i_strides, o_strides});
 
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(src);
-  encoder.set_output_array(dst);
-  encoder.dispatch([src_ptr,
-                    dst_ptr,
-                    size = src.size(),
-                    data_shape = data_shape,
-                    i_strides = i_strides,
-                    o_strides = o_strides,
-                    i_offset_ptr,
-                    o_offset_ptr]() mutable {
-    if (data_shape.empty()) {
-      auto val = static_cast<DstT>(*src_ptr);
-      *dst_ptr = val;
-      return;
-    }
-    auto [shape, strides] =
-        collapse_contiguous_dims(data_shape, {i_strides, o_strides});
-
-    int ndim = shape.size();
-    if (ndim < 3) {
-      if (i_offset_ptr) {
-        src_ptr += i_offset_ptr[0];
-      }
-      if (o_offset_ptr) {
-        dst_ptr += o_offset_ptr[0];
-      }
-
-      if (ndim == 1) {
-        copy_dims<SrcT, DstT, 1>(
-            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-      } else if (ndim == 2) {
-        copy_dims<SrcT, DstT, 2>(
-            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-      } else if (ndim == 3) {
-        copy_dims<SrcT, DstT, 3>(
-            src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-      }
-      return;
-    }
+  int ndim = shape.size();
+  if (ndim < 3) {
     if (i_offset_ptr) {
       src_ptr += i_offset_ptr[0];
     }
@@ -128,30 +88,47 @@ void copy_general_general(
       dst_ptr += o_offset_ptr[0];
     }
 
-    ContiguousIterator in(shape, strides[0], ndim - 3);
-    ContiguousIterator out(shape, strides[1], ndim - 3);
-    auto stride = std::accumulate(
-        shape.end() - 3, shape.end(), 1, std::multiplies<int64_t>());
-    for (int64_t elem = 0; elem < size; elem += stride) {
+    if (ndim == 1) {
+      copy_dims<SrcT, DstT, 1>(
+          src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    } else if (ndim == 2) {
+      copy_dims<SrcT, DstT, 2>(
+          src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    } else if (ndim == 3) {
       copy_dims<SrcT, DstT, 3>(
-          src_ptr + in.loc,
-          dst_ptr + out.loc,
-          shape,
-          strides[0],
-          strides[1],
-          ndim - 3);
-      in.step();
-      out.step();
+          src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
     }
-  });
+    return;
+  }
+  if (i_offset_ptr) {
+    src_ptr += i_offset_ptr[0];
+  }
+  if (o_offset_ptr) {
+    dst_ptr += o_offset_ptr[0];
+  }
+
+  ContiguousIterator in(shape, strides[0], ndim - 3);
+  ContiguousIterator out(shape, strides[1], ndim - 3);
+  auto stride = std::accumulate(
+      shape.end() - 3, shape.end(), 1, std::multiplies<int64_t>());
+  for (int64_t elem = 0; elem < size; elem += stride) {
+    copy_dims<SrcT, DstT, 3>(
+        src_ptr + in.loc,
+        dst_ptr + out.loc,
+        shape,
+        strides[0],
+        strides[1],
+        ndim - 3);
+    in.step();
+    out.step();
+  }
 }
 
 template <typename SrcT, typename DstT>
-inline void copy_general_general(const array& src, array& dst, Stream stream) {
+inline void copy_general_general(const array& src, array& dst) {
   copy_general_general<SrcT, DstT>(
       src,
       dst,
-      stream,
       src.shape(),
       src.strides(),
       dst.strides(),
@@ -165,7 +142,6 @@ template <typename SrcT, typename DstT>
 void copy_general(
     const array& src,
     array& dst,
-    Stream stream,
     const Shape& data_shape,
     const Strides& i_strides,
     const Strides&,
@@ -176,7 +152,6 @@ void copy_general(
   copy_general_general<SrcT, DstT>(
       src,
       dst,
-      stream,
       data_shape,
       i_strides,
       make_contiguous_strides(data_shape),
@@ -187,11 +162,10 @@ void copy_general(
 }
 
 template <typename SrcT, typename DstT>
-inline void copy_general(const array& src, array& dst, Stream stream) {
+inline void copy_general(const array& src, array& dst) {
   copy_general_general<SrcT, DstT>(
       src,
       dst,
-      stream,
       src.shape(),
       src.strides(),
       make_contiguous_strides(src.shape()),
@@ -202,84 +176,67 @@ inline void copy_general(const array& src, array& dst, Stream stream) {
 }
 
 template <typename SrcT, typename DstT, typename... Args>
-void copy(
-    const array& src,
-    array& dst,
-    CopyType ctype,
-    Stream stream,
-    Args&&... args) {
+void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
   switch (ctype) {
     case CopyType::Scalar:
-      copy_single<SrcT, DstT>(src, dst, stream);
+      copy_single<SrcT, DstT>(src, dst);
       return;
     case CopyType::Vector:
-      copy_vector<SrcT, DstT>(src, dst, stream);
+      copy_vector<SrcT, DstT>(src, dst);
       return;
     case CopyType::General:
-      copy_general<SrcT, DstT>(src, dst, stream, std::forward<Args>(args)...);
+      copy_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
       return;
     case CopyType::GeneralGeneral:
-      copy_general_general<SrcT, DstT>(
-          src, dst, stream, std::forward<Args>(args)...);
+      copy_general_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
       return;
   }
 }
 
 template <typename SrcT, typename... Args>
-void copy(
-    const array& src,
-    array& dst,
-    CopyType ctype,
-    Stream stream,
-    Args&&... args) {
+void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
   switch (dst.dtype()) {
     case bool_:
-      copy<SrcT, bool>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, bool>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint8:
-      copy<SrcT, uint8_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint16:
-      copy<SrcT, uint16_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, uint16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint32:
-      copy<SrcT, uint32_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, uint32_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint64:
-      copy<SrcT, uint64_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, uint64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int8:
-      copy<SrcT, int8_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, int8_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int16:
-      copy<SrcT, int16_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, int16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int32:
-      copy<SrcT, int32_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, int32_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int64:
-      copy<SrcT, int64_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, int64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float16:
-      copy<SrcT, float16_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, float16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float32:
-      copy<SrcT, float>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, float>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float64:
-      copy<SrcT, double>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, double>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case bfloat16:
-      copy<SrcT, bfloat16_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, bfloat16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case complex64:
-      copy<SrcT, complex64_t>(
-          src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<SrcT, complex64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
   }
 }
@@ -289,50 +246,49 @@ inline void copy_inplace_dispatch(
     const array& src,
     array& dst,
     CopyType ctype,
-    Stream stream,
     Args&&... args) {
   switch (src.dtype()) {
     case bool_:
-      copy<bool>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<bool>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint8:
-      copy<uint8_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint16:
-      copy<uint16_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<uint16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint32:
-      copy<uint32_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<uint32_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint64:
-      copy<uint64_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<uint64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int8:
-      copy<int8_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<int8_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int16:
-      copy<int16_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<int16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int32:
-      copy<int32_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<int32_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case int64:
-      copy<int64_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<int64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float16:
-      copy<float16_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<float16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float32:
-      copy<float>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<float>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case float64:
-      copy<double>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<double>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case bfloat16:
-      copy<bfloat16_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<bfloat16_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case complex64:
-      copy<complex64_t>(src, dst, ctype, stream, std::forward<Args>(args)...);
+      copy<complex64_t>(src, dst, ctype, std::forward<Args>(args)...);
       break;
   }
 }
@@ -340,7 +296,13 @@ inline void copy_inplace_dispatch(
 } // namespace
 
 void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream) {
-  copy_inplace_dispatch(src, dst, ctype, stream);
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
+  encoder.dispatch(
+      [src = array::unsafe_weak_copy(src),
+       dst = array::unsafe_weak_copy(dst),
+       ctype]() mutable { copy_inplace_dispatch(src, dst, ctype); });
 }
 
 void copy(const array& src, array& dst, CopyType ctype, Stream stream) {
@@ -368,26 +330,47 @@ void copy_inplace(
     Stream stream,
     const std::optional<array>& dynamic_i_offset, /* = std::nullopt */
     const std::optional<array>& dynamic_o_offset /* = std::nullopt */) {
-  switch (ctype) {
-    case CopyType::General:
-    case CopyType::GeneralGeneral:
-      copy_inplace_dispatch(
-          src,
-          dst,
-          ctype,
-          stream,
-          data_shape,
-          i_strides,
-          o_strides,
-          i_offset,
-          o_offset,
-          dynamic_i_offset,
-          dynamic_o_offset);
-      break;
-    case CopyType::Scalar:
-    case CopyType::Vector:
-      copy_inplace_dispatch(src, dst, ctype, stream);
-  }
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(src);
+  encoder.set_output_array(dst);
+  auto weak_copy_if_set = [](auto x) -> std::optional<array> {
+    if (x) {
+      return array::unsafe_weak_copy(*x);
+    } else {
+      return std::nullopt;
+    }
+  };
+  encoder.dispatch(
+      [src = array::unsafe_weak_copy(src),
+       dst = array::unsafe_weak_copy(dst),
+       data_shape,
+       i_strides,
+       o_strides,
+       i_offset,
+       o_offset,
+       ctype,
+       dynamic_i_offset = weak_copy_if_set(dynamic_i_offset),
+       dynamic_o_offset = weak_copy_if_set(dynamic_o_offset)]() mutable {
+        switch (ctype) {
+          case CopyType::General:
+          case CopyType::GeneralGeneral:
+            copy_inplace_dispatch(
+                src,
+                dst,
+                ctype,
+                data_shape,
+                i_strides,
+                o_strides,
+                i_offset,
+                o_offset,
+                dynamic_i_offset,
+                dynamic_o_offset);
+            break;
+          case CopyType::Scalar:
+          case CopyType::Vector:
+            copy_inplace_dispatch(src, dst, ctype);
+        }
+      });
 }
 
 } // namespace mlx::core
