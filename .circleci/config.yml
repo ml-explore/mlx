@@ -92,10 +92,12 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF
+              CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py build_ext --inplace
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF \
+              CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py develop
       - run:
@@ -146,7 +148,9 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install -e . -v
+            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
+            CMAKE_ARGS="CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
+              pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
