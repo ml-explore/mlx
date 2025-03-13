@@ -44,7 +44,8 @@ template <
     const int SM, /* Simdgroup rows (in threads) */
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
+    const int TN, /* Thread cols (in elements) */
+    typename AccT = float>
 struct GEMVKernel {
   MLX_MTL_CONST int threadsM = BM * SM;
   MLX_MTL_CONST int threadsN = BN * SN;
@@ -128,7 +129,7 @@ struct GEMVKernel {
       const device op_mask_t* mat_mask [[buffer(21)]],
       const device op_mask_t* vec_mask [[buffer(22)]],
       const constant int* mask_strides [[buffer(23)]],
-      threadgroup T* tgp_memory [[threadgroup(0)]],
+      threadgroup AccT* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
       uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -137,7 +138,7 @@ struct GEMVKernel {
     (void)lid;
 
     // Thread local accumulation results
-    thread T result[TM] = {0};
+    thread AccT result[TM] = {0};
     thread T inter[TN];
     thread T v_coeff[TN];
 
@@ -245,7 +246,7 @@ struct GEMVKernel {
           // Accumulate results
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            result[tm] += inter[tn] * v_coeff[tn];
+            result[tm] += static_cast<AccT>(inter[tn]) * v_coeff[tn];
           }
 
           mat_offset += matrix_ld;
@@ -286,7 +287,7 @@ struct GEMVKernel {
         // Accumulate results
         MLX_MTL_PRAGMA_UNROLL
         for (int tn = 0; tn < TN; tn++) {
-          result[tm] += inter[tn] * v_coeff[tn];
+          result[tm] += static_cast<AccT>(inter[tn]) * v_coeff[tn];
         }
       }
     }
@@ -310,7 +311,7 @@ struct GEMVKernel {
 
     // Threadgroup accumulation results
     if (needs_tgp_reduction) {
-      threadgroup T* tgp_results = tgp_memory + sgN * (blockM + TM) + bm;
+      threadgroup AccT* tgp_results = tgp_memory + sgN * (blockM + TM) + bm;
       if (thrN == 0) {
         MLX_MTL_PRAGMA_UNROLL
         for (int tm = 0; tm < TM; tm++) {
@@ -335,7 +336,7 @@ struct GEMVKernel {
     if (simdN == 0 && thrN == 0) {
       MLX_MTL_PRAGMA_UNROLL
       for (int tm = 0; tm < TM; tm++) {
-        out_vec[out_row + tm] = result[tm];
+        out_vec[out_row + tm] = static_cast<T>(result[tm]);
       }
     }
   }
@@ -354,7 +355,8 @@ template <
     const int SM, /* Simdgroup rows (in threads) */
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
+    const int TN, /* Thread cols (in elements) */
+    typename AccT = float>
 struct GEMVTKernel {
   MLX_MTL_CONST int threadsM = BM * SM;
   MLX_MTL_CONST int threadsN = BN * SN;
@@ -405,7 +407,7 @@ struct GEMVTKernel {
       const device op_mask_t* mat_mask [[buffer(21)]],
       const device op_mask_t* vec_mask [[buffer(22)]],
       const constant int* mask_strides [[buffer(23)]],
-      threadgroup T* tgp_memory [[threadgroup(0)]],
+      threadgroup AccT* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
       uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -414,7 +416,7 @@ struct GEMVTKernel {
     (void)lid;
 
     // Thread local accumulation results
-    T result[TN] = {0};
+    AccT result[TN] = {0};
     T inter[TN];
     T v_coeff[TM];
 
@@ -528,7 +530,7 @@ struct GEMVTKernel {
               inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
             }
             for (int tn = 0; tn < TN; tn++) {
-              result[tn] += v_coeff[tm] * inter[tn];
+              result[tn] += static_cast<AccT>(v_coeff[tm]) * inter[tn];
             }
           }
         }
@@ -562,7 +564,7 @@ struct GEMVTKernel {
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            result[tn] += v_coeff[tm] * inter[tn];
+            result[tn] += static_cast<AccT>(v_coeff[tm]) * inter[tn];
           }
         }
       }
@@ -587,7 +589,7 @@ struct GEMVTKernel {
 
     // Threadgroup accumulation results
     if (needs_tgp_reduction) {
-      threadgroup T* tgp_results = tgp_memory + sgM * (blockN + TN) + bn;
+      threadgroup AccT* tgp_results = tgp_memory + sgM * (blockN + TN) + bn;
       if (thrM == 0) {
         MLX_MTL_PRAGMA_UNROLL
         for (int tn = 0; tn < TN; tn++) {
@@ -612,7 +614,7 @@ struct GEMVTKernel {
     if (cm == 0 && out_col < out_vec_size) {
       MLX_MTL_PRAGMA_UNROLL
       for (int j = 0; j < TN; j++) {
-        out_vec[out_col + j] = result[j];
+        out_vec[out_col + j] = static_cast<T>(result[j]);
       }
     }
   }
@@ -655,7 +657,7 @@ template <
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel =
       GEMVKernel<T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN>;
-  threadgroup T tgp_memory
+  threadgroup float tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   constexpr bool has_operand_mask = !metal::is_same_v<op_mask_t, nomask_t>;
@@ -755,7 +757,7 @@ template <
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel =
       GEMVTKernel<T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN>;
-  threadgroup T tgp_memory
+  threadgroup float tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   constexpr bool has_operand_mask = !metal::is_same_v<op_mask_t, nomask_t>;
