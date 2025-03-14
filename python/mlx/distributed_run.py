@@ -761,6 +761,8 @@ def main():
         "--cwd", help="Set the working directory on each node to the provided one"
     )
     args, rest = parser.parse_known_args()
+    if rest[0] == "--":
+        rest.pop(0)
 
     if args.print_python:
         print(sys.executable)
