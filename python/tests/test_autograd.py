@@ -746,6 +746,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.checkpoint,
         ]:
             if mx.metal.is_available():
+                mx.synchronize(mx.default_stream(mx.default_device()))
                 mem_pre = mx.metal.get_active_memory()
             else:
                 mem_pre = 0
@@ -789,6 +790,20 @@ class TestAutograd(mlx_tests.MLXTestCase):
         init_id = id(arrs[0])
         mx.grad(fun)(arrs)
         self.assertEqual(init_id, id(arrs[0]))
+
+    def test_grad_with_inplace_update(self):
+        def loss_fn(model):
+            model[1] = mx.array(2.0)
+            return model[0]
+
+        model = [
+            mx.array(0.0),
+            mx.array(1.0),
+        ]
+
+        grad_fn = mx.grad(loss_fn)
+        grad_fn(model)
+        self.assertEqual(model[1].item(), 2.0)
 
 
 if __name__ == "__main__":
