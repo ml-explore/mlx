@@ -117,7 +117,7 @@ struct GEMVKernel {
       for (int tn = 0; tn < TN; tn++) {
         dst[tn] = src_offset + tn < src_size
             ? static_cast<U>(src[src_offset + tn])
-            : 0;
+            : U(0);
       }
     }
   }
