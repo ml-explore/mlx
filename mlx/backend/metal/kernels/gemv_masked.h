@@ -92,28 +92,32 @@ struct GEMVKernel {
   MLX_MTL_CONST short tgp_mem_size = BN > 1 ? BN*(blockM + TM) : 0;
   MLX_MTL_CONST bool needs_tgp_reduction = BN > 1;
 
+  template <typename U = T>
   static METAL_FUNC void
-  load_unsafe(const device T* src, thread T dst[TN], const int src_offset = 0) {
+  load_unsafe(const device T* src, thread U dst[TN], const int src_offset = 0) {
     MLX_MTL_PRAGMA_UNROLL
     for (int tn = 0; tn < TN; tn++) {
-      dst[tn] = src[src_offset + tn];
+      dst[tn] = static_cast<U>(src[src_offset + tn]);
     }
   }
 
+  template <typename U = T>
   static METAL_FUNC void load_safe(
       const device T* src,
-      thread T dst[TN],
+      thread U dst[TN],
       const int src_offset = 0,
       const int src_size = TN) {
     if (src_offset + TN <= src_size) {
       MLX_MTL_PRAGMA_UNROLL
       for (int tn = 0; tn < TN; tn++) {
-        dst[tn] = src[src_offset + tn];
+        dst[tn] = static_cast<U>(src[src_offset + tn]);
       }
     } else { // Edgecase
       MLX_MTL_PRAGMA_UNROLL
       for (int tn = 0; tn < TN; tn++) {
-        dst[tn] = src_offset + tn < src_size ? src[src_offset + tn] : 0;
+        dst[tn] = src_offset + tn < src_size
+            ? static_cast<U>(src[src_offset + tn])
+            : 0;
       }
     }
   }
@@ -140,7 +144,7 @@ struct GEMVKernel {
     // Thread local accumulation results
     thread AccT result[TM] = {0};
     thread T inter[TN];
-    thread T v_coeff[TN];
+    thread AccT v_coeff[TN];
 
     const int thrM = SN != 32 ? simd_lid / SN : 0;
     const int thrN = SN != 32 ? simd_lid % SN : int(simd_lid);
@@ -226,7 +230,7 @@ struct GEMVKernel {
               T(mat_mask[mat_mask_offset]) * T(vec_mask[vec_mask_offset]);
         }
 
-        load_unsafe(in_vec, v_coeff, bn);
+        load_unsafe<AccT>(in_vec, v_coeff, bn);
 
         // Apply scale
         if (has_mul_operand_mask) {
@@ -246,7 +250,7 @@ struct GEMVKernel {
           // Accumulate results
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            result[tm] += static_cast<AccT>(inter[tn]) * v_coeff[tn];
+            result[tm] += inter[tn] * v_coeff[tn];
           }
 
           mat_offset += matrix_ld;
@@ -268,7 +272,7 @@ struct GEMVKernel {
             T(mat_mask[mat_mask_offset]) * T(vec_mask[vec_mask_offset]);
       }
 
-      load_safe(in_vec, v_coeff, bn, in_size);
+      load_safe<AccT>(in_vec, v_coeff, bn, in_size);
 
       // Apply scale
       if (has_mul_operand_mask) {
@@ -287,7 +291,7 @@ struct GEMVKernel {
         // Accumulate results
         MLX_MTL_PRAGMA_UNROLL
         for (int tn = 0; tn < TN; tn++) {
-          result[tm] += static_cast<AccT>(inter[tn]) * v_coeff[tn];
+          result[tm] += inter[tn] * v_coeff[tn];
         }
       }
     }
@@ -418,7 +422,7 @@ struct GEMVTKernel {
     // Thread local accumulation results
     AccT result[TN] = {0};
     T inter[TN];
-    T v_coeff[TM];
+    AccT v_coeff[TM];
 
     const int thrM = SN != 32 ? simd_lid / SN : 0;
     const int thrN = SN != 32 ? simd_lid % SN : int(simd_lid);
@@ -513,7 +517,7 @@ struct GEMVTKernel {
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tm = 0; tm < TM; tm++) {
-            v_coeff[tm] = in_vec[bm + tm];
+            v_coeff[tm] = static_cast<AccT>(in_vec[bm + tm]);
           }
 
           // Apply scale
@@ -530,7 +534,7 @@ struct GEMVTKernel {
               inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
             }
             for (int tn = 0; tn < TN; tn++) {
-              result[tn] += static_cast<AccT>(v_coeff[tm]) * inter[tn];
+              result[tn] += v_coeff[tm] * inter[tn];
             }
           }
         }
@@ -551,7 +555,7 @@ struct GEMVTKernel {
         }
 
         for (int tm = 0; tm < TM && bm + tm < in_vec_size; tm++) {
-          v_coeff[tm] = in_vec[bm + tm];
+          v_coeff[tm] = static_cast<AccT>(in_vec[bm + tm]);
 
           if (has_mul_operand_mask) {
             v_coeff[tm] *= block_scale;
@@ -564,7 +568,7 @@ struct GEMVTKernel {
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            result[tn] += static_cast<AccT>(v_coeff[tm]) * inter[tn];
+            result[tn] += v_coeff[tm] * inter[tn];
           }
         }
       }
