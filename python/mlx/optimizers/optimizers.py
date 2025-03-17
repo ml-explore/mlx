@@ -79,7 +79,7 @@ class Optimizer:
 
         Args:
             parameter (mx.array): A single parameter that will be optimized.
-            state (dict): The optimizer's state
+            state (dict): The optimizer's state.
         """
         raise NotImplementedError()
 
