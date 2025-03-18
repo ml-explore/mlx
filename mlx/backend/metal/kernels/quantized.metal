@@ -132,10 +132,10 @@
   instantiate_quantized_types(32, bits)
 
 #define instantiate_quantized_all() \
-  instantiate_quantized_groups(2) \
-  instantiate_quantized_groups(3) \
-  instantiate_quantized_groups(4) \
-  instantiate_quantized_groups(6) \
-  instantiate_quantized_groups(8)
+  instantiate_quantized_groups(4)
+//  instantiate_quantized_groups(2) \
+//  instantiate_quantized_groups(3) \
+//  instantiate_quantized_groups(6) \
+//  instantiate_quantized_groups(8)
 
 instantiate_quantized_all() // clang-format on

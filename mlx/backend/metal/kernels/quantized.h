@@ -185,13 +185,19 @@ inline U qdot(
   }
 
   else if (bits == 4) {
-    const device uint16_t* ws = (const device uint16_t*)w;
+    union alignas(4 * (values_per_thread / 8)) tmp_u {
+      uint32_t wi[values_per_thread / 8];
+      uint16_t ws[values_per_thread / 4];
+    };
+    auto ww = ((const device tmp_u*)w)[0];
+
+
     for (int i = 0; i < (values_per_thread / 4); i++) {
       accum +=
-          (x_thread[4 * i] * (ws[i] & 0x000f) +
-           x_thread[4 * i + 1] * (ws[i] & 0x00f0) +
-           x_thread[4 * i + 2] * (ws[i] & 0x0f00) +
-           x_thread[4 * i + 3] * (ws[i] & 0xf000));
+          (x_thread[4 * i] * (ww.ws[i] & 0x000f) +
+           x_thread[4 * i + 1] * (ww.ws[i] & 0x00f0) +
+           x_thread[4 * i + 2] * (ww.ws[i] & 0x0f00) +
+           x_thread[4 * i + 3] * (ww.ws[i] & 0xf000));
     }
   }
 
@@ -629,7 +635,7 @@ METAL_FUNC void qmv_fast_impl(
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
-  constexpr int packs_per_thread = bits == 2 ? 1 : 2;
+  constexpr int packs_per_thread = bits == 2 ? 1 : 4;
   constexpr int num_simdgroups = 2;
   constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
   constexpr int bytes_per_pack = power_of_2_bits ? 4 : 3;
