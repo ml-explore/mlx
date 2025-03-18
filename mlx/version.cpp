@@ -2,15 +2,10 @@
 
 #include <string>
 
-#include "mlx/version.h"
-
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
 namespace mlx::core {
 
 std::string version() {
-  return TOSTRING(MLX_VERSION);
+  return MLX_VERSION;
 }
 
 } // namespace mlx::core
