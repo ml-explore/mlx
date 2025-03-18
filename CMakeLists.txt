@@ -216,7 +216,7 @@ endif()
 find_package(MPI)
 if(MPI_FOUND)
   execute_process(
-    COMMAND zsh "-c" "mpirun --version"
+    COMMAND bash "-c" "mpirun --version"
     OUTPUT_VARIABLE MPI_VERSION
     ERROR_QUIET)
   if(${MPI_VERSION} MATCHES ".*Open MPI.*")
