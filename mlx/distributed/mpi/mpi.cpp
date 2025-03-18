@@ -18,6 +18,12 @@
     }                                                              \
   }
 
+#ifdef __APPLE__
+static constexpr const char* libmpi_name = "libmpi.dylib";
+#else
+static constexpr const char* libmpi_name = "libmpi.so";
+#endif
+
 namespace mlx::core::distributed::mpi {
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
@@ -47,7 +53,7 @@ struct MPIWrapper {
   MPIWrapper() {
     initialized_ = false;
 
-    libmpi_handle_ = dlopen("libmpi.dylib", RTLD_NOW | RTLD_GLOBAL);
+    libmpi_handle_ = dlopen(libmpi_name, RTLD_NOW | RTLD_GLOBAL);
     if (libmpi_handle_ == nullptr) {
       return;
     }
