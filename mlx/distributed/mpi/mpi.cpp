@@ -21,7 +21,7 @@
 #ifdef __APPLE__
 static constexpr const char* libmpi_name = "libmpi.dylib";
 #else
-static constexpr const char* libmpi_name = "libmpi.so";
+static constexpr const char* libmpi_name = "libmpi_cxx.so";
 #endif
 
 namespace mlx::core::distributed::mpi {
