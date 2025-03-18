@@ -33,12 +33,8 @@ void eval(array& arr) {
     buffers.erase(it);
   }
   auto& encoder = cpu::get_command_encoder(s);
-  scheduler::notify_new_task(s);
-  encoder.dispatch([s,
-                    buffers = std::move(buffers),
-                    temps = std::move(encoder.temporaries())]() {
-    scheduler::notify_task_completion(s);
-  });
+  encoder.dispatch([buffers = std::move(buffers),
+                    temps = std::move(encoder.temporaries())]() {});
 }
 
 } // namespace mlx::core::cpu

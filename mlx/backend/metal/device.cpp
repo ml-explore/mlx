@@ -20,7 +20,7 @@ namespace mlx::core::metal {
 namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
-constexpr int MAX_BUFFERS_PER_QUEUE = 12;
+constexpr int MAX_BUFFERS_PER_QUEUE = 20;
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
