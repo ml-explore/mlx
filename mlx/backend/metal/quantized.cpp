@@ -316,11 +316,7 @@ void qmm_op(
       grid_dims = MTL::Size((O + bo - 1) / bo, B, N);
       quad = true;
     } else if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
-      if (O < 4096) {
-        results_per_simdgroup = 2;
-      } else {
-        results_per_simdgroup = 1;
-      }
+      results_per_simdgroup = 2;
       name += "qmv_fast";
       int bo = 2 * (*results_per_simdgroup);
       int bd = 32;
