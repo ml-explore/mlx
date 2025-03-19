@@ -187,15 +187,15 @@ if __name__ == "__main__":
 
     shapes_128 = (
         # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
-          (  1,  1024,  1024,      128,   32,    32),
-          (  1,  2048,  2048,      128,   32,    32),
-          (  1,  4096,  4096,      128,   32,    32),
+          (  1,  1024,  1024,      128,   32,     8),
+          (  1,  2048,  2048,      128,   32,     8),
+          (  1,  4096,  4096,      128,   32,     8),
     )
     # fmt: on
 
     shapes = shapes_64 + shapes_80 + shapes_128
 
-    masks = [None, "causal"]
+    masks = [None, "bool", "causal"]
 
     print(
         "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_unfs, t_fuse, diff%"
