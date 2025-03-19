@@ -17,6 +17,8 @@
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 namespace mlx::core {
 
 namespace {
@@ -79,7 +81,8 @@ std::pair<int, int> extract_quantized_matmul_dims(
     const array& biases,
     bool transpose,
     int group_size,
-    int bits) {
+    int bits,
+    const std::string& mode) {
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[" << tag << "] The weight matrix should be uint32 "
@@ -87,12 +90,23 @@ std::pair<int, int> extract_quantized_matmul_dims(
     throw std::invalid_argument(msg.str());
   }
 
-  if (scales.shape() != biases.shape()) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] Scales and biases should have the same shape. "
-        << "Received scales with shape " << scales.shape()
-        << " and biases with " << biases.shape();
-    throw std::invalid_argument(msg.str());
+  if (mode == "affine") {
+    if (scales.shape() != biases.shape()) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Scales and biases should have the same shape. "
+          << "Received scales with shape " << scales.shape()
+          << " and biases with " << biases.shape();
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (w.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] The shapes of the weight and scales are "
+          << "incompatible based on bits and group_size. w.shape() == "
+          << w.shape() << " and scales.shape() == " << scales.shape()
+          << " with group_size=" << group_size << " and bits=" << bits;
+      throw std::invalid_argument(msg.str());
+    }
   }
 
   if (!std::equal(
@@ -102,15 +116,6 @@ std::pair<int, int> extract_quantized_matmul_dims(
         << "] Weight, scales and biases should have the same batch shape. "
         << "Received weight with shape " << w.shape() << ", scales with "
         << scales.shape() << " and biases with " << biases.shape();
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (w.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] The shapes of the weight and scales are "
-        << "incompatible based on bits and group_size. w.shape() == "
-        << w.shape() << " and scales.shape() == " << scales.shape()
-        << " with group_size=" << group_size << " and bits=" << bits;
     throw std::invalid_argument(msg.str());
   }
 
@@ -717,6 +722,9 @@ array slice(
         << "array with dimension " << a.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
+  // std::cout << "start " << start << std::endl;
+  // std::cout << "stop " << stop << std::endl;
+  // std::cout << "strides " << strides << std::endl;
 
   auto [has_neg_strides, out_shape] =
       normalize_slice(a.shape(), start, stop, strides);
@@ -3969,10 +3977,19 @@ array quantized_matmul(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
+      "quantized_matmul",
+      x,
+      w,
+      scales,
+      biases,
+      transpose,
+      group_size,
+      bits,
+      mode);
 
   auto dtype = result_type(x, scales, biases);
   if (!issubdtype(dtype, floating)) {
@@ -3996,16 +4013,26 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, transpose),
+          to_stream(s), group_size, bits, transpose, mode),
       std::move(inputs));
 }
 
-std::tuple<array, array, array> quantize(
+std::vector<array> quantize(
     const array& w,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode, /* = affine */
     StreamOrDevice s /* = {} */) {
-  return fast::affine_quantize(w, group_size, bits, s);
+  if (mode == "affine") {
+    return fast::affine_quantize(w, group_size, bits, s);
+  } else if (mode == "trellis") {
+    return fast::trellis_quantize(w, bits, s);
+  } else {
+    std::ostringstream msg;
+    msg << "[quantize] Unsupported quantization mode " << mode << "."
+        << std::endl;
+    throw std::invalid_argument(msg.str());
+  }
 }
 
 array dequantize(
@@ -4028,14 +4055,15 @@ array gather_qmm(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size, bits, s);
+        x, w, scales, biases, transpose, group_size, bits, mode, s);
   }
 
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
+      "gather_qmm", x, w, scales, biases, transpose, group_size, bits, mode);
 
   // Extract indices and broadcast them
   array lhs_indices = indices_or_default(lhs_indices_, x, s);
@@ -4067,7 +4095,8 @@ array gather_qmm(
   return array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherQMM>(to_stream(s), group_size, bits, transpose),
+      std::make_shared<GatherQMM>(
+          to_stream(s), group_size, bits, transpose, mode),
       {astype(x, out_type, s),
        w,
        astype(scales, out_type, s),

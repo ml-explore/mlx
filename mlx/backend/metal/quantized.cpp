@@ -7,10 +7,13 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/reduce.h"
+#include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
+
+#include <iostream>
 
 namespace mlx::core {
 
@@ -31,6 +34,7 @@ void launch_qmm(
     bool gather,
     bool aligned,
     bool quad,
+    const std::string& mode,
     const Stream& s) {
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
@@ -54,8 +58,12 @@ void launch_qmm(
   };
   auto x = ensure_row_contiguous_last_dims(x_pre);
   auto w = ensure_row_contiguous_last_dims(w_pre);
-  auto scales = ensure_row_contiguous_last_dims(scales_pre);
-  auto biases = ensure_row_contiguous_last_dims(biases_pre);
+  auto scales = scales_pre;
+  auto biases = biases_pre;
+  if (mode == "affine") {
+    scales = ensure_row_contiguous_last_dims(scales_pre);
+    biases = ensure_row_contiguous_last_dims(biases_pre);
+  }
 
   int x_batch_ndims = x.ndim() - 2;
   auto& x_shape = x.shape();
@@ -67,6 +75,8 @@ void launch_qmm(
   auto& b_strides = biases.strides();
 
   std::string aligned_n = (O % 32) == 0 ? "true" : "false";
+
+  bool is_trellis = (mode == "trellis");
 
   std::ostringstream kname;
   auto type_string = get_type_string(x.dtype());
@@ -80,24 +90,47 @@ void launch_qmm(
   if (!gather) {
     kname << "_batch_" << batched;
   }
+  if (mode == "trellis") {
+    kname << "_mode_" << is_trellis;
+  }
 
   // Encode and dispatch kernel
   std::string template_def;
   if (quad) {
     template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, D, batched);
+        kname.str(),
+        name,
+        type_string,
+        group_size,
+        bits,
+        D,
+        batched,
+        is_trellis);
   } else if (aligned && !gather) {
     template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, aligned_n, batched);
+        kname.str(),
+        name,
+        type_string,
+        group_size,
+        bits,
+        aligned_n,
+        batched,
+        is_trellis);
   } else if (!gather && !aligned) {
     template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, batched);
+        kname.str(), name, type_string, group_size, bits, batched, is_trellis);
   } else if (aligned && gather) {
     template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, aligned_n);
+        kname.str(),
+        name,
+        type_string,
+        group_size,
+        bits,
+        aligned_n,
+        is_trellis);
   } else {
     template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits);
+        kname.str(), name, type_string, group_size, bits, is_trellis);
   }
   auto& d = metal::device(s.device);
   auto kernel = get_quantized_kernel(d, kname.str(), template_def);
@@ -276,6 +309,7 @@ void qmm_op(
     int group_size,
     int bits,
     bool gather,
+    const std::string& mode,
     const Stream& s) {
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -354,7 +388,7 @@ void qmm_op(
       group_dims = MTL::Size(simdgroup_size, 1, 1);
       grid_dims = MTL::Size(B, (O + bo - 1) / bo, N);
       quad = true;
-    } else if (B < qmv_batch_limit && O % 8 == 0 && D % 512 == 0 && D >= 512) {
+    } else if (B < 10000 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
       name += "qmv_fast";
       int bo = 8;
       int bd = 32;
@@ -420,19 +454,34 @@ void qmm_op(
       gather,
       aligned,
       quad,
+      mode,
       s);
 }
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 4);
   qmm_op(
-      inputs, out, transpose_, group_size_, bits_, /*gather=*/false, stream());
+      inputs,
+      out,
+      transpose_,
+      group_size_,
+      bits_,
+      /*gather=*/false,
+      mode_,
+      stream());
 }
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 6);
   qmm_op(
-      inputs, out, transpose_, group_size_, bits_, /*gather=*/true, stream());
+      inputs,
+      out,
+      transpose_,
+      group_size_,
+      bits_,
+      /*gather=*/true,
+      mode_,
+      stream());
 }
 
 void fast::AffineQuantize::eval_gpu(
@@ -512,6 +561,125 @@ void fast::AffineQuantize::eval_gpu(
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
                                : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+  d.add_temporaries(std::move(copies), s.index);
+}
+
+void viterbi(
+    array& w,
+    array& scores,
+    array& pointers,
+    array& start,
+    array& overlap,
+    bool use_overlap,
+    const Stream& s) {
+  int B = scores.shape(0);
+  auto& d = metal::device(s.device);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_output_array(scores, 1);
+  compute_encoder.set_output_array(pointers, 2);
+  if (use_overlap) {
+    compute_encoder.set_input_array(overlap, 3);
+  }
+
+  std::ostringstream kname;
+  auto type_string = get_type_string(w.dtype());
+  kname << "trellis_viterbi_" << type_string << "_overlap_" << use_overlap;
+  auto template_def = get_template_definition(
+      kname.str(), "trellis_viterbi", type_string, use_overlap);
+  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  auto group_dims = MTL::Size(1, 1024, 1);
+  auto grid_dims = MTL::Size(B, 1024, 1);
+
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  arg_reduce_dispatch(scores, start, 1, "argmin", s);
+}
+
+void viterbi_backtrack(
+    array& start,
+    array& pointers,
+    array& out,
+    array& overlap,
+    bool use_overlap,
+    const Stream& s) {
+  int B = start.shape(0);
+
+  auto& d = metal::device(s.device);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_input_array(start, 0);
+  compute_encoder.set_input_array(pointers, 1);
+  compute_encoder.set_output_array(out, 2);
+  if (use_overlap) {
+    compute_encoder.set_input_array(overlap, 3);
+  }
+
+  std::ostringstream kname;
+  kname << "trellis_backtrack" << "_overlap_" << use_overlap;
+  auto template_def =
+      get_template_definition(kname.str(), "trellis_backtrack", use_overlap);
+  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  auto group_dims = MTL::Size(256, 1, 1);
+  auto grid_dims = MTL::Size(B, 1, 1);
+
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void fast::TrellisQuantize::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& w_pre = inputs[0];
+  auto& out = outputs[0];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  std::vector<array> copies;
+  auto ensure_row_contiguous = [&copies, &s](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy_gpu(arr, arr_copy, CopyType::General, s);
+      copies.push_back(arr_copy);
+      return arr_copy;
+    }
+  };
+  auto w = ensure_row_contiguous(w_pre);
+
+  int B = w.shape(0);
+  int T = w.shape(1);
+
+  constexpr int num_states = 1 << 14;
+
+  array scores({B, num_states}, float16, nullptr, {});
+  scores.set_data(allocator::malloc_or_wait(scores.nbytes()));
+  copies.push_back(scores);
+
+  array pointers({B, T, num_states}, uint8, nullptr, {});
+  pointers.set_data(allocator::malloc_or_wait(pointers.nbytes()));
+  copies.push_back(pointers);
+
+  array start({B}, uint32, nullptr, {});
+  start.set_data(allocator::malloc_or_wait(start.nbytes()));
+  copies.push_back(start);
+
+  array rolled({B, T}, uint16, nullptr, {});
+  rolled.set_data(allocator::malloc_or_wait(rolled.nbytes()));
+  copies.push_back(rolled);
+
+  viterbi(w, scores, pointers, start, out, false, s);
+  viterbi_backtrack(start, pointers, rolled, out, false, s);
+
+  viterbi(w, scores, pointers, start, rolled, true, s);
+  viterbi_backtrack(start, pointers, out, rolled, true, s);
 
   d.add_temporaries(std::move(copies), s.index);
 }

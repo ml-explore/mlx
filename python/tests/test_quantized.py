@@ -10,6 +10,9 @@ import mlx_tests
 class TestQuantized(mlx_tests.MLXTestCase):
     def test_quantize_dequantize(self):
         w = mx.random.normal(shape=(128, 512))
+        w_q, scales, biases = mx.quantize(w, bits=2, mode="trellis")
+        print(w_q, scales, biases)
+
         for gs in [32, 64, 128]:
             for b in [2, 3, 6, 4, 8]:
                 with self.subTest(gs=gs, b=b):

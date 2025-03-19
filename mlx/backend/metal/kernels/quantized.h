@@ -684,6 +684,115 @@ METAL_FUNC void qmv_fast_impl(
   }
 }
 
+template <uint32_t a = 89226354, uint32_t b = 64248484, uint32_t m = 996162400>
+float inst3(uint16_t xi) {
+  uint32_t x = xi;
+  x = a * x + b;
+  x = (x & 0b10001111111111111000111111111111) ^ m;
+  auto xf = reinterpret_cast<thread float16_t*>(&x);
+  return xf[0] + xf[1];
+}
+
+template <typename T, int bits>
+METAL_FUNC void qmv_trellis_impl(
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    const device T* x,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
+  constexpr int packs_per_thread = 2;
+  constexpr int num_simdgroups = 2;
+  constexpr int results_per_simdgroup = 4;
+  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
+  constexpr int bytes_per_pack = power_of_2_bits ? 4 : 3;
+  constexpr int values_per_thread = pack_factor * packs_per_thread;
+  constexpr int block_size = values_per_thread * SIMD_SIZE;
+  constexpr int reads_per = 16 / bits;
+  constexpr int local_w_size =
+      results_per_simdgroup * values_per_thread / reads_per;
+
+  const device uint8_t* ws = (const device uint8_t*)w;
+
+  typedef float U;
+
+  thread U x_thread[values_per_thread];
+  thread uint16_t w_thread[local_w_size];
+  thread U result[results_per_simdgroup] = {0};
+
+  // Adjust positions
+  const int in_vec_size_w = in_vec_size * bytes_per_pack / pack_factor;
+  const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
+      simd_gid * results_per_simdgroup;
+
+  ws += out_row * in_vec_size_w + simd_lid * packs_per_thread * bytes_per_pack;
+  x += tid.x * in_vec_size + simd_lid * values_per_thread;
+  y += tid.x * out_vec_size + out_row;
+
+  T scale = scales[0];
+
+  for (int k = 0; k < in_vec_size; k += block_size) {
+#pragma clang loop unroll(full)
+    for (int i = 0; i < values_per_thread; i++) {
+      x_thread[i] = x[i];
+    }
+
+#pragma clang loop unroll(full)
+    for (int row = 0; row < results_per_simdgroup; row++) {
+#pragma clang loop unroll(full)
+      for (int i = 0; i < values_per_thread / reads_per; i++) {
+        auto wl = (const device uint16_t*)(ws + row * in_vec_size_w);
+        w_thread[row * values_per_thread / reads_per + i] = wl[i];
+      }
+    }
+
+#pragma clang loop unroll(full)
+    for (int row = 0; row < results_per_simdgroup; row++) {
+#pragma clang loop unroll(full)
+      for (int i = 0; i < values_per_thread / reads_per; i++) {
+        int index = row * values_per_thread / reads_per + i;
+        uint16_t w0 = w_thread[index];
+        uint16_t w1 = w_thread[(index + 1) % local_w_size];
+
+        uint16_t wx = w0 ^ w1;
+        uint16_t wx1 = wx ^ 1;
+        uint16_t wf = w0 ^ (1 << bits);
+
+        if (bits == 2) {
+          result[row] += x_thread[8 * i] * inst3(w0);
+          result[row] += x_thread[8 * i + 1] * inst3(wf ^ (wx1 & 0x3));
+          result[row] += x_thread[8 * i + 2] * inst3(w0 ^ (wx & 0xf));
+          result[row] += x_thread[8 * i + 3] * inst3(w0 ^ (wx1 & 0x3f));
+          result[row] += x_thread[8 * i + 4] * inst3(w0 ^ (wx & 0xff));
+          result[row] += x_thread[8 * i + 5] * inst3(w0 ^ (wx1 & 0x3ff));
+          result[row] += x_thread[8 * i + 6] * inst3(w0 ^ (wx & 0xfff));
+          result[row] += x_thread[8 * i + 7] * inst3(w0 ^ (wx1 & 0x3fff));
+        } else if (bits == 4) {
+          result[row] += x_thread[4 * i] * inst3(w0);
+          result[row] += x_thread[4 * i + 1] * inst3(wf ^ (wx1 & 0xf));
+          result[row] += x_thread[4 * i + 2] * inst3(w0 ^ (wx & 0xff));
+          result[row] += x_thread[4 * i + 3] * inst3(w0 ^ (wx1 & 0xfff));
+        }
+      }
+    }
+
+    ws += block_size * bytes_per_pack / pack_factor;
+    x += block_size;
+  }
+
+  for (int row = 0; row < results_per_simdgroup; row++) {
+    result[row] = simd_sum(result[row]);
+    if (simd_lid == 0) {
+      y[row] = static_cast<T>(scale * result[row]);
+    }
+  }
+}
+
 template <typename T, int group_size, int bits>
 METAL_FUNC void qmv_impl(
     const device uint32_t* w,
@@ -1302,7 +1411,13 @@ METAL_FUNC void adjust_matrix_offsets(
   y += tid.z * output_stride;
 }
 
-template <typename T, int group_size, int bits, int D, bool batched>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    int D,
+    bool batched,
+    bool trellis = false>
 [[kernel]] void qmv_quad(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1354,7 +1469,12 @@ template <typename T, int group_size, int bits, int D, bool batched>
       quad_lid);
 }
 
-template <typename T, int group_size, int bits, bool batched>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool batched,
+    bool trellis = false>
 [[kernel]] void qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1393,20 +1513,39 @@ template <typename T, int group_size, int bits, bool batched>
         b_strides,
         tid);
   }
-  qmv_fast_impl<T, group_size, bits>(
-      w,
-      scales,
-      biases,
-      x,
-      y,
-      in_vec_size,
-      out_vec_size,
-      tid,
-      simd_gid,
-      simd_lid);
+  if (trellis) {
+    qmv_trellis_impl<T, bits>(
+        w,
+        scales,
+        biases,
+        x,
+        y,
+        in_vec_size,
+        out_vec_size,
+        tid,
+        simd_gid,
+        simd_lid);
+  } else {
+    qmv_fast_impl<T, group_size, bits>(
+        w,
+        scales,
+        biases,
+        x,
+        y,
+        in_vec_size,
+        out_vec_size,
+        tid,
+        simd_gid,
+        simd_lid);
+  }
 }
 
-template <typename T, const int group_size, const int bits, bool batched>
+template <
+    typename T,
+    const int group_size,
+    const int bits,
+    bool batched,
+    bool trellis = false>
 [[kernel]] void qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1458,7 +1597,12 @@ template <typename T, const int group_size, const int bits, bool batched>
       simd_lid);
 }
 
-template <typename T, const int group_size, const int bits, bool batched>
+template <
+    typename T,
+    const int group_size,
+    const int bits,
+    bool batched,
+    bool trellis = false>
 [[kernel]] void qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1572,6 +1716,7 @@ template <
     const int bits,
     const bool aligned_N,
     const bool batched,
+    bool trellis = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1630,6 +1775,7 @@ template <
     const int group_size,
     const int bits,
     const bool batched,
+    bool trellis = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1685,7 +1831,7 @@ template <
       w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool trellis = false>
 [[kernel]] void bs_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1734,20 +1880,34 @@ template <typename T, int group_size, int bits>
       s_strides,
       b_strides,
       tid);
-  qmv_fast_impl<T, group_size, bits>(
-      w,
-      scales,
-      biases,
-      x,
-      y,
-      in_vec_size,
-      out_vec_size,
-      tid,
-      simd_gid,
-      simd_lid);
+  if (trellis) {
+    qmv_trellis_impl<T, bits>(
+        w,
+        scales,
+        biases,
+        x,
+        y,
+        in_vec_size,
+        out_vec_size,
+        tid,
+        simd_gid,
+        simd_lid);
+  } else {
+    qmv_fast_impl<T, group_size, bits>(
+        w,
+        scales,
+        biases,
+        x,
+        y,
+        in_vec_size,
+        out_vec_size,
+        tid,
+        simd_gid,
+        simd_lid);
+  }
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool trellis = false>
 [[kernel]] void bs_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1809,7 +1969,7 @@ template <typename T, int group_size, int bits>
       simd_lid);
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool trellis = false>
 [[kernel]] void bs_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1876,6 +2036,7 @@ template <
     const int group_size,
     const int bits,
     const bool aligned_N,
+    bool trellis = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1943,6 +2104,7 @@ template <
     typename T,
     const int group_size,
     const int bits,
+    bool trellis = false,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -2155,5 +2317,213 @@ template <typename T, const int group_size, const int bits>
       }
       out[i] = scale * d + bias;
     }
+  }
+}
+
+template <
+    typename T,
+    const bool use_overlap,
+    const int bits = 2,
+    const int timesteps = 128>
+[[kernel]] void trellis_viterbi(
+    const device T* w [[buffer(0)]],
+    device float16_t* score [[buffer(1)]],
+    device uint8_t* pointers [[buffer(2)]],
+    const device uint16_t* overlap [[buffer(3)]],
+    uint3 tid [[thread_position_in_grid]]) {
+  constexpr uint16_t L = 16;
+  constexpr uint L2 = 1 << L;
+
+  uint16_t idx = tid.y * 16;
+
+  threadgroup float16_t swap_V[16384];
+
+  thread float16_t min_V[16] = {0};
+
+  for (uint16_t t = 0; t < timesteps; t++) {
+    uint16_t tt = t % 8 == 0 ? L / bits : t % 8;
+    uint16_t shift = ((tt - 1) % (L / bits)) * bits;
+    uint16_t flip = (t == 0 || (t > 1 && t % 8 == 1)) ? (1 << bits) + 1 : t % 2;
+
+    uint16_t s000 = 1 << (shift - 6);
+    uint16_t s0 = 1 << (shift - 2);
+    uint16_t s1 = 1 << (shift);
+    uint16_t s2 = 1 << (shift + 2);
+    uint16_t s4 = 1 << (shift + 4);
+
+    if (t > 1) {
+      uint16_t i = 0;
+      uint16_t loff = 1 << (metal::clamp((shift + 14) % 16, 2, 12));
+      uint16_t hoff = shift > 4 ? 4 : shift == 4 ? 16 : 1;
+      uint16_t ind = idx;
+
+      if (shift == 0) {
+        ind >>= 2;
+      } else if (shift == 14) {
+        ind = (ind & 0xfff) + (ind >> 12);
+      } else if (shift == 2) {
+      } else if (shift == 4) {
+        ind = ((ind >> 4) & 0x3) + (ind & ~0x3f);
+      } else if (shift == 6) {
+        ind = ((ind / s0) % 4) * s1 + ((ind / s1) % 4) + (ind / s2) * s2;
+      } else {
+        ind = ((ind / 16) % s000) * 16 + ((ind / s0) % 4) * s1 +
+            ((ind / s1) % 4) + (ind / s2) * s2;
+      }
+
+      for (uint16_t high = 0; high < 4; high++) {
+        uint16_t sub_ind = ind;
+        for (uint16_t low = 0; low < 4; low++) {
+          swap_V[sub_ind] = min_V[i];
+          i++;
+          sub_ind += loff;
+        }
+        ind += hoff;
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      for (uint16_t i = 0; i < 16; i++) {
+        min_V[i] = swap_V[idx + i];
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    uint16_t rolled_t = use_overlap ? t : (t + 64) % 128;
+    T w_t = w[tid.x * timesteps + rolled_t];
+
+    for (uint16_t i = 0; i < 4; i++) {
+      thread float16_t min_val[4] = {INFINITY, INFINITY, INFINITY, INFINITY};
+      thread uint16_t min_idx[4] = {0};
+
+      uint16_t ii = idx * 4 + i * 16;
+      uint16_t big_idx = ii;
+      if (shift > 0 && shift < 14) {
+        big_idx = ((ii / s2) % 4) + (ii / s4 * s4);
+        if (shift > 2) {
+          big_idx += ((ii / 16) % s0) * 4;
+        }
+      } else if (shift == 14 && t > 0) {
+        big_idx >>= 2;
+      }
+
+      uint16_t loff = t == 0 ? 4 : s1;
+      uint16_t hoff = (t == 0 || shift == 14) ? 1 : s2;
+
+      for (uint16_t high = 0; high < 4; high++) {
+        uint16_t sub_ind = big_idx;
+        for (uint16_t low = 0; low < 4; low++) {
+          float mse = inst3(sub_ind ^ flip) - w_t;
+          mse *= mse;
+
+          float16_t new_val = min_V[i * 4 + high] + mse;
+          if (new_val < min_val[low]) {
+            min_val[low] = new_val;
+            min_idx[low] = high;
+          }
+          sub_ind += loff;
+        }
+        big_idx += hoff;
+      }
+
+      for (uint16_t j = 0; j < 4; j++) {
+        min_V[i * 4 + j] = min_val[j];
+        pointers[tid.x * L2 / 4 * timesteps + t * L2 / 4 + idx + i * 4 + j] =
+            min_idx[j];
+      }
+    }
+    if (t == 0 && use_overlap) {
+      uint16_t over = overlap[tid.x * 128 + 64];
+      over = over & ((1 << 14) - 1);
+      for (uint16_t i = 0; i < 16; i++) {
+        uint16_t rs = (over >> 2) ^ 1;
+        uint16_t ls = (idx + i) & ((1 << 12) - 1);
+        min_V[i] = rs == ls ? min_V[i] : INFINITY;
+      }
+    }
+  }
+  if (use_overlap) {
+    uint16_t over = overlap[tid.x * 128 + 64];
+    over = over & ((1 << 14) - 1);
+    uint16_t node =
+        (over % 4) * 4096 + ((over / 4) % 1024) * 4 + (over / 4096) % 4;
+    for (uint16_t i = 0; i < 16; i++) {
+      min_V[i] = (idx + i) == node ? min_V[i] : INFINITY;
+    }
+  }
+  for (uint16_t i = 0; i < 16; i++) {
+    score[tid.x * L2 / 4 + idx + i] = min_V[i];
+  }
+}
+
+uint16_t remove_bits(uint16_t i, uint16_t shift) {
+  uint16_t lower = i & ((1 << shift) - 1);
+  uint16_t upper = i & ~((1 << (shift + 2)) - 1);
+  return lower + (upper >> 2);
+}
+
+uint16_t swap_bits(uint16_t i, uint16_t shift) {
+  uint16_t diff = ((i >> shift) ^ i) & 0x3;
+  i = i ^ diff;
+  i ^= diff << shift;
+  return i;
+}
+
+template <const bool use_overlap, const int bits = 2, const int timesteps = 128>
+[[kernel]] void trellis_backtrack(
+    const device uint32_t* start [[buffer(0)]],
+    const device uint8_t* pointers [[buffer(1)]],
+    device uint16_t* out [[buffer(2)]],
+    const device uint16_t* overlap [[buffer(3)]],
+    uint3 tid [[thread_position_in_grid]]) {
+  constexpr uint16_t L = 16;
+
+  uint16_t node = start[tid.x];
+
+  uint16_t dir =
+      pointers[tid.x * timesteps * 16384 + (timesteps - 1) * 16384 + node];
+
+  node = (node % 4) * 4096 + ((node / 4) % 1024) * 4 + (node / 4096) % 4;
+  node ^= 1;
+  node += dir * 16384;
+
+  out[tid.x * timesteps + timesteps - 1] = node;
+
+  for (int t = timesteps - 2; t >= 0; t--) {
+    uint16_t shift = (t % (L / bits)) * bits;
+    uint16_t mask = ((1 << L) - 1) ^ (((1 << bits) - 1) << shift);
+    uint16_t flip = t % (L / bits) == 0 ? 1 << bits : 1;
+    uint16_t i = (node & mask) ^ flip;
+
+    if (shift > 0) {
+      i = remove_bits(i, shift);
+    }
+
+    if (t == 0) {
+      i >>= 2;
+    }
+
+    if (t % 2 == 1 || t == 0) {
+      i ^= 1;
+    }
+
+    shift = shift == 0 ? L : shift;
+
+    if (t > 0) {
+      i = swap_bits(i, shift - 2);
+    }
+
+    shift = shift == L ? 0 : shift;
+
+    uint16_t last_p = pointers[tid.x * timesteps * 16384 + t * 16384 + i];
+    if ((t % 8 == 1 && t > 1) || t == 0) {
+      last_p ^= 1;
+    }
+
+    node = ((node & mask) ^ flip) | (last_p << shift);
+    if (t == 0 && use_overlap) {
+      uint16_t over = overlap[tid.x * 128 + 64];
+      over = over & ((1 << 14) - 1);
+      node = (node & 0xfffc) + (over & 0x3);
+    }
+    out[tid.x * timesteps + t] = node;
   }
 }

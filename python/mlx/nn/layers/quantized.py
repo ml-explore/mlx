@@ -1,10 +1,11 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-from typing import Callable, Optional, Union
+from typing import Callable, Literal, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+from mlx.nn.layers.viterbi import quantize as trellis_quantize
 from mlx.utils import tree_map_with_path
 
 
@@ -12,7 +13,9 @@ def quantize(
     model: Module,
     group_size: int = 64,
     bits: int = 4,
+    mode: Literal["affine", "trellis"] = "affine",
     class_predicate: Optional[Callable[[str, Module], Union[bool, dict]]] = None,
+    fake: bool = False,
 ):
     """Quantize the sub-modules of a module according to a predicate.
 
@@ -21,7 +24,7 @@ def quantize(
     will be quantized. Note also, the module is updated in-place.
 
     Args:
-        model (mlx.nn.Module): The model whose leaf modules may be quantized.
+        model (mlx.nn.Module):, mode: Literal["affine", "trellis"] = "affine" The model whose leaf modules may be quantized.
         group_size (int): The quantization group size (see
            :func:`mlx.core.quantize`). Default: ``64``.
         bits (int): The number of bits per parameter (see
@@ -36,12 +39,15 @@ def quantize(
     class_predicate = class_predicate or (lambda _, m: hasattr(m, "to_quantized"))
 
     def _maybe_quantize(path, m):
+        print(path)
         if bool_or_params := class_predicate(path, m):
             if hasattr(m, "to_quantized"):
                 if isinstance(bool_or_params, bool):
-                    return m.to_quantized(group_size=group_size, bits=bits)
+                    return m.to_quantized(
+                        group_size=group_size, bits=bits, mode=mode, fake=fake
+                    )
                 elif isinstance(bool_or_params, dict):
-                    return m.to_quantized(**bool_or_params)
+                    return m.to_quantized(**bool_or_params, fake=fake)
                 else:
                     raise ValueError(
                         "``class_predicate`` must return a bool"
@@ -131,7 +137,11 @@ class QuantizedEmbedding(Module):
 
     @classmethod
     def from_embedding(
-        cls, embedding_layer: Module, group_size: int = 64, bits: int = 4
+        cls,
+        embedding_layer: Module,
+        group_size: int = 64,
+        bits: int = 4,
+        mode: Literal["affine", "trellis"] = "affine",
     ):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
         embedding_dims, dims = embedding_layer.weight.shape
@@ -170,12 +180,14 @@ class QuantizedLinear(Module):
         bias: bool = True,
         group_size: int = 64,
         bits: int = 4,
+        mode: Literal["affine", "trellis"] = "affine",
     ):
         super().__init__()
 
         # Quantization config
         self.group_size = group_size
         self.bits = bits
+        self.mode = mode
 
         # Initialize the quantized weight
         scale = math.sqrt(1 / input_dims)
@@ -216,19 +228,40 @@ class QuantizedLinear(Module):
             transpose=True,
             group_size=self.group_size,
             bits=self.bits,
+            mode=self.mode,
         )
         if "bias" in self:
             x = x + self["bias"]
         return x
 
     @classmethod
-    def from_linear(cls, linear_layer: Module, group_size: int = 64, bits: int = 4):
+    def from_linear(
+        cls,
+        linear_layer: Module,
+        group_size: int = 64,
+        bits: int = 4,
+        mode: Literal["affine", "trellis"] = "affine",
+        fake: bool = False,
+    ):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape
-        ql = cls(input_dims, output_dims, False, group_size, bits)
-        ql.weight, ql.scales, ql.biases = mx.quantize(
-            linear_layer.weight, group_size, bits
-        )
+        ql = cls(input_dims, output_dims, False, group_size, bits, mode)
+        if mode == "trellis":
+            if fake:
+                ql.weight = mx.zeros(
+                    (output_dims, input_dims // 32 * bits), dtype=mx.uint32
+                )
+                ql.scales = mx.array(0.0)
+                ql.biases = mx.array(0.0)
+            else:
+                ql.weight, ql.scales, ql.biases = mx.quantize(
+                    linear_layer.weight, bits=bits, mode="trellis"
+                )
+        else:
+            ql.weight, ql.scales, ql.biases = mx.quantize(
+                linear_layer.weight, group_size, bits, mode="affine"
+            )
+
         if "bias" in linear_layer:
             ql.bias = linear_layer.bias
 

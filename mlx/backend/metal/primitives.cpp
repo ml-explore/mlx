@@ -16,6 +16,8 @@
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 namespace mlx::core {
 
 template <typename T>
@@ -158,33 +160,25 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
-void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  out.set_data(allocator::malloc(out.nbytes()));
-  auto& s = stream();
+void arg_reduce_dispatch(
+    const array& in,
+    array& out,
+    int axis,
+    std::string op_name,
+    const Stream& s) {
   auto& d = metal::device(s.device);
-  std::string op_name;
-  switch (reduce_type_) {
-    case ArgReduce::ArgMin:
-      op_name = "argmin_";
-      break;
-    case ArgReduce::ArgMax:
-      op_name = "argmax_";
-      break;
-  }
 
   // Prepare the shapes, strides and axis arguments.
   auto in_strides = in.strides();
   auto shape = in.shape();
   auto out_strides = out.strides();
-  auto axis_stride = in_strides[axis_];
-  size_t axis_size = shape[axis_];
+  auto axis_stride = in_strides[axis];
+  size_t axis_size = shape[axis];
   if (out_strides.size() == in_strides.size()) {
-    out_strides.erase(out_strides.begin() + axis_);
+    out_strides.erase(out_strides.begin() + axis);
   }
-  in_strides.erase(in_strides.begin() + axis_);
-  shape.erase(shape.begin() + axis_);
+  in_strides.erase(in_strides.begin() + axis);
+  shape.erase(shape.begin() + axis);
   size_t ndim = shape.size();
 
   // ArgReduce
@@ -192,7 +186,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   int n_reads = 4;
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
-    auto kernel = d.get_kernel(op_name + type_to_name(in));
+    auto kernel = d.get_kernel(op_name + "_" + type_to_name(in));
     NS::UInteger thread_group_size = std::min(
         (axis_size + n_reads - 1) / n_reads,
         kernel->maxTotalThreadsPerThreadgroup());
@@ -224,6 +218,23 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_bytes(axis_size, 7);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
+}
+
+void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  std::string op_name;
+  switch (reduce_type_) {
+    case ArgReduce::ArgMin:
+      op_name = "argmin";
+      break;
+    case ArgReduce::ArgMax:
+      op_name = "argmax";
+      break;
+  }
+  auto& in = inputs[0];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto& s = stream();
+  arg_reduce_dispatch(in, out, axis_, op_name, s);
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {

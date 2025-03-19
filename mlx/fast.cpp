@@ -11,6 +11,8 @@
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 
+#include <iostream>
+
 namespace mlx::core::fast {
 
 std::vector<array> Custom::vjp(
@@ -832,7 +834,7 @@ array pack_and_quantize(
   return packed_w;
 }
 
-std::tuple<array, array, array>
+std::vector<array>
 affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
   auto s = to_stream(s_);
 
@@ -1026,6 +1028,54 @@ array affine_dequantize(
         {w, scales, biases});
   }
   return fallback({w, scales, biases})[0];
+}
+
+std::vector<array>
+trellis_quantize(const array& w_, int bits, StreamOrDevice s_) {
+  if (bits != 2) {
+    throw std::invalid_argument(
+        "Only 2 bit Trellis quants are currently supported.");
+  }
+
+  int Tx = 4;
+  int Ty = 32;
+  int batch_size = 256;
+
+  auto s = to_stream(s_);
+
+  int L = 16;
+  int M = w_.shape(-2);
+  int T = Tx * Ty;
+  auto scale = std(astype(w_, float32, s), s);
+  auto w = divide(w_, scale, s);
+  w = astype(w, float16, s);
+
+  w = reshape(w, {M / Tx, Tx, -1, Ty}, s);
+  w = transpose(w, {0, 2, 1, 3}, s);
+  w = reshape(w, {-1, T}, s);
+
+  auto fallback = [bits, s](const std::vector<array>& inputs) mutable
+      -> std::vector<array> { return {inputs[0]}; };
+
+  auto q = zeros({w.shape(0), w.shape(1) * bits / L}, uint16, s);
+  for (int i = 0; i < w.shape(0); i += batch_size) {
+    auto w_batch = slice(w, {i, 0}, {i + batch_size, w.shape(-1)}, s);
+    auto q_batch = array(
+        w_batch.shape(),
+        uint16,
+        std::make_shared<TrellisQuantize>(s, fallback, bits, true),
+        {w_batch});
+    q_batch = slice(q_batch, {0, 0}, q_batch.shape(), {1, L / bits}, s);
+    q = slice_update(q, q_batch, {i, 0}, {i + batch_size, q.shape(-1)}, s);
+    eval(q);
+  }
+
+  q = reshape(q, {M / Tx, -1, Tx, Ty * bits / L}, s);
+  q = transpose(q, {0, 2, 1, 3}, s);
+  q = reshape(q, {M, -1}, s);
+  q = view(q, uint32, s);
+
+  return {q, scale, scale};
 }
 
 bool AffineQuantize::is_equivalent(const Primitive& other) const {

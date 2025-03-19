@@ -38,4 +38,11 @@ void strided_reduce_general_dispatch(
     metal::Device& d,
     const Stream& s);
 
+void arg_reduce_dispatch(
+    const array& in,
+    array& out,
+    int axis,
+    std::string op_name,
+    const Stream& s);
+
 } // namespace mlx::core

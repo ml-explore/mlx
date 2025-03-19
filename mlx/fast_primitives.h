@@ -269,6 +269,38 @@ class AffineQuantize : public Custom {
   bool dequantize_;
 };
 
+class TrellisQuantize : public Custom {
+ public:
+  explicit TrellisQuantize(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int bits,
+      bool dequantize)
+      : Custom(stream, fallback), bits_(bits), dequantize_(dequantize) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  };
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(TrellisQuantize);
+
+  // bool is_equivalent(const Primitive& other) const override;
+  // std::vector<Shape> output_shapes(const std::vector<array>& inputs)
+  // override;
+  auto state() const {
+    return std::make_tuple(nullptr, bits_, dequantize_);
+  }
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  int bits_;
+  bool dequantize_;
+};
+
 struct CustomKernelShapeInfo {
   bool shape = false;
   bool strides = false;

@@ -52,7 +52,7 @@ array scaled_dot_product_attention(
     const std::vector<array>& mask_arrs = {},
     StreamOrDevice s = {});
 
-std::tuple<array, array, array> affine_quantize(
+std::vector<array> affine_quantize(
     const array& w,
     int group_size = 64,
     int bits = 4,
@@ -65,6 +65,9 @@ array affine_dequantize(
     int group_size = 64,
     int bits = 4,
     StreamOrDevice s = {});
+
+std::vector<array>
+trellis_quantize(const array& w, int bits = 4, StreamOrDevice s = {});
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
 
