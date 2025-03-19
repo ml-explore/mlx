@@ -236,7 +236,7 @@ template <
   int kb_lim = params->NK;
 
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
+    int q_max = (tid.x + 1) * BQ + max(0, params->qL_off);
     kb_lim = (q_max + BK - 1) / BK;
   }
 
@@ -291,17 +291,17 @@ template <
     }
 
     // Mask out of causal
-    if (do_causal) {
+    if (do_causal && kb >= (kb_lim - (BQ + BK - 1) / BK)) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
       constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
-        short row_pos = tid.x * BQ + tm + sm + (i * stile_t::kFragRows);
+        const int row_pos = tid.x * BQ + tm + sm + (i * stile_t::kFragRows);
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < stile_t::kTileCols; j++) {
-          short col_pos = kb * BK + sn + (j * stile_t::kFragCols);
+          const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
           STEEL_PRAGMA_UNROLL
           for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
             if (row_pos < (col_pos + jj)) {

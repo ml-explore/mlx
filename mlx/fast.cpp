@@ -736,9 +736,10 @@ array scaled_dot_product_attention(
   };
 
   auto stream = to_stream(s);
-  const size_t value_head_dim = v.shape(-1);
-  const size_t query_head_dim = q.shape(-1);
-  const size_t query_sequence_length = q.shape(2);
+  const int value_head_dim = v.shape(-1);
+  const int query_head_dim = q.shape(-1);
+  const int query_sequence_length = q.shape(2);
+  const int key_sequence_length = k.shape(2);
 
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
@@ -747,15 +748,17 @@ array scaled_dot_product_attention(
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
   const bool sdpa_vector_supported_mask = (!has_mask || has_bool_mask);
-  const bool sdpa_full_supported_mask = !has_mask || do_causal;
+  const bool sdpa_full_supported_mask =
+      !has_mask || (query_sequence_length <= key_sequence_length && do_causal);
 
   const bool supports_sdpa_full = query_sequence_length >= threshold &&
       sdpa_full_supported_mask && sdpa_full_supported_head_dim &&
       stream.device == Device::gpu;
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
-      (query_sequence_length <= k.shape(-2)) && sdpa_vector_supported_mask &&
-      sdpa_vector_supported_head_dim && stream.device == Device::gpu;
+      (query_sequence_length <= key_sequence_length) &&
+      sdpa_vector_supported_mask && sdpa_vector_supported_head_dim &&
+      stream.device == Device::gpu;
 
   const bool implementation_supports_use_case =
       supports_sdpa_full || supports_sdpa_vector;
