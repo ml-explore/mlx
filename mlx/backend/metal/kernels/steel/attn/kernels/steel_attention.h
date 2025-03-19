@@ -110,8 +110,7 @@ template <
 
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch
-        tidl.y * mask_params->M_strides[1]; // + // Head
-    // tidl.x * BQ * mask_params->M_strides[2]; // Seqeunce
+        tidl.y * mask_params->M_strides[1]; // Head
   }
 
   // Prepare threadgroup memory
@@ -238,26 +237,6 @@ template <
   if (do_causal) {
     int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
-
-    // Exit early
-    if (kb_lim <= 0) {
-      // Store results
-      O += (tm + sm) * params->O_strides[2] + sn;
-
-      if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
-        auto dst_tile_dims = short2(BD - sn, params->qL_rem - (tm + sm));
-
-        if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
-          return;
-
-        Otile.template store_safe<T, 1, 1>(
-            O, params->O_strides[2], dst_tile_dims);
-      } else {
-        Otile.template store<T, 1, 1>(O, params->O_strides[2]);
-      }
-
-      return;
-    }
   }
 
   // Loop over KV seq length
