@@ -35,6 +35,11 @@ class Synchronizer : public Primitive {
   DEFINE_PRINT(Synchronize);
 };
 
+std::atomic<bool>& interrupt_flag() {
+  static std::atomic<bool> interrupt_{false};
+  return interrupt_;
+}
+
 // Initialize the static tracing members from transforms_impl.h
 //
 // These are used to implement the in_tracing() function the returns true if we
@@ -249,6 +254,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
     if (!arr.is_tracer()) {
       arr.detach();
     }
+
+    if (interrupt_flag()) {
+      interrupt_flag() = false;
+      synchronizer.attach_event(Event{stream});
+      break;
+    }
   }
 
   // Signal the event in its stream
@@ -261,6 +272,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   return synchronizer;
+}
+
+void interrupt_eval() {
+  interrupt_flag() = true;
 }
 
 void async_eval(std::vector<array> outputs) {

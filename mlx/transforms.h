@@ -23,6 +23,11 @@ void eval(Arrays&&... outputs) {
 }
 
 /**
+ * Interrupt an ongoing eval. Leaves the graph in a valid state.
+ */
+void interrupt_eval();
+
+/**
  *  Computes the output and vector-Jacobian product (VJP) of a function.
  *
  *  Computes the vector-Jacobian product of the vector of cotangents with the
