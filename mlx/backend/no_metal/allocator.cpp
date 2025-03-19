@@ -10,6 +10,9 @@ Allocator& allocator() {
 }
 
 void* Buffer::raw_ptr() {
+  if (!ptr_) {
+    return nullptr;
+  }
   return static_cast<size_t*>(ptr_) + 1;
 }
 
