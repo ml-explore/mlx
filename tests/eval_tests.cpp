@@ -97,7 +97,8 @@ TEST_CASE("test interrupt eval") {
     x = x + 1;
   }
   std::thread t([x]() { eval(x); });
-  interrupt_eval();
+  while (!interrupt_eval()) {
+  }
   t.join();
   // Check that x is not evaluated
   CHECK(!x.is_available());

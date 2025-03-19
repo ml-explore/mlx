@@ -23,9 +23,12 @@ void eval(Arrays&&... outputs) {
 }
 
 /**
- * Interrupt an ongoing eval. Leaves the graph in a valid state.
+ * Interrupt an ongoing eval.
+ *
+ * Leaves the graph in a valid state. Returns true if an ongoing eval was
+ * interrupted and false otherwise.
  */
-void interrupt_eval();
+bool interrupt_eval();
 
 /**
  *  Computes the output and vector-Jacobian product (VJP) of a function.
