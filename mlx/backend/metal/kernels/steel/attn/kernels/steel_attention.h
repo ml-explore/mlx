@@ -110,7 +110,8 @@ template <
 
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch
-        tidl.y * mask_params->M_strides[1]; // Head
+        tidl.y * mask_params->M_strides[1]; // + // Head
+    // tidl.x * BQ * mask_params->M_strides[2]; // Seqeunce
   }
 
   // Prepare threadgroup memory
@@ -338,24 +339,37 @@ template <
       using selem_t = typename stile_t::elem_type;
       constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
 
+      using MMAFrag_mask_t = BaseMMAFrag<MaskType, kFragSize, kFragSize>;
+      using frag_t = typename MMAFrag_mask_t::frag_type;
+      frag_t mfrag[TQ][TK];
+
+      // const device MaskType* mask_ptr = &mask[(tm + sm) *
+      // mask_params->M_strides[2] + kb * BK + sn];
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
         const int row_pos = tid.x * BQ + tm + sm + (i * stile_t::kFragRows);
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < stile_t::kTileCols; j++) {
           const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
+
+          MMAFrag_mask_t::load_safe(
+              mfrag[i][j],
+              mask,
+              int(mask_params->M_strides[2]),
+              Int<1>{},
+              params->qL,
+              params->kL,
+              row_pos,
+              col_pos);
+
           STEEL_PRAGMA_UNROLL
           for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
-            if ((align_Q || (row_pos < params->qL)) &&
-                (align_K || ((col_pos + jj) < params->kL))) {
-              MaskType mask_val =
-                  mask[row_pos * mask_params->M_strides[2] + col_pos + jj];
-              if constexpr (is_same_v<MaskType, bool>) {
-                Stile.frag_at(i, j)[jj] =
-                    mask_val ? Stile.frag_at(i, j)[jj] : neg_inf;
-              } else {
-                Stile.frag_at(i, j)[jj] += selem_t(mask_val);
-              }
+            if constexpr (is_same_v<MaskType, bool>) {
+              Stile.frag_at(i, j)[jj] =
+                  mfrag[i][j][jj] ? Stile.frag_at(i, j)[jj] : neg_inf;
+            } else {
+              Stile.frag_at(i, j)[jj] +=
+                  1.44269504089 * selem_t(mfrag[i][j][jj]);
             }
           }
         }

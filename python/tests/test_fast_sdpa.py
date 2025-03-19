@@ -81,7 +81,7 @@ def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
 
     if mask is not None:
         if mask == "additive":
-            mask_np = np.random.uniform(0.0, 1.0, (B, qH, qL, kL)).astype(np_dtype)
+            mask_np = np.random.normal(0.0, 0.5, (B, qH, qL, kL)).astype(np_dtype)
             mask = mx.array(mask_np)
         elif mask == "bool":
             mask_np = np.random.uniform(0.0, 1.0, (B, qH, qL, kL)) < 0.5
@@ -463,10 +463,10 @@ class TestSDPA(mlx_tests.MLXTestCase):
             # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
             (  1,   128,   128,       64,   32,    32),
             (  1,    64,   128,       64,   32,    32),
-            (  1,    65,   128,       64,   32,    32),
-            (  1,    64,   127,       64,   32,    32),
-            (  1,    65,   127,       64,   32,    32),
-            # (  1,   127,    65,       64,   32,    32),
+            (  1,    65,   128,       64,   32,     8),
+            (  1,    64,   127,       64,   32,     8),
+            (  1,    65,   127,       64,   32,     8),
+            (  1,   127,    65,       64,   32,     8),
         )
 
         shapes_128 = (
@@ -474,7 +474,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
             (  1,   128,   128,      128,   32,     8),
             (  1,    64,   128,      128,   32,     8),
             (  1,    65,   127,      128,   32,     8),
-            # (  1,   127,    65,      128,   32,     8),
+            (  1,   127,    65,      128,   32,     8),
         )
         # fmt: on
 
