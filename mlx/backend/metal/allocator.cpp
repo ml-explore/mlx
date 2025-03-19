@@ -20,6 +20,9 @@ Allocator& allocator() {
 }
 
 void* Buffer::raw_ptr() {
+  if (!ptr_) {
+    return nullptr;
+  }
   return static_cast<MTL::Buffer*>(ptr_)->contents();
 }
 
