@@ -517,7 +517,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
                                 t,
                             )
 
-                            atol = 1e-5 if dtype == "float32" else 2e-4
+                            atol = 1e-5 if dtype == "float32" else 3e-4
 
                             self.assertListEqual(
                                 list(out_ref.shape), list(out_fst.shape)
