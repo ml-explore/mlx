@@ -110,8 +110,7 @@ template <
 
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch
-        tidl.y * mask_params->M_strides[1] + // Head
-        tidl.x * BQ * mask_params->M_strides[2]; // Seqeunce
+        tidl.y * mask_params->M_strides[1]; // Head
   }
 
   // Prepare threadgroup memory
@@ -236,8 +235,28 @@ template <
   int kb_lim = params->NK;
 
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + max(0, params->qL_off);
+    int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
+
+    // Exit early
+    if (kb_lim <= 0) {
+      // Store results
+      O += (tm + sm) * params->O_strides[2] + sn;
+
+      if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
+        auto dst_tile_dims = short2(BD - sn, params->qL_rem - (tm + sm));
+
+        if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+          return;
+
+        Otile.template store_safe<T, 1, 1>(
+            O, params->O_strides[2], dst_tile_dims);
+      } else {
+        Otile.template store<T, 1, 1>(O, params->O_strides[2]);
+      }
+
+      return;
+    }
   }
 
   // Loop over KV seq length
@@ -269,7 +288,7 @@ template <
       tile_matmad(Stile, Qtile, Ktile, Stile);
     }
 
-    // Mask out of length sequence
+    // Mask out length sequence
     if (!align_K && kb == (params->NK_aligned)) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
@@ -290,8 +309,31 @@ template <
       }
     }
 
-    // Mask out of causal
-    if (do_causal && kb >= (kb_lim - (BQ + BK - 1) / BK)) {
+    // Mask out if causal
+    if (do_causal && kb >= (kb_lim - (BQ + BK - 1) / BK - int(!align_K))) {
+      using stile_t = decltype(Stile);
+      using selem_t = typename stile_t::elem_type;
+      constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
+
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < stile_t::kTileRows; i++) {
+        const int row_pos =
+            tid.x * BQ + params->qL_off + tm + sm + (i * stile_t::kFragRows);
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < stile_t::kTileCols; j++) {
+          const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
+            if (row_pos < (col_pos + jj)) {
+              Stile.frag_at(i, j)[jj] = neg_inf;
+            }
+          }
+        }
+      }
+    }
+
+    // Other masking as needed
+    if (has_mask) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
       constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
@@ -304,8 +346,16 @@ template <
           const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
           STEEL_PRAGMA_UNROLL
           for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
-            if (row_pos < (col_pos + jj)) {
-              Stile.frag_at(i, j)[jj] = neg_inf;
+            if ((align_Q || (row_pos < params->qL)) &&
+                (align_K || ((col_pos + jj) < params->kL))) {
+              MaskType mask_val =
+                  mask[row_pos * mask_params->M_strides[2] + col_pos + jj];
+              if constexpr (is_same_v<MaskType, bool>) {
+                Stile.frag_at(i, j)[jj] =
+                    mask_val ? Stile.frag_at(i, j)[jj] : neg_inf;
+              } else {
+                Stile.frag_at(i, j)[jj] += selem_t(mask_val);
+              }
             }
           }
         }

@@ -61,7 +61,7 @@ void sdpa_full_self_attention_metal(
         << "_bd" << bd
         << "_wm" << wm 
         << "_wn" << wn
-        << "_mask" << (type_to_name(mask ? *mask : q)); // clang-format on
+        << "_mask" << (type_to_name(has_mask ? *mask : q)); // clang-format on
 
   std::string base_name = kname.str();
 
