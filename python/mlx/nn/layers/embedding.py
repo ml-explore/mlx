@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+from typing import Literal
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -39,6 +40,12 @@ class Embedding(Module):
         """
         return x @ self.weight.T
 
-    def to_quantized(self, group_size: int = 64, bits: int = 4):
+    def to_quantized(
+        self,
+        group_size: int = 64,
+        bits: int = 4,
+        mode: Literal["affine", "trellis"] = "affine",
+        fake: bool = False,
+    ):
         """Return a :obj:`QuantizedEmbedding` layer that approximates this embedding layer."""
         return QuantizedEmbedding.from_embedding(self, group_size, bits)

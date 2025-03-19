@@ -1315,13 +1315,15 @@ array quantized_matmul(
     bool transpose = true,
     int group_size = 64,
     int bits = 4,
+    const std::string& mode = "affine",
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
-std::tuple<array, array, array> quantize(
+std::vector<array> quantize(
     const array& w,
     int group_size = 64,
     int bits = 4,
+    const std::string& mode = "affine",
     StreamOrDevice s = {});
 
 /** Dequantize a matrix produced by quantize() */
@@ -1344,6 +1346,7 @@ array gather_qmm(
     bool transpose = true,
     int group_size = 64,
     int bits = 4,
+    const std::string& mode = "affine",
     StreamOrDevice s = {});
 
 /** Returns a contraction of a and b over multiple dimensions. */

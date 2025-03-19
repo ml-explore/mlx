@@ -4079,10 +4079,11 @@ void init_ops(nb::module_& m) {
       "transpose"_a = true,
       "group_size"_a = 64,
       "bits"_a = 4,
+      "mode"_a = "affine",
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: Literal['affine', 'trellis'], *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4101,6 +4102,8 @@ void init_ops(nb::module_& m) {
             shares a scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
             ``w``. Default: ``4``.
+          mode (str, optional): The mode to use for quantization.
+            Default: ``affine``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
@@ -4112,9 +4115,10 @@ void init_ops(nb::module_& m) {
       "group_size"_a = 64,
       "bits"_a = 4,
       nb::kw_only(),
+      "mode"_a = "affine",
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
+          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, mode: Literal['affine', 'trellis'], stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
       R"pbdoc(
         Quantize the matrix ``w`` using ``bits`` bits per element.
 
@@ -4156,6 +4160,7 @@ void init_ops(nb::module_& m) {
             scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element of
             ``w`` in the returned quantized matrix. Default: ``4``.
+          mode (str): The quantization mode to use. Default: ``affine``.
 
         Returns:
           tuple: A tuple containing
@@ -4212,10 +4217,11 @@ void init_ops(nb::module_& m) {
       "transpose"_a = true,
       "group_size"_a = 64,
       "bits"_a = 4,
+      "mode"_a = "affine",
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: Literal['affine', 'trellis'], *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4241,6 +4247,8 @@ void init_ops(nb::module_& m) {
             shares a scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
             ``w``. Default: ``4``.
+          mode (str, optional): The mode to use for quantization.
+            Default: ``affine``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``

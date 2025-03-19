@@ -1538,11 +1538,13 @@ class QuantizedMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      bool transpose)
+      bool transpose,
+      const std::string mode)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        transpose_(transpose) {}
+        transpose_(transpose),
+        mode_(mode) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1553,22 +1555,29 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, transpose_);
+    return std::make_tuple(group_size_, bits_, transpose_, mode_);
   }
 
  private:
   int group_size_;
   int bits_;
   bool transpose_;
+  const std::string mode_;
 };
 
 class GatherQMM : public UnaryPrimitive {
  public:
-  explicit GatherQMM(Stream stream, int group_size, int bits, bool transpose)
+  explicit GatherQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      bool transpose,
+      const std::string& mode)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        transpose_(transpose) {}
+        transpose_(transpose),
+        mode_(mode) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1578,13 +1587,14 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_PRINT(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, transpose_);
+    return std::make_tuple(group_size_, bits_, transpose_, mode_);
   }
 
  private:
   int group_size_;
   int bits_;
   bool transpose_;
+  const std::string mode_;
 };
 
 class RandomBits : public UnaryPrimitive {
