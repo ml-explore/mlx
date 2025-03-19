@@ -64,6 +64,7 @@ def do_attention(f, q, k, v, scale, mask=None, transpose=False):
 
 
 def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
+    np.random.seed(0)
     np_dtype = getattr(np, dtype)
 
     shape_q = (B, qL, qH, D) if transpose else (B, qH, qL, D)
