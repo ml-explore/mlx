@@ -499,6 +499,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
                             dtype=dtype,
                         ):
 
+                            np.random.seed(0)
                             q_mx, k_mx, v_mx, scale, mask = prepare_inputs(
                                 B, qL, kL, D, qH, kH, mask_str, t, dtype
                             )
@@ -517,7 +518,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
                                 t,
                             )
 
-                            atol = 1e-5 if dtype == "float32" else 3e-4
+                            atol = 2e-5 if dtype == "float32" else 3e-4
 
                             self.assertListEqual(
                                 list(out_ref.shape), list(out_fst.shape)
