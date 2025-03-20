@@ -3,11 +3,14 @@
 import unittest
 
 import mlx.core as mx
-import mlx_tests
-from mlx.nn.utils import average_gradients
+import mlx_distributed_tests
 
 
-class TestDistributed(mlx_tests.MLXTestCase):
+class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
+    @classmethod
+    def setUpClass(cls):
+        world = mx.distributed.init(strict=True, backend="mpi")
+
     def test_groups(self):
         world = mx.distributed.init()
         self.assertEqual(world.size(), 8)

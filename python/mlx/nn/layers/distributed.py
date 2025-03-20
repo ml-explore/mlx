@@ -66,6 +66,10 @@ def _shard(
             axis = s
         elif isinstance(s, tuple):
             axis, segments = s
+        else:
+            raise ValueError(
+                "The sharding function should return int or tuple[int, list]"
+            )
 
         return mx.contiguous(
             mx.concatenate(
@@ -239,8 +243,7 @@ class AllToShardedLinear(Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         # Aggregate the gradients coming from each shard
-        if self.group.size() > 1:
-            x = sum_gradients(self.group)(x)
+        x = sum_gradients(self.group)(x)
 
         # Compute the affine projection
         if "bias" in self:
@@ -323,20 +326,13 @@ class ShardedToAllLinear(Module):
         return f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
-        if self.group.size() > 1:
-            # Perform the local projection and aggregate the results
-            x = x @ self["weight"].T
-            x = mx.distributed.all_sum(x, group=self.group)
+        x = x @ self["weight"].T
 
-            # Add the bias if we have one
-            if "bias" in self:
-                x = x + self["bias"]
-        else:
-            # Normal linear layer as we are not in a distributed setting.
-            if "bias" in self:
-                x = mx.addmm(self["bias"], x, self["weight"].T)
-            else:
-                x = x @ self["weight"].T
+        x = mx.distributed.all_sum(x, group=self.group)
+
+        if "bias" in self:
+            x = x + self["bias"]
+
         return x
 
     @classmethod
@@ -434,8 +430,7 @@ class QuantizedAllToShardedLinear(Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         # Aggregate the gradients coming from each shard
-        if self.group.size() > 1:
-            x = sum_gradients(self.group)(x)
+        x = sum_gradients(self.group)(x)
 
         x = mx.quantized_matmul(
             x,
@@ -472,7 +467,9 @@ class QuantizedAllToShardedLinear(Module):
         )
         sl.update(
             _shard(
-                quantized_linear_layer.parameters(), _all_to_sharded(segments), group
+                quantized_linear_layer.parameters(),
+                _all_to_sharded(segments),
+                group,
             )
         )
 
@@ -566,8 +563,7 @@ class QuantizedShardedToAllLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
         )
-        if self.group.size() > 1:
-            x = mx.distributed.all_sum(x, group=self.group)
+        x = mx.distributed.all_sum(x, group=self.group)
         if "bias" in self:
             x = x + self["bias"]
         return x
@@ -594,7 +590,9 @@ class QuantizedShardedToAllLinear(Module):
         )
         sl.update(
             _shard(
-                quantized_linear_layer.parameters(), _sharded_to_all(segments), group
+                quantized_linear_layer.parameters(),
+                _sharded_to_all(segments),
+                group,
             )
         )
 
