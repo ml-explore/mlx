@@ -19,5 +19,5 @@ var namespacemlx_1_1core_1_1fast =
     [ "rms_norm", "namespacemlx_1_1core_1_1fast.html#a85ec3abc6b9d968c58275f5eef916f01", null ],
     [ "rope", "namespacemlx_1_1core_1_1fast.html#a1632b78950f0c8c31b24be7d80faeb39", null ],
     [ "rope", "namespacemlx_1_1core_1_1fast.html#a534ef357eae24892684a6ecd866d3fab", null ],
-    [ "scaled_dot_product_attention", "namespacemlx_1_1core_1_1fast.html#a3663b50265b0a9c0cca2b5376852e059", null ]
+    [ "scaled_dot_product_attention", "namespacemlx_1_1core_1_1fast.html#a4207ab2eb838335c0074f6bbb6b4cfc5", null ]
 ];
