@@ -28,7 +28,7 @@ void swap_endianness(uint8_t* data_bytes, size_t N) {
 namespace mlx::core {
 
 void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto read_task = [out_ptr = out.data<char>(),
                     size = out.size(),
                     itemsize = out.itemsize(),

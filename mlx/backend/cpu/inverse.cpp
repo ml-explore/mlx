@@ -11,7 +11,7 @@ namespace mlx::core {
 template <typename T>
 void general_inv(T* inv, int N) {
   int info;
-  auto ipiv = array::Data{allocator::malloc_or_wait(sizeof(int) * N)};
+  auto ipiv = array::Data{allocator::malloc(sizeof(int) * N)};
   // Compute LU factorization.
   getrf<T>(
       /* m = */ &N,
@@ -49,7 +49,7 @@ void general_inv(T* inv, int N) {
   }
 
   const int lwork = workspace_size;
-  auto scratch = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
+  auto scratch = array::Data{allocator::malloc(sizeof(T) * lwork)};
 
   // Compute inverse.
   getri<T>(

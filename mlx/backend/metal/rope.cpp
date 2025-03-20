@@ -43,14 +43,14 @@ void RoPE::eval_gpu(
       donated = true;
       out.copy_shared_buffer(in);
     } else {
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      out.set_data(allocator::malloc(out.nbytes()));
     }
     strides[0] = mat_size;
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];
   } else if (dispatch_ndim == 3) {
     // Handle non-contiguous 3D inputs
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
     strides[0] = in.strides()[ndim - 3];
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];

@@ -68,7 +68,7 @@ void arg_reduce_dispatch(
 void ArgReduce::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(in);
   encoder.set_output_array(out);

@@ -244,7 +244,7 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
     in = arr_copy;
     encoder.add_temporary(arr_copy);
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);

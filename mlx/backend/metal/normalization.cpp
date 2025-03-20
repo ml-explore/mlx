@@ -29,7 +29,7 @@ void RMSNorm::eval_gpu(
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            allocator::malloc(x.data_size() * x.itemsize()),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -129,7 +129,7 @@ void RMSNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
+    gx.set_data(allocator::malloc(gx.nbytes()));
   }
   if (g_copied && !g_in_gx) {
     d.add_temporary(g, s.index);
@@ -146,11 +146,11 @@ void RMSNormVJP::eval_gpu(
     if (!g_in_gx && donate_g) {
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
+      gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
       d.add_temporary(gw_temp, s.index);
     }
   }
-  gw.set_data(allocator::malloc_or_wait(gw.nbytes()));
+  gw.set_data(allocator::malloc(gw.nbytes()));
 
   const int simd_size = 32;
   const int n_reads = RMS_N_READS;
@@ -226,7 +226,7 @@ void LayerNorm::eval_gpu(
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            allocator::malloc(x.data_size() * x.itemsize()),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -331,7 +331,7 @@ void LayerNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
+    gx.set_data(allocator::malloc(gx.nbytes()));
   }
   if (g_copied && !g_in_gx) {
     d.add_temporary(g, s.index);
@@ -348,12 +348,12 @@ void LayerNormVJP::eval_gpu(
     if (!g_in_gx && donate_g) {
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
+      gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
       d.add_temporary(gw_temp, s.index);
     }
   }
-  gw.set_data(allocator::malloc_or_wait(gw.nbytes()));
-  gb.set_data(allocator::malloc_or_wait(gb.nbytes()));
+  gw.set_data(allocator::malloc(gw.nbytes()));
+  gb.set_data(allocator::malloc(gb.nbytes()));
 
   // Finish with the gradient for b in case we had a b
   auto& compute_encoder = d.get_command_encoder(s.index);

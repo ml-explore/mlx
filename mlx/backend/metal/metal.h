@@ -38,17 +38,20 @@ void reset_peak_memory();
 size_t get_cache_memory();
 
 /* Set the memory limit.
- * Calls to malloc will wait on scheduled tasks if the limit is exceeded.  If
- * there are no more scheduled tasks an error will be raised if relaxed
- * is false or memory will be allocated (including the potential for
- * swap) if relaxed is true.
+ * The memory limit is a guideline for the maximum amount of memory to use
+ * during graph evaluation. If the memory limit is exceeded and there is no
+ * more RAM (including swap when available) allocations will result in an
+ * exception.
  *
- * The memory limit defaults to 1.5 times the maximum recommended working set
- * size reported by the device.
+ * When metal is available the memory limit defaults to 1.5 times the maximum
+ * recommended working set size reported by the device.
  *
  * Returns the previous memory limit.
  * */
-size_t set_memory_limit(size_t limit, bool relaxed = true);
+size_t set_memory_limit(size_t limit);
+
+/* Get the current memory limit. */
+size_t get_memory_limit();
 
 /* Set the free cache limit.
  * If using more than the given limit, free memory will be reclaimed

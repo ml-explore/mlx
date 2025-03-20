@@ -115,7 +115,7 @@ void matmul_general(
 }
 
 void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   if (inputs[0].shape(-1) == 0) {
     auto& encoder = cpu::get_command_encoder(stream());
     encoder.set_output_array(out);

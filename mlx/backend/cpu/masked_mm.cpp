@@ -59,7 +59,7 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[BlockMaskedMM::eval] Currently only supports float32.");
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
@@ -318,7 +318,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[GatherMM::eval] Currently only supports float32.");
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];

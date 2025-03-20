@@ -921,7 +921,7 @@ void explicit_gemm_conv_1D_cpu(
 
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
-    gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    gemm_out.set_data(allocator::malloc(gemm_out.nbytes()));
     temps.push_back(gemm_out);
   }
 
@@ -1048,7 +1048,7 @@ void explicit_gemm_conv_2D_cpu(
 
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
-    gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    gemm_out.set_data(allocator::malloc(gemm_out.nbytes()));
     temps.push_back(gemm_out);
   }
 
@@ -1214,7 +1214,7 @@ void explicit_gemm_conv_ND_cpu(
 
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
-    gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
+    gemm_out.set_data(allocator::malloc(gemm_out.nbytes()));
     temps.push_back(gemm_out);
   }
 
@@ -1327,7 +1327,7 @@ void conv_3D_cpu(
 } // namespace
 
 void Convolution::eval_cpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& in = inputs[0];
   auto& wt = inputs[1];

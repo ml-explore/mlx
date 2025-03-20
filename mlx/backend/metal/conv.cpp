@@ -37,7 +37,7 @@ void explicit_gemm_conv_ND_gpu(
   Shape unfolded_shape{implicit_M, implicit_K};
   array in_unfolded(unfolded_shape, in.dtype(), nullptr, {});
 
-  in_unfolded.set_data(allocator::malloc_or_wait(in_unfolded.nbytes()));
+  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
 
   // Prepare unfolding kernel
   std::ostringstream kname;
@@ -115,7 +115,7 @@ void explicit_gemm_conv_group_ND_gpu(
   // Prepare unfolding array
   Shape unfolded_shape{implicit_M, implicit_K * groups};
   array in_unfolded(unfolded_shape, in.dtype(), nullptr, {});
-  in_unfolded.set_data(allocator::malloc_or_wait(in_unfolded.nbytes()));
+  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
 
   // Prepare unfolding kernel
   std::ostringstream kname;
@@ -613,7 +613,7 @@ void winograd_conv_2D_gpu(
   // Do filter transform
   Shape filt_wg_shape = {8 * 8, conv_params.C, conv_params.O};
   array filt_wg(std::move(filt_wg_shape), wt.dtype(), nullptr, {});
-  filt_wg.set_data(allocator::malloc_or_wait(filt_wg.nbytes()));
+  filt_wg.set_data(allocator::malloc(filt_wg.nbytes()));
   copies_w.push_back(filt_wg);
   {
     int bc = 32;
@@ -640,7 +640,7 @@ void winograd_conv_2D_gpu(
   // Do input transform
   Shape inp_wg_shape = {8 * 8, N_tiles, conv_params.C};
   array inp_wg(std::move(inp_wg_shape), in.dtype(), nullptr, {});
-  inp_wg.set_data(allocator::malloc_or_wait(inp_wg.nbytes()));
+  inp_wg.set_data(allocator::malloc(inp_wg.nbytes()));
   copies_w.push_back(inp_wg);
   {
     int bc = 32;
@@ -667,7 +667,7 @@ void winograd_conv_2D_gpu(
   // Do batched gemm
   Shape out_wg_shape = {8 * 8, N_tiles, conv_params.O};
   array out_wg(std::move(out_wg_shape), in.dtype(), nullptr, {});
-  out_wg.set_data(allocator::malloc_or_wait(out_wg.nbytes()));
+  out_wg.set_data(allocator::malloc(out_wg.nbytes()));
   copies_w.push_back(out_wg);
   {
     std::vector<array> empty_copies;
@@ -855,7 +855,7 @@ void conv_3D_gpu(
 } // namespace
 
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
   auto& d = metal::device(s.device);
 

@@ -29,7 +29,7 @@ void concatenate_gpu(
   }
   std::partial_sum(sizes.cbegin(), sizes.cend(), sizes.begin());
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto strides = out.strides();
   auto flags = out.flags();

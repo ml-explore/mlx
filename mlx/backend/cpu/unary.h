@@ -18,13 +18,13 @@ void set_unary_output_data(const array& in, array& out) {
     } else {
       auto size = in.data_size();
       out.set_data(
-          allocator::malloc_or_wait(size * out.itemsize()),
+          allocator::malloc(size * out.itemsize()),
           size,
           in.strides(),
           in.flags());
     }
   } else {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
   }
 }
 

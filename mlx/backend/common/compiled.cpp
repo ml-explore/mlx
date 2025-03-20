@@ -188,7 +188,7 @@ void compiled_allocate_outputs(
     }
     for (; o < outputs.size(); ++o) {
       outputs[o].set_data(
-          allocator::malloc_or_wait(data_size * outputs[o].itemsize()),
+          allocator::malloc(data_size * outputs[o].itemsize()),
           data_size,
           strides,
           flags);
@@ -211,7 +211,7 @@ void compiled_allocate_outputs(
       }
     }
     for (; o < outputs.size(); ++o) {
-      outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
+      outputs[o].set_data(allocator::malloc(outputs[o].nbytes()));
     }
   }
 }

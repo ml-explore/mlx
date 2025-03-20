@@ -30,8 +30,7 @@ void luf_impl(
   auto strides = lu.strides();
   strides[ndim - 1] = M;
   strides[ndim - 2] = 1;
-  lu.set_data(
-      allocator::malloc_or_wait(lu.nbytes()), lu.nbytes(), strides, flags);
+  lu.set_data(allocator::malloc(lu.nbytes()), lu.nbytes(), strides, flags);
   copy_inplace(
       a,
       lu,
@@ -44,8 +43,8 @@ void luf_impl(
       stream);
 
   auto a_ptr = lu.data<T>();
-  pivots.set_data(allocator::malloc_or_wait(pivots.nbytes()));
-  row_indices.set_data(allocator::malloc_or_wait(row_indices.nbytes()));
+  pivots.set_data(allocator::malloc(pivots.nbytes()));
+  row_indices.set_data(allocator::malloc(row_indices.nbytes()));
   auto pivots_ptr = pivots.data<uint32_t>();
   auto row_indices_ptr = row_indices.data<uint32_t>();
   size_t num_matrices = a.size() / (M * N);

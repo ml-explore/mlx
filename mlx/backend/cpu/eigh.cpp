@@ -55,9 +55,8 @@ void eigh_impl(
       liwork = iwork;
     }
 
-    auto work_buf = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
-    auto iwork_buf =
-        array::Data{allocator::malloc_or_wait(sizeof(int) * liwork)};
+    auto work_buf = array::Data{allocator::malloc(sizeof(T) * lwork)};
+    auto iwork_buf = array::Data{allocator::malloc(sizeof(int) * liwork)};
     for (size_t i = 0; i < size / (N * N); ++i) {
       syevd<T>(
           &jobz,
@@ -98,7 +97,7 @@ void Eigh::eval_cpu(
       ? outputs[1]
       : array(a.shape(), a.dtype(), nullptr, {});
 
-  values.set_data(allocator::malloc_or_wait(values.nbytes()));
+  values.set_data(allocator::malloc(values.nbytes()));
 
   copy(
       a,

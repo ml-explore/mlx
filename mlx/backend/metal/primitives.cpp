@@ -28,7 +28,7 @@ void arange_set_scalars(T start, T next, metal::CommandEncoder& enc) {
 void reshape(const array& in, array& out, Stream s) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
     copy_gpu_inplace(
         in,
         out,
@@ -58,7 +58,7 @@ static array compute_dynamic_offset(
   if (donate) {
     offset.copy_shared_buffer(indices);
   } else {
-    offset.set_data(allocator::malloc_or_wait(offset.itemsize()));
+    offset.set_data(allocator::malloc(offset.itemsize()));
   }
   d.add_temporary(offset, s.index);
 
@@ -100,7 +100,7 @@ static array compute_dynamic_offset(
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
     return;
   }
@@ -161,7 +161,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
 void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
   auto& d = metal::device(s.device);
   std::string op_name;
@@ -333,7 +333,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
     return;
   }
@@ -397,7 +397,7 @@ void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& in = inputs[0];
   auto& start = inputs[1];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto s = stream();
   auto in_offset = compute_dynamic_offset(start, in.strides(), axes_, s);
   copy_gpu_inplace(
@@ -554,7 +554,7 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
         in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
-    tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
+    tmp.set_data(allocator::malloc(tmp.nbytes()));
     copy_gpu_inplace(in, tmp, CopyType::General, stream());
 
     auto flags = out.flags();
