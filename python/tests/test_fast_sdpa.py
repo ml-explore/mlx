@@ -527,6 +527,22 @@ class TestSDPA(mlx_tests.MLXTestCase):
                             diff = mx.abs(out_fst - out_ref) - atol * mx.abs(out_ref)
                             self.assertLessEqual(mx.max(diff).item(), atol)
 
+    def test_sdpa_broadcast_mask(self):
+        mask = mx.array(True)
+        D = 64
+        Nq = 4
+        Nkv = 1
+        scale = 1.0
+        L = 256
+
+        mx.random.seed(0)
+        q = 5e-1 * mx.random.normal(shape=(1, Nq, L, D))
+        k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+        v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+        ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
 
 if __name__ == "__main__":
     unittest.main(failfast=True)
