@@ -2,12 +2,13 @@
 
 import math
 from functools import lru_cache
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.quantized import QuantizedLinear
+from mlx.utils import tree_map_with_path
 
 
 @lru_cache
@@ -26,69 +27,76 @@ def sum_gradients(group):
     return f
 
 
-def _split(weight, groups, axis):
-    if isinstance(groups, int) or isinstance(groups[0], int):
-        return mx.split(weight, groups, axis=axis)
+def _split(weight, segments, axis):
+    """Equivalent to mx.split but allows for fractional segments."""
+    if isinstance(segments, int) or isinstance(segments[0], int):
+        return mx.split(weight, segments, axis=axis)
 
     N = weight.shape[axis]
-    indices = [int(g * N) for g in groups]
+    indices = [int(s * N) for s in segments]
     return mx.split(weight, indices, axis=axis)
 
 
-def _all_to_sharded(
+def _shard(
     parameters: dict,
-    groups: Union[int, list] = 1,
+    sharding_predicate: Callable,
     group: Optional[mx.distributed.Group] = None,
 ):
+    """Returns a new parameter tree with the weights sharded according to the
+    sharding_predicate.
+
+    The sharding predicate should return the sharding axis and optionally also
+    the segments that comprise the weight.
+    """
     group = group or mx.distributed.init()
     N = group.size()
     r = group.rank()
 
-    # The multiplication with 1 forces a copy, perhaps change to
-    # something better when available.
-    for k in parameters:
-        if not isinstance(parameters[k], mx.array):
-            continue
+    def _shard_fn(path, weight):
+        if not isinstance(weight, mx.array):
+            return weight
 
-        axis = max(parameters[k].ndim - 2, 0)
-        parameters[k] = mx.contiguous(
+        s = sharding_predicate(path, weight)
+        if s is None:
+            return weight
+
+        axis = None
+        segments = 1
+        if isinstance(s, int):
+            axis = s
+        elif isinstance(s, tuple):
+            axis, segments = s
+
+        return mx.contiguous(
             mx.concatenate(
-                [
-                    _split(part, N, axis)[r]
-                    for part in _split(parameters[k], groups, axis)
-                ],
+                [_split(part, N, axis)[r] for part in _split(weight, segments, axis)],
                 axis=axis,
             )
         )
 
-    return parameters
+    return tree_map_with_path(_shard_fn, parameters)
 
 
-def _sharded_to_all(
-    parameters: dict,
-    groups: Union[int, list] = 1,
-    group: Optional[mx.distributed.Group] = None,
-):
-    group = group or mx.distributed.init()
-    N = group.size()
-    r = group.rank()
+def _all_to_sharded(segments):
+    """Simple predicate to shard fully connected layers such that a common
+    representation becomes a sharded representation."""
 
-    # The multiplication with 1 forces a copy, perhaps change to
-    # something better when available.
-    for k in parameters:
-        if not isinstance(parameters[k], mx.array):
-            continue
-        if k == "bias":
-            continue
+    def _shard_fn(path, weight):
+        return max(weight.ndim - 2, 0), segments
 
-        parameters[k] = mx.contiguous(
-            mx.concatenate(
-                [_split(part, N, -1)[r] for part in _split(parameters[k], groups, -1)],
-                axis=-1,
-            )
-        )
+    return _shard_fn
 
-    return parameters
+
+def _sharded_to_all(segments):
+    """Simple predicate to shard fully connected layers such that a sharded
+    representation becomes a common representation."""
+
+    def _shard_fn(path, weight):
+        if path.endswith("bias"):
+            return None
+        return -1, segments
+
+    return _shard_fn
 
 
 def _check_sharding(sharding):
@@ -103,25 +111,67 @@ def _check_sharding(sharding):
 
 def shard_inplace(
     module: Module,
-    sharding: str,
+    sharding: Union[str, Callable],
     *,
-    groups: Union[int, list] = 1,
+    segments: Union[int, list] = 1,
     group: Optional[mx.distributed.Group] = None,
 ):
-    _check_sharding(sharding)
-    shard_function = (
-        _all_to_sharded if sharding == "all-to-sharded" else _sharded_to_all
-    )
-    module.update(shard_function(module.parameters(), groups=groups, group=group))
+    """Shard a module in-place by updating its parameter dictionary with the
+    sharded parameter dictionary.
+
+    The ``sharding`` argument can be any callable that given the path and the
+    weight returns the sharding axis and optionally also the segments that
+    comprise the unsharded weight. For instance if the weight is a fused QKV
+    matrix the segments should be 3.
+
+    .. note::
+        The module doesn't change so in order for distributed communication to
+        happen the module needs to natively support it and for it to be enabled.
+
+    Args:
+        module (mlx.nn.Module): The parameters of this module will be sharded
+            in-place.
+        sharding (str or callable): One of "all-to-sharded" and
+            "sharded-to-all" or a callable that returns the sharding axis and
+            segments.
+        segments (int or list): The segments to use if ``sharding`` is a
+            string. Default: ``1``.
+        group (mlx.core.distributed.Group): The distributed group to shard
+            across. If not set, the global group will be used. Default: ``None``.
+    """
+    if isinstance(sharding, str):
+        _check_sharding(sharding)
+        sharding = (
+            _all_to_sharded(segments)
+            if sharding == "all-to-sharded"
+            else _sharded_to_all(segments)
+        )
+    module.update(_shard(module.parameters(), sharding, group))
 
 
 def shard_linear(
     module: Module,
     sharding: str,
     *,
-    groups: Union[int, list] = 1,
+    segments: Union[int, list] = 1,
     group: Optional[mx.distributed.Group] = None,
 ):
+    """Create a new linear layer that has its parameters sharded and also
+    performs distributed communication either in the forward or backward
+    pass.
+
+    .. note::
+        Contrary to ``shard_inplace``, the original layer is not changed but a
+        new layer is returned.
+
+    Args:
+        module (mlx.nn.Module): The linear layer to be sharded.
+        sharding (str): One of "all-to-sharded" and
+            "sharded-to-all" that defines the type of sharding to perform.
+        segments (int or list): The segments to use. Default: ``1``.
+        group (mlx.core.distributed.Group): The distributed group to shard
+            across. If not set, the global group will be used. Default: ``None``.
+    """
     _check_sharding(sharding)
     fns = {
         ("all-to-sharded", True): AllToShardedLinear.from_linear,
@@ -129,7 +179,9 @@ def shard_linear(
         ("sharded-to-all", True): ShardedToAllLinear.from_linear,
         ("sharded-to-all", False): QuantizedShardedToAllLinear.from_quantized_linear,
     }
-    return fns[sharding, isinstance(module, Linear)](module, groups=groups, group=group)
+    return fns[sharding, isinstance(module, Linear)](
+        module, segments=segments, group=group
+    )
 
 
 class AllToShardedLinear(Module):
@@ -202,16 +254,14 @@ class AllToShardedLinear(Module):
         cls,
         linear_layer: Module,
         *,
-        groups: Union[int, list] = 1,
+        segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = linear_layer.weight.shape
 
         sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
-        sl.update(
-            _all_to_sharded(linear_layer.parameters(), groups=groups, group=group)
-        )
+        sl.update(_shard(linear_layer.parameters(), _all_to_sharded(segments), group))
 
         return sl
 
@@ -294,16 +344,14 @@ class ShardedToAllLinear(Module):
         cls,
         linear_layer: Module,
         *,
-        groups: Union[int, list] = 1,
+        segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = linear_layer.weight.shape
 
         sl = cls(input_dims, output_dims, hasattr(linear_layer, "bias"), group)
-        sl.update(
-            _sharded_to_all(linear_layer.parameters(), groups=groups, group=group)
-        )
+        sl.update(_shard(linear_layer.parameters(), _sharded_to_all(segments), group))
 
         return sl
 
@@ -407,7 +455,7 @@ class QuantizedAllToShardedLinear(Module):
         cls,
         quantized_linear_layer: Module,
         *,
-        groups: Union[int, list] = 1,
+        segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
@@ -423,8 +471,8 @@ class QuantizedAllToShardedLinear(Module):
             group=group,
         )
         sl.update(
-            _all_to_sharded(
-                quantized_linear_layer.parameters(), groups=groups, group=group
+            _shard(
+                quantized_linear_layer.parameters(), _all_to_sharded(segments), group
             )
         )
 
@@ -529,7 +577,7 @@ class QuantizedShardedToAllLinear(Module):
         cls,
         quantized_linear_layer: Module,
         *,
-        groups: Union[int, list] = 1,
+        segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
         group = group or mx.distributed.init()
@@ -545,8 +593,8 @@ class QuantizedShardedToAllLinear(Module):
             group=group,
         )
         sl.update(
-            _sharded_to_all(
-                quantized_linear_layer.parameters(), groups=groups, group=group
+            _shard(
+                quantized_linear_layer.parameters(), _sharded_to_all(segments), group
             )
         )
 
