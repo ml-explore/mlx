@@ -11,7 +11,7 @@ var structmlx_1_1core_1_1metal_1_1_command_encoder =
     [ "maybeInsertBarrier", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#ad538ae88f90560063f9ba502e2795991", null ],
     [ "operator=", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a3f42a1362b4a513fa89e7b3dcc570a8e", null ],
     [ "outputs", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#aefa48740fdee884f02e2d379bca4e78f", null ],
-    [ "register_output_array", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#ada20558738968ca2ecdcd95f228e028a", null ],
+    [ "register_output_array", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a2d42827ff8551ec43cef2d33b9051c0f", null ],
     [ "set_buffer", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#ae890f5cefa4ae24ae0f5d8e46a313a92", null ],
     [ "set_bytes", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#abc52d18ea87d213c47fd26062c829849", null ],
     [ "set_bytes", "structmlx_1_1core_1_1metal_1_1_command_encoder.html#a9c343f791812a45c6c03a5c9f27f74d5", null ],

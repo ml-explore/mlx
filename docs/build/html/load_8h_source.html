@@ -76,7 +76,7 @@ $(function() { codefold.init(0); });
 </div>
 <script type="text/javascript">
 /* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
-$(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
+$(function(){initNavTree('load_8h_source.html',''); initResizable(true); });
 /* @license-end */
 </script>
 <div id="doc-content">
@@ -105,7 +105,7 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
   <div class="headertitle"><div class="title">load.h</div></div>
 </div><!--header-->
 <div class="contents">
-<a href="io_2load_8h.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="comment">// Copyright © 2023 Apple Inc.</span></div>
+<a href="load_8h.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="comment">// Copyright © 2023 Apple Inc.</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span> </div>
 <div class="line"><a id="l00003" name="l00003"></a><span class="lineno">    3</span><span class="preprocessor">#pragma once</span></div>
 <div class="line"><a id="l00004" name="l00004"></a><span class="lineno">    4</span> </div>
@@ -127,7 +127,7 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="comment">// longer differentiates between binary and text files and for them define</span></div>
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="comment">// the flag as no-op.</span></div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="preprocessor">#ifndef O_BINARY</span></div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno"><a class="line" href="io_2load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">   23</a></span><span class="preprocessor">#define O_BINARY 0</span></div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno"><a class="line" href="load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">   23</a></span><span class="preprocessor">#define O_BINARY 0</span></div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacemlx_1_1core.html">mlx::core</a> {</div>
@@ -173,7 +173,7 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span> <span class="keyword">public</span>:</div>
 <div class="foldopen" id="foldopen00061" data-start="{" data-end="}">
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a6cdb4547408f8cbca9e2ddd82514e697">   61</a></span>  <span class="keyword">explicit</span> <a class="code hl_function" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a6cdb4547408f8cbca9e2ddd82514e697">ParallelFileReader</a>(std::string file_path)</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>      : fd_(open(file_path.c_str(), O_RDONLY | <a class="code hl_define" href="io_2load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a>)),</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>      : fd_(open(file_path.c_str(), O_RDONLY | <a class="code hl_define" href="load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a>)),</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>        label_(<a class="code hl_function" href="group__ops.html#ga2a466024f8061febc0a64be557644cb0">std</a>::move(file_path)) {}</div>
 </div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span> </div>
@@ -241,7 +241,7 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1io_1_1_file_writer.html#a40b241ad540ee4aadc3a19a6b1ccfb4d">  111</a></span>  <span class="keyword">explicit</span> <a class="code hl_function" href="classmlx_1_1core_1_1io_1_1_file_writer.html#a40b241ad540ee4aadc3a19a6b1ccfb4d">FileWriter</a>(std::string file_path)</div>
 <div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>      : fd_(open(</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>            file_path.c_str(),</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>            O_CREAT | O_WRONLY | O_TRUNC | <a class="code hl_define" href="io_2load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a>,</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>            O_CREAT | O_WRONLY | O_TRUNC | <a class="code hl_define" href="load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a>,</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>            0644)),</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>        label_(<a class="code hl_function" href="group__ops.html#ga2a466024f8061febc0a64be557644cb0">std</a>::move(file_path)) {}</div>
 </div>
@@ -360,8 +360,8 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
 <div class="ttc" id="aclassmlx_1_1core_1_1io_1_1_writer_html_a9c1716dda53aa36faea9c8fb1a3e34d4"><div class="ttname"><a href="classmlx_1_1core_1_1io_1_1_writer.html#a9c1716dda53aa36faea9c8fb1a3e34d4">mlx::core::io::Writer::seek</a></div><div class="ttdeci">virtual void seek(int64_t off, std::ios_base::seekdir way=std::ios_base::beg)=0</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1io_1_1_writer_html_ad9515b7f007338674de1e124cf77e125"><div class="ttname"><a href="classmlx_1_1core_1_1io_1_1_writer.html#ad9515b7f007338674de1e124cf77e125">mlx::core::io::Writer::write</a></div><div class="ttdeci">virtual void write(const char *data, size_t n)=0</div></div>
 <div class="ttc" id="agroup__ops_html_ga2a466024f8061febc0a64be557644cb0"><div class="ttname"><a href="group__ops.html#ga2a466024f8061febc0a64be557644cb0">mlx::core::std</a></div><div class="ttdeci">array std(const array &amp;a, bool keepdims, int ddof=0, StreamOrDevice s={})</div><div class="ttdoc">Computes the standard deviation of the elements of an array.</div></div>
-<div class="ttc" id="aio_2load_8h_html_a36fa9b2e726512bc17a7a6d3e39002be"><div class="ttname"><a href="io_2load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a></div><div class="ttdeci">#define O_BINARY</div><div class="ttdef"><b>Definition</b> load.h:23</div></div>
 <div class="ttc" id="aio_8h_html"><div class="ttname"><a href="io_8h.html">io.h</a></div></div>
+<div class="ttc" id="aload_8h_html_a36fa9b2e726512bc17a7a6d3e39002be"><div class="ttname"><a href="load_8h.html#a36fa9b2e726512bc17a7a6d3e39002be">O_BINARY</a></div><div class="ttdeci">#define O_BINARY</div><div class="ttdef"><b>Definition</b> load.h:23</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1io_html"><div class="ttname"><a href="namespacemlx_1_1core_1_1io.html">mlx::core::io</a></div><div class="ttdef"><b>Definition</b> load.h:28</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1io_html_a05f27b765443a178a972abae772e863d"><div class="ttname"><a href="namespacemlx_1_1core_1_1io.html#a05f27b765443a178a972abae772e863d">mlx::core::io::thread_pool</a></div><div class="ttdeci">ThreadPool &amp; thread_pool()</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html"><div class="ttname"><a href="namespacemlx_1_1core.html">mlx::core</a></div><div class="ttdef"><b>Definition</b> allocator.h:7</div></div>
@@ -371,7 +371,7 @@ $(function(){initNavTree('io_2load_8h_source.html',''); initResizable(true); });
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
-    <li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_2193406f5b2eae6fc53753d8a9a80df3.html">io</a></li><li class="navelem"><a class="el" href="io_2load_8h.html">load.h</a></li>
+    <li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_2193406f5b2eae6fc53753d8a9a80df3.html">io</a></li><li class="navelem"><a class="el" href="load_8h.html">load.h</a></li>
     <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.13.2 </li>
   </ul>
 </div>

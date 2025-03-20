@@ -5,7 +5,6 @@ var classmlx_1_1core_1_1array =
     [ "Flags", "structmlx_1_1core_1_1array_1_1_flags.html", "structmlx_1_1core_1_1array_1_1_flags" ],
     [ "Status", "classmlx_1_1core_1_1array.html#a199726612fa8a4bcd5c2d05eadad7078", [
       [ "unscheduled", "classmlx_1_1core_1_1array.html#a199726612fa8a4bcd5c2d05eadad7078ae8a9988458b0355001674020a45656fb", null ],
-      [ "scheduled", "classmlx_1_1core_1_1array.html#a199726612fa8a4bcd5c2d05eadad7078af8a6f8eed2395ab89a758dec434393ae", null ],
       [ "evaluated", "classmlx_1_1core_1_1array.html#a199726612fa8a4bcd5c2d05eadad7078a6fc3d7595445dd877584495f47535268", null ],
       [ "available", "classmlx_1_1core_1_1array.html#a199726612fa8a4bcd5c2d05eadad7078a308bd3e5bf976888b120dd36d0c2d2ae", null ]
     ] ],
@@ -20,7 +19,6 @@ var classmlx_1_1core_1_1array =
     [ "array", "classmlx_1_1core_1_1array.html#a297df274e2da5cb884257bbeffd6b187", null ],
     [ "array", "classmlx_1_1core_1_1array.html#ab6cbccbba66cc54acda4390b19f0397c", null ],
     [ "array", "classmlx_1_1core_1_1array.html#abc26528271076510822e374d1668a94b", null ],
-    [ "array", "classmlx_1_1core_1_1array.html#a2476f987ec7a5afb7665d3b3974db0b2", null ],
     [ "~array", "classmlx_1_1core_1_1array.html#a2f16c1ef8ee248d2fba95520c86dfad2", null ],
     [ "attach_event", "classmlx_1_1core_1_1array.html#a000c3cfe13cb378bf0523b62816190da", null ],
     [ "begin", "classmlx_1_1core_1_1array.html#a76b258b169d7d73419ebbf85340fb914", null ],
@@ -34,6 +32,7 @@ var classmlx_1_1core_1_1array =
     [ "data_shared_ptr", "classmlx_1_1core_1_1array.html#ab84c792117e29cdf90ef3433303f6141", null ],
     [ "data_size", "classmlx_1_1core_1_1array.html#afaf2a370fa35d96af1b27a4b814e3bfd", null ],
     [ "detach", "classmlx_1_1core_1_1array.html#a84948c29df8c957904919c8602692bd2", null ],
+    [ "detach_event", "classmlx_1_1core_1_1array.html#a9ff36a88bfd7c99a2662136ee9315f4e", null ],
     [ "dtype", "classmlx_1_1core_1_1array.html#ae29e7d6fbfbea1e5e321a8d1ea3cfacd", null ],
     [ "end", "classmlx_1_1core_1_1array.html#a5daf64552fb450825c9b382f3a5fa2d4", null ],
     [ "eval", "classmlx_1_1core_1_1array.html#a2820c45188071a22175e9fa42e10a49a", null ],
@@ -50,8 +49,6 @@ var classmlx_1_1core_1_1array =
     [ "item", "classmlx_1_1core_1_1array.html#a8650a99a6b7549bc823b03ad92590ff7", null ],
     [ "itemsize", "classmlx_1_1core_1_1array.html#af329d9432c92de87cbaa2de8454eefc0", null ],
     [ "make_arrays", "classmlx_1_1core_1_1array.html#a45b1c9763fe921fe5880ca28316ae98c", null ],
-    [ "move_shared_buffer", "classmlx_1_1core_1_1array.html#a38d7ad605f8282e5e49d0c09e0555c78", null ],
-    [ "move_shared_buffer", "classmlx_1_1core_1_1array.html#ad41cc5e7aebfcad849ad15d697584cf8", null ],
     [ "nbytes", "classmlx_1_1core_1_1array.html#a387b67cd3ef5cfc1e749c371766c4a05", null ],
     [ "ndim", "classmlx_1_1core_1_1array.html#a53006e77d13d9d88b525ef577748939f", null ],
     [ "operator=", "classmlx_1_1core_1_1array.html#a5c89c2406a610b32943955f9a5060fbd", null ],
@@ -76,5 +73,6 @@ var classmlx_1_1core_1_1array =
     [ "status", "classmlx_1_1core_1_1array.html#a7102659be87e9ef62966696ab9b07dad", null ],
     [ "strides", "classmlx_1_1core_1_1array.html#a28cf1928f5ec2f972a94ff1c0e71187d", null ],
     [ "strides", "classmlx_1_1core_1_1array.html#ac9bfc251a9937eaefbe7f8c5ffd304d1", null ],
+    [ "unsafe_weak_copy", "classmlx_1_1core_1_1array.html#a797ae8a1708a7c67d62e6c55c321d802", null ],
     [ "wait", "classmlx_1_1core_1_1array.html#a648592006f1c92287734ba2428eaa45e", null ]
 ];
