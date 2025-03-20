@@ -17,6 +17,7 @@ var dir_938ab0ecf10b8b860ff766c820f665fd =
     [ "export_impl.h", "export__impl_8h.html", "export__impl_8h" ],
     [ "fast.h", "fast_8h.html", "fast_8h" ],
     [ "fast_primitives.h", "fast__primitives_8h.html", "fast__primitives_8h" ],
+    [ "fence.h", "fence_8h.html", "fence_8h" ],
     [ "fft.h", "fft_8h.html", "fft_8h" ],
     [ "graph_utils.h", "graph__utils_8h.html", "graph__utils_8h" ],
     [ "io.h", "io_8h.html", "io_8h" ],
