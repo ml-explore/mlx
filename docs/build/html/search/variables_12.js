@@ -22,9 +22,8 @@ var searchData=
   ['start_5frow_19',['start_row',['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader_general.html#a220e033b689c8d6a6f319dae02b38334',1,'mlx::steel::Conv2DWeightBlockLoaderGeneral']]],
   ['stop_20',['stop',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a456ad1c0c9e731833a2f8411c4ed51aa',1,'mlx::core::scheduler::StreamThread']]],
   ['str_21',['str',['../classpocketfft_1_1detail_1_1arr__info.html#abe1f7b92501b4e0e5a38fd26294ac5a4',1,'pocketfft::detail::arr_info::str'],['../struct_m_l_x_conv_params.html#a862191e8ab1bc8a47aa1396b36d46058',1,'MLXConvParams::str']]],
-  ['stream_22',['stream',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a8462e4acffcd385c6248bd7102e6bcb1',1,'mlx::core::scheduler::StreamThread']]],
-  ['strided_5fdevice_5fidx_23',['strided_device_idx',['../struct_read_writer.html#a4c0b12484aac4fd6759d67c190391989',1,'ReadWriter']]],
-  ['strided_5fshared_5fidx_24',['strided_shared_idx',['../struct_read_writer.html#ace40adb02cfb33d89c98353327c251fc',1,'ReadWriter']]],
-  ['strides_25',['strides',['../structmlx_1_1core_1_1_reduction_plan.html#a58bc6189e5e7175dae92632a7bcfd53e',1,'mlx::core::ReductionPlan::strides'],['../struct_indices.html#a510b7fe052c5826911dd17d7ccb9e73f',1,'Indices::strides'],['../structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html#a63954de7da62942ec69afcaaa19d46f2',1,'mlx::core::fast::CustomKernelShapeInfo::strides']]],
-  ['swizzle_5flog_26',['swizzle_log',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#ad0713159d4f710cd9a066596593d8840',1,'mlx::steel::ImplicitGemmConv2DParams::swizzle_log'],['../structmlx_1_1steel_1_1_g_e_m_m_params.html#af9ff2c06dd8994126634531440325be7',1,'mlx::steel::GEMMParams::swizzle_log']]]
+  ['strided_5fdevice_5fidx_22',['strided_device_idx',['../struct_read_writer.html#a4c0b12484aac4fd6759d67c190391989',1,'ReadWriter']]],
+  ['strided_5fshared_5fidx_23',['strided_shared_idx',['../struct_read_writer.html#ace40adb02cfb33d89c98353327c251fc',1,'ReadWriter']]],
+  ['strides_24',['strides',['../structmlx_1_1core_1_1_reduction_plan.html#a58bc6189e5e7175dae92632a7bcfd53e',1,'mlx::core::ReductionPlan::strides'],['../struct_indices.html#a510b7fe052c5826911dd17d7ccb9e73f',1,'Indices::strides'],['../structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html#a63954de7da62942ec69afcaaa19d46f2',1,'mlx::core::fast::CustomKernelShapeInfo::strides']]],
+  ['swizzle_5flog_25',['swizzle_log',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#ad0713159d4f710cd9a066596593d8840',1,'mlx::steel::ImplicitGemmConv2DParams::swizzle_log'],['../structmlx_1_1steel_1_1_g_e_m_m_params.html#af9ff2c06dd8994126634531440325be7',1,'mlx::steel::GEMMParams::swizzle_log']]]
 ];

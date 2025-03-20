@@ -2,8 +2,8 @@ var gemv__masked_8h =
 [
     [ "_NoMask", "struct___no_mask.html", "struct___no_mask" ],
     [ "ScaleOp< OutT, InT >", "struct_scale_op.html", "struct_scale_op" ],
-    [ "GEMVKernel< T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN >", "struct_g_e_m_v_kernel.html", "struct_g_e_m_v_kernel" ],
-    [ "GEMVTKernel< T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN >", "struct_g_e_m_v_t_kernel.html", "struct_g_e_m_v_t_kernel" ],
+    [ "GEMVKernel< T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT >", "struct_g_e_m_v_kernel.html", "struct_g_e_m_v_kernel" ],
+    [ "GEMVTKernel< T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT >", "struct_g_e_m_v_t_kernel.html", "struct_g_e_m_v_t_kernel" ],
     [ "MLX_MTL_CONST", "gemv__masked_8h.html#a0386011c52d03e60885a31e6fbd903dd", null ],
     [ "MLX_MTL_PRAGMA_UNROLL", "gemv__masked_8h.html#a069b682d7d21827461544817d722bfd3", null ],
     [ "nomask_t", "gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca", null ],

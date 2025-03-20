@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.13.2"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: mlx/backend/common/load.h File Reference</title>
+<title>MLX: mlx::steel::AttnMaskParams Struct Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -76,7 +76,7 @@ $(function() { codefold.init(0); });
 </div>
 <script type="text/javascript">
 /* @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&amp;dn=expat.txt MIT */
-$(function(){initNavTree('backend_2common_2load_8h.html',''); initResizable(true); });
+$(function(){initNavTree('structmlx_1_1steel_1_1_attn_mask_params.html',''); initResizable(true); });
 /* @license-end */
 </script>
 <div id="doc-content">
@@ -103,34 +103,46 @@ $(function(){initNavTree('backend_2common_2load_8h.html',''); initResizable(true
 
 <div class="header">
   <div class="summary">
-<a href="#namespaces">Namespaces</a> &#124;
-<a href="#func-members">Functions</a>  </div>
-  <div class="headertitle"><div class="title">load.h File Reference</div></div>
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="structmlx_1_1steel_1_1_attn_mask_params-members.html">List of all members</a>  </div>
+  <div class="headertitle"><div class="title">mlx::steel::AttnMaskParams Struct Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &quot;<a class="el" href="array_8h_source.html">mlx/array.h</a>&quot;</code><br />
-<code>#include &quot;<a class="el" href="io_2load_8h_source.html">mlx/io/load.h</a>&quot;</code><br />
-</div>
-<p><a href="backend_2common_2load_8h_source.html">Go to the source code of this file.</a></p>
+
+<p><code>#include &lt;<a class="el" href="attn_2params_8h_source.html">params.h</a>&gt;</code></p>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
-Namespaces</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx.html">mlx</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html">mlx::core</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
-Functions</h2></td></tr>
-<tr class="memitem:a954de19249da7c1fa39b89bdc47368aa" id="r_a954de19249da7c1fa39b89bdc47368aa"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a954de19249da7c1fa39b89bdc47368aa">mlx::core::load</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, size_t offset, const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;reader, bool swap_endianess)</td></tr>
-<tr class="separator:a954de19249da7c1fa39b89bdc47368aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:aaf6c5822d2cb2dcf0992798dc08e27d6" id="r_aaf6c5822d2cb2dcf0992798dc08e27d6"><td class="memItemLeft" align="right" valign="top">int64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aaf6c5822d2cb2dcf0992798dc08e27d6">M_strides</a> [3]</td></tr>
+<tr class="memdesc:aaf6c5822d2cb2dcf0992798dc08e27d6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mask strides (B, H, qL, kL = 1)  <br /></td></tr>
+<tr class="separator:aaf6c5822d2cb2dcf0992798dc08e27d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="aaf6c5822d2cb2dcf0992798dc08e27d6" name="aaf6c5822d2cb2dcf0992798dc08e27d6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf6c5822d2cb2dcf0992798dc08e27d6">&#9670;&#160;</a></span>M_strides</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int64_t mlx::steel::AttnMaskParams::M_strides[3]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Mask strides (B, H, qL, kL = 1) </p>
+
+</div>
+</div>
+<hr/>The documentation for this struct was generated from the following file:<ul>
+<li>mlx/backend/metal/kernels/steel/attn/<a class="el" href="attn_2params_8h_source.html">params.h</a></li>
+</ul>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
-    <li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_1d446c9bd3c99228254c9484e0bc5c06.html">backend</a></li><li class="navelem"><a class="el" href="dir_f149b24a1b5be11cd70151abe517e3f8.html">common</a></li><li class="navelem"><a class="el" href="backend_2common_2load_8h.html">load.h</a></li>
+    <li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1steel.html">steel</a></li><li class="navelem"><a class="el" href="structmlx_1_1steel_1_1_attn_mask_params.html">AttnMaskParams</a></li>
     <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.13.2 </li>
   </ul>
 </div>

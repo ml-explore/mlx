@@ -230,10 +230,12 @@ Functions</h2></td></tr>
 <tr class="separator:a8b4188f9a090a1da42d62b8a369bf106"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a46583a1aba89449fa72e6cb3a7090981" id="r_a46583a1aba89449fa72e6cb3a7090981"><td class="memItemLeft" align="right" valign="top">std::unique_ptr&lt; void, std::function&lt; void(void *)&gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a46583a1aba89449fa72e6cb3a7090981">new_scoped_memory_pool</a> ()</td></tr>
 <tr class="separator:a46583a1aba89449fa72e6cb3a7090981"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4552b7ccdfa7f3cc9895c09799d8048e" id="r_a4552b7ccdfa7f3cc9895c09799d8048e"><td class="memItemLeft" align="right" valign="top">std::function&lt; void()&gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4552b7ccdfa7f3cc9895c09799d8048e">make_task</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> arr, bool signal)</td></tr>
-<tr class="separator:a4552b7ccdfa7f3cc9895c09799d8048e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab31abdda3052162d59f6590a89e38337" id="r_ab31abdda3052162d59f6590a89e38337"><td class="memItemLeft" align="right" valign="top">std::function&lt; void()&gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab31abdda3052162d59f6590a89e38337">make_synchronize_task</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> s, std::shared_ptr&lt; std::promise&lt; void &gt; &gt; p)</td></tr>
-<tr class="separator:ab31abdda3052162d59f6590a89e38337"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a87f378c14345e475d7e5701a987b66cd" id="r_a87f378c14345e475d7e5701a987b66cd"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a87f378c14345e475d7e5701a987b66cd">eval</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;arr)</td></tr>
+<tr class="separator:a87f378c14345e475d7e5701a987b66cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5bfb8d4e6a7d1e51010d81ce008c3232" id="r_a5bfb8d4e6a7d1e51010d81ce008c3232"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5bfb8d4e6a7d1e51010d81ce008c3232">finalize</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> s)</td></tr>
+<tr class="separator:a5bfb8d4e6a7d1e51010d81ce008c3232"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acc15b940ea02dcac263a1af9e39ec16b" id="r_acc15b940ea02dcac263a1af9e39ec16b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acc15b940ea02dcac263a1af9e39ec16b">synchronize</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> s)</td></tr>
+<tr class="separator:acc15b940ea02dcac263a1af9e39ec16b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Typedef Documentation</h2>
 <a id="a616e09a1ef321d527770721cef264c54" name="a616e09a1ef321d527770721cef264c54"></a>
@@ -425,6 +427,23 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a87f378c14345e475d7e5701a987b66cd" name="a87f378c14345e475d7e5701a987b66cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87f378c14345e475d7e5701a987b66cd">&#9670;&#160;</a></span>eval()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::eval </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>arr</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a39f43360d9e916fcf7e86c919b419554" name="a39f43360d9e916fcf7e86c919b419554"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a39f43360d9e916fcf7e86c919b419554">&#9670;&#160;</a></span>fft()</h2>
 
@@ -435,6 +454,23 @@ Functions</h2></td></tr>
           <td class="memname">const char * mlx::core::metal::fft </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5bfb8d4e6a7d1e51010d81ce008c3232" name="a5bfb8d4e6a7d1e51010d81ce008c3232"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5bfb8d4e6a7d1e51010d81ce008c3232">&#9670;&#160;</a></span>finalize()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::finalize </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -614,48 +650,6 @@ Functions</h2></td></tr>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="ab31abdda3052162d59f6590a89e38337" name="ab31abdda3052162d59f6590a89e38337"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab31abdda3052162d59f6590a89e38337">&#9670;&#160;</a></span>make_synchronize_task()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">std::function&lt; void()&gt; mlx::core::metal::make_synchronize_task </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::shared_ptr&lt; std::promise&lt; void &gt; &gt;</td>          <td class="paramname"><span class="paramname"><em>p</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a4552b7ccdfa7f3cc9895c09799d8048e" name="a4552b7ccdfa7f3cc9895c09799d8048e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4552b7ccdfa7f3cc9895c09799d8048e">&#9670;&#160;</a></span>make_task()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">std::function&lt; void()&gt; mlx::core::metal::make_task </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>arr</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>signal</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1018,6 +1012,23 @@ Functions</h2></td></tr>
           <td class="memname">void mlx::core::metal::stop_capture </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acc15b940ea02dcac263a1af9e39ec16b" name="acc15b940ea02dcac263a1af9e39ec16b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc15b940ea02dcac263a1af9e39ec16b">&#9670;&#160;</a></span>synchronize()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::synchronize </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

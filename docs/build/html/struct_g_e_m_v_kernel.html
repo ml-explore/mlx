@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.13.2"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: GEMVKernel&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt; Struct Template Reference</title>
+<title>MLX: GEMVKernel&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt; Struct Template Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -106,7 +106,7 @@ $(function(){initNavTree('struct_g_e_m_v_kernel.html',''); initResizable(true); 
 <a href="#pub-static-methods">Static Public Member Functions</a> &#124;
 <a href="#pub-static-attribs">Static Public Attributes</a> &#124;
 <a href="struct_g_e_m_v_kernel-members.html">List of all members</a>  </div>
-  <div class="headertitle"><div class="title">GEMVKernel&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt; Struct Template Reference</div></div>
+  <div class="headertitle"><div class="title">GEMVKernel&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt; Struct Template Reference</div></div>
 </div><!--header-->
 <div class="contents">
 
@@ -114,57 +114,61 @@ $(function(){initNavTree('struct_g_e_m_v_kernel.html',''); initResizable(true); 
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a6013e9c5b2f72fa1311dd038172df0ce" id="r_a6013e9c5b2f72fa1311dd038172df0ce"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6013e9c5b2f72fa1311dd038172df0ce">load_unsafe</a> (const device T *src, thread T dst[TN], const int src_offset=0)</td></tr>
-<tr class="separator:a6013e9c5b2f72fa1311dd038172df0ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a04bb72da9a93d6d1eba468fa311bbba7" id="r_a04bb72da9a93d6d1eba468fa311bbba7"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a04bb72da9a93d6d1eba468fa311bbba7">load_safe</a> (const device T *src, thread T dst[TN], const int src_offset=0, const int src_size=TN)</td></tr>
-<tr class="separator:a04bb72da9a93d6d1eba468fa311bbba7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4a7b5011a0ea938ab1949bb1767fc1a" id="r_ac4a7b5011a0ea938ab1949bb1767fc1a"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac4a7b5011a0ea938ab1949bb1767fc1a">run</a> (const device T *mat, const device T *in_vec, device T *out_vec, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;matrix_ld, const device out_mask_t *out_mask, const device op_mask_t *mat_mask, const device op_mask_t *vec_mask, const constant int *mask_strides, threadgroup T *tgp_memory, uint3 tid, uint3 lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:ac4a7b5011a0ea938ab1949bb1767fc1a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af96a768a213a95e7a4d8f3ec1948034f" id="r_af96a768a213a95e7a4d8f3ec1948034f"><td class="memTemplParams" colspan="2">template&lt;typename U = T&gt; </td></tr>
+<tr class="memitem:af96a768a213a95e7a4d8f3ec1948034f"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#af96a768a213a95e7a4d8f3ec1948034f">load_unsafe</a> (const device T *src, thread U dst[TN], const int src_offset=0)</td></tr>
+<tr class="separator:af96a768a213a95e7a4d8f3ec1948034f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a047eca250e7cbc928bce0e13de98e558" id="r_a047eca250e7cbc928bce0e13de98e558"><td class="memTemplParams" colspan="2">template&lt;typename U = T&gt; </td></tr>
+<tr class="memitem:a047eca250e7cbc928bce0e13de98e558"><td class="memTemplItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a047eca250e7cbc928bce0e13de98e558">load_safe</a> (const device T *src, thread U dst[TN], const int src_offset=0, const int src_size=TN)</td></tr>
+<tr class="separator:a047eca250e7cbc928bce0e13de98e558"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac1a9e1d9853489dd928916912cc627a7" id="r_ac1a9e1d9853489dd928916912cc627a7"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac1a9e1d9853489dd928916912cc627a7">run</a> (const device T *mat, const device T *in_vec, device T *out_vec, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;matrix_ld, const device out_mask_t *out_mask, const device op_mask_t *mat_mask, const device op_mask_t *vec_mask, const constant int *mask_strides, threadgroup AccT *tgp_memory, uint3 tid, uint3 lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:ac1a9e1d9853489dd928916912cc627a7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:a1dd943fcbf5e7be435fc36bed589a641" id="r_a1dd943fcbf5e7be435fc36bed589a641"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1dd943fcbf5e7be435fc36bed589a641">threadsM</a> = BM * SM</td></tr>
-<tr class="separator:a1dd943fcbf5e7be435fc36bed589a641"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a47bfab7d21dd18760d3e0937ad36b19d" id="r_a47bfab7d21dd18760d3e0937ad36b19d"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a47bfab7d21dd18760d3e0937ad36b19d">threadsN</a> = BN * SN</td></tr>
-<tr class="separator:a47bfab7d21dd18760d3e0937ad36b19d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7281520100658811076400060663903c" id="r_a7281520100658811076400060663903c"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7281520100658811076400060663903c">blockM</a> = <a class="el" href="#a1dd943fcbf5e7be435fc36bed589a641">threadsM</a> * TM</td></tr>
-<tr class="separator:a7281520100658811076400060663903c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2fef17f9c9aa0bdf530ad3554fb0988b" id="r_a2fef17f9c9aa0bdf530ad3554fb0988b"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2fef17f9c9aa0bdf530ad3554fb0988b">blockN</a> = <a class="el" href="#a47bfab7d21dd18760d3e0937ad36b19d">threadsN</a> * TN</td></tr>
-<tr class="separator:a2fef17f9c9aa0bdf530ad3554fb0988b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab00784dff1512a7b0919fcb4cfa5d50e" id="r_ab00784dff1512a7b0919fcb4cfa5d50e"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab00784dff1512a7b0919fcb4cfa5d50e">has_operand_mask</a> = !metal::is_same_v&lt;op_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td></tr>
-<tr class="separator:ab00784dff1512a7b0919fcb4cfa5d50e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab8b64c94f4c8f6f09c0777415589b487" id="r_ab8b64c94f4c8f6f09c0777415589b487"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab8b64c94f4c8f6f09c0777415589b487">has_output_mask</a> = !metal::is_same_v&lt;out_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td></tr>
-<tr class="separator:ab8b64c94f4c8f6f09c0777415589b487"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad47223ee49b3cb7bf3746a2cec45f883" id="r_ad47223ee49b3cb7bf3746a2cec45f883"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad47223ee49b3cb7bf3746a2cec45f883">has_mul_operand_mask</a></td></tr>
-<tr class="separator:ad47223ee49b3cb7bf3746a2cec45f883"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0edbf2dd6a6563e7afa6dab6b670615c" id="r_a0edbf2dd6a6563e7afa6dab6b670615c"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a0edbf2dd6a6563e7afa6dab6b670615c">has_mul_output_mask</a></td></tr>
-<tr class="separator:a0edbf2dd6a6563e7afa6dab6b670615c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9ef4d0e62094d7033069f5dda5efb236" id="r_a9ef4d0e62094d7033069f5dda5efb236"><td class="memItemLeft" align="right" valign="top">static constant constexpr const short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9ef4d0e62094d7033069f5dda5efb236">tgp_mem_size</a> = BN &gt; 1 ? BN*(<a class="el" href="#a7281520100658811076400060663903c">blockM</a> + TM) : 0</td></tr>
-<tr class="separator:a9ef4d0e62094d7033069f5dda5efb236"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae8113fddf6fb637acfd12efd978b704c" id="r_ae8113fddf6fb637acfd12efd978b704c"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae8113fddf6fb637acfd12efd978b704c">needs_tgp_reduction</a> = BN &gt; 1</td></tr>
-<tr class="separator:ae8113fddf6fb637acfd12efd978b704c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afbe7ab8ebfa912ffbf3ba2cf4db24940" id="r_afbe7ab8ebfa912ffbf3ba2cf4db24940"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#afbe7ab8ebfa912ffbf3ba2cf4db24940">threadsM</a> = BM * SM</td></tr>
+<tr class="separator:afbe7ab8ebfa912ffbf3ba2cf4db24940"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a23142b7400f1f678e5d6d69d87f51032" id="r_a23142b7400f1f678e5d6d69d87f51032"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a23142b7400f1f678e5d6d69d87f51032">threadsN</a> = BN * SN</td></tr>
+<tr class="separator:a23142b7400f1f678e5d6d69d87f51032"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a188ef7ed5c1d74d9b540b6d4ebf12f2e" id="r_a188ef7ed5c1d74d9b540b6d4ebf12f2e"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a188ef7ed5c1d74d9b540b6d4ebf12f2e">blockM</a> = <a class="el" href="#afbe7ab8ebfa912ffbf3ba2cf4db24940">threadsM</a> * TM</td></tr>
+<tr class="separator:a188ef7ed5c1d74d9b540b6d4ebf12f2e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af22b6e5ed1a9d350866aaafa35d63a8a" id="r_af22b6e5ed1a9d350866aaafa35d63a8a"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af22b6e5ed1a9d350866aaafa35d63a8a">blockN</a> = <a class="el" href="#a23142b7400f1f678e5d6d69d87f51032">threadsN</a> * TN</td></tr>
+<tr class="separator:af22b6e5ed1a9d350866aaafa35d63a8a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a68bad880d1e689228ae4d3c6958cc6c1" id="r_a68bad880d1e689228ae4d3c6958cc6c1"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a68bad880d1e689228ae4d3c6958cc6c1">has_operand_mask</a> = !metal::is_same_v&lt;op_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td></tr>
+<tr class="separator:a68bad880d1e689228ae4d3c6958cc6c1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3b0b9ccf11bd5d7de50b9626fa9a22cc" id="r_a3b0b9ccf11bd5d7de50b9626fa9a22cc"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3b0b9ccf11bd5d7de50b9626fa9a22cc">has_output_mask</a> = !metal::is_same_v&lt;out_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td></tr>
+<tr class="separator:a3b0b9ccf11bd5d7de50b9626fa9a22cc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a09f0e646822d45dc2543e31509552258" id="r_a09f0e646822d45dc2543e31509552258"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a09f0e646822d45dc2543e31509552258">has_mul_operand_mask</a></td></tr>
+<tr class="separator:a09f0e646822d45dc2543e31509552258"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad54fb5c6f0f9a820365b638542693291" id="r_ad54fb5c6f0f9a820365b638542693291"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad54fb5c6f0f9a820365b638542693291">has_mul_output_mask</a></td></tr>
+<tr class="separator:ad54fb5c6f0f9a820365b638542693291"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a53514fa199efc5b7328052dac45aabab" id="r_a53514fa199efc5b7328052dac45aabab"><td class="memItemLeft" align="right" valign="top">static constant constexpr const short&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a53514fa199efc5b7328052dac45aabab">tgp_mem_size</a> = BN &gt; 1 ? BN*(<a class="el" href="#a188ef7ed5c1d74d9b540b6d4ebf12f2e">blockM</a> + TM) : 0</td></tr>
+<tr class="separator:a53514fa199efc5b7328052dac45aabab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae1c8e57e6718f22732570cc92d9bcf99" id="r_ae1c8e57e6718f22732570cc92d9bcf99"><td class="memItemLeft" align="right" valign="top">static constant constexpr const bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae1c8e57e6718f22732570cc92d9bcf99">needs_tgp_reduction</a> = BN &gt; 1</td></tr>
+<tr class="separator:ae1c8e57e6718f22732570cc92d9bcf99"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a04bb72da9a93d6d1eba468fa311bbba7" name="a04bb72da9a93d6d1eba468fa311bbba7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a04bb72da9a93d6d1eba468fa311bbba7">&#9670;&#160;</a></span>load_safe()</h2>
+<a id="a047eca250e7cbc928bce0e13de98e558" name="a047eca250e7cbc928bce0e13de98e558"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a047eca250e7cbc928bce0e13de98e558">&#9670;&#160;</a></span>load_safe()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
+<div class="memtemplate">
+template&lt;typename U = T&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::load_safe </td>
+          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::load_safe </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread T</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>[TN], </td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>[TN], </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -186,26 +190,28 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="a6013e9c5b2f72fa1311dd038172df0ce" name="a6013e9c5b2f72fa1311dd038172df0ce"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6013e9c5b2f72fa1311dd038172df0ce">&#9670;&#160;</a></span>load_unsafe()</h2>
+<a id="af96a768a213a95e7a4d8f3ec1948034f" name="af96a768a213a95e7a4d8f3ec1948034f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af96a768a213a95e7a4d8f3ec1948034f">&#9670;&#160;</a></span>load_unsafe()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
+<div class="memtemplate">
+template&lt;typename U = T&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::load_unsafe </td>
+          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::load_unsafe </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">thread T</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>[TN], </td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>[TN], </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -222,19 +228,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="ac4a7b5011a0ea938ab1949bb1767fc1a" name="ac4a7b5011a0ea938ab1949bb1767fc1a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac4a7b5011a0ea938ab1949bb1767fc1a">&#9670;&#160;</a></span>run()</h2>
+<a id="ac1a9e1d9853489dd928916912cc627a7" name="ac1a9e1d9853489dd928916912cc627a7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac1a9e1d9853489dd928916912cc627a7">&#9670;&#160;</a></span>run()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::run </td>
+          <td class="memname">static METAL_FUNC void <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::run </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>mat</em></span>, </td>
         </tr>
@@ -286,7 +292,7 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">threadgroup T *</td>          <td class="paramname"><span class="paramname"><em>tgp_memory</em></span>, </td>
+          <td class="paramtype">threadgroup AccT *</td>          <td class="paramname"><span class="paramname"><em>tgp_memory</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -319,19 +325,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 </div>
 </div>
 <h2 class="groupheader">Member Data Documentation</h2>
-<a id="a7281520100658811076400060663903c" name="a7281520100658811076400060663903c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7281520100658811076400060663903c">&#9670;&#160;</a></span>blockM</h2>
+<a id="a188ef7ed5c1d74d9b540b6d4ebf12f2e" name="a188ef7ed5c1d74d9b540b6d4ebf12f2e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a188ef7ed5c1d74d9b540b6d4ebf12f2e">&#9670;&#160;</a></span>blockM</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::blockM = <a class="el" href="#a1dd943fcbf5e7be435fc36bed589a641">threadsM</a> * TM</td>
+          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::blockM = <a class="el" href="#afbe7ab8ebfa912ffbf3ba2cf4db24940">threadsM</a> * TM</td>
         </tr>
       </table>
   </td>
@@ -343,19 +349,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="a2fef17f9c9aa0bdf530ad3554fb0988b" name="a2fef17f9c9aa0bdf530ad3554fb0988b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2fef17f9c9aa0bdf530ad3554fb0988b">&#9670;&#160;</a></span>blockN</h2>
+<a id="af22b6e5ed1a9d350866aaafa35d63a8a" name="af22b6e5ed1a9d350866aaafa35d63a8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af22b6e5ed1a9d350866aaafa35d63a8a">&#9670;&#160;</a></span>blockN</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::blockN = <a class="el" href="#a47bfab7d21dd18760d3e0937ad36b19d">threadsN</a> * TN</td>
+          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::blockN = <a class="el" href="#a23142b7400f1f678e5d6d69d87f51032">threadsN</a> * TN</td>
         </tr>
       </table>
   </td>
@@ -367,46 +373,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="ad47223ee49b3cb7bf3746a2cec45f883" name="ad47223ee49b3cb7bf3746a2cec45f883"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad47223ee49b3cb7bf3746a2cec45f883">&#9670;&#160;</a></span>has_mul_operand_mask</h2>
+<a id="a09f0e646822d45dc2543e31509552258" name="a09f0e646822d45dc2543e31509552258"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09f0e646822d45dc2543e31509552258">&#9670;&#160;</a></span>has_mul_operand_mask</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::has_mul_operand_mask</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-<b>Initial value:</b><div class="fragment"><div class="line">=</div>
-<div class="line">      <a class="code hl_variable" href="#ab00784dff1512a7b0919fcb4cfa5d50e">has_operand_mask</a> &amp;&amp; !metal::is_same_v&lt;op_mask_t, bool&gt;</div>
-<div class="ttc" id="astruct_g_e_m_v_kernel_html_ab00784dff1512a7b0919fcb4cfa5d50e"><div class="ttname"><a href="#ab00784dff1512a7b0919fcb4cfa5d50e">GEMVKernel::has_operand_mask</a></div><div class="ttdeci">static constant constexpr const bool has_operand_mask</div><div class="ttdef"><b>Definition</b> gemv_masked.h:63</div></div>
-</div><!-- fragment -->
-</div>
-</div>
-<a id="a0edbf2dd6a6563e7afa6dab6b670615c" name="a0edbf2dd6a6563e7afa6dab6b670615c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0edbf2dd6a6563e7afa6dab6b670615c">&#9670;&#160;</a></span>has_mul_output_mask</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::has_mul_output_mask</td>
+          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::has_mul_operand_mask</td>
         </tr>
       </table>
   </td>
@@ -416,24 +395,51 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 </table>
 </div><div class="memdoc">
 <b>Initial value:</b><div class="fragment"><div class="line">=</div>
-<div class="line">      <a class="code hl_variable" href="#ab8b64c94f4c8f6f09c0777415589b487">has_output_mask</a> &amp;&amp; !metal::is_same_v&lt;out_mask_t, bool&gt;</div>
-<div class="ttc" id="astruct_g_e_m_v_kernel_html_ab8b64c94f4c8f6f09c0777415589b487"><div class="ttname"><a href="#ab8b64c94f4c8f6f09c0777415589b487">GEMVKernel::has_output_mask</a></div><div class="ttdeci">static constant constexpr const bool has_output_mask</div><div class="ttdef"><b>Definition</b> gemv_masked.h:64</div></div>
+<div class="line">      <a class="code hl_variable" href="#a68bad880d1e689228ae4d3c6958cc6c1">has_operand_mask</a> &amp;&amp; !metal::is_same_v&lt;op_mask_t, bool&gt;</div>
+<div class="ttc" id="astruct_g_e_m_v_kernel_html_a68bad880d1e689228ae4d3c6958cc6c1"><div class="ttname"><a href="#a68bad880d1e689228ae4d3c6958cc6c1">GEMVKernel::has_operand_mask</a></div><div class="ttdeci">static constant constexpr const bool has_operand_mask</div><div class="ttdef"><b>Definition</b> gemv_masked.h:64</div></div>
 </div><!-- fragment -->
 </div>
 </div>
-<a id="ab00784dff1512a7b0919fcb4cfa5d50e" name="ab00784dff1512a7b0919fcb4cfa5d50e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab00784dff1512a7b0919fcb4cfa5d50e">&#9670;&#160;</a></span>has_operand_mask</h2>
+<a id="ad54fb5c6f0f9a820365b638542693291" name="ad54fb5c6f0f9a820365b638542693291"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad54fb5c6f0f9a820365b638542693291">&#9670;&#160;</a></span>has_mul_output_mask</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::has_operand_mask = !metal::is_same_v&lt;op_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td>
+          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::has_mul_output_mask</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">=</div>
+<div class="line">      <a class="code hl_variable" href="#a3b0b9ccf11bd5d7de50b9626fa9a22cc">has_output_mask</a> &amp;&amp; !metal::is_same_v&lt;out_mask_t, bool&gt;</div>
+<div class="ttc" id="astruct_g_e_m_v_kernel_html_a3b0b9ccf11bd5d7de50b9626fa9a22cc"><div class="ttname"><a href="#a3b0b9ccf11bd5d7de50b9626fa9a22cc">GEMVKernel::has_output_mask</a></div><div class="ttdeci">static constant constexpr const bool has_output_mask</div><div class="ttdef"><b>Definition</b> gemv_masked.h:65</div></div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a68bad880d1e689228ae4d3c6958cc6c1" name="a68bad880d1e689228ae4d3c6958cc6c1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68bad880d1e689228ae4d3c6958cc6c1">&#9670;&#160;</a></span>has_operand_mask</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::has_operand_mask = !metal::is_same_v&lt;op_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td>
         </tr>
       </table>
   </td>
@@ -445,19 +451,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="ab8b64c94f4c8f6f09c0777415589b487" name="ab8b64c94f4c8f6f09c0777415589b487"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab8b64c94f4c8f6f09c0777415589b487">&#9670;&#160;</a></span>has_output_mask</h2>
+<a id="a3b0b9ccf11bd5d7de50b9626fa9a22cc" name="a3b0b9ccf11bd5d7de50b9626fa9a22cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b0b9ccf11bd5d7de50b9626fa9a22cc">&#9670;&#160;</a></span>has_output_mask</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::has_output_mask = !metal::is_same_v&lt;out_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td>
+          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::has_output_mask = !metal::is_same_v&lt;out_mask_t, <a class="el" href="gemv__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">nomask_t</a>&gt;</td>
         </tr>
       </table>
   </td>
@@ -469,19 +475,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="ae8113fddf6fb637acfd12efd978b704c" name="ae8113fddf6fb637acfd12efd978b704c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae8113fddf6fb637acfd12efd978b704c">&#9670;&#160;</a></span>needs_tgp_reduction</h2>
+<a id="ae1c8e57e6718f22732570cc92d9bcf99" name="ae1c8e57e6718f22732570cc92d9bcf99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1c8e57e6718f22732570cc92d9bcf99">&#9670;&#160;</a></span>needs_tgp_reduction</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::needs_tgp_reduction = BN &gt; 1</td>
+          <td class="memname">constant constexpr const bool <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::needs_tgp_reduction = BN &gt; 1</td>
         </tr>
       </table>
   </td>
@@ -493,19 +499,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="a9ef4d0e62094d7033069f5dda5efb236" name="a9ef4d0e62094d7033069f5dda5efb236"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9ef4d0e62094d7033069f5dda5efb236">&#9670;&#160;</a></span>tgp_mem_size</h2>
+<a id="a53514fa199efc5b7328052dac45aabab" name="a53514fa199efc5b7328052dac45aabab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53514fa199efc5b7328052dac45aabab">&#9670;&#160;</a></span>tgp_mem_size</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const short <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::tgp_mem_size = BN &gt; 1 ? BN*(<a class="el" href="#a7281520100658811076400060663903c">blockM</a> + TM) : 0</td>
+          <td class="memname">constant constexpr const short <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::tgp_mem_size = BN &gt; 1 ? BN*(<a class="el" href="#a188ef7ed5c1d74d9b540b6d4ebf12f2e">blockM</a> + TM) : 0</td>
         </tr>
       </table>
   </td>
@@ -517,19 +523,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="a1dd943fcbf5e7be435fc36bed589a641" name="a1dd943fcbf5e7be435fc36bed589a641"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1dd943fcbf5e7be435fc36bed589a641">&#9670;&#160;</a></span>threadsM</h2>
+<a id="afbe7ab8ebfa912ffbf3ba2cf4db24940" name="afbe7ab8ebfa912ffbf3ba2cf4db24940"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afbe7ab8ebfa912ffbf3ba2cf4db24940">&#9670;&#160;</a></span>threadsM</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::threadsM = BM * SM</td>
+          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::threadsM = BM * SM</td>
         </tr>
       </table>
   </td>
@@ -541,19 +547,19 @@ template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, c
 
 </div>
 </div>
-<a id="a47bfab7d21dd18760d3e0937ad36b19d" name="a47bfab7d21dd18760d3e0937ad36b19d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a47bfab7d21dd18760d3e0937ad36b19d">&#9670;&#160;</a></span>threadsN</h2>
+<a id="a23142b7400f1f678e5d6d69d87f51032" name="a23142b7400f1f678e5d6d69d87f51032"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23142b7400f1f678e5d6d69d87f51032">&#9670;&#160;</a></span>threadsN</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN&gt; </div>
+template&lt;typename T, typename out_mask_t, typename op_mask_t, const int BM, const int BN, const int SM, const int SN, const int TM, const int TN, typename AccT = float&gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN &gt;::threadsN = BN * SN</td>
+          <td class="memname">constant constexpr const int <a class="el" href="struct_g_e_m_v_kernel.html">GEMVKernel</a>&lt; T, out_mask_t, op_mask_t, BM, BN, SM, SN, TM, TN, AccT &gt;::threadsN = BN * SN</td>
         </tr>
       </table>
   </td>

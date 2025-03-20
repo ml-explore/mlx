@@ -8,5 +8,5 @@ var common_2binary_8h =
       [ "mlx::core::BinaryOpType::General", "namespacemlx_1_1core.html#a546e3d3c8957fbf2758f9504f4a2d0b6a0db377921f4ce762c62526131097968f", null ]
     ] ],
     [ "mlx::core::get_binary_op_type", "namespacemlx_1_1core.html#a24eef9908f164adeece3be7c6924919a", null ],
-    [ "mlx::core::set_binary_op_output_data", "namespacemlx_1_1core.html#a6a52856325c2eb031d3983eba2108d59", null ]
+    [ "mlx::core::set_binary_op_output_data", "namespacemlx_1_1core.html#a9f22a9ed98104aaffb929381055b966d", null ]
 ];

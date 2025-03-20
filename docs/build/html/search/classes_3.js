@@ -13,7 +13,7 @@ var searchData=
   ['cmplx_3c_20thigh_20_3e_10',['cmplx&lt; Thigh &gt;',['../structpocketfft_1_1detail_1_1cmplx.html',1,'pocketfft::detail']]],
   ['cmplx_3c_20vtype_5ft_3c_20t_20_3e_20_3e_11',['cmplx&lt; vtype_t&lt; T &gt; &gt;',['../structpocketfft_1_1detail_1_1cmplx.html',1,'pocketfft::detail']]],
   ['cndarr_12',['cndarr',['../classpocketfft_1_1detail_1_1cndarr.html',1,'pocketfft::detail']]],
-  ['commandencoder_13',['CommandEncoder',['../structmlx_1_1core_1_1_command_encoder.html',1,'mlx::core::CommandEncoder'],['../structmlx_1_1core_1_1metal_1_1_command_encoder.html',1,'mlx::core::metal::CommandEncoder']]],
+  ['commandencoder_13',['CommandEncoder',['../structmlx_1_1core_1_1_command_encoder.html',1,'mlx::core::CommandEncoder'],['../structmlx_1_1core_1_1cpu_1_1_command_encoder.html',1,'mlx::core::cpu::CommandEncoder'],['../structmlx_1_1core_1_1metal_1_1_command_encoder.html',1,'mlx::core::metal::CommandEncoder']]],
   ['commonallocator_14',['CommonAllocator',['../classmlx_1_1core_1_1allocator_1_1_common_allocator.html',1,'mlx::core::allocator']]],
   ['compiled_15',['Compiled',['../classmlx_1_1core_1_1_compiled.html',1,'mlx::core']]],
   ['complex128_5ft_16',['complex128_t',['../structmlx_1_1core_1_1complex128__t.html',1,'mlx::core']]],

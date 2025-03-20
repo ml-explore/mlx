@@ -108,10 +108,10 @@ $(function(){initNavTree('cpu_2ternary_8h.html',''); initResizable(true); });
   <div class="headertitle"><div class="title">ternary.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &quot;<a class="el" href="allocator_8h_source.html">mlx/allocator.h</a>&quot;</code><br />
-<code>#include &quot;<a class="el" href="array_8h_source.html">mlx/array.h</a>&quot;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="array_8h_source.html">mlx/array.h</a>&quot;</code><br />
 <code>#include &quot;<a class="el" href="common_2ternary_8h_source.html">mlx/backend/common/ternary.h</a>&quot;</code><br />
 <code>#include &quot;<a class="el" href="backend_2common_2utils_8h_source.html">mlx/backend/common/utils.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="encoder_8h_source.html">mlx/backend/cpu/encoder.h</a>&quot;</code><br />
 </div>
 <p><a href="cpu_2ternary_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
@@ -127,12 +127,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a8096c7a688ac3f09cca69a3a85f7f157" id="r_a8096c7a688ac3f09cca69a3a85f7f157"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op, int D&gt; </td></tr>
 <tr class="memitem:a8096c7a688ac3f09cca69a3a85f7f157"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a8096c7a688ac3f09cca69a3a85f7f157">mlx::core::ternary_op_dims</a> (const T1 *a, const T2 *b, const T3 *c, U *out, Op op, const <a class="el" href="namespacemlx_1_1core.html#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;c_strides, const <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, int axis)</td></tr>
 <tr class="separator:a8096c7a688ac3f09cca69a3a85f7f157"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac1c085e305954247d042f5d8803cd85b" id="r_ac1c085e305954247d042f5d8803cd85b"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
-<tr class="memitem:ac1c085e305954247d042f5d8803cd85b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#ac1c085e305954247d042f5d8803cd85b">mlx::core::ternary_op_dispatch_dims</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:ac1c085e305954247d042f5d8803cd85b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9dcc3018702ee31c21c8652bdc2182b1" id="r_a9dcc3018702ee31c21c8652bdc2182b1"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
-<tr class="memitem:a9dcc3018702ee31c21c8652bdc2182b1"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a9dcc3018702ee31c21c8652bdc2182b1">mlx::core::ternary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a9dcc3018702ee31c21c8652bdc2182b1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9abcc6efafd9ab5df1293b1793a734d2" id="r_a9abcc6efafd9ab5df1293b1793a734d2"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
+<tr class="memitem:a9abcc6efafd9ab5df1293b1793a734d2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a9abcc6efafd9ab5df1293b1793a734d2">mlx::core::ternary_op_dispatch_dims</a> (const T1 *a_ptr, const T2 *b_ptr, const T3 *c_ptr, U *out_ptr, Op op, size_t size, <a class="el" href="namespacemlx_1_1core.html#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, std::vector&lt; <a class="el" href="namespacemlx_1_1core.html#a79939016d0972ded7db37130da2a8b5c">Strides</a> &gt; &amp;strides)</td></tr>
+<tr class="separator:a9abcc6efafd9ab5df1293b1793a734d2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a48fbbd43d2165ab7f42bac3f228bbda3" id="r_a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
+<tr class="memitem:a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a48fbbd43d2165ab7f42bac3f228bbda3">mlx::core::ternary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="namespacemlx_1_1core.html#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a> topt)</td></tr>
+<tr class="separator:a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

@@ -1,6 +1,6 @@
 var cpu_2copy_8h =
 [
-    [ "mlx::core::copy", "namespacemlx_1_1core.html#a479648542a2bea151b947b18f0e79dd2", null ],
-    [ "mlx::core::copy_inplace", "namespacemlx_1_1core.html#ae85bafda5ab0b4b2289591260cf07685", null ],
-    [ "mlx::core::copy_inplace", "namespacemlx_1_1core.html#a98495894a796b2cc6d022e7a03432c64", null ]
+    [ "mlx::core::copy", "namespacemlx_1_1core.html#a017bd8bd743e26f1ff971c8749b55daf", null ],
+    [ "mlx::core::copy_inplace", "namespacemlx_1_1core.html#a1e4381d42877a5c6050c20e77d13c990", null ],
+    [ "mlx::core::copy_inplace", "namespacemlx_1_1core.html#ab30708325761c91e7dde245827e9dd91", null ]
 ];

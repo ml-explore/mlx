@@ -228,7 +228,7 @@ $(function(){initNavTree('attn_2mma_8h_source.html',''); initResizable(true); })
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>      <span class="keywordflow">for</span> (<span class="keywordtype">short</span> j = 0; j &lt; kElemCols; j++) {</div>
 <div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>        <span class="keywordflow">if</span> ((off_x + i) &lt; lim_x &amp;&amp; (off_y + j) &lt; lim_y) {</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>          dst[i * kElemCols + j] =</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>              <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(src[(off_x + i) * str_x + (off_x + j) * str_y]);</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>              <span class="keyword">static_cast&lt;</span>T<span class="keyword">&gt;</span>(src[(off_x + i) * str_x + (off_y + j) * str_y]);</div>
 <div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>        } <span class="keywordflow">else</span> {</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>          dst[i * kElemCols + j] = T(0);</div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>        }</div>
