@@ -174,6 +174,17 @@ class TestEval(mlx_tests.MLXTestCase):
         post = mx.metal.get_peak_memory()
         self.assertEqual(pre, post)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_multistream_deadlock(self):
+        s1 = mx.default_stream(mx.gpu)
+        s2 = mx.new_stream(mx.gpu)
+
+        x = mx.array(1.0)
+        x = mx.abs(x, stream=s1)
+        for _ in range(1000):
+            x = mx.abs(x, stream=s2)
+        mx.eval(x)
+
 
 if __name__ == "__main__":
     unittest.main()

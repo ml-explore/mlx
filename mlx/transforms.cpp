@@ -21,7 +21,7 @@
 
 namespace mlx::core {
 
-static constexpr int MAX_ACTIVE_TASKS = 100;
+static constexpr int MAX_ACTIVE_TASKS = 10;
 
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */

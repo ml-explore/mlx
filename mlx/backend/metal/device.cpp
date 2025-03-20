@@ -19,9 +19,6 @@ namespace mlx::core::metal {
 
 namespace {
 
-// TODO nicer way to set this or possibly expose as an environment variable
-constexpr int MAX_BUFFERS_PER_QUEUE = 12;
-
 constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto get_metal_version() {
@@ -256,7 +253,7 @@ Device::~Device() {
 
 void Device::new_queue(int index) {
   auto thread_pool = metal::new_scoped_memory_pool();
-  auto q = device_->newCommandQueue(MAX_BUFFERS_PER_QUEUE);
+  auto q = device_->newCommandQueue();
   debug_set_stream_queue_label(q, index);
   if (!q) {
     throw std::runtime_error(
