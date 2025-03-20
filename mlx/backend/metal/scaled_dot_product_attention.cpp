@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -59,7 +58,7 @@ void sdpa_full_self_attention_metal(
         << "_bq" << bq
         << "_bk" << bk
         << "_bd" << bd
-        << "_wm" << wm 
+        << "_wm" << wm
         << "_wn" << wn
         << "_mask" << (type_to_name(has_mask ? *mask : q)); // clang-format on
 
@@ -67,7 +66,7 @@ void sdpa_full_self_attention_metal(
 
   // clang-format off
   kname << "_align_Q_" << (align_Q ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n')
         << "_has_mask_" << (has_mask ? 't' : 'n')
         << "_do_causal_" << (do_causal ? 't' : 'n'); // clang-format on
 
@@ -117,8 +116,14 @@ void sdpa_full_self_attention_metal(
 
   if (mask) {
     auto m = *mask;
+    int nd = m.ndim();
+    int64_t kv_seq_stride =
+        nd >= 1 && m.shape(-1) > 1 ? m.strides()[nd - 1] : 0;
+    int64_t q_seq_stride = nd >= 2 && m.shape(-2) > 1 ? m.strides()[nd - 2] : 0;
+    int64_t head_stride = nd >= 3 && m.shape(-3) > 1 ? m.strides()[nd - 3] : 0;
+
     AttnMaskParams mask_params{/* int64_t M_strides[3] = */ {
-        m.strides(0), m.strides(1), m.strides(2)}};
+        head_stride, q_seq_stride, kv_seq_stride}};
 
     compute_encoder.set_bytes(mask_params, 5);
     compute_encoder.set_input_array(m, 6);
@@ -437,8 +442,13 @@ void ScaledDotProductAttention::eval_gpu(
         {str_oB, str_oH, str_oL, str_oD},
         flags);
 
+    auto mask_no_copy = [&q, &k](const array& arr) {
+      return arr.ndim() <= 3 ||
+          arr.strides()[0] == (q.shape(1) * q.shape(2) * k.shape(2));
+    };
+
     auto mask = inputs.size() > 3
-        ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
+        ? std::optional<array>{copy_unless(mask_no_copy, inputs[3])}
         : std::nullopt;
 
     sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o, do_causal_, mask);
