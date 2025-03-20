@@ -185,6 +185,18 @@ class TestEval(mlx_tests.MLXTestCase):
             x = mx.abs(x, stream=s2)
         mx.eval(x)
 
+        s1 = mx.default_stream(mx.gpu)
+        s2 = mx.new_stream(mx.gpu)
+        old_limit = mx.metal.set_memory_limit(1000)
+
+        x = mx.ones((512, 512), stream=s2)
+        for _ in range(80):
+            x = mx.abs(x, stream=s1)
+        y = mx.abs(x, stream=s2)
+        z = mx.abs(y, stream=s2)
+        mx.eval(z)
+        mx.metal.set_memory_limit(old_limit)
+
 
 if __name__ == "__main__":
     unittest.main()

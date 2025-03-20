@@ -84,7 +84,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (in_contiguous.is_donatable()) {
     out.copy_shared_buffer(in_contiguous);
   } else {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
   }
 
   int n, m;
@@ -161,7 +161,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Upload 2:
     // y = h12 @ tmp
     array temp(in.shape(), in.dtype(), nullptr, {});
-    temp.set_data(allocator::malloc_or_wait(temp.nbytes()));
+    temp.set_data(allocator::malloc(temp.nbytes()));
     copies.push_back(temp);
 
     launch_hadamard(in_contiguous, temp, "n" + kernel_name, 1.0);

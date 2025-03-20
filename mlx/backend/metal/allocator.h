@@ -56,7 +56,7 @@ class BufferCache {
 class MetalAllocator : public allocator::Allocator {
   /** Allocator for Metal GPUs. */
  public:
-  virtual Buffer malloc(size_t size, bool allow_swap = false) override;
+  virtual Buffer malloc(size_t size) override;
   virtual void free(Buffer buffer) override;
   virtual size_t size(Buffer buffer) const override;
   size_t get_active_memory() {
@@ -73,7 +73,8 @@ class MetalAllocator : public allocator::Allocator {
     return buffer_cache_.cache_size();
   };
   size_t set_cache_limit(size_t limit);
-  size_t set_memory_limit(size_t limit, bool relaxed);
+  size_t set_memory_limit(size_t limit);
+  size_t get_memory_limit();
   size_t set_wired_limit(size_t limit);
   void clear_cache();
 

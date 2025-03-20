@@ -382,7 +382,7 @@ void steel_matmul(
     int split_k_partition_size = gemm_k_iterations * bk;
 
     array C_split({split_k_partitions, M, N}, float32, nullptr, {});
-    C_split.set_data(allocator::malloc_or_wait(C_split.nbytes()));
+    C_split.set_data(allocator::malloc(C_split.nbytes()));
     copies.push_back(C_split);
 
     bool mn_aligned = M % bm == 0 && N % bn == 0;
@@ -513,7 +513,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
@@ -677,7 +677,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[matmul] Does not yet support non-floating point types.");
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
   auto& d = metal::device(s.device);
 
@@ -860,7 +860,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     int split_k_partition_size = gemm_k_iterations * bk;
 
     array C_split({split_k_partitions, M, N}, float32, nullptr, {});
-    C_split.set_data(allocator::malloc_or_wait(C_split.nbytes()));
+    C_split.set_data(allocator::malloc(C_split.nbytes()));
     copies.push_back(C_split);
 
     bool mn_aligned = M % bm == 0 && N % bn == 0;
@@ -1096,7 +1096,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
@@ -1484,7 +1484,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep

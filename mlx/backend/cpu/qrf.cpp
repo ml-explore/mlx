@@ -25,12 +25,11 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   auto strides = in.strides();
   strides[in.ndim() - 2] = 1;
   strides[in.ndim() - 1] = M;
-  in.set_data(
-      allocator::malloc_or_wait(in.nbytes()), in.nbytes(), strides, flags);
+  in.set_data(allocator::malloc(in.nbytes()), in.nbytes(), strides, flags);
   copy_inplace(a, in, CopyType::GeneralGeneral, stream);
   auto& encoder = cpu::get_command_encoder(stream);
-  q.set_data(allocator::malloc_or_wait(q.nbytes()));
-  r.set_data(allocator::malloc_or_wait(r.nbytes()));
+  q.set_data(allocator::malloc(q.nbytes()));
+  r.set_data(allocator::malloc(r.nbytes()));
 
   auto in_ptr = in.data<T>();
   auto r_ptr = r.data<T>();
@@ -41,8 +40,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   encoder.set_output_array(r);
   encoder.dispatch([in_ptr, q_ptr, r_ptr, M, N, lda, num_matrices]() {
     int num_reflectors = std::min(M, N);
-    auto tau =
-        allocator::malloc_or_wait(sizeof(T) * num_matrices * num_reflectors);
+    auto tau = allocator::malloc(sizeof(T) * num_matrices * num_reflectors);
 
     T optimal_work;
     int lwork = -1;
@@ -53,7 +51,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
 
     // Update workspace size
     lwork = optimal_work;
-    auto work = allocator::malloc_or_wait(sizeof(T) * lwork);
+    auto work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
     for (int i = 0; i < num_matrices; ++i) {
@@ -96,7 +94,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
         &lwork,
         &info);
     lwork = optimal_work;
-    work = allocator::malloc_or_wait(sizeof(T) * lwork);
+    work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
     for (int i = 0; i < num_matrices; ++i) {

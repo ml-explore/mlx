@@ -24,7 +24,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          allocator::malloc(in.data_size() * out.itemsize()),
           in.data_size(),
           in.strides(),
           in.flags());

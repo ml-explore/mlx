@@ -129,7 +129,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(x.data_size() * x.itemsize()),
+            allocator::malloc(x.data_size() * x.itemsize()),
             x.data_size(),
             x.strides(),
             x.flags());

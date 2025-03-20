@@ -32,14 +32,10 @@ Buffer malloc(size_t size);
 
 void free(Buffer buffer);
 
-// Wait for running tasks to finish and free up memory
-// if allocation fails
-Buffer malloc_or_wait(size_t size);
-
 class Allocator {
   /** Abstract base class for a memory allocator. */
  public:
-  virtual Buffer malloc(size_t size, bool allow_swap = false) = 0;
+  virtual Buffer malloc(size_t size) = 0;
   virtual void free(Buffer buffer) = 0;
   virtual size_t size(Buffer buffer) const = 0;
 
@@ -56,7 +52,7 @@ Allocator& allocator();
 class CommonAllocator : public Allocator {
   /** A general CPU allocator. */
  public:
-  virtual Buffer malloc(size_t size, bool allow_swap = false) override;
+  virtual Buffer malloc(size_t size) override;
   virtual void free(Buffer buffer) override;
   virtual size_t size(Buffer buffer) const override;
 

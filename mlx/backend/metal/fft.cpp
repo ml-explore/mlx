@@ -281,7 +281,7 @@ std::tuple<array, array, array> compute_raders_constants(
   }
 
   array b_q_fft({rader_n - 1}, complex64, nullptr, {});
-  b_q_fft.set_data(allocator::malloc_or_wait(b_q_fft.nbytes()));
+  b_q_fft.set_data(allocator::malloc(b_q_fft.nbytes()));
   auto b_q_fft_ptr =
       reinterpret_cast<std::complex<float>*>(b_q_fft.data<complex64_t>());
   std::ptrdiff_t item_size = b_q_fft.itemsize();
@@ -327,11 +327,11 @@ std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
   }
 
   array w_k({n}, complex64, nullptr, {});
-  w_k.set_data(allocator::malloc_or_wait(w_k.nbytes()));
+  w_k.set_data(allocator::malloc(w_k.nbytes()));
   std::copy(w_k_vec.begin(), w_k_vec.end(), w_k.data<complex64_t>());
 
   array w_q({bluestein_n}, complex64, nullptr, {});
-  w_q.set_data(allocator::malloc_or_wait(w_q.nbytes()));
+  w_q.set_data(allocator::malloc(w_q.nbytes()));
   auto w_q_ptr =
       reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
 
@@ -551,8 +551,7 @@ void fft_op(
       flags.row_contiguous = is_row_contiguous;
       flags.contiguous = data_size == x_copy.size();
 
-      x_copy.set_data(
-          allocator::malloc_or_wait(x.nbytes()), data_size, strides, flags);
+      x_copy.set_data(allocator::malloc(x.nbytes()), data_size, strides, flags);
       copy_gpu_inplace(x, x_copy, CopyType::GeneralGeneral, s);
       copies.push_back(x_copy);
       return x_copy;
@@ -583,7 +582,7 @@ void fft_op(
   // TODO: allow donation here
   if (!inplace) {
     out.set_data(
-        allocator::malloc_or_wait(out.nbytes()),
+        allocator::malloc(out.nbytes()),
         out_data_size,
         out_strides,
         in_contiguous.flags());

@@ -31,14 +31,14 @@ inline bool set_copy_output_data(const array& in, array& out, CopyType ctype) {
       return true;
     } else {
       out.set_data(
-          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          allocator::malloc(in.data_size() * out.itemsize()),
           in.data_size(),
           in.strides(),
           in.flags());
       return false;
     }
   } else {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
     return false;
   }
 }

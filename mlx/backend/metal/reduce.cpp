@@ -347,7 +347,7 @@ void all_reduce_dispatch(
 
     // Allocate an intermediate tensor to hold results if needed
     array intermediate({n_rows}, out_type, nullptr, {});
-    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    intermediate.set_data(allocator::malloc(intermediate.nbytes()));
     d.add_temporary(intermediate, s.index);
 
     // 1st pass
@@ -641,7 +641,7 @@ void strided_reduce_longcolumn(
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
-  intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   d.add_temporary(intermediate, s.index);
 
   // Prepare the arguments for the kernel
@@ -812,7 +812,7 @@ void strided_reduce_2pass(
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
-  intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   d.add_temporary(intermediate, s.index);
 
   // Prepare the arguments for the kernel
@@ -950,7 +950,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Minimum of 4 bytes since we use size 4 structs for all reduce
   // and metal will complain o/w
   size_t min_bytes = std::max(out.nbytes(), 4ul);
-  out.set_data(allocator::malloc_or_wait(min_bytes));
+  out.set_data(allocator::malloc(min_bytes));
   std::string op_name;
   switch (reduce_type_) {
     case Reduce::And:

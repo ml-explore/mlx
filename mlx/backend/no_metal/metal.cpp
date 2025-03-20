@@ -42,7 +42,10 @@ void reset_peak_memory() {}
 size_t get_cache_memory() {
   return 0;
 }
-size_t set_memory_limit(size_t, bool) {
+size_t set_memory_limit(size_t) {
+  return 0;
+}
+size_t get_memory_limit() {
   return 0;
 }
 size_t set_cache_limit(size_t) {

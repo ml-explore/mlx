@@ -247,9 +247,7 @@ point-wise. This is captured in the templated function :meth:`axpby_impl`.
       float alpha_,
       float beta_,
       mx::Stream stream) {
-    // Allocate the output with `malloc_or_wait` which synchronously allocates
-    // memory, potentially waiting if the system is under memory pressure
-    out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(mx::allocator::malloc(out.nbytes()));
 
     // Get the CPU command encoder and register input and output arrays
     auto& encoder = mx::cpu::get_command_encoder(stream);
@@ -393,7 +391,7 @@ below.
         auto& d = metal::device(s.device);
 
         // Allocate output memory
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+        out.set_data(allocator::malloc(out.nbytes()));
 
         // Resolve name of kernel
         std::ostringstream kname;

@@ -515,7 +515,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous(scales_pre);
   auto biases = ensure_row_contiguous(biases_pre);
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.add_temporaries(std::move(temps));
@@ -565,7 +565,7 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto scales = ensure_row_contiguous_last_dims(scales_pre);
   auto biases = ensure_row_contiguous_last_dims(biases_pre);
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.add_temporaries(std::move(temps));
@@ -691,12 +691,12 @@ void fast::AffineQuantize::eval_cpu(
 
   auto [w, copied] = ensure_row_contiguous(inputs[0]);
   auto& out = outputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& scales = outputs[1];
   auto& biases = outputs[2];
-  scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
-  biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
+  scales.set_data(allocator::malloc(scales.nbytes()));
+  biases.set_data(allocator::malloc(biases.nbytes()));
   auto& encoder = cpu::get_command_encoder(stream());
   if (copied) {
     encoder.add_temporary(w);

@@ -21,7 +21,7 @@ namespace mlx::core {
 void reshape(const array& in, array& out) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
     copy_inplace(in, out, CopyType::General, out.primitive().stream());
   } else {
     shared_buffer_reshape(in, out_strides, out);
@@ -39,7 +39,7 @@ static std::pair<array, bool> compute_dynamic_offset(
   if (donate) {
     offset.copy_shared_buffer(indices);
   } else {
-    offset.set_data(allocator::malloc_or_wait(offset.itemsize()));
+    offset.set_data(allocator::malloc(offset.itemsize()));
   }
 
   auto& encoder = cpu::get_command_encoder(stream);
@@ -124,7 +124,7 @@ void Transpose::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   switch (out.dtype()) {
     case bool_:
       throw std::runtime_error("Bool type unsupported for arange.");
@@ -186,7 +186,7 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
   std::partial_sum(sizes.cbegin(), sizes.cend(), sizes.begin());
 
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto strides = out.strides();
   auto flags = out.flags();
@@ -276,7 +276,7 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto kptr = inputs[0].data<uint32_t>();
   auto cptr = out.data<char>();
@@ -335,7 +335,7 @@ void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
   auto& in = inputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto [in_offset, donated] =
       compute_dynamic_offset(inputs[1], in.strides(), axes_, stream());
   copy_inplace(
@@ -450,7 +450,7 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else {
     auto tmp = array(
         in.shape(), in.dtype() == bool_ ? uint8 : in.dtype(), nullptr, {});
-    tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
+    tmp.set_data(allocator::malloc(tmp.nbytes()));
     if (in.dtype() == bool_) {
       auto in_tmp = array(in.shape(), uint8, nullptr, {});
       in_tmp.copy_shared_buffer(in);
