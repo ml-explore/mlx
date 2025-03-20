@@ -123,8 +123,8 @@ Inheritance diagram for mlx::core::fast::ScaledDotProductAttention:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:ab3f78d30e5bb3e76cfe701f2358e4748" id="r_ab3f78d30e5bb3e76cfe701f2358e4748"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab3f78d30e5bb3e76cfe701f2358e4748">ScaledDotProductAttention</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;)&gt; fallback, const float scale)</td></tr>
-<tr class="separator:ab3f78d30e5bb3e76cfe701f2358e4748"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a09c99b460cca606b2ebb22f90b3d13a2" id="r_a09c99b460cca606b2ebb22f90b3d13a2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a09c99b460cca606b2ebb22f90b3d13a2">ScaledDotProductAttention</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;)&gt; fallback, const float scale, const bool <a class="el" href="steel__attention_8h.html#abfa50278ba59a90e0acb7e5d94500741">do_causal</a>)</td></tr>
+<tr class="separator:a09c99b460cca606b2ebb22f90b3d13a2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae20851e002f7fcb6d4f97817596f6328" id="r_ae20851e002f7fcb6d4f97817596f6328"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae20851e002f7fcb6d4f97817596f6328">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
 <tr class="memdesc:ae20851e002f7fcb6d4f97817596f6328"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
 <tr class="separator:ae20851e002f7fcb6d4f97817596f6328"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -178,8 +178,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="ab3f78d30e5bb3e76cfe701f2358e4748" name="ab3f78d30e5bb3e76cfe701f2358e4748"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab3f78d30e5bb3e76cfe701f2358e4748">&#9670;&#160;</a></span>ScaledDotProductAttention()</h2>
+<a id="a09c99b460cca606b2ebb22f90b3d13a2" name="a09c99b460cca606b2ebb22f90b3d13a2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09c99b460cca606b2ebb22f90b3d13a2">&#9670;&#160;</a></span>ScaledDotProductAttention()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -200,7 +200,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const float</td>          <td class="paramname"><span class="paramname"><em>scale</em></span>&#160;)</td>
+          <td class="paramtype">const float</td>          <td class="paramname"><span class="paramname"><em>scale</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const bool</td>          <td class="paramname"><span class="paramname"><em>do_causal</em></span>&#160;)</td>
         </tr>
       </table>
   </td>

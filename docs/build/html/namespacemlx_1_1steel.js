@@ -1,6 +1,7 @@
 var namespacemlx_1_1steel =
 [
     [ "AccumHelper", "structmlx_1_1steel_1_1_accum_helper.html", "structmlx_1_1steel_1_1_accum_helper" ],
+    [ "AttnMaskParams", "structmlx_1_1steel_1_1_attn_mask_params.html", "structmlx_1_1steel_1_1_attn_mask_params" ],
     [ "AttnParams", "structmlx_1_1steel_1_1_attn_params.html", "structmlx_1_1steel_1_1_attn_params" ],
     [ "BaseMMAFrag", "structmlx_1_1steel_1_1_base_m_m_a_frag.html", null ],
     [ "BaseMMAFrag< T, 8, 8 >", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4" ],

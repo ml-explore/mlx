@@ -124,14 +124,14 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:ab1c8044b05f185c4bcc53002d4587599"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a87800a23c8160933a2d77a55a959194d" id="r_a87800a23c8160933a2d77a55a959194d"><td class="memItemLeft" align="right" valign="top">virtual std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1distributed_1_1detail_1_1_group_impl.html">GroupImpl</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a87800a23c8160933a2d77a55a959194d">split</a> (int color, int key=-1)=0</td></tr>
 <tr class="separator:a87800a23c8160933a2d77a55a959194d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae163a6f444c6cc8820288b20f294e483" id="r_ae163a6f444c6cc8820288b20f294e483"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae163a6f444c6cc8820288b20f294e483">all_sum</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;output)=0</td></tr>
-<tr class="separator:ae163a6f444c6cc8820288b20f294e483"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a04bb1df23abe5b1f3fa0126375c6cea4" id="r_a04bb1df23abe5b1f3fa0126375c6cea4"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a04bb1df23abe5b1f3fa0126375c6cea4">all_gather</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;output)=0</td></tr>
-<tr class="separator:a04bb1df23abe5b1f3fa0126375c6cea4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac8472eb2f96d1b14c7e4ccef56268ba0" id="r_ac8472eb2f96d1b14c7e4ccef56268ba0"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac8472eb2f96d1b14c7e4ccef56268ba0">send</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, int dst)=0</td></tr>
-<tr class="separator:ac8472eb2f96d1b14c7e4ccef56268ba0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4af5fc16a82ba8c72df04d7694f8352" id="r_ac4af5fc16a82ba8c72df04d7694f8352"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac4af5fc16a82ba8c72df04d7694f8352">recv</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, int src)=0</td></tr>
-<tr class="separator:ac4af5fc16a82ba8c72df04d7694f8352"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a23f620ec55d75f236d5371e05a52fd64" id="r_a23f620ec55d75f236d5371e05a52fd64"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a23f620ec55d75f236d5371e05a52fd64">all_sum</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;output, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)=0</td></tr>
+<tr class="separator:a23f620ec55d75f236d5371e05a52fd64"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a65ae9485d2b1a2fd769744d50b0dd225" id="r_a65ae9485d2b1a2fd769744d50b0dd225"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a65ae9485d2b1a2fd769744d50b0dd225">all_gather</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;output, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)=0</td></tr>
+<tr class="separator:a65ae9485d2b1a2fd769744d50b0dd225"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a74befcdc600669cb87761106ae0bd9a5" id="r_a74befcdc600669cb87761106ae0bd9a5"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a74befcdc600669cb87761106ae0bd9a5">send</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, int dst, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)=0</td></tr>
+<tr class="separator:a74befcdc600669cb87761106ae0bd9a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7ce5b7a19d0fb8e189986c84845c5898" id="r_a7ce5b7a19d0fb8e189986c84845c5898"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7ce5b7a19d0fb8e189986c84845c5898">recv</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, int src, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)=0</td></tr>
+<tr class="separator:a7ce5b7a19d0fb8e189986c84845c5898"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Abstract base class of a distributed group implementation. </p>
@@ -162,8 +162,8 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a04bb1df23abe5b1f3fa0126375c6cea4" name="a04bb1df23abe5b1f3fa0126375c6cea4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a04bb1df23abe5b1f3fa0126375c6cea4">&#9670;&#160;</a></span>all_gather()</h2>
+<a id="a65ae9485d2b1a2fd769744d50b0dd225" name="a65ae9485d2b1a2fd769744d50b0dd225"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a65ae9485d2b1a2fd769744d50b0dd225">&#9670;&#160;</a></span>all_gather()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -179,7 +179,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>output</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>output</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -191,8 +196,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ae163a6f444c6cc8820288b20f294e483" name="ae163a6f444c6cc8820288b20f294e483"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae163a6f444c6cc8820288b20f294e483">&#9670;&#160;</a></span>all_sum()</h2>
+<a id="a23f620ec55d75f236d5371e05a52fd64" name="a23f620ec55d75f236d5371e05a52fd64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23f620ec55d75f236d5371e05a52fd64">&#9670;&#160;</a></span>all_sum()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -208,7 +213,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>output</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>output</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -245,8 +255,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ac4af5fc16a82ba8c72df04d7694f8352" name="ac4af5fc16a82ba8c72df04d7694f8352"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac4af5fc16a82ba8c72df04d7694f8352">&#9670;&#160;</a></span>recv()</h2>
+<a id="a7ce5b7a19d0fb8e189986c84845c5898" name="a7ce5b7a19d0fb8e189986c84845c5898"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ce5b7a19d0fb8e189986c84845c5898">&#9670;&#160;</a></span>recv()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -262,7 +272,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>src</em></span>&#160;)</td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -274,8 +289,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ac8472eb2f96d1b14c7e4ccef56268ba0" name="ac8472eb2f96d1b14c7e4ccef56268ba0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac8472eb2f96d1b14c7e4ccef56268ba0">&#9670;&#160;</a></span>send()</h2>
+<a id="a74befcdc600669cb87761106ae0bd9a5" name="a74befcdc600669cb87761106ae0bd9a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74befcdc600669cb87761106ae0bd9a5">&#9670;&#160;</a></span>send()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -291,7 +306,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>&#160;)</td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
