@@ -146,6 +146,15 @@ Public Attributes</h2></td></tr>
 <tr class="memitem:aaf953954274794cfcb4e35e82d681b58" id="r_aaf953954274794cfcb4e35e82d681b58"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aaf953954274794cfcb4e35e82d681b58">NK_aligned</a></td></tr>
 <tr class="memdesc:aaf953954274794cfcb4e35e82d681b58"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of full key/value blocks.  <br /></td></tr>
 <tr class="separator:aaf953954274794cfcb4e35e82d681b58"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af3fcd78329de006a9a44db64ba469345" id="r_af3fcd78329de006a9a44db64ba469345"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af3fcd78329de006a9a44db64ba469345">qL_rem</a></td></tr>
+<tr class="memdesc:af3fcd78329de006a9a44db64ba469345"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="struct_remainder.html">Remainder</a> in last query block.  <br /></td></tr>
+<tr class="separator:af3fcd78329de006a9a44db64ba469345"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a752033afdf873d2c506aa83b02e38139" id="r_a752033afdf873d2c506aa83b02e38139"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a752033afdf873d2c506aa83b02e38139">kL_rem</a></td></tr>
+<tr class="memdesc:a752033afdf873d2c506aa83b02e38139"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="struct_remainder.html">Remainder</a> in last key/value block.  <br /></td></tr>
+<tr class="separator:a752033afdf873d2c506aa83b02e38139"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2d18657f764a8b4097bc5a05238b5dde" id="r_a2d18657f764a8b4097bc5a05238b5dde"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2d18657f764a8b4097bc5a05238b5dde">qL_off</a></td></tr>
+<tr class="memdesc:a2d18657f764a8b4097bc5a05238b5dde"><td class="mdescLeft">&#160;</td><td class="mdescRight">Offset in query sequence start.  <br /></td></tr>
+<tr class="separator:a2d18657f764a8b4097bc5a05238b5dde"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9150df3fb79de521bbccf57c43f6b092" id="r_a9150df3fb79de521bbccf57c43f6b092"><td class="memItemLeft" align="right" valign="top">int64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9150df3fb79de521bbccf57c43f6b092">Q_strides</a> [3]</td></tr>
 <tr class="memdesc:a9150df3fb79de521bbccf57c43f6b092"><td class="mdescLeft">&#160;</td><td class="mdescRight">Query strides (B, H, L, D = 1)  <br /></td></tr>
 <tr class="separator:a9150df3fb79de521bbccf57c43f6b092"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -253,6 +262,22 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Key Sequence Length. </p>
+
+</div>
+</div>
+<a id="a752033afdf873d2c506aa83b02e38139" name="a752033afdf873d2c506aa83b02e38139"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a752033afdf873d2c506aa83b02e38139">&#9670;&#160;</a></span>kL_rem</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int mlx::steel::AttnParams::kL_rem</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="struct_remainder.html">Remainder</a> in last key/value block. </p>
 
 </div>
 </div>
@@ -365,6 +390,38 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Query Sequence Length. </p>
+
+</div>
+</div>
+<a id="a2d18657f764a8b4097bc5a05238b5dde" name="a2d18657f764a8b4097bc5a05238b5dde"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d18657f764a8b4097bc5a05238b5dde">&#9670;&#160;</a></span>qL_off</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int mlx::steel::AttnParams::qL_off</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Offset in query sequence start. </p>
+
+</div>
+</div>
+<a id="af3fcd78329de006a9a44db64ba469345" name="af3fcd78329de006a9a44db64ba469345"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3fcd78329de006a9a44db64ba469345">&#9670;&#160;</a></span>qL_rem</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int mlx::steel::AttnParams::qL_rem</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="struct_remainder.html">Remainder</a> in last query block. </p>
 
 </div>
 </div>

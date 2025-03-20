@@ -28,5 +28,6 @@ var utils_8h =
     [ "mlx::core::result_type", "namespacemlx_1_1core.html#a8b984eef832f757e28cd262d64a49ae7", null ],
     [ "mlx::core::result_type", "namespacemlx_1_1core.html#ac457c232f956ba802acb69c5a621633d", null ],
     [ "mlx::core::result_type", "namespacemlx_1_1core.html#aafaf24a28297428caf6d0c36c623489e", null ],
-    [ "mlx::core::to_stream", "namespacemlx_1_1core.html#a4734a596e57434492ddfe79f2cb9dbf9", null ]
+    [ "mlx::core::to_stream", "namespacemlx_1_1core.html#a4734a596e57434492ddfe79f2cb9dbf9", null ],
+    [ "mlx::core::to_stream", "namespacemlx_1_1core.html#a999be930e8a5b35eb33d934eefd548e8", null ]
 ];
