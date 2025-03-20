@@ -18,6 +18,9 @@ var annotated_dup =
           [ "Buffer", "classmlx_1_1core_1_1allocator_1_1_buffer.html", "classmlx_1_1core_1_1allocator_1_1_buffer" ],
           [ "CommonAllocator", "classmlx_1_1core_1_1allocator_1_1_common_allocator.html", "classmlx_1_1core_1_1allocator_1_1_common_allocator" ]
         ] ],
+        [ "cpu", "namespacemlx_1_1core_1_1cpu.html", [
+          [ "CommandEncoder", "structmlx_1_1core_1_1cpu_1_1_command_encoder.html", "structmlx_1_1core_1_1cpu_1_1_command_encoder" ]
+        ] ],
         [ "detail", "namespacemlx_1_1core_1_1detail.html", [
           [ "Abs", "structmlx_1_1core_1_1detail_1_1_abs.html", "structmlx_1_1core_1_1detail_1_1_abs" ],
           [ "Add", "structmlx_1_1core_1_1detail_1_1_add.html", "structmlx_1_1core_1_1detail_1_1_add" ],
@@ -280,6 +283,7 @@ var annotated_dup =
       ] ],
       [ "steel", "namespacemlx_1_1steel.html", [
         [ "AccumHelper", "structmlx_1_1steel_1_1_accum_helper.html", "structmlx_1_1steel_1_1_accum_helper" ],
+        [ "AttnMaskParams", "structmlx_1_1steel_1_1_attn_mask_params.html", "structmlx_1_1steel_1_1_attn_mask_params" ],
         [ "AttnParams", "structmlx_1_1steel_1_1_attn_params.html", "structmlx_1_1steel_1_1_attn_params" ],
         [ "BaseMMAFrag", "structmlx_1_1steel_1_1_base_m_m_a_frag.html", null ],
         [ "BaseMMAFrag< T, 8, 8 >", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4.html", "structmlx_1_1steel_1_1_base_m_m_a_frag_3_01_t_00_018_00_018_01_4" ],

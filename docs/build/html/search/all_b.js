@@ -20,11 +20,12 @@ var searchData=
   ['kind_17',['Kind',['../structmlx_1_1core_1_1_dtype.html#adb1ea8b45a0c53e04a0e73b168702715',1,'mlx::core::Dtype']]],
   ['kindof_18',['kindof',['../namespacemlx_1_1core.html#ad527b86818823db040195785efd7d724',1,'mlx::core']]],
   ['kl_19',['kL',['../structmlx_1_1steel_1_1_attn_params.html#a497b7404bcd25b535c3589c61f269f63',1,'mlx::steel::AttnParams']]],
-  ['knumfrags_20',['kNumFrags',['../structmlx_1_1steel_1_1_m_m_a_tile.html#ae326e7693eb77c22d5a6e3e9219019d3',1,'mlx::steel::MMATile']]],
-  ['kron_21',['kron',['../group__ops.html#ga6df16248cb68bc73644cdb1698967c19',1,'mlx::core']]],
-  ['krows_22',['kRows',['../structmlx_1_1steel_1_1_c_shape.html#a5caf36cb9acf9f90ba59a9b0b4197993',1,'mlx::steel::CShape::kRows'],['../structmlx_1_1steel_1_1_m_m_a_tile.html#a60ea6b8ff2923b7fe6f598e74ac54323',1,'mlx::steel::MMATile::kRows']]],
-  ['krowsperthread_23',['kRowsPerThread',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a5b1d1c85a5046108a4e38bdc5a0ea74e',1,'mlx::steel::MMATile']]],
-  ['ktilecols_24',['kTileCols',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a46324d40f8ad61cade08a1ebad6d9ad4',1,'mlx::steel::MMATile']]],
-  ['ktilerows_25',['kTileRows',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a1d126b14910385ab644e224ac1d0307a',1,'mlx::steel::MMATile']]],
-  ['kwargs_26',['Kwargs',['../namespacemlx_1_1core.html#af3efb38b31c0bc08754a4edfda656b83',1,'mlx::core']]]
+  ['kl_5frem_20',['kL_rem',['../structmlx_1_1steel_1_1_attn_params.html#a752033afdf873d2c506aa83b02e38139',1,'mlx::steel::AttnParams']]],
+  ['knumfrags_21',['kNumFrags',['../structmlx_1_1steel_1_1_m_m_a_tile.html#ae326e7693eb77c22d5a6e3e9219019d3',1,'mlx::steel::MMATile']]],
+  ['kron_22',['kron',['../group__ops.html#ga6df16248cb68bc73644cdb1698967c19',1,'mlx::core']]],
+  ['krows_23',['kRows',['../structmlx_1_1steel_1_1_c_shape.html#a5caf36cb9acf9f90ba59a9b0b4197993',1,'mlx::steel::CShape::kRows'],['../structmlx_1_1steel_1_1_m_m_a_tile.html#a60ea6b8ff2923b7fe6f598e74ac54323',1,'mlx::steel::MMATile::kRows']]],
+  ['krowsperthread_24',['kRowsPerThread',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a5b1d1c85a5046108a4e38bdc5a0ea74e',1,'mlx::steel::MMATile']]],
+  ['ktilecols_25',['kTileCols',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a46324d40f8ad61cade08a1ebad6d9ad4',1,'mlx::steel::MMATile']]],
+  ['ktilerows_26',['kTileRows',['../structmlx_1_1steel_1_1_m_m_a_tile.html#a1d126b14910385ab644e224ac1d0307a',1,'mlx::steel::MMATile']]],
+  ['kwargs_27',['Kwargs',['../namespacemlx_1_1core.html#af3efb38b31c0bc08754a4edfda656b83',1,'mlx::core']]]
 ];
