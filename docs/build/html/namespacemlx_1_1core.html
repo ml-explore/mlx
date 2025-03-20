@@ -117,6 +117,8 @@ $(function(){initNavTree('namespacemlx_1_1core.html',''); initResizable(true); }
 Namespaces</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1allocator.html">allocator</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1cpu.html">cpu</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1detail.html">detail</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1distributed.html">distributed</a></td></tr>
@@ -503,8 +505,8 @@ Enumerations</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:a24eef9908f164adeece3be7c6924919a" id="r_a24eef9908f164adeece3be7c6924919a"><td class="memItemLeft" align="right" valign="top"><a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a24eef9908f164adeece3be7c6924919a">get_binary_op_type</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b)</td></tr>
 <tr class="separator:a24eef9908f164adeece3be7c6924919a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6a52856325c2eb031d3983eba2108d59" id="r_a6a52856325c2eb031d3983eba2108d59"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6a52856325c2eb031d3983eba2108d59">set_binary_op_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a> bopt, bool donate_with_move=false)</td></tr>
-<tr class="separator:a6a52856325c2eb031d3983eba2108d59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9f22a9ed98104aaffb929381055b966d" id="r_a9f22a9ed98104aaffb929381055b966d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9f22a9ed98104aaffb929381055b966d">set_binary_op_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a> bopt)</td></tr>
+<tr class="separator:a9f22a9ed98104aaffb929381055b966d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afd9e740e567f9d7c28e00113caf46d5f" id="r_afd9e740e567f9d7c28e00113caf46d5f"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#afd9e740e567f9d7c28e00113caf46d5f">is_static_cast</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;p)</td></tr>
 <tr class="separator:afd9e740e567f9d7c28e00113caf46d5f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3ef23f334cb9f68a2c50524bc67c913b" id="r_a3ef23f334cb9f68a2c50524bc67c913b"><td class="memItemLeft" align="right" valign="top">std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3ef23f334cb9f68a2c50524bc67c913b">build_lib_name</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;tape, const std::unordered_set&lt; uintptr_t &gt; &amp;constant_ids)</td></tr>
@@ -526,14 +528,14 @@ Functions</h2></td></tr>
 <tr class="separator:a985c60929757190e0b4ec51f57c767d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a562040f4a03f2c0a5d50eb9c8f14a8be" id="r_a562040f4a03f2c0a5d50eb9c8f14a8be"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a562040f4a03f2c0a5d50eb9c8f14a8be">compiled_check_contiguity</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape)</td></tr>
 <tr class="separator:a562040f4a03f2c0a5d50eb9c8f14a8be"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab8c3c4fc05745f586de922c8266f4fce" id="r_ab8c3c4fc05745f586de922c8266f4fce"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab8c3c4fc05745f586de922c8266f4fce">compiled_allocate_outputs</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs_, const std::unordered_set&lt; uintptr_t &gt; &amp;constant_ids_, bool <a class="el" href="group__ops.html#ga8ab10aa6c41416d739791164a52b25d5">contiguous</a>, bool move_buffers=false)</td></tr>
-<tr class="separator:ab8c3c4fc05745f586de922c8266f4fce"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ed5ff0d69f6c7d2e092fe811e40d564" id="r_a8ed5ff0d69f6c7d2e092fe811e40d564"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8ed5ff0d69f6c7d2e092fe811e40d564">compiled_allocate_outputs</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs_, const std::unordered_set&lt; uintptr_t &gt; &amp;constant_ids_, bool <a class="el" href="group__ops.html#ga8ab10aa6c41416d739791164a52b25d5">contiguous</a>)</td></tr>
+<tr class="separator:a8ed5ff0d69f6c7d2e092fe811e40d564"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3892b68a2e828270caa1c7accf44f038" id="r_a3892b68a2e828270caa1c7accf44f038"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3892b68a2e828270caa1c7accf44f038">set_copy_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype)</td></tr>
+<tr class="separator:a3892b68a2e828270caa1c7accf44f038"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a50214cf406957fab27c8bef32046f030" id="r_a50214cf406957fab27c8bef32046f030"><td class="memItemLeft" align="right" valign="top">const std::map&lt; int, std::string_view &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a50214cf406957fab27c8bef32046f030">hadamard_matrices</a> ()</td></tr>
 <tr class="separator:a50214cf406957fab27c8bef32046f030"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3a8fe7ba84714dbb5fdc81e93a07abc8" id="r_a3a8fe7ba84714dbb5fdc81e93a07abc8"><td class="memItemLeft" align="right" valign="top">std::pair&lt; int, int &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3a8fe7ba84714dbb5fdc81e93a07abc8">decompose_hadamard</a> (int n)</td></tr>
 <tr class="separator:a3a8fe7ba84714dbb5fdc81e93a07abc8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a954de19249da7c1fa39b89bdc47368aa" id="r_a954de19249da7c1fa39b89bdc47368aa"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a954de19249da7c1fa39b89bdc47368aa">load</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, size_t offset, const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;reader, bool swap_endianess)</td></tr>
-<tr class="separator:a954de19249da7c1fa39b89bdc47368aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac97b5a6f009ca3d99854ce9512c20dba" id="r_ac97b5a6f009ca3d99854ce9512c20dba"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_reduction_plan.html">ReductionPlan</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac97b5a6f009ca3d99854ce9512c20dba">get_reduction_plan</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::vector&lt; int &gt; &amp;axes)</td></tr>
 <tr class="separator:ac97b5a6f009ca3d99854ce9512c20dba"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0bea91a360a984e72d2815353f97ee25" id="r_a0bea91a360a984e72d2815353f97ee25"><td class="memItemLeft" align="right" valign="top">std::pair&lt; <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a>, <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a0bea91a360a984e72d2815353f97ee25">shapes_without_reduction_axes</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::vector&lt; int &gt; &amp;axes)</td></tr>
@@ -544,8 +546,8 @@ Functions</h2></td></tr>
 <tr class="separator:a5adff87687b78bfc18dafbc654925cdb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a548b6f4a39e639c18896e50b1702c830" id="r_a548b6f4a39e639c18896e50b1702c830"><td class="memItemLeft" align="right" valign="top"><a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a548b6f4a39e639c18896e50b1702c830">get_ternary_op_type</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c)</td></tr>
 <tr class="separator:a548b6f4a39e639c18896e50b1702c830"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6f4528d0d338ea5e1f19d345875c26a2" id="r_a6f4528d0d338ea5e1f19d345875c26a2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6f4528d0d338ea5e1f19d345875c26a2">set_ternary_op_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a> topt, bool donate_with_move=false)</td></tr>
-<tr class="separator:a6f4528d0d338ea5e1f19d345875c26a2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae159e1f9193c12eff9a56dfceb1502ef" id="r_ae159e1f9193c12eff9a56dfceb1502ef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae159e1f9193c12eff9a56dfceb1502ef">set_ternary_op_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a> topt)</td></tr>
+<tr class="separator:ae159e1f9193c12eff9a56dfceb1502ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a59c0af06c5325c04ad8d69563c1c6b0a" id="r_a59c0af06c5325c04ad8d69563c1c6b0a"><td class="memItemLeft" align="right" valign="top">int64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a59c0af06c5325c04ad8d69563c1c6b0a">elem_to_loc</a> (int elem, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;strides)</td></tr>
 <tr class="separator:a59c0af06c5325c04ad8d69563c1c6b0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac9c19514210333346f02a4520641847f" id="r_ac9c19514210333346f02a4520641847f"><td class="memItemLeft" align="right" valign="top">int64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac9c19514210333346f02a4520641847f">elem_to_loc</a> (int elem, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a)</td></tr>
@@ -567,68 +569,71 @@ Functions</h2></td></tr>
 <tr class="separator:ab2b50a44a9d3a06282be4611f5fc7447"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af650e831ce21759da1ac103037d08d84" id="r_af650e831ce21759da1ac103037d08d84"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af650e831ce21759da1ac103037d08d84">is_donatable</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:af650e831ce21759da1ac103037d08d84"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a830a47d8a317dffb0c88e5a7afe6aee2" id="r_a830a47d8a317dffb0c88e5a7afe6aee2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a830a47d8a317dffb0c88e5a7afe6aee2">move_or_copy</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
-<tr class="separator:a830a47d8a317dffb0c88e5a7afe6aee2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9fcb3711b150cb65c7778a35c51284b2" id="r_a9fcb3711b150cb65c7778a35c51284b2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9fcb3711b150cb65c7778a35c51284b2">move_or_copy</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;strides, <a class="el" href="structmlx_1_1core_1_1array_1_1_flags.html">array::Flags</a> flags, size_t data_size, size_t offset=0)</td></tr>
-<tr class="separator:a9fcb3711b150cb65c7778a35c51284b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6783cfc7dbe1a116ba84a3904a37145f" id="r_a6783cfc7dbe1a116ba84a3904a37145f"><td class="memItemLeft" align="right" valign="top">std::pair&lt; bool, <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6783cfc7dbe1a116ba84a3904a37145f">prepare_reshape</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a6783cfc7dbe1a116ba84a3904a37145f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a88d88987bd8bf3ca46bf3b5e8aacce9d" id="r_a88d88987bd8bf3ca46bf3b5e8aacce9d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a88d88987bd8bf3ca46bf3b5e8aacce9d">shared_buffer_reshape</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a88d88987bd8bf3ca46bf3b5e8aacce9d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a369aa886219b83cf219e7a7862ce260b" id="r_a369aa886219b83cf219e7a7862ce260b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a369aa886219b83cf219e7a7862ce260b">arange</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, double start, double step)</td></tr>
-<tr class="separator:a369aa886219b83cf219e7a7862ce260b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7ca09ebf776fe32db580f9038587ec31" id="r_a7ca09ebf776fe32db580f9038587ec31"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, typename Op, int D, bool Strided&gt; </td></tr>
-<tr class="memitem:a7ca09ebf776fe32db580f9038587ec31"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7ca09ebf776fe32db580f9038587ec31">binary_op_dims</a> (const T *a, const T *b, U *out, Op op, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, int axis)</td></tr>
-<tr class="separator:a7ca09ebf776fe32db580f9038587ec31"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a66c9ee5018168b9101de52e0122d9755" id="r_a66c9ee5018168b9101de52e0122d9755"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, bool Strided, typename Op&gt; </td></tr>
-<tr class="memitem:a66c9ee5018168b9101de52e0122d9755"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a66c9ee5018168b9101de52e0122d9755">binary_op_dispatch_dims</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, int dim, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides)</td></tr>
-<tr class="separator:a66c9ee5018168b9101de52e0122d9755"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9c1c1fdf9a0840a16a4d10a8f74f761d" id="r_a9c1c1fdf9a0840a16a4d10a8f74f761d"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, typename Op&gt; </td></tr>
-<tr class="memitem:a9c1c1fdf9a0840a16a4d10a8f74f761d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9c1c1fdf9a0840a16a4d10a8f74f761d">binary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a9c1c1fdf9a0840a16a4d10a8f74f761d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2aca3458c56605a74d07ec39876549bc" id="r_a2aca3458c56605a74d07ec39876549bc"><td class="memTemplParams" colspan="2">template&lt;typename T, typename Op&gt; </td></tr>
-<tr class="memitem:a2aca3458c56605a74d07ec39876549bc"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a2aca3458c56605a74d07ec39876549bc">binary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a2aca3458c56605a74d07ec39876549bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae374861abd45cf019c3e6be2026f3798" id="r_ae374861abd45cf019c3e6be2026f3798"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
-<tr class="memitem:ae374861abd45cf019c3e6be2026f3798"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae374861abd45cf019c3e6be2026f3798">binary</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:ae374861abd45cf019c3e6be2026f3798"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a479648542a2bea151b947b18f0e79dd2" id="r_a479648542a2bea151b947b18f0e79dd2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a479648542a2bea151b947b18f0e79dd2">copy</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype)</td></tr>
-<tr class="separator:a479648542a2bea151b947b18f0e79dd2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a98495894a796b2cc6d022e7a03432c64" id="r_a98495894a796b2cc6d022e7a03432c64"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a98495894a796b2cc6d022e7a03432c64">copy_inplace</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype)</td></tr>
-<tr class="separator:a98495894a796b2cc6d022e7a03432c64"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae85bafda5ab0b4b2289591260cf07685" id="r_ae85bafda5ab0b4b2289591260cf07685"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae85bafda5ab0b4b2289591260cf07685">copy_inplace</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;data_shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;i_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;o_strides, int64_t i_offset, int64_t o_offset, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype)</td></tr>
-<tr class="separator:ae85bafda5ab0b4b2289591260cf07685"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aaacf0afe13d77a5c49ce96f1e833eb2d" id="r_aaacf0afe13d77a5c49ce96f1e833eb2d"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
-<tr class="memitem:aaacf0afe13d77a5c49ce96f1e833eb2d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aaacf0afe13d77a5c49ce96f1e833eb2d">matmul</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, bool a_transposed, bool b_transposed, size_t lda, size_t ldb, float alpha, float beta)</td></tr>
-<tr class="separator:aaacf0afe13d77a5c49ce96f1e833eb2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeac6fa9529eedba76b27de9d098de963" id="r_aeac6fa9529eedba76b27de9d098de963"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, typename Op, int D, bool Strided&gt; </td></tr>
+<tr class="memitem:aeac6fa9529eedba76b27de9d098de963"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aeac6fa9529eedba76b27de9d098de963">binary_op_dims</a> (const T *a, const T *b, U *out, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, int axis)</td></tr>
+<tr class="separator:aeac6fa9529eedba76b27de9d098de963"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad1229ffbba21bdb81f63482a4651bc5a" id="r_ad1229ffbba21bdb81f63482a4651bc5a"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, bool Strided, typename Op&gt; </td></tr>
+<tr class="memitem:ad1229ffbba21bdb81f63482a4651bc5a"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad1229ffbba21bdb81f63482a4651bc5a">binary_op_dispatch_dims</a> (const T *a, const T *b, U *out, int dim, int size, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides)</td></tr>
+<tr class="separator:ad1229ffbba21bdb81f63482a4651bc5a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae0c47c0bd95bb8c44339159e04c0f604" id="r_ae0c47c0bd95bb8c44339159e04c0f604"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U, typename Op&gt; </td></tr>
+<tr class="memitem:ae0c47c0bd95bb8c44339159e04c0f604"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae0c47c0bd95bb8c44339159e04c0f604">binary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a> bopt)</td></tr>
+<tr class="separator:ae0c47c0bd95bb8c44339159e04c0f604"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5160ef5819f58cf040c9613ecce548f1" id="r_a5160ef5819f58cf040c9613ecce548f1"><td class="memTemplParams" colspan="2">template&lt;typename T, typename Op&gt; </td></tr>
+<tr class="memitem:a5160ef5819f58cf040c9613ecce548f1"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a5160ef5819f58cf040c9613ecce548f1">binary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, <a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a> bopt)</td></tr>
+<tr class="separator:a5160ef5819f58cf040c9613ecce548f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a017bd8bd743e26f1ff971c8749b55daf" id="r_a017bd8bd743e26f1ff971c8749b55daf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a017bd8bd743e26f1ff971c8749b55daf">copy</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a017bd8bd743e26f1ff971c8749b55daf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab30708325761c91e7dde245827e9dd91" id="r_ab30708325761c91e7dde245827e9dd91"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab30708325761c91e7dde245827e9dd91">copy_inplace</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:ab30708325761c91e7dde245827e9dd91"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1e4381d42877a5c6050c20e77d13c990" id="r_a1e4381d42877a5c6050c20e77d13c990"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1e4381d42877a5c6050c20e77d13c990">copy_inplace</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;src, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;dst, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;data_shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;i_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;o_strides, int64_t i_offset, int64_t o_offset, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;dynamic_i_offset=std::nullopt, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;dynamic_o_offset=std::nullopt)</td></tr>
+<tr class="separator:a1e4381d42877a5c6050c20e77d13c990"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afd07258882634dcda1e6f18f10dc28d5" id="r_afd07258882634dcda1e6f18f10dc28d5"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:afd07258882634dcda1e6f18f10dc28d5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#afd07258882634dcda1e6f18f10dc28d5">matmul</a> (const T *a, const T *b, T *out, bool a_transposed, bool b_transposed, size_t lda, size_t ldb, size_t ldc, float alpha, float beta, size_t batch_size, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;a_shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;b_shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides)</td></tr>
+<tr class="separator:afd07258882634dcda1e6f18f10dc28d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a349a9fc2bfd950f679a3fe39b8bdedad" id="r_a349a9fc2bfd950f679a3fe39b8bdedad"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a349a9fc2bfd950f679a3fe39b8bdedad">shared_buffer_slice</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, size_t data_offset, size_t data_size, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a349a9fc2bfd950f679a3fe39b8bdedad"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8096c7a688ac3f09cca69a3a85f7f157" id="r_a8096c7a688ac3f09cca69a3a85f7f157"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op, int D&gt; </td></tr>
 <tr class="memitem:a8096c7a688ac3f09cca69a3a85f7f157"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8096c7a688ac3f09cca69a3a85f7f157">ternary_op_dims</a> (const T1 *a, const T2 *b, const T3 *c, U *out, Op op, const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;a_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;b_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;c_strides, const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;out_strides, int axis)</td></tr>
 <tr class="separator:a8096c7a688ac3f09cca69a3a85f7f157"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac1c085e305954247d042f5d8803cd85b" id="r_ac1c085e305954247d042f5d8803cd85b"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
-<tr class="memitem:ac1c085e305954247d042f5d8803cd85b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac1c085e305954247d042f5d8803cd85b">ternary_op_dispatch_dims</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:ac1c085e305954247d042f5d8803cd85b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9dcc3018702ee31c21c8652bdc2182b1" id="r_a9dcc3018702ee31c21c8652bdc2182b1"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
-<tr class="memitem:a9dcc3018702ee31c21c8652bdc2182b1"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9dcc3018702ee31c21c8652bdc2182b1">ternary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a9dcc3018702ee31c21c8652bdc2182b1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9abcc6efafd9ab5df1293b1793a734d2" id="r_a9abcc6efafd9ab5df1293b1793a734d2"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
+<tr class="memitem:a9abcc6efafd9ab5df1293b1793a734d2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9abcc6efafd9ab5df1293b1793a734d2">ternary_op_dispatch_dims</a> (const T1 *a_ptr, const T2 *b_ptr, const T3 *c_ptr, U *out_ptr, Op op, size_t size, <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;shape, std::vector&lt; <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &gt; &amp;strides)</td></tr>
+<tr class="separator:a9abcc6efafd9ab5df1293b1793a734d2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a48fbbd43d2165ab7f42bac3f228bbda3" id="r_a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memTemplParams" colspan="2">template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; </td></tr>
+<tr class="memitem:a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a48fbbd43d2165ab7f42bac3f228bbda3">ternary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;c, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a> topt)</td></tr>
+<tr class="separator:a48fbbd43d2165ab7f42bac3f228bbda3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4c6a4241bfcdd7bbf30d0e521b79e5a3" id="r_a4c6a4241bfcdd7bbf30d0e521b79e5a3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4c6a4241bfcdd7bbf30d0e521b79e5a3">set_unary_output_data</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a4c6a4241bfcdd7bbf30d0e521b79e5a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a27f00519f9756896734fd4d47fec0625" id="r_a27f00519f9756896734fd4d47fec0625"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U = T, typename Op&gt; </td></tr>
-<tr class="memitem:a27f00519f9756896734fd4d47fec0625"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a27f00519f9756896734fd4d47fec0625">unary_op</a> (const T *a, U *out, Op op, size_t shape, size_t stride)</td></tr>
-<tr class="separator:a27f00519f9756896734fd4d47fec0625"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae20f207ad1ed3badc17cecf08f118b5e" id="r_ae20f207ad1ed3badc17cecf08f118b5e"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U = T, typename Op&gt; </td></tr>
-<tr class="memitem:ae20f207ad1ed3badc17cecf08f118b5e"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae20f207ad1ed3badc17cecf08f118b5e">unary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:ae20f207ad1ed3badc17cecf08f118b5e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6c8fdd03ef891d7f47804bf02e9a8507" id="r_a6c8fdd03ef891d7f47804bf02e9a8507"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
-<tr class="memitem:a6c8fdd03ef891d7f47804bf02e9a8507"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6c8fdd03ef891d7f47804bf02e9a8507">unary</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a6c8fdd03ef891d7f47804bf02e9a8507"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a76a2cb4634f5fd6970a8c3b3753d7a4a" id="r_a76a2cb4634f5fd6970a8c3b3753d7a4a"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
-<tr class="memitem:a76a2cb4634f5fd6970a8c3b3753d7a4a"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a76a2cb4634f5fd6970a8c3b3753d7a4a">unary_fp</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a76a2cb4634f5fd6970a8c3b3753d7a4a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a078859db0d66ff77f97af6dc9764e8eb" id="r_a078859db0d66ff77f97af6dc9764e8eb"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
-<tr class="memitem:a078859db0d66ff77f97af6dc9764e8eb"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a078859db0d66ff77f97af6dc9764e8eb">unary_int</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op)</td></tr>
-<tr class="separator:a078859db0d66ff77f97af6dc9764e8eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa6b3dfc27a21d26b3fda96022aa60e32" id="r_aa6b3dfc27a21d26b3fda96022aa60e32"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U = T, typename Op&gt; </td></tr>
+<tr class="memitem:aa6b3dfc27a21d26b3fda96022aa60e32"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa6b3dfc27a21d26b3fda96022aa60e32">unary_op</a> (const T *a, U *out, size_t shape, size_t stride)</td></tr>
+<tr class="separator:aa6b3dfc27a21d26b3fda96022aa60e32"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab9812785763451ceb86486032d614048" id="r_ab9812785763451ceb86486032d614048"><td class="memTemplParams" colspan="2">template&lt;typename T, typename U = T, typename Op&gt; </td></tr>
+<tr class="memitem:ab9812785763451ceb86486032d614048"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ab9812785763451ceb86486032d614048">unary_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op)</td></tr>
+<tr class="separator:ab9812785763451ceb86486032d614048"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0f3ff0f676d28840c210ef6277caa546" id="r_a0f3ff0f676d28840c210ef6277caa546"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a0f3ff0f676d28840c210ef6277caa546"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0f3ff0f676d28840c210ef6277caa546">unary</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a0f3ff0f676d28840c210ef6277caa546"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a940f998c7469d14f5234f78dcaecd48b" id="r_a940f998c7469d14f5234f78dcaecd48b"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a940f998c7469d14f5234f78dcaecd48b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a940f998c7469d14f5234f78dcaecd48b">unary_real_fp</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a940f998c7469d14f5234f78dcaecd48b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c1b92aea938457e44f93a7955d22823" id="r_a6c1b92aea938457e44f93a7955d22823"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a6c1b92aea938457e44f93a7955d22823"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6c1b92aea938457e44f93a7955d22823">unary_fp</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a6c1b92aea938457e44f93a7955d22823"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aed2b5550f8424094ef10bdadfe92ec0f" id="r_aed2b5550f8424094ef10bdadfe92ec0f"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:aed2b5550f8424094ef10bdadfe92ec0f"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aed2b5550f8424094ef10bdadfe92ec0f">unary_signed</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:aed2b5550f8424094ef10bdadfe92ec0f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9af588b2e7f4e5249cd8b7722ad829c0" id="r_a9af588b2e7f4e5249cd8b7722ad829c0"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a9af588b2e7f4e5249cd8b7722ad829c0"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9af588b2e7f4e5249cd8b7722ad829c0">unary_complex</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a9af588b2e7f4e5249cd8b7722ad829c0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0640d1f5bcd9a4f5cdaea9f197a53515" id="r_a0640d1f5bcd9a4f5cdaea9f197a53515"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a0640d1f5bcd9a4f5cdaea9f197a53515"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0640d1f5bcd9a4f5cdaea9f197a53515">unary_complex_to_float</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a0640d1f5bcd9a4f5cdaea9f197a53515"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a50536365b8bcfec55e7d023ae9a6395c" id="r_a50536365b8bcfec55e7d023ae9a6395c"><td class="memTemplParams" colspan="2">template&lt;typename Op&gt; </td></tr>
+<tr class="memitem:a50536365b8bcfec55e7d023ae9a6395c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a50536365b8bcfec55e7d023ae9a6395c">unary_int</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, Op op, <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream)</td></tr>
+<tr class="separator:a50536365b8bcfec55e7d023ae9a6395c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad884f4a36308b5b4f8a5d990d2e086df" id="r_ad884f4a36308b5b4f8a5d990d2e086df"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad884f4a36308b5b4f8a5d990d2e086df">binary_op_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs, const std::string &amp;op, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:ad884f4a36308b5b4f8a5d990d2e086df"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a094876ea5a2a2445ab64efc8222da202" id="r_a094876ea5a2a2445ab64efc8222da202"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a094876ea5a2a2445ab64efc8222da202">binary_op_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::string &amp;op, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
@@ -649,10 +654,6 @@ Functions</h2></td></tr>
 <tr class="separator:a49fc043a981925b9be79e37fc415d966"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae789dbda2a0f4e21aa0984f6a5dc986c" id="r_ae789dbda2a0f4e21aa0984f6a5dc986c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae789dbda2a0f4e21aa0984f6a5dc986c">fill_gpu</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;val, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:ae789dbda2a0f4e21aa0984f6a5dc986c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2874ba55b73057b76c23a7429fdd2d6e" id="r_a2874ba55b73057b76c23a7429fdd2d6e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2874ba55b73057b76c23a7429fdd2d6e">encode_wait</a> (<a class="el" href="classmlx_1_1core_1_1_event.html">Event</a> e)</td></tr>
-<tr class="separator:a2874ba55b73057b76c23a7429fdd2d6e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6d452306f0f046a7d021bd94f8713a89" id="r_a6d452306f0f046a7d021bd94f8713a89"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6d452306f0f046a7d021bd94f8713a89">encode_signal</a> (<a class="el" href="classmlx_1_1core_1_1_event.html">Event</a> e)</td></tr>
-<tr class="separator:a6d452306f0f046a7d021bd94f8713a89"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a76f614e9956a6ca05a9be4db5a483446" id="r_a76f614e9956a6ca05a9be4db5a483446"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a76f614e9956a6ca05a9be4db5a483446">get_arange_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a76f614e9956a6ca05a9be4db5a483446"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afbb085188b563a54606d84f87a9bf5a6" id="r_afbb085188b563a54606d84f87a9bf5a6"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#afbb085188b563a54606d84f87a9bf5a6">get_unary_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> in_type, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> out_type, const std::string op)</td></tr>
@@ -748,9 +749,6 @@ Functions</h2></td></tr>
 <tr class="memitem:aaf51544472fa87fa974686eacdd2a4a6" id="r_aaf51544472fa87fa974686eacdd2a4a6"><td class="memTemplParams" colspan="2">template&lt;typename T, typename... Args&gt; </td></tr>
 <tr class="memitem:aaf51544472fa87fa974686eacdd2a4a6"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aaf51544472fa87fa974686eacdd2a4a6">concatenate</a> (std::string &amp;acc, T first, Args... args)</td></tr>
 <tr class="separator:aaf51544472fa87fa974686eacdd2a4a6"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a357f4172305d2021bde8cf07d99adb7d" id="r_a357f4172305d2021bde8cf07d99adb7d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a357f4172305d2021bde8cf07d99adb7d">unsafe_weak_copy</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x)</td></tr>
-<tr class="memdesc:a357f4172305d2021bde8cf07d99adb7d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a new array that refers to the same data but has a non-owning pointer to them.  <br /></td></tr>
-<tr class="separator:a357f4172305d2021bde8cf07d99adb7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a55933c6665de9f81059120d6b0de1c87" id="r_a55933c6665de9f81059120d6b0de1c87"><td class="memItemLeft" align="right" valign="top">std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a55933c6665de9f81059120d6b0de1c87">compile</a> (std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt; fun, bool shapeless=false)</td></tr>
 <tr class="memdesc:a55933c6665de9f81059120d6b0de1c87"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compile takes a function and returns a compiled function.  <br /></td></tr>
 <tr class="separator:a55933c6665de9f81059120d6b0de1c87"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -2510,6 +2508,8 @@ Functions</h2></td></tr>
 <tr class="separator:a899851f85dbddd96f9d36319b82542a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4734a596e57434492ddfe79f2cb9dbf9" id="r_a4734a596e57434492ddfe79f2cb9dbf9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4734a596e57434492ddfe79f2cb9dbf9">to_stream</a> (<a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s)</td></tr>
 <tr class="separator:a4734a596e57434492ddfe79f2cb9dbf9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a999be930e8a5b35eb33d934eefd548e8" id="r_a999be930e8a5b35eb33d934eefd548e8"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a999be930e8a5b35eb33d934eefd548e8">to_stream</a> (<a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s, <a class="el" href="structmlx_1_1core_1_1_device.html">Device</a> default_)</td></tr>
+<tr class="separator:a999be930e8a5b35eb33d934eefd548e8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afc71e62dc5757564486cea5ebb12500e" id="r_afc71e62dc5757564486cea5ebb12500e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_print_formatter.html">PrintFormatter</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#afc71e62dc5757564486cea5ebb12500e">get_global_formatter</a> ()</td></tr>
 <tr class="separator:afc71e62dc5757564486cea5ebb12500e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae1b6e5cfd27b1526285648686898e011" id="r_ae1b6e5cfd27b1526285648686898e011"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae1b6e5cfd27b1526285648686898e011">abort_with_exception</a> (const std::exception &amp;error)</td></tr>
@@ -3041,37 +3041,6 @@ template&lt;typename... T&gt; </div>
 
 </div>
 </div>
-<a id="a369aa886219b83cf219e7a7862ce260b" name="a369aa886219b83cf219e7a7862ce260b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a369aa886219b83cf219e7a7862ce260b">&#9670;&#160;</a></span>arange()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::arange </td>
-          <td>(</td>
-          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">double</td>          <td class="paramname"><span class="paramname"><em>start</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">double</td>          <td class="paramname"><span class="paramname"><em>step</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="abf8dae3b87a03a409711691cd9c097b6" name="abf8dae3b87a03a409711691cd9c097b6"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abf8dae3b87a03a409711691cd9c097b6">&#9670;&#160;</a></span>async_eval() <span class="overload">[1/2]</span></h2>
 
@@ -3108,41 +3077,8 @@ template&lt;typename... Arrays, typename = enable_for_arrays_t&lt;Arrays...&gt;&
 
 </div>
 </div>
-<a id="ae374861abd45cf019c3e6be2026f3798" name="ae374861abd45cf019c3e6be2026f3798"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae374861abd45cf019c3e6be2026f3798">&#9670;&#160;</a></span>binary()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename Op&gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::binary </td>
-          <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a9c1c1fdf9a0840a16a4d10a8f74f761d" name="a9c1c1fdf9a0840a16a4d10a8f74f761d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9c1c1fdf9a0840a16a4d10a8f74f761d">&#9670;&#160;</a></span>binary_op() <span class="overload">[1/2]</span></h2>
+<a id="ae0c47c0bd95bb8c44339159e04c0f604" name="ae0c47c0bd95bb8c44339159e04c0f604"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae0c47c0bd95bb8c44339159e04c0f604">&#9670;&#160;</a></span>binary_op() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3167,15 +3103,15 @@ template&lt;typename T, typename U, typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>bopt</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a2aca3458c56605a74d07ec39876549bc" name="a2aca3458c56605a74d07ec39876549bc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2aca3458c56605a74d07ec39876549bc">&#9670;&#160;</a></span>binary_op() <span class="overload">[2/2]</span></h2>
+<a id="a5160ef5819f58cf040c9613ecce548f1" name="a5160ef5819f58cf040c9613ecce548f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5160ef5819f58cf040c9613ecce548f1">&#9670;&#160;</a></span>binary_op() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3200,15 +3136,15 @@ template&lt;typename T, typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>bopt</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a7ca09ebf776fe32db580f9038587ec31" name="a7ca09ebf776fe32db580f9038587ec31"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7ca09ebf776fe32db580f9038587ec31">&#9670;&#160;</a></span>binary_op_dims()</h2>
+<a id="aeac6fa9529eedba76b27de9d098de963" name="aeac6fa9529eedba76b27de9d098de963"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeac6fa9529eedba76b27de9d098de963">&#9670;&#160;</a></span>binary_op_dims()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3229,11 +3165,6 @@ template&lt;typename T, typename U, typename Op, int D, bool Strided&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -3265,8 +3196,8 @@ template&lt;typename T, typename U, typename Op, int D, bool Strided&gt; </div>
 
 </div>
 </div>
-<a id="a66c9ee5018168b9101de52e0122d9755" name="a66c9ee5018168b9101de52e0122d9755"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a66c9ee5018168b9101de52e0122d9755">&#9670;&#160;</a></span>binary_op_dispatch_dims()</h2>
+<a id="ad1229ffbba21bdb81f63482a4651bc5a" name="ad1229ffbba21bdb81f63482a4651bc5a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1229ffbba21bdb81f63482a4651bc5a">&#9670;&#160;</a></span>binary_op_dispatch_dims()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3276,27 +3207,27 @@ template&lt;typename T, typename U, bool Strided, typename Op&gt; </div>
         <tr>
           <td class="memname">void mlx::core::binary_op_dispatch_dims </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+          <td class="paramtype">const T *</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
+          <td class="paramtype">const T *</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+          <td class="paramtype">U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>dim</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -3744,8 +3675,8 @@ template&lt;typename F&gt; </div>
 
 </div>
 </div>
-<a id="ab8c3c4fc05745f586de922c8266f4fce" name="ab8c3c4fc05745f586de922c8266f4fce"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab8c3c4fc05745f586de922c8266f4fce">&#9670;&#160;</a></span>compiled_allocate_outputs()</h2>
+<a id="a8ed5ff0d69f6c7d2e092fe811e40d564" name="a8ed5ff0d69f6c7d2e092fe811e40d564"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ed5ff0d69f6c7d2e092fe811e40d564">&#9670;&#160;</a></span>compiled_allocate_outputs()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3773,12 +3704,7 @@ template&lt;typename F&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>contiguous</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>move_buffers</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>contiguous</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -3888,8 +3814,8 @@ template&lt;typename T, typename... Args&gt; </div>
 
 </div>
 </div>
-<a id="a479648542a2bea151b947b18f0e79dd2" name="a479648542a2bea151b947b18f0e79dd2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a479648542a2bea151b947b18f0e79dd2">&#9670;&#160;</a></span>copy()</h2>
+<a id="a017bd8bd743e26f1ff971c8749b55daf" name="a017bd8bd743e26f1ff971c8749b55daf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a017bd8bd743e26f1ff971c8749b55daf">&#9670;&#160;</a></span>copy()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3907,7 +3833,12 @@ template&lt;typename T, typename... Args&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -4109,8 +4040,8 @@ template&lt;typename T, typename... Args&gt; </div>
 
 </div>
 </div>
-<a id="ae85bafda5ab0b4b2289591260cf07685" name="ae85bafda5ab0b4b2289591260cf07685"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae85bafda5ab0b4b2289591260cf07685">&#9670;&#160;</a></span>copy_inplace() <span class="overload">[1/2]</span></h2>
+<a id="a1e4381d42877a5c6050c20e77d13c990" name="a1e4381d42877a5c6050c20e77d13c990"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e4381d42877a5c6050c20e77d13c990">&#9670;&#160;</a></span>copy_inplace() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -4153,15 +4084,30 @@ template&lt;typename T, typename... Args&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>dynamic_i_offset</em></span><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>dynamic_o_offset</em></span><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a98495894a796b2cc6d022e7a03432c64" name="a98495894a796b2cc6d022e7a03432c64"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a98495894a796b2cc6d022e7a03432c64">&#9670;&#160;</a></span>copy_inplace() <span class="overload">[2/2]</span></h2>
+<a id="ab30708325761c91e7dde245827e9dd91" name="ab30708325761c91e7dde245827e9dd91"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab30708325761c91e7dde245827e9dd91">&#9670;&#160;</a></span>copy_inplace() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -4179,7 +4125,12 @@ template&lt;typename T, typename... Args&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -4525,40 +4476,6 @@ template&lt;typename T, typename... Args&gt; </div>
 
 <p>Globally enable compilation. </p>
 <p>This will override the environment variable <code>MLX_DISABLE_COMPILE</code>. </p>
-
-</div>
-</div>
-<a id="a6d452306f0f046a7d021bd94f8713a89" name="a6d452306f0f046a7d021bd94f8713a89"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6d452306f0f046a7d021bd94f8713a89">&#9670;&#160;</a></span>encode_signal()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::encode_signal </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1_event.html">Event</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a2874ba55b73057b76c23a7429fdd2d6e" name="a2874ba55b73057b76c23a7429fdd2d6e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2874ba55b73057b76c23a7429fdd2d6e">&#9670;&#160;</a></span>encode_wait()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::encode_wait </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1_event.html">Event</a></td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
 
 </div>
 </div>
@@ -6618,39 +6535,8 @@ template&lt;typename... Args&gt; </div>
 
 </div>
 </div>
-<a id="a954de19249da7c1fa39b89bdc47368aa" name="a954de19249da7c1fa39b89bdc47368aa"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a954de19249da7c1fa39b89bdc47368aa">&#9670;&#160;</a></span>load() <span class="overload">[1/3]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::load </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>offset</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>reader</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>swap_endianess</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="abada9bfa834d7423959362386720f3db" name="abada9bfa834d7423959362386720f3db"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abada9bfa834d7423959362386720f3db">&#9670;&#160;</a></span>load() <span class="overload">[2/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abada9bfa834d7423959362386720f3db">&#9670;&#160;</a></span>load() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -6673,7 +6559,7 @@ template&lt;typename... Args&gt; </div>
 </div>
 </div>
 <a id="ac71a08bf4c052ae3c77e9e89cbea071d" name="ac71a08bf4c052ae3c77e9e89cbea071d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac71a08bf4c052ae3c77e9e89cbea071d">&#9670;&#160;</a></span>load() <span class="overload">[3/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac71a08bf4c052ae3c77e9e89cbea071d">&#9670;&#160;</a></span>load() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -6812,8 +6698,8 @@ template&lt;typename... Args&gt; </div>
 
 </div>
 </div>
-<a id="aaacf0afe13d77a5c49ce96f1e833eb2d" name="aaacf0afe13d77a5c49ce96f1e833eb2d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aaacf0afe13d77a5c49ce96f1e833eb2d">&#9670;&#160;</a></span>matmul()</h2>
+<a id="afd07258882634dcda1e6f18f10dc28d5" name="afd07258882634dcda1e6f18f10dc28d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd07258882634dcda1e6f18f10dc28d5">&#9670;&#160;</a></span>matmul()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -6823,17 +6709,17 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="memname">void mlx::core::matmul </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+          <td class="paramtype">const T *</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
+          <td class="paramtype">const T *</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">T *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -6858,74 +6744,42 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>ldc</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">float</td>          <td class="paramname"><span class="paramname"><em>alpha</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">float</td>          <td class="paramname"><span class="paramname"><em>beta</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a830a47d8a317dffb0c88e5a7afe6aee2" name="a830a47d8a317dffb0c88e5a7afe6aee2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a830a47d8a317dffb0c88e5a7afe6aee2">&#9670;&#160;</a></span>move_or_copy() <span class="overload">[1/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::move_or_copy </td>
-          <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>in</em></span>, </td>
+          <td class="paramtype">float</td>          <td class="paramname"><span class="paramname"><em>beta</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a9fcb3711b150cb65c7778a35c51284b2" name="a9fcb3711b150cb65c7778a35c51284b2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9fcb3711b150cb65c7778a35c51284b2">&#9670;&#160;</a></span>move_or_copy() <span class="overload">[2/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void mlx::core::move_or_copy </td>
-          <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>in</em></span>, </td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>batch_size</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a_shape</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1array_1_1_flags.html">array::Flags</a></td>          <td class="paramname"><span class="paramname"><em>flags</em></span>, </td>
+          <td class="paramtype">const <a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b_shape</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>data_size</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>offset</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+          <td class="paramtype">const <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -18257,8 +18111,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a6a52856325c2eb031d3983eba2108d59" name="a6a52856325c2eb031d3983eba2108d59"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6a52856325c2eb031d3983eba2108d59">&#9670;&#160;</a></span>set_binary_op_output_data()</h2>
+<a id="a9f22a9ed98104aaffb929381055b966d" name="a9f22a9ed98104aaffb929381055b966d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f22a9ed98104aaffb929381055b966d">&#9670;&#160;</a></span>set_binary_op_output_data()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -18284,12 +18138,7 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>bopt</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>donate_with_move</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#a546e3d3c8957fbf2758f9504f4a2d0b6">BinaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>bopt</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -18317,6 +18166,40 @@ template&lt;typename T&gt; </div>
 </div><div class="memdoc">
 
 <p>Set the compiler mode to the given value. </p>
+
+</div>
+</div>
+<a id="a3892b68a2e828270caa1c7accf44f038" name="a3892b68a2e828270caa1c7accf44f038"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3892b68a2e828270caa1c7accf44f038">&#9670;&#160;</a></span>set_copy_output_data()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool mlx::core::set_copy_output_data </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>in</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a></td>          <td class="paramname"><span class="paramname"><em>ctype</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -18356,8 +18239,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a6f4528d0d338ea5e1f19d345875c26a2" name="a6f4528d0d338ea5e1f19d345875c26a2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6f4528d0d338ea5e1f19d345875c26a2">&#9670;&#160;</a></span>set_ternary_op_output_data()</h2>
+<a id="ae159e1f9193c12eff9a56dfceb1502ef" name="ae159e1f9193c12eff9a56dfceb1502ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae159e1f9193c12eff9a56dfceb1502ef">&#9670;&#160;</a></span>set_ternary_op_output_data()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -18388,12 +18271,7 @@ template&lt;typename T&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>topt</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>donate_with_move</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>topt</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -18893,8 +18771,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a9dcc3018702ee31c21c8652bdc2182b1" name="a9dcc3018702ee31c21c8652bdc2182b1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9dcc3018702ee31c21c8652bdc2182b1">&#9670;&#160;</a></span>ternary_op()</h2>
+<a id="a48fbbd43d2165ab7f42bac3f228bbda3" name="a48fbbd43d2165ab7f42bac3f228bbda3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a48fbbd43d2165ab7f42bac3f228bbda3">&#9670;&#160;</a></span>ternary_op()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -18924,7 +18802,12 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; <
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#ac2b8997537c7f25dd2b244d4c0a865a1">TernaryOpType</a></td>          <td class="paramname"><span class="paramname"><em>topt</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -18999,8 +18882,8 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op, int 
 
 </div>
 </div>
-<a id="ac1c085e305954247d042f5d8803cd85b" name="ac1c085e305954247d042f5d8803cd85b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac1c085e305954247d042f5d8803cd85b">&#9670;&#160;</a></span>ternary_op_dispatch_dims()</h2>
+<a id="a9abcc6efafd9ab5df1293b1793a734d2" name="a9abcc6efafd9ab5df1293b1793a734d2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9abcc6efafd9ab5df1293b1793a734d2">&#9670;&#160;</a></span>ternary_op_dispatch_dims()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19010,27 +18893,42 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; <
         <tr>
           <td class="memname">void mlx::core::ternary_op_dispatch_dims </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+          <td class="paramtype">const T1 *</td>          <td class="paramname"><span class="paramname"><em>a_ptr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>b</em></span>, </td>
+          <td class="paramtype">const T2 *</td>          <td class="paramname"><span class="paramname"><em>b_ptr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype">const T3 *</td>          <td class="paramname"><span class="paramname"><em>c_ptr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">U *</td>          <td class="paramname"><span class="paramname"><em>out_ptr</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a694e23f2d59606643728ad443d621416">Shape</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::vector&lt; <a class="el" href="#a79939016d0972ded7db37130da2a8b5c">Strides</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -19100,7 +18998,7 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; <
 </div>
 </div>
 <a id="a4734a596e57434492ddfe79f2cb9dbf9" name="a4734a596e57434492ddfe79f2cb9dbf9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4734a596e57434492ddfe79f2cb9dbf9">&#9670;&#160;</a></span>to_stream()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a4734a596e57434492ddfe79f2cb9dbf9">&#9670;&#160;</a></span>to_stream() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19110,6 +19008,27 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; <
           <td>(</td>
           <td class="paramtype"><a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span></td><td>)</td>
           <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a999be930e8a5b35eb33d934eefd548e8" name="a999be930e8a5b35eb33d934eefd548e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a999be930e8a5b35eb33d934eefd548e8">&#9670;&#160;</a></span>to_stream() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> mlx::core::to_stream </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_device.html">Device</a></td>          <td class="paramname"><span class="paramname"><em>default_</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -19150,8 +19069,8 @@ template&lt;typename T1, typename T2, typename T3, typename U, typename Op&gt; <
 
 </div>
 </div>
-<a id="a6c8fdd03ef891d7f47804bf02e9a8507" name="a6c8fdd03ef891d7f47804bf02e9a8507"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6c8fdd03ef891d7f47804bf02e9a8507">&#9670;&#160;</a></span>unary()</h2>
+<a id="a0f3ff0f676d28840c210ef6277caa546" name="a0f3ff0f676d28840c210ef6277caa546"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0f3ff0f676d28840c210ef6277caa546">&#9670;&#160;</a></span>unary()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19171,15 +19090,86 @@ template&lt;typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a76a2cb4634f5fd6970a8c3b3753d7a4a" name="a76a2cb4634f5fd6970a8c3b3753d7a4a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a76a2cb4634f5fd6970a8c3b3753d7a4a">&#9670;&#160;</a></span>unary_fp()</h2>
+<a id="a9af588b2e7f4e5249cd8b7722ad829c0" name="a9af588b2e7f4e5249cd8b7722ad829c0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9af588b2e7f4e5249cd8b7722ad829c0">&#9670;&#160;</a></span>unary_complex()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename Op&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::unary_complex </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0640d1f5bcd9a4f5cdaea9f197a53515" name="a0640d1f5bcd9a4f5cdaea9f197a53515"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0640d1f5bcd9a4f5cdaea9f197a53515">&#9670;&#160;</a></span>unary_complex_to_float()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename Op&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::unary_complex_to_float </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6c1b92aea938457e44f93a7955d22823" name="a6c1b92aea938457e44f93a7955d22823"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c1b92aea938457e44f93a7955d22823">&#9670;&#160;</a></span>unary_fp()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19199,15 +19189,20 @@ template&lt;typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a078859db0d66ff77f97af6dc9764e8eb" name="a078859db0d66ff77f97af6dc9764e8eb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a078859db0d66ff77f97af6dc9764e8eb">&#9670;&#160;</a></span>unary_int()</h2>
+<a id="a50536365b8bcfec55e7d023ae9a6395c" name="a50536365b8bcfec55e7d023ae9a6395c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50536365b8bcfec55e7d023ae9a6395c">&#9670;&#160;</a></span>unary_int()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19227,15 +19222,20 @@ template&lt;typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="ae20f207ad1ed3badc17cecf08f118b5e" name="ae20f207ad1ed3badc17cecf08f118b5e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae20f207ad1ed3badc17cecf08f118b5e">&#9670;&#160;</a></span>unary_op() <span class="overload">[1/2]</span></h2>
+<a id="ab9812785763451ceb86486032d614048" name="ab9812785763451ceb86486032d614048"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9812785763451ceb86486032d614048">&#9670;&#160;</a></span>unary_op() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19255,15 +19255,15 @@ template&lt;typename T, typename U = T, typename Op&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>&#160;)</td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a27f00519f9756896734fd4d47fec0625" name="a27f00519f9756896734fd4d47fec0625"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a27f00519f9756896734fd4d47fec0625">&#9670;&#160;</a></span>unary_op() <span class="overload">[2/2]</span></h2>
+<a id="aa6b3dfc27a21d26b3fda96022aa60e32" name="aa6b3dfc27a21d26b3fda96022aa60e32"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6b3dfc27a21d26b3fda96022aa60e32">&#9670;&#160;</a></span>unary_op() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -19279,11 +19279,6 @@ template&lt;typename T, typename U = T, typename Op&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -19362,30 +19357,69 @@ template&lt;typename T, typename U = T, typename Op&gt; </div>
 
 </div>
 </div>
-<a id="a357f4172305d2021bde8cf07d99adb7d" name="a357f4172305d2021bde8cf07d99adb7d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a357f4172305d2021bde8cf07d99adb7d">&#9670;&#160;</a></span>unsafe_weak_copy()</h2>
+<a id="a940f998c7469d14f5234f78dcaecd48b" name="a940f998c7469d14f5234f78dcaecd48b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a940f998c7469d14f5234f78dcaecd48b">&#9670;&#160;</a></span>unary_real_fp()</h2>
 
 <div class="memitem">
 <div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
+<div class="memtemplate">
+template&lt;typename Op&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::unsafe_weak_copy </td>
+          <td class="memname">void mlx::core::unary_real_fp </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
         </tr>
       </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
-  </tr>
-</table>
 </div><div class="memdoc">
 
-<p>Get a new array that refers to the same data but has a non-owning pointer to them. </p>
+</div>
+</div>
+<a id="aed2b5550f8424094ef10bdadfe92ec0f" name="aed2b5550f8424094ef10bdadfe92ec0f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed2b5550f8424094ef10bdadfe92ec0f">&#9670;&#160;</a></span>unary_signed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename Op&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::unary_signed </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Op</td>          <td class="paramname"><span class="paramname"><em>op</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
