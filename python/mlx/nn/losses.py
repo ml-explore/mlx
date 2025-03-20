@@ -373,7 +373,7 @@ def smooth_l1_loss(
             f"targets shape {targets.shape}."
         )
 
-    diff = predictions - targets
+    diff = mx.abs(predictions - targets)
     loss = mx.where(
         diff < beta, 0.5 * mx.square(diff) / beta, mx.abs(diff) - 0.5 * beta
     )
