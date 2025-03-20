@@ -1,12 +1,12 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
-#include <mpi.h>
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/mpi/mpi_declarations.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \
@@ -21,7 +21,7 @@
 #ifdef __APPLE__
 static constexpr const char* libmpi_name = "libmpi.dylib";
 #else
-static constexpr const char* libmpi_name = "libmpi_cxx.so";
+static constexpr const char* libmpi_name = "libmpi.so";
 #endif
 
 namespace mlx::core::distributed::mpi {
