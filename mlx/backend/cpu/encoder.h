@@ -9,6 +9,9 @@
 
 namespace mlx::core::cpu {
 
+// Number of dispatches per scheduler task
+constexpr int DISPATCHES_PER_TASK = 10;
+
 struct CommandEncoder {
   CommandEncoder(Stream stream) : stream_(stream) {}
 
@@ -39,7 +42,7 @@ struct CommandEncoder {
 
   template <class F, class... Args>
   void dispatch(F&& f, Args&&... args) {
-    num_ops_ = (num_ops_ + 1) % 10;
+    num_ops_ = (num_ops_ + 1) % DISPATCHES_PER_TASK;
     auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
     if (num_ops_ == 0) {
       scheduler::notify_new_task(stream_);
