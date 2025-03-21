@@ -3,7 +3,16 @@
 #include <mutex>
 
 #include "mlx/allocator.h"
+
+#ifdef __APPLE__
 #include "mlx/backend/no_metal/apple_memory.h"
+#elif defined(__linux__)
+#include "mlx/backend/no_metal/linux_memory.h"
+#else
+size_t get_memory_size() {
+  return 0;
+}
+#endif
 
 namespace mlx::core {
 
@@ -39,7 +48,12 @@ class CommonAllocator : public Allocator {
   size_t active_memory_{0};
   size_t peak_memory_{0};
   std::mutex mutex_;
-  CommonAllocator() : memory_limit_(0.8 * get_memory_size()) {};
+  CommonAllocator() : memory_limit_(0.8 * get_memory_size()) {
+    if (memory_limit_ == 0) {
+      memory_limit_ = 1UL << 33;
+    }
+  };
+
   friend CommonAllocator& common_allocator();
 };
 

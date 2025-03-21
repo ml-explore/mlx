@@ -2,37 +2,21 @@
 
 #pragma once
 
+#include <sys/sysinfo.h>
+
 namespace {
 
 size_t get_memory_size() {
-  std::ifstream meminfo("/proc/meminfo");
-  if (!meminfo.is_open()) {
-    std::cerr << "Error opening /proc/meminfo" << std::endl;
-    return -1; // Indicate an error
+  struct sysinfo info;
+
+  if (sysinfo(&info) != 0) {
+    return 0;
   }
 
-  std::string line;
-  while (std::getline(meminfo, line)) {
-    if (line.find("MemTotal:") == 0) {
-      std::istringstream iss(line.substr(line.find(":") + 1));
-      long long memTotal;
-      std::string unit;
-      if (iss >> memTotal >> unit) {
-        if (unit == "kB") {
-          return memTotal * 1024; // Convert kilobytes to bytes
-        } else if (unit == "MB") {
-          return memTotal * 1024 * 1024; // Convert megabytes to bytes
-        } else if (unit == "GB") {
-          return memTotal * 1024 * 1024 * 1024; // Convert gigabytes to bytes
-        } else {
-          return memTotal; // return in kilobytes if unit is unknown
-        }
-      }
-    }
-  }
+  size_t total_ram = info.totalram;
+  total_ram *= info.mem_unit;
 
-  std::cerr << "MemTotal not found in /proc/meminfo" << std::endl;
-  return -1; // Indicate an error
+  return total_ram;
 }
 
 } // namespace
