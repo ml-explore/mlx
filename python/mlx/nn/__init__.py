@@ -2,6 +2,22 @@
 
 from mlx.nn import init, losses
 from mlx.nn.layers import *  # noqa: F403
+from mlx.nn.layers import (
+    activations,
+    containers,
+    convolution,
+    convolution_transpose,
+    dropout,
+    embedding,
+    linear,
+    normalization,
+    pooling,
+    positional_encoding,
+    quantized,
+    recurrent,
+    transformer,
+    upsample,
+)
 from mlx.nn.utils import average_gradients, value_and_grad
 
 __all__ = [
@@ -9,6 +25,20 @@ __all__ = [
     "losses",
     "average_gradients",
     "value_and_grad",
+    "activations",
+    "containers",
+    "convolution",
+    "convolution_transpose",
+    "dropout",
+    "embedding",
+    "linear",
+    "normalization",
+    "pooling",
+    "positional_encoding",
+    "quantized",
+    "recurrent",
+    "transformer",
+    "upsample",
     "CELU",
     "ELU",
     "GELU",
