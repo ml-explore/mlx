@@ -3,10 +3,10 @@
 import unittest
 
 import mlx.core as mx
-import mlx_tests
+import mlx_distributed_tests
 
 
-class TestRingDistributed(mlx_tests.MLXTestCase):
+class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
         world = mx.distributed.init(strict=True, backend="ring")
