@@ -49,16 +49,4 @@ class Allocator {
 
 Allocator& allocator();
 
-class CommonAllocator : public Allocator {
-  /** A general CPU allocator. */
- public:
-  virtual Buffer malloc(size_t size) override;
-  virtual void free(Buffer buffer) override;
-  virtual size_t size(Buffer buffer) const override;
-
- private:
-  CommonAllocator() = default;
-  friend Allocator& allocator();
-};
-
 } // namespace mlx::core::allocator

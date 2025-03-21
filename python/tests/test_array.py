@@ -1803,7 +1803,6 @@ class TestArray(mlx_tests.MLXTestCase):
         b = pickle.loads(pickle.dumps(a))
         self.assertTrue(mx.array_equal(mx.array(a), mx.array(b)))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_multi_output_leak(self):
         def fun():
             a = mx.zeros((2**20))

@@ -745,11 +745,8 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.custom_function,
             mx.checkpoint,
         ]:
-            if mx.metal.is_available():
-                mx.synchronize(mx.default_stream(mx.default_device()))
-                mem_pre = mx.get_active_memory()
-            else:
-                mem_pre = 0
+            mx.synchronize()
+            mem_pre = mx.get_active_memory()
 
             def outer():
                 d = {}
@@ -763,12 +760,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
             for _ in range(5):
                 outer()
                 gc.collect()
-
-            if mx.metal.is_available():
-                mem_post = mx.get_active_memory()
-            else:
-                mem_post = 0
-
+            mem_post = mx.get_active_memory()
             self.assertEqual(mem_pre, mem_post)
 
     def test_grad_with_copies(self):
