@@ -7,7 +7,6 @@ import mlx_tests
 
 
 class TestMemory(mlx_tests.MLXTestCase):
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_memory_info(self):
         old_limit = mx.set_cache_limit(0)
 
@@ -38,8 +37,10 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(new_active_mem, active_mem)
         peak_mem = mx.get_peak_memory()
         self.assertTrue(peak_mem >= 4096 * 8)
-        cache_mem = mx.get_cache_memory()
-        self.assertTrue(cache_mem >= 4096 * 4)
+
+        if mx.metal.is_available():
+            cache_mem = mx.get_cache_memory()
+            self.assertTrue(cache_mem >= 4096 * 4)
 
         mx.clear_cache()
         self.assertEqual(mx.get_cache_memory(), 0)
@@ -47,6 +48,8 @@ class TestMemory(mlx_tests.MLXTestCase):
         mx.reset_peak_memory()
         self.assertEqual(mx.get_peak_memory(), 0)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_wired_memory(self):
         old_limit = mx.set_wired_limit(1000)
         old_limit = mx.set_wired_limit(0)
         self.assertEqual(old_limit, 1000)

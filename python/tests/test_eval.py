@@ -117,10 +117,9 @@ class TestEval(mlx_tests.MLXTestCase):
 
         out = mx.vjp(fn, (x,), (y,))
         out = mx.vjp(fn, (x,), (y,))
-        if mx.metal.is_available():
-            peak_mem = mx.get_peak_memory()
-            out = mx.vjp(fn, (x,), (y,))
-            self.assertEqual(peak_mem, mx.get_peak_memory())
+        peak_mem = mx.get_peak_memory()
+        out = mx.vjp(fn, (x,), (y,))
+        self.assertEqual(peak_mem, mx.get_peak_memory())
 
     def test_async_eval_with_multiple_streams(self):
         x = mx.array([1.0])
@@ -137,7 +136,6 @@ class TestEval(mlx_tests.MLXTestCase):
             mx.async_eval(x)
             mx.eval(a + b)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_donation_for_noops(self):
         def fun(x):
             s = x.shape

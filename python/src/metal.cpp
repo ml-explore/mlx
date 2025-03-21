@@ -36,7 +36,7 @@ void init_metal(nb::module_& m) {
   });
   metal.def("get_peak_memory", []() {
     DEPRECATE("mx.metal.get_peak_memory", "mx.get_peak_memory");
-    return mx::get_active_memory();
+    return mx::get_peak_memory();
   });
   metal.def("reset_peak_memory", []() {
     DEPRECATE("mx.metal.reset_peak_memory", "mx.reset_peak_memory");
