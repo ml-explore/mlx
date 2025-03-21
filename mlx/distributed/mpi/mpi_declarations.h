@@ -6,6 +6,7 @@
 #define MPI_ANY_SOURCE -1
 #define MPI_ANY_TAG -1
 #define MPI_IN_PLACE ((void*)1)
+#define MPI_MAX_LIBRARY_VERSION_STRING 256
 
 // Define all the types that we use so that we don't include <mpi.h> which
 // causes linker errors on some platforms.
