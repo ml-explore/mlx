@@ -614,6 +614,7 @@ class RingGroup : public GroupImpl {
   void all_gather(const array& input, array& output, Stream stream) override {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
+    encoder.set_output_array(output);
     encoder.dispatch([input_ptr = input.data<char>(),
                       nbytes = input.nbytes(),
                       output_ptr = output.data<char>(),
