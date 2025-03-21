@@ -31,33 +31,8 @@ void synchronize(Stream) {
       "[metal::synchronize] Cannot synchronize GPU without metal backend");
 }
 
-// No-ops when Metal is not available.
-size_t get_active_memory() {
-  return 0;
-}
-size_t get_peak_memory() {
-  return 0;
-}
-void reset_peak_memory() {}
-size_t get_cache_memory() {
-  return 0;
-}
-size_t set_memory_limit(size_t) {
-  return 0;
-}
-size_t get_memory_limit() {
-  return 0;
-}
-size_t set_cache_limit(size_t) {
-  return 0;
-}
-size_t set_wired_limit(size_t) {
-  return 0;
-}
-
 void start_capture(std::string) {}
 void stop_capture() {}
-void clear_cache() {}
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info() {

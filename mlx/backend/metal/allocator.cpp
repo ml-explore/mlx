@@ -3,6 +3,7 @@
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/backend/metal/resident.h"
+#include "mlx/memory.h"
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
@@ -323,40 +324,40 @@ MetalAllocator& allocator() {
   return *allocator_;
 }
 
+} // namespace metal
+
 size_t set_cache_limit(size_t limit) {
-  return allocator().set_cache_limit(limit);
+  return metal::allocator().set_cache_limit(limit);
 }
 size_t set_memory_limit(size_t limit) {
-  return allocator().set_memory_limit(limit);
+  return metal::allocator().set_memory_limit(limit);
 }
 size_t get_memory_limit() {
-  return allocator().get_memory_limit();
+  return metal::allocator().get_memory_limit();
 }
 size_t set_wired_limit(size_t limit) {
-  if (limit >
-      std::get<size_t>(device_info().at("max_recommended_working_set_size"))) {
+  if (limit > std::get<size_t>(metal::device_info().at(
+                  "max_recommended_working_set_size"))) {
     throw std::invalid_argument(
         "[metal::set_wired_limit] Setting a wired limit larger than "
         "the maximum working set size is not allowed.");
   }
-  return allocator().set_wired_limit(limit);
+  return metal::allocator().set_wired_limit(limit);
 }
 size_t get_active_memory() {
-  return allocator().get_active_memory();
+  return metal::allocator().get_active_memory();
 }
 size_t get_peak_memory() {
-  return allocator().get_peak_memory();
+  return metal::allocator().get_peak_memory();
 }
 void reset_peak_memory() {
-  allocator().reset_peak_memory();
+  metal::allocator().reset_peak_memory();
 }
 size_t get_cache_memory() {
-  return allocator().get_cache_memory();
+  return metal::allocator().get_cache_memory();
 }
 void clear_cache() {
-  return allocator().clear_cache();
+  return metal::allocator().clear_cache();
 }
-
-} // namespace metal
 
 } // namespace mlx::core

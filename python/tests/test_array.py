@@ -1813,10 +1813,10 @@ class TestArray(mlx_tests.MLXTestCase):
 
         fun()
         mx.synchronize()
-        peak_1 = mx.metal.get_peak_memory()
+        peak_1 = mx.get_peak_memory()
         fun()
         mx.synchronize()
-        peak_2 = mx.metal.get_peak_memory()
+        peak_2 = mx.get_peak_memory()
         self.assertEqual(peak_1, peak_2)
 
         def fun():
@@ -1826,10 +1826,10 @@ class TestArray(mlx_tests.MLXTestCase):
 
         fun()
         mx.synchronize()
-        peak_1 = mx.metal.get_peak_memory()
+        peak_1 = mx.get_peak_memory()
         fun()
         mx.synchronize()
-        peak_2 = mx.metal.get_peak_memory()
+        peak_2 = mx.get_peak_memory()
         self.assertEqual(peak_1, peak_2)
 
     def test_add_numpy(self):
