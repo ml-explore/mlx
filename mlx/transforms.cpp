@@ -12,6 +12,7 @@
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/fence.h"
+#include "mlx/memory.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -219,7 +220,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-        (metal::get_active_memory() > metal::get_memory_limit() &&
+        (get_active_memory() > get_memory_limit() &&
          scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
       for (auto& [_, e] : events) {
@@ -228,8 +229,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
       }
       scheduler::wait_for_one();
-      // TODO memory api should be moved out of metal
-      while (metal::get_active_memory() > metal::get_memory_limit() &&
+      while (get_active_memory() > get_memory_limit() &&
              scheduler::n_active_tasks() > 0) {
         scheduler::wait_for_one();
       }

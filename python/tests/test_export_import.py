@@ -243,7 +243,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def test_leaks(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
         if mx.metal.is_available():
-            mem_pre = mx.metal.get_active_memory()
+            mem_pre = mx.get_active_memory()
         else:
             mem_pre = 0
 
@@ -261,7 +261,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
             gc.collect()
 
         if mx.metal.is_available():
-            mem_post = mx.metal.get_active_memory()
+            mem_post = mx.get_active_memory()
         else:
             mem_post = 0
 

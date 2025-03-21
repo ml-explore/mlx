@@ -473,24 +473,24 @@ TEST_CASE("test metal validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
-TEST_CASE("test metal memory info") {
+TEST_CASE("test memory info") {
   // Test cache limits
   {
-    auto old_limit = metal::set_cache_limit(0);
+    auto old_limit = set_cache_limit(0);
     {
       auto a = zeros({4096});
       eval(a);
     }
-    CHECK_EQ(metal::get_cache_memory(), 0);
-    CHECK_EQ(metal::set_cache_limit(old_limit), 0);
-    CHECK_EQ(metal::set_cache_limit(old_limit), old_limit);
+    CHECK_EQ(get_cache_memory(), 0);
+    CHECK_EQ(set_cache_limit(old_limit), 0);
+    CHECK_EQ(set_cache_limit(old_limit), old_limit);
   }
 
   // Test memory limits
   {
-    auto old_limit = metal::set_memory_limit(10);
-    CHECK_EQ(metal::set_memory_limit(old_limit), 10);
-    CHECK_EQ(metal::set_memory_limit(old_limit), old_limit);
+    auto old_limit = set_memory_limit(10);
+    CHECK_EQ(set_memory_limit(old_limit), 10);
+    CHECK_EQ(set_memory_limit(old_limit), old_limit);
   }
 
   // Query active and peak memory
@@ -498,22 +498,22 @@ TEST_CASE("test metal memory info") {
     auto a = zeros({4096});
     eval(a);
     synchronize();
-    auto active_mem = metal::get_active_memory();
+    auto active_mem = get_active_memory();
     CHECK(active_mem >= 4096 * 4);
     {
       auto b = zeros({4096});
       eval(b);
     }
     synchronize();
-    auto new_active_mem = metal::get_active_memory();
+    auto new_active_mem = get_active_memory();
     CHECK_EQ(new_active_mem, active_mem);
-    auto peak_mem = metal::get_peak_memory();
+    auto peak_mem = get_peak_memory();
     CHECK(peak_mem >= 4096 * 8);
 
-    auto cache_mem = metal::get_cache_memory();
+    auto cache_mem = get_cache_memory();
     CHECK(cache_mem >= 4096 * 4);
   }
 
-  metal::clear_cache();
-  CHECK_EQ(metal::get_cache_memory(), 0);
+  clear_cache();
+  CHECK_EQ(get_cache_memory(), 0);
 }
