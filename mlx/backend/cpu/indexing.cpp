@@ -197,7 +197,7 @@ void dispatch_gather(
 }
 
 void Gather::eval_cpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& src = inputs[0];
   std::vector<array> inds;
@@ -354,7 +354,7 @@ void dispatch_gather_axis(
 }
 
 void GatherAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& src = inputs[0];
   auto& inds = inputs[1];

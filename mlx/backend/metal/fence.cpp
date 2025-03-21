@@ -20,7 +20,7 @@ struct FenceImpl {
       auto p = metal::new_scoped_memory_pool();
       fence = static_cast<void*>(d->newSharedEvent());
     } else {
-      auto buf = allocator::malloc_or_wait(sizeof(uint32_t)).ptr();
+      auto buf = allocator::malloc(sizeof(uint32_t)).ptr();
       fence = static_cast<void*>(buf);
       cpu_value()[0] = 0;
     }

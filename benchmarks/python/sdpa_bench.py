@@ -28,11 +28,34 @@ def bench(f, *args):
     return (e - s) * 1e-9
 
 
-def mlx_sdpa_fused_inner(q, k, v, scale):
-    return mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=None)
+def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
+    np_dtype = getattr(np, dtype)
+
+    shape_q = (B, qL, qH, D) if transpose else (B, qH, qL, D)
+    shape_kv = (B, kL, kH, D) if transpose else (B, kH, kL, D)
+
+    scale = 1.0 / math.sqrt(D)
+
+    q_np = np.random.normal(0.0, 1.0, shape_q).astype(np_dtype)
+    k_np = np.random.normal(0.0, scale, shape_kv).astype(np_dtype)
+    v_np = np.random.normal(0.0, scale, shape_kv).astype(np_dtype)
+
+    q_mx = mx.array(q_np)
+    k_mx = mx.array(k_np)
+    v_mx = mx.array(v_np)
+
+    if mask is not None:
+        if mask == "additive":
+            mask_np = np.random.normal(0.0, 1.0, (B, qH, qL, kL)).astype(np_dtype)
+            mask = mx.array(mask_np)
+        elif mask == "bool":
+            mask_np = np.random.uniform(0.0, 1.0, (B, qH, qL, kL)) < 0.5
+            mask = mx.array(mask_np)
+
+    return q_mx, k_mx, v_mx, scale, mask
 
 
-def mlx_sdpa_unfused_inner(q, k, v, scale, f32softmax=False):
+def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
     q_dtype = q.dtype
     q = q * mx.array(scale, q_dtype)
     n_q_heads = q.shape[-3]
@@ -41,6 +64,7 @@ def mlx_sdpa_unfused_inner(q, k, v, scale, f32softmax=False):
 
     B = q.shape[0]
     L = q.shape[2]
+    kL = k.shape[2]
 
     if n_repeats > 1:
         q = mx.reshape(q, [B, n_kv_heads, n_repeats, L, -1])
@@ -48,10 +72,27 @@ def mlx_sdpa_unfused_inner(q, k, v, scale, f32softmax=False):
         v = mx.expand_dims(v, 2)
 
     scores = q @ mx.swapaxes(k, -1, -2)
-    if f32softmax:
-        scores = mx.softmax(scores.astype(mx.float32), axis=-1).astype(q_dtype)
-    else:
-        scores = mx.softmax(scores, axis=-1)
+
+    if mask is not None:
+
+        if mask == "causal":
+            q_offset = max(0, kL - L)
+            q_indices = mx.arange(q_offset, q_offset + L)
+            k_indices = mx.arange(kL)
+            mask = q_indices[:, None] >= k_indices[None]
+
+        if n_repeats > 1 and mask.ndim >= 3:
+            if mask.shape[-3] == 1:
+                mask = mx.expand_dims(mask, -3)
+            else:
+                mask = mx.unflatten(mask, -3, (n_kv_heads, n_repeats))
+
+        if mask.dtype == mx.bool_:
+            scores = mx.where(mask, scores, -np.float32(np.inf))
+        else:
+            scores += mask
+
+    scores = mx.softmax(scores, axis=-1, precise=True)
 
     out = scores @ v
     if n_repeats > 1:
@@ -60,74 +101,55 @@ def mlx_sdpa_unfused_inner(q, k, v, scale, f32softmax=False):
     return out
 
 
-def mlx_spda_unfused(q, k, v, scale, transpose):
-    q_out = q
+def mlx_fused_attn(q, k, v, scale, mask):
+    return mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
+
+
+def do_attention(f, q, k, v, scale, mask=None, transpose=False):
     if transpose:
-        k = mx.transpose(k, (0, 2, 1, 3))
-        v = mx.transpose(v, (0, 2, 1, 3))
+        q_t = mx.transpose(q, (0, 2, 1, 3))
+        k_t = mx.transpose(k, (0, 2, 1, 3))
+        v_t = mx.transpose(v, (0, 2, 1, 3))
+        o_t = f(q_t, k_t, v_t, scale=scale, mask=mask)
+        return mx.transpose(o_t, (0, 2, 1, 3))
+    else:
+        return f(q, k, v, scale=scale, mask=mask)
+
+
+def do_attention_bench(f, q, k, v, scale, mask=None, transpose=False):
+    q_out = q
 
     for i in range(N_iter_func):
-        if transpose:
-            q_out = mx.transpose(q_out, (0, 2, 1, 3))
-        q_out = mlx_sdpa_unfused_inner(q_out, k, v, scale)
-        if transpose:
-            q_out = mx.transpose(q_out, (0, 2, 1, 3))
+        q_out = do_attention(f, q_out, k, v, scale, mask=mask, transpose=transpose)
 
     mx.eval(q_out)
     return q_out
 
 
-def mlx_spda_fused(q, k, v, scale, transpose):
-    q_out = q
-    if transpose:
-        k = mx.transpose(k, (0, 2, 1, 3))
-        v = mx.transpose(v, (0, 2, 1, 3))
-
-    for i in range(N_iter_func):
-        if transpose:
-            q_out = mx.transpose(q_out, (0, 2, 1, 3))
-        q_out = mlx_sdpa_fused_inner(q_out, k, v, scale)
-        if transpose:
-            q_out = mx.transpose(q_out, (0, 2, 1, 3))
-
-    mx.eval(q_out)
-    return q_out
-
-
-def bench_shape(B, qsl, ksl, head_dim, n_q_heads, n_kv_heads, np_dtype, transpose=True):
-    shape_q = (
-        (B, qsl, n_q_heads, head_dim) if transpose else (B, n_q_heads, qsl, head_dim)
-    )
-    shape_kv = (
-        (B, ksl, n_kv_heads, head_dim) if transpose else (B, n_kv_heads, ksl, head_dim)
+def bench_shape(
+    B, qsl, ksl, head_dim, n_q_heads, n_kv_heads, dtype, transpose=True, mask_in=None
+):
+    q_mx, k_mx, v_mx, scale, mask = prepare_inputs(
+        B, qsl, ksl, head_dim, n_q_heads, n_kv_heads, mask_in, transpose, dtype
     )
 
-    q_np = np.random.normal(0.0, 1.0 / math.sqrt(head_dim), shape_q).astype(np_dtype)
-    k_np = np.random.normal(0.0, 1.0 / math.sqrt(head_dim), shape_kv).astype(np_dtype)
-    v_np = np.random.normal(0.0, 1.0 / math.sqrt(head_dim), shape_kv).astype(np_dtype)
+    time_mlx_unfused = bench(
+        do_attention_bench, mlx_ref_attn, q_mx, k_mx, v_mx, scale, mask, transpose
+    )
+    time_mlx_fused = bench(
+        do_attention_bench, mlx_fused_attn, q_mx, k_mx, v_mx, scale, mask, transpose
+    )
 
-    scale = math.sqrt(1.0 / head_dim)
+    o_mlx_fused = do_attention(mlx_ref_attn, q_mx, k_mx, v_mx, scale, mask, transpose)
+    o_mlx_unfused = do_attention(
+        mlx_fused_attn, q_mx, k_mx, v_mx, scale, mask, transpose
+    )
 
-    q_mx = mx.array(q_np)
-    k_mx = mx.array(k_np)
-    v_mx = mx.array(v_np)
+    atol = 1e-5 if dtype == "float32" else 2e-4
 
-    time_mlx_unfused = bench(mlx_spda_unfused, q_mx, k_mx, v_mx, scale, transpose)
-    time_mlx_fused = bench(mlx_spda_fused, q_mx, k_mx, v_mx, scale, transpose)
-
-    if transpose:
-        q_mx = mx.transpose(q_mx, (0, 2, 1, 3))
-        k_mx = mx.transpose(k_mx, (0, 2, 1, 3))
-        v_mx = mx.transpose(v_mx, (0, 2, 1, 3))
-
-    o_mlx_fused = mlx_sdpa_fused_inner(q_mx, k_mx, v_mx, scale)
-    o_mlx_unfused = mlx_sdpa_unfused_inner(q_mx, k_mx, v_mx, scale, f32softmax=True)
-
-    atol = 1e-5 if np_dtype == np.float32 else 1e-4
-
-    if not mx.allclose(o_mlx_fused, o_mlx_unfused, atol=atol):
+    if not mx.allclose(o_mlx_fused, o_mlx_unfused, atol=atol, rtol=atol):
         print(
-            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: {n_q_heads}, n_kvh: {n_kv_heads}) [tpose = {transpose}] with max(|a - b|) = {mx.max(mx.abs(o_mlx_unfused - o_mlx_fused)):3.2e}"
+            f"Failed at (B: {B}, qsl: {qsl}, ksl: {ksl}, head_dim: {head_dim}, n_qh: {n_q_heads}, n_kvh: {n_kv_heads}, mask: {mask_in}) [tpose = {transpose}] with max(|a - b|) = {mx.max(mx.abs(o_mlx_unfused - o_mlx_fused)):3.2e}"
         )
 
     return time_mlx_fused, time_mlx_unfused
@@ -151,39 +173,51 @@ if __name__ == "__main__":
           (  1,   128,   128,       64,   32,    32),
           (  1,   256,   256,       64,   32,    32),
           (  1,   512,   512,       64,   32,    32),
-          (  1,  1024,  1024,       64,   32,    32),
-          (  1,  2048,  2048,       64,   32,    32),
-          (  1,  4096,  4096,       64,   32,    32),
+          (  1,  1024,  1024,       64,   32,     8),
+          (  1,  2048,  2048,       64,   32,     8),
+          (  1,  4096,  4096,       64,   32,     8),
     )
 
     shapes_80 = (
         # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
-          (  1,  1024,  1024,       80,   32,    32),
-          (  1,  2048,  2048,       80,   32,    32),
-          (  1,  4096,  4096,       80,   32,    32),
+          (  1,  1024,  1024,       80,   32,     8),
+          (  1,  2048,  2048,       80,   32,     8),
+          (  1,  4096,  4096,       80,   32,     8),
     )
 
     shapes_128 = (
         # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
-          (  1,  1024,  1024,      128,   32,    32),
-          (  1,  2048,  2048,      128,   32,    32),
-          (  1,  4096,  4096,      128,   32,    32),
+          (  1,  1024,  1024,      128,   32,     8),
+          (  1,  2048,  2048,      128,   32,     8),
+          (  1,  4096,  4096,      128,   32,     8),
     )
     # fmt: on
 
     shapes = shapes_64 + shapes_80 + shapes_128
 
-    print("  B,   qsl,   ksl, hdim, n_qh, n_kvh, tpose,   dtype, t_unfs, t_fuse, diff%")
+    masks = [None, "bool", "causal"]
+
+    print(
+        "  B,   qsl,   ksl, hdim, n_qh, n_kvh, t,   dtype,     mask, t_unfs, t_fuse, diff%"
+    )
 
     for dtype in dtypes:
         for transpose in transposes:
             for B, qsl, ksl, head_dim, n_q_heads, n_kv_heads in shapes:
-                np_dtype = getattr(np, dtype)
-                time_mlx_fused, time_mlx_unfused = bench_shape(
-                    B, qsl, ksl, head_dim, n_q_heads, n_kv_heads, np_dtype, transpose
-                )
-                diff = time_mlx_unfused / time_mlx_fused - 1.0
-                t_str = 1 if transpose else 0
-                print(
-                    f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, {n_q_heads:4d}, {n_kv_heads:5d}, {t_str:5d}, {dtype}, {time_mlx_unfused: 2.3f}, {time_mlx_fused: 2.3f}, {100. * diff:+5.2f}%"
-                )
+                for mask_in in masks:
+                    time_mlx_fused, time_mlx_unfused = bench_shape(
+                        B,
+                        qsl,
+                        ksl,
+                        head_dim,
+                        n_q_heads,
+                        n_kv_heads,
+                        dtype,
+                        transpose,
+                        mask_in,
+                    )
+                    diff = time_mlx_unfused / time_mlx_fused - 1.0
+                    t_str = 1 if transpose else 0
+                    print(
+                        f"{B:3d}, {qsl:5d}, {ksl:5d}, {head_dim:4d}, {n_q_heads:4d}, {n_kv_heads:5d}, {t_str:1d}, {dtype}, {str(mask_in):>8}, {time_mlx_unfused: 2.3f}, {time_mlx_fused: 2.3f}, {100. * diff:+5.2f}%"
+                    )

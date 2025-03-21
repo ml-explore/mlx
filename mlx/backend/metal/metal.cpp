@@ -75,11 +75,7 @@ void finalize(Stream s) {
   auto& d = metal::device(s.device);
   auto cb = d.get_command_buffer(s.index);
   d.end_encoding(s.index);
-  scheduler::notify_new_task(s);
-  cb->addCompletedHandler([s](MTL::CommandBuffer* cbuf) {
-    scheduler::notify_task_completion(s);
-    check_error(cbuf);
-  });
+  cb->addCompletedHandler([s](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
   d.commit_command_buffer(s.index);
   d.get_command_buffer(s.index);
 }

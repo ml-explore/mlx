@@ -30,7 +30,7 @@ void AllReduce::eval_cpu(
       if (in.is_donatable()) {
         out.copy_shared_buffer(in);
       } else {
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+        out.set_data(allocator::malloc(out.nbytes()));
       }
       return in;
     } else {
@@ -58,7 +58,7 @@ void AllGather::eval_cpu(
   assert(outputs.size() == 1);
 
   auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
-  outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
+  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
   distributed::detail::all_gather(group(), in, outputs[0], stream());
   if (copied) {
     auto& enc = cpu::get_command_encoder(stream());
@@ -87,7 +87,7 @@ void Recv::eval_cpu(
   assert(inputs.size() == 0);
   assert(outputs.size() == 1);
 
-  outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
+  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
   distributed::detail::recv(group(), outputs[0], src_, stream());
 }
 

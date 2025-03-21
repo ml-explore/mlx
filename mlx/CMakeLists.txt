@@ -17,8 +17,12 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
+
+# Define MLX_VERSION only in the version.cpp file.
+add_library(mlx_version STATIC ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
+target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
 if(MSVC)
   # Disable some MSVC warnings to speed up compilation.

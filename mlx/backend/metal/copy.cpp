@@ -202,7 +202,7 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   if (out.size() == 0) {
     return;
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   bool large = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
   std::string kernel_name = std::string(large ? "s2" : "s") + "_copy" +

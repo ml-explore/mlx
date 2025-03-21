@@ -19,7 +19,7 @@ void CustomKernel::eval_gpu(
       copies.emplace_back(init_value_.value(), out.dtype());
       fill_gpu(copies.back(), out, s);
     } else {
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      out.set_data(allocator::malloc(out.nbytes()));
     }
   }
 

@@ -72,9 +72,7 @@ void axpby_impl(
     float alpha_,
     float beta_,
     mx::Stream stream) {
-  // Allocate the output with `malloc_or_wait` which synchronously allocates
-  // memory, potentially waiting if the system is under memory pressure
-  out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(mx::allocator::malloc(out.nbytes()));
 
   // Get the CPU command encoder and register input and output arrays
   auto& encoder = mx::cpu::get_command_encoder(stream);
@@ -160,12 +158,12 @@ void Axpby::eval_gpu(
   // Allocate output memory with strides based on specialization
   if (contiguous_kernel) {
     out.set_data(
-        mx::allocator::malloc_or_wait(x.data_size() * out.itemsize()),
+        mx::allocator::malloc(x.data_size() * out.itemsize()),
         x.data_size(),
         x.strides(),
         x.flags());
   } else {
-    out.set_data(mx::allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(mx::allocator::malloc(out.nbytes()));
   }
 
   // Resolve name of kernel (corresponds to axpby.metal)

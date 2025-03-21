@@ -224,7 +224,7 @@ void qvm_split_k(
   auto temp_shape = out.shape();
   temp_shape.insert(temp_shape.end() - 2, split_k);
   array intermediate(temp_shape, x.dtype(), nullptr, {});
-  intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   d.add_temporary(intermediate, s.index);
 
   std::ostringstream kname;
@@ -277,7 +277,7 @@ void qmm_op(
     int bits,
     bool gather,
     const Stream& s) {
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   MTL::Size group_dims;
   MTL::Size grid_dims;
@@ -394,7 +394,7 @@ void fast::AffineQuantize::eval_gpu(
     std::vector<array>& outputs) {
   auto& w_pre = inputs[0];
   auto& out = outputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
 
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -425,8 +425,8 @@ void fast::AffineQuantize::eval_gpu(
   } else {
     auto& scales = outputs[1];
     auto& biases = outputs[2];
-    scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
-    biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
+    scales.set_data(allocator::malloc(scales.nbytes()));
+    biases.set_data(allocator::malloc(biases.nbytes()));
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_output_array(scales, 2);
     compute_encoder.set_output_array(biases, 3);

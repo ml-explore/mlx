@@ -21,7 +21,7 @@
 
 namespace mlx::core {
 
-static constexpr int MAX_ACTIVE_TASKS = 100;
+static constexpr int MAX_ACTIVE_TASKS = 10;
 
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
@@ -218,7 +218,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
       cpu::eval(arr);
     }
 
-    if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS) {
+    if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
+        (metal::get_active_memory() > metal::get_memory_limit() &&
+         scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
       for (auto& [_, e] : events) {
         if (e.stream().device == Device::gpu) {
@@ -226,6 +228,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
       }
       scheduler::wait_for_one();
+      // TODO memory api should be moved out of metal
+      while (metal::get_active_memory() > metal::get_memory_limit() &&
+             scheduler::n_active_tasks() > 0) {
+        scheduler::wait_for_one();
+      }
     }
 
     auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {

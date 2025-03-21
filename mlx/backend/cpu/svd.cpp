@@ -50,9 +50,9 @@ void svd_impl(
     array& s = outputs[1];
     array& vt = outputs[2];
 
-    u.set_data(allocator::malloc_or_wait(u.nbytes()));
-    s.set_data(allocator::malloc_or_wait(s.nbytes()));
-    vt.set_data(allocator::malloc_or_wait(vt.nbytes()));
+    u.set_data(allocator::malloc(u.nbytes()));
+    s.set_data(allocator::malloc(s.nbytes()));
+    vt.set_data(allocator::malloc(vt.nbytes()));
 
     encoder.set_output_array(u);
     encoder.set_output_array(s);
@@ -64,7 +64,7 @@ void svd_impl(
   } else {
     array& s = outputs[0];
 
-    s.set_data(allocator::malloc_or_wait(s.nbytes()));
+    s.set_data(allocator::malloc(s.nbytes()));
 
     encoder.set_output_array(s);
 
@@ -91,7 +91,7 @@ void svd_impl(
 
     // Will contain the indices of eigenvectors that failed to converge (not
     // used here but required by lapack).
-    auto iwork = array::Data{allocator::malloc_or_wait(sizeof(int) * 12 * K)};
+    auto iwork = array::Data{allocator::malloc(sizeof(int) * 12 * K)};
 
     static const int lwork_query = -1;
 
@@ -132,7 +132,7 @@ void svd_impl(
     }
 
     const int lwork = workspace_dimension;
-    auto scratch = array::Data{allocator::malloc_or_wait(sizeof(T) * lwork)};
+    auto scratch = array::Data{allocator::malloc(sizeof(T) * lwork)};
 
     // Loop over matrices.
     for (int i = 0; i < num_matrices; i++) {

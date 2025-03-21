@@ -97,13 +97,13 @@ void unary_op_gpu(
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          allocator::malloc(in.data_size() * out.itemsize()),
           in.data_size(),
           in.strides(),
           in.flags());
     }
   } else {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    out.set_data(allocator::malloc(out.nbytes()));
   }
   unary_op_gpu_inplace(inputs, out, op, s);
 }

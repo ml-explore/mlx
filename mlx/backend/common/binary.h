@@ -44,14 +44,14 @@ inline void set_binary_op_output_data(
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
       out.set_data(
-          allocator::malloc_or_wait(out.itemsize()), 1, a.strides(), a.flags());
+          allocator::malloc(out.itemsize()), 1, a.strides(), a.flags());
       break;
     case BinaryOpType::ScalarVector:
       if (b_donatable) {
         out.copy_shared_buffer(b);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(b.data_size() * out.itemsize()),
+            allocator::malloc(b.data_size() * out.itemsize()),
             b.data_size(),
             b.strides(),
             b.flags());
@@ -62,7 +62,7 @@ inline void set_binary_op_output_data(
         out.copy_shared_buffer(a);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            allocator::malloc(a.data_size() * out.itemsize()),
             a.data_size(),
             a.strides(),
             a.flags());
@@ -75,7 +75,7 @@ inline void set_binary_op_output_data(
         out.copy_shared_buffer(b);
       } else {
         out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            allocator::malloc(a.data_size() * out.itemsize()),
             a.data_size(),
             a.strides(),
             a.flags());
@@ -88,7 +88,7 @@ inline void set_binary_op_output_data(
           b_donatable && b.flags().row_contiguous && b.size() == out.size()) {
         out.copy_shared_buffer(b);
       } else {
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+        out.set_data(allocator::malloc(out.nbytes()));
       }
       break;
   }

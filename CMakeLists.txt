@@ -9,6 +9,7 @@ if(NOT MLX_VERSION)
   string(REGEX MATCH "#define MLX_VERSION_PATCH ([0-9]+)" _ "${_mlx_h_version}")
   set(_patch ${CMAKE_MATCH_1})
   set(MLX_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
+  set(MLX_VERSION ${MLX_PROJECT_VERSION})
 else()
   string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" MLX_PROJECT_VERSION
                        ${MLX_VERSION})
@@ -40,8 +41,6 @@ option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
-
-add_compile_definitions("MLX_VERSION=${MLX_VERSION}")
 
 # --------------------- Processor tests -------------------------
 message(
@@ -77,7 +76,6 @@ include(FetchContent)
 cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
-set_target_properties(mlx PROPERTIES COMPILE_WARNING_AS_ERROR ON)
 
 if(MLX_BUILD_METAL)
   set(METAL_LIB "-framework Metal")
