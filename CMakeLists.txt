@@ -212,24 +212,6 @@ else()
   set(MLX_BUILD_ACCELERATE OFF)
 endif()
 
-find_package(MPI)
-if(MPI_FOUND)
-  execute_process(
-    COMMAND zsh "-c" "mpirun --version"
-    OUTPUT_VARIABLE MPI_VERSION
-    ERROR_QUIET)
-  if(${MPI_VERSION} MATCHES ".*Open MPI.*")
-    target_include_directories(mlx PRIVATE ${MPI_INCLUDE_PATH})
-  elseif(MPI_VERSION STREQUAL "")
-    set(MPI_FOUND FALSE)
-    message(
-      WARNING "MPI found but mpirun is not available. Building without MPI.")
-  else()
-    set(MPI_FOUND FALSE)
-    message(WARNING "MPI which is not OpenMPI found. Building without MPI.")
-  endif()
-endif()
-
 message(STATUS "Downloading json")
 FetchContent_Declare(
   json

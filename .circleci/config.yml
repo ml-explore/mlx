@@ -89,6 +89,7 @@ jobs:
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
       - run:
           name: Install Python package
           command: |
@@ -110,6 +111,8 @@ jobs:
           name: Run Python tests
           command: |
             python3 -m unittest discover python/tests -v
+            mpirun --bind-to none -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
+            mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py
       - run:
           name: Build CPP only
           command: |

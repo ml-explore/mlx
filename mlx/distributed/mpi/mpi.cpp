@@ -1,12 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
-#include <mpi.h>
+#include <iostream>
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/mpi/mpi_declarations.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \
@@ -17,6 +18,12 @@
       return;                                                      \
     }                                                              \
   }
+
+#ifdef __APPLE__
+static constexpr const char* libmpi_name = "libmpi.dylib";
+#else
+static constexpr const char* libmpi_name = "libmpi.so";
+#endif
 
 namespace mlx::core::distributed::mpi {
 
@@ -47,8 +54,21 @@ struct MPIWrapper {
   MPIWrapper() {
     initialized_ = false;
 
-    libmpi_handle_ = dlopen("libmpi.dylib", RTLD_NOW | RTLD_GLOBAL);
+    libmpi_handle_ = dlopen(libmpi_name, RTLD_NOW | RTLD_GLOBAL);
     if (libmpi_handle_ == nullptr) {
+      return;
+    }
+
+    // Check library version and warn if it isn't Open MPI
+    int (*get_version)(char*, int*);
+    LOAD_SYMBOL(MPI_Get_library_version, get_version);
+    char version_ptr[MPI_MAX_LIBRARY_VERSION_STRING];
+    int version_length = 0;
+    get_version(version_ptr, &version_length);
+    std::string_view version(version_ptr, version_length);
+    if (version.find("Open MPI") == std::string::npos) {
+      std::cerr << "[mpi] MPI found but it does not appear to be Open MPI."
+                << "MLX requires Open MPI but this is " << version << std::endl;
       return;
     }
 
