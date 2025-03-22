@@ -70,7 +70,7 @@ are the CPU and GPU.
    python/fft
    python/linalg
    python/metal
-   python/memory
+   python/memory_management
    python/nn
    python/optimizers
    python/distributed
