@@ -50,6 +50,7 @@ void array_basics() {
 
   // Same thing:
   z = x + y;
+  std::cout << z << std::endl;
 
   // mlx is lazy by default. At this point `z` only
   // has a shape and a type but no actual data:
