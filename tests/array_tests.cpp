@@ -178,6 +178,11 @@ TEST_CASE("test array types") {
     basic_dtype_test(float, float32);
   }
 
+  // float64
+  {
+    basic_dtype_test(double, float64);
+  }
+
   // bfloat16
   {
     basic_dtype_test(bfloat16_t, bfloat16);
