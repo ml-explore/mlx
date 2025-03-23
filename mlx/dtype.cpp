@@ -149,7 +149,7 @@ TypeToDtype<float>::operator Dtype() {
 
 template <>
 TypeToDtype<double>::operator Dtype() {
-  return float32;
+  return float64;
 }
 
 template <>
