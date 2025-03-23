@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <algorithm>
 #include <mutex>
 
 #include "mlx/allocator.h"
