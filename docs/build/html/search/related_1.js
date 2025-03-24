@@ -1,4 +1,0 @@
-var searchData=
-[
-  ['exporter_0',['exporter',['../structmlx_1_1core_1_1_function_exporter.html#a3921e0f41f795708c33bda7c50a72055',1,'mlx::core::FunctionExporter::exporter(const std::string &amp;file, const std::function&lt; std::vector&lt; array &gt;(const Args &amp;)&gt; &amp;fun, bool shapeless=false)'],['../structmlx_1_1core_1_1_function_exporter.html#ae53b863ba9fea62cc7c1b9eb55993269',1,'mlx::core::FunctionExporter::exporter(const std::string &amp;file, const std::function&lt; std::vector&lt; array &gt;(const Kwargs &amp;)&gt; &amp;fun, bool shapeless=false)'],['../structmlx_1_1core_1_1_function_exporter.html#a82eb4ca466592b97225e8252f1cdb2e4',1,'mlx::core::FunctionExporter::exporter(const std::string &amp;path, const std::function&lt; std::vector&lt; array &gt;(const Args &amp;, const Kwargs &amp;)&gt; &amp;fun, bool shapeless=false)']]]
-];
