@@ -750,6 +750,8 @@ array scaled_dot_product_attention(
       msg << "[scaled_dot_product_attention] Mask type must promote to output type. "
           << final_type << ".";
       throw std::invalid_argument(msg.str());
+    } else if (!has_bool_mask) {
+      mask_arr = astype(mask_arr, final_type, stream);
     }
     // Broadcast mask
     auto mask_shape = queries.shape();
