@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Metal &#8212; MLX 0.24.0 documentation</title>
+    <title>Metal &#8212; MLX 0.24.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=ae1d10b0"></script>
+    <script src="../_static/documentation_options.js?v=15e192ad"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.1 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -507,16 +507,19 @@
 <li class="toctree-l1 current active has-children"><a class="current reference internal" href="#">Metal</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.is_available.html">mlx.core.metal.is_available</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.device_info.html">mlx.core.metal.device_info</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.get_active_memory.html">mlx.core.metal.get_active_memory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.get_peak_memory.html">mlx.core.metal.get_peak_memory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.reset_peak_memory.html">mlx.core.metal.reset_peak_memory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.get_cache_memory.html">mlx.core.metal.get_cache_memory</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.set_memory_limit.html">mlx.core.metal.set_memory_limit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.set_cache_limit.html">mlx.core.metal.set_cache_limit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.set_wired_limit.html">mlx.core.metal.set_wired_limit</a></li>
-<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.clear_cache.html">mlx.core.metal.clear_cache</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.start_capture.html">mlx.core.metal.start_capture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.metal.stop_capture.html">mlx.core.metal.stop_capture</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="memory_management.html">Memory Management</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.get_active_memory.html">mlx.core.get_active_memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.get_peak_memory.html">mlx.core.get_peak_memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.reset_peak_memory.html">mlx.core.reset_peak_memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.get_cache_memory.html">mlx.core.get_cache_memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.set_memory_limit.html">mlx.core.set_memory_limit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.set_cache_limit.html">mlx.core.set_cache_limit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.set_wired_limit.html">mlx.core.set_wired_limit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.clear_cache.html">mlx.core.clear_cache</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="nn.html">Neural Networks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -900,30 +903,6 @@ document.write(`
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.device_info.html#mlx.core.metal.device_info" title="mlx.core.metal.device_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">device_info</span></code></a>()</p></td>
 <td><p>Get information about the GPU device and system settings.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.get_active_memory.html#mlx.core.metal.get_active_memory" title="mlx.core.metal.get_active_memory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_active_memory</span></code></a>()</p></td>
-<td><p>Get the actively used memory in bytes.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.get_peak_memory.html#mlx.core.metal.get_peak_memory" title="mlx.core.metal.get_peak_memory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_peak_memory</span></code></a>()</p></td>
-<td><p>Get the peak amount of used memory in bytes.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.reset_peak_memory.html#mlx.core.metal.reset_peak_memory" title="mlx.core.metal.reset_peak_memory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_peak_memory</span></code></a>()</p></td>
-<td><p>Reset the peak memory to zero.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.get_cache_memory.html#mlx.core.metal.get_cache_memory" title="mlx.core.metal.get_cache_memory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cache_memory</span></code></a>()</p></td>
-<td><p>Get the cache size in bytes.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.set_memory_limit.html#mlx.core.metal.set_memory_limit" title="mlx.core.metal.set_memory_limit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_memory_limit</span></code></a>(limit, *[, relaxed])</p></td>
-<td><p>Set the memory limit.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.set_cache_limit.html#mlx.core.metal.set_cache_limit" title="mlx.core.metal.set_cache_limit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_cache_limit</span></code></a>(limit)</p></td>
-<td><p>Set the free cache limit.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.set_wired_limit.html#mlx.core.metal.set_wired_limit" title="mlx.core.metal.set_wired_limit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_wired_limit</span></code></a>(limit)</p></td>
-<td><p>Set the wired size limit.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.clear_cache.html#mlx.core.metal.clear_cache" title="mlx.core.metal.clear_cache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clear_cache</span></code></a>()</p></td>
-<td><p>Clear the memory cache.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.metal.start_capture.html#mlx.core.metal.start_capture" title="mlx.core.metal.start_capture"><code class="xref py py-obj docutils literal notranslate"><span class="pre">start_capture</span></code></a>(path)</p></td>
 <td><p>Start a Metal capture.</p></td>
