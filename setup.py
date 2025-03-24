@@ -12,7 +12,16 @@ from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.build_ext import build_ext
 
 
-def get_version(version):
+def get_version():
+    with open("mlx/version.h", "r") as fid:
+        for l in fid:
+            if "#define MLX_VERSION_MAJOR" in l:
+                major = l.split()[-1]
+            if "#define MLX_VERSION_MINOR" in l:
+                minor = l.split()[-1]
+            if "#define MLX_VERSION_PATCH" in l:
+                patch = l.split()[-1]
+    version = f"{major}.{minor}.{patch}"
     if "PYPI_RELEASE" not in os.environ:
         today = datetime.date.today()
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
@@ -172,7 +181,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.24.0"),
+        version=get_version(),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
