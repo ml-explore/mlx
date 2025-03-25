@@ -18,7 +18,7 @@ namespace {
 
 class BufferCache {
  public:
-  BufferCache(MTL::Device* device);
+  BufferCache(ResidencySet& residency_set);
   ~BufferCache();
 
   MTL::Buffer* reuse_from_cache(size_t size);
@@ -42,13 +42,11 @@ class BufferCache {
   void add_at_head(BufferHolder* to_add);
   void remove_from_list(BufferHolder* to_remove);
 
-  MTL::Device* device_;
-  MTL::Heap* heap_{nullptr};
-
   std::multimap<size_t, BufferHolder*> buffer_pool_;
   BufferHolder* head_;
   BufferHolder* tail_;
   size_t pool_size_;
+  ResidencySet& residency_set_;
 };
 
 } // namespace
