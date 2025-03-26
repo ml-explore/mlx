@@ -33,8 +33,11 @@ namespace metal {
 
 namespace {
 
-BufferCache::BufferCache(MTL::Device* device)
-    : device_(device), head_(nullptr), tail_(nullptr), pool_size_(0) {}
+BufferCache::BufferCache(ResidencySet& residency_set)
+    : head_(nullptr),
+      tail_(nullptr),
+      pool_size_(0),
+      residency_set_(residency_set) {}
 
 BufferCache::~BufferCache() {
   auto pool = metal::new_scoped_memory_pool();
@@ -102,6 +105,9 @@ int BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
     while (tail_ && (total_bytes_freed < min_bytes_to_free)) {
       if (tail_->buf) {
         total_bytes_freed += tail_->buf->length();
+        if (!tail_->buf->heap()) {
+          residency_set_.erase(tail_->buf);
+        }
         tail_->buf->release();
         tail_->buf = nullptr;
         n_release++;
@@ -156,7 +162,7 @@ void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       residency_set_(device_),
-      buffer_cache_(device_) {
+      buffer_cache_(residency_set_) {
   auto pool = metal::new_scoped_memory_pool();
   auto memsize = std::get<size_t>(device_info().at("memory_size"));
   auto max_rec_size =
@@ -298,14 +304,14 @@ void MetalAllocator::free(Buffer buffer) {
     return;
   }
   std::unique_lock lk(mutex_);
-  if (!buf->heap()) {
-    residency_set_.erase(buf);
-  }
   active_memory_ -= buf->length();
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     num_resources_--;
+    if (!buf->heap()) {
+      residency_set_.erase(buf);
+    }
     lk.unlock();
     auto pool = metal::new_scoped_memory_pool();
     buf->release();
