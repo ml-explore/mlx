@@ -315,8 +315,8 @@ void qmm_op(
       group_dims = MTL::Size(simdgroup_size, 1, 1);
       grid_dims = MTL::Size((O + bo - 1) / bo, B, N);
       quad = true;
-    } else if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
-      results_per_simdgroup = 2;
+    } else if (B < 6 && O % 8 == 0 && D % 256 == 0 && D >= 256) {
+      results_per_simdgroup = 1;
       name += "qmv_fast";
       int bo = 2 * (*results_per_simdgroup);
       int bd = 32;
@@ -324,11 +324,7 @@ void qmm_op(
       grid_dims = MTL::Size(B, O / bo, N);
     } else if (B < 6) {
       name += "qmv";
-      if (O < 4096) {
-        results_per_simdgroup = 2;
-      } else {
-        results_per_simdgroup = 1;
-      }
+      results_per_simdgroup = 1;
       int bo = 2 * (*results_per_simdgroup);
       int bd = 32;
       group_dims = MTL::Size(bd, 2, 1);
