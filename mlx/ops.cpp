@@ -2359,6 +2359,20 @@ array logsumexp(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
+  if (axes.size() == 1 && (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+    auto dtype = at_least_float(a.dtype());
+    auto out_shape = a.shape();
+    out_shape.back() = 1;
+    auto out = array(
+        std::move(out_shape),
+        dtype,
+        std::make_shared<LogSumExp>(to_stream(s)),
+        {astype(a, dtype, s)});
+    if (!keepdims) {
+      out = squeeze(out, -1, s);
+    }
+    return out;
+  }
   auto maxval = stop_gradient(max(a, axes, true, s), s);
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
   out = add(out, reshape(maxval, out.shape(), s), s);

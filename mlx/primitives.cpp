@@ -2509,6 +2509,31 @@ std::pair<std::vector<array>, std::vector<int>> LogAddExp::vmap(
   return {{logaddexp(a, b, stream())}, {to_ax}};
 }
 
+std::vector<array> LogSumExp::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(cotangents.size() == 1);
+  return {multiply(
+      cotangents[0],
+      softmax(primals[0], std::vector<int>{-1}, true, stream()),
+      stream())};
+}
+
+std::vector<array> LogSumExp::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(tangents.size() == 1);
+  return {multiply(
+      tangents[0],
+      softmax(primals[0], std::vector<int>{-1}, true, stream()),
+      stream())};
+}
+
 std::vector<array> Matmul::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

@@ -59,6 +59,11 @@ MTL::ComputePipelineState* get_softmax_kernel(
     bool precise,
     const array& out);
 
+MTL::ComputePipelineState* get_logsumexp_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out);
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
