@@ -1628,6 +1628,15 @@ class TestOps(mlx_tests.MLXTestCase):
             x = mx.full((n,), vals=-float("inf"))
             self.assertTrue(mx.all(mx.isnan(mx.softmax(x))))
 
+        # Transposed inputs
+        a = mx.random.uniform(shape=(32, 32, 32))
+        b = mx.softmax(a, axis=-1)
+        c = mx.softmax(a.swapaxes(0, 1), axis=-1).swapaxes(0, 1)
+        self.assertEqual((b - c).abs().max().item(), 0.0)
+
+        with self.assertRaises(ValueError):
+            mx.softmax(mx.array(1.0), axis=-1)
+
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)

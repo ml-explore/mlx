@@ -4,61 +4,69 @@
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
-constexpr int SOFTMAX_LOOPED_LIMIT = 4096;
+constexpr int LOGSUMEXP_LOOPED_LIMIT = 4096;
 
-void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
+void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   if (!issubdtype(out.dtype(), floating)) {
     throw std::runtime_error(
-        "[softmax] Does not support non-floating point types.");
+        "[logsumexp] Does not support non-floating point types.");
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [&s, &out](const array& x) {
+  auto ensure_contiguous = [&s, &d](const array& x) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
       return x;
     } else {
       auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
       copy_gpu(x, x_copy, CopyType::General, s);
-      out.copy_shared_buffer(x_copy);
+      d.add_temporary(x_copy, s.index);
       return x_copy;
     }
   };
 
-  const array in = set_output(inputs[0]);
+  auto in = ensure_contiguous(inputs[0]);
+  if (in.flags().row_contiguous) {
+    out.set_data(allocator::malloc(out.nbytes()));
+  } else {
+    auto n = in.shape(-1);
+    auto flags = in.flags();
+    auto strides = in.strides();
+    for (auto& s : strides) {
+      s /= n;
+    }
+    bool col_contig = strides[0] == 1;
+    for (int i = 1; col_contig && i < strides.size(); ++i) {
+      col_contig &=
+          (out.shape(i) == 1 || strides[i - 1] == out.shape(i) * strides[i]);
+    }
+    flags.col_contiguous = col_contig;
+    out.set_data(
+        allocator::malloc(in.nbytes() / n),
+        in.data_size() / n,
+        std::move(strides),
+        flags);
+  }
 
   int axis_size = in.shape().back();
   int n_rows = in.data_size() / axis_size;
 
   const int simd_size = 32;
-  const int n_reads = SOFTMAX_N_READS;
-  const int looped_limit = SOFTMAX_LOOPED_LIMIT;
+  const int n_reads = 4;
+  const int looped_limit = LOGSUMEXP_LOOPED_LIMIT;
 
   std::string kernel_name = (axis_size > looped_limit) ? "looped_" : "block_";
-  kernel_name += "softmax_";
-  if (in.dtype() != float32 && precise_) {
-    kernel_name += "precise_";
-  }
+  kernel_name += "logsumexp_";
   kernel_name += type_to_name(out);
 
-  auto kernel = get_softmax_kernel(d, kernel_name, precise_, out);
+  auto kernel = get_logsumexp_kernel(d, kernel_name, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     MTL::Size grid_dims, group_dims;

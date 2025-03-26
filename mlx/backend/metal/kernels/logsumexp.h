@@ -1,14 +1,7 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2025 Apple Inc.
 
-template <typename T>
-inline T softmax_exp(T x) {
-  // Softmax doesn't need high precision exponential cause x is gonna be in
-  // (-oo, 0] anyway and subsequently it will be divided by sum(exp(x_i)).
-  return fast::exp(x);
-}
-
-template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
-[[kernel]] void softmax_single_row(
+template <typename T, typename AccT = float, int N_READS = 4>
+[[kernel]] void logsumexp(
     const device T* in,
     device T* out,
     constant int& axis_size,
@@ -63,9 +56,7 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
   // Compute exp(x_i - maxval) and store the partial sums in local_normalizer
   AccT normalizer = 0;
   for (int i = 0; i < N_READS; i++) {
-    AccT exp_x = softmax_exp(ld[i] - maxval);
-    ld[i] = exp_x;
-    normalizer += exp_x;
+    normalizer += fast::exp(ld[i] - maxval);
   }
   normalizer = simd_sum(normalizer);
   if (simd_lane_id == 0) {
@@ -75,29 +66,13 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
   if (simd_group_id == 0) {
     normalizer = simd_sum(local_normalizer[simd_lane_id]);
     if (simd_lane_id == 0) {
-      local_normalizer[0] = normalizer;
-    }
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  normalizer = 1 / local_normalizer[0];
-
-  // Normalize and write to the output
-  out += gid * size_t(axis_size) + lid * N_READS;
-  if (lid * N_READS + N_READS <= axis_size) {
-    for (int i = 0; i < N_READS; i++) {
-      out[i] = T(ld[i] * normalizer);
-    }
-  } else {
-    for (int i = 0; i < N_READS; i++) {
-      if ((lid * N_READS + i) < axis_size) {
-        out[i] = T(ld[i] * normalizer);
-      }
+      out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
     }
   }
 }
 
-template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
-[[kernel]] void softmax_looped(
+template <typename T, typename AccT = float, int N_READS = 4>
+[[kernel]] void logsumexp_looped(
     const device T* in,
     device T* out,
     constant int& axis_size,
@@ -135,55 +110,33 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
     for (int i = 0; i < N_READS; i++) {
       maxval = (maxval < vals[i]) ? vals[i] : maxval;
     }
-    normalizer *= softmax_exp(prevmax - maxval);
+    normalizer *= fast::exp(prevmax - maxval);
     for (int i = 0; i < N_READS; i++) {
-      normalizer += softmax_exp(vals[i] - maxval);
+      normalizer += fast::exp(vals[i] - maxval);
     }
   }
-  // Now we got partial normalizer of N_READS * ceildiv(axis_size, N_READS *
-  // lsize) parts. We need to combine them.
-  //    1. We start by finding the max across simd groups
-  //    2. We then change the partial normalizers to account for a possible
-  //       change in max
-  //    3. We sum all normalizers
   prevmax = maxval;
   maxval = simd_max(maxval);
-  normalizer *= softmax_exp(prevmax - maxval);
+  normalizer *= fast::exp(prevmax - maxval);
   normalizer = simd_sum(normalizer);
 
-  // Now the normalizer and max value is correct for each simdgroup. We write
-  // them shared memory and combine them.
   prevmax = maxval;
   if (simd_lane_id == 0) {
     local_max[simd_group_id] = maxval;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   maxval = simd_max(local_max[simd_lane_id]);
-  normalizer *= softmax_exp(prevmax - maxval);
+  normalizer *= fast::exp(prevmax - maxval);
   if (simd_lane_id == 0) {
     local_normalizer[simd_group_id] = normalizer;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   normalizer = simd_sum(local_normalizer[simd_lane_id]);
-  normalizer = 1 / normalizer;
 
-  // Finally given the normalizer and max value we can directly write the
-  // softmax output
-  out += gid * size_t(axis_size);
-  for (int r = 0; r < static_cast<int>(ceildiv(axis_size, N_READS * lsize));
-       r++) {
-    int offset = r * lsize * N_READS + lid * N_READS;
-    if (offset + N_READS <= axis_size) {
-      for (int i = 0; i < N_READS; i++) {
-        out[offset + i] = T(softmax_exp(in[offset + i] - maxval) * normalizer);
-      }
-    } else {
-      for (int i = 0; i < N_READS; i++) {
-        if (offset + i < axis_size) {
-          out[offset + i] =
-              T(softmax_exp(in[offset + i] - maxval) * normalizer);
-        }
-      }
+  if (simd_group_id == 0) {
+    normalizer = simd_sum(local_normalizer[simd_lane_id]);
+    if (simd_lane_id == 0) {
+      out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
     }
   }
 }
