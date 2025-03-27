@@ -317,6 +317,7 @@ def softmin(x, axis=-1):
     """
     return mx.softmax(-x, axis=axis)
 
+
 @partial(mx.compile, shapeless=True)
 def hardsigmoid(x):
     r"""Applies the hardsigmoid function, element-wise.
@@ -325,6 +326,7 @@ def hardsigmoid(x):
         \text{Hardsigmoid}(x) = \max(0, \min(1, (x + 1) / 2))
     """
     return mx.maximum(0, mx.minimum(1, (x + 1) / 2))
+
 
 @partial(mx.compile, shapeless=True)
 def rrelu(x, lower=0.125, upper=0.333, training=True):
@@ -354,6 +356,7 @@ def rrelu(x, lower=0.125, upper=0.333, training=True):
         a = (lower + upper) / 2
     return mx.where(x >= 0, x, a * x)
 
+
 @partial(mx.compile, shapeless=True)
 def threshold(x, threshold: float = 0.0, value: float = 0.0):
     r"""Applies the Threshold activation function.
@@ -373,6 +376,7 @@ def threshold(x, threshold: float = 0.0, value: float = 0.0):
     """
     return mx.where(x > threshold, x, value)
 
+
 @partial(mx.compile, shapeless=True)
 def tanh_shrink(x):
     r"""Applies the TanhShrink activation function.
@@ -386,6 +390,7 @@ def tanh_shrink(x):
         x: Input tensor.
     """
     return x - mx.tanh(x)
+
 
 def tanh(x):
     """Applies the hyperbolic tangent function.
@@ -713,12 +718,14 @@ class Softmin(Module):
     See :func:`softmin` for the functional equivalent.
     """
 
+
 @_make_activation_module(hardsigmoid)
 class HardSigmoid(Module):
     r"""Applies the hardsigmoid function, element-wise.
 
     See :func:`hardsigmoid` for the functional equivalent.
     """
+
 
 @_make_activation_module(rrelu)
 class RReLU(Module):
@@ -731,15 +738,17 @@ class RReLU(Module):
         upper: Upper bound of the uniform distribution. Default: 0.333.
         training: Whether the model is in training mode. Default: True.
     """
+
     def __init__(self, lower=0.125, upper=0.333, training=True):
         super().__init__()
         self.lower = lower
-        self.upper = upper  
+        self.upper = upper
         self.training = training
 
     def __call__(self, x):
         return rrelu(x, self.lower, self.upper, self.training)
-    
+
+
 @_make_activation_module(threshold)
 class Threshold(Module):
     r"""Applies the Threshold activation function.
@@ -758,7 +767,8 @@ class Threshold(Module):
 
     def __call__(self, x):
         return threshold(x, self.threshold, self.value)
-    
+
+
 @_make_activation_module(tanh_shrink)
 class TanhShrink(Module):
     r"""Applies the TanhShrink activation function.
