@@ -206,6 +206,30 @@ void init_array(nb::module_& m) {
         return os.str();
       });
 
+  nb::class_<mx::iinfo>(
+      m,
+      "iinfo",
+      R"pbdoc(
+      Get information on integer types.
+      )pbdoc")
+      .def(nb::init<mx::Dtype>())
+      .def_ro(
+          "min",
+          &mx::iinfo::min,
+          R"pbdoc(The smallest representable number.)pbdoc")
+      .def_ro(
+          "max",
+          &mx::iinfo::max,
+          R"pbdoc(The largest representable number.)pbdoc")
+      .def_ro("dtype", &mx::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
+      .def("__repr__", [](const mx::iinfo& i) {
+        std::ostringstream os;
+        os << "iinfo("
+           << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
+           << ")";
+        return os.str();
+      });
+
   nb::class_<ArrayAt>(
       m,
       "ArrayAt",

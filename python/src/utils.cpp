@@ -2,6 +2,7 @@
 
 #include "python/src/utils.h"
 #include "mlx/ops.h"
+#include "mlx/utils.h"
 #include "python/src/convert.h"
 
 mx::array to_array(
@@ -16,6 +17,16 @@ mx::array to_array(
         ? mx::int64
         : mx::int32;
     auto out_t = dtype.value_or(default_type);
+    if (mx::issubdtype(out_t, mx::integer) && out_t.size() < 8) {
+      auto info = mx::iinfo(out_t);
+      if (val < info.min || val > static_cast<int64_t>(info.max)) {
+        std::ostringstream msg;
+        msg << "Converting " << val << " to " << out_t
+            << " would result in overflow.";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+
     // bool_ is an exception and is always promoted
     return mx::array(val, (out_t == mx::bool_) ? mx::int32 : out_t);
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
