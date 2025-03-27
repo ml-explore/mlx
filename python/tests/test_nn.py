@@ -1050,6 +1050,60 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, x.shape)
         self.assertEqual(y.dtype, mx.float16)
 
+    def test_rrelu(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.rrelu(x, lower=0.1, upper=0.3)
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+        self.assertTrue((y >= 0).all())
+
+        layer = nn.RReLU(lower=0.1, upper=0.3)
+        y = layer(x)
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_threshold(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.threshold(x, threshold=0.5, value=-1.0)
+        expected_y = mx.array([1.0, -1.0, -1.0])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        layer = nn.Threshold(threshold=0.5, value=-1.0)
+        y = layer(x)
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_tanh_shrink(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.tanh_shrink(x)
+        expected_y = mx.array([0.2384, -0.2384, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < 1e-4))
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        layer = nn.TanhShrink()
+        y = layer(x)
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < 1e-4))
+        self.assertEqual(y.shape, (3,))
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_hardsigmoid(self):
+        x = mx.array([1.0, -1.0, 0.0, 2.0, -2.0])
+        y = nn.hardsigmoid(x)
+        expected_y = mx.array([0.8, 0.2, 0.5, 1.0, 0.0])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        layer = nn.HardSigmoid()
+        y = layer(x)
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_upsample(self):
         b, h, w, c = 1, 2, 2, 1
         scale_factor = 2

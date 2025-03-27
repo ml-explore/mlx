@@ -317,6 +317,75 @@ def softmin(x, axis=-1):
     """
     return mx.softmax(-x, axis=axis)
 
+@partial(mx.compile, shapeless=True)
+def hardsigmoid(x):
+    r"""Applies the hardsigmoid function, element-wise.
+
+    .. math::
+        \text{Hardsigmoid}(x) = \max(0, \min(1, (x + 1) / 2))
+    """
+    return mx.maximum(0, mx.minimum(1, (x + 1) / 2))
+
+@partial(mx.compile, shapeless=True)
+def rrelu(x, lower=0.125, upper=0.333, training=True):
+    r"""Applies the Randomized Leaky ReLU (RReLU) function.
+
+    During training, the slope of the negative part is randomly sampled from a uniform distribution
+    between `lower` and `upper`. During evaluation, it uses the average of `lower` and `upper`.
+
+    .. math::
+        \text{RReLU}(x) = \begin{cases}
+        x & \text{if } x \geq 0 \\
+        a * x & \text{if } x < 0
+        \end{cases}
+
+    where :math:`a \sim \text{Uniform(lower, upper)}` during training, and
+    :math:`a = (lower + upper) / 2` during evaluation.
+
+    Args:
+        x: Input tensor.
+        lower: Lower bound of the uniform distribution. Default: 0.125.
+        upper: Upper bound of the uniform distribution. Default: 0.333.
+        training: Whether the model is in training mode. Default: True.
+    """
+    if training:
+        a = mx.random.uniform(lower, upper, shape=x.shape)
+    else:
+        a = (lower + upper) / 2
+    return mx.where(x >= 0, x, a * x)
+
+@partial(mx.compile, shapeless=True)
+def threshold(x, threshold: float = 0.0, value: float = 0.0):
+    r"""Applies the Threshold activation function.
+
+    This function sets values below the threshold to a specified value.
+
+    .. math::
+        \text{Threshold}(x) = \begin{cases}
+        x & \text{if } x > \text{threshold} \\
+        \text{value} & \text{if } x \leq \text{threshold}
+        \end{cases}
+
+    Args:
+        x: Input tensor.
+        threshold: The threshold value. Default: 0.0.
+        value: The value to assign to elements below the threshold. Default: 0.0.
+    """
+    return mx.where(x > threshold, x, value)
+
+@partial(mx.compile, shapeless=True)
+def tanh_shrink(x):
+    r"""Applies the TanhShrink activation function.
+
+    This function is defined as:
+
+    .. math::
+        \text{TanhShrink}(x) = x - \tanh(x)
+
+    Args:
+        x: Input tensor.
+    """
+    return x - mx.tanh(x)
 
 def tanh(x):
     """Applies the hyperbolic tangent function.
@@ -642,4 +711,57 @@ class Softmin(Module):
     r"""Applies the Softmin function.
 
     See :func:`softmin` for the functional equivalent.
+    """
+
+@_make_activation_module(hardsigmoid)
+class HardSigmoid(Module):
+    r"""Applies the hardsigmoid function, element-wise.
+
+    See :func:`hardsigmoid` for the functional equivalent.
+    """
+
+@_make_activation_module(rrelu)
+class RReLU(Module):
+    r"""Applies the Randomized Leaky ReLU (RReLU) function.
+
+    See :func:`rrelu` for the functional equivalent.
+
+    Args:
+        lower: Lower bound of the uniform distribution. Default: 0.125.
+        upper: Upper bound of the uniform distribution. Default: 0.333.
+        training: Whether the model is in training mode. Default: True.
+    """
+    def __init__(self, lower=0.125, upper=0.333, training=True):
+        super().__init__()
+        self.lower = lower
+        self.upper = upper  
+        self.training = training
+
+    def __call__(self, x):
+        return rrelu(x, self.lower, self.upper, self.training)
+    
+@_make_activation_module(threshold)
+class Threshold(Module):
+    r"""Applies the Threshold activation function.
+
+    See :func:`threshold` for the functional equivalent.
+
+    Args:
+        threshold: The threshold value. Default: 0.0.
+        value: The value to assign to elements below the threshold. Default: 0.0.
+    """
+
+    def __init__(self, threshold: float = 0.0, value: float = 0.0):
+        super().__init__()
+        self.threshold = threshold
+        self.value = value
+
+    def __call__(self, x):
+        return threshold(x, self.threshold, self.value)
+    
+@_make_activation_module(tanh_shrink)
+class TanhShrink(Module):
+    r"""Applies the TanhShrink activation function.
+
+    See :func:`tanh_shrink` for the functional equivalent.
     """
