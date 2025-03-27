@@ -156,3 +156,41 @@ def linear_schedule(init: float, end: float, steps: int) -> Callable:
         return step * ((end - init) / steps) + init
 
     return schedule
+
+
+def triangle_schedule(
+    init: float, end: float, peak: float, steps: int, peak_ratio: float
+) -> Callable:
+    r"""Make a triangle scheduler.
+
+    Args:
+        init (float): Initial value.
+        end (float): Final value.
+        peak (float): Peak value.
+        steps (int): Number of steps to apply the schedule over. The value is
+          ``end`` for any steps beyond ``steps``.
+        peak_ratio (float): Fraction of total steps where peak value occurs.
+
+    Example:
+        >>> lr_schedule = optim.triangle_schedule(0.2, 0, 1, 100, 0.4)
+        >>> optimizer = optim.Adam(learning_rate=lr_schedule)
+        >>> optimizer.learning_rate
+        array(0.2, dtype=float32)
+        >>> for _ in range(101): optimizer.update({}, {})
+        ...
+        >>> optimizer.learning_rate
+        array(0, dtype=float32)
+    """
+
+    if steps < 1:
+        raise ValueError(f"steps must be greater than 0, but got {steps}.")
+
+    peak_step = int(peak_ratio * steps)
+
+    def schedule(step):
+        step = mx.minimum(step, steps)
+        if step < peak_step:
+            return init + (step / peak_step) * (peak - init)
+        return peak + (step - peak_step) / (steps - peak_step) * (end - peak)
+
+    return schedule

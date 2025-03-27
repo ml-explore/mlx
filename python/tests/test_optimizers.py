@@ -392,6 +392,36 @@ class TestSchedulers(unittest.TestCase):
         lr = lr_schedule(20)
         self.assertEqual(lr, expected_end_lr)
 
+    def test_triangle_schedule(self):
+        start_lr = 0.2
+        end_lr = 0
+        peak_lr = 1
+        steps = 100
+        peak_ratio = 0.4
+        lr_schedule = opt.triangle_schedule(
+            start_lr, end_lr, peak_lr, steps, peak_ratio
+        )
+
+        test_lr = lr_schedule(0)
+        self.assertEqual(test_lr, start_lr)
+
+        test_peak_lr = 0
+        peak_step = 0
+
+        for step in range(steps + 1):
+            lr = lr_schedule(step)
+            if lr > test_peak_lr:
+                test_peak_lr = lr
+                peak_step = step
+
+        test_peak_ratio = peak_step / 100
+
+        self.assertEqual(test_peak_lr, peak_lr)
+        self.assertAlmostEqual(test_peak_ratio, peak_ratio, delta=1e-2)
+
+        test_lr = lr_schedule(steps)
+        self.assertEqual(test_lr, end_lr)
+
     def test_schedule_joiner(self):
         boundaries = [2, 3, 4]
         schedules = [lambda _: 3, lambda _: 4, lambda _: 5]
