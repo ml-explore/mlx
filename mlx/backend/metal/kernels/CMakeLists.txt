@@ -13,6 +13,10 @@ function(build_kernel_base TARGET SRCFILE DEPS)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()
+  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+    set(METAL_FLAGS ${METAL_FLAGS}
+                    "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
   if(MLX_METAL_VERSION GREATER_EQUAL 310)
     set(VERSION_INCLUDES
         ${PROJECT_SOURCE_DIR}/mlx/backend/metal/kernels/metal_3_1)
