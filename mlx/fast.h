@@ -49,7 +49,6 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::variant<std::monostate, std::string, array>& mask = {},
-    const std::optional<int> memory_efficient_threshold = std::nullopt,
     StreamOrDevice s = {});
 
 std::tuple<array, array, array> affine_quantize(
