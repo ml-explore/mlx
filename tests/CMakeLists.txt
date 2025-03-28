@@ -1,3 +1,6 @@
+# Doctest works fine with cmake 3.5
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 FetchContent_Declare(
   doctest
   GIT_REPOSITORY "https://github.com/onqtam/doctest"
