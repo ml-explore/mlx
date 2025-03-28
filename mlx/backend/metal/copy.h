@@ -5,6 +5,8 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/stream.h"
 
+#include <optional>
+
 namespace mlx::core {
 
 // Generic copy inplace

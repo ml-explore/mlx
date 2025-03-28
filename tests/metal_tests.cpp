@@ -3,10 +3,12 @@
 #include <array>
 #include "doctest/doctest.h"
 
-#include "mlx/backend/metal/allocator.h"
-#include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/mlx.h"
+
+#if defined(MLX_USE_METAL)
+#include "mlx/backend/metal/device.h"
+#endif
 
 using namespace mlx::core;
 
@@ -16,7 +18,9 @@ static const std::array<Dtype, 5> types =
 TEST_CASE("test metal device") {
   // Make sure the device and library can load
   CHECK(metal::is_available());
+#if defined(MLX_USE_METAL)
   auto& device = metal::device(Device::gpu);
+#endif
 }
 
 TEST_CASE("test metal arange") {
