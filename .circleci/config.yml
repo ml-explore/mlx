@@ -24,8 +24,8 @@ jobs:
         type: boolean
         default: false
     macos:
-      xcode: "15.2.0"
-    resource_class: macos.m1.medium.gen1
+      xcode: "16.2.0"
+    resource_class: m2pro.medium
     steps:
       - checkout
       - run:
@@ -93,12 +93,10 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF
-              CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py build_ext --inplace
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF \
-              CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py develop
       - run:
@@ -127,10 +125,15 @@ jobs:
     parameters:
       xcode_version:
         type: string
-        default: "15.2.0"
+        default: "16.2.0"
+      macosx_deployment_target:
+        type: string
+        default: ""
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.medium.gen1
+    environment:
+      MACOSX_DEPLOYMENT_TARGET: << parameters.macosx_deployment_target >>
+    resource_class: m2pro.medium
     steps:
       - checkout
       - run:
@@ -152,7 +155,7 @@ jobs:
           command: |
             source env/bin/activate
             DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
-            CMAKE_ARGS="CMAKE_COMPILE_WARNING_AS_ERROR=ON" \
+            CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
               pip install -e . -v
       - run:
           name: Generate package stubs
@@ -216,13 +219,18 @@ jobs:
         default: "3.9"
       xcode_version:
         type: string
-        default: "15.2.0"
+        default: "16.2.0"
       build_env:
+        type: string
+        default: ""
+      macosx_deployment_target:
         type: string
         default: ""
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.medium.gen1
+    resource_class: m2pro.medium
+    environment:
+      MACOSX_DEPLOYMENT_TARGET: << parameters.macosx_deployment_target >>
     steps:
       - checkout
       - run:
@@ -338,7 +346,7 @@ workflows:
       - mac_build_and_test:
           matrix:
             parameters:
-              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
+              macosx_deployment_target: ["13.5", "14.0"]
       - linux_build_and_test
       - build_documentation 
 
@@ -358,7 +366,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["15.0.0", "15.2.0"]
+              macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["PYPI_RELEASE=1"]
       - build_documentation:
           filters:
@@ -382,7 +390,7 @@ workflows:
           requires: [ hold ]
           matrix:
             parameters:
-              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
+              macosx_deployment_target: ["13.5", "14.0"]
       - linux_build_and_test:
           requires: [ hold ]
   nightly_build:
@@ -395,7 +403,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["15.0.0", "15.2.0"]
+              macosx_deployment_target: ["13.5", "14.0", "15.0"]
   weekly_build:
     when:
       and:
@@ -406,7 +414,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
+              macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when:
