@@ -95,7 +95,13 @@ def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
 def mlx_primitives_sdpa(q, k, v, scale, mask=None):
     p = (q * scale) @ k.transpose(0, 1, 3, 2)
     if mask is not None:
-        if mask.dtype == mx.bool_:
+        if mask == "causal":
+            q_offset = max(0, k.shape[2] - q.shape[2])
+            q_indices = mx.arange(q_offset, q_offset + q.shape[2])
+            k_indices = mx.arange(k.shape[2])
+            mask = q_indices[:, None] >= k_indices[None]
+            p = mx.where(mask, p, mx.finfo(mx.float32).min)
+        elif mask.dtype == mx.bool_:
             p = mx.where(mask, p, mx.finfo(mx.float32).min)
         else:
             p += mask
@@ -176,7 +182,10 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
                 reference = mlx_primitives_sdpa_with_gqa(q_mlx, k_mlx, v_mlx, scale)
                 o_mlx = mx.fast.scaled_dot_product_attention(
-                    q_mlx, k_mlx, v_mlx, scale=scale, memory_efficient_threshold=2
+                    q_mlx,
+                    k_mlx,
+                    v_mlx,
+                    scale=scale,
                 )
 
                 self.assertListEqual(list(reference.shape), list(o_mlx.shape))
@@ -342,6 +351,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -366,6 +376,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -396,6 +407,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -420,6 +432,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)

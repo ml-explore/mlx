@@ -131,7 +131,6 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "scale"_a,
       "mask"_a = nb::none(),
-      "memory_efficient_threshold"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, stream: Union[None, Stream, Device] = None) -> array"),
@@ -164,10 +163,10 @@ void init_fast(nb::module_& parent_module) {
             k (array): Keys with shape ``[B, N_kv, T_kv, D]``.
             v (array): Values with shape ``[B, N_kv, T_kv, D]``.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
-            mask (Union[None, str, array], optional): A causal, boolean or additive 
-               mask to apply to the query-key scores. The mask can have at most 4 
-               dimensions and must be broadcast-compatible with the shape 
-               ``[B, N, T_q, T_kv]``. If an additive mask is given its type must 
+            mask (Union[None, str, array], optional): A causal, boolean or additive
+               mask to apply to the query-key scores. The mask can have at most 4
+               dimensions and must be broadcast-compatible with the shape
+               ``[B, N, T_q, T_kv]``. If an additive mask is given its type must
                promote to the promoted type of ``q``, ``k``, and ``v``.
         Returns:
             array: The output array.

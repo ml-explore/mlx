@@ -6,6 +6,7 @@ using namespace metal;
 
 constant bool has_mask [[function_constant(20)]];
 constant bool query_transposed [[function_constant(21)]];
+constant bool do_causal [[function_constant(22)]];
 
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
@@ -77,7 +78,13 @@ template <typename T, int D, int V = D>
 
   // For each key
   for (int i = simd_gid; i < N; i += BN) {
-    if (!has_mask || mask[0]) {
+    bool use_key = true;
+    if (do_causal) {
+      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+    } else if (has_mask) {
+      use_key = mask[0];
+    }
+    if (use_key) {
       // Read the key
       for (int j = 0; j < qk_per_thread; j++) {
         k[j] = keys[j];
@@ -218,7 +225,13 @@ template <typename T, int D, int V = D>
 
   // For each key
   for (int i = block_idx * BN + simd_gid; i < N; i += blocks * BN) {
-    if (!has_mask || mask[0]) {
+    bool use_key = true;
+    if (do_causal) {
+      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+    } else if (has_mask) {
+      use_key = mask[0];
+    }
+    if (use_key) {
       // Read the key
       for (int i = 0; i < qk_per_thread; i++) {
         k[i] = keys[i];

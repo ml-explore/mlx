@@ -138,6 +138,7 @@ void sdpa_vector(
     const array& v,
     array& out,
     float scale,
+    bool do_causal,
     const std::optional<array>& mask) {
   // Set the kernel name
   std::string kname;
@@ -166,6 +167,7 @@ void sdpa_vector(
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
+      {&do_causal, MTL::DataType::DataTypeBool, 22},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
@@ -214,6 +216,7 @@ void sdpa_vector_2pass(
     const array& v,
     array& out,
     float scale,
+    bool do_causal,
     const std::optional<array>& mask) {
   // Set the kernel name
   std::string kname;
@@ -260,6 +263,7 @@ void sdpa_vector_2pass(
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
+      {&do_causal, MTL::DataType::DataTypeBool, 22},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
@@ -401,12 +405,13 @@ void ScaledDotProductAttention::eval_gpu(
     // We route to the 2 pass fused attention if
     // - The device is large and the sequence length long
     // - The sequence length is even longer and we have gqa
+    bool do_causal = do_causal_ && q.shape(2) > 1;
     char devc = d.get_architecture().back();
     if ((devc == 'd' && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, mask);
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask);
     } else {
-      sdpa_vector(s, d, q, k, v, o, scale_, mask);
+      sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask);
     }
   }
 
