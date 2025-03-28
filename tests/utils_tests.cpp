@@ -55,3 +55,13 @@ TEST_CASE("test finfo") {
   CHECK_EQ(finfo(float16).min, -65504);
   CHECK_EQ(finfo(float16).max, 65504);
 }
+
+TEST_CASE("test iinfo") {
+  CHECK_EQ(iinfo(int8).dtype, int8);
+  CHECK_EQ(iinfo(int64).dtype, int64);
+  CHECK_EQ(iinfo(int64).max, std::numeric_limits<int64_t>::max());
+  CHECK_EQ(iinfo(uint64).max, std::numeric_limits<uint64_t>::max());
+  CHECK_EQ(iinfo(uint64).max, std::numeric_limits<uint64_t>::max());
+  CHECK_EQ(iinfo(uint64).min, 0);
+  CHECK_EQ(iinfo(int64).min, std::numeric_limits<int64_t>::min());
+}

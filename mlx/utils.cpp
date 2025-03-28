@@ -380,4 +380,43 @@ finfo::finfo(Dtype dtype) : dtype(dtype) {
   }
 }
 
+template <typename T>
+void set_iinfo_limits(int64_t& min, uint64_t& max) {
+  min = std::numeric_limits<T>::min();
+  max = std::numeric_limits<T>::max();
+}
+
+iinfo::iinfo(Dtype dtype) : dtype(dtype) {
+  switch (dtype) {
+    case int8:
+      set_iinfo_limits<int8_t>(min, max);
+      break;
+    case uint8:
+      set_iinfo_limits<uint8_t>(min, max);
+      break;
+    case int16:
+      set_iinfo_limits<int16_t>(min, max);
+      break;
+    case uint16:
+      set_iinfo_limits<uint16_t>(min, max);
+      break;
+    case int32:
+      set_iinfo_limits<int32_t>(min, max);
+      break;
+    case uint32:
+      set_iinfo_limits<uint32_t>(min, max);
+      break;
+    case int64:
+      set_iinfo_limits<int64_t>(min, max);
+      break;
+    case uint64:
+      set_iinfo_limits<uint64_t>(min, max);
+      break;
+    default:
+      std::ostringstream msg;
+      msg << "[iinfo] dtype " << dtype << " is not integral.";
+      throw std::invalid_argument(msg.str());
+  }
+}
+
 } // namespace mlx::core
