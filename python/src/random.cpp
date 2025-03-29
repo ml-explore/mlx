@@ -467,7 +467,7 @@ void init_random(nb::module_& parent_module) {
             array: The output array of random values.
       )pbdoc");
   m.def(
-      "permuation",
+      "permutation",
       [](const std::variant<nb::int_, mx::array>& x,
          int axis,
          const std::optional<mx::array>& key_,
