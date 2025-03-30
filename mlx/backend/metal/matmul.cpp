@@ -1558,6 +1558,24 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
+  if (M == 1) {
+    // Determine dispatch kernel
+    int bm = 64, bn = 64, bk = 16;
+    int wm = 2, wn = 2;
+
+    char devc = d.get_architecture().back();
+    GEMM_TPARAM_MACRO(devc)
+
+    std::string kname;
+    kname.reserve(128);
+    kname += "steel_gather_mm_rhs_n";
+    kname += transpose_b ? 't' : 'n';
+    kname += '_';
+    kname += type_to_name(a);
+    kname += '_';
+
+    return;
+  }
 
   // Route to gemv if needed
   if (std::min(M, N) == 1) {
