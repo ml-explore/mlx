@@ -1243,20 +1243,32 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(array_equal(sign(x), x).item<bool>());
 
     // uint64
-    array x_uint64({uint64_t(0xa11cc311cb6acd70), uint64_t(0x7a375ac3ebb533f3), uint64_t(0x734969adf9d7190c), uint64_t(0xb400515a4f673424)});
-    array expected({uint64_t(0x0000000000000001), uint64_t(0x0000000000000001), uint64_t(0x0000000000000001), uint64_t(0x0000000000000001)});
+    array x_uint64(
+        {uint64_t(0xa11cc311cb6acd70),
+         uint64_t(0x7a375ac3ebb533f3),
+         uint64_t(0x734969adf9d7190c),
+         uint64_t(0xb400515a4f673424)});
+    array expected(
+        {uint64_t(0x0000000000000001),
+         uint64_t(0x0000000000000001),
+         uint64_t(0x0000000000000001),
+         uint64_t(0x0000000000000001)});
     CHECK(array_equal(sign(x_uint64), expected).item<bool>());
 
-    x_uint64 = array({uint64_t(0xa11cc311cb6acd70), uint64_t(0x7a375ac3ebb533f3), uint64_t(0x734969adf9d7190c), uint64_t(0xb400515a4f673424)});
-    expected = array({uint64_t(0xffffffffffffffff), uint64_t(0xffffffffffffffff), uint64_t(0xffffffffffffffff), uint64_t(0xffffffffffffffff)});
+    x_uint64 = array(
+        {uint64_t(0xa11cc311cb6acd70),
+         uint64_t(0x7a375ac3ebb533f3),
+         uint64_t(0x734969adf9d7190c)});
+    expected = array(
+        {uint64_t(0x0000000000000001),
+         uint64_t(0x0000000000000001),
+         uint64_t(0x0000000000000001)});
     CHECK(array_equal(sign(x_uint64), expected).item<bool>());
 
-    x_uint64 = array({uint64_t(0xa11cc311cb6acd70), uint64_t(0x7a375ac3ebb533f3), uint64_t(0x734969adf9d7190c)});
-    expected = array({uint64_t(0x0000000000000001), uint64_t(0x0000000000000001), uint64_t(0x0000000000000001)});
-    CHECK(array_equal(sign(x_uint64), expected).item<bool>());
-
-    x_uint64 = array({uint64_t(0xa11cc311cb6acd70), uint64_t(0x7a375ac3ebb533f3)});
-    expected = array({uint64_t(0x0000000000000001), uint64_t(0x0000000000000001)});
+    x_uint64 =
+        array({uint64_t(0xa11cc311cb6acd70), uint64_t(0x7a375ac3ebb533f3)});
+    expected =
+        array({uint64_t(0x0000000000000001), uint64_t(0x0000000000000001)});
     CHECK(array_equal(sign(x_uint64), expected).item<bool>());
 
     x_uint64 = array({uint64_t(0xa11cc311cb6acd70)});
