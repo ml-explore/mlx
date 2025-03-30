@@ -32,7 +32,7 @@ void logsumexp(const array& in, array& out, Stream stream) {
 
     const T* current_in_ptr;
 
-    for (int i = 0; i < L; i++, in_ptr += M, out_ptr += M) {
+    for (int i = 0; i < L; i++, in_ptr += M, out_ptr += 1) {
       // Find the maximum
       current_in_ptr = in_ptr;
       Simd<AccT, N> vmaximum(-numeric_limits<AccT>::infinity());
@@ -67,12 +67,10 @@ void logsumexp(const array& in, array& out, Stream stream) {
         normalizer += _exp;
         current_in_ptr++;
       }
-
       // Normalize
       *out_ptr = std::isinf(maximum)
           ? static_cast<T>(maximum)
           : static_cast<T>(std::log(normalizer) + maximum);
-      out_ptr++;
     }
   });
 }

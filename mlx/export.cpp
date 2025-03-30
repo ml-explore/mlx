@@ -278,6 +278,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(LogicalAnd),
       SERIALIZE_PRIMITIVE(LogicalOr),
       SERIALIZE_PRIMITIVE(LogAddExp),
+      SERIALIZE_PRIMITIVE(LogSumExp),
       SERIALIZE_PRIMITIVE(Matmul),
       SERIALIZE_PRIMITIVE(Maximum),
       SERIALIZE_PRIMITIVE(Minimum),
