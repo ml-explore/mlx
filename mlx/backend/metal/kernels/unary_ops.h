@@ -257,6 +257,13 @@ struct Log {
   T operator()(T x) {
     return metal::precise::log(x);
   };
+
+  template <>
+  complex64_t operator()(complex64_t x) {
+    auto r = metal::precise::log(Abs{}(x).real);
+    auto i = metal::precise::atan2(x.imag, x.real);
+    return {r, i};
+  };
 };
 
 struct Log2 {
@@ -264,12 +271,24 @@ struct Log2 {
   T operator()(T x) {
     return metal::precise::log2(x);
   };
+
+  template <>
+  complex64_t operator()(complex64_t x) {
+    auto y = Log{}(x);
+    return {y.real / M_LN2_F, y.imag / M_LN2_F};
+  };
 };
 
 struct Log10 {
   template <typename T>
   T operator()(T x) {
     return metal::precise::log10(x);
+  };
+
+  template <>
+  complex64_t operator()(complex64_t x) {
+    auto y = Log{}(x);
+    return {y.real / M_LN10_F, y.imag / M_LN10_F};
   };
 };
 
