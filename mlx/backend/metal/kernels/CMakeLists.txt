@@ -69,6 +69,7 @@ set(STEEL_HEADERS
     steel/gemm/loader.h
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
+    steel/gemm/kernels/steel_gemm_gather.h
     steel/gemm/kernels/steel_gemm_masked.h
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
@@ -116,6 +117,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/conv/kernels/steel_conv ${STEEL_HEADERS})
   build_kernel(steel/conv/kernels/steel_conv_general ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_fused ${STEEL_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
