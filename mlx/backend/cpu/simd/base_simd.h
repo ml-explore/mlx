@@ -87,13 +87,23 @@ DEFAULT_UNARY(cosh, std::cosh)
 DEFAULT_UNARY(expm1, std::expm1)
 DEFAULT_UNARY(floor, std::floor)
 DEFAULT_UNARY(log, std::log)
-DEFAULT_UNARY(log2, std::log2)
 DEFAULT_UNARY(log10, std::log10)
 DEFAULT_UNARY(log1p, std::log1p)
 DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
+
+template <typename T>
+Simd<T, 1> log2(Simd<T, 1> in) {
+  if constexpr (is_complex<T>) {
+    auto out = std::log(in.value);
+    auto scale = decltype(out.real())(M_LN2);
+    return Simd<T, 1>{T{out.real() / scale, out.imag() / scale}};
+  } else {
+    return Simd<T, 1>{std::log2(in.value)};
+  }
+}
 
 template <typename T>
 Simd<T, 1> operator~(Simd<T, 1> in) {
