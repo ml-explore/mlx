@@ -9,26 +9,9 @@ using namespace metal;
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/logsumexp.h"
 
-#define instantiate_logsumexp(name, itype)                          \
-  template [[host_name("block_logsumexp_" #name)]] [[kernel]] void        \
-  logsumexp<itype>(                                      \
-      const device itype* in,                                     \
-      device itype* out,                                          \
-      constant int& axis_size,                                    \
-      uint gid [[thread_position_in_grid]],                       \
-      uint _lid [[thread_position_in_threadgroup]],               \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);     \
-  template [[host_name("looped_logsumexp_" #name)]] [[kernel]] void \
-  logsumexp_looped<itype>(                                          \
-      const device itype* in,                                     \
-      device itype* out,                                          \
-      constant int& axis_size,                                    \
-      uint gid [[threadgroup_position_in_grid]],                  \
-      uint lid [[thread_position_in_threadgroup]],                \
-      uint lsize [[threads_per_threadgroup]],                     \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+#define instantiate_logsumexp(name, itype)                               \
+  instantiate_kernel("block_logsumexp_" #name, logsumexp, itype)         \
+  instantiate_kernel("looped_logsumexp_" #name, logsumexp_looped, itype) \
 
 instantiate_logsumexp(float32, float)
 instantiate_logsumexp(float16, half)
