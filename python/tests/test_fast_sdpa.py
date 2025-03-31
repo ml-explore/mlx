@@ -580,7 +580,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
         k = mx.random.uniform(shape=kv_shape)
         v = mx.random.uniform(shape=kv_shape)
 
-        # make window causal mask
+        # Make boolean window causal mask
         linds = rinds = mx.arange(N)
         linds = linds[:, None]
         rinds = rinds[None]
@@ -589,7 +589,14 @@ class TestSDPA(mlx_tests.MLXTestCase):
 
         out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
         expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
+        self.assertFalse(mx.isnan(out).any().item())
+        self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
 
+        # And an additive one
+        mask = mx.log(mask)
+
+        out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
+        expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
         self.assertFalse(mx.isnan(out).any().item())
         self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
 
