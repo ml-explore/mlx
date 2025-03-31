@@ -20,6 +20,7 @@ const char* copy();
 const char* fft();
 const char* gather_axis();
 const char* hadamard();
+const char* logsumexp();
 const char* quantized();
 const char* ternary();
 const char* scan();

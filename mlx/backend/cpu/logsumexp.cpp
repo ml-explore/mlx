@@ -16,7 +16,7 @@ namespace {
 using namespace mlx::core::simd;
 
 template <typename T, typename AccT>
-void softmax(const array& in, array& out, Stream stream) {
+void logsumexp(const array& in, array& out, Stream stream) {
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
@@ -28,13 +28,11 @@ void softmax(const array& in, array& out, Stream stream) {
   int L = in.data_size() / M;
 
   encoder.dispatch([in_ptr, out_ptr, M, L]() mutable {
-    constexpr bool same_t = std::is_same_v<T, AccT>;
     constexpr int N = std::min(max_size<AccT>, max_size<T>);
 
     const T* current_in_ptr;
-    T* current_out_ptr;
 
-    for (int i = 0; i < L; i++, in_ptr += M, out_ptr += M) {
+    for (int i = 0; i < L; i++, in_ptr += M, out_ptr += 1) {
       // Find the maximum
       current_in_ptr = in_ptr;
       Simd<AccT, N> vmaximum(-numeric_limits<AccT>::infinity());
@@ -54,116 +52,87 @@ void softmax(const array& in, array& out, Stream stream) {
 
       // Compute the normalizer and the exponentials
       Simd<AccT, N> vnormalizer(0.0);
-      current_out_ptr = out_ptr;
       current_in_ptr = in_ptr;
       s = M;
       while (s >= N) {
         Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
         vexp = exp(vexp - maximum);
-        if constexpr (same_t) {
-          store(current_out_ptr, vexp);
-        }
         vnormalizer = vnormalizer + vexp;
         current_in_ptr += N;
-        current_out_ptr += N;
         s -= N;
       }
       AccT normalizer = sum(vnormalizer);
       while (s-- > 0) {
         AccT _exp = std::exp(*current_in_ptr - maximum);
-        if constexpr (same_t) {
-          *current_out_ptr = _exp;
-        }
         normalizer += _exp;
         current_in_ptr++;
-        current_out_ptr++;
       }
-      normalizer = 1 / normalizer;
-
       // Normalize
-      current_out_ptr = out_ptr;
-      current_in_ptr = in_ptr;
-      s = M;
-      while (s >= N) {
-        if constexpr (same_t) {
-          store(
-              current_out_ptr,
-              Simd<T, N>(load<T, N>(current_out_ptr) * normalizer));
-        } else {
-          Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
-          vexp = exp(vexp - maximum) * normalizer;
-          store(current_out_ptr, Simd<T, N>(vexp));
-          current_in_ptr += N;
-        }
-        current_out_ptr += N;
-        s -= N;
-      }
-      while (s-- > 0) {
-        if constexpr (same_t) {
-          *current_out_ptr *= normalizer;
-        } else {
-          AccT _exp = std::exp(*current_in_ptr - maximum);
-          *current_out_ptr = static_cast<T>(_exp * normalizer);
-          current_in_ptr++;
-        }
-        current_out_ptr++;
-      }
+      *out_ptr = std::isinf(maximum)
+          ? static_cast<T>(maximum)
+          : static_cast<T>(std::log(normalizer) + maximum);
     }
   });
 }
 
 } // namespace
 
-void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
+void LogSumExp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [s = stream(), &out](const array& x) {
+  auto s = stream();
+  auto& encoder = cpu::get_command_encoder(s);
+  auto ensure_contiguous = [&s, &encoder](const array& x) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
       return x;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
+      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
       copy(x, x_copy, CopyType::General, s);
-      out.copy_shared_buffer(x_copy);
+      encoder.add_temporary(x_copy);
       return x_copy;
     }
   };
 
-  auto in = set_output(inputs[0]);
+  auto in = ensure_contiguous(inputs[0]);
+  if (in.flags().row_contiguous) {
+    out.set_data(allocator::malloc(out.nbytes()));
+  } else {
+    auto n = in.shape(-1);
+    auto flags = in.flags();
+    auto strides = in.strides();
+    for (auto& s : strides) {
+      s /= n;
+    }
+    bool col_contig = strides[0] == 1;
+    for (int i = 1; col_contig && i < strides.size(); ++i) {
+      col_contig &=
+          (out.shape(i) == 1 || strides[i - 1] == out.shape(i) * strides[i]);
+    }
+    flags.col_contiguous = col_contig;
+    out.set_data(
+        allocator::malloc(in.nbytes() / n),
+        in.data_size() / n,
+        std::move(strides),
+        flags);
+  }
 
   switch (in.dtype()) {
     case float32:
-      softmax<float, float>(in, out, stream());
+      logsumexp<float, float>(in, out, stream());
       break;
     case float16:
-      if (precise_) {
-        softmax<float16_t, float>(in, out, stream());
-      } else {
-        softmax<float16_t, float16_t>(in, out, stream());
-      }
+      logsumexp<float16_t, float>(in, out, stream());
       break;
     case bfloat16:
-      if (precise_) {
-        softmax<bfloat16_t, float>(in, out, stream());
-      } else {
-        softmax<bfloat16_t, bfloat16_t>(in, out, stream());
-      }
+      logsumexp<bfloat16_t, float>(in, out, stream());
       break;
     case float64:
-      softmax<double, double>(in, out, stream());
+      logsumexp<double, double>(in, out, stream());
       break;
     default:
       throw std::runtime_error(
-          "[softmax] Only defined for floating point types.");
+          "[logsumexp] only supports floating point types");
       break;
   }
 }

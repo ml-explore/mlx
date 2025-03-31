@@ -493,71 +493,11 @@ template <typename T, int N_READS = RMS_N_READS>
 }
 
 // clang-format off
-#define instantiate_layer_norm_single_row(name, itype)            \
-  template [[host_name("layer_norm" #name)]] [[kernel]] void      \
-  layer_norm_single_row<itype>(                                   \
-      const device itype* x,                                      \
-      const device itype* w,                                      \
-      const device itype* b,                                      \
-      device itype* out,                                          \
-      constant float& eps,                                        \
-      constant uint& axis_size,                                   \
-      constant uint& w_stride,                                    \
-      constant uint& b_stride,                                    \
-      uint gid [[thread_position_in_grid]],                       \
-      uint lid [[thread_position_in_threadgroup]],                \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);     \
-  template [[host_name("vjp_layer_norm" #name)]] [[kernel]] void  \
-  vjp_layer_norm_single_row<itype>(                               \
-      const device itype* x,                                      \
-      const device itype* w,                                      \
-      const device itype* g,                                      \
-      device itype* gx,                                           \
-      device itype* gw,                                           \
-      constant float& eps,                                        \
-      constant uint& axis_size,                                   \
-      constant uint& w_stride,                                    \
-      uint gid [[thread_position_in_grid]],                       \
-      uint lid [[thread_position_in_threadgroup]],                \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_layer_norm_looped(name, itype)                       \
-  template [[host_name("layer_norm_looped" #name)]] [[kernel]] void      \
-  layer_norm_looped<itype>(                                              \
-      const device itype* x,                                             \
-      const device itype* w,                                             \
-      const device itype* b,                                             \
-      device itype* out,                                                 \
-      constant float& eps,                                               \
-      constant uint& axis_size,                                          \
-      constant uint& w_stride,                                           \
-      constant uint& b_stride,                                           \
-      uint gid [[thread_position_in_grid]],                              \
-      uint lid [[thread_position_in_threadgroup]],                       \
-      uint lsize [[threads_per_threadgroup]],                            \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                   \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);            \
-  template [[host_name("vjp_layer_norm_looped" #name)]] [[kernel]] void  \
-  vjp_layer_norm_looped<itype>(                                          \
-      const device itype* x,                                             \
-      const device itype* w,                                             \
-      const device itype* g,                                             \
-      device itype* gx,                                                  \
-      device itype* gb,                                                  \
-      constant float& eps,                                               \
-      constant uint& axis_size,                                          \
-      constant uint& w_stride,                                           \
-      uint gid [[thread_position_in_grid]],                              \
-      uint lid [[thread_position_in_threadgroup]],                       \
-      uint lsize [[threads_per_threadgroup]],                            \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                   \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_layer_norm(name, itype)      \
-  instantiate_layer_norm_single_row(name, itype) \
-  instantiate_layer_norm_looped(name, itype)
+#define instantiate_layer_norm(name, itype)                                       \
+  instantiate_kernel("layer_norm" #name, layer_norm_single_row, itype)            \
+  instantiate_kernel("vjp_layer_norm" #name, vjp_layer_norm_single_row, itype)    \
+  instantiate_kernel("layer_norm_looped" #name, layer_norm_looped, itype)         \
+  instantiate_kernel("vjp_layer_norm_looped" #name, vjp_layer_norm_looped, itype)
 
 instantiate_layer_norm(float32, float)
 instantiate_layer_norm(float16, half)
