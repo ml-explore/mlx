@@ -15,6 +15,8 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 using namespace mlx::steel;
 
 namespace mlx::core {
@@ -712,6 +714,33 @@ void winograd_conv_2D_gpu(
   }
 }
 
+void depthwise_conv_2D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array out,
+    const MLXConvParams<2>& conv_params) {
+  std::ostringstream kname;
+  kname << "depthwise_conv_2d_" << type_to_name(out);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_input_array(wt, 1);
+  compute_encoder.set_output_array(out, 2);
+
+  compute_encoder.set_bytes(conv_params, 3);
+
+  MTL::Size group_dims = MTL::Size(32, 1, 1);
+  MTL::Size grid_dims =
+      MTL::Size(conv_params.oS[1], conv_params.oS[0], conv_params.N);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -757,6 +786,10 @@ void conv_2D_gpu(
   if (groups > 1) {
     const int C_per_group = conv_params.C / groups;
     const int O_per_group = conv_params.O / groups;
+
+    if (C_per_group == 1 && O_per_group == 1) {
+      return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
+    }
 
     if (is_idil_one && (C_per_group <= 4 || C_per_group % 16 == 0) &&
         (O_per_group <= 16 || O_per_group % 16 == 0)) {

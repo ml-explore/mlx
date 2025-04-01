@@ -276,6 +276,67 @@ instantiate_naive_conv_2d_blocks(float16, half);
 instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
 
 ///////////////////////////////////////////////////////////////////////////////
+/// Depthwise convolution kernels
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+[[kernel]] void depthwise_conv_2d(
+    const device T* in [[buffer(0)]],
+    const device T* wt [[buffer(1)]],
+    device T* out [[buffer(2)]],
+    const constant MLXConvParams<2>& params [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)simd_gid;
+  (void)simd_lid;
+
+  const int n = tid.z;
+  const int oh = tid.y;
+  const int ow = tid.x;
+  const int ih_ = oh * params.str[0] - params.pad[0];
+  const int iw_ = ow * params.str[1] - params.pad[1];
+
+  in += n * params.in_strides[0];
+  out += n * params.out_strides[0] + oh * params.out_strides[1] +
+      ow * params.out_strides[2];
+
+  wt += simd_lid * params.wt_strides[0];
+
+  for (int c = 0; c < params.C; c += 32) {
+    float o = 0.;
+    for (int h = 0; h < params.wS[0]; ++h) {
+      for (int w = 0; w < params.wS[1]; ++w) {
+        int ih = ih_ + h * params.kdil[0];
+        int iw = iw_ + w * params.kdil[1];
+
+        simdgroup_barrier(mem_flags::mem_none);
+        if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
+          auto wt_hw = wt + h * params.wt_strides[1] + w * params.wt_strides[2];
+          auto in_hw =
+              in + ih * params.in_strides[1] + iw * params.in_strides[2];
+
+          auto inv = in_hw[c + simd_lid];
+          auto wtv = wt_hw[0];
+          o += inv * wtv;
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_none);
+    out[c + simd_lid] = static_cast<T>(o);
+    wt += 32 * params.wt_strides[0];
+  }
+}
+
+#define instantiate_depthconv2d(iname, itype) \
+  instantiate_kernel("depthwise_conv_2d_" #iname, depthwise_conv_2d, itype)
+
+instantiate_depthconv2d(float32, float);
+instantiate_depthconv2d(float16, half);
+instantiate_depthconv2d(bfloat16, bfloat16_t);
+
+///////////////////////////////////////////////////////////////////////////////
 /// Winograd kernels
 ///////////////////////////////////////////////////////////////////////////////
 
