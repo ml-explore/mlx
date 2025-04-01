@@ -25,6 +25,15 @@ def scatter_unsort(x, inv_order, shape=None):
     return x
 
 
+def gather_mm_simulate(x, w, indices):
+    x, idx, inv_order = gather_sort(x, indices)
+    for i in range(2):
+        y = mx.concatenate([x[i] @ w[j].T for i, j in enumerate(idx.tolist())], axis=0)
+        x = y[:, None]
+    x = scatter_unsort(x, inv_order, indices.shape)
+    return x
+
+
 def time_gather_mm():
     x = mx.random.normal((N, 1, 1, K)) / 1024**0.5
     w = mx.random.normal((E, M, K)) / 1024**0.5
@@ -43,7 +52,12 @@ def time_gather_mm():
             x = scatter_unsort(x, inv_order, indices.shape)
         return x
 
-    time_fn(gather_mm, x, w, indices, False)
+    # import pdb
+    # pdb.set_trace()
+    # y1 = gather_mm(x, w, indices, True)
+    # y2 = gather_mm_simulate(x, w, indices)
+
+    # time_fn(gather_mm, x, w, indices, False)
     time_fn(gather_mm, x, w, indices, True)
     time_fn(gather_mm, x, w, sorted_indices, False)
 
