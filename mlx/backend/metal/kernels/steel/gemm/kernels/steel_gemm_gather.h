@@ -66,32 +66,33 @@ template <
   B += transpose_b ? c_col_long * params->ldb : c_col_long;
   C += c_row_long * params->ldd + c_col_long;
 
-  // Calculate the number of unique matmuls
-  uint32_t unique_indices[4];
-  short offsets[5];
-  unique_indices[0] = rhs_indices[c_row];
-  offsets[0] = 0;
-  int j = 0;
-  for (int i = 1; i < tgp_bm; i++) {
-    if (rhs_indices[c_row + i] != unique_indices[j]) {
-      j++;
-      offsets[j] = i;
-      unique_indices[j] = rhs_indices[c_row + i];
+  // Do as many matmuls as necessary
+  uint32_t index;
+  short offset;
+  uint32_t index_next = rhs_indices[c_row];
+  short offset_next = 0;
+  int n = 0;
+  while (n < tgp_bm) {
+    n++;
+    offset = offset_next;
+    index = index_next;
+    offset_next = tgp_bm;
+    for (; n < tgp_bm; n++) {
+      if (rhs_indices[c_row + n] != index) {
+        offset_next = n;
+        index_next = rhs_indices[c_row + n];
+        break;
+      }
     }
-  }
-  int n_unique = j + 1;
-  offsets[n_unique] = tgp_bm;
+    threadgroup_barrier(mem_flags::mem_none);
 
-  threadgroup_barrier(mem_flags::mem_none);
-
-  for (int n = 0; n < n_unique; n++) {
     // Prepare threadgroup mma operation
     thread mma_t mma_op(simd_group_id, simd_lane_id);
 
     // Prepare threadgroup loading operations
     thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
     thread loader_b_t loader_b(
-        B + unique_indices[n] * params->batch_stride_b,
+        B + index * params->batch_stride_b,
         params->ldb,
         Bs,
         simd_group_id,
@@ -152,11 +153,11 @@ template <
       }
 
       // Store results to device memory
-      if (offsets[n + 1] - offsets[n] == BM) {
+      if (offset_next - offset == BM) {
         mma_op.store_result(C, params->ldd);
       } else {
         mma_op.store_result_slice(
-            C, params->ldd, short2(0, offsets[n]), short2(BN, offsets[n + 1]));
+            C, params->ldd, short2(0, offset), short2(BN, offset_next));
       }
     } else {
       const short lbk = 0;
@@ -174,14 +175,11 @@ template <
             tgp_bn,
             lbk,
             LoopAlignment<true, true, true>{});
-        if (offsets[n + 1] - offsets[n] == BM) {
+        if (offset_next - offset == BM) {
           mma_op.store_result(C, params->ldd);
         } else {
           mma_op.store_result_slice(
-              C,
-              params->ldd,
-              short2(0, offsets[n]),
-              short2(BN, offsets[n + 1]));
+              C, params->ldd, short2(0, offset), short2(BN, offset_next));
         }
       }
 
@@ -199,7 +197,7 @@ template <
             lbk,
             LoopAlignment<false, true, true>{});
         mma_op.store_result_slice(
-            C, params->ldd, short2(0, offsets[n]), short2(BN, offsets[n + 1]));
+            C, params->ldd, short2(0, offset), short2(BN, offset_next));
       }
 
       // Tile partially aligned check cols
@@ -216,10 +214,7 @@ template <
             lbk,
             LoopAlignment<true, false, true>{});
         mma_op.store_result_slice(
-            C,
-            params->ldd,
-            short2(0, offsets[n]),
-            short2(tgp_bn, offsets[n + 1]));
+            C, params->ldd, short2(0, offset), short2(tgp_bn, offset_next));
       }
 
       // Nothing aligned so check both rows and cols
@@ -236,10 +231,7 @@ template <
             lbk,
             LoopAlignment<false, false, true>{});
         mma_op.store_result_slice(
-            C,
-            params->ldd,
-            short2(0, offsets[n]),
-            short2(tgp_bn, offsets[n + 1]));
+            C, params->ldd, short2(0, offset), short2(tgp_bn, offset_next));
       }
     }
   }
