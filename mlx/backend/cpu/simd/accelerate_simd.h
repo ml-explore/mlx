@@ -83,25 +83,25 @@ struct Simd {
 // Values chosen based on benchmarks on M3 Max
 // TODO: consider choosing these more optimally
 template <>
-static constexpr int max_size<int8_t> = 16;
+inline constexpr int max_size<int8_t> = 16;
 template <>
-static constexpr int max_size<int16_t> = 16;
+inline constexpr int max_size<int16_t> = 16;
 template <>
-static constexpr int max_size<int> = 8;
+inline constexpr int max_size<int> = 8;
 template <>
-static constexpr int max_size<int64_t> = 4;
+inline constexpr int max_size<int64_t> = 4;
 template <>
-static constexpr int max_size<uint8_t> = 16;
+inline constexpr int max_size<uint8_t> = 16;
 template <>
-static constexpr int max_size<uint16_t> = 16;
+inline constexpr int max_size<uint16_t> = 16;
 template <>
-static constexpr int max_size<uint32_t> = 8;
+inline constexpr int max_size<uint32_t> = 8;
 template <>
-static constexpr int max_size<uint64_t> = 4;
+inline constexpr int max_size<uint64_t> = 4;
 template <>
-static constexpr int max_size<float> = 8;
+inline constexpr int max_size<float> = 8;
 template <>
-static constexpr int max_size<double> = 4;
+inline constexpr int max_size<double> = 4;
 
 #define SIMD_DEFAULT_UNARY(name, op) \
   template <typename T, int N>       \
