@@ -4,8 +4,8 @@
 #include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
-#define instantiate_gather_mm_rhs(                                            \
-    tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn)  \
+// clang-format off
+#define instantiate_gather_mm_rhs(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
   instantiate_kernel(                                                         \
       "steel_gather_mm_rhs_" #tname "_" #iname "_" #oname "_bm" #bm "_bn" #bn \
       "_bk" #bk "_wm" #wm "_wn" #wn,                                          \
@@ -20,39 +20,15 @@
       trans_b,                                                                \
       float)
 
-#define instantiate_gather_mm_transpose_helper(                                \
-    iname, itype, oname, otype, bm, bn, bk, wm, wn)                            \
-  instantiate_gather_mm_rhs(                                                   \
-      nn, false, false, iname, itype, oname, otype, bm, bn, bk, wm, wn)        \
-      instantiate_gather_mm_rhs(                                               \
-          nt, false, true, iname, itype, oname, otype, bm, bn, bk, wm, wn)     \
-          instantiate_gather_mm_rhs(                                           \
-              tn, true, false, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
-              instantiate_gather_mm_rhs(                                       \
-                  tt,                                                          \
-                  true,                                                        \
-                  true,                                                        \
-                  iname,                                                       \
-                  itype,                                                       \
-                  oname,                                                       \
-                  otype,                                                       \
-                  bm,                                                          \
-                  bn,                                                          \
-                  bk,                                                          \
-                  wm,                                                          \
-                  wn)
+#define instantiate_gather_mm_transpose_helper(iname, itype, oname, otype, bm, bn, bk, wm, wn) \
+  instantiate_gather_mm_rhs(nn, false, false, iname, itype, oname, otype, bm, bn, bk, wm, wn)  \
+  instantiate_gather_mm_rhs(nt, false,  true, iname, itype, oname, otype, bm, bn, bk, wm, wn)  \
+  instantiate_gather_mm_rhs(tn,  true, false, iname, itype, oname, otype, bm, bn, bk, wm, wn)  \
+  instantiate_gather_mm_rhs(tt,  true,  true, iname, itype, oname, otype, bm, bn, bk, wm, wn)
 
-#define instantiate_gather_mm_shapes_helper(iname, itype, oname, otype) \
-  instantiate_gather_mm_transpose_helper(                               \
-      iname, itype, oname, otype, 64, 64, 16, 2, 2)                     \
-      instantiate_gather_mm_transpose_helper(                           \
-          iname, itype, oname, otype, 64, 64, 16, 1, 2)                 \
-          instantiate_gather_mm_transpose_helper(                       \
-              iname, itype, oname, otype, 64, 32, 32, 2, 2)             \
-              instantiate_gather_mm_transpose_helper(                   \
-                  iname, itype, oname, otype, 32, 64, 16, 1, 2)         \
-                  instantiate_gather_mm_transpose_helper(               \
-                      iname, itype, oname, otype, 32, 32, 16, 2, 2)
+#define instantiate_gather_mm_shapes_helper(iname, itype, oname, otype)                \
+  instantiate_gather_mm_transpose_helper(iname, itype, oname, otype, 16, 64, 16, 1, 2)
+// clang-format on
 
 instantiate_gather_mm_shapes_helper(float16, half, float16, half);
 instantiate_gather_mm_shapes_helper(bfloat16, bfloat16_t, bfloat16, bfloat16_t);

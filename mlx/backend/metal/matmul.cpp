@@ -1559,21 +1559,104 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
   if (M == 1) {
+    M = batch_size_out;
+    batch_size_out = 1;
+
     // Determine dispatch kernel
-    int bm = 64, bn = 64, bk = 16;
-    int wm = 2, wn = 2;
+    int bm = 16, bn = 64, bk = 16;
+    int wm = 1, wn = 2;
 
-    char devc = d.get_architecture().back();
-    GEMM_TPARAM_MACRO(devc)
+    const bool align_M = (M % bm) == 0;
+    const bool align_N = (N % bn) == 0;
+    const bool align_K = (K % bk) == 0;
 
-    std::string kname;
-    kname.reserve(128);
-    kname += "steel_gather_mm_rhs_n";
-    kname += transpose_b ? 't' : 'n';
-    kname += '_';
-    kname += type_to_name(a);
-    kname += '_';
+    std::string base_name;
+    base_name.reserve(64);
+    concatenate(
+        base_name,
+        "steel_gather_mm_rhs_n",
+        transpose_b ? 't' : 'n',
+        '_',
+        type_to_name(a),
+        '_',
+        type_to_name(out),
+        "_bm",
+        std::to_string(bm),
+        "_bn",
+        std::to_string(bn),
+        "_bk",
+        std::to_string(bk),
+        "_wm",
+        std::to_string(wm),
+        "_wn",
+        std::to_string(wn));
 
+    metal::MTLFCList func_consts = {
+        {&align_M, MTL::DataType::DataTypeBool, 200},
+        {&align_N, MTL::DataType::DataTypeBool, 201},
+        {&align_K, MTL::DataType::DataTypeBool, 202},
+    };
+
+    std::string hash_name;
+    hash_name.reserve(128);
+    concatenate(
+        hash_name,
+        base_name,
+        "_align_M_",
+        align_M ? 't' : 'n',
+        "_align_N_",
+        align_N ? 't' : 'n',
+        "_align_K_",
+        align_K ? 't' : 'n');
+
+    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = get_steel_gemm_gather_kernel(
+        d,
+        base_name,
+        hash_name,
+        func_consts,
+        out,
+        transpose_a,
+        transpose_b,
+        bm,
+        bn,
+        bk,
+        wm,
+        wn);
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    // Prepare steel matmul params
+    GEMMParams params{
+        /* const int M = */ M,
+        /* const int N = */ N,
+        /* const int K = */ K,
+        /* const int lda = */ lda,
+        /* const int ldb = */ ldb,
+        /* const int ldd = */ N,
+        /* const int tiles_n = */ (N + bn - 1) / bn,
+        /* const int tiles_m = */ (M + bm - 1) / bm,
+        /* const int64_t batch_stride_a = */ 0,
+        /* const int64_t batch_stride_b = */ batch_strides_B.back(),
+        /* const int64_t batch_stride_d = */ matrix_stride_out,
+        /* const int swizzle_log = */ 0,
+        /* const int gemm_k_iterations_aligned = */ (K / bk),
+        /* const int batch_ndim = */ batch_ndim};
+
+    // Prepare the grid
+    MTL::Size group_dims = MTL::Size(32, wn, wm);
+    MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
+
+    // Launch kernel
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_input_array(rhs_indices, 2);
+    compute_encoder.set_output_array(out, 3);
+    compute_encoder.set_bytes(params, 4);
+
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+    d.add_temporaries(std::move(copies), s.index);
     return;
   }
 
