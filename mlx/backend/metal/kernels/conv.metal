@@ -309,7 +309,6 @@ template <typename T>
   float o = 0.;
   for (int h = 0; h < params.wS[0]; ++h) {
     int ih = ih_ + h * params.kdil[0];
-    auto in_hw = in;
     for (int w = 0; w < params.wS[1]; ++w) {
       int iw = iw_ + w * params.kdil[1];
 
