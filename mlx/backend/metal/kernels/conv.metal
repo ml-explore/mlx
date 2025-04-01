@@ -298,35 +298,33 @@ template <typename T>
   const int ih_ = oh * params.str[0] - params.pad[0];
   const int iw_ = ow * params.str[1] - params.pad[1];
 
-  in += n * params.in_strides[0];
+  in += n * params.in_strides[0] + ih_ * params.in_strides[1] +
+      iw_ * params.in_strides[2];
   out += n * params.out_strides[0] + oh * params.out_strides[1] +
       ow * params.out_strides[2];
 
-  wt += simd_lid * params.wt_strides[0];
+  int c = simd_gid * 32;
+  wt += (c + simd_lid) * params.wt_strides[0];
 
-  for (int c = 0; c < params.C; c += 32) {
-    float o = 0.;
-    for (int h = 0; h < params.wS[0]; ++h) {
-      for (int w = 0; w < params.wS[1]; ++w) {
-        int ih = ih_ + h * params.kdil[0];
-        int iw = iw_ + w * params.kdil[1];
+  float o = 0.;
+  for (int h = 0; h < params.wS[0]; ++h) {
+    int ih = ih_ + h * params.kdil[0];
+    auto in_hw = in;
+    for (int w = 0; w < params.wS[1]; ++w) {
+      int iw = iw_ + w * params.kdil[1];
 
-        simdgroup_barrier(mem_flags::mem_none);
-        if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
-          auto wt_hw = wt + h * params.wt_strides[1] + w * params.wt_strides[2];
-          auto in_hw =
-              in + ih * params.in_strides[1] + iw * params.in_strides[2];
-
-          auto inv = in_hw[c + simd_lid];
-          auto wtv = wt_hw[0];
-          o += inv * wtv;
-        }
+      simdgroup_barrier(mem_flags::mem_none);
+      if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
+        auto inv = in[c + simd_lid];
+        auto wtv = wt[h * params.wS[1] + w];
+        o += inv * wtv;
       }
+      in += params.in_strides[2];
     }
-    threadgroup_barrier(mem_flags::mem_none);
-    out[c + simd_lid] = static_cast<T>(o);
-    wt += 32 * params.wt_strides[0];
+    in += params.in_strides[1] - params.wS[1] * params.in_strides[2];
   }
+  threadgroup_barrier(mem_flags::mem_none);
+  out[c + simd_lid] = static_cast<T>(o);
 }
 
 #define instantiate_depthconv2d(iname, itype) \

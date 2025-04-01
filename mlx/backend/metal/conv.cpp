@@ -734,7 +734,7 @@ void depthwise_conv_2D_gpu(
 
   compute_encoder.set_bytes(conv_params, 3);
 
-  MTL::Size group_dims = MTL::Size(32, 1, 1);
+  MTL::Size group_dims = MTL::Size(32, conv_params.C / 32, 1);
   MTL::Size grid_dims =
       MTL::Size(conv_params.oS[1], conv_params.oS[0], conv_params.N);
 
