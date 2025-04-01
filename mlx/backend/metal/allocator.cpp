@@ -48,7 +48,7 @@ int BufferCache::clear() {
   int n_release = 0;
   for (auto& [size, holder] : buffer_pool_) {
     if (holder->buf) {
-      if (holder->buf->heap()) {
+      if (!holder->buf->heap()) {
         residency_set_.erase(holder->buf);
       }
       holder->buf->release();
