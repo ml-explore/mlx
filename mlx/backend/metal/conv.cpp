@@ -723,9 +723,37 @@ void depthwise_conv_2D_gpu(
     const MLXConvParams<2>& conv_params) {
   std::ostringstream kname;
   kname << "depthwise_conv_2d_" << type_to_name(out);
+  std::string base_name = kname.str();
+
+  const int ker_h = conv_params.wS[0];
+  const int ker_w = conv_params.wS[1];
+  const int str_h = conv_params.str[0];
+  const int str_w = conv_params.str[1];
+  const int tc = 8;
+  const int tw = 8;
+  const int th = 4;
+
+  metal::MTLFCList func_consts = {
+      {&ker_h, MTL::DataType::DataTypeInt, 00},
+      {&ker_w, MTL::DataType::DataTypeInt, 01},
+      {&str_h, MTL::DataType::DataTypeInt, 10},
+      {&str_w, MTL::DataType::DataTypeInt, 11},
+      {&th, MTL::DataType::DataTypeInt, 100},
+      {&tw, MTL::DataType::DataTypeInt, 101},
+  };
+
+  // clang-format off
+  kname << "_ker_h_" << ker_h
+        << "_ker_w_" << ker_w
+        << "_str_h_" << str_h
+        << "_str_w_" << str_w
+        << "_tgp_h_" << th
+        << "_tgp_w_" << tw; // clang-format on
+
+  std::string hash_name = kname.str();
 
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(in, 0);
@@ -734,9 +762,6 @@ void depthwise_conv_2D_gpu(
 
   compute_encoder.set_bytes(conv_params, 3);
 
-  int tc = 8;
-  int tw = 8;
-  int th = 4;
   MTL::Size group_dims = MTL::Size(tc, tw, th);
   MTL::Size grid_dims = MTL::Size(
       conv_params.C / tc, conv_params.oS[1] / tw, conv_params.oS[0] / th);

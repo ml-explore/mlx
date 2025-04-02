@@ -279,6 +279,17 @@ instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
 /// Depthwise convolution kernels
 ///////////////////////////////////////////////////////////////////////////////
 
+constant int ker_h [[function_constant(00)]];
+constant int ker_w [[function_constant(01)]];
+constant int str_h [[function_constant(10)]];
+constant int str_w [[function_constant(11)]];
+constant int tgp_h [[function_constant(100)]];
+constant int tgp_w [[function_constant(101)]];
+
+constant int span_h = tgp_h * str_h + ker_h - 1;
+constant int span_w = tgp_w * str_w + ker_w - 1;
+constant int span_hw = span_h * span_w;
+
 template <typename T>
 [[kernel]] void depthwise_conv_2d(
     const device T* in [[buffer(0)]],
@@ -313,14 +324,9 @@ template <typename T>
   // Load in
   {
     constexpr int n_threads = th * tw * tc;
-    const int tg_oh = (tid.z * th) * params.str[0] - params.pad[0];
-    const int tg_ow = (tid.y * tw) * params.str[1] - params.pad[1];
+    const int tg_oh = (tid.z * th) * str_h - params.pad[0];
+    const int tg_ow = (tid.y * tw) * str_w - params.pad[1];
     const int tg_c = tid.x * tc;
-
-    const int hspan = th * params.str[0] + params.wS[0] - 1;
-    const int wspan = tw * params.str[1] + params.wS[1] - 1;
-
-    const int hwmax = hspan * wspan;
 
     const int thread_idx = simd_gid * 32 + simd_lid;
     constexpr int thr_per_hw = tc / c_per_thr;
@@ -329,14 +335,14 @@ template <typename T>
     const int thr_c = thread_idx % thr_per_hw;
     const int thr_hw = thread_idx / thr_per_hw;
 
-    for (int hw = thr_hw; hw < hwmax; hw += hw_per_group) {
-      const int h = hw / wspan;
-      const int w = hw % wspan;
+    for (int hw = thr_hw; hw < span_hw; hw += hw_per_group) {
+      const int h = hw / span_w;
+      const int w = hw % span_w;
 
       const int ih = tg_oh + h;
       const int iw = tg_ow + w;
 
-      const int in_s_offset = h * TGW * TGC + w * TGC;
+      const int in_s_offset = h * span_w * TGC + w * TGC;
 
       if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
         const auto in_load =
@@ -358,12 +364,12 @@ template <typename T>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   wt += c * params.wt_strides[0];
 
-  const auto ins_ptr = &ins[lid.z * TGW * TGC + lid.y * TGC + lid.x];
+  const auto ins_ptr = &ins[lid.z * span_w * TGC + lid.y * TGC + lid.x];
   float o = 0.;
-  for (int h = 0; h < params.wS[0]; ++h) {
-    for (int w = 0; w < params.wS[1]; ++w) {
-      auto inv = ins_ptr[h * TGW * TGC + w * TGC];
-      auto wtv = wt[h * params.wS[1] + w];
+  for (int h = 0; h < ker_h; ++h) {
+    for (int w = 0; w < ker_w; ++w) {
+      auto inv = ins_ptr[h * span_w * TGC + w * TGC];
+      auto wtv = wt[h * ker_w + w];
       o += inv * wtv;
     }
   }
