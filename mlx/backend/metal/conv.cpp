@@ -732,6 +732,7 @@ void depthwise_conv_2D_gpu(
   const int tc = 8;
   const int tw = 8;
   const int th = 4;
+  const bool do_flip = conv_params.flip;
 
   metal::MTLFCList func_consts = {
       {&ker_h, MTL::DataType::DataTypeInt, 00},
@@ -740,6 +741,7 @@ void depthwise_conv_2D_gpu(
       {&str_w, MTL::DataType::DataTypeInt, 11},
       {&th, MTL::DataType::DataTypeInt, 100},
       {&tw, MTL::DataType::DataTypeInt, 101},
+      {&do_flip, MTL::DataType::DataTypeBool, 200},
   };
 
   // clang-format off
@@ -748,7 +750,8 @@ void depthwise_conv_2D_gpu(
         << "_str_h_" << str_h
         << "_str_w_" << str_w
         << "_tgp_h_" << th
-        << "_tgp_w_" << tw; // clang-format on
+        << "_tgp_w_" << tw
+        << "_do_flip_" << (do_flip ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
@@ -815,11 +818,15 @@ void conv_2D_gpu(
     const int C_per_group = conv_params.C / groups;
     const int O_per_group = conv_params.O / groups;
 
-    if (C_per_group == 1 && O_per_group == 1 && is_stride_one) {
+    if (C_per_group == 1 && O_per_group == 1 && is_kdil_one &&
+        conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
+        conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
+        conv_params.oS[0] % 8 == 0 && conv_params.oS[1] % 8 == 0 &&
+        conv_params.C % 16 == 0) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
     }
 
-    if (is_idil_one && (C_per_group <= 4 || C_per_group % 16 == 0) &&
+    if ((C_per_group <= 4 || C_per_group % 16 == 0) &&
         (O_per_group <= 16 || O_per_group % 16 == 0)) {
       return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
     } else {

@@ -285,6 +285,7 @@ constant int str_h [[function_constant(10)]];
 constant int str_w [[function_constant(11)]];
 constant int tgp_h [[function_constant(100)]];
 constant int tgp_w [[function_constant(101)]];
+constant bool do_flip [[function_constant(200)]];
 
 constant int span_h = tgp_h * str_h + ker_h - 1;
 constant int span_w = tgp_w * str_w + ker_w - 1;
@@ -301,30 +302,31 @@ template <typename T>
     uint3 gid [[thread_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  (void)simd_gid;
-  (void)simd_lid;
-
-  const int n = 0;
-  const int oh = gid.z;
-  const int ow = gid.y;
-  const int c = gid.x;
-
   constexpr int tc = 8;
   constexpr int tw = 8;
   constexpr int th = 4;
 
   constexpr int c_per_thr = 8;
 
-  constexpr int TGH = th + 6;
-  constexpr int TGW = tw + 6;
+  constexpr int TGH = th * 2 + 6;
+  constexpr int TGW = tw * 2 + 6;
   constexpr int TGC = tc;
 
   threadgroup T ins[TGH * TGW * TGC];
 
+  const int n_tgblocks_h = params.oS[0] / th;
+  const int n = tid.z / n_tgblocks_h;
+  const int tghid = tid.z % n_tgblocks_h;
+  const int oh = tghid * th + lid.z;
+  const int ow = gid.y;
+  const int c = gid.x;
+
+  in += n * params.in_strides[0];
+
   // Load in
   {
     constexpr int n_threads = th * tw * tc;
-    const int tg_oh = (tid.z * th) * str_h - params.pad[0];
+    const int tg_oh = (tghid * th) * str_h - params.pad[0];
     const int tg_ow = (tid.y * tw) * str_w - params.pad[1];
     const int tg_c = tid.x * tc;
 
@@ -347,13 +349,14 @@ template <typename T>
       if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
         const auto in_load =
             in + ih * params.in_strides[1] + iw * params.in_strides[2] + tg_c;
-#pragma clang loop unroll(full)
+
+        MLX_MTL_PRAGMA_UNROLL
         for (int cc = 0; cc < c_per_thr; ++cc) {
           ins[in_s_offset + c_per_thr * thr_c + cc] =
               in_load[c_per_thr * thr_c + cc];
         }
       } else {
-#pragma clang loop unroll(full)
+        MLX_MTL_PRAGMA_UNROLL
         for (int cc = 0; cc < c_per_thr; ++cc) {
           ins[in_s_offset + c_per_thr * thr_c + cc] = T(0);
         }
@@ -368,8 +371,14 @@ template <typename T>
   float o = 0.;
   for (int h = 0; h < ker_h; ++h) {
     for (int w = 0; w < ker_w; ++w) {
+      int wt_h = h;
+      int wt_w = w;
+      if (do_flip) {
+        wt_h = ker_h - h - 1;
+        wt_w = ker_w - w - 1;
+      }
       auto inv = ins_ptr[h * span_w * TGC + w * TGC];
-      auto wtv = wt[h * ker_w + w];
+      auto wtv = wt[wt_h * ker_w + wt_w];
       o += inv * wtv;
     }
   }
