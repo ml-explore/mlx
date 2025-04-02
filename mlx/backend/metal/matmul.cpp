@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream> // TODO: Remove
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -101,6 +103,38 @@ std::tuple<bool, int64_t, array> check_transpose(
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }
 };
+
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return x_copy;
+  } else {
+    return x;
+  }
+}
+
+inline array
+ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  }
+
+  bool rc = true;
+  for (int i = 0; i < x.ndim() - 3; i++) {
+    rc &= x.strides()[i + 1] * x.shape(i) == x.strides()[i];
+  }
+  if (rc) {
+    return x;
+  }
+
+  array x_copy(x.shape(), x.dtype(), nullptr, {});
+  copy_gpu(x, x_copy, CopyType::General, s);
+  d.add_temporary(x_copy, s.index);
+  return x_copy;
+}
 
 } // namespace
 
@@ -1464,18 +1498,149 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   d.add_temporaries(std::move(copies), s.index);
 }
 
+void gather_mm_rhs(
+    const array& a_,
+    const array& b_,
+    const array& indices_,
+    array& out,
+    bool transpose_b,
+    int ldb,
+    metal::Device& d,
+    const Stream& s) {
+  array indices = ensure_row_contiguous(indices_, d, s);
+  array b = ensure_batch_contiguous(b_, d, s);
+
+  // Broadcast a with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of a broadcasted
+  // with rhs_indices. We need only broadcast a and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+  array a = broadcast_with_indices(a_);
+
+  // Extract the matmul shapes
+  int K = a.shape(-1);
+  int M = a.size() / K;
+  int N = b.shape(-1);
+  int lda = a.strides()[a.ndim() - 2]; // should be K
+
+  // Define the dispatch blocks
+  int bm = 16, bn = 64, bk = 16;
+  int wm = 1, wn = 2;
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(64);
+  concatenate(
+      base_name,
+      "steel_gather_mm_rhs_n",
+      transpose_b ? 't' : 'n',
+      '_',
+      type_to_name(a),
+      '_',
+      type_to_name(out),
+      "_bm",
+      std::to_string(bm),
+      "_bn",
+      std::to_string(bn),
+      "_bk",
+      std::to_string(bk),
+      "_wm",
+      std::to_string(wm),
+      "_wn",
+      std::to_string(wn));
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_gather_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      out,
+      false,
+      transpose_b,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Prepare the matmul params
+  auto batch_stride_b = b.ndim() > 2 ? b.strides()[b.ndim() - 3] : b.size();
+  steel::GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */ 0,
+      /* const int64_t batch_stride_b = */ static_cast<int64_t>(batch_stride_b),
+      /* const int64_t batch_stride_d = */ 0,
+      /* const int swizzle_log = */ 0,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ 0};
+
+  // Prepare the grid
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(indices, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(params, 4);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   using namespace mlx::steel;
-  // assert(inputs.size() == 2);
-  if (!issubdtype(out.dtype(), floating)) {
-    throw std::runtime_error(
-        "[GatherMM] Does not yet support non-floating point types.");
-  }
+
   auto& s = stream();
   auto& d = metal::device(s.device);
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
+
   // Return 0s if either input is empty
   if (a_pre.size() == 0 || b_pre.size() == 0) {
     array zero = array(0, a_pre.dtype());
@@ -1486,21 +1651,26 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Init checks and prep
-
+  // Extract shapes strides from inputs and copy in case of non-contiguous
+  // vectors.
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
   int K = a_pre.shape(-1);
 
-  // Keep a vector with copies to be cleared in the completed buffer to release
-  // the arrays
   std::vector<array> copies;
   auto [transpose_a, a_cols, a] = check_transpose(copies, s, a_pre, M == 1);
   auto [transpose_b, b_cols, b] = check_transpose(copies, s, b_pre, N == 1);
+  d.add_temporaries(std::move(copies), s.index);
 
   int lda = a_cols;
   int ldb = b_cols;
+
+  // We are walking a in order and b is also in order so we can batch up the
+  // matmuls and reuse reading a and b.
+  if (M == 1 && right_sorted_ == true) {
+    gather_mm_rhs(a, b, inputs[3], out, transpose_b, ldb, d, s);
+    return;
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -1558,108 +1728,6 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
-  if (M == 1) {
-    M = batch_size_out;
-    batch_size_out = 1;
-
-    // Determine dispatch kernel
-    int bm = 16, bn = 64, bk = 16;
-    int wm = 1, wn = 2;
-
-    const bool align_M = (M % bm) == 0;
-    const bool align_N = (N % bn) == 0;
-    const bool align_K = (K % bk) == 0;
-
-    std::string base_name;
-    base_name.reserve(64);
-    concatenate(
-        base_name,
-        "steel_gather_mm_rhs_n",
-        transpose_b ? 't' : 'n',
-        '_',
-        type_to_name(a),
-        '_',
-        type_to_name(out),
-        "_bm",
-        std::to_string(bm),
-        "_bn",
-        std::to_string(bn),
-        "_bk",
-        std::to_string(bk),
-        "_wm",
-        std::to_string(wm),
-        "_wn",
-        std::to_string(wn));
-
-    metal::MTLFCList func_consts = {
-        {&align_M, MTL::DataType::DataTypeBool, 200},
-        {&align_N, MTL::DataType::DataTypeBool, 201},
-        {&align_K, MTL::DataType::DataTypeBool, 202},
-    };
-
-    std::string hash_name;
-    hash_name.reserve(128);
-    concatenate(
-        hash_name,
-        base_name,
-        "_align_M_",
-        align_M ? 't' : 'n',
-        "_align_N_",
-        align_N ? 't' : 'n',
-        "_align_K_",
-        align_K ? 't' : 'n');
-
-    auto& compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = get_steel_gemm_gather_kernel(
-        d,
-        base_name,
-        hash_name,
-        func_consts,
-        out,
-        transpose_a,
-        transpose_b,
-        bm,
-        bn,
-        bk,
-        wm,
-        wn);
-
-    compute_encoder.set_compute_pipeline_state(kernel);
-
-    // Prepare steel matmul params
-    GEMMParams params{
-        /* const int M = */ M,
-        /* const int N = */ N,
-        /* const int K = */ K,
-        /* const int lda = */ lda,
-        /* const int ldb = */ ldb,
-        /* const int ldd = */ N,
-        /* const int tiles_n = */ (N + bn - 1) / bn,
-        /* const int tiles_m = */ (M + bm - 1) / bm,
-        /* const int64_t batch_stride_a = */ 0,
-        /* const int64_t batch_stride_b = */ batch_strides_B.back(),
-        /* const int64_t batch_stride_d = */ matrix_stride_out,
-        /* const int swizzle_log = */ 0,
-        /* const int gemm_k_iterations_aligned = */ (K / bk),
-        /* const int batch_ndim = */ batch_ndim};
-
-    // Prepare the grid
-    MTL::Size group_dims = MTL::Size(32, wn, wm);
-    MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
-
-    // Launch kernel
-    compute_encoder.set_input_array(a, 0);
-    compute_encoder.set_input_array(b, 1);
-    compute_encoder.set_input_array(rhs_indices, 2);
-    compute_encoder.set_output_array(out, 3);
-    compute_encoder.set_bytes(params, 4);
-
-    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-
-    d.add_temporaries(std::move(copies), s.index);
-    return;
-  }
-
   // Route to gemv if needed
   if (std::min(M, N) == 1) {
     // Collect problem info
