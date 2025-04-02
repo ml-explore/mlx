@@ -1066,13 +1066,9 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         # fmt: on
 
-        dtypes = [
-            np.float32,
-        ]
+        dtypes = [np.float32]
         if mx.default_device() == mx.gpu:
-            dtypes += [
-                np.float16,
-            ]
+            dtypes += [np.float16]
 
         for N, H, W, C, kH, kW, O, strides, padding, groups in shapes:
             for dtype in dtypes:
