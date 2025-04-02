@@ -360,9 +360,9 @@ template <typename T>
   wt += c * params.wt_strides[0];
 
   float o = 0.;
-  for (int h = 0; h < 7; ++h) {
+  for (int h = 0; h < params.wS[0]; ++h) {
     int ih = lid.z + h;
-    for (int w = 0; w < 7; ++w) {
+    for (int w = 0; w < params.wS[1]; ++w) {
       int iw = lid.y + w;
 
       auto inv = ins[(ih * TGW + iw) * TGC + lid.x];
