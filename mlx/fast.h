@@ -48,6 +48,16 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
+    const std::string& mask_mode,
+    const std::vector<array>& mask_arrs,
+    StreamOrDevice s = {});
+
+/** Computes: O = softmax(Q @ K.T) @ V **/
+array scaled_dot_product_attention(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const float scale,
     const std::variant<std::monostate, std::string, array>& mask = {},
     StreamOrDevice s = {});
 

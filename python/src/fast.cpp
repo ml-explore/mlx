@@ -124,7 +124,16 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "scaled_dot_product_attention",
-      &mx::fast::scaled_dot_product_attention,
+      [](const mx::array& queries,
+         const mx::array& keys,
+         const mx::array& values,
+         const float scale,
+         const std::variant<std::monostate, std::string, mx::array>&
+             mask /* = {} */,
+         mx::StreamOrDevice s /*  = {} */) {
+        return mx::fast::scaled_dot_product_attention(
+            queries, keys, values, scale, mask, s);
+      },
       "q"_a,
       "k"_a,
       "v"_a,
