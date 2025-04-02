@@ -298,20 +298,20 @@ template <typename T>
   const int ow = gid.y;
   const int c = gid.x;
 
-  constexpr int TGH = 10;
-  constexpr int TGW = 10;
-  constexpr int TGC = 16;
+  constexpr int tc = 8;
+  constexpr int tw = 8;
+  constexpr int th = 4;
+
+  constexpr int c_per_thr = 8;
+
+  constexpr int TGH = th + 6;
+  constexpr int TGW = tw + 6;
+  constexpr int TGC = tc;
 
   threadgroup T ins[TGH * TGW * TGC];
 
-  const int ih_ = oh * params.str[0] - params.pad[0];
-  const int iw_ = ow * params.str[1] - params.pad[1];
-
   // Load in
   {
-    constexpr int th = 4;
-    constexpr int tw = 4;
-    constexpr int tc = 16;
     constexpr int n_threads = th * tw * tc;
     const int tg_oh = (tid.z * th) * params.str[0] - params.pad[0];
     const int tg_ow = (tid.y * tw) * params.str[1] - params.pad[1];
@@ -323,7 +323,6 @@ template <typename T>
     const int hwmax = hspan * wspan;
 
     const int thread_idx = simd_gid * 32 + simd_lid;
-    constexpr int c_per_thr = 8;
     constexpr int thr_per_hw = tc / c_per_thr;
     constexpr int hw_per_group = n_threads / thr_per_hw;
 
@@ -337,7 +336,7 @@ template <typename T>
       const int ih = tg_oh + h;
       const int iw = tg_ow + w;
 
-      const int in_s_offset = (h * TGW + w) * TGC;
+      const int in_s_offset = h * TGW * TGC + w * TGC;
 
       if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
         const auto in_load =
@@ -359,13 +358,11 @@ template <typename T>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   wt += c * params.wt_strides[0];
 
+  const auto ins_ptr = &ins[lid.z * TGW * TGC + lid.y * TGC + lid.x];
   float o = 0.;
   for (int h = 0; h < params.wS[0]; ++h) {
-    int ih = lid.z + h;
     for (int w = 0; w < params.wS[1]; ++w) {
-      int iw = lid.y + w;
-
-      auto inv = ins[(ih * TGW + iw) * TGC + lid.x];
+      auto inv = ins_ptr[h * TGW * TGC + w * TGC];
       auto wtv = wt[h * params.wS[1] + w];
       o += inv * wtv;
     }

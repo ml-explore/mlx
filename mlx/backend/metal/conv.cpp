@@ -734,17 +734,12 @@ void depthwise_conv_2D_gpu(
 
   compute_encoder.set_bytes(conv_params, 3);
 
-  int tc = 16;
-  int tw = 4;
+  int tc = 8;
+  int tw = 8;
   int th = 4;
   MTL::Size group_dims = MTL::Size(tc, tw, th);
   MTL::Size grid_dims = MTL::Size(
       conv_params.C / tc, conv_params.oS[1] / tw, conv_params.oS[0] / th);
-
-  // MTL::Size group_dims = MTL::Size(tw, th, tc);
-  // MTL::Size grid_dims  =
-  //     MTL::Size(conv_params.oS[1] / tw, conv_params.oS[0] / th, conv_params.C
-  //     / tc);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
