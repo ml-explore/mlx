@@ -734,9 +734,17 @@ void depthwise_conv_2D_gpu(
 
   compute_encoder.set_bytes(conv_params, 3);
 
-  MTL::Size group_dims = MTL::Size(32, conv_params.C / 32, 1);
-  MTL::Size grid_dims =
-      MTL::Size(conv_params.oS[1], conv_params.oS[0], conv_params.N);
+  int tc = 16;
+  int tw = 4;
+  int th = 4;
+  MTL::Size group_dims = MTL::Size(tc, tw, th);
+  MTL::Size grid_dims = MTL::Size(
+      conv_params.C / tc, conv_params.oS[1] / tw, conv_params.oS[0] / th);
+
+  // MTL::Size group_dims = MTL::Size(tw, th, tc);
+  // MTL::Size grid_dims  =
+  //     MTL::Size(conv_params.oS[1] / tw, conv_params.oS[0] / th, conv_params.C
+  //     / tc);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -783,11 +791,11 @@ void conv_2D_gpu(
   bool is_kdil_one = conv_params.kdil[0] == 1 && conv_params.kdil[1] == 1;
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1;
 
-  if (groups > 1) {
+  if (is_idil_one && groups > 1) {
     const int C_per_group = conv_params.C / groups;
     const int O_per_group = conv_params.O / groups;
 
-    if (C_per_group == 1 && O_per_group == 1) {
+    if (C_per_group == 1 && O_per_group == 1 && is_stride_one) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
     }
 

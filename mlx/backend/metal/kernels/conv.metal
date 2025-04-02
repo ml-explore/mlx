@@ -287,43 +287,94 @@ template <typename T>
     const constant MLXConvParams<2>& params [[buffer(3)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
+    uint3 gid [[thread_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   (void)simd_gid;
   (void)simd_lid;
 
-  const int n = tid.z;
-  const int oh = tid.y;
-  const int ow = tid.x;
+  const int n = 0;
+  const int oh = gid.z;
+  const int ow = gid.y;
+  const int c = gid.x;
+
+  constexpr int TGH = 10;
+  constexpr int TGW = 10;
+  constexpr int TGC = 16;
+
+  threadgroup T ins[TGH * TGW * TGC];
+
   const int ih_ = oh * params.str[0] - params.pad[0];
   const int iw_ = ow * params.str[1] - params.pad[1];
 
-  in += n * params.in_strides[0] + ih_ * params.in_strides[1] +
-      iw_ * params.in_strides[2];
-  out += n * params.out_strides[0] + oh * params.out_strides[1] +
-      ow * params.out_strides[2];
+  // Load in
+  {
+    constexpr int th = 4;
+    constexpr int tw = 4;
+    constexpr int tc = 16;
+    constexpr int n_threads = th * tw * tc;
+    const int tg_oh = (tid.z * th) * params.str[0] - params.pad[0];
+    const int tg_ow = (tid.y * tw) * params.str[1] - params.pad[1];
+    const int tg_c = tid.x * tc;
 
-  int c = simd_gid * 32;
-  wt += (c + simd_lid) * params.wt_strides[0];
+    const int hspan = th * params.str[0] + params.wS[0] - 1;
+    const int wspan = tw * params.str[1] + params.wS[1] - 1;
+
+    const int hwmax = hspan * wspan;
+
+    const int thread_idx = simd_gid * 32 + simd_lid;
+    constexpr int c_per_thr = 8;
+    constexpr int thr_per_hw = tc / c_per_thr;
+    constexpr int hw_per_group = n_threads / thr_per_hw;
+
+    const int thr_c = thread_idx % thr_per_hw;
+    const int thr_hw = thread_idx / thr_per_hw;
+
+    for (int hw = thr_hw; hw < hwmax; hw += hw_per_group) {
+      const int h = hw / wspan;
+      const int w = hw % wspan;
+
+      const int ih = tg_oh + h;
+      const int iw = tg_ow + w;
+
+      const int in_s_offset = (h * TGW + w) * TGC;
+
+      if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
+        const auto in_load =
+            in + ih * params.in_strides[1] + iw * params.in_strides[2] + tg_c;
+#pragma clang loop unroll(full)
+        for (int cc = 0; cc < c_per_thr; ++cc) {
+          ins[in_s_offset + c_per_thr * thr_c + cc] =
+              in_load[c_per_thr * thr_c + cc];
+        }
+      } else {
+#pragma clang loop unroll(full)
+        for (int cc = 0; cc < c_per_thr; ++cc) {
+          ins[in_s_offset + c_per_thr * thr_c + cc] = T(0);
+        }
+      }
+    }
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  wt += c * params.wt_strides[0];
 
   float o = 0.;
   for (int h = 0; h < params.wS[0]; ++h) {
-    int ih = ih_ + h * params.kdil[0];
+    int ih = lid.z + h;
     for (int w = 0; w < params.wS[1]; ++w) {
-      int iw = iw_ + w * params.kdil[1];
+      int iw = lid.y + w;
 
-      simdgroup_barrier(mem_flags::mem_none);
-      if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
-        auto inv = in[c + simd_lid];
-        auto wtv = wt[h * params.wS[1] + w];
-        o += inv * wtv;
-      }
-      in += params.in_strides[2];
+      auto inv = ins[(ih * TGW + iw) * TGC + lid.x];
+      auto wtv = wt[h * params.wS[1] + w];
+      o += inv * wtv;
     }
-    in += params.in_strides[1] - params.wS[1] * params.in_strides[2];
   }
   threadgroup_barrier(mem_flags::mem_none);
-  out[c + simd_lid] = static_cast<T>(o);
+
+  out += n * params.out_strides[0] + oh * params.out_strides[1] +
+      ow * params.out_strides[2];
+  out[c] = static_cast<T>(o);
 }
 
 #define instantiate_depthconv2d(iname, itype) \
