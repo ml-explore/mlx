@@ -367,7 +367,8 @@ template <typename T>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   wt += c * params.wt_strides[0];
 
-  const auto ins_ptr = &ins[lid.z * span_w * TGC + lid.y * TGC + lid.x];
+  const auto ins_ptr =
+      &ins[lid.z * str_h * span_w * TGC + lid.y * str_w * TGC + lid.x];
   float o = 0.;
   for (int h = 0; h < ker_h; ++h) {
     for (int w = 0; w < ker_w; ++w) {

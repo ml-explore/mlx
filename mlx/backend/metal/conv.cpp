@@ -725,6 +725,7 @@ void depthwise_conv_2D_gpu(
   kname << "depthwise_conv_2d_" << type_to_name(out);
   std::string base_name = kname.str();
 
+  const int N = conv_params.N;
   const int ker_h = conv_params.wS[0];
   const int ker_w = conv_params.wS[1];
   const int str_h = conv_params.str[0];
@@ -767,7 +768,7 @@ void depthwise_conv_2D_gpu(
 
   MTL::Size group_dims = MTL::Size(tc, tw, th);
   MTL::Size grid_dims = MTL::Size(
-      conv_params.C / tc, conv_params.oS[1] / tw, conv_params.oS[0] / th);
+      conv_params.C / tc, conv_params.oS[1] / tw, (conv_params.oS[0] / th) * N);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
