@@ -47,17 +47,14 @@ def time_gather_mm():
         if sort:
             x, idx, inv_order = gather_sort(x, indices)
         for _ in range(2):
-            x = mx.gather_mm(x, w.swapaxes(-1, -2), rhs_indices=idx)
+            x = mx.gather_mm(
+                x, w.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort
+            )
         if sort:
             x = scatter_unsort(x, inv_order, indices.shape)
         return x
 
-    # import pdb
-    # pdb.set_trace()
-    # y1 = gather_mm(x, w, indices, True)
-    # y2 = gather_mm_simulate(x, w, indices)
-
-    # time_fn(gather_mm, x, w, indices, False)
+    time_fn(gather_mm, x, w, indices, False)
     time_fn(gather_mm, x, w, indices, True)
     time_fn(gather_mm, x, w, sorted_indices, False)
 
