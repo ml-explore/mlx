@@ -822,7 +822,8 @@ void conv_2D_gpu(
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
         conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
         conv_params.oS[0] % 8 == 0 && conv_params.oS[1] % 8 == 0 &&
-        conv_params.C % 16 == 0) {
+        conv_params.wt_strides[1] == conv_params.wS[1] &&
+        conv_params.C % 16 == 0 && conv_params.C == conv_params.O) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
     }
 
