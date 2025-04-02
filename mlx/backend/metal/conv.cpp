@@ -15,8 +15,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#include <iostream>
-
 using namespace mlx::steel;
 
 namespace mlx::core {

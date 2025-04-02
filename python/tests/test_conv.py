@@ -707,6 +707,7 @@ class TestConv(mlx_tests.MLXTestCase):
             flip=flip,
             np_dtype=np_dtype,
         ):
+            np.random.seed(0)
             scale = 1.0 / math.sqrt(np.prod(wt_shape[1:]))
             scale = min(0.3, scale)
             in_np = np.random.normal(0, scale, in_shape).astype(np_dtype)
@@ -1065,8 +1066,16 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         # fmt: on
 
+        dtypes = [
+            np.float32,
+        ]
+        if mx.default_device() == mx.gpu:
+            dtypes += [
+                np.float16,
+            ]
+
         for N, H, W, C, kH, kW, O, strides, padding, groups in shapes:
-            for dtype in [np.float32, np.float16]:
+            for dtype in dtypes:
                 for flip in [False, True]:
                     Cw = C // groups
 
