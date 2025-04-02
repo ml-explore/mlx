@@ -1391,6 +1391,7 @@ array gather_mm(
     array b,
     std::optional<array> lhs_indices = std::nullopt,
     std::optional<array> rhs_indices = std::nullopt,
+    bool sorted_indices = false,
     StreamOrDevice s = {});
 
 /** Extract a diagonal or construct a diagonal array */
