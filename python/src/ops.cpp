@@ -3924,7 +3924,7 @@ void init_ops(nb::module_& m) {
             array or dict:
                 A single array if loading from a ``.npy`` file or a dict
                 mapping names to arrays if loading from a ``.npz`` or
-                ``.safetensors`` file. If ``return_metadata` is ``True`` an
+                ``.safetensors`` file. If ``return_metadata`` is ``True`` an
                 additional dictionary of metadata will be returned.
 
         Warning:
