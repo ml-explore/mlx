@@ -33,6 +33,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
     local_max[simd_lane_id] = Limits<AccT>::min;
     local_normalizer[simd_lane_id] = 0;
   }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // Get the max
   AccT maxval = Limits<AccT>::finite_min;
