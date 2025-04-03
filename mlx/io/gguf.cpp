@@ -219,7 +219,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
 
   while (gguf_get_tensor(ctx, &tensor)) {
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
-        tensor.type == GGUF_TYPE_Q8_0) {
+        tensor.type == GGUF_TYPE_Q4_K || tensor.type == GGUF_TYPE_Q8_0) {
       gguf_load_quantized(array_map, tensor);
     } else {
       std::string name(tensor.name, tensor.namelen);
