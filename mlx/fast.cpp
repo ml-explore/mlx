@@ -579,8 +579,7 @@ array scaled_dot_product_attention(
       if (mask_str != "causal") {
         std::ostringstream msg;
         msg << "[scaled_dot_product_attention] invalid mask option '"
-            << std::get<std::string>(mask)
-            << "'. Must be 'causal', or an array.";
+            << mask_str << "'. Must be 'causal', or an array.";
         throw std::invalid_argument(msg.str());
       }
       return scaled_dot_product_attention(
@@ -644,7 +643,7 @@ array scaled_dot_product_attention(
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] Invalid mask_arrs for mask_mode "
           << "'" << mask_mode << "'. Only 1 mask array is supported, got "
-          << mask_arrs.size() << "arrays .";
+          << mask_arrs.size() << "arrays.";
       throw std::invalid_argument(msg.str());
     }
 

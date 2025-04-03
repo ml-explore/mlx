@@ -128,9 +128,8 @@ void init_fast(nb::module_& parent_module) {
          const mx::array& keys,
          const mx::array& values,
          const float scale,
-         const std::variant<std::monostate, std::string, mx::array>&
-             mask /* = {} */,
-         mx::StreamOrDevice s /*  = {} */) {
+         const std::variant<std::monostate, std::string, mx::array>& mask,
+         mx::StreamOrDevice s) {
         return mx::fast::scaled_dot_product_attention(
             queries, keys, values, scale, mask, s);
       },
