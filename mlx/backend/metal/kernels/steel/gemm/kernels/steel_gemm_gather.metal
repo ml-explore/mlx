@@ -1,10 +1,10 @@
 // Copyright © 2024 Apple Inc.
 
+// clang-format off
+#include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 #include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
-// clang-format off
 #define instantiate_gather_mm_rhs(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
   instantiate_kernel(                                                         \
       "steel_gather_mm_rhs_" #tname "_" #iname "_" #oname "_bm" #bm "_bn" #bn \
