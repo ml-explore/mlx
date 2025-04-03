@@ -1756,151 +1756,144 @@ void gather_mv(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-// void gather_mm(
-//     const array& a_,
-//     const array& b_,
-//     const array& lhs_indices_,
-//     const array& rhs_indices_,
-//     array& out,
-//     int M,
-//     int N,
-//     int K,
-//     metal::Device& d,
-//     const Stream& s) {
-//   // Copy if needed
-//   std::vector<array> copies;
-//   auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
-//   auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
-//   d.add_temporaries(std::move(copies), s.index);
-//
-//   // Determine dispatch kernel
-//   int bm = 64, bn = 64, bk = 16;
-//   int wm = 2, wn = 2;
-//
-//   char devc = d.get_architecture().back();
-//   GEMM_TPARAM_MACRO(devc)
-//
-//   // Prepare kernel name
-//   std::ostringstream kname;
-//   kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
-//         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
-//         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-//         << "_wm" << wm << "_wn" << wn;
-//
-//   std::string base_name = kname.str();
-//
-//   const bool has_batch = batch_ndim > 1;
-//   const bool use_out_source = false;
-//   const bool do_axpby = false;
-//   const bool align_M = (M % bm) == 0;
-//   const bool align_N = (N % bn) == 0;
-//   const bool align_K = (K % bk) == 0;
-//   const bool do_gather = true;
-//
-//   metal::MTLFCList func_consts = {
-//       {&has_batch, MTL::DataType::DataTypeBool, 10},
-//       {&use_out_source, MTL::DataType::DataTypeBool, 100},
-//       {&do_axpby, MTL::DataType::DataTypeBool, 110},
-//       {&align_M, MTL::DataType::DataTypeBool, 200},
-//       {&align_N, MTL::DataType::DataTypeBool, 201},
-//       {&align_K, MTL::DataType::DataTypeBool, 202},
-//       {&do_gather, MTL::DataType::DataTypeBool, 300},
-//   };
-//
-//   // clang-format off
-//   kname << "_has_batch_" << (has_batch ? 't' : 'n')
-//         << "_use_out_source_" << (use_out_source ? 't' : 'n')
-//         << "_do_axpby_" << (do_axpby ? 't' : 'n')
-//         << "_align_M_" << (align_M ? 't' : 'n')
-//         << "_align_N_" << (align_N ? 't' : 'n')
-//         << "_align_K_" << (align_K ? 't' : 'n')
-//         << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
-//
-//   std::string hash_name = kname.str();
-//
-//   // Encode and dispatch kernel
-//   auto& compute_encoder = d.get_command_encoder(s.index);
-//   auto kernel = get_steel_gemm_fused_kernel(
-//       d,
-//       base_name,
-//       hash_name,
-//       func_consts,
-//       out,
-//       transpose_a,
-//       transpose_b,
-//       bm,
-//       bn,
-//       bk,
-//       wm,
-//       wn);
-//
-//   compute_encoder.set_compute_pipeline_state(kernel);
-//
-//   // Use problem size to determine threadblock swizzle
-//   int tn = (N + bn - 1) / bn;
-//   int tm = (M + bm - 1) / bm;
-//
-//   // TODO: Explore device-based tuning for swizzle
-//   int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
-//
-//   // Prepare steel matmul params
-//   GEMMParams params{
-//       /* const int M = */ M,
-//       /* const int N = */ N,
-//       /* const int K = */ K,
-//       /* const int lda = */ lda,
-//       /* const int ldb = */ ldb,
-//       /* const int ldd = */ N,
-//       /* const int tiles_n = */ tn,
-//       /* const int tiles_m = */ tm,
-//       /* const int64_t batch_stride_a = */ lhs_indices_str,
-//       /* const int64_t batch_stride_b = */ rhs_indices_str,
-//       /* const int64_t batch_stride_d = */ matrix_stride_out,
-//       /* const int swizzle_log = */ swizzle_log,
-//       /* const int gemm_k_iterations_aligned = */ (K / bk),
-//       /* const int batch_ndim = */ batch_ndim};
-//
-//   / Prepare launch grid params
-//   int tile = 1 << swizzle_log;
-//   tm = (tm + tile - 1) / tile;
-//   tn = tn * tile;
-//
-//   MTL::Size group_dims = MTL::Size(32, wn, wm);
-//   MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
-//
-//   // Launch kernel
-//   compute_encoder.set_input_array(a, 0);
-//   compute_encoder.set_input_array(b, 1);
-//   compute_encoder.set_output_array(out, 3);
-//
-//   compute_encoder.set_bytes(params, 4);
-//
-//   compute_encoder.set_vector_bytes(batch_shape, 6);
-//   compute_encoder.set_vector_bytes(batch_strides, 7);
-//
-//   compute_encoder.set_input_array(lhs_indices, 10);
-//   compute_encoder.set_input_array(rhs_indices, 11);
-//
-//   std::vector operand_shape = batch_shape_A;
-//   operand_shape.insert(
-//       operand_shape.end(), batch_shape_B.begin(), batch_shape_B.end());
-//
-//   std::vector operand_strides = batch_strides_A;
-//   operand_strides.insert(
-//       operand_strides.end(), batch_strides_B.begin(), batch_strides_B.end());
-//
-//   operand_batch_ndim.push_back(0);
-//
-//   compute_encoder.set_vector_bytes(operand_shape, 13);
-//   compute_encoder.set_vector_bytes(operand_strides, 14);
-//   compute_encoder.set_vector_bytes(operand_batch_ndim, 15);
-//
-//   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-// }
+void gather_mm(
+    const array& a_,
+    const array& b_,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  // Copy if needed
+  std::vector<array> copies;
+  auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
+  auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
+  d.add_temporaries(std::move(copies), s.index);
+
+  // Determine dispatch kernel
+  int bm = 64, bn = 64, bk = 16;
+  int wm = 2, wn = 2;
+  size_t batch_size_out = out.size() / M / N;
+  int batch_ndim = out.ndim() - 2;
+  int batch_ndim_a = a.ndim() - 2;
+  int batch_ndim_b = b.ndim() - 2;
+
+  char devc = d.get_architecture().back();
+  GEMM_TPARAM_MACRO(devc)
+
+  const bool has_batch = batch_ndim > 1;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(128);
+  concatenate(
+      base_name,
+      "steel_gather_mm_",
+      transpose_a ? 't' : 'n',
+      transpose_b ? 't' : 'n',
+      "_",
+      type_to_name(a),
+      "_",
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      "_has_batch_",
+      has_batch ? 't' : 'n',
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_gather_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      out,
+      transpose_a,
+      transpose_b,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Prepare the matmul params
+  steel::GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ static_cast<int>(lda),
+      /* const int ldb = */ static_cast<int>(ldb),
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */
+      (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
+      /* const int64_t batch_stride_b = */
+      (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
+      /* const int64_t batch_stride_d = */ M * N,
+      /* const int swizzle_log = */ 0,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ batch_ndim};
+
+  // Prepare the grid
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims =
+      MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(lhs_indices, 2);
+  compute_encoder.set_input_array(rhs_indices, 3);
+  compute_encoder.set_output_array(out, 4);
+  compute_encoder.set_bytes(params, 5);
+  compute_encoder.set_vector_bytes(lhs_indices.shape(), 6);
+  compute_encoder.set_vector_bytes(lhs_indices.strides(), 7);
+  compute_encoder.set_vector_bytes(rhs_indices.strides(), 8);
+  compute_encoder.set_bytes(batch_ndim_a, 9);
+  compute_encoder.set_vector_bytes(a.shape(), 10);
+  compute_encoder.set_vector_bytes(a.strides(), 11);
+  compute_encoder.set_bytes(batch_ndim_b, 12);
+  compute_encoder.set_vector_bytes(b.shape(), 13);
+  compute_encoder.set_vector_bytes(b.strides(), 14);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
 
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
-  using namespace mlx::steel;
-
   auto& s = stream();
   auto& d = metal::device(s.device);
 
@@ -1942,137 +1935,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  auto matrix_stride_out = static_cast<int64_t>(M) * N;
-  auto batch_size_out = out.size() / matrix_stride_out;
-
-  ///////////////////////////////////////////////////////////////////////////////
-  //// Regular kernel dispatch
-
-  //// Determine dispatch kernel
-  // int bm = 64, bn = 64, bk = 16;
-  // int wm = 2, wn = 2;
-
-  // char devc = d.get_architecture().back();
-  // GEMM_TPARAM_MACRO(devc)
-
-  //// Prepare kernel name
-  // std::ostringstream kname;
-  // kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
-  //       << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
-  //       << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-  //       << "_wm" << wm << "_wn" << wn;
-
-  // std::string base_name = kname.str();
-
-  // const bool has_batch = batch_ndim > 1;
-  // const bool use_out_source = false;
-  // const bool do_axpby = false;
-  // const bool align_M = (M % bm) == 0;
-  // const bool align_N = (N % bn) == 0;
-  // const bool align_K = (K % bk) == 0;
-  // const bool do_gather = true;
-
-  // metal::MTLFCList func_consts = {
-  //     {&has_batch, MTL::DataType::DataTypeBool, 10},
-  //     {&use_out_source, MTL::DataType::DataTypeBool, 100},
-  //     {&do_axpby, MTL::DataType::DataTypeBool, 110},
-  //     {&align_M, MTL::DataType::DataTypeBool, 200},
-  //     {&align_N, MTL::DataType::DataTypeBool, 201},
-  //     {&align_K, MTL::DataType::DataTypeBool, 202},
-  //     {&do_gather, MTL::DataType::DataTypeBool, 300},
-  // };
-
-  //// clang-format off
-  // kname << "_has_batch_" << (has_batch ? 't' : 'n')
-  //       << "_use_out_source_" << (use_out_source ? 't' : 'n')
-  //       << "_do_axpby_" << (do_axpby ? 't' : 'n')
-  //       << "_align_M_" << (align_M ? 't' : 'n')
-  //       << "_align_N_" << (align_N ? 't' : 'n')
-  //       << "_align_K_" << (align_K ? 't' : 'n')
-  //       << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
-
-  // std::string hash_name = kname.str();
-
-  //// Encode and dispatch kernel
-  // auto& compute_encoder = d.get_command_encoder(s.index);
-  // auto kernel = get_steel_gemm_fused_kernel(
-  //     d,
-  //     base_name,
-  //     hash_name,
-  //     func_consts,
-  //     out,
-  //     transpose_a,
-  //     transpose_b,
-  //     bm,
-  //     bn,
-  //     bk,
-  //     wm,
-  //     wn);
-
-  // compute_encoder.set_compute_pipeline_state(kernel);
-
-  //// Use problem size to determine threadblock swizzle
-  // int tn = (N + bn - 1) / bn;
-  // int tm = (M + bm - 1) / bm;
-
-  //// TODO: Explore device-based tuning for swizzle
-  // int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
-
-  //// Prepare steel matmul params
-  // GEMMParams params{
-  //     /* const int M = */ M,
-  //     /* const int N = */ N,
-  //     /* const int K = */ K,
-  //     /* const int lda = */ lda,
-  //     /* const int ldb = */ ldb,
-  //     /* const int ldd = */ N,
-  //     /* const int tiles_n = */ tn,
-  //     /* const int tiles_m = */ tm,
-  //     /* const int64_t batch_stride_a = */ lhs_indices_str,
-  //     /* const int64_t batch_stride_b = */ rhs_indices_str,
-  //     /* const int64_t batch_stride_d = */ matrix_stride_out,
-  //     /* const int swizzle_log = */ swizzle_log,
-  //     /* const int gemm_k_iterations_aligned = */ (K / bk),
-  //     /* const int batch_ndim = */ batch_ndim};
-
-  //// Prepare launch grid params
-  // int tile = 1 << swizzle_log;
-  // tm = (tm + tile - 1) / tile;
-  // tn = tn * tile;
-
-  // MTL::Size group_dims = MTL::Size(32, wn, wm);
-  // MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
-
-  //// Launch kernel
-  // compute_encoder.set_input_array(a, 0);
-  // compute_encoder.set_input_array(b, 1);
-  // compute_encoder.set_output_array(out, 3);
-
-  // compute_encoder.set_bytes(params, 4);
-
-  // compute_encoder.set_vector_bytes(batch_shape, 6);
-  // compute_encoder.set_vector_bytes(batch_strides, 7);
-
-  // compute_encoder.set_input_array(lhs_indices, 10);
-  // compute_encoder.set_input_array(rhs_indices, 11);
-
-  // std::vector operand_shape = batch_shape_A;
-  // operand_shape.insert(
-  //     operand_shape.end(), batch_shape_B.begin(), batch_shape_B.end());
-
-  // std::vector operand_strides = batch_strides_A;
-  // operand_strides.insert(
-  //     operand_strides.end(), batch_strides_B.begin(), batch_strides_B.end());
-
-  // operand_batch_ndim.push_back(0);
-
-  // compute_encoder.set_vector_bytes(operand_shape, 13);
-  // compute_encoder.set_vector_bytes(operand_strides, 14);
-  // compute_encoder.set_vector_bytes(operand_batch_ndim, 15);
-
-  // compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-
-  // d.add_temporaries(std::move(copies), s.index);
+  // Route to non specialized gather mm
+  gather_mm(a, b, lhs_indices, rhs_indices, out, M, N, K, d, s);
 }
 
 } // namespace mlx::core
