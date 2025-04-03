@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Operations &#8212; MLX 0.24.1 documentation</title>
+    <title>Operations &#8212; MLX 0.24.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=15e192ad"></script>
+    <script src="../_static/documentation_options.js?v=029512cb"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -138,8 +138,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.2 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -292,10 +292,12 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.broadcast_arrays.html">mlx.core.broadcast_arrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.ceil.html">mlx.core.ceil</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.clip.html">mlx.core.clip</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.concatenate.html">mlx.core.concatenate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.contiguous.html">mlx.core.contiguous</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.conj.html">mlx.core.conj</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.conjugate.html">mlx.core.conjugate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.convolve.html">mlx.core.convolve</a></li>
@@ -454,6 +456,7 @@
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="transforms.html">Transforms</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.async_eval.html">mlx.core.async_eval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.compile.html">mlx.core.compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.custom_function.html">mlx.core.custom_function</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.disable_compile.html">mlx.core.disable_compile</a></li>
@@ -501,6 +504,7 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.pinv.html">mlx.core.linalg.pinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
@@ -983,17 +987,23 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.block_masked_mm.html#mlx.core.block_masked_mm" title="mlx.core.block_masked_mm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">block_masked_mm</span></code></a>(a, b, /[, block_size, ...])</p></td>
 <td><p>Matrix multiplication with block masking.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.broadcast_to.html#mlx.core.broadcast_to" title="mlx.core.broadcast_to"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_to</span></code></a>(a, /, shape, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.broadcast_arrays.html#mlx.core.broadcast_arrays" title="mlx.core.broadcast_arrays"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_arrays</span></code></a>(*arrays[, stream])</p></td>
+<td><p>Broadcast arrays against one another.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.broadcast_to.html#mlx.core.broadcast_to" title="mlx.core.broadcast_to"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_to</span></code></a>(a, /, shape, *[, stream])</p></td>
 <td><p>Broadcast an array to the given shape.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.ceil.html#mlx.core.ceil" title="mlx.core.ceil"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ceil</span></code></a>(a, /, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.ceil.html#mlx.core.ceil" title="mlx.core.ceil"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ceil</span></code></a>(a, /, *[, stream])</p></td>
 <td><p>Element-wise ceil.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.clip.html#mlx.core.clip" title="mlx.core.clip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clip</span></code></a>(a, /, a_min, a_max, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.clip.html#mlx.core.clip" title="mlx.core.clip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clip</span></code></a>(a, /, a_min, a_max, *[, stream])</p></td>
 <td><p>Clip the values of the array between the given minimum and maximum.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.concatenate.html#mlx.core.concatenate" title="mlx.core.concatenate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concatenate</span></code></a>(arrays[, axis, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.concatenate.html#mlx.core.concatenate" title="mlx.core.concatenate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concatenate</span></code></a>(arrays[, axis, stream])</p></td>
 <td><p>Concatenate the arrays along the given axis.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.contiguous.html#mlx.core.contiguous" title="mlx.core.contiguous"><code class="xref py py-obj docutils literal notranslate"><span class="pre">contiguous</span></code></a>(a, /[, allow_col_major, stream])</p></td>
+<td><p>Force an array to be row contiguous.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.conj.html#mlx.core.conj" title="mlx.core.conj"><code class="xref py py-obj docutils literal notranslate"><span class="pre">conj</span></code></a>(a, *[, stream])</p></td>
 <td><p>Return the elementwise complex conjugate of the input.</p></td>

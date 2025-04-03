@@ -9,6 +9,7 @@ Transforms
   :toctree: _autosummary
 
    eval
+   async_eval
    compile
    custom_function
    disable_compile
