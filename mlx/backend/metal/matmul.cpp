@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <iostream> // TODO: Remove
 #include <numeric>
 #include <sstream>
 
@@ -1818,6 +1817,7 @@ void gather_mm(
   hash_name.reserve(128);
   concatenate(
       hash_name,
+      base_name,
       "_has_batch_",
       has_batch ? 't' : 'n',
       "_align_M_",
