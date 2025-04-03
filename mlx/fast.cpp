@@ -567,43 +567,8 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
-    const std::variant<std::monostate, std::string, array>& mask /* = {}*/,
-    StreamOrDevice s /* = {}*/) {
-  bool has_mask = !std::holds_alternative<std::monostate>(mask);
-  bool has_str_mask = has_mask && std::holds_alternative<std::string>(mask);
-  bool has_arr_mask = has_mask && std::holds_alternative<array>(mask);
-
-  if (has_mask) {
-    if (has_str_mask) {
-      auto mask_str = std::get<std::string>(mask);
-      if (mask_str != "causal") {
-        std::ostringstream msg;
-        msg << "[scaled_dot_product_attention] invalid mask option '"
-            << mask_str << "'. Must be 'causal', or an array.";
-        throw std::invalid_argument(msg.str());
-      }
-      return scaled_dot_product_attention(
-          queries, keys, values, scale, mask_str, {}, s);
-    } else {
-      auto mask_arr = std::get<array>(mask);
-      return scaled_dot_product_attention(
-          queries, keys, values, scale, "", {mask_arr}, s);
-    }
-
-  } else {
-    return scaled_dot_product_attention(
-        queries, keys, values, scale, "", {}, s);
-  }
-}
-
-/** Computes: O = softmax(Q @ K.T) @ V **/
-array scaled_dot_product_attention(
-    const array& queries,
-    const array& keys,
-    const array& values,
-    const float scale,
-    const std::string& mask_mode,
-    const std::vector<array>& mask_arrs,
+    const std::string& mask_mode /* = "" */,
+    const std::vector<array>& mask_arrs /* = {} */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
