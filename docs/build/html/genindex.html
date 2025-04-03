@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.24.1 documentation</title>
+    <title>Index &#8212; MLX 0.24.2 documentation</title>
   
   
   
@@ -35,7 +35,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="_static/documentation_options.js?v=15e192ad"></script>
+    <script src="_static/documentation_options.js?v=029512cb"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -136,8 +136,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.1 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.1 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.2 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -290,10 +290,12 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.broadcast_arrays.html">mlx.core.broadcast_arrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.ceil.html">mlx.core.ceil</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.clip.html">mlx.core.clip</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.concatenate.html">mlx.core.concatenate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.contiguous.html">mlx.core.contiguous</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conj.html">mlx.core.conj</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conjugate.html">mlx.core.conjugate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.convolve.html">mlx.core.convolve</a></li>
@@ -452,6 +454,7 @@
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/transforms.html">Transforms</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.async_eval.html">mlx.core.async_eval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.compile.html">mlx.core.compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.custom_function.html">mlx.core.custom_function</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.disable_compile.html">mlx.core.disable_compile</a></li>
@@ -499,6 +502,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.lu_factor.html">mlx.core.linalg.lu_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.pinv.html">mlx.core.linalg.pinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.solve.html">mlx.core.linalg.solve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.solve_triangular.html">mlx.core.linalg.solve_triangular</a></li>
 </ul>
@@ -979,10 +983,10 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.arcsin.html#mlx.core.arcsin">arcsin() (in module mlx.core)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="cpp/ops.html#_CPPv47arcsinhRK5array14StreamOrDevice">arcsinh (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.arcsinh.html#mlx.core.arcsinh">arcsinh() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv46arctanRK5array14StreamOrDevice">arctan (C++ function)</a>
@@ -1034,6 +1038,8 @@ document.write(`
       <li><a href="cpp/ops.html#_CPPv46astype5array5Dtype14StreamOrDevice">astype (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.array.astype.html#mlx.core.array.astype">astype() (array method)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.async_eval.html#mlx.core.async_eval">async_eval() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.array.at.html#mlx.core.array.at">at (array property)</a>
 </li>
@@ -1093,6 +1099,8 @@ document.write(`
 </li>
       <li><a href="cpp/ops.html#_CPPv416broadcast_arraysRKNSt6vectorI5arrayEE14StreamOrDevice">broadcast_arrays (C++ function)</a>
 </li>
+      <li><a href="python/_autosummary/mlx.core.broadcast_arrays.html#mlx.core.broadcast_arrays">broadcast_arrays() (in module mlx.core)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv412broadcast_toRK5arrayRK5Shape14StreamOrDevice">broadcast_to (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.broadcast_to.html#mlx.core.broadcast_to">broadcast_to() (in module mlx.core)</a>
@@ -1146,6 +1154,8 @@ document.write(`
       <li><a href="python/nn/_autosummary/mlx.nn.init.constant.html#mlx.nn.init.constant">constant() (in module mlx.nn.init)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv410contiguousRK5arrayb14StreamOrDevice">contiguous (C++ function)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.contiguous.html#mlx.core.contiguous">contiguous() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv46conv1dRK5arrayRK5arrayiiii14StreamOrDevice">conv1d (C++ function)</a>
 </li>
@@ -1946,6 +1956,8 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.partition.html#mlx.core.partition">partition() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.random.permutation.html#mlx.core.random.permutation">permutation() (in module mlx.core.random)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.linalg.pinv.html#mlx.core.linalg.pinv">pinv() (in module mlx.core.linalg)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv45powerRK5arrayRK5array14StreamOrDevice">power (C++ function)</a>
 </li>
