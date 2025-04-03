@@ -368,6 +368,14 @@ workflows:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["PYPI_RELEASE=1"]
+              xcode_version: ["16.2.0", "15.0.0"]
+            exclude:
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
       - build_documentation:
           filters:
             tags:
@@ -404,6 +412,14 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
+              xcode_version: ["16.2.0", "15.0.0"]
+            exclude:
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
   weekly_build:
     when:
       and:
@@ -416,6 +432,14 @@ workflows:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["DEV_RELEASE=1"]
+              xcode_version: ["16.2.0", "15.0.0"]
+            exclude:
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
   linux_test_release:
     when:
       and:
