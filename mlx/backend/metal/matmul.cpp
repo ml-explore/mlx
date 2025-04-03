@@ -273,7 +273,6 @@ void steel_matmul_regular(
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
-  const bool do_gather = false;
 
   metal::MTLFCList func_consts = {
       {&has_batch, MTL::DataType::DataTypeBool, 10},
@@ -282,7 +281,6 @@ void steel_matmul_regular(
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
-      {&do_gather, MTL::DataType::DataTypeBool, 300},
   };
 
   // clang-format off
@@ -291,8 +289,7 @@ void steel_matmul_regular(
         << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
         << "_align_N_" << (align_N ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
@@ -1018,7 +1015,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
-  const bool do_gather = false;
 
   metal::MTLFCList func_consts = {
       {&has_batch, MTL::DataType::DataTypeBool, 10},
@@ -1027,7 +1023,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
-      {&do_gather, MTL::DataType::DataTypeBool, 300},
   };
 
   // clang-format off
@@ -1036,8 +1031,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
         << "_align_N_" << (align_N ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
