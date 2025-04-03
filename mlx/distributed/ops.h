@@ -38,4 +38,14 @@ array recv_like(
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
+array all_max(
+    const array& x,
+    std::optional<Group> group = std::nullopt,
+    StreamOrDevice s = {});
+
+array all_min(
+    const array& x,
+    std::optional<Group> group = std::nullopt,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::distributed

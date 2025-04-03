@@ -21,6 +21,8 @@ class GroupImpl {
   virtual void all_gather(const array& input, array& output, Stream stream) = 0;
   virtual void send(const array& input, int dst, Stream stream) = 0;
   virtual void recv(array& out, int src, Stream stream) = 0;
+  virtual void all_max(const array& input, array& output, Stream stream) = 0;
+  virtual void all_min(const array& input, array& output, Stream stream) = 0;
 };
 
 /* Perform an all reduce sum operation */
@@ -34,5 +36,11 @@ void send(Group group, const array& input, int dst, Stream stream);
 
 /** Recv an array from the src rank */
 void recv(Group group, array& out, int src, Stream stream);
+
+/** Max reduction */
+void all_max(Group group, const array& input, array& output, Stream stream);
+
+/** Min reduction */
+void all_min(Group group, const array& input, array& output, Stream stream);
 
 } // namespace mlx::core::distributed::detail
