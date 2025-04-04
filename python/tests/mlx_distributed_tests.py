@@ -65,21 +65,18 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
 
     def test_donation(self):
         x = mx.random.normal((1024,))
+        scale = mx.array(2.0)
         mx.eval(x)
         mx.synchronize()
 
         mx.reset_peak_memory()
-        scale = mx.array(2.0)
-        y = mx.distributed.all_sum(x)
-        mx.eval(y)
-        mx.synchronize()
-        all_sum_only = mx.get_peak_memory()
-        y = mx.distributed.all_sum(x) * scale
-        mx.eval(y)
-        mx.synchronize()
-        all_sum_with_binary = mx.get_peak_memory()
 
-        self.assertEqual(all_sum_only, all_sum_with_binary)
+        # Everything should be donated so peak memory is unchanged
+        x = mx.distributed.all_sum(x) * scale
+        mx.eval(x)
+        mx.synchronize()
+
+        self.assertEqual(mx.get_peak_memory(), 0)
 
     def test_shard_linear(self):
         # Seed the prng to have the same inputs and weights generated everywhere
