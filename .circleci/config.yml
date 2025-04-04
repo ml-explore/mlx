@@ -458,7 +458,7 @@ workflows:
   nightly_build:
     when:
       and:
-        - equal: [ fix-ci-release, << pipeline.git.branch >> ]
+        - equal: [ main, << pipeline.git.branch >> ]
         - << pipeline.parameters.nightly_build >>
     jobs:
       - build_release:
