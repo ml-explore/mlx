@@ -13,3 +13,4 @@ Schedulers
    join_schedules
    linear_schedule
    step_decay    
+   triangle_schedule
