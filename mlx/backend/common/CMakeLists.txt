@@ -1,6 +1,7 @@
 target_sources(
   mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broadcasting.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/common.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp

@@ -5,6 +5,7 @@
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -101,6 +102,47 @@ std::tuple<bool, int64_t, array> check_transpose(
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }
 };
+
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return x_copy;
+  } else {
+    return x;
+  }
+}
+
+inline std::tuple<bool, int64_t, array>
+ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return std::make_tuple(false, x.strides()[x.ndim() - 2], x);
+  }
+
+  bool rc = true;
+  for (int i = 0; i < x.ndim() - 3; i++) {
+    rc &= x.strides()[i + 1] * x.shape(i) == x.strides()[i];
+  }
+  if (rc) {
+    auto stx = x.strides()[x.ndim() - 2];
+    auto sty = x.strides()[x.ndim() - 1];
+    auto K = x.shape(-2);
+    auto N = x.shape(-1);
+    if (sty == 1 && (N != 1 || stx == N)) {
+      return std::make_tuple(false, stx, x);
+    }
+    if (stx == 1 && (N != 1 || sty == K)) {
+      return std::make_tuple(true, sty, x);
+    }
+  }
+
+  array x_copy(x.shape(), x.dtype(), nullptr, {});
+  copy_gpu(x, x_copy, CopyType::General, s);
+  d.add_temporary(x_copy, s.index);
+  return std::make_tuple(false, x_copy.strides()[x_copy.ndim() - 2], x_copy);
+}
 
 } // namespace
 
@@ -230,7 +272,6 @@ void steel_matmul_regular(
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
-  const bool do_gather = false;
 
   metal::MTLFCList func_consts = {
       {&has_batch, MTL::DataType::DataTypeBool, 10},
@@ -239,7 +280,6 @@ void steel_matmul_regular(
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
-      {&do_gather, MTL::DataType::DataTypeBool, 300},
   };
 
   // clang-format off
@@ -248,8 +288,7 @@ void steel_matmul_regular(
         << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
         << "_align_N_" << (align_N ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
@@ -975,7 +1014,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
-  const bool do_gather = false;
 
   metal::MTLFCList func_consts = {
       {&has_batch, MTL::DataType::DataTypeBool, 10},
@@ -984,7 +1022,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
-      {&do_gather, MTL::DataType::DataTypeBool, 300},
   };
 
   // clang-format off
@@ -993,8 +1030,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
         << "_align_N_" << (align_N ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
@@ -1464,267 +1500,337 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   d.add_temporaries(std::move(copies), s.index);
 }
 
-void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
-  using namespace mlx::steel;
-  // assert(inputs.size() == 2);
-  if (!issubdtype(out.dtype(), floating)) {
-    throw std::runtime_error(
-        "[GatherMM] Does not yet support non-floating point types.");
-  }
-  auto& s = stream();
-  auto& d = metal::device(s.device);
+void gather_mm_rhs(
+    const array& a_,
+    const array& b_,
+    const array& indices_,
+    array& out,
+    metal::Device& d,
+    const Stream& s) {
+  array indices = ensure_row_contiguous(indices_, d, s);
+  auto [transpose_b, ldb, b] = ensure_batch_contiguous(b_, d, s);
 
-  auto& a_pre = inputs[0];
-  auto& b_pre = inputs[1];
-  // Return 0s if either input is empty
-  if (a_pre.size() == 0 || b_pre.size() == 0) {
-    array zero = array(0, a_pre.dtype());
-    fill_gpu(zero, out, s);
-    d.add_temporary(std::move(zero), s.index);
-    return;
-  }
+  // Broadcast a with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of a broadcasted
+  // with rhs_indices. We need only broadcast a and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
 
-  out.set_data(allocator::malloc(out.nbytes()));
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+  array a = broadcast_with_indices(a_);
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Init checks and prep
+  // Extract the matmul shapes
+  int K = a.shape(-1);
+  int M = a.size() / K;
+  int N = b.shape(-1);
+  int lda = a.strides()[a.ndim() - 2]; // should be K
 
-  int M = a_pre.shape(-2);
-  int N = b_pre.shape(-1);
-  int K = a_pre.shape(-1);
+  // Define the dispatch blocks
+  int bm = 16, bn = 64, bk = 16;
+  int wm = 1, wn = 2;
 
-  // Keep a vector with copies to be cleared in the completed buffer to release
-  // the arrays
-  std::vector<array> copies;
-  auto [transpose_a, a_cols, a] = check_transpose(copies, s, a_pre, M == 1);
-  auto [transpose_b, b_cols, b] = check_transpose(copies, s, b_pre, N == 1);
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
 
-  int lda = a_cols;
-  int ldb = b_cols;
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(64);
+  concatenate(
+      base_name,
+      "steel_gather_mm_rhs_n",
+      transpose_b ? 't' : 'n',
+      '_',
+      type_to_name(a),
+      '_',
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Check and collapse batch dimensions
-
-  auto get_batch_dims = [](const auto& v) {
-    return decltype(v){v.begin(), v.end() - 2};
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
   };
 
-  auto& lhs_indices = inputs[2];
-  auto& rhs_indices = inputs[3];
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
 
-  Shape batch_shape = get_batch_dims(out.shape());
-  Strides batch_strides;
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_gather_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      out,
+      false,
+      transpose_b,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      true);
+  compute_encoder.set_compute_pipeline_state(kernel);
 
-  batch_strides.insert(
-      batch_strides.end(),
-      lhs_indices.strides().begin(),
-      lhs_indices.strides().end());
-  auto lhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+  // Prepare the matmul params
+  auto batch_stride_b = b.ndim() > 2 ? b.strides()[b.ndim() - 3] : b.size();
+  steel::GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ static_cast<int>(ldb),
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */ 0,
+      /* const int64_t batch_stride_b = */ static_cast<int64_t>(batch_stride_b),
+      /* const int64_t batch_stride_d = */ 0,
+      /* const int swizzle_log = */ 0,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ 0};
 
-  batch_strides.insert(
-      batch_strides.end(),
-      rhs_indices.strides().begin(),
-      rhs_indices.strides().end());
-  auto rhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+  // Prepare the grid
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
 
-  int batch_ndim = batch_shape.size();
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(indices, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(params, 4);
 
-  if (batch_ndim == 0) {
-    batch_shape = {1};
-    batch_strides = {0};
-  }
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
 
-  int batch_ndim_A = a.ndim() - 2;
-  int batch_ndim_B = b.ndim() - 2;
-  std::vector<int> operand_batch_ndim = {batch_ndim_A, batch_ndim_B};
+void gather_mv(
+    const array& mat_,
+    const array& vec_,
+    const array& mat_indices_,
+    const array& vec_indices_,
+    array& out,
+    int N,
+    int K,
+    bool is_mv,
+    metal::Device& d,
+    const Stream& s) {
+  // Copy if needed
+  std::vector<array> copies;
+  auto [transpose_mat, mat_cols, mat] =
+      check_transpose(copies, s, mat_, N == 1);
+  auto [transpose_vec, vec_cols, vec] = check_transpose(copies, s, vec_, true);
+  d.add_temporaries(std::move(copies), s.index);
 
-  Shape batch_shape_A = get_batch_dims(a.shape());
-  Strides batch_strides_A = get_batch_dims(a.strides());
-  Shape batch_shape_B = get_batch_dims(b.shape());
-  Strides batch_strides_B = get_batch_dims(b.strides());
+  // If we are doing vector matrix instead of matrix vector we need to flip the
+  // matrix transposition. Basically m @ v = v @ m.T assuming that v is treated
+  // as a one dimensional array.
+  transpose_mat = (!is_mv) ^ transpose_mat;
 
-  if (batch_ndim_A == 0) {
-    batch_shape_A = {1};
-    batch_strides_A = {0};
-  }
+  // Define some shapes
+  int in_vector_len = K;
+  int out_vector_len = N;
+  int mat_ld = mat_cols;
 
-  if (batch_ndim_B == 0) {
-    batch_shape_B = {1};
-    batch_strides_B = {0};
-  }
+  int batch_size_out = out.size() / N;
+  int batch_ndim = out.ndim() - 2;
+  int batch_ndim_mat = mat.ndim() - 2;
+  int batch_ndim_vec = vec.ndim() - 2;
+  Strides index_strides = vec_indices_.strides();
+  index_strides.insert(
+      index_strides.end(),
+      mat_indices_.strides().begin(),
+      mat_indices_.strides().end());
 
-  auto matrix_stride_out = static_cast<int64_t>(M) * N;
-  auto batch_size_out = out.size() / matrix_stride_out;
+  // Determine dispatch kernel
+  int tm = 4, tn = 4;
+  int sm = 1, sn = 32;
+  int bm = 1, bn = 1;
+  int n_out_per_tgp;
+  std::ostringstream kname;
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Gemv specialization
-
-  // Route to gemv if needed
-  if (std::min(M, N) == 1) {
-    // Collect problem info
-    bool is_b_matrix = N != 1;
-
-    auto& mat = is_b_matrix ? b : a;
-    auto& vec = is_b_matrix ? a : b;
-    bool transpose_mat = is_b_matrix ? !transpose_b : transpose_a;
-    int in_vector_len = K;
-    int out_vector_len = is_b_matrix ? N : M;
-
-    int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
-    int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
-    int mat_ld = is_b_matrix ? b_cols : a_cols;
-
-    auto batch_strides_mat = is_b_matrix ? batch_strides_B : batch_strides_A;
-    auto batch_strides_vec = is_b_matrix ? batch_strides_A : batch_strides_B;
-
-    auto batch_shape_mat = is_b_matrix ? batch_shape_B : batch_shape_A;
-    auto batch_shape_vec = is_b_matrix ? batch_shape_A : batch_shape_B;
-
-    if (!is_b_matrix) {
-      batch_strides = rhs_indices.strides();
-      batch_strides.insert(
-          batch_strides.end(),
-          lhs_indices.strides().begin(),
-          lhs_indices.strides().end());
-    }
-
-    int batch_ndim = batch_shape.size();
-
-    // Determine dispatch kernel
-    int tm = 4, tn = 4;
-    int sm = 1, sn = 32;
-    int bm = 1, bn = 1;
-    int n_out_per_tgp;
-    std::ostringstream kname;
-
-    if (transpose_mat) {
-      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
-        sm = 4;
-        sn = 8;
-      } else {
-        sm = 8;
-        sn = 4;
-      }
-
-      if (out_vector_len >= 2048) {
-        bn = 16;
-      } else if (out_vector_len >= 512) {
-        bn = 4;
-      } else {
-        bn = 2;
-      }
-
-      // Specialized kernel for very small outputs
-      tn = out_vector_len < tn ? 1 : tn;
-
-      n_out_per_tgp = bn * sn * tn;
-      kname << "gemv_t_gather_" << type_to_name(out);
-
+  if (transpose_mat) {
+    if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+      sm = 4;
+      sn = 8;
     } else {
-      bm = out_vector_len >= 4096 ? 8 : 4;
-      sn = 32;
-
-      // Specialized kernel for very small outputs
-      tm = out_vector_len < tm ? 1 : tm;
-
-      n_out_per_tgp = bm * sm * tm;
-      kname << "gemv_gather_" << type_to_name(out);
+      sm = 8;
+      sn = 4;
     }
 
-    kname << "_bm" << bm << "_bn" << bn << "_sm" << sm << "_sn" << sn << "_tm"
-          << tm << "_tn" << tn;
+    if (out_vector_len >= 2048) {
+      bn = 16;
+    } else if (out_vector_len >= 512) {
+      bn = 4;
+    } else {
+      bn = 2;
+    }
 
-    // Encode and dispatch kernel
-    auto& compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel(kname.str());
-    compute_encoder.set_compute_pipeline_state(kernel);
+    // Specialized kernel for very small outputs
+    tn = out_vector_len < tn ? 1 : tn;
 
-    int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
-    MTL::Size group_dims = MTL::Size(32, bn, bm);
-    MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
+    n_out_per_tgp = bn * sn * tn;
+    kname << "gemv_t_gather_" << type_to_name(out);
 
-    compute_encoder.set_input_array(mat, 0);
-    compute_encoder.set_input_array(vec, 1);
-    compute_encoder.set_output_array(out, 3);
+  } else {
+    bm = out_vector_len >= 4096 ? 8 : 4;
+    sn = 32;
 
-    compute_encoder.set_bytes(in_vector_len, 4);
-    compute_encoder.set_bytes(out_vector_len, 5);
-    compute_encoder.set_bytes(mat_ld, 6);
+    // Specialized kernel for very small outputs
+    tm = out_vector_len < tm ? 1 : tm;
 
-    compute_encoder.set_bytes(batch_ndim, 9);
-    compute_encoder.set_vector_bytes(batch_shape, 10);
-    compute_encoder.set_vector_bytes(batch_strides, 11);
-
-    int batch_ndim_vec = batch_shape_vec.size();
-    compute_encoder.set_bytes(batch_ndim_vec, 12);
-    compute_encoder.set_vector_bytes(batch_shape_vec, 13);
-    compute_encoder.set_vector_bytes(batch_strides_vec, 14);
-
-    int batch_ndim_mat = batch_shape_mat.size();
-    compute_encoder.set_bytes(batch_ndim_mat, 15);
-    compute_encoder.set_vector_bytes(batch_shape_mat, 16);
-    compute_encoder.set_vector_bytes(batch_strides_mat, 17);
-
-    compute_encoder.set_input_array(lhs_indices, 18 + int(!is_b_matrix));
-    compute_encoder.set_input_array(rhs_indices, 18 + int(is_b_matrix));
-
-    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-
-    d.add_temporaries(std::move(copies), s.index);
-    return;
+    n_out_per_tgp = bm * sm * tm;
+    kname << "gemv_gather_" << type_to_name(out);
   }
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Regular kernel dispatch
+  kname << "_bm" << bm << "_bn" << bn << "_sm" << sm << "_sn" << sn << "_tm"
+        << tm << "_tn" << tn;
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
+  MTL::Size group_dims = MTL::Size(32, bn, bm);
+  MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
+
+  compute_encoder.set_input_array(mat, 0);
+  compute_encoder.set_input_array(vec, 1);
+  compute_encoder.set_output_array(out, 3);
+
+  compute_encoder.set_bytes(in_vector_len, 4);
+  compute_encoder.set_bytes(out_vector_len, 5);
+  compute_encoder.set_bytes(mat_ld, 6);
+
+  compute_encoder.set_bytes(batch_ndim, 9);
+  compute_encoder.set_vector_bytes(out.shape(), 10);
+  compute_encoder.set_vector_bytes(index_strides, 11);
+
+  compute_encoder.set_bytes(batch_ndim_vec, 12);
+  compute_encoder.set_vector_bytes(vec.shape(), 13);
+  compute_encoder.set_vector_bytes(vec.strides(), 14);
+
+  compute_encoder.set_bytes(batch_ndim_mat, 15);
+  compute_encoder.set_vector_bytes(mat.shape(), 16);
+  compute_encoder.set_vector_bytes(mat.strides(), 17);
+
+  compute_encoder.set_input_array(vec_indices_, 18);
+  compute_encoder.set_input_array(mat_indices_, 19);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void gather_mm(
+    const array& a_,
+    const array& b_,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  // Copy if needed
+  std::vector<array> copies;
+  auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
+  auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
+  d.add_temporaries(std::move(copies), s.index);
 
   // Determine dispatch kernel
   int bm = 64, bn = 64, bk = 16;
   int wm = 2, wn = 2;
+  size_t batch_size_out = out.size() / M / N;
+  int batch_ndim = out.ndim() - 2;
+  int batch_ndim_a = a.ndim() - 2;
+  int batch_ndim_b = b.ndim() - 2;
 
   char devc = d.get_architecture().back();
   GEMM_TPARAM_MACRO(devc)
 
-  // Prepare kernel name
-  std::ostringstream kname;
-  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
-        << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn;
-
-  std::string base_name = kname.str();
-
   const bool has_batch = batch_ndim > 1;
-  const bool use_out_source = false;
-  const bool do_axpby = false;
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
   const bool align_K = (K % bk) == 0;
-  const bool do_gather = true;
+
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(128);
+  concatenate(
+      base_name,
+      "steel_gather_mm_",
+      transpose_a ? 't' : 'n',
+      transpose_b ? 't' : 'n',
+      "_",
+      type_to_name(a),
+      "_",
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
 
   metal::MTLFCList func_consts = {
       {&has_batch, MTL::DataType::DataTypeBool, 10},
-      {&use_out_source, MTL::DataType::DataTypeBool, 100},
-      {&do_axpby, MTL::DataType::DataTypeBool, 110},
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
       {&align_K, MTL::DataType::DataTypeBool, 202},
-      {&do_gather, MTL::DataType::DataTypeBool, 300},
   };
 
-  // clang-format off
-  kname << "_has_batch_" << (has_batch ? 't' : 'n')
-        << "_use_out_source_" << (use_out_source ? 't' : 'n')
-        << "_do_axpby_" << (do_axpby ? 't' : 'n')
-        << "_align_M_" << (align_M ? 't' : 'n')
-        << "_align_N_" << (align_N ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_has_batch_",
+      has_batch ? 't' : 'n',
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
 
-  std::string hash_name = kname.str();
-
-  // Encode and dispatch kernel
+  // Get and set the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_steel_gemm_fused_kernel(
+  auto kernel = get_steel_gemm_gather_kernel(
       d,
       base_name,
       hash_name,
@@ -1736,72 +1842,97 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       bn,
       bk,
       wm,
-      wn);
-
+      wn,
+      false);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  // Use problem size to determine threadblock swizzle
-  int tn = (N + bn - 1) / bn;
-  int tm = (M + bm - 1) / bm;
-
-  // TODO: Explore device-based tuning for swizzle
-  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
-
-  // Prepare steel matmul params
-  GEMMParams params{
+  // Prepare the matmul params
+  steel::GEMMParams params{
       /* const int M = */ M,
       /* const int N = */ N,
       /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
+      /* const int lda = */ static_cast<int>(lda),
+      /* const int ldb = */ static_cast<int>(ldb),
       /* const int ldd = */ N,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ lhs_indices_str,
-      /* const int64_t batch_stride_b = */ rhs_indices_str,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */
+      (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
+      /* const int64_t batch_stride_b = */
+      (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
+      /* const int64_t batch_stride_d = */ M * N,
+      /* const int swizzle_log = */ 0,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ batch_ndim};
 
-  // Prepare launch grid params
-  int tile = 1 << swizzle_log;
-  tm = (tm + tile - 1) / tile;
-  tn = tn * tile;
-
+  // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+  MTL::Size grid_dims =
+      MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
 
   // Launch kernel
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);
-  compute_encoder.set_output_array(out, 3);
-
-  compute_encoder.set_bytes(params, 4);
-
-  compute_encoder.set_vector_bytes(batch_shape, 6);
-  compute_encoder.set_vector_bytes(batch_strides, 7);
-
-  compute_encoder.set_input_array(lhs_indices, 10);
-  compute_encoder.set_input_array(rhs_indices, 11);
-
-  std::vector operand_shape = batch_shape_A;
-  operand_shape.insert(
-      operand_shape.end(), batch_shape_B.begin(), batch_shape_B.end());
-
-  std::vector operand_strides = batch_strides_A;
-  operand_strides.insert(
-      operand_strides.end(), batch_strides_B.begin(), batch_strides_B.end());
-
-  operand_batch_ndim.push_back(0);
-
-  compute_encoder.set_vector_bytes(operand_shape, 13);
-  compute_encoder.set_vector_bytes(operand_strides, 14);
-  compute_encoder.set_vector_bytes(operand_batch_ndim, 15);
-
+  compute_encoder.set_input_array(lhs_indices, 2);
+  compute_encoder.set_input_array(rhs_indices, 3);
+  compute_encoder.set_output_array(out, 4);
+  compute_encoder.set_bytes(params, 5);
+  compute_encoder.set_vector_bytes(lhs_indices.shape(), 6);
+  compute_encoder.set_vector_bytes(lhs_indices.strides(), 7);
+  compute_encoder.set_vector_bytes(rhs_indices.strides(), 8);
+  compute_encoder.set_bytes(batch_ndim_a, 9);
+  compute_encoder.set_vector_bytes(a.shape(), 10);
+  compute_encoder.set_vector_bytes(a.strides(), 11);
+  compute_encoder.set_bytes(batch_ndim_b, 12);
+  compute_encoder.set_vector_bytes(b.shape(), 13);
+  compute_encoder.set_vector_bytes(b.strides(), 14);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
 
-  d.add_temporaries(std::move(copies), s.index);
+void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  // Return 0s if either input is empty
+  if (a.size() == 0 || b.size() == 0) {
+    array zero = array(0, a.dtype());
+    fill_gpu(zero, out, s);
+    d.add_temporary(std::move(zero), s.index);
+    return;
+  }
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // Extract shapes strides from inputs and copy in case of non-contiguous
+  // vectors.
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  // We are walking a in order and b is also in order so we can batch up the
+  // matmuls and reuse reading a and b.
+  if (M == 1 && right_sorted_ == true) {
+    gather_mm_rhs(a, b, rhs_indices, out, d, s);
+    return;
+  }
+
+  // Route to gather gemv if any of a or b are vectors
+  if (M == 1) {
+    gather_mv(b, a, rhs_indices, lhs_indices, out, N, K, false, d, s);
+    return;
+  }
+  if (N == 1) {
+    gather_mv(a, b, lhs_indices, rhs_indices, out, M, K, true, d, s);
+    return;
+  }
+
+  // Route to non specialized gather mm
+  gather_mm(a, b, lhs_indices, rhs_indices, out, M, N, K, d, s);
 }
 
 } // namespace mlx::core
