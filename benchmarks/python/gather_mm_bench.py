@@ -55,8 +55,8 @@ def time_gather_mm():
         return x
 
     time_fn(gather_mm, x, w, indices, False)
-    time_fn(gather_mm, x, w, indices, True)
     time_fn(gather_mm, x, w, sorted_indices, False)
+    time_fn(gather_mm, x, w, indices, True)
 
     x = mx.random.normal((N * I, K)) / 1024**0.5
     w = mx.random.normal((M, K)) / 1024**0.5
