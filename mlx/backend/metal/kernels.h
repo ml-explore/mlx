@@ -172,7 +172,8 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int bn,
     int bk,
     int wm,
-    int wn);
+    int wn,
+    bool rhs);
 
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,

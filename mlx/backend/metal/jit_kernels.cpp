@@ -479,40 +479,6 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
-MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
-    metal::Device& d,
-    const std::string& kernel_name,
-    const std::string& hash_name,
-    const metal::MTLFCList& func_consts,
-    const array& out,
-    bool transpose_a,
-    bool transpose_b,
-    int bm,
-    int bn,
-    int bk,
-    int wm,
-    int wn) {
-  const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::gemm()
-                  << metal::steel_gemm_gather()
-                  << get_template_definition(
-                         lib_name,
-                         "gemm",
-                         get_type_string(out.dtype()),
-                         bm,
-                         bn,
-                         bk,
-                         wm,
-                         wn,
-                         transpose_a,
-                         transpose_b);
-    return kernel_source.str();
-  });
-  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
-}
-
 MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -630,24 +596,28 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int bn,
     int bk,
     int wm,
-    int wn) {
+    int wn,
+    bool rhs) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::gemm()
-                  << metal::steel_gemm_gather()
-                  << get_template_definition(
-                         lib_name,
-                         "gemm",
-                         get_type_string(out.dtype()),
-                         bm,
-                         bn,
-                         bk,
-                         wm,
-                         wn,
-                         transpose_a,
-                         transpose_b);
-    return kernel_source.str();
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::gemm(),
+        metal::steel_gemm_gather(),
+        get_template_definition(
+            lib_name,
+            rhs ? "gather_mm_rhs" : "gather_mm",
+            get_type_string(out.dtype()),
+            bm,
+            bn,
+            bk,
+            wm,
+            wn,
+            transpose_a,
+            transpose_b));
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }

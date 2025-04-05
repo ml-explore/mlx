@@ -1597,7 +1597,8 @@ void gather_mm_rhs(
       bn,
       bk,
       wm,
-      wn);
+      wn,
+      true);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
@@ -1841,7 +1842,8 @@ void gather_mm(
       bn,
       bk,
       wm,
-      wn);
+      wn,
+      false);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
