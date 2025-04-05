@@ -205,7 +205,8 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int,
     int,
     int,
-    int) {
+    int,
+    bool) {
   return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
 }
 
