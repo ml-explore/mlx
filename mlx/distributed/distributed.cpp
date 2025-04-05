@@ -15,6 +15,14 @@ void all_sum(Group group, const array& input, array& output, Stream stream) {
   group.raw_group()->all_sum(input, output, stream);
 }
 
+void all_max(Group group, const array& input, array& output, Stream stream) {
+  group.raw_group()->all_max(input, output, stream);
+}
+
+void all_min(Group group, const array& input, array& output, Stream stream) {
+  group.raw_group()->all_min(input, output, stream);
+}
+
 void all_gather(Group group, const array& input, array& output, Stream stream) {
   group.raw_group()->all_gather(input, output, stream);
 }
@@ -54,6 +62,16 @@ class EmptyGroup : public GroupImpl {
         "Communication not implemented in an empty distributed group.");
   }
   void recv(array&, int, Stream) override {
+    throw std::runtime_error(
+        "Communication not implemented in an empty distributed group.");
+  }
+
+  void all_max(const array&, array&, Stream) override {
+    throw std::runtime_error(
+        "Communication not implemented in an empty distributed group.");
+  }
+
+  void all_min(const array&, array&, Stream) override {
     throw std::runtime_error(
         "Communication not implemented in an empty distributed group.");
   }
