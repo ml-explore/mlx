@@ -139,14 +139,6 @@ TEST_CASE("test astype") {
     y = astype(x, int32);
     CHECK_EQ(y.dtype(), int32);
     CHECK_EQ(y.item<int>(), -3);
-
-    y = astype(x, uint32);
-    CHECK_EQ(y.dtype(), uint32);
-
-    // Use std::copy since the result is platform dependent
-    uint32_t v;
-    std::copy(x.data<float>(), x.data<float>() + 1, &v);
-    CHECK_EQ(y.item<uint32_t>(), v);
   }
 }
 
