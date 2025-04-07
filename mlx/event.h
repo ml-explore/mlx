@@ -16,9 +16,6 @@ class Event {
   // Wait for the event to be signaled at its current value
   void wait();
 
-  // Signal the event at its current value
-  void signal();
-
   // Wait in the given stream for the event to be signaled at its current value
   void wait(Stream stream);
 
