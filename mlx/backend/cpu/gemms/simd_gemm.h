@@ -64,23 +64,16 @@ void simd_gemm(
       int k = 0;
       for (; k < K / block_size; k++) {
         // Load a and b blocks
-        load_block<block_size>(
-            a,
-            a_block,
-            a_trans ? K : M,
-            a_trans ? M : K,
-            a_trans ? k : i,
-            a_trans ? i : k,
-            a_trans);
-
-        load_block<block_size>(
-            b,
-            b_block,
-            b_trans ? N : K,
-            b_trans ? K : N,
-            b_trans ? j : k,
-            b_trans ? k : j,
-            !b_trans);
+        if (a_trans) {
+          load_block<block_size>(a, a_block, K, M, k, i, true);
+        } else {
+          load_block<block_size>(a, a_block, M, K, i, k, false);
+        }
+        if (b_trans) {
+          load_block<block_size>(b, b_block, N, K, j, k, false);
+        } else {
+          load_block<block_size>(b, b_block, K, N, k, j, true);
+        }
 
         // Multiply and accumulate
         for (int ii = 0; ii < block_size && i * block_size + ii < M; ++ii) {
@@ -97,23 +90,16 @@ void simd_gemm(
       }
       if (last_k_block_size) {
         // Load a and b blocks
-        load_block<block_size>(
-            a,
-            a_block,
-            a_trans ? K : M,
-            a_trans ? M : K,
-            a_trans ? k : i,
-            a_trans ? i : k,
-            a_trans);
-
-        load_block<block_size>(
-            b,
-            b_block,
-            b_trans ? N : K,
-            b_trans ? K : N,
-            b_trans ? j : k,
-            b_trans ? k : j,
-            !b_trans);
+        if (a_trans) {
+          load_block<block_size>(a, a_block, K, M, k, i, true);
+        } else {
+          load_block<block_size>(a, a_block, M, K, i, k, false);
+        }
+        if (b_trans) {
+          load_block<block_size>(b, b_block, N, K, j, k, false);
+        } else {
+          load_block<block_size>(b, b_block, K, N, k, j, true);
+        }
 
         // Multiply and accumulate
         for (int ii = 0; ii < block_size && i * block_size + ii < M; ++ii) {
