@@ -48,7 +48,8 @@ array scaled_dot_product_attention(
     const array& keys,
     const array& values,
     const float scale,
-    const std::variant<std::monostate, std::string, array>& mask = {},
+    const std::string& mask_mode = "",
+    const std::vector<array>& mask_arrs = {},
     StreamOrDevice s = {});
 
 std::tuple<array, array, array> affine_quantize(

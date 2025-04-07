@@ -22,6 +22,7 @@ ResidencySet::ResidencySet(MTL::Device* d) {
       }
       throw std::runtime_error(msg.str());
     }
+    wired_set_->requestResidency();
   }
 }
 
@@ -32,7 +33,6 @@ void ResidencySet::insert(MTL::Allocation* buf) {
   if (wired_set_->allocatedSize() + buf->allocatedSize() <= capacity_) {
     wired_set_->addAllocation(buf);
     wired_set_->commit();
-    wired_set_->requestResidency();
   } else {
     unwired_set_.insert(buf);
   }
@@ -76,7 +76,6 @@ void ResidencySet::resize(size_t size) {
       }
     }
     wired_set_->commit();
-    wired_set_->requestResidency();
   } else if (current_size > size) {
     auto pool = new_scoped_memory_pool();
     // Remove wired allocations until under capacity

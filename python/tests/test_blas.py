@@ -12,7 +12,7 @@ import numpy as np
 class TestBlas(mlx_tests.MLXTestCase):
     @property
     def dtypes(self):
-        return ["float32", "float16"] if mx.metal.is_available() else ["float32"]
+        return ["float32", "float16"]
 
     def __gemm_test(
         self,
