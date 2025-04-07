@@ -272,9 +272,13 @@ Buffer MetalAllocator::malloc(size_t size) {
     if (!buf) {
       buf = device_->newBuffer(size, resource_options);
     }
+    if (!buf) {
+      return Buffer{nullptr};
+    }
     lk.lock();
-    if (buf) {
-      num_resources_++;
+    num_resources_++;
+    if (!buf->heap()) {
+      residency_set_.insert(buf);
     }
   }
 
@@ -286,10 +290,6 @@ Buffer MetalAllocator::malloc(size_t size) {
     auto pool = metal::new_scoped_memory_pool();
     num_resources_ -= buffer_cache_.release_cached_buffers(
         get_cache_memory() - max_pool_size_);
-  }
-
-  if (!buf->heap()) {
-    residency_set_.insert(buf);
   }
 
   return Buffer{static_cast<void*>(buf)};
