@@ -423,8 +423,68 @@ void qmm_op(
       s);
 }
 
+inline array ensure_row_contiguous_matrix(
+    const array& x,
+    metal::Device& d,
+    const Stream& s) {
+  auto stride_0 = x.strides()[arr.ndim() - 2];
+  auto stride_1 = x.strides()[arr.ndim() - 1];
+  if (stride_0 == x.shape(-1) && stride_1 == 1) {
+    return x;
+  } else {
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return x_copy;
+  }
+}
+
+void qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {}
+
+void qvm(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {}
+
+void qmm(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    bool transpose,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 4);
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  array x = ensure_row_contiguous_matrix(inputs[0]);
+  array w = ensure_row_contiguous_matrix(inputs[1]);
+  array scales = ensure_row_contiguous_matrix(inputs[2]);
+  array biases = ensure_row_contiguous_matrix(inputs[3]);
+
+  int M = x.flags().row_contiguous ? x.size() / K : x.shape(-2);
+  int K = x.shape(-1);
+  int N = out.shape(-1);
+
   qmm_op(
       inputs, out, transpose_, group_size_, bits_, /*gather=*/false, stream());
 }
