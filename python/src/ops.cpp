@@ -4250,9 +4250,10 @@ void init_ops(nb::module_& m) {
       "group_size"_a = 64,
       "bits"_a = 4,
       nb::kw_only(),
+      "sorted_indices"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4265,23 +4266,25 @@ void init_ops(nb::module_& m) {
         as ``w`` since they represent the same quantized matrix.
 
         Args:
-          x (array): Input array
-          w (array): Quantized matrix packed in unsigned integers
-          scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
-          lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
-          rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
-          transpose (bool, optional): Defines whether to multiply with the
-            transposed ``w`` or not, namely whether we are performing
-            ``x @ w.T`` or ``x @ w``. Default: ``True``.
-          group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. Default: ``64``.
-          bits (int, optional): The number of bits occupied by each element in
-            ``w``. Default: ``4``.
+            x (array): Input array
+            w (array): Quantized matrix packed in unsigned integers
+            scales (array): The scales to use per ``group_size`` elements of ``w``
+            biases (array): The biases to use per ``group_size`` elements of ``w``
+            lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
+            rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
+            transpose (bool, optional): Defines whether to multiply with the
+              transposed ``w`` or not, namely whether we are performing
+              ``x @ w.T`` or ``x @ w``. Default: ``True``.
+            group_size (int, optional): The size of the group in ``w`` that
+              shares a scale and bias. Default: ``64``.
+            bits (int, optional): The number of bits occupied by each element in
+              ``w``. Default: ``4``.
+            sorted_indices (bool, optional): May allow a faster implementation
+              if the passed indices are sorted. Default: ``False``.
 
         Returns:
-          array: The result of the multiplication of ``x`` with ``w``
-            after gathering using ``lhs_indices`` and ``rhs_indices``.
+            array: The result of the multiplication of ``x`` with ``w``
+              after gathering using ``lhs_indices`` and ``rhs_indices``.
       )pbdoc");
   m.def(
       "tensordot",
@@ -4311,16 +4314,16 @@ void init_ops(nb::module_& m) {
         Compute the tensor dot product along the specified axes.
 
         Args:
-          a (array): Input array
-          b (array): Input array
-          axes (int or list(list(int)), optional): The number of dimensions to
-            sum over. If an integer is provided, then sum over the last
-            ``axes`` dimensions of ``a`` and the first ``axes`` dimensions of
-            ``b``. If a list of lists is provided, then sum over the
-            corresponding dimensions of ``a`` and ``b``. Default: 2.
+            a (array): Input array
+            b (array): Input array
+            axes (int or list(list(int)), optional): The number of dimensions to
+              sum over. If an integer is provided, then sum over the last
+              ``axes`` dimensions of ``a`` and the first ``axes`` dimensions of
+              ``b``. If a list of lists is provided, then sum over the
+              corresponding dimensions of ``a`` and ``b``. Default: 2.
 
         Returns:
-          array: The tensor dot product.
+            array: The tensor dot product.
       )pbdoc");
   m.def(
       "inner",

@@ -4028,6 +4028,7 @@ array gather_qmm(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
@@ -4067,13 +4068,19 @@ array gather_qmm(
   return array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherQMM>(to_stream(s), group_size, bits, transpose),
+      std::make_shared<GatherQMM>(
+          to_stream(s),
+          group_size,
+          bits,
+          transpose,
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
       {astype(x, out_type, s),
-       w,
+       std::move(w),
        astype(scales, out_type, s),
        astype(biases, out_type, s),
-       lhs_indices,
-       rhs_indices});
+       std::move(lhs_indices),
+       std::move(rhs_indices)});
 }
 
 array tensordot(
