@@ -42,7 +42,8 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-std::vector<char> detail::InTracing::trace_stack{};
+std::vector<std::pair<char, char>> detail::InTracing::trace_stack{};
+int detail::InTracing::grad_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
@@ -307,7 +308,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::vector<array>& cotans,
     const std::vector<int>& argnums) {
   // Set the global tracing flag.
-  detail::InTracing in_tracing;
+  detail::InTracing in_tracing{false, true};
 
   // Make tracers from given primals
   std::vector<array> primals_;
@@ -505,7 +506,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents) {
   // Set the global tracing flag.
-  detail::InTracing in_tracing;
+  detail::InTracing in_tracing{false, true};
 
   if (primals.size() != tangents.size()) {
     throw std::invalid_argument(
