@@ -77,7 +77,7 @@ MTL::Library* try_load_bundle(
 #endif
 
 // Firstly, search for the metallib in the same path as this binary
-std::pair<MTL::Library*, NS::Error*> load_collocated_library(
+std::pair<MTL::Library*, NS::Error*> load_colocated_library(
     MTL::Device* device,
     const std::string& lib_name) {
   std::string lib_path = get_colocated_mtllib_path(lib_name);
@@ -111,8 +111,8 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 MTL::Library* load_default_library(MTL::Device* device) {
   NS::Error *error1, *error2, *error3;
   MTL::Library* lib;
-  // First try the collocated mlx.metallib
-  std::tie(lib, error1) = load_collocated_library(device, "mlx");
+  // First try the colocated mlx.metallib
+  std::tie(lib, error1) = load_colocated_library(device, "mlx");
   if (lib) {
     return lib;
   }
@@ -128,13 +128,13 @@ MTL::Library* load_default_library(MTL::Device* device) {
   if (!lib) {
     std::ostringstream msg;
     msg << "Failed to load the default metallib. ";
-    if (!error1) {
+    if (error1 != nullptr) {
       msg << error1->localizedDescription()->utf8String() << " ";
     }
-    if (!error2) {
+    if (error2 != nullptr) {
       msg << error2->localizedDescription()->utf8String() << " ";
     }
-    if (!error3) {
+    if (error3 != nullptr) {
       msg << error3->localizedDescription()->utf8String() << " ";
     }
     throw std::runtime_error(msg.str());
@@ -170,6 +170,14 @@ MTL::Library* load_library(
     }
   }
 
+  // Try to load the colocated library
+  {
+    auto [lib, error] = load_colocated_library(device, lib_name);
+    if (lib) {
+      return lib;
+    }
+  }
+
   // Try to load the library from swiftpm
   {
     auto [lib, error] = load_swiftpm_library(device, lib_name);
@@ -178,17 +186,14 @@ MTL::Library* load_library(
     }
   }
 
-  // Finally try to load the collocated library
-  {
-    auto [lib, error] = load_collocated_library(device, lib_name);
-    if (!lib) {
-      std::ostringstream msg;
-      msg << "Failed to load the metallib " << lib_name << ".metallib "
-          << error->localizedDescription()->utf8String();
-      throw std::runtime_error(msg.str());
-    }
-    return lib;
-  }
+  std::ostringstream msg;
+  msg << "Failed to load the metallib " << lib_name << ".metallib. "
+      << "We attempted to load it from <" << get_colocated_mtllib_path(lib_name)
+      << ">";
+#ifdef SWIFTPM_BUNDLE
+  msg << " and from the Swift PM bundle.";
+#endif
+  throw std::runtime_error(msg.str());
 }
 
 } // namespace
