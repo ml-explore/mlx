@@ -24,10 +24,6 @@ void Event::wait() {
   }
 }
 
-void Event::signal() {
-  static_cast<MTL::SharedEvent*>(event_.get())->setSignaledValue(value());
-}
-
 void Event::wait(Stream stream) {
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [*this]() mutable { wait(); });
@@ -42,7 +38,9 @@ void Event::wait(Stream stream) {
 
 void Event::signal(Stream stream) {
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [*this]() mutable { signal(); });
+    scheduler::enqueue(stream, [*this]() mutable {
+      static_cast<MTL::SharedEvent*>(event_.get())->setSignaledValue(value());
+    });
   } else {
     auto& d = metal::device(stream.device);
     d.end_encoding(stream.index);
