@@ -172,6 +172,7 @@ void sdpa_vector(
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
+  hash_name += do_causal ? "_c" : "_nc";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -268,6 +269,7 @@ void sdpa_vector_2pass(
   std::string hash_name = kname;
   hash_name += has_mask ? "_mask" : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
+  hash_name += do_causal ? "_c" : "_nc";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
