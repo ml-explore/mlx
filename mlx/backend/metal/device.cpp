@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <array>
 #include <cstdlib>
 #include <sstream>
 
@@ -16,6 +17,22 @@
 #include "mlx/utils.h"
 
 namespace mlx::core::metal {
+
+std::string search_colocated_mtllib(
+    const fs::path& dli_path,
+    const std::string& lib_name) {
+  auto dir_name = dli_path.parent_path();
+  std::array search_list{
+      dir_name / lib_name,
+      dir_name / "Resources" / lib_name // in macOS framework
+  };
+  for (const auto& lib_path : search_list) {
+    if (fs::exists(lib_path)) {
+      return lib_path.c_str();
+    }
+  }
+  return "";
+}
 
 namespace {
 
