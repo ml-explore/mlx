@@ -21,22 +21,22 @@ std::vector<array> vmap_replace(
 // the graph.
 struct InTracing {
   explicit InTracing(bool dynamic = false) {
-    trace_stack.push_back(dynamic);
+    trace_stack().push_back(dynamic);
   }
   ~InTracing() {
-    trace_stack.pop_back();
+    trace_stack().pop_back();
   }
 
   static bool in_tracing() {
-    return !trace_stack.empty();
+    return !trace_stack().empty();
   }
   static bool in_dynamic_tracing() {
     // compile is always and only the outer-most transform
-    return in_tracing() && trace_stack.front();
+    return in_tracing() && trace_stack().front();
   }
 
  private:
-  static std::vector<char> trace_stack;
+  static std::vector<char>& trace_stack();
 };
 
 struct RetainGraph {
