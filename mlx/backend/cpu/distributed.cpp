@@ -46,8 +46,14 @@ void AllReduce::eval_cpu(
     case Sum:
       distributed::detail::all_sum(group(), in, outputs[0], stream());
       break;
+    case Max:
+      distributed::detail::all_max(group(), in, outputs[0], stream());
+      break;
+    case Min:
+      distributed::detail::all_min(group(), in, outputs[0], stream());
+      break;
     default:
-      throw std::runtime_error("Only all reduce sum is supported for now");
+      throw std::runtime_error("Only all reduce sum, min and max are supported for now");
   }
 }
 
