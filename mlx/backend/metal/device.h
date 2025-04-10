@@ -189,15 +189,7 @@ class Device {
 
   void register_library(
       const std::string& lib_name,
-      const std::string& lib_path);
-
-  // Note, this should remain in the header so that it is not dynamically
-  // linked
-  void register_library(const std::string& lib_name) {
-    if (auto it = library_map_.find(lib_name); it == library_map_.end()) {
-      register_library(lib_name, get_colocated_mtllib_path(lib_name));
-    }
-  }
+      const std::string& lib_path = "");
 
   MTL::Library* get_library(
       const std::string& name,

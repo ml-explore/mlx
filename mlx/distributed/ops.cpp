@@ -36,6 +36,40 @@ array all_sum(
       {x});
 }
 
+array all_max(
+    const array& x,
+    std::optional<Group> group_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto group = to_group(group_);
+
+  if (group.size() == 1) {
+    return x;
+  }
+  return array(
+      x.shape(),
+      x.dtype(),
+      std::make_shared<AllReduce>(
+          to_stream(s, Device::cpu), group, AllReduce::Max),
+      {x});
+}
+
+array all_min(
+    const array& x,
+    std::optional<Group> group_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto group = to_group(group_);
+
+  if (group.size() == 1) {
+    return x;
+  }
+  return array(
+      x.shape(),
+      x.dtype(),
+      std::make_shared<AllReduce>(
+          to_stream(s, Device::cpu), group, AllReduce::Min),
+      {x});
+}
+
 array all_gather(
     const array& x,
     std::optional<Group> group_ /* = std::nullopt */,

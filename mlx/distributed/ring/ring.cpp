@@ -503,15 +503,38 @@ std::vector<int> make_connections(
 
   return sockets;
 }
+template <typename T>
+struct SumOp {
+  void operator()(const T* input, T* output, size_t N) {
+    while (N-- > 0) {
+      *output += *input;
+      input++;
+      output++;
+    }
+  }
+};
 
 template <typename T>
-void sum_inplace(const T* input, T* output, size_t N) {
-  while (N-- > 0) {
-    *output += *input;
-    input++;
-    output++;
+struct MaxOp {
+  void operator()(const T* input, T* output, size_t N) {
+    while (N-- > 0) {
+      *output = std::max(*output, *input);
+      input++;
+      output++;
+    }
   }
-}
+};
+
+template <typename T>
+struct MinOp {
+  void operator()(const T* input, T* output, size_t N) {
+    while (N-- > 0) {
+      *output = std::min(*output, *input);
+      input++;
+      output++;
+    }
+  }
+};
 
 } // namespace
 
@@ -605,7 +628,18 @@ class RingGroup : public GroupImpl {
   }
 
   void all_sum(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(output, all_sum<T>(input, output, stream));
+    SWITCH_TYPE(
+        output, all_reduce<T, SumOp<T>>(input, output, stream, SumOp<T>()));
+  }
+
+  void all_max(const array& input, array& output, Stream stream) override {
+    SWITCH_TYPE(
+        output, all_reduce<T, MaxOp<T>>(input, output, stream, MaxOp<T>()));
+  }
+
+  void all_min(const array& input, array& output, Stream stream) override {
+    SWITCH_TYPE(
+        output, all_reduce<T, MinOp<T>>(input, output, stream, MinOp<T>()));
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
@@ -694,13 +728,17 @@ class RingGroup : public GroupImpl {
   }
 
  private:
-  template <typename T>
-  void all_sum(const array& input, array& output, Stream stream) {
+  template <typename T, typename ReduceOp>
+  void all_reduce(
+      const array& input,
+      array& output,
+      Stream stream,
+      ReduceOp reduce_op) {
     auto in_ptr = input.data<char>();
     auto out_ptr = output.data<char>();
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, size = input.size(), this]() {
+    encoder.dispatch([in_ptr, out_ptr, size = input.size(), this, reduce_op]() {
       // If the input data cannot be split into size_ segments then copy it and
       // all reduce a local buffer prefilled with 0s.
       size_t nbytes = size * sizeof(T);
@@ -717,13 +755,14 @@ class RingGroup : public GroupImpl {
         char buffer[1024];
         std::memset(buffer, 0, size_ * sizeof(T));
         std::memcpy(buffer, in_ptr, nbytes);
-        all_sum_impl<T>(
+        all_reduce_impl<T, ReduceOp>(
             reinterpret_cast<T*>(buffers_.data()),
             reinterpret_cast<T*>(buffer),
             size_,
             sockets_right_[0],
             sockets_left_[0],
-            -1);
+            -1,
+            reduce_op);
         std::memcpy(out_ptr, buffer, nbytes);
         return;
       }
@@ -746,7 +785,7 @@ class RingGroup : public GroupImpl {
 
       for (int i = 0; i < n_reduces; i++) {
         all_sums.emplace_back(pool_.enqueue(std::bind(
-            &RingGroup::all_sum_impl<T>,
+            &RingGroup::all_reduce_impl<T, ReduceOp>,
             this,
             reinterpret_cast<T*>(
                 buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
@@ -754,7 +793,8 @@ class RingGroup : public GroupImpl {
             std::min(size, (i + 1) * step) - i * step,
             sockets_right_[i / 2],
             sockets_left_[i / 2],
-            (i % 2) ? -1 : 1)));
+            (i % 2) ? -1 : 1,
+            reduce_op)));
       }
       for (auto& f : all_sums) {
         f.wait();
@@ -762,14 +802,15 @@ class RingGroup : public GroupImpl {
     });
   }
 
-  template <typename T>
-  void all_sum_impl(
+  template <typename T, typename ReduceOp>
+  void all_reduce_impl(
       T* buffer,
       T* data,
       size_t data_size,
       int socket_right,
       int socket_left,
-      int direction) {
+      int direction,
+      ReduceOp reduce_op) {
     // Choose which socket we send to and recv from
     int socket_send = (direction < 0) ? socket_right : socket_left;
     int socket_recv = (direction < 0) ? socket_left : socket_right;
@@ -846,7 +887,7 @@ class RingGroup : public GroupImpl {
         sends[b].wait();
         recvs[b].wait();
         if (2 * j < send_plan.size()) {
-          sum_inplace<T>(
+          reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
               data + recv_plan[j].first,
               recv_plan[j].second - recv_plan[j].first);

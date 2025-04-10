@@ -93,6 +93,8 @@ struct MPIWrapper {
 
     // Ops
     LOAD_SYMBOL(ompi_mpi_op_sum, op_sum_);
+    LOAD_SYMBOL(ompi_mpi_op_max, op_max_);
+    LOAD_SYMBOL(ompi_mpi_op_min, op_min_);
 
     // Datatypes
     LOAD_SYMBOL(ompi_mpi_c_bool, mpi_bool_);
@@ -191,6 +193,14 @@ struct MPIWrapper {
     }
   }
 
+  MPI_Op op_max(const array& arr) {
+    return op_max_;
+  }
+
+  MPI_Op op_min(const array& arr) {
+    return op_min_;
+  }
+
   void* libmpi_handle_;
 
   // API
@@ -219,6 +229,8 @@ struct MPIWrapper {
   MPI_Op op_sum_;
   MPI_Op op_sum_f16_;
   MPI_Op op_sum_bf16_;
+  MPI_Op op_max_;
+  MPI_Op op_min_;
 
   // Datatypes
   MPI_Datatype mpi_bool_;
@@ -303,6 +315,36 @@ class MPIGroup : public GroupImpl {
         input.size(),
         mpi().datatype(input),
         mpi().op_sum(input),
+        comm_);
+  }
+
+  void all_max(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_reduce,
+        (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                    : input.data<void>(),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        mpi().op_max(input),
+        comm_);
+  }
+
+  void all_min(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_reduce,
+        (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                    : input.data<void>(),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        mpi().op_min(input),
         comm_);
   }
 
