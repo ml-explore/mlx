@@ -55,7 +55,10 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 # All sum
                 y = mx.distributed.all_sum(x[world.rank()])
                 z = x.sum(0)
-                maxrelerror = ((y - z).abs() / z.abs()).max()
+                maxrelerror = (y - z).abs()
+                if rtol > 0:
+                    maxrelerror /= z.abs()
+                maxrelerror = maxrelerror.max()
                 self.assertLessEqual(maxrelerror, rtol)
 
                 # All max
