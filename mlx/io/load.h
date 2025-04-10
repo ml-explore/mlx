@@ -100,8 +100,10 @@ class ParallelFileReader : public Reader {
   }
 
  private:
+  static ThreadPool& thread_pool();
+
+ private:
   static constexpr size_t batch_size_ = 1 << 25;
-  static ThreadPool thread_pool_;
   int fd_;
   std::string label_;
 };

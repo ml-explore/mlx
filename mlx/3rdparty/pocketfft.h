@@ -537,7 +537,11 @@ inline size_t &num_threads()
   static thread_local size_t num_threads_=1;
   return num_threads_;
   }
-static const size_t max_threads = std::max(1u, std::thread::hardware_concurrency());
+inline const size_t &max_threads()
+  {
+  static thread_local const size_t max_threads_ = std::max(1u, std::thread::hardware_concurrency());
+  return max_threads_;
+  }
 
 class latch
   {
@@ -721,7 +725,7 @@ class thread_pool
       workers_(nthreads)
       { create_threads(); }
 
-    thread_pool(): thread_pool(max_threads) {}
+    thread_pool(): thread_pool(max_threads()) {}
 
     ~thread_pool() { shutdown(); }
 
@@ -786,7 +790,7 @@ template <typename Func>
 void thread_map(size_t nthreads, Func f)
   {
   if (nthreads == 0)
-    nthreads = max_threads;
+    nthreads = max_threads();
 
   if (nthreads == 1)
     { f(); return; }
