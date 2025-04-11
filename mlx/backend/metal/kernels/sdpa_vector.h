@@ -7,6 +7,8 @@ using namespace metal;
 constant bool has_mask [[function_constant(20)]];
 constant bool query_transposed [[function_constant(21)]];
 constant bool do_causal [[function_constant(22)]];
+constant bool bool_mask [[function_constant(23)]];
+constant bool float_mask [[function_constant(24)]];
 
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
@@ -21,7 +23,8 @@ template <typename T, int D, int V = D>
     const constant size_t& v_head_stride,
     const constant size_t& v_seq_stride,
     const constant float& scale,
-    const device bool* mask [[function_constant(has_mask)]],
+    const device bool* bmask [[function_constant(bool_mask)]],
+    const device T* fmask [[function_constant(float_mask)]],
     const constant int& mask_kv_seq_stride [[function_constant(has_mask)]],
     const constant int& mask_q_seq_stride [[function_constant(has_mask)]],
     const constant int& mask_head_stride [[function_constant(has_mask)]],
@@ -58,8 +61,12 @@ template <typename T, int D, int V = D>
       simd_lid * qk_per_thread;
   values += kv_head_idx * v_head_stride + simd_gid * v_seq_stride +
       simd_lid * v_per_thread;
-  if (has_mask) {
-    mask += head_idx * mask_head_stride + simd_gid * mask_kv_seq_stride +
+  if (bool_mask) {
+    bmask += head_idx * mask_head_stride + simd_gid * mask_kv_seq_stride +
+        q_seq_idx * mask_q_seq_stride;
+  }
+  if (float_mask) {
+    fmask += head_idx * mask_head_stride + simd_gid * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
 
@@ -81,8 +88,8 @@ template <typename T, int D, int V = D>
     bool use_key = true;
     if (do_causal) {
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
-    } else if (has_mask) {
-      use_key = mask[0];
+    } else if (bool_mask) {
+      use_key = bmask[0];
     }
     if (use_key) {
       // Read the key
@@ -96,6 +103,9 @@ template <typename T, int D, int V = D>
         score += q[j] * k[j];
       }
       score = simd_sum(score);
+      if (float_mask) {
+        score += fmask[0];
+      }
 
       // Update the accumulators
       U new_max = max(max_score, score);
@@ -114,8 +124,11 @@ template <typename T, int D, int V = D>
     // Move the pointers to the next kv
     keys += inner_k_stride;
     values += inner_v_stride;
-    if (has_mask) {
-      mask += BN * mask_kv_seq_stride;
+    if (bool_mask) {
+      bmask += BN * mask_kv_seq_stride;
+    }
+    if (float_mask) {
+      fmask += BN * mask_kv_seq_stride;
     }
   }
 
@@ -163,7 +176,8 @@ template <typename T, int D, int V = D>
     const constant size_t& v_head_stride,
     const constant size_t& v_seq_stride,
     const constant float& scale,
-    const device bool* mask [[function_constant(has_mask)]],
+    const device bool* bmask [[function_constant(bool_mask)]],
+    const device T* fmask [[function_constant(float_mask)]],
     const constant int& mask_kv_seq_stride [[function_constant(has_mask)]],
     const constant int& mask_q_seq_stride [[function_constant(has_mask)]],
     const constant int& mask_head_stride [[function_constant(has_mask)]],
@@ -204,8 +218,13 @@ template <typename T, int D, int V = D>
   values += kv_head_idx * v_head_stride +
       (block_idx * BN + simd_gid) * v_seq_stride + simd_lid * v_per_thread;
   out += o_offset * blocks * V + block_idx * V + simd_lid * v_per_thread;
-  if (has_mask) {
-    mask += head_idx * mask_head_stride +
+  if (bool_mask) {
+    bmask += head_idx * mask_head_stride +
+        (block_idx * BN + simd_gid) * mask_kv_seq_stride +
+        q_seq_idx * mask_q_seq_stride;
+  }
+  if (float_mask) {
+    fmask += head_idx * mask_head_stride +
         (block_idx * BN + simd_gid) * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
@@ -228,8 +247,8 @@ template <typename T, int D, int V = D>
     bool use_key = true;
     if (do_causal) {
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
-    } else if (has_mask) {
-      use_key = mask[0];
+    } else if (bool_mask) {
+      use_key = bmask[0];
     }
     if (use_key) {
       // Read the key
@@ -243,6 +262,9 @@ template <typename T, int D, int V = D>
         score += q[i] * k[i];
       }
       score = simd_sum(score);
+      if (float_mask) {
+        score += fmask[0];
+      }
 
       // Update the accumulators
       U new_max = max(max_score, score);
@@ -261,8 +283,11 @@ template <typename T, int D, int V = D>
     // Move the pointers to the next kv
     keys += blocks * inner_k_stride;
     values += blocks * inner_v_stride;
-    if (has_mask) {
-      mask += BN * blocks * mask_kv_seq_stride;
+    if (bool_mask) {
+      bmask += BN * blocks * mask_kv_seq_stride;
+    }
+    if (float_mask) {
+      fmask += BN * blocks * mask_kv_seq_stride;
     }
   }
 
