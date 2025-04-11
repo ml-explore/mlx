@@ -352,6 +352,10 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            mx.random.uniform(shape=(Nq, 1, L)),
+            mx.random.uniform(shape=(L, 1, Nq)).T,
+            mx.log(mx.random.uniform(shape=(Nq, 1, L)) > 0.2),
+            mx.log(mx.random.uniform(shape=(L, 1, Nq)).T > 0.2),
             "causal",
         ]
         for m in masks:
@@ -377,6 +381,10 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            mx.random.uniform(shape=(Nq, 1, L)),
+            mx.random.uniform(shape=(L, 1, Nq)).T,
+            mx.log(mx.random.uniform(shape=(Nq, 1, L)) > 0.2),
+            mx.log(mx.random.uniform(shape=(L, 1, Nq)).T > 0.2),
             "causal",
         ]
         for m in masks:
