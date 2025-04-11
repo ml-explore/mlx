@@ -172,7 +172,7 @@ def parse_hostfile(parser, hostfile):
             for i, h in enumerate(json.load(f)):
                 hosts.append(Host(i, h["ssh"], h.get("ips", [])))
         return hosts
-    except e:
+    except Exception as e:
         parser.error(f"Failed to parse hostfile {str(hostfile)} ({str(e)})")
 
 
