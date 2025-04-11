@@ -22,19 +22,19 @@ std::vector<array> vmap_replace(
 struct InTracing {
   explicit InTracing(bool dynamic = false, bool grad = false) {
     grad_counter += grad;
-    trace_stack.push_back({dynamic, grad});
+    trace_stack().push_back({dynamic, grad});
   }
   ~InTracing() {
-    grad_counter -= trace_stack.back().second;
-    trace_stack.pop_back();
+    grad_counter -= trace_stack().back().second;
+    trace_stack().pop_back();
   }
 
   static bool in_tracing() {
-    return !trace_stack.empty();
+    return !trace_stack().empty();
   }
   static bool in_dynamic_tracing() {
     // compile is always and only the outer-most transform
-    return in_tracing() && trace_stack.front().first;
+    return in_tracing() && trace_stack().front().first;
   }
 
   static bool in_grad_tracing() {
@@ -43,7 +43,7 @@ struct InTracing {
 
  private:
   static int grad_counter;
-  static std::vector<std::pair<char, char>> trace_stack;
+  static std::vector<std::pair<char, char>>& trace_stack();
 };
 
 struct RetainGraph {
