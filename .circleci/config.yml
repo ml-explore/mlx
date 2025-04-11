@@ -251,7 +251,7 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            DEV_RELEASE=1 \
+            MACOSX_DEPLOYMENT_TARGET="" DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
               pip install . -v
       - run:
