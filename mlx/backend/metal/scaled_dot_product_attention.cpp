@@ -198,15 +198,15 @@ void sdpa_vector(
   compute_encoder.set_bytes(scale, 10);
   if (has_mask) {
     auto& m = *mask;
-    compute_encoder.set_input_array(m, 11);
+    compute_encoder.set_input_array(m, 11 + float_mask);
     auto nd = m.ndim();
     int32_t kv_seq_stride =
         nd >= 1 && m.shape(-1) > 1 ? m.strides()[nd - 1] : 0;
     int32_t q_seq_stride = nd >= 2 && m.shape(-2) > 1 ? m.strides()[nd - 2] : 0;
     int32_t head_stride = nd >= 3 && m.shape(-3) > 1 ? m.strides()[nd - 3] : 0;
-    compute_encoder.set_bytes(kv_seq_stride, 12);
-    compute_encoder.set_bytes(q_seq_stride, 13);
-    compute_encoder.set_bytes(head_stride, 14);
+    compute_encoder.set_bytes(kv_seq_stride, 13);
+    compute_encoder.set_bytes(q_seq_stride, 14);
+    compute_encoder.set_bytes(head_stride, 15);
   }
 
   // Launch
@@ -301,15 +301,15 @@ void sdpa_vector_2pass(
   compute_encoder.set_bytes(scale, 12);
   if (has_mask) {
     auto& m = *mask;
-    compute_encoder.set_input_array(m, 13);
+    compute_encoder.set_input_array(m, 13 + float_mask);
     auto nd = m.ndim();
     int32_t kv_seq_stride =
         nd >= 1 && m.shape(-1) > 1 ? m.strides()[nd - 1] : 0;
     int32_t q_seq_stride = nd >= 2 && m.shape(-2) > 1 ? m.strides()[nd - 2] : 0;
     int32_t head_stride = nd >= 3 && m.shape(-3) > 1 ? m.strides()[nd - 3] : 0;
-    compute_encoder.set_bytes(kv_seq_stride, 14);
-    compute_encoder.set_bytes(q_seq_stride, 15);
-    compute_encoder.set_bytes(head_stride, 16);
+    compute_encoder.set_bytes(kv_seq_stride, 15);
+    compute_encoder.set_bytes(q_seq_stride, 16);
+    compute_encoder.set_bytes(head_stride, 17);
   }
 
   // Launch

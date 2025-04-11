@@ -16,18 +16,21 @@ template <typename T, int D, int V = D>
     const device T* keys [[buffer(1)]],
     const device T* values [[buffer(2)]],
     device T* out [[buffer(3)]],
-    const constant int& gqa_factor,
-    const constant int& N,
-    const constant size_t& k_head_stride,
-    const constant size_t& k_seq_stride,
-    const constant size_t& v_head_stride,
-    const constant size_t& v_seq_stride,
-    const constant float& scale,
-    const device bool* bmask [[function_constant(bool_mask)]],
-    const device T* fmask [[function_constant(float_mask)]],
-    const constant int& mask_kv_seq_stride [[function_constant(has_mask)]],
-    const constant int& mask_q_seq_stride [[function_constant(has_mask)]],
-    const constant int& mask_head_stride [[function_constant(has_mask)]],
+    const constant int& gqa_factor [[buffer(4)]],
+    const constant int& N [[buffer(5)]],
+    const constant size_t& k_head_stride [[buffer(6)]],
+    const constant size_t& k_seq_stride [[buffer(7)]],
+    const constant size_t& v_head_stride [[buffer(8)]],
+    const constant size_t& v_seq_stride [[buffer(9)]],
+    const constant float& scale [[buffer(10)]],
+    const device bool* bmask [[buffer(11), function_constant(bool_mask)]],
+    const device T* fmask [[buffer(12), function_constant(float_mask)]],
+    const constant int& mask_kv_seq_stride
+    [[buffer(13), function_constant(has_mask)]],
+    const constant int& mask_q_seq_stride
+    [[buffer(14), function_constant(has_mask)]],
+    const constant int& mask_head_stride
+    [[buffer(15), function_constant(has_mask)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -104,7 +107,7 @@ template <typename T, int D, int V = D>
       }
       score = simd_sum(score);
       if (float_mask) {
-        score += fmask[0];
+        score += max(Limits<U>::finite_min, static_cast<U>(fmask[0]));
       }
 
       // Update the accumulators
@@ -169,18 +172,21 @@ template <typename T, int D, int V = D>
     device float* out [[buffer(3)]],
     device float* sums [[buffer(4)]],
     device float* maxs [[buffer(5)]],
-    const constant int& gqa_factor,
-    const constant int& N,
-    const constant size_t& k_head_stride,
-    const constant size_t& k_seq_stride,
-    const constant size_t& v_head_stride,
-    const constant size_t& v_seq_stride,
-    const constant float& scale,
-    const device bool* bmask [[function_constant(bool_mask)]],
-    const device T* fmask [[function_constant(float_mask)]],
-    const constant int& mask_kv_seq_stride [[function_constant(has_mask)]],
-    const constant int& mask_q_seq_stride [[function_constant(has_mask)]],
-    const constant int& mask_head_stride [[function_constant(has_mask)]],
+    const constant int& gqa_factor [[buffer(6)]],
+    const constant int& N [[buffer(7)]],
+    const constant size_t& k_head_stride [[buffer(8)]],
+    const constant size_t& k_seq_stride [[buffer(9)]],
+    const constant size_t& v_head_stride [[buffer(10)]],
+    const constant size_t& v_seq_stride [[buffer(11)]],
+    const constant float& scale [[buffer(12)]],
+    const device bool* bmask [[buffer(13), function_constant(bool_mask)]],
+    const device T* fmask [[buffer(14), function_constant(float_mask)]],
+    const constant int& mask_kv_seq_stride
+    [[buffer(15), function_constant(has_mask)]],
+    const constant int& mask_q_seq_stride
+    [[buffer(16), function_constant(has_mask)]],
+    const constant int& mask_head_stride
+    [[buffer(17), function_constant(has_mask)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
