@@ -45,9 +45,17 @@ class Linear(Module):
           not use a bias. Default is ``True``.
     """
 
-    def __init__(self, input_dims: int, output_dims: int, bias: bool = True) -> None:
+    def __init__(
+        self,
+        input_dims: int,
+        output_dims: int,
+        bias: bool = True,
+        kaiming_init: bool = False,
+    ) -> None:
         super().__init__()
-        scale = math.sqrt(1.0 / input_dims)
+        scale = (
+            math.sqrt(6.0 / input_dims) if kaiming_init else math.sqrt(1.0 / input_dims)
+        )
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -97,13 +105,24 @@ class Bilinear(Module):
         output_dims (int): The dimensionality of the output features
         bias (bool, optional): If set to ``False`` then the layer will
           not use a bias. Default is ``True``.
+        kaiming_init (bool, optional): If ``True``, uses Kaiming uniform initialization
+          compatible with ReLU activations (matches PyTorch). Default is ``False``.
     """
 
     def __init__(
-        self, input1_dims: int, input2_dims: int, output_dims: int, bias: bool = True
+        self,
+        input1_dims: int,
+        input2_dims: int,
+        output_dims: int,
+        bias: bool = True,
+        kaiming_init: bool = False,
     ) -> None:
         super().__init__()
-        scale = math.sqrt(1.0 / input1_dims)
+        scale = (
+            math.sqrt(6.0 / input1_dims)
+            if kaiming_init
+            else math.sqrt(1.0 / input1_dims)
+        )
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
