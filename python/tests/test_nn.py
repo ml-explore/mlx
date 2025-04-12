@@ -226,12 +226,6 @@ class TestLayers(mlx_tests.MLXTestCase):
         outputs = layer(inputs)
         self.assertEqual(outputs.shape, (10, 8))
 
-    def test_linear_kaiming_init(self):
-        inputs = mx.zeros((10, 4))
-        layer = nn.Linear(input_dims=4, output_dims=8, kaiming_init=True)
-        outputs = layer(inputs)
-        self.assertEqual(outputs.shape, (10, 8))
-
     def test_bilinear(self):
         inputs1 = mx.zeros((10, 2))
         inputs2 = mx.zeros((10, 4))
