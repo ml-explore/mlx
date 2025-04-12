@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
@@ -220,6 +221,16 @@ void scan_dispatch(
     }
     case Scan::Max: {
       auto op = [](U y, T x) { return x < y ? y : x; };
+      auto init = (issubdtype(in.dtype(), floating))
+          ? static_cast<U>(-std::numeric_limits<float>::infinity())
+          : std::numeric_limits<U>::min();
+      scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
+      break;
+    }
+    case Scan::LogAddExp: {
+      auto op = [](U a, T b) {
+        return detail::LogAddExp{}(a, static_cast<U>(b));
+      };
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
