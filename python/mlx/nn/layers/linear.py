@@ -43,6 +43,8 @@ class Linear(Module):
         output_dims (int): The dimensionality of the output features
         bias (bool, optional): If set to ``False`` then the layer will
           not use a bias. Default is ``True``.
+        kaiming_init (bool, optional): If ``True``, uses Kaiming uniform initialization
+        compatible with ReLU activations (matches PyTorch). Default is ``False``.
     """
 
     def __init__(
