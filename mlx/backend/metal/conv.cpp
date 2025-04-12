@@ -944,6 +944,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
     wt = arr_copy;
   }
 
+  auto padding_ = padding_lo_;
+
   // 3D conv
   if (out.ndim() == 5) {
     conv_3D_gpu(
