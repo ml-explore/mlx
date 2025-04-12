@@ -55,7 +55,6 @@ class Linear(Module):
         super().__init__()
         init_fn = init.he_uniform()
         self.weight = init_fn(mx.zeros((output_dims, input_dims)))
-
         if bias:
             self.bias = init_fn(mx.zeros((output_dims,)))
 
@@ -108,7 +107,6 @@ class Bilinear(Module):
         super().__init__()
         init_fn = init.he_uniform()
         self.weight = init_fn(mx.zeros((output_dims, input_dims)))
-
         if bias:
             self.bias = init_fn(mx.zeros((output_dims,)))
 
