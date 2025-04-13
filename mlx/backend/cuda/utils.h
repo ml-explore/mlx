@@ -2,13 +2,23 @@
 
 #pragma once
 
+#include "mlx/array.h"
+
 #include <cuda_runtime.h>
+
+#include <type_traits>
 
 namespace mlx::core {
 
 namespace cu {
 class Device;
 }
+
+// Type traits for detecting floating numbers.
+template <typename T>
+inline constexpr bool is_floating_v =
+    std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
 
 // Cuda stream managed with RAII.
 class CudaStream {

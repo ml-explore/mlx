@@ -2,8 +2,6 @@
 
 #include "mlx/backend/metal/utils.h"
 
-using namespace mlx;
-
 namespace mlx::core {
 
 std::string type_to_name(const Dtype& t) {
@@ -156,12 +154,6 @@ get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor) {
   }
   return MTL::Size(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
-}
-
-std::string get_primitive_string(Primitive* primitive) {
-  std::ostringstream op_t;
-  primitive->print(op_t);
-  return op_t.str();
 }
 
 } // namespace mlx::core
