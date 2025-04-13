@@ -1728,7 +1728,7 @@ class Round : public UnaryPrimitive {
 
 class Scan : public UnaryPrimitive {
  public:
-  enum ReduceType { Max, Min, Sum, Prod };
+  enum ReduceType { Max, Min, Sum, Prod, LogAddExp };
 
   explicit Scan(
       Stream stream,
@@ -1762,6 +1762,9 @@ class Scan : public UnaryPrimitive {
         break;
       case Max:
         os << "Max";
+        break;
+      case LogAddExp:
+        os << "Logaddexp";
         break;
     }
   }

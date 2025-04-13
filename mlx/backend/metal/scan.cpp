@@ -60,6 +60,9 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     case Scan::Min:
       reduce_type = "min";
       break;
+    case Scan::LogAddExp:
+      reduce_type = "logaddexp";
+      break;
   }
   kname << reduce_type << "_" << type_to_name(in) << "_" << type_to_name(out);
   auto kernel = get_scan_kernel(
