@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/array.h"
+#include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
 
@@ -26,7 +26,7 @@ inline bool set_copy_output_data(const array& in, array& out, CopyType ctype) {
   if (ctype == CopyType::Vector) {
     // If the input is donateable, we are doing a vector copy and the types
     // have the same size, then the input buffer can hold the output.
-    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+    if (is_donatable(in, out)) {
       out.copy_shared_buffer(in);
       return true;
     } else {

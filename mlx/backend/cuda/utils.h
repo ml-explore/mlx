@@ -1,5 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
+// This file include utilies that are used by C++ code (i.e. .cpp files).
+
 #pragma once
 
 #include <cuda_runtime.h>
