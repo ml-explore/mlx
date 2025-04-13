@@ -304,7 +304,7 @@ struct PrimitiveFactory {
           "CumProd",
           "CumMin",
           "CumMax",
-          "LogCumSumExp"),
+          "CumLogaddexp"),
       SERIALIZE_PRIMITIVE(Scatter),
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),

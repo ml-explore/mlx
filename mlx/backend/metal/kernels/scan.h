@@ -142,7 +142,7 @@ struct CumMin {
 };
 
 template <typename U>
-struct LogCumSumExp {
+struct CumLogaddexp {
   static constexpr constant U init = Limits<U>::min;
 
   template <typename T>

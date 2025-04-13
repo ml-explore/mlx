@@ -1764,7 +1764,7 @@ class Scan : public UnaryPrimitive {
         os << "Max";
         break;
       case LogAddExp:
-        os << "LogAddExp";
+        os << "Logaddexp";
         break;
     }
   }
