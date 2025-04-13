@@ -61,7 +61,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       reduce_type = "min";
       break;
     case Scan::LogAddExp:
-      reduce_type = "lae";
+      reduce_type = "logaddexp";
       break;
   }
   kname << reduce_type << "_" << type_to_name(in) << "_" << type_to_name(out);
