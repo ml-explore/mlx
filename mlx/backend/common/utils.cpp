@@ -1,8 +1,15 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
+
+std::string get_primitive_string(Primitive* primitive) {
+  std::ostringstream op_t;
+  primitive->print(op_t);
+  return op_t.str();
+}
 
 std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
     const Shape& shape,

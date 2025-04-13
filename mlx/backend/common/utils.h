@@ -8,6 +8,8 @@
 
 namespace mlx::core {
 
+std::string get_primitive_string(Primitive* primitive);
+
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
   int64_t loc = 0;
