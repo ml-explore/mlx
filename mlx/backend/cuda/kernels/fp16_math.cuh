@@ -81,6 +81,52 @@ MLX_DEFINE_UNARY_OP_FALLBCK(tanh)
 #undef MLX_DEFINE_UNARY_OP_FALLBCK
 
 ///////////////////////////////////////////////////////////////////////////////
+// Binary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)          \
+  template <typename T>                              \
+  __forceinline__ __device__ auto NAME(T x, T y) {   \
+    if constexpr (cuda::std::is_same_v<T, __half>) { \
+      return HALF_OP(x, y);                          \
+    } else {                                         \
+      return ::NAME(x, y);                           \
+    }                                                \
+  }
+#else
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)                        \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x, T y) {                 \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x, y);                                        \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x, y);                                        \
+    } else {                                                       \
+      return ::NAME(x, y);                                         \
+    }                                                              \
+  }
+#endif
+
+MLX_DEFINE_BINARY_OP(max, __hmax)
+MLX_DEFINE_BINARY_OP(min, __hmin)
+
+#undef MLX_DEFINE_BINARY_OP
+
+template <typename T>
+__forceinline__ __device__ T fmod(T x, T y) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __float2half(::fmod(__half2float(x), __half2float(y)));
+#if CUDART_VERSION >= 12000 || __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __float2bfloat16(::fmod(__bfloat162float(x), __bfloat162float(y)));
+#endif
+  } else {
+    return ::fmod(x, y);
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Missing C++ operator overrides for CUDA 7.
 ///////////////////////////////////////////////////////////////////////////////
 
