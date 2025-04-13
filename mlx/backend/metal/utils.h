@@ -58,8 +58,6 @@ inline void debug_set_primitive_buffer_label(
 #endif
 }
 
-std::string get_primitive_string(Primitive* primitive);
-
 template <typename T>
 constexpr bool is_numeric_except_char = std::is_arithmetic_v<T> &&
     !std::is_same_v<T, char> && !std::is_same_v<T, signed char> &&
