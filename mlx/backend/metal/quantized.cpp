@@ -662,7 +662,44 @@ void qvm(
     int N,
     int K,
     metal::Device& d,
-    const Stream& s) {}
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int bn = 64;
+  int bk = 32;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
+
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      "qvm_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      B > 1 ? "_batch_1" : "_batch_0");
+  auto template_def = get_template_definition(
+      kname, "qvm", type_string, group_size, bits, B > 1);
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_output_array(out, 4);
+  compute_encoder.set_bytes(K, 5);
+  compute_encoder.set_bytes(N, 6);
+  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 7);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
 
 void qmm(
     const array& x,
