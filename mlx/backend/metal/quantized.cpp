@@ -377,6 +377,8 @@ inline void add_strides_and_shapes(
     return;
   }
 
+  // TODO: Collapse batch dimensions
+
   int x_batch_ndims = x.ndim() - 2;
   int w_batch_ndims = w.ndim() - 2;
   compute_encoder.set_bytes(x_batch_ndims, offset);
@@ -714,7 +716,56 @@ void qmm(
     int N,
     int K,
     metal::Device& d,
-    const Stream& s) {}
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 32;
+  int bn = 32;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 32 == 0;
+  bool batched = B > 1;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      transpose ? "qmm_t_" : "qmm_n_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      aligned ? "_alN_true" : "_alN_false",
+      batched ? "_batch_1" : "_batch_0");
+  auto template_def = get_template_definition(
+      kname,
+      transpose ? "qmm_t" : "qmm_n",
+      type_string,
+      group_size,
+      bits,
+      aligned,
+      batched);
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_output_array(out, 4);
+  compute_encoder.set_bytes(K, 5);
+  compute_encoder.set_bytes(N, 6);
+  compute_encoder.set_bytes(M, 7);
+  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 8);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
