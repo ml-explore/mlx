@@ -428,58 +428,7 @@ void qmv_quad(
       K,
       B > 1 ? "_batch_1" : "_batch_0");
   auto template_def = get_template_definition(
-      kname, "qmv_fast", type_string, group_size, bits, K, B > 1);
-
-  auto kernel = get_quantized_kernel(d, kname, template_def);
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(biases, 2);
-  compute_encoder.set_input_array(x, 3);
-  compute_encoder.set_output_array(out, 4);
-  compute_encoder.set_bytes(K, 5);
-  compute_encoder.set_bytes(N, 6);
-  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 7);
-
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-}
-
-void qmv_fast(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
-    array& out,
-    int group_size,
-    int bits,
-    int M,
-    int N,
-    int K,
-    metal::Device& d,
-    const Stream& s) {
-  int B = out.size() / M / N;
-
-  int bn = 8;
-  int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
-  MTL::Size grid_dims(M, N / bn, B);
-
-  std::string kname;
-  kname.reserve(64);
-  std::string type_string = get_type_string(x.dtype());
-  concatenate(
-      kname,
-      "qmv_fast_",
-      type_string,
-      "_gs_",
-      group_size,
-      "_b_",
-      bits,
-      B > 1 ? "_batch_1" : "_batch_0");
-  auto template_def = get_template_definition(
-      kname, "qmv_fast", type_string, group_size, bits, B > 1);
+      kname, "qmv_quad", type_string, group_size, bits, K, B > 1);
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -520,9 +469,10 @@ void qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
+  bool fast = N % bn == 0 && K % 512 == 0;
   concatenate(
       kname,
-      "qmv_",
+      fast ? "qmv_fast_" : "qmv_",
       type_string,
       "_gs_",
       group_size,
@@ -530,7 +480,7 @@ void qmv(
       bits,
       B > 1 ? "_batch_1" : "_batch_0");
   auto template_def = get_template_definition(
-      kname, "qmv", type_string, group_size, bits, B > 1);
+      kname, fast ? "qmv_fast" : "qmv", type_string, group_size, bits, B > 1);
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -793,11 +743,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         qmv_quad(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
       }
 
-      // Conveniently aligned vectors so route to fast kernel
-      else if (N % 8 == 0 && K % 512 == 0) {
-        qmv_fast(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
-      }
-
       // Normal qmv
       else {
         qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
@@ -835,10 +780,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         d,
         s);
   }
-
-  // qmm_op(
-  //     inputs, out, transpose_, group_size_, bits_, /*gather=*/false,
-  //     stream());
 }
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
