@@ -1108,7 +1108,7 @@ class TestBlas(mlx_tests.MLXTestCase):
             lhs_indices_ = mx.broadcast_to(lhs_indices, (3, 2))
             rhs_indices_ = mx.broadcast_to(rhs_indices, (3, 2))
             M = a.shape[-2]
-            N = b.shape[-2]
+            N = b.shape[-1]
             K = a.shape[-1]
 
             a = a.reshape((-1, M, K))
