@@ -232,7 +232,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       break;
   }
   auto& in = inputs[0];
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
   arg_reduce_dispatch(in, out, axis_, op_name, s);
 }
