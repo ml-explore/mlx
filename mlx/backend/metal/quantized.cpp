@@ -150,125 +150,6 @@ void launch_qmm(
   d.add_temporaries(std::move(copies), s.index);
 }
 
-void qvm_split_k(
-    const std::vector<array>& inputs,
-    array& out,
-    int group_size,
-    int bits,
-    int D,
-    int O,
-    int B,
-    int N,
-    const Stream& s) {
-  int split_k = D > 8192 ? 32 : 8;
-  int split_D = (D + split_k - 1) / split_k;
-  N *= split_k;
-
-  int bo = 64;
-  int bd = 32;
-  MTL::Size group_dims = MTL::Size(bd, 2, 1);
-  MTL::Size grid_dims = MTL::Size(B, O / bo, N);
-
-  auto& x_pre = inputs[0];
-  auto& w_pre = inputs[1];
-  auto& scales_pre = inputs[2];
-  auto& biases_pre = inputs[3];
-
-  // Ensure that the last two dims are row contiguous.
-  // TODO: Check if we really need this for x as well...
-  std::vector<array> copies;
-  auto ensure_row_contiguous_last_dims = [&copies, &s](const array& arr) {
-    auto stride_0 = arr.strides()[arr.ndim() - 2];
-    auto stride_1 = arr.strides()[arr.ndim() - 1];
-    if (stride_0 == arr.shape(-1) && stride_1 == 1) {
-      return arr;
-    } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy_gpu(arr, arr_copy, CopyType::General, s);
-      copies.push_back(arr_copy);
-      return arr_copy;
-    }
-  };
-  auto x = ensure_row_contiguous_last_dims(x_pre);
-  auto w = ensure_row_contiguous_last_dims(w_pre);
-  auto scales = ensure_row_contiguous_last_dims(scales_pre);
-  auto biases = ensure_row_contiguous_last_dims(biases_pre);
-
-  int x_batch_ndims = x.ndim() - 2;
-  auto x_shape = x.shape();
-  auto x_strides = x.strides();
-  int w_batch_ndims = w.ndim() - 2;
-  auto w_shape = w.shape();
-  auto w_strides = w.strides();
-  auto s_strides = scales.strides();
-  auto b_strides = biases.strides();
-
-  // Add split_k dim with reshapes
-  x_shape.insert(x_shape.end() - 2, split_k);
-  x_shape.back() /= split_k;
-  x_strides.insert(x_strides.end() - 2, split_D);
-  x_strides[x.ndim() - 1] = split_D;
-  x_batch_ndims += 1;
-
-  w_shape.insert(w_shape.end() - 2, split_k);
-  w_shape[w.ndim() - 1] /= split_k;
-  w_strides.insert(w_strides.end() - 2, split_D * w.shape(-1));
-  w_batch_ndims += 1;
-  s_strides.insert(s_strides.end() - 2, split_D * scales.shape(-1));
-  b_strides.insert(b_strides.end() - 2, split_D * biases.shape(-1));
-
-  int final_block_size = D - (split_k - 1) * split_D;
-
-  auto& d = metal::device(s.device);
-
-  auto temp_shape = out.shape();
-  temp_shape.insert(temp_shape.end() - 2, split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
-  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  d.add_temporary(intermediate, s.index);
-
-  std::ostringstream kname;
-  auto type_string = get_type_string(x.dtype());
-  kname << "qvm_split_k" << "_" << type_string << "_gs_" << group_size << "_b_"
-        << bits << "_spk_" << split_k;
-  auto template_def = get_template_definition(
-      kname.str(), "qvm_split_k", type_string, group_size, bits, split_k);
-
-  // Encode and dispatch kernel
-  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(biases, 2);
-  compute_encoder.set_input_array(x, 3);
-  compute_encoder.set_output_array(intermediate, 4);
-  compute_encoder.set_bytes(split_D, 5);
-  compute_encoder.set_bytes(O, 6);
-
-  compute_encoder.set_bytes(x_batch_ndims, 7);
-  compute_encoder.set_vector_bytes(x_shape, 8);
-  compute_encoder.set_vector_bytes(x_strides, 9);
-  compute_encoder.set_bytes(w_batch_ndims, 10);
-  compute_encoder.set_vector_bytes(w_shape, 11);
-  compute_encoder.set_vector_bytes(w_strides, 12);
-  compute_encoder.set_vector_bytes(s_strides, 13);
-  compute_encoder.set_vector_bytes(b_strides, 14);
-  compute_encoder.set_bytes(final_block_size, 15);
-
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-  d.add_temporaries(std::move(copies), s.index);
-
-  int axis = intermediate.ndim() - 3;
-  ReductionPlan plan(
-      ReductionOpType::ContiguousStridedReduce,
-      {intermediate.shape(axis)},
-      {intermediate.strides(axis)});
-  strided_reduce_general_dispatch(
-      intermediate, out, "sum", plan, {axis}, compute_encoder, d, s);
-}
-
 void qmm_op(
     const std::vector<array>& inputs,
     array& out,
@@ -379,7 +260,7 @@ void qmm_op(
     }
   } else {
     if (B < 4 && D >= 1024 && !gather) {
-      return qvm_split_k(inputs, out, group_size, bits, D, O, B, N, s);
+      // return qvm_split_k(inputs, out, group_size, bits, D, O, B, N, s);
     } else if (B < 4) {
       name += "qvm";
       int bo = 64;
@@ -427,8 +308,8 @@ inline array ensure_row_contiguous_matrix(
     const array& x,
     metal::Device& d,
     const Stream& s) {
-  auto stride_0 = x.strides()[arr.ndim() - 2];
-  auto stride_1 = x.strides()[arr.ndim() - 1];
+  auto stride_0 = x.strides()[x.ndim() - 2];
+  auto stride_1 = x.strides()[x.ndim() - 1];
   if (stride_0 == x.shape(-1) && stride_1 == 1) {
     return x;
   } else {
@@ -439,23 +320,208 @@ inline array ensure_row_contiguous_matrix(
   }
 }
 
+inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
+  auto arch = d.get_architecture();
+  auto arch_size = arch.back();
+  auto arch_gen = arch.substr(arch.size() - 3, 2);
+  if (arch_gen == "13" || arch_gen == "14") {
+    switch (arch_size) {
+      case 'd':
+        if (D <= 2048 && O <= 2048) {
+          return 32;
+        } else if (D <= 4096 && O <= 4096) {
+          return 18;
+        } else {
+          return 12;
+        }
+      default:
+        if (D <= 2048 && O <= 2048) {
+          return 14;
+        } else if (D <= 4096 && O <= 4096) {
+          return 10;
+        } else {
+          return 6;
+        }
+    }
+  } else {
+    switch (arch_size) {
+      case 'd':
+        if (D <= 2048 && O <= 2048) {
+          return 32;
+        } else if (D <= 4096 && O <= 4096) {
+          return 18;
+        } else {
+          return 12;
+        }
+      default:
+        if (D <= 2048 && O <= 2048) {
+          return 18;
+        } else if (D <= 4096 && O <= 4096) {
+          return 12;
+        } else {
+          return 10;
+        }
+    }
+  }
+}
+
+void qmv_quad(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {}
+
+void qmv_fast(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {}
+
 void qmv(
     const array& x,
     const array& w,
     const array& scales,
     const array& biases,
+    array& out,
     int group_size,
     int bits,
+    int M,
+    int N,
+    int K,
     metal::Device& d,
     const Stream& s) {}
+
+void qvm_split_k(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int split_k = K > 8192 ? 32 : 8;
+  int split_D = (K + split_k - 1) / split_k;
+  int B = out.size() / M / N;
+  B *= split_k;
+
+  int bn = 64;
+  int bk = 32;
+  MTL::Size group_dims = MTL::Size(bk, 2, 1);
+  MTL::Size grid_dims = MTL::Size(M, N / bn, B);
+
+  int x_batch_ndims = x.ndim() - 2;
+  auto x_shape = x.shape();
+  auto x_strides = x.strides();
+  int w_batch_ndims = w.ndim() - 2;
+  auto w_shape = w.shape();
+  auto w_strides = w.strides();
+  auto s_strides = scales.strides();
+  auto b_strides = biases.strides();
+
+  // Add split_k dim with reshapes
+  x_shape.insert(x_shape.end() - 2, split_k);
+  x_shape.back() /= split_k;
+  x_strides.insert(x_strides.end() - 2, split_D);
+  x_strides[x.ndim() - 1] = split_D;
+  x_batch_ndims += 1;
+
+  w_shape.insert(w_shape.end() - 2, split_k);
+  w_shape[w.ndim() - 1] /= split_k;
+  w_strides.insert(w_strides.end() - 2, split_D * w.shape(-1));
+  w_batch_ndims += 1;
+  s_strides.insert(s_strides.end() - 2, split_D * scales.shape(-1));
+  b_strides.insert(b_strides.end() - 2, split_D * biases.shape(-1));
+
+  int final_block_size = K - (split_k - 1) * split_D;
+
+  auto temp_shape = out.shape();
+  temp_shape.insert(temp_shape.end() - 2, split_k);
+  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  d.add_temporary(intermediate, s.index);
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      "qvm_split_k_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_spk_",
+      split_k);
+  auto template_def = get_template_definition(
+      kname, "qvm_split_k", type_string, group_size, bits, split_k);
+
+  // Encode and dispatch kernel
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_output_array(intermediate, 4);
+  compute_encoder.set_bytes(split_D, 5);
+  compute_encoder.set_bytes(N, 6);
+
+  compute_encoder.set_bytes(x_batch_ndims, 7);
+  compute_encoder.set_vector_bytes(x_shape, 8);
+  compute_encoder.set_vector_bytes(x_strides, 9);
+  compute_encoder.set_bytes(w_batch_ndims, 10);
+  compute_encoder.set_vector_bytes(w_shape, 11);
+  compute_encoder.set_vector_bytes(w_strides, 12);
+  compute_encoder.set_vector_bytes(s_strides, 13);
+  compute_encoder.set_vector_bytes(b_strides, 14);
+  compute_encoder.set_bytes(final_block_size, 15);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  int axis = intermediate.ndim() - 3;
+  ReductionPlan plan(
+      ReductionOpType::ContiguousStridedReduce,
+      {intermediate.shape(axis)},
+      {intermediate.strides(axis)});
+  strided_reduce_general_dispatch(
+      intermediate, out, "sum", plan, {axis}, compute_encoder, d, s);
+}
 
 void qvm(
     const array& x,
     const array& w,
     const array& scales,
     const array& biases,
+    array& out,
     int group_size,
     int bits,
+    int M,
+    int N,
+    int K,
     metal::Device& d,
     const Stream& s) {}
 
@@ -464,9 +530,13 @@ void qmm(
     const array& w,
     const array& scales,
     const array& biases,
+    array& out,
     bool transpose,
     int group_size,
     int bits,
+    int M,
+    int N,
+    int K,
     metal::Device& d,
     const Stream& s) {}
 
@@ -476,17 +546,72 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  array x = ensure_row_contiguous_matrix(inputs[0]);
-  array w = ensure_row_contiguous_matrix(inputs[1]);
-  array scales = ensure_row_contiguous_matrix(inputs[2]);
-  array biases = ensure_row_contiguous_matrix(inputs[3]);
+  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  array biases = ensure_row_contiguous_matrix(inputs[3], d, s);
 
-  int M = x.flags().row_contiguous ? x.size() / K : x.shape(-2);
   int K = x.shape(-1);
+  int M =
+      (w.ndim() == 2 && x.flags().row_contiguous) ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  qmm_op(
-      inputs, out, transpose_, group_size_, bits_, /*gather=*/false, stream());
+  // Route to the vector kernels
+  int vector_limit = (transpose_) ? get_qmv_batch_limit(K, N, d) : 4;
+  if (M < vector_limit) {
+    // Matrix vector products
+    if (transpose_) {
+      // Small vectors so route to quad kernel
+      if ((K == 128 || K == 64) && is_power_of_2(bits_)) {
+        qmv_quad(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+      }
+
+      // Conveniently aligned vectors so route to fast kernel
+      else if (N % 8 == 0 && K % 512 == 0) {
+        qmv_fast(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+      }
+
+      // Normal qmv
+      else {
+        qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+      }
+    }
+
+    // Vector matrix products
+    else {
+      // Split K kernel
+      if (K >= 1024) {
+        qvm_split_k(
+            x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+      }
+
+      // Normal qvm
+      else {
+        qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+      }
+    }
+  }
+
+  // Route to the matrix kernels
+  else {
+    qmm(x,
+        w,
+        scales,
+        biases,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s);
+  }
+
+  // qmm_op(
+  //     inputs, out, transpose_, group_size_, bits_, /*gather=*/false,
+  //     stream());
 }
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
