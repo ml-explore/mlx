@@ -717,8 +717,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // We are walking x in order and w is also in order so we can batch up the
   // matmuls and reuse reading x and w.
   //
-  // TODO: Tune 16 here a bit better. Maybe also choose dynamically based on
-  //       B and (w.size() / K / N).
+  // TODO: Tune 16 here a bit better. Maybe also choose it dynamically based
+  //       on B and (w.size() / K / N).
   if (false && M == 1 && B >= 16 && right_sorted_ == true) {
     return;
   }

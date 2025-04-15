@@ -28,16 +28,24 @@ def scatter_unsort(x, inv_order, shape=None):
 def gather_mm_simulate(x, w, indices):
     x, idx, inv_order = gather_sort(x, indices)
     for i in range(2):
-        y = mx.concatenate([x[i] @ w[j].T for i, j in enumerate(idx.tolist())], axis=0)
+        y = mx.concatenate(
+            [
+                mx.quantized_matmul(x[i], w[0][j], w[1][j], w[2][j], transpose=True)
+                for i, j in enumerate(idx.tolist())
+            ],
+            axis=0,
+        )
         x = y[:, None]
     x = scatter_unsort(x, inv_order, indices.shape)
     return x
 
 
-def time_gather_mm():
+def time_gather_qmm():
     x = mx.random.normal((N, 1, 1, D)) / 1024**0.5
     w1 = mx.random.normal((E, M, D)) / 1024**0.5
     w2 = mx.random.normal((E, D, M)) / 1024**0.5
+    w1 = mx.quantize(w1)
+    w2 = mx.quantize(w2)
     indices = (mx.random.uniform(shape=(N, I)) * E).astype(mx.uint32)
     sorted_indices = mx.sort(indices.flatten()).reshape(N, I)
     mx.eval(x, w1, w2, indices, sorted_indices)
@@ -47,8 +55,8 @@ def time_gather_mm():
         inv_order = None
         if sort:
             x, idx, inv_order = gather_sort(x, indices)
-        x = mx.gather_mm(x, w1.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort)
-        x = mx.gather_mm(x, w2.swapaxes(-1, -2), rhs_indices=idx, sorted_indices=sort)
+        x = mx.gather_qmm(x, *w1, transpose=True, rhs_indices=idx, sorted_indices=sort)
+        x = mx.gather_qmm(x, *w2, transpose=True, rhs_indices=idx, sorted_indices=sort)
         if sort:
             x = scatter_unsort(x, inv_order, indices.shape)
         return x
@@ -60,15 +68,17 @@ def time_gather_mm():
     x = mx.random.normal((N * I, D)) / 1024**0.5
     w1 = mx.random.normal((M, D)) / 1024**0.5
     w2 = mx.random.normal((D, M)) / 1024**0.5
+    w1 = mx.quantize(w1)
+    w2 = mx.quantize(w2)
     mx.eval(x, w1, w2)
 
     def equivalent_matmul(x, w1, w2):
-        x = x @ w1.T
-        x = x @ w2.T
+        x = mx.quantized_matmul(x, *w1, transpose=True)
+        x = mx.quantized_matmul(x, *w2, transpose=True)
         return x
 
     time_fn(equivalent_matmul, x, w1, w2)
 
 
 if __name__ == "__main__":
-    time_gather_mm()
+    time_gather_qmm()
