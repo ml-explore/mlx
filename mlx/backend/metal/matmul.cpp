@@ -1908,8 +1908,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  // Extract shapes strides from inputs and copy in case of non-contiguous
-  // vectors.
+  // Extract shapes from inputs.
   int M = a.shape(-2);
   int N = b.shape(-1);
   int K = a.shape(-1);

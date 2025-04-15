@@ -365,16 +365,16 @@ inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
   }
 }
 
-inline void add_strides_and_shapes(
+inline int add_strides_and_shapes(
     CommandEncoder& compute_encoder,
-    int B,
+    bool skip,
     const array& x,
     const array& w,
     const array& scales,
     const array& biases,
     int offset) {
-  if (B <= 1) {
-    return;
+  if (skip) {
+    return 0;
   }
 
   // TODO: Collapse batch dimensions
@@ -389,6 +389,25 @@ inline void add_strides_and_shapes(
   compute_encoder.set_vector_bytes(w.strides(), offset + 5);
   compute_encoder.set_vector_bytes(scales.strides(), offset + 6);
   compute_encoder.set_vector_bytes(biases.strides(), offset + 7);
+
+  return 8;
+}
+
+inline int add_gather_strides_and_shapes(
+    CommandEncoder& compute_encoder,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    int offset) {
+  auto [shape, strides] = collapse_contiguous_dims(
+      lhs_indices.shape(), {lhs_indices.strides(), rhs_indices.strides()});
+  int ndims = shape.size();
+
+  compute_encoder.set_bytes(ndims, offset);
+  compute_encoder.set_vector_bytes(shape, offset + 1);
+  compute_encoder.set_vector_bytes(strides[0], offset + 2);
+  compute_encoder.set_vector_bytes(strides[1], offset + 3);
+
+  return 4;
 }
 
 void qmv_quad(
@@ -441,7 +460,7 @@ void qmv_quad(
   compute_encoder.set_output_array(out, 4);
   compute_encoder.set_bytes(K, 5);
   compute_encoder.set_bytes(N, 6);
-  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 7);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, 7);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -493,7 +512,7 @@ void qmv(
   compute_encoder.set_output_array(out, 4);
   compute_encoder.set_bytes(K, 5);
   compute_encoder.set_bytes(N, 6);
-  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 7);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, 7);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -648,7 +667,7 @@ void qvm(
   compute_encoder.set_output_array(out, 4);
   compute_encoder.set_bytes(K, 5);
   compute_encoder.set_bytes(N, 6);
-  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 7);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, 7);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -712,7 +731,185 @@ void qmm(
   compute_encoder.set_bytes(K, 5);
   compute_encoder.set_bytes(N, 6);
   compute_encoder.set_bytes(M, 7);
-  add_strides_and_shapes(compute_encoder, B, x, w, scales, biases, 8);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, 8);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void gather_qmm(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 32;
+  int bn = 32;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 32 == 0;
+  bool batched = B > 1;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      transpose ? "bs_qmm_t_" : "bs_qmm_n_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "");
+  std::string template_def;
+  if (transpose) {
+    template_def = get_template_definition(
+        kname, "bs_qmm_t", type_string, group_size, bits, aligned);
+  } else {
+    template_def = get_template_definition(
+        kname, "bs_qmm_n", type_string, group_size, bits);
+  }
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_input_array(lhs_indices, 4);
+  compute_encoder.set_input_array(rhs_indices, 5);
+  compute_encoder.set_output_array(out, 6);
+  compute_encoder.set_bytes(K, 7);
+  compute_encoder.set_bytes(N, 8);
+  compute_encoder.set_bytes(M, 9);
+  int n =
+      add_strides_and_shapes(compute_encoder, false, x, w, scales, biases, 10);
+  add_gather_strides_and_shapes(
+      compute_encoder, lhs_indices, rhs_indices, 10 + n);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int bn = 8;
+  int bk = 32;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
+
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  bool fast = N % bn == 0 && K % 512 == 0;
+  concatenate(
+      kname,
+      fast ? "bs_qmv_fast_" : "bs_qmv_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto template_def = get_template_definition(
+      kname, fast ? "bs_qmv_fast" : "bs_qmv", type_string, group_size, bits);
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_input_array(lhs_indices, 4);
+  compute_encoder.set_input_array(rhs_indices, 5);
+  compute_encoder.set_output_array(out, 6);
+  compute_encoder.set_bytes(K, 7);
+  compute_encoder.set_bytes(N, 8);
+  int n =
+      add_strides_and_shapes(compute_encoder, false, x, w, scales, biases, 9);
+  add_gather_strides_and_shapes(
+      compute_encoder, lhs_indices, rhs_indices, 9 + n);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void gather_qvm(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int bn = 64;
+  int bk = 32;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
+
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(kname, "qvm_", type_string, "_gs_", group_size, "_b_", bits);
+  auto template_def =
+      get_template_definition(kname, "qvm", type_string, group_size, bits);
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_input_array(lhs_indices, 4);
+  compute_encoder.set_input_array(rhs_indices, 5);
+  compute_encoder.set_output_array(out, 6);
+  compute_encoder.set_bytes(K, 7);
+  compute_encoder.set_bytes(N, 8);
+  int n =
+      add_strides_and_shapes(compute_encoder, false, x, w, scales, biases, 9);
+  add_gather_strides_and_shapes(
+      compute_encoder, lhs_indices, rhs_indices, 9 + n);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -723,49 +920,23 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
+  // Make sure the last two dims of x and w, s, b are contiguous. This should
+  // be relaxed for x.
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
   array w = ensure_row_contiguous_matrix(inputs[1], d, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   array biases = ensure_row_contiguous_matrix(inputs[3], d, s);
 
+  // Extract the matmul shapes
   bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
   int K = x.shape(-1);
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  // Route to the vector kernels
-  int vector_limit = (transpose_) ? get_qmv_batch_limit(K, N, d) : 4;
-  if (M < vector_limit) {
-    // Matrix vector products
-    if (transpose_) {
-      // Small vectors so route to quad kernel
-      if ((K == 128 || K == 64) && is_power_of_2(bits_)) {
-        qmv_quad(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
-      }
+  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
 
-      // Normal qmv
-      else {
-        qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
-      }
-    }
-
-    // Vector matrix products
-    else {
-      // Split K kernel
-      if (K >= 1024) {
-        qvm_split_k(
-            x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
-      }
-
-      // Normal qvm
-      else {
-        qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
-      }
-    }
-  }
-
-  // Route to the matrix kernels
-  else {
+  // It is a matrix matrix product.
+  if (M >= vector_limit) {
     qmm(x,
         w,
         scales,
@@ -779,13 +950,119 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s);
+    return;
   }
+
+  // It is a qmv with a small inner dimension so route to qmv_quad kernel
+  if (transpose_ && (K == 128 || K == 64) && is_power_of_2(bits_)) {
+    qmv_quad(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+    return;
+  }
+
+  // Run of the mill qmv
+  if (transpose_) {
+    qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+    return;
+  }
+
+  // Run of the mill qvm
+  if (K < 1024) {
+    qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+    return;
+  }
+
+  // Qvm with large dimension so route to a split K kernel for more parallelism
+  qvm_split_k(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+  return;
 }
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 6);
-  qmm_op(
-      inputs, out, transpose_, group_size_, bits_, /*gather=*/true, stream());
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  array biases = ensure_row_contiguous_matrix(inputs[3], d, s);
+  const array& lhs_indices = inputs[4];
+  const array& rhs_indices = inputs[5];
+
+  int K = x.shape(-1);
+  int M = x.shape(-2);
+  int N = out.shape(-1);
+  int B = out.size() / M / N;
+  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
+
+  // We are walking x in order and w is also in order so we can batch up the
+  // matmuls and reuse reading x and w.
+  //
+  // TODO: Tune 16 here a bit better. Maybe also choose dynamically based on
+  //       B and (w.size() / K / N).
+  if (false && M == 1 && B >= 16 && right_sorted_ == true) {
+    return;
+  }
+
+  // It is a matrix matrix product
+  if (M >= vector_limit) {
+    gather_qmm(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s);
+    return;
+  }
+
+  if (transpose_) {
+    gather_qmv(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s);
+    return;
+  }
+
+  gather_qvm(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      out,
+      group_size_,
+      bits_,
+      M,
+      N,
+      K,
+      d,
+      s);
+
+  // qmm_op(
+  //     inputs, out, transpose_, group_size_, bits_, /*gather=*/true,
+  //     stream());
 }
 
 void fast::AffineQuantize::eval_gpu(
