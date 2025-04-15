@@ -3,6 +3,10 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
+constant bool align_M [[function_constant(200)]];
+constant bool align_N [[function_constant(201)]];
+constant bool align_K [[function_constant(202)]];
+
 using namespace metal;
 
 #define MLX_MTL_CONST static constant constexpr const
@@ -2005,6 +2009,163 @@ template <
       tid);
   qmm_n_impl<T, group_size, bits, BM, BK, BN>(
       w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
+}
+
+template <
+    typename T,
+    int group_size,
+    int bits,
+    int BM,
+    int BN,
+    int BK,
+    int WM,
+    int WN,
+    bool transpose>
+[[kernel]] void gather_qmm_rhs(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    const device uint32_t* indices [[buffer(4)]],
+    device T* y [[buffer(5)]],
+    const constant int& M [[buffer(6)]],
+    const constant int& N [[buffer(7)]],
+    const constant int& K [[buffer(8)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int BN_padded = (BN + 16 / sizeof(T));
+  constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
+  constexpr int bytes_per_pack = power_of_2_bits ? 1 : 3;
+
+  using mma_t = mlx::steel::BlockMMA<
+      T,
+      T,
+      BM,
+      BN,
+      BK,
+      WM,
+      WN,
+      false,
+      transpose,
+      BK_padded,
+      transpose ? BK_padded : BN_padded>;
+  using loader_x_t =
+      mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
+  using loader_w_t = QuantizedBlockLoader<
+      T,
+      transpose ? BN : BK,
+      transpose ? BK : BN,
+      transpose ? BK_padded : BN_padded,
+      transpose,
+      WM * WN * SIMD_SIZE,
+      group_size,
+      bits>;
+
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[transpose ? BN * BK_padded : BK * BN_padded];
+
+  // Compute the block
+  const int K_w = K * bytes_per_pack / pack_factor;
+  const int K_g = K / group_size;
+  const int K_it = K / BK;
+  const int stride_w = N * K_w;
+  const int stride_s = N * K_g;
+  const int y_row = tid.y * BM;
+  const int y_col = tid.x * BN;
+  const size_t y_row_long = size_t(y_row);
+  const size_t y_col_long = size_t(y_col);
+
+  // Prepare threadgroup bounds
+  const short tgp_bm = align_M ? BM : short(min(BM, M - y_row));
+  const short tgp_bn = align_N ? BN : short(min(BN, N - y_col));
+
+  // Move x and output to the correct block
+  auto wl = (const device uint8_t*)w;
+  x += y_row_long * K;
+  y += y_row_long * N + y_col_long;
+  wl += transpose ? y_col_long * K_w : y_col * bytes_per_pack / pack_factor;
+  scales += transpose ? y_col_long * K_g : y_col / group_size;
+  biases += transpose ? y_col_long * K_g : y_col / group_size;
+
+  // Do as many matmuls as necessary
+  uint32_t index;
+  short offset;
+  uint32_t index_next = indices[y_row];
+  short offset_next = 0;
+  int n = 0;
+  while (n < tgp_bm) {
+    n++;
+    offset = offset_next;
+    index = index_next;
+    offset_next = tgp_bm;
+    for (; n < tgp_bm; n++) {
+      if (indices[y_row + n] != index) {
+        offset_next = n;
+        index_next = indices[y_row + n];
+        break;
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_none);
+
+    // Prepare threadgroup mma operation
+    thread mma_t mma_op(simd_group_id, simd_lane_id);
+
+    // Prepare threadgroup loading operations
+    thread loader_x_t loader_x(x, K, Xs, simd_group_id, simd_lane_id);
+    thread loader_w_t loader_w(
+        wl + index * stride_w,
+        scales + index * stride_s,
+        biases + index * stride_s,
+        N,
+        Ws,
+        simd_group_id,
+        simd_lane_id);
+
+    // Matrices are all aligned check nothing
+    if (align_M && align_N) {
+      for (int k = 0; k < K_it; k++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Load elements into threadgroup memory
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Multiply and accumulate threadgroup elements
+        mma_op.mma(Xs, Ws);
+
+        // Prepare for next iteration
+        loader_x.next();
+        loader_w.next();
+      }
+      if (!align_K) {
+        // Calculate and load remaining elements
+        const int k_remain = K - K_it * BK;
+        const short2 tile_x = short2(k_remain, tgp_bm);
+        const short2 tile_w =
+            transpose ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
+        loader_x.load_safe(tile_x);
+        loader_w.load_safe(tile_w);
+
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Multiply and accumulate them
+        mma_op.mma(Xs, Ws);
+      }
+
+      // Store results to device memory
+      if (offset_next - offset == BM) {
+        mma_op.store_result(y, N);
+      } else {
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(BN, offset_next));
+      }
+    }
+  }
 }
 
 template <typename T, const int group_size, const int bits>

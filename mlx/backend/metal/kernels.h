@@ -224,6 +224,21 @@ MTL::ComputePipelineState* get_quantized_kernel(
     const std::string& kernel_name,
     const std::string& template_def);
 
+MTL::ComputePipelineState* get_gather_qmm_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& x,
+    int group_size,
+    int bits,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    bool transpose);
+
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
 std::string

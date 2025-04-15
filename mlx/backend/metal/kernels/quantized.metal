@@ -60,6 +60,20 @@
       bits,                                                         \
       split_k)
 
+#define instantiate_gather_qmm_rhs(func, name, type, group_size, bits, bm, bn, bk, wm, wn, transpose)        \
+  instantiate_kernel(                                                                                        \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn, \
+      func,                                                         \
+      type,                                                         \
+      group_size,                                                   \
+      bits,                                                         \
+      bm,                                                           \
+      bn,                                                           \
+      bk,                                                           \
+      wm,                                                           \
+      wn,                                                           \
+      transpose)
+
 #define instantiate_quantized_batched_wrap(name, type, group_size, bits) \
   instantiate_quantized_batched(name, type, group_size, bits, 1)      \
   instantiate_quantized_batched(name, type, group_size, bits, 0)
@@ -96,12 +110,17 @@
   instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 8)   \
   instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 32)
 
+#define instantiate_quantized_all_rhs(type, group_size, bits) \
+  instantiate_gather_qmm_rhs(gather_qmm_rhs, gather_qmm_rhs_nt, type, group_size, bits, 16, 32, 32, 1, 2, true) \
+  instantiate_gather_qmm_rhs(gather_qmm_rhs, gather_qmm_rhs_nn, type, group_size, bits, 16, 32, 32, 1, 2, false)
+
 #define instantiate_quantized_funcs(type, group_size, bits) \
   instantiate_quantized_all_single(type, group_size, bits)  \
   instantiate_quantized_all_batched(type, group_size, bits) \
   instantiate_quantized_all_aligned(type, group_size, bits) \
   instantiate_quantized_all_quad(type, group_size, bits)    \
-  instantiate_quantized_all_splitk(type, group_size, bits)
+  instantiate_quantized_all_splitk(type, group_size, bits)  \
+  instantiate_quantized_all_rhs(type, group_size, bits)
 
 #define instantiate_quantized_types(group_size, bits)       \
   instantiate_quantized_funcs(float, group_size, bits)      \

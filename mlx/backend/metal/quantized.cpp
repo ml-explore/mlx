@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -15,6 +16,18 @@
 namespace mlx::core {
 
 namespace {
+
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return x_copy;
+  } else {
+    return x;
+  }
+}
 
 inline array ensure_row_contiguous_matrix(
     const array& x,
@@ -633,6 +646,131 @@ void gather_qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void gather_qmm_rhs(
+    const array& x_,
+    const array& w_,
+    const array& scales_,
+    const array& biases_,
+    const array& indices_,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  // Start by normalizing the indices
+  array indices = ensure_row_contiguous(indices_, d, s);
+
+  // Broadcast x with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of x broadcasted
+  // with rhs_indices. We need only broadcast x and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+
+  // Normalize the input arrays
+  array x = broadcast_with_indices(x_);
+  array w = ensure_row_contiguous(w_, d, s);
+  array scales = ensure_row_contiguous(scales_, d, s);
+  array biases = ensure_row_contiguous(biases_, d, s);
+
+  // TODO: Tune the block sizes
+  int bm = 16, bn = 32, bk = 32;
+  int wm = 1, wn = 2;
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Make the kernel name
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      transpose ? "gather_qmm_rhs_nt_" : "gather_qmm_rhs_nn_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm_",
+      bm,
+      "_bn_",
+      bn,
+      "_bk_",
+      bk,
+      "_wm_",
+      wm,
+      "_wn_",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      kname,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_gather_qmm_kernel(
+      d,
+      kname,
+      hash_name,
+      func_consts,
+      x,
+      group_size,
+      bits,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      transpose);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
+
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_input_array(w, 1);
+  compute_encoder.set_input_array(scales, 2);
+  compute_encoder.set_input_array(biases, 3);
+  compute_encoder.set_input_array(indices, 4);
+  compute_encoder.set_output_array(out, 5);
+  compute_encoder.set_bytes(M, 6);
+  compute_encoder.set_bytes(N, 7);
+  compute_encoder.set_bytes(K, 8);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -719,7 +857,22 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   //
   // TODO: Tune 16 here a bit better. Maybe also choose it dynamically based
   //       on B and (w.size() / K / N).
-  if (false && M == 1 && B >= 16 && right_sorted_ == true) {
+  if (M == 1 && B >= 16 && right_sorted_ == true) {
+    gather_qmm_rhs(
+        x,
+        w,
+        scales,
+        biases,
+        rhs_indices,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        x.size() / K,
+        N,
+        K,
+        d,
+        s);
     return;
   }
 
@@ -789,27 +942,13 @@ void fast::AffineQuantize::eval_gpu(
 
   auto& s = stream();
   auto& d = metal::device(s.device);
-
-  std::vector<array> copies;
-  auto ensure_row_contiguous = [&copies, &s](const array& arr) {
-    if (arr.flags().row_contiguous) {
-      return arr;
-    } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy_gpu(arr, arr_copy, CopyType::General, s);
-      copies.push_back(arr_copy);
-      return arr_copy;
-    }
-  };
-  auto w = ensure_row_contiguous(w_pre);
-
   auto& compute_encoder = d.get_command_encoder(s.index);
+
+  auto w = ensure_row_contiguous(w_pre, d, s);
   compute_encoder.set_input_array(w, 0);
   if (dequantize_) {
-    auto& scales_pre = inputs[1];
-    auto& biases_pre = inputs[2];
-    auto scales = ensure_row_contiguous(scales_pre);
-    auto biases = ensure_row_contiguous(biases_pre);
+    auto scales = ensure_row_contiguous(inputs[1], d, s);
+    auto biases = ensure_row_contiguous(inputs[2], d, s);
     compute_encoder.set_input_array(scales, 1);
     compute_encoder.set_input_array(biases, 2);
     compute_encoder.set_output_array(out, 3);
@@ -857,8 +996,6 @@ void fast::AffineQuantize::eval_gpu(
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
                                : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
-
-  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core
