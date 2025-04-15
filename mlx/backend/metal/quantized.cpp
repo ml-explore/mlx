@@ -689,16 +689,16 @@ void qmm(
       group_size,
       "_b_",
       bits,
-      aligned ? "_alN_true" : "_alN_false",
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
       batched ? "_batch_1" : "_batch_0");
-  auto template_def = get_template_definition(
-      kname,
-      transpose ? "qmm_t" : "qmm_n",
-      type_string,
-      group_size,
-      bits,
-      aligned,
-      batched);
+  std::string template_def;
+  if (transpose) {
+    template_def = get_template_definition(
+        kname, "qmm_t", type_string, group_size, bits, aligned, batched);
+  } else {
+    template_def = get_template_definition(
+        kname, "qmm_n", type_string, group_size, bits, batched);
+  }
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
