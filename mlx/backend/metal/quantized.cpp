@@ -889,9 +889,9 @@ void gather_qvm(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  concatenate(kname, "qvm_", type_string, "_gs_", group_size, "_b_", bits);
+  concatenate(kname, "bs_qvm_", type_string, "_gs_", group_size, "_b_", bits);
   auto template_def =
-      get_template_definition(kname, "qvm", type_string, group_size, bits);
+      get_template_definition(kname, "bs_qvm", type_string, group_size, bits);
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
