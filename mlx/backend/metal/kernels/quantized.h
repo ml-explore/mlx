@@ -1686,7 +1686,7 @@ template <
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void bs_qmv_fast(
+[[kernel]] void gather_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1748,7 +1748,7 @@ template <typename T, int group_size, int bits>
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void bs_qmv(
+[[kernel]] void gather_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1810,7 +1810,7 @@ template <typename T, int group_size, int bits>
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void bs_qvm(
+[[kernel]] void gather_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1879,7 +1879,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void bs_qmm_t(
+[[kernel]] void gather_qmm_t(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1946,7 +1946,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void bs_qmm_n(
+[[kernel]] void gather_qmm_n(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],

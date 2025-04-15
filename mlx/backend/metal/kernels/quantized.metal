@@ -73,14 +73,14 @@
 #define instantiate_quantized_all_single(type, group_size, bits) \
   instantiate_quantized(affine_quantize, type, group_size, bits) \
   instantiate_quantized(affine_dequantize, type, group_size, bits)     \
-  instantiate_quantized(bs_qmv_fast, type, group_size, bits)     \
-  instantiate_quantized(bs_qmv, type, group_size, bits)     \
-  instantiate_quantized(bs_qvm, type, group_size, bits)     \
-  instantiate_quantized(bs_qmm_n, type, group_size, bits)
+  instantiate_quantized(gather_qmv_fast, type, group_size, bits)     \
+  instantiate_quantized(gather_qmv, type, group_size, bits)     \
+  instantiate_quantized(gather_qvm, type, group_size, bits)     \
+  instantiate_quantized(gather_qmm_n, type, group_size, bits)
 
 #define instantiate_quantized_all_aligned(type, group_size, bits)   \
-  instantiate_quantized_aligned(bs_qmm_t, type, group_size, bits, true) \
-  instantiate_quantized_aligned(bs_qmm_t, type, group_size, bits, false) \
+  instantiate_quantized_aligned(gather_qmm_t, type, group_size, bits, true) \
+  instantiate_quantized_aligned(gather_qmm_t, type, group_size, bits, false) \
   instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 1) \
   instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 0) \
   instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, false, 1) \

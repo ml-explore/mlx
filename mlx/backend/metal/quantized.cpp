@@ -14,295 +14,7 @@
 
 namespace mlx::core {
 
-void launch_qmm(
-    std::string name,
-    const std::vector<array>& inputs,
-    array& out,
-    int group_size,
-    int bits,
-    int D,
-    int O,
-    int B,
-    int N,
-    MTL::Size& group_dims,
-    MTL::Size& grid_dims,
-    bool batched,
-    bool matrix,
-    bool gather,
-    bool aligned,
-    bool quad,
-    const Stream& s) {
-  auto& x_pre = inputs[0];
-  auto& w_pre = inputs[1];
-  auto& scales_pre = inputs[2];
-  auto& biases_pre = inputs[3];
-
-  // Ensure that the last two dims are row contiguous.
-  // TODO: Check if we really need this for x as well...
-  std::vector<array> copies;
-  auto ensure_row_contiguous_last_dims = [&copies, &s](const array& arr) {
-    auto stride_0 = arr.strides()[arr.ndim() - 2];
-    auto stride_1 = arr.strides()[arr.ndim() - 1];
-    if (stride_0 == arr.shape(-1) && stride_1 == 1) {
-      return arr;
-    } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy_gpu(arr, arr_copy, CopyType::General, s);
-      copies.push_back(arr_copy);
-      return arr_copy;
-    }
-  };
-  auto x = ensure_row_contiguous_last_dims(x_pre);
-  auto w = ensure_row_contiguous_last_dims(w_pre);
-  auto scales = ensure_row_contiguous_last_dims(scales_pre);
-  auto biases = ensure_row_contiguous_last_dims(biases_pre);
-
-  int x_batch_ndims = x.ndim() - 2;
-  auto& x_shape = x.shape();
-  auto& x_strides = x.strides();
-  int w_batch_ndims = w.ndim() - 2;
-  auto& w_shape = w.shape();
-  auto& w_strides = w.strides();
-  auto& s_strides = scales.strides();
-  auto& b_strides = biases.strides();
-
-  std::string aligned_n = (O % 32) == 0 ? "true" : "false";
-
-  std::ostringstream kname;
-  auto type_string = get_type_string(x.dtype());
-  kname << name << "_" << type_string << "_gs_" << group_size << "_b_" << bits;
-  if (quad) {
-    kname << "_d_" << D;
-  }
-  if (aligned) {
-    kname << "_alN_" << aligned_n;
-  }
-  if (!gather) {
-    kname << "_batch_" << batched;
-  }
-
-  // Encode and dispatch kernel
-  std::string template_def;
-  if (quad) {
-    template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, D, batched);
-  } else if (aligned && !gather) {
-    template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, aligned_n, batched);
-  } else if (!gather && !aligned) {
-    template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, batched);
-  } else if (aligned && gather) {
-    template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits, aligned_n);
-  } else {
-    template_def = get_template_definition(
-        kname.str(), name, type_string, group_size, bits);
-  }
-  auto& d = metal::device(s.device);
-  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(biases, 2);
-  compute_encoder.set_input_array(x, 3);
-  compute_encoder.set_output_array(out, 4);
-  compute_encoder.set_bytes(D, 5);
-  compute_encoder.set_bytes(O, 6);
-
-  int offset = 7;
-  if (matrix) {
-    compute_encoder.set_bytes(B, 7);
-    offset += 1;
-  }
-
-  if (batched || gather) {
-    compute_encoder.set_bytes(x_batch_ndims, offset);
-    compute_encoder.set_vector_bytes(x_shape, offset + 1);
-    compute_encoder.set_vector_bytes(x_strides, offset + 2);
-    compute_encoder.set_bytes(w_batch_ndims, offset + 3);
-    compute_encoder.set_vector_bytes(w_shape, offset + 4);
-    compute_encoder.set_vector_bytes(w_strides, offset + 5);
-    compute_encoder.set_vector_bytes(s_strides, offset + 6);
-    compute_encoder.set_vector_bytes(b_strides, offset + 7);
-  }
-  if (gather) {
-    auto& lhs_indices = inputs[4];
-    auto& rhs_indices = inputs[5];
-
-    // TODO: collapse batch dims
-    auto& batch_shape = lhs_indices.shape();
-    int batch_ndims = batch_shape.size();
-    auto& lhs_strides = lhs_indices.strides();
-    auto& rhs_strides = rhs_indices.strides();
-
-    compute_encoder.set_bytes(batch_ndims, offset + 8);
-    compute_encoder.set_vector_bytes(batch_shape, offset + 9);
-    compute_encoder.set_input_array(lhs_indices, offset + 10);
-    compute_encoder.set_input_array(rhs_indices, offset + 11);
-    compute_encoder.set_vector_bytes(lhs_strides, offset + 12);
-    compute_encoder.set_vector_bytes(rhs_strides, offset + 13);
-  }
-
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-  d.add_temporaries(std::move(copies), s.index);
-}
-
-void qmm_op(
-    const std::vector<array>& inputs,
-    array& out,
-    bool transpose,
-    int group_size,
-    int bits,
-    bool gather,
-    const Stream& s) {
-  out.set_data(allocator::malloc(out.nbytes()));
-
-  MTL::Size group_dims;
-  MTL::Size grid_dims;
-
-  auto& x = inputs[0];
-  auto& w = inputs[1];
-  bool batched = !gather && (w.ndim() > 2 || !x.flags().row_contiguous);
-
-  int D = x.shape(-1);
-  int O = out.shape(-1);
-  // For the unbatched W case, avoid `adjust_matrix_offsets`
-  // for a small performance gain.
-  int B = (batched || gather) ? x.shape(-2) : x.size() / D;
-  int N = (batched || gather) ? out.size() / B / O : 1;
-
-  std::string name = gather ? "bs_" : "";
-  bool matrix = false;
-  bool aligned = false;
-  bool quad = false;
-
-  auto get_qmv_batch_limit = [s](int D, int O) {
-    auto arch = metal::device(s.device).get_architecture();
-    auto arch_size = arch.back();
-    auto arch_gen = arch.substr(arch.size() - 3, 2);
-    if (arch_gen == "13" || arch_gen == "14") {
-      switch (arch_size) {
-        case 'd':
-          if (D <= 2048 && O <= 2048) {
-            return 32;
-          } else if (D <= 4096 && O <= 4096) {
-            return 18;
-          } else {
-            return 12;
-          }
-        default:
-          if (D <= 2048 && O <= 2048) {
-            return 14;
-          } else if (D <= 4096 && O <= 4096) {
-            return 10;
-          } else {
-            return 6;
-          }
-      }
-    } else {
-      switch (arch_size) {
-        case 'd':
-          if (D <= 2048 && O <= 2048) {
-            return 32;
-          } else if (D <= 4096 && O <= 4096) {
-            return 18;
-          } else {
-            return 12;
-          }
-        default:
-          if (D <= 2048 && O <= 2048) {
-            return 18;
-          } else if (D <= 4096 && O <= 4096) {
-            return 12;
-          } else {
-            return 10;
-          }
-      }
-    }
-  };
-
-  if (transpose) {
-    auto qmv_batch_limit = get_qmv_batch_limit(D, O);
-    if (B < qmv_batch_limit && (D == 128 || D == 64) && is_power_of_2(bits)) {
-      name += "qmv_quad";
-      constexpr int quads_per_simd = 8;
-      constexpr int results_per_quadgroup = 8;
-      int bo = quads_per_simd * results_per_quadgroup;
-      int simdgroup_size = 32;
-      group_dims = MTL::Size(simdgroup_size, 1, 1);
-      grid_dims = MTL::Size(B, (O + bo - 1) / bo, N);
-      quad = true;
-    } else if (B < qmv_batch_limit && O % 8 == 0 && D % 512 == 0 && D >= 512) {
-      name += "qmv_fast";
-      int bo = 8;
-      int bd = 32;
-      group_dims = MTL::Size(bd, 2, 1);
-      grid_dims = MTL::Size(B, O / bo, N);
-    } else if (B < qmv_batch_limit) {
-      name += "qmv";
-      int bo = 8;
-      int bd = 32;
-      group_dims = MTL::Size(bd, 2, 1);
-      grid_dims = MTL::Size(B, (O + bo - 1) / bo, N);
-    } else {
-      int wn = 2;
-      int wm = 2;
-      int bm = 32;
-      int bn = 32;
-      group_dims = MTL::Size(32, wn, wm);
-      grid_dims = MTL::Size((O + bn - 1) / bn, (B + bm - 1) / bm, N);
-      name += "qmm_t";
-      matrix = true;
-      aligned = true;
-    }
-  } else {
-    if (B < 4 && D >= 1024 && !gather) {
-      // return qvm_split_k(inputs, out, group_size, bits, D, O, B, N, s);
-    } else if (B < 4) {
-      name += "qvm";
-      int bo = 64;
-      int bd = 32;
-      group_dims = MTL::Size(bd, 2, 1);
-      grid_dims = MTL::Size(B, O / bo, N);
-    } else {
-      name += "qmm_n";
-      int wn = 2;
-      int wm = 2;
-      int bm = 32;
-      int bn = 32;
-      group_dims = MTL::Size(32, wn, wm);
-      grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, N);
-      matrix = true;
-      if ((O % bn) != 0) {
-        std::ostringstream msg;
-        msg << "[quantized_matmul] The output size should be divisible by "
-            << bn << " but received " << O << ".";
-        throw std::runtime_error(msg.str());
-      }
-    }
-  }
-  launch_qmm(
-      name,
-      inputs,
-      out,
-      group_size,
-      bits,
-      D,
-      O,
-      B,
-      N,
-      group_dims,
-      grid_dims,
-      batched,
-      matrix,
-      gather,
-      aligned,
-      quad,
-      s);
-}
+namespace {
 
 inline array ensure_row_contiguous_matrix(
     const array& x,
@@ -409,6 +121,8 @@ inline int add_gather_strides_and_shapes(
 
   return 4;
 }
+
+} // namespace
 
 void qmv_quad(
     const array& x,
@@ -768,7 +482,7 @@ void gather_qmm(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      transpose ? "bs_qmm_t_" : "bs_qmm_n_",
+      transpose ? "gather_qmm_t_" : "gather_qmm_n_",
       type_string,
       "_gs_",
       group_size,
@@ -778,10 +492,10 @@ void gather_qmm(
   std::string template_def;
   if (transpose) {
     template_def = get_template_definition(
-        kname, "bs_qmm_t", type_string, group_size, bits, aligned);
+        kname, "gather_qmm_t", type_string, group_size, bits, aligned);
   } else {
     template_def = get_template_definition(
-        kname, "bs_qmm_n", type_string, group_size, bits);
+        kname, "gather_qmm_n", type_string, group_size, bits);
   }
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
@@ -834,14 +548,18 @@ void gather_qmv(
   bool fast = N % bn == 0 && K % 512 == 0;
   concatenate(
       kname,
-      fast ? "bs_qmv_fast_" : "bs_qmv_",
+      fast ? "gather_qmv_fast_" : "gather_qmv_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits);
   auto template_def = get_template_definition(
-      kname, fast ? "bs_qmv_fast" : "bs_qmv", type_string, group_size, bits);
+      kname,
+      fast ? "gather_qmv_fast" : "gather_qmv",
+      type_string,
+      group_size,
+      bits);
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -889,9 +607,10 @@ void gather_qvm(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  concatenate(kname, "bs_qvm_", type_string, "_gs_", group_size, "_b_", bits);
-  auto template_def =
-      get_template_definition(kname, "bs_qvm", type_string, group_size, bits);
+  concatenate(
+      kname, "gather_qvm_", type_string, "_gs_", group_size, "_b_", bits);
+  auto template_def = get_template_definition(
+      kname, "gather_qvm", type_string, group_size, bits);
 
   auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -1059,10 +778,6 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       K,
       d,
       s);
-
-  // qmm_op(
-  //     inputs, out, transpose_, group_size_, bits_, /*gather=*/true,
-  //     stream());
 }
 
 void fast::AffineQuantize::eval_gpu(
