@@ -174,12 +174,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
         tests = product(
             [128, 64, 32],  # group_size
             [2, 3, 4, 6, 8],  # bits
-            [128, 256],  # M
+            [32, 128, 256],  # M
             [128, 256, 67],  # N
             [0, 1, 3, 8],  # B
         )
         for group_size, bits, M, N, B in tests:
             with self.subTest(shape=(B, M, N), group_size=group_size, bits=bits):
+                if M < group_size:
+                    continue
                 x_shape = (1, N) if B == 0 else (B, 1, N)
                 w_shape = (N, M) if B == 0 else (B, N, M)
                 x = mx.random.normal(shape=x_shape, key=k1)
@@ -448,6 +450,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
 
         for kwargs in inputs:
+            test_shape(1, 32, 128, **kwargs)
             test_shape(32, 32, 256, **kwargs)
             test_shape(1, 32, 256, **kwargs)
             test_shape(32, 256, 32, transpose=False, **kwargs)
