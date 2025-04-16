@@ -778,6 +778,8 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
             lib_name,
             "gather_qmm_rhs",
             get_type_string(x.dtype()),
+            group_size,
+            bits,
             bm,
             bn,
             bk,
