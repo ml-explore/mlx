@@ -2011,6 +2011,92 @@ template <
       w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
+template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
+inline void gemm_loop_aligned(
+    threadgroup T* As,
+    threadgroup T* Bs,
+    thread mma_t& mma_op,
+    thread loader_a_t& loader_a,
+    thread loader_b_t& loader_b,
+    const int k_iterations) {
+  for (int k = 0; k < k_iterations; k++) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Load elements into threadgroup memory
+    loader_a.load_unsafe();
+    loader_b.load_unsafe();
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Multiply and accumulate threadgroup elements
+    mma_op.mma(As, Bs);
+
+    // Prepare for next iteration
+    loader_a.next();
+    loader_b.next();
+  }
+}
+
+template <
+    bool rows_aligned,
+    bool cols_aligned,
+    bool transpose,
+    typename T,
+    typename mma_t,
+    typename loader_a_t,
+    typename loader_b_t>
+inline void gemm_loop_unaligned(
+    threadgroup T* As,
+    threadgroup T* Bs,
+    thread mma_t& mma_op,
+    thread loader_a_t& loader_a,
+    thread loader_b_t& loader_b,
+    const int k_iterations,
+    const short tgp_bm,
+    const short tgp_bn,
+    const short tgp_bk) {
+  for (int k = 0; k < k_iterations; k++) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Load elements into threadgroup memory
+    if (rows_aligned) {
+      loader_a.load_unsafe();
+    } else {
+      loader_a.load_safe(short2(tgp_bk, tgp_bm));
+    }
+    if (cols_aligned) {
+      loader_b.load_unsafe();
+    } else {
+      loader_a.load_safe(
+          transpose ? short2(tgp_bk, tgp_bn) : short2(tgp_bn, tgp_bk));
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Multiply and accumulate threadgroup elements
+    mma_op.mma(As, Bs);
+
+    // Prepare for next iteration
+    loader_a.next();
+    loader_b.next();
+  }
+}
+
+template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
+inline void gemm_loop_finalize(
+    threadgroup T* As,
+    threadgroup T* Bs,
+    thread mma_t& mma_op,
+    thread loader_a_t& loader_a,
+    thread loader_b_t& loader_b,
+    const short2 tile_a,
+    const short2 tile_b) {
+  loader_a.load_safe(tile_a);
+  loader_b.load_safe(tile_b);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  mma_op.mma(As, Bs);
+}
+
 template <
     typename T,
     int group_size,
@@ -2082,6 +2168,12 @@ template <
   const short tgp_bm = align_M ? BM : short(min(BM, M - y_row));
   const short tgp_bn = align_N ? BN : short(min(BN, N - y_col));
 
+  // Calculate the final tiles in the case that K is not aligned
+  const int k_remain = K - K_it * BK;
+  const short2 tile_x = short2(k_remain, tgp_bm);
+  const short2 tile_w =
+      transpose ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
+
   // Move x and output to the correct block
   auto wl = (const device uint8_t*)w;
   x += y_row_long * K;
@@ -2126,35 +2218,9 @@ template <
 
     // Matrices are all aligned check nothing
     if (align_M && align_N) {
-      for (int k = 0; k < K_it; k++) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Load elements into threadgroup memory
-        loader_x.load_unsafe();
-        loader_w.load_unsafe();
-
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Multiply and accumulate threadgroup elements
-        mma_op.mma(Xs, Ws);
-
-        // Prepare for next iteration
-        loader_x.next();
-        loader_w.next();
-      }
+      gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
       if (!align_K) {
-        // Calculate and load remaining elements
-        const int k_remain = K - K_it * BK;
-        const short2 tile_x = short2(k_remain, tgp_bm);
-        const short2 tile_w =
-            transpose ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
-        loader_x.load_safe(tile_x);
-        loader_w.load_safe(tile_w);
-
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Multiply and accumulate them
-        mma_op.mma(Xs, Ws);
+        gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
       }
 
       // Store results to device memory
@@ -2163,6 +2229,59 @@ template <
       } else {
         mma_op.store_result_slice(
             y, N, short2(0, offset), short2(BN, offset_next));
+      }
+    } else {
+      // Tile aligned so check outside of the hot loop
+      if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
+        gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
+        if (!align_K) {
+          gemm_loop_finalize(
+              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+
+        // Store results to device memory
+        if (offset_next - offset == BM) {
+          mma_op.store_result(y, N);
+        } else {
+          mma_op.store_result_slice(
+              y, N, short2(0, offset), short2(BN, offset_next));
+        }
+      }
+
+      // Tile partially aligned check rows
+      else if (align_N || tgp_bn == BN) {
+        gemm_loop_unaligned<false, true, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          gemm_loop_finalize(
+              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(BN, offset_next));
+      }
+
+      // Tile partially aligned check cols
+      else if (align_M || tgp_bm == BM) {
+        gemm_loop_unaligned<true, false, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          gemm_loop_finalize(
+              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(tgp_bn, offset_next));
+      }
+
+      // Nothing aligned so check both rows and cols
+      else {
+        gemm_loop_unaligned<false, false, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          gemm_loop_finalize(
+              Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(tgp_bn, offset_next));
       }
     }
   }
