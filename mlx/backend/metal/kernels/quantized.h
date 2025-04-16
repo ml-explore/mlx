@@ -2067,7 +2067,7 @@ inline void gemm_loop_unaligned(
     if (cols_aligned) {
       loader_b.load_unsafe();
     } else {
-      loader_a.load_safe(
+      loader_b.load_safe(
           transpose ? short2(tgp_bk, tgp_bn) : short2(tgp_bn, tgp_bk));
     }
 
@@ -2156,9 +2156,11 @@ template <
   // Compute the block
   const int K_w = K * bytes_per_pack / pack_factor;
   const int K_g = K / group_size;
+  const int N_w = N * bytes_per_pack / pack_factor;
+  const int N_g = N / group_size;
   const int K_it = K / BK;
-  const int stride_w = N * K_w;
-  const int stride_s = N * K_g;
+  const size_t stride_w = transpose ? N * K_w : K * N_w;
+  const size_t stride_s = transpose ? N * K_g : K * N_g;
   const int y_row = tid.y * BM;
   const int y_col = tid.x * BN;
   const size_t y_row_long = size_t(y_row);
@@ -2211,7 +2213,7 @@ template <
         wl + index * stride_w,
         scales + index * stride_s,
         biases + index * stride_s,
-        N,
+        transpose ? K : N,
         Ws,
         simd_group_id,
         simd_lane_id);
