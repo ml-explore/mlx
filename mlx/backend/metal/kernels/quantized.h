@@ -2012,7 +2012,7 @@ template <
 }
 
 template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
-inline void gemm_loop_aligned(
+METAL_FUNC void gemm_loop_aligned(
     threadgroup T* As,
     threadgroup T* Bs,
     thread mma_t& mma_op,
@@ -2045,7 +2045,7 @@ template <
     typename mma_t,
     typename loader_a_t,
     typename loader_b_t>
-inline void gemm_loop_unaligned(
+METAL_FUNC void gemm_loop_unaligned(
     threadgroup T* As,
     threadgroup T* Bs,
     thread mma_t& mma_op,
@@ -2083,7 +2083,7 @@ inline void gemm_loop_unaligned(
 }
 
 template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
-inline void gemm_loop_finalize(
+METAL_FUNC void gemm_loop_finalize(
     threadgroup T* As,
     threadgroup T* Bs,
     thread mma_t& mma_op,
@@ -2222,6 +2222,7 @@ template <
     if (align_M && align_N) {
       gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
       if (!align_K) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
         gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
       }
 
@@ -2237,6 +2238,7 @@ template <
       if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
         gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
         if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
           gemm_loop_finalize(
               Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
         }
@@ -2255,6 +2257,7 @@ template <
         gemm_loop_unaligned<false, true, transpose>(
             Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
         if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
           gemm_loop_finalize(
               Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
         }
@@ -2267,6 +2270,7 @@ template <
         gemm_loop_unaligned<true, false, transpose>(
             Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
         if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
           gemm_loop_finalize(
               Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
         }
@@ -2279,6 +2283,7 @@ template <
         gemm_loop_unaligned<false, false, transpose>(
             Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
         if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
           gemm_loop_finalize(
               Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
         }
