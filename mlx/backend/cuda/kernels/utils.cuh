@@ -9,6 +9,8 @@
 #pragma once
 
 #include <cuComplex.h>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 #include <cuda/std/array>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
@@ -19,12 +21,104 @@ namespace mlx::core::cu {
 // CUDA kernel utils
 ///////////////////////////////////////////////////////////////////////////////
 
+// All existing NVIDIA hardware has a fixed 32 warp size. Though a built-in
+// warpSize variable exists, using it would prevent compile-time optimizations.
+#define WARP_SIZE 32
+
 // To pass shape/strides to kernels via constant memory, their size must be
 // known at compile time.
 #define MAX_NDIM 8
 
 using Shape = cuda::std::array<int32_t, MAX_NDIM>;
 using Strides = cuda::std::array<int64_t, MAX_NDIM>;
+
+///////////////////////////////////////////////////////////////////////////////
+// Type limits utils
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename = void>
+struct Limits {
+  static constexpr __host__ __device__ T max() {
+    return cuda::std::numeric_limits<T>::max();
+  }
+  static constexpr __host__ __device__ T min() {
+    return cuda::std::numeric_limits<T>::min();
+  }
+  static constexpr __host__ __device__ T finite_max() {
+    return cuda::std::numeric_limits<T>::max();
+  }
+  static constexpr __host__ __device__ T finite_min() {
+    return cuda::std::numeric_limits<T>::min();
+  }
+};
+
+template <typename T>
+struct Limits<
+    T,
+    cuda::std::enable_if_t<
+        cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double>>> {
+  static constexpr __host__ __device__ T max() {
+    return cuda::std::numeric_limits<T>::infinity();
+  }
+  static constexpr __host__ __device__ T min() {
+    return -cuda::std::numeric_limits<T>::infinity();
+  }
+  static constexpr __host__ __device__ T finite_max() {
+    return cuda::std::numeric_limits<T>::max();
+  }
+  static constexpr __host__ __device__ T finite_min() {
+    return cuda::std::numeric_limits<T>::lowest();
+  }
+};
+
+// CUDA 11 does not have host side arithmatic operators for half types.
+template <typename T>
+struct Limits<
+    T,
+    cuda::std::enable_if_t<
+        cuda::std::is_same_v<T, __half> ||
+        cuda::std::is_same_v<T, __nv_bfloat16>>> {
+  static constexpr __host__ __device__ T max() {
+    return cuda::std::numeric_limits<T>::infinity();
+  }
+  static constexpr __host__ __device__ T min() {
+#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
+    return -cuda::std::numeric_limits<T>::infinity();
+#else
+    return -cuda::std::numeric_limits<float>::infinity();
+#endif
+  }
+  static constexpr __host__ __device__ T finite_max() {
+    return cuda::std::numeric_limits<T>::max();
+  }
+  static constexpr __host__ __device__ T finite_min() {
+#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
+    return cuda::std::numeric_limits<T>::lowest();
+#else
+    return cuda::std::numeric_limits<float>::lowest();
+#endif
+  }
+};
+
+template <>
+struct Limits<bool> {
+  static constexpr __host__ __device__ bool max() {
+    return true;
+  }
+  static constexpr __host__ __device__ bool min() {
+    return false;
+  }
+};
+
+template <>
+struct Limits<cuComplex> {
+  static constexpr __host__ __device__ cuComplex max() {
+    return {Limits<float>::max(), Limits<float>::max()};
+  }
+  static constexpr __host__ __device__ cuComplex min() {
+    return {Limits<float>::min(), Limits<float>::min()};
+  }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Indexing utils
@@ -100,5 +194,109 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
   }
   return cuda::std::make_tuple(a_loc, b_loc);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Elem to loc in a loop utils
+///////////////////////////////////////////////////////////////////////////////
+
+template <int DIM, bool General = true, typename OffsetT = size_t>
+struct LoopedElemToLoc {
+  int dim;
+  LoopedElemToLoc<DIM - 1, General, OffsetT> inner_looper;
+  OffsetT offset{0};
+  int index{0};
+
+  __device__ LoopedElemToLoc(int dim) : dim(dim), inner_looper(dim - 1) {}
+
+  __device__ void next(const int* shape, const int64_t* strides) {
+    if (dim == 0) {
+      return;
+    }
+    index++;
+    offset += OffsetT(strides[dim - 1]);
+    if (index >= shape[dim - 1]) {
+      index = 0;
+      inner_looper.next(shape, strides);
+      offset = inner_looper.offset;
+    }
+  }
+
+  __device__ void next(int n, const int* shape, const int64_t* strides) {
+    if (dim == 0) {
+      return;
+    }
+    index += n;
+    offset += n * OffsetT(strides[dim - 1]);
+
+    if (index >= shape[dim - 1]) {
+      int extra = index - shape[dim - 1];
+      if (extra >= shape[dim - 1]) {
+        inner_looper.next(1 + extra / shape[dim - 1], shape, strides);
+        extra = extra % shape[dim - 1];
+      } else {
+        inner_looper.next(shape, strides);
+      }
+      index = 0;
+      offset = inner_looper.offset;
+      if (extra > 0) {
+        next(extra, shape, strides);
+      }
+    }
+  }
+
+  __device__ OffsetT location() {
+    return offset;
+  }
+};
+
+template <typename OffsetT>
+struct LoopedElemToLoc<1, true, OffsetT> {
+  int dim;
+  OffsetT offset{0};
+  int index{0};
+
+  __device__ LoopedElemToLoc(int dim) : dim(dim) {}
+
+  __device__ void next(const int* shape, const int64_t* strides) {
+    index++;
+    if (dim > 1) {
+      offset = elem_to_loc<OffsetT>(index, shape, strides, dim);
+    } else {
+      offset += OffsetT(strides[0]);
+    }
+  }
+
+  __device__ void next(int n, const int* shape, const int64_t* strides) {
+    index += n;
+    if (dim > 1) {
+      offset = elem_to_loc<OffsetT>(index, shape, strides, dim);
+    } else {
+      offset = index * OffsetT(strides[0]);
+    }
+  }
+
+  __device__ OffsetT location() {
+    return offset;
+  }
+};
+
+template <typename OffsetT>
+struct LoopedElemToLoc<1, false, OffsetT> {
+  OffsetT offset{0};
+
+  __device__ LoopedElemToLoc(int) {}
+
+  __device__ void next(const int*, const int64_t* strides) {
+    offset += OffsetT(strides[0]);
+  }
+
+  __device__ void next(int n, const int*, const int64_t* strides) {
+    offset += n * OffsetT(strides[0]);
+  }
+
+  __device__ OffsetT location() {
+    return offset;
+  }
+};
 
 } // namespace mlx::core::cu
