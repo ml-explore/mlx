@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.gather_mm &#8212; MLX 0.24.2 documentation</title>
+    <title>mlx.core.gather_mm &#8212; MLX 0.25.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=029512cb"></script>
+    <script src="../../_static/documentation_options.js?v=52c7255c"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.24.2 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.24.2 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.25.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.25.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -212,6 +212,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.log10.html">mlx.core.array.log10</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.log1p.html">mlx.core.array.log1p</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.log2.html">mlx.core.array.log2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.logcumsumexp.html">mlx.core.array.logcumsumexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.logsumexp.html">mlx.core.array.logsumexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.max.html">mlx.core.array.max</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.mean.html">mlx.core.array.mean</a></li>
@@ -358,6 +359,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.log10.html">mlx.core.log10</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.log1p.html">mlx.core.log1p</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logaddexp.html">mlx.core.logaddexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logcumsumexp.html">mlx.core.logcumsumexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_not.html">mlx.core.logical_not</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_and.html">mlx.core.logical_and</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_or.html">mlx.core.logical_or</a></li>
@@ -690,6 +692,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.AdamW.html">mlx.optimizers.AdamW</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Adamax.html">mlx.optimizers.Adamax</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.MultiOptimizer.html">mlx.optimizers.MultiOptimizer</a></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/schedulers.html">Schedulers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -912,7 +915,7 @@ document.write(`
 <h1>mlx.core.gather_mm<a class="headerlink" href="#mlx-core-gather-mm" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.gather_mm">
-<span class="sig-name descname"><span class="pre">gather_mm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lhs_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">rhs_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.gather_mm" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">gather_mm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lhs_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">rhs_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sorted_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.gather_mm" title="Link to this definition">#</a></dt>
 <dd><p>Matrix multiplication with matrix-level gather.</p>
 <p>Performs a gather of the operands with the given indices followed by a
 (possibly batched) matrix multiplication of two arrays.  This operation
@@ -925,6 +928,8 @@ along the batch dimensions (i.e. all but the last two dimensions) of
 contains indices from the range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">A1</span> <span class="pre">*</span> <span class="pre">A2</span> <span class="pre">*</span> <span class="pre">...</span> <span class="pre">*</span> <span class="pre">AS)</span></code></p>
 <p>For <code class="docutils literal notranslate"><span class="pre">b</span></code> with shape <code class="docutils literal notranslate"><span class="pre">(B1,</span> <span class="pre">B2,</span> <span class="pre">...,</span> <span class="pre">BS,</span> <span class="pre">M,</span> <span class="pre">K)</span></code>, <code class="docutils literal notranslate"><span class="pre">rhs_indices</span></code>
 contains indices from the range <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">B1</span> <span class="pre">*</span> <span class="pre">B2</span> <span class="pre">*</span> <span class="pre">...</span> <span class="pre">*</span> <span class="pre">BS)</span></code></p>
+<p>If only one index is passed and it is sorted, the <code class="docutils literal notranslate"><span class="pre">sorted_indices</span></code>
+flag can be passed for a possible faster implementation.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -932,6 +937,8 @@ contains indices from the range <code class="docutils literal notranslate"><span
 <li><p><strong>b</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input array.</p></li>
 <li><p><strong>lhs_indices</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>, </em><em>optional</em>) – Integer indices for <code class="docutils literal notranslate"><span class="pre">a</span></code>. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code></p></li>
 <li><p><strong>rhs_indices</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>, </em><em>optional</em>) – Integer indices for <code class="docutils literal notranslate"><span class="pre">b</span></code>. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code></p></li>
+<li><p><strong>sorted_indices</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em>, </em><em>optional</em>) – May allow a faster implementation
+if the passed indices are sorted. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>

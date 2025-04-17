@@ -38,6 +38,7 @@ Array
     array.log10
     array.log1p
     array.log2
+    array.logcumsumexp
     array.logsumexp
     array.max
     array.mean
