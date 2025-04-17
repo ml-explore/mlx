@@ -4909,7 +4909,7 @@ array operator^(const array& a, const array& b) {
 
 array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = promote_types(result_type(a, b), a.dtype());
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),
@@ -4923,7 +4923,7 @@ array operator<<(const array& a, const array& b) {
 
 array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = promote_types(result_type(a, b), a.dtype());
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),
