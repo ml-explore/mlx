@@ -2,12 +2,65 @@
 
 #pragma once
 
+#include <cuComplex.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace mlx::core::cu {
+
+///////////////////////////////////////////////////////////////////////////////
+// Constant values for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#define MLX_DEFINE_CONSTEXPR_VALUE(NAME, HALF_VALUE, BF16_VALUE, ...) \
+  template <typename T>                                               \
+  constexpr __host__ __device__ T NAME() {                            \
+    if constexpr (cuda::std::is_same_v<T, __half>) {                  \
+      uint16_t value = HALF_VALUE;                                    \
+      return __builtin_bit_cast(__half, value);                       \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {    \
+      uint16_t value = BF16_VALUE;                                    \
+      return __builtin_bit_cast(__nv_bfloat16, value);                \
+    } else {                                                          \
+      __VA_ARGS__                                                     \
+    }                                                                 \
+  }
+
+MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{0, 0};
+  } else {
+    return 0;
+  }
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{1, 1};
+  } else {
+    return 1;
+  }
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, {
+  return cuda::std::numeric_limits<T>::infinity();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, {
+  return -cuda::std::numeric_limits<T>::infinity();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(max_value, 0x7BFF, 0x7F7F, {
+  return cuda::std::numeric_limits<T>::max();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(lowest_value, 0xFBFF, 0xFF7F, {
+  return cuda::std::numeric_limits<T>::lowest();
+})
+
+#undef MLX_DEFINE_CONSTEXPR_VALUE
 
 ///////////////////////////////////////////////////////////////////////////////
 // Unary ops for half types.

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "mlx/array.h"
+
 #include <cuda_runtime.h>
 
 namespace mlx::core {
@@ -34,5 +36,8 @@ void check_cuda_error(const char* name, cudaError_t err);
 
 // The macro version that prints the command that failed.
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
+
+// Computes a 2D grid where each element is < UINT_MAX.
+dim3 get_2d_grid_dims(const Shape& shape, const Strides& strides);
 
 } // namespace mlx::core
