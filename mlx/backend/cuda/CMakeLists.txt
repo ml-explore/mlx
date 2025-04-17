@@ -13,6 +13,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
