@@ -752,4 +752,43 @@ MTL::ComputePipelineState* get_quantized_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_gather_qmm_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& x,
+    int group_size,
+    int bits,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    bool transpose) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::gemm(),
+        metal::quantized(),
+        get_template_definition(
+            lib_name,
+            "gather_qmm_rhs",
+            get_type_string(x.dtype()),
+            group_size,
+            bits,
+            bm,
+            bn,
+            bk,
+            wm,
+            wn,
+            transpose));
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 } // namespace mlx::core

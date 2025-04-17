@@ -1352,6 +1352,7 @@ array gather_qmm(
     bool transpose = true,
     int group_size = 64,
     int bits = 4,
+    bool sorted_indices = false,
     StreamOrDevice s = {});
 
 /** Returns a contraction of a and b over multiple dimensions. */

@@ -3080,6 +3080,8 @@ std::vector<array> GatherQMM::vjp(
   auto& lhs_indices = primals[4];
   auto& rhs_indices = primals[5];
 
+  bool sorted = left_sorted_ || right_sorted_;
+
   for (auto arg : argnums) {
     // gradient wrt to x
     if (arg == 0) {
@@ -3098,6 +3100,7 @@ std::vector<array> GatherQMM::vjp(
                       !transpose_,
                       group_size_,
                       bits_,
+                      sorted,
                       stream()),
                   -3,
                   stream()),
