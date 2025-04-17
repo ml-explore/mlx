@@ -103,6 +103,7 @@ Operations
    log10
    log1p
    logaddexp
+   logcumsumexp
    logical_not
    logical_and
    logical_or
