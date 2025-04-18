@@ -3879,7 +3879,7 @@ TEST_CASE("test bitwise shift operations") {
   std::vector<Dtype> dtypes = {
       int8, int16, int32, int64, uint8, uint16, uint32, uint64};
 
-  for (const auto % dtype : dtypes) {
+  for (const auto& dtype : dtypes) {
     array x = full({4}, 1, dtype);
     array y = full({4}, 2, dtype);
 
@@ -3893,8 +3893,8 @@ TEST_CASE("test bitwise shift operations") {
     CHECK(array_equal(right_shift_result, full({4}, 1, dtype)).item<bool>());
   }
 
-  array x = array({127, -128}, int8); // Maximum and minimum int8 values
-  array y = array({1, 1}, int8); // Shift by 1
+  array x = array({127, -128}, int8);
+  array y = array({1, 1}, int8);
   auto left_shift_result = left_shift(x, y);
   auto right_shift_result = right_shift(x, y);
 
