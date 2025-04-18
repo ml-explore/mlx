@@ -3900,4 +3900,15 @@ TEST_CASE("test bitwise shift operations") {
 
   CHECK(array_equal(left_shift_result, array({-2, 0}, int8)).item<bool>());
   CHECK(array_equal(right_shift_result, array({63, -64}, int8)).item<bool>());
+
+  array x_bool = full({4}, true, bool_);
+  array y_bool = full({4}, 1, int32);
+  auto left_shift_bool_result = left_shift(x_bool, y_bool);
+  auto right_shift_bool_result = right_shift(x_bool, y_bool);
+
+  CHECK_EQ(left_shift_bool_result.dtype(), uint8);
+  CHECK(array_equal(left_shift_bool_result, full({4}, 2, uint8)).item<bool>());
+
+  CHECK_EQ(right_shift_bool_result.dtype(), uint8);
+  CHECK(array_equal(right_shift_bool_result, full({4}, 0, uint8)).item<bool>());
 }
