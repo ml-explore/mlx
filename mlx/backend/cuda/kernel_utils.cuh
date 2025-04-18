@@ -15,6 +15,33 @@
 
 namespace mlx::core {
 
+// Helper macros for dispatch macros (see below).
+#define MLX_INTERNAL_IF_CASE(DIM, BLOCK_DIM, ...) \
+  }                                               \
+  else if (_num_threads <= DIM) {                 \
+    constexpr uint32_t BLOCK_DIM = DIM;           \
+    __VA_ARGS__;
+
+#define MLX_INTERNAL_IF_CASE_DIMS(NUM_THREADS, BLOCK_DIM, ...) \
+  {                                                            \
+    uint32_t _num_threads = NUM_THREADS;                       \
+    if (false) {                                               \
+      MLX_INTERNAL_IF_CASE(32, BLOCK_DIM, __VA_ARGS__)         \
+      MLX_INTERNAL_IF_CASE(64, BLOCK_DIM, __VA_ARGS__)         \
+      MLX_INTERNAL_IF_CASE(128, BLOCK_DIM, __VA_ARGS__)        \
+      MLX_INTERNAL_IF_CASE(256, BLOCK_DIM, __VA_ARGS__)        \
+      MLX_INTERNAL_IF_CASE(512, BLOCK_DIM, __VA_ARGS__)        \
+    } else {                                                   \
+      constexpr uint32_t BLOCK_DIM = 1024;                     \
+      __VA_ARGS__;                                             \
+    }                                                          \
+  }
+
+// Some kernels use CUB which requires block_dim to be known at compile-time,
+// use this macro to dispatch constexpr block_dim for the num_threads.
+#define MLX_SWITCH_BLOCK_DIM(NUM_THREADS, BLOCK_DIM, ...) \
+  MLX_INTERNAL_IF_CASE_DIMS(NUM_THREADS, BLOCK_DIM, __VA_ARGS__)
+
 // Maps CPU types to CUDA types.
 template <typename T>
 struct CTypeToCudaType {

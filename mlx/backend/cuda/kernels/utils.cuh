@@ -20,6 +20,10 @@ namespace mlx::core::cu {
 // CUDA kernel utils
 ///////////////////////////////////////////////////////////////////////////////
 
+// All existing NVIDIA hardware has a fixed 32 warp size. Though a built-in
+// warpSize variable exists, using it would prevent compile-time optimizations.
+#define WARP_SIZE 32
+
 // To pass shape/strides to kernels via constant memory, their size must be
 // known at compile time.
 #define MAX_NDIM 8

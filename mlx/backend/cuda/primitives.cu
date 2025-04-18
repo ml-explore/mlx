@@ -56,7 +56,6 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 NO_GPU(AddMM)
 NO_GPU(ArgPartition)
-NO_GPU(ArgReduce)
 NO_GPU(ArgSort)
 NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)
