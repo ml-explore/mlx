@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
 #include "mlx/backend/cuda/kernels/arange.cuh"
+#include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/cuda/kernels/fp16_math.cuh"
 #include "mlx/distributed/primitives.h"
 #include "mlx/dtype_utils.h"
@@ -43,6 +44,61 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("ArgReduce::eval_gpu");
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+
+  // Prepare the shapes, strides and axis arguments.
+  auto in_strides = in.strides();
+  auto shape = in.shape();
+  auto out_strides = out.strides();
+  auto axis_stride = in_strides[axis_];
+  size_t axis_size = shape[axis_];
+  if (out_strides.size() == in_strides.size()) {
+    out_strides.erase(out_strides.begin() + axis_);
+  }
+  in_strides.erase(in_strides.begin() + axis_);
+  shape.erase(shape.begin() + axis_);
+  size_t ndim = shape.size();
+
+  // ArgReduce.
+  auto& encoder = cu::get_command_encoder(s);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.launch_kernel([&](cudaStream_t stream) {
+    MLX_SWITCH_REAL_TYPES_CHECKED(in.dtype(), "ArgReduce", CTYPE, {
+      using InType = cuda_type_t<CTYPE>;
+      constexpr uint32_t N_READS = 4;
+      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
+        auto kernel = &cu::arg_reduce_general<
+            InType,
+            cu::ArgMax<InType>,
+            BLOCK_DIM,
+            N_READS>;
+        if (reduce_type_ == ArgReduce::ArgMin) {
+          kernel = &cu::arg_reduce_general<
+              InType,
+              cu::ArgMin<InType>,
+              BLOCK_DIM,
+              N_READS>;
+        }
+        kernel<<<out.data_size(), BLOCK_DIM, 0, stream>>>(
+            in.data<InType>(),
+            out.data<uint32_t>(),
+            cu::const_param(shape),
+            cu::const_param(in_strides),
+            cu::const_param(out_strides),
+            ndim,
+            axis_stride,
+            axis_size);
+      });
+    });
+  });
+}
+
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
@@ -56,7 +112,6 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 NO_GPU(AddMM)
 NO_GPU(ArgPartition)
-NO_GPU(ArgReduce)
 NO_GPU(ArgSort)
 NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)

@@ -16,6 +16,30 @@ namespace cu {
 // CUDA kernel utils
 ///////////////////////////////////////////////////////////////////////////////
 
+// All existing NVIDIA hardware has a fixed 32 warp size. Though a built-in
+// warpSize variable exists, using it would prevent compile-time optimizations.
+#define WARP_SIZE 32
+
+// Helper macros for dispatch macros (see below).
+#define MLX_INTERNAL_IF_CASE(DIM, NUM_THREADS, BLOCK_DIM, ...) \
+  if (NUM_THREADS <= DIM) {                                    \
+    constexpr uint32_t BLOCK_DIM = DIM;                        \
+    __VA_ARGS__;                                               \
+  }
+
+#define MLX_INTERNAL_IF_CASE_DIMS(...)   \
+  MLX_INTERNAL_IF_CASE(32, __VA_ARGS__)  \
+  MLX_INTERNAL_IF_CASE(64, __VA_ARGS__)  \
+  MLX_INTERNAL_IF_CASE(128, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(256, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(512, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(1024, __VA_ARGS__)
+
+// Some kernels use CUB which requires block_dim to be known at compile-time,
+// use this macro to dispatch constexpr block_dim for the num_threads.
+#define MLX_SWITCH_BLOCK_DIM(NUM_THREADS, BLOCK_DIM, ...) \
+  MLX_INTERNAL_IF_CASE_DIMS(NUM_THREADS, BLOCK_DIM, __VA_ARGS__)
+
 // To pass shape/strides to kernels via constant memory, their size must be
 // known at compile time.
 #define MAX_NDIM 8
