@@ -98,9 +98,12 @@ int py_function_exporter_tp_traverse(
     PyObject* self,
     visitproc visit,
     void* arg) {
+  Py_VISIT(Py_TYPE(self));
+  if (!nb::inst_ready(self)) {
+    return 0;
+  }
   auto* p = nb::inst_ptr<PyFunctionExporter>(self);
   Py_VISIT(p->dep_.ptr());
-  Py_VISIT(Py_TYPE(self));
   return 0;
 }
 

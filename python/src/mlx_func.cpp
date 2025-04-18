@@ -16,12 +16,12 @@ struct gc_func {
 };
 
 int gc_func_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+  Py_VISIT(Py_TYPE(self));
   gc_func* w = (gc_func*)self;
   Py_VISIT(w->func);
   for (auto d : w->deps) {
     Py_VISIT(d);
   }
-  Py_VISIT(Py_TYPE(self));
   return 0;
 };
 

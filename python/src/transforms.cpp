@@ -960,6 +960,11 @@ class PyCustomFunction {
 };
 
 int py_custom_function_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+  Py_VISIT(Py_TYPE(self));
+  if (!nb::inst_ready(self)) {
+    return 0;
+  }
+
   auto* p = nb::inst_ptr<PyCustomFunction>(self);
   nb::handle v = nb::find(p->fun_);
   Py_VISIT(v.ptr());
@@ -975,7 +980,6 @@ int py_custom_function_tp_traverse(PyObject* self, visitproc visit, void* arg) {
     nb::handle v = nb::find(*(p->vmap_fun_));
     Py_VISIT(v.ptr());
   }
-  Py_VISIT(Py_TYPE(self));
   return 0;
 }
 int py_custom_function_tp_clear(PyObject* self) {
