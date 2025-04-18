@@ -3902,7 +3902,7 @@ TEST_CASE("test bitwise shift operations") {
   CHECK(array_equal(right_shift_result, array({63, -64}, int8)).item<bool>());
 
   array x_bool = full({4}, true, bool_);
-  array y_bool = full({4}, 1, int32);
+  array y_bool = full({4}, true, bool_);
   auto left_shift_bool_result = left_shift(x_bool, y_bool);
   auto right_shift_bool_result = right_shift(x_bool, y_bool);
 
