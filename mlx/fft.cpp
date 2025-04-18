@@ -225,15 +225,13 @@ array stft(
 
   int n_frames = 1 + (padded_x.shape(0) - n_fft) / hop_length;
 
-  std::vector<array> frames;
-  for (int i = 0; i < n_frames; ++i) {
-    array frame =
-        slice(padded_x, {i * hop_length}, {i * hop_length + n_fft}, s);
-    frames.push_back(multiply(frame, win, s));
-  }
+  Shape strided_shape = {n_frames, n_fft};
+  Strides strided_strides = {
+      hop_length * static_cast<long long>(sizeof(float32)),
+      static_cast<long long>(sizeof(float32))};
+  array frames = as_strided(padded_x, strided_shape, strided_strides, 0, s);
 
-  array stacked_frames = stack(frames, 0, s);
-
+  array stacked_frames = multiply(frames, win, s);
   array stft_result = mlx::core::fft::rfftn(stacked_frames, {n_fft}, {-1}, s);
 
   if (normalized) {
@@ -273,23 +271,23 @@ array istft(
   }
 
   array frames = mlx::core::fft::irfftn(stft_matrix, {n_fft}, {-1}, s);
-
   frames = multiply(frames, win, s);
 
   int signal_length = (frames.shape(0) - 1) * hop_length + n_fft;
   array signal = zeros({signal_length}, float32, s);
   array window_sum = zeros({signal_length}, float32, s);
 
-  for (int i = 0; i < frames.shape(0); ++i) {
-    array frame = reshape(slice(frames, {i}, {i + 1}, s), {n_fft}, s);
-    array signal_slice =
-        slice(signal, {i * hop_length}, {i * hop_length + n_fft}, s);
-    array window_slice =
-        slice(window_sum, {i * hop_length}, {i * hop_length + n_fft}, s);
+  Shape strided_shape = {frames.shape(0), n_fft};
+  Strides strided_strides = {
+      hop_length * static_cast<long long>(sizeof(float32)),
+      static_cast<long long>(sizeof(float32))};
+  array signal_strided =
+      as_strided(signal, strided_shape, strided_strides, 0, s);
+  array window_sum_strided =
+      as_strided(window_sum, strided_shape, strided_strides, 0, s);
 
-    signal_slice = add(signal_slice, frame, s);
-    window_slice = add(window_slice, win, s);
-  }
+  signal_strided = add(signal_strided, frames, s);
+  window_sum_strided = add(window_sum_strided, win, s);
 
   signal = divide(signal, window_sum, s);
 
