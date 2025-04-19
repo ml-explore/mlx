@@ -5,6 +5,7 @@
 #include "mlx/backend/cuda/kernels/arange.cuh"
 #include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/cuda/kernels/fp16_math.cuh"
+#include "mlx/backend/cuda/kernels/random.cuh"
 #include "mlx/distributed/primitives.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
@@ -99,6 +100,59 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("RandomBits::eval_gpu");
+  assert(inputs.size() == 1);
+
+  // keys has shape (N1, ..., NK, 2)
+  // out has shape (N1, ..., NK, M1, M2, ...)
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+
+  size_t elems_per_key = out.size() / num_keys;
+  size_t bytes_per_key = out.itemsize() * elems_per_key;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  size_t out_per_key = (bytes_per_key + 4 - 1) / 4;
+  size_t half_size = out_per_key / 2;
+  bool odd = out_per_key % 2;
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  encoder.launch_kernel([&](cudaStream_t stream) {
+    dim3 grid_dim{
+        static_cast<uint32_t>(num_keys),
+        static_cast<uint32_t>(half_size + odd)};
+    dim3 block_dim = get_block_dims(grid_dim.x, grid_dim.y, 1);
+    dim3 num_blocks{
+        cuda::ceil_div(grid_dim.x, block_dim.x),
+        cuda::ceil_div(grid_dim.y, block_dim.y)};
+    if (keys.flags().row_contiguous) {
+      cu::rbitsc<<<num_blocks, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          grid_dim,
+          odd,
+          bytes_per_key);
+    } else {
+      cu::rbits<<<num_blocks, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          grid_dim,
+          odd,
+          bytes_per_key,
+          keys.ndim(),
+          cu::const_param(keys.shape()),
+          cu::const_param(keys.strides()));
+    }
+  });
+}
+
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
@@ -132,7 +186,6 @@ NO_GPU(Matmul)
 NO_GPU(Partition)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
-NO_GPU(RandomBits)
 NO_GPU(Scan)
 NO_GPU(Scatter)
 NO_GPU(ScatterAxis)

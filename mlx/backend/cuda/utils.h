@@ -43,4 +43,7 @@ void check_cuda_error(const char* name, cudaError_t err);
 // The macro version that prints the command that failed.
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
 
+// Compute the thread block dimensions which fit the given input dimensions.
+dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
+
 } // namespace mlx::core
