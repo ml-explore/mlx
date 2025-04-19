@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2025 Apple Inc.
 
 import mlx.utils
 import mlx_tests
