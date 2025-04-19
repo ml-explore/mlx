@@ -734,8 +734,7 @@ array scaled_dot_product_attention(
 
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-       query_head_dim == 256);
+      (query_head_dim % 32 == 0 || query_head_dim % 2 == 0);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
