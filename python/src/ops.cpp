@@ -5192,17 +5192,15 @@ void init_ops(nb::module_& m) {
   m.def(
       "broadcast_shapes",
       [](const nb::args& shapes) {
-        if (shapes.size() == 0) {
+        if (shapes.size() == 0)
           throw std::invalid_argument(
               "broadcast_shapes expects a sequence of shapes");
-        }
 
         std::vector<mx::Shape> shape_vec;
         shape_vec.reserve(shapes.size());
 
         for (size_t i = 0; i < shapes.size(); ++i) {
           mx::Shape shape;
-
           if (nb::isinstance<nb::tuple>(shapes[i])) {
             nb::tuple t = nb::cast<nb::tuple>(shapes[i]);
             for (size_t j = 0; j < t.size(); ++j) {
@@ -5221,14 +5219,9 @@ void init_ops(nb::module_& m) {
           shape_vec.push_back(shape);
         }
 
-        if (shape_vec.empty()) {
-          return nb::tuple();
-        }
-
         mx::Shape result = shape_vec[0];
-        for (size_t i = 1; i < shape_vec.size(); ++i) {
+        for (size_t i = 1; i < shape_vec.size(); ++i)
           result = mx::broadcast_shapes(result, shape_vec[i]);
-        }
 
         auto py_list = nb::cast(result);
         return nb::tuple(py_list);
