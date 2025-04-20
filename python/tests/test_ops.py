@@ -977,6 +977,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        # Complex test
+        a = mx.array([1, 0.5, 10, 100]) + 1j
+        result = mx.log1p(a)
+        expected = np.log1p(a, dtype=np.complex64)
+
+        self.assertTrue(np.allclose(result, expected))
+
     def test_sigmoid(self):
         a = mx.array([0.0, 1.0, -1.0, 5.0, -5.0])
         result = mx.sigmoid(a)
