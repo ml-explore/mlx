@@ -5226,7 +5226,7 @@ void init_ops(nb::module_& m) {
         auto py_list = nb::cast(result);
         return nb::tuple(py_list);
       },
-      nb::sig("def broadcast_shapes(*shapes: Sequence[int]) -> Sequence[int]"),
+      nb::sig("def broadcast_shapes(*shapes: Sequence[int]) -> Tuple[int]"),
       R"pbdoc(
         Broadcast shapes.
 
