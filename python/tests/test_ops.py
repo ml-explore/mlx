@@ -1900,6 +1900,19 @@ class TestOps(mlx_tests.MLXTestCase):
                 c_mlx = mxop(a_mlx, axis=axis)
                 self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+        # Complex test
+
+        a_npy = np.random.randn(32, 32, 32).astype(np.float32) + 0.5j
+        a_mlx = mx.array(a_npy)
+
+        for op in ["cumsum", "cumprod"]:
+            npop = getattr(np, op)
+            mxop = getattr(mx, op)
+            for axis in (None, 0, 1, 2):
+                c_npy = npop(a_npy, axis=axis)
+                c_mlx = mxop(a_mlx, axis=axis)
+                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
         a_mlx = mx.random.randint(shape=(32, 32, 32), low=-100, high=100)
         for dt in [mx.int32, mx.int64]:
             mxx = a_mlx.astype(dt)
