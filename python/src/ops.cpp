@@ -5200,16 +5200,12 @@ void init_ops(nb::module_& m) {
         shape_vec.reserve(shapes.size());
 
         for (size_t i = 0; i < shapes.size(); ++i) {
-          mx::Shape shape;
-          if (nb::isinstance<mx::Shape>(shapes[i]) ||
-              nb::isinstance<nb::tuple>(shapes[i])) {
-            shape = nb::cast<mx::Shape>(shapes[i]);
-          } else {
+          if (!nb::isinstance<mx::Shape>(shapes[i]) &&
+              !nb::isinstance<nb::tuple>(shapes[i]))
             throw std::invalid_argument(
                 "broadcast_shapes expects a sequence of shapes (tuple or list of ints)");
-          }
 
-          shape_vec.push_back(shape);
+          shape_vec.push_back(nb::cast<mx::Shape>(shapes[i]));
         }
 
         mx::Shape result = shape_vec[0];
