@@ -28,21 +28,19 @@ void Event::wait() {
   ec->cv.wait(lk, [value = value(), ec] { return ec->value >= value; });
 }
 
-void Event::signal() {
-  auto ec = static_cast<EventCounter*>(event_.get());
-  {
-    std::lock_guard<std::mutex> lk(ec->mtx);
-    ec->value = value();
-  }
-  ec->cv.notify_all();
-}
-
 void Event::wait(Stream stream) {
   scheduler::enqueue(stream, [*this]() mutable { wait(); });
 }
 
 void Event::signal(Stream stream) {
-  scheduler::enqueue(stream, [*this]() mutable { signal(); });
+  scheduler::enqueue(stream, [*this]() mutable {
+    auto ec = static_cast<EventCounter*>(event_.get());
+    {
+      std::lock_guard<std::mutex> lk(ec->mtx);
+      ec->value = value();
+    }
+    ec->cv.notify_all();
+  });
 }
 
 bool Event::is_signaled() const {

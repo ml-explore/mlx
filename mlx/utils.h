@@ -67,6 +67,14 @@ struct finfo {
   double max;
 };
 
+/** Holds information about integral types. */
+struct iinfo {
+  explicit iinfo(Dtype dtype);
+  Dtype dtype;
+  int64_t min;
+  uint64_t max;
+};
+
 /** The type from promoting the arrays' types with one another. */
 inline Dtype result_type(const array& a, const array& b) {
   return promote_types(a.dtype(), b.dtype());

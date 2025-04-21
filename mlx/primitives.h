@@ -498,7 +498,13 @@ class BlockMaskedMM : public UnaryPrimitive {
 
 class GatherMM : public UnaryPrimitive {
  public:
-  explicit GatherMM(Stream stream) : UnaryPrimitive(stream) {}
+  explicit GatherMM(
+      Stream stream,
+      bool left_sorted = false,
+      bool right_sorted = false)
+      : UnaryPrimitive(stream),
+        left_sorted_(left_sorted),
+        right_sorted_(right_sorted) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -510,7 +516,14 @@ class GatherMM : public UnaryPrimitive {
       const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(GatherMM)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
+  bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return std::make_pair(left_sorted_, right_sorted_);
+  }
+
+ private:
+  bool left_sorted_;
+  bool right_sorted_;
 };
 
 class BroadcastAxes : public UnaryPrimitive {
@@ -1350,6 +1363,20 @@ class LogAddExp : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class LogSumExp : public UnaryPrimitive {
+ public:
+  explicit LogSumExp(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(LogSumExp)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+};
+
 class Matmul : public UnaryPrimitive {
  public:
   explicit Matmul(Stream stream) : UnaryPrimitive(stream) {}
@@ -1564,11 +1591,19 @@ class QuantizedMatmul : public UnaryPrimitive {
 
 class GatherQMM : public UnaryPrimitive {
  public:
-  explicit GatherQMM(Stream stream, int group_size, int bits, bool transpose)
+  explicit GatherQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      bool transpose,
+      bool left_sorted = false,
+      bool right_sorted = false)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        transpose_(transpose) {}
+        transpose_(transpose),
+        left_sorted_(left_sorted),
+        right_sorted_(right_sorted) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1578,13 +1613,16 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_PRINT(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, transpose_);
+    return std::make_tuple(
+        group_size_, bits_, transpose_, left_sorted_, right_sorted_);
   }
 
  private:
   int group_size_;
   int bits_;
   bool transpose_;
+  bool left_sorted_;
+  bool right_sorted_;
 };
 
 class RandomBits : public UnaryPrimitive {
@@ -1714,7 +1752,7 @@ class Round : public UnaryPrimitive {
 
 class Scan : public UnaryPrimitive {
  public:
-  enum ReduceType { Max, Min, Sum, Prod };
+  enum ReduceType { Max, Min, Sum, Prod, LogAddExp };
 
   explicit Scan(
       Stream stream,
@@ -1748,6 +1786,9 @@ class Scan : public UnaryPrimitive {
         break;
       case Max:
         os << "Max";
+        break;
+      case LogAddExp:
+        os << "Logaddexp";
         break;
     }
   }

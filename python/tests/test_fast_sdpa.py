@@ -95,7 +95,13 @@ def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
 def mlx_primitives_sdpa(q, k, v, scale, mask=None):
     p = (q * scale) @ k.transpose(0, 1, 3, 2)
     if mask is not None:
-        if mask.dtype == mx.bool_:
+        if mask == "causal":
+            q_offset = max(0, k.shape[2] - q.shape[2])
+            q_indices = mx.arange(q_offset, q_offset + q.shape[2])
+            k_indices = mx.arange(k.shape[2])
+            mask = q_indices[:, None] >= k_indices[None]
+            p = mx.where(mask, p, mx.finfo(mx.float32).min)
+        elif mask.dtype == mx.bool_:
             p = mx.where(mask, p, mx.finfo(mx.float32).min)
         else:
             p += mask
@@ -176,7 +182,10 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
                 reference = mlx_primitives_sdpa_with_gqa(q_mlx, k_mlx, v_mlx, scale)
                 o_mlx = mx.fast.scaled_dot_product_attention(
-                    q_mlx, k_mlx, v_mlx, scale=scale, memory_efficient_threshold=2
+                    q_mlx,
+                    k_mlx,
+                    v_mlx,
+                    scale=scale,
                 )
 
                 self.assertListEqual(list(reference.shape), list(o_mlx.shape))
@@ -338,10 +347,16 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
 
         masks = [
+            None,
             mx.array(True),
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            mx.random.uniform(shape=(Nq, 1, L)),
+            mx.random.uniform(shape=(L, 1, Nq)).T,
+            mx.log(mx.random.uniform(shape=(Nq, 1, L)) > 0.2),
+            mx.log(mx.random.uniform(shape=(L, 1, Nq)).T > 0.2),
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -366,6 +381,11 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            mx.random.uniform(shape=(Nq, 1, L)),
+            mx.random.uniform(shape=(L, 1, Nq)).T,
+            mx.log(mx.random.uniform(shape=(Nq, 1, L)) > 0.2),
+            mx.log(mx.random.uniform(shape=(L, 1, Nq)).T > 0.2),
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -381,7 +401,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_fast_sdpa_few_query(self):
         D = 64
         L = 43
-        Lq = 4
+        Lq = 8
         Nq = 8
         Nkv = 1
         scale = 1.0
@@ -392,10 +412,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
 
         masks = [
+            None,
             mx.array(True),
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -416,10 +438,12 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
 
         masks = [
+            None,
             mx.array(True),
             mx.array([True] * (L - 10) + [False] * 10),
             mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
             mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+            "causal",
         ]
         for m in masks:
             ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
@@ -542,6 +566,50 @@ class TestSDPA(mlx_tests.MLXTestCase):
         ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    def test_sdpa_prommote_mask(self):
+        mask = mx.array(2.0, mx.bfloat16)
+        D = 64
+        Nq = 4
+        Nkv = 1
+        scale = 1.0
+        L = 256
+
+        mx.random.seed(0)
+        q = 5e-1 * mx.random.normal(shape=(1, Nq, L, D))
+        k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+        v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+        ref = mlx_primitives_sdpa(q, k, v, scale, mask=mask)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    def test_sdpa_nan_bug(self):
+        N = 128
+        q_shape = (1, 1, N, 128)
+        kv_shape = (1, 1, N, 128)
+        q = mx.random.uniform(shape=q_shape)
+        k = mx.random.uniform(shape=kv_shape)
+        v = mx.random.uniform(shape=kv_shape)
+
+        # Make boolean window causal mask
+        linds = rinds = mx.arange(N)
+        linds = linds[:, None]
+        rinds = rinds[None]
+        mask = linds >= rinds
+        mask = mask & (linds <= rinds + 111)
+
+        out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
+        expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
+        self.assertFalse(mx.isnan(out).any().item())
+        self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
+
+        # And an additive one
+        mask = mx.log(mask)
+
+        out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1.0)
+        expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
+        self.assertFalse(mx.isnan(out).any().item())
+        self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/fence.h"
+#include "mlx/memory.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -41,7 +42,8 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-std::vector<char> detail::InTracing::trace_stack{};
+std::vector<std::pair<char, char>> detail::InTracing::trace_stack{};
+int detail::InTracing::grad_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
@@ -219,7 +221,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-        (metal::get_active_memory() > metal::get_memory_limit() &&
+        (get_active_memory() > get_memory_limit() &&
          scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
       for (auto& [_, e] : events) {
@@ -228,8 +230,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
       }
       scheduler::wait_for_one();
-      // TODO memory api should be moved out of metal
-      while (metal::get_active_memory() > metal::get_memory_limit() &&
+      while (get_active_memory() > get_memory_limit() &&
              scheduler::n_active_tasks() > 0) {
         scheduler::wait_for_one();
       }
@@ -307,7 +308,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::vector<array>& cotans,
     const std::vector<int>& argnums) {
   // Set the global tracing flag.
-  detail::InTracing in_tracing;
+  detail::InTracing in_tracing{false, true};
 
   // Make tracers from given primals
   std::vector<array> primals_;
@@ -505,7 +506,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents) {
   // Set the global tracing flag.
-  detail::InTracing in_tracing;
+  detail::InTracing in_tracing{false, true};
 
   if (primals.size() != tangents.size()) {
     throw std::invalid_argument(

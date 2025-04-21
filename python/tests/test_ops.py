@@ -690,15 +690,34 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.array_equal(b_npy, b_mlx))
 
     def test_logsumexp(self):
+        def logsumexp(x, axes=None):
+            maxs = mx.max(x, axis=axes, keepdims=True)
+            return mx.log(mx.sum(mx.exp(x - maxs), axis=axes, keepdims=True)) + maxs
+
         x = mx.array(
             [
                 [1.0, 2.0],
                 [3.0, 4.0],
             ]
         )
-        xnp = np.array(x.tolist(), dtype=np.float32)
-        expected = np.log(np.sum(np.exp(xnp)))
-        self.assertTrue(math.isclose(mx.logsumexp(x).item(), expected.item()))
+        self.assertTrue(math.isclose(mx.logsumexp(x).item(), logsumexp(x).item()))
+
+        x = mx.random.uniform(shape=(1025,))
+        self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
+
+        # Transposed
+        x = mx.random.uniform(shape=(2, 2, 8))
+        x = x.swapaxes(0, 1)
+        self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
+
+        # Broadcast
+        x = mx.broadcast_to(mx.random.uniform(shape=(2, 1, 8)), (2, 2, 8))
+        self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
+
+        # Large
+        x = mx.random.uniform(shape=(1025,))
+        x = mx.broadcast_to(mx.random.uniform(shape=(2, 1, 8)), (2, 2, 8))
+        self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
 
     def test_mean(self):
         x = mx.array(
@@ -845,6 +864,11 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        a = mx.array(1.0) + 1j * mx.array(2.0)
+        result = mx.log(a)
+        expected = np.log(np.array(a))
+        self.assertTrue(np.allclose(result, expected))
+
     def test_log2(self):
         a = mx.array([0.5, 1, 2, 10, 16])
         result = mx.log2(a)
@@ -852,11 +876,21 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        a = mx.array(1.0) + 1j * mx.array(2.0)
+        result = mx.log2(a)
+        expected = np.log2(np.array(a))
+        self.assertTrue(np.allclose(result, expected))
+
     def test_log10(self):
         a = mx.array([0.1, 1, 10, 20, 100])
         result = mx.log10(a)
         expected = np.log10(a, dtype=np.float32)
 
+        self.assertTrue(np.allclose(result, expected))
+
+        a = mx.array(1.0) + 1j * mx.array(2.0)
+        result = mx.log10(a)
+        expected = np.log10(np.array(a))
         self.assertTrue(np.allclose(result, expected))
 
     def test_exp(self):
@@ -1628,6 +1662,15 @@ class TestOps(mlx_tests.MLXTestCase):
             x = mx.full((n,), vals=-float("inf"))
             self.assertTrue(mx.all(mx.isnan(mx.softmax(x))))
 
+        # Transposed inputs
+        a = mx.random.uniform(shape=(32, 32, 32))
+        b = mx.softmax(a, axis=-1)
+        c = mx.softmax(a.swapaxes(0, 1), axis=-1).swapaxes(0, 1)
+        self.assertEqual((b - c).abs().max().item(), 0.0)
+
+        with self.assertRaises(ValueError):
+            mx.softmax(mx.array(1.0), axis=-1)
+
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)
@@ -1814,6 +1857,30 @@ class TestOps(mlx_tests.MLXTestCase):
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
 
+    def test_logcumsumexp(self):
+        npop = np.logaddexp.accumulate
+        mxop = mx.logcumsumexp
+
+        a_npy = np.random.randn(32, 32, 32).astype(np.float32)
+        a_mlx = mx.array(a_npy)
+
+        for axis in (0, 1, 2):
+            c_npy = npop(a_npy, axis=axis)
+            c_mlx = mxop(a_mlx, axis=axis)
+            self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
+        edge_cases_npy = [
+            np.float32([-float("inf")] * 8),
+            np.float32([-float("inf"), 0, -float("inf")]),
+            np.float32([-float("inf"), float("inf"), -float("inf")]),
+        ]
+        edge_cases_mlx = [mx.array(a) for a in edge_cases_npy]
+
+        for a_npy, a_mlx in zip(edge_cases_npy, edge_cases_mlx):
+            c_npy = npop(a_npy, axis=0)
+            c_mlx = mxop(a_mlx, axis=0)
+            self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
         a_mlx = mx.array(a_npy)
@@ -1901,13 +1968,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 x = mx.cumsum(x)
             return x
 
-        mx.synchronize(mx.default_stream(mx.default_device()))
+        mx.synchronize()
         mx.eval(fn(2))
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        mem2 = mx.metal.get_peak_memory()
+        mx.synchronize()
+        mem2 = mx.get_peak_memory()
         mx.eval(fn(4))
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        mem4 = mx.metal.get_peak_memory()
+        mx.synchronize()
+        mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
     def test_squeeze_expand(self):

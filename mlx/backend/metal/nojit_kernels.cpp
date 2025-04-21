@@ -72,6 +72,13 @@ MTL::ComputePipelineState* get_softmax_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_logsumexp_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -186,6 +193,23 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    bool,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
+  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -243,6 +267,23 @@ MTL::ComputePipelineState* get_quantized_kernel(
     const std::string& kernel_name,
     const std::string&) {
   return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_gather_qmm_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
+  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
 }
 
 } // namespace mlx::core

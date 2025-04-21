@@ -20,5 +20,6 @@ Linear Algebra
     eigh
     lu
     lu_factor
+    pinv
     solve
     solve_triangular

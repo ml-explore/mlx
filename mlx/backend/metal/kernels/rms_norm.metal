@@ -380,69 +380,11 @@ template <typename T, int N_READS = RMS_N_READS>
 }
 
 // clang-format off
-#define instantiate_rms_single_row(name, itype)               \
-  template [[host_name("rms" #name)]] [[kernel]] void         \
-  rms_single_row<itype>(                                      \
-      const device itype* x,                                  \
-      const device itype* w,                                  \
-      device itype* out,                                      \
-      constant float& eps,                                    \
-      constant uint& axis_size,                               \
-      constant uint& w_stride,                                \
-      uint gid [[thread_position_in_grid]],                   \
-      uint lid [[thread_position_in_threadgroup]],            \
-      uint simd_lane_id [[thread_index_in_simdgroup]],        \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]); \
-                                                              \
-  template [[host_name("vjp_rms" #name)]] [[kernel]] void     \
-  vjp_rms_single_row<itype>(                                  \
-      const device itype* x,                                  \
-      const device itype* w,                                  \
-      const device itype* g,                                  \
-      device itype* gx,                                       \
-      device itype* gw,                                       \
-      constant float& eps,                                    \
-      constant uint& axis_size,                               \
-      constant uint& w_stride,                                \
-      uint gid [[thread_position_in_grid]],                   \
-      uint lid [[thread_position_in_threadgroup]],            \
-      uint simd_lane_id [[thread_index_in_simdgroup]],        \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_rms_looped(name, itype)                      \
-  template [[host_name("rms_looped" #name)]] [[kernel]] void     \
-  rms_looped<itype>(                                             \
-      const device itype* x,                                     \
-      const device itype* w,                                     \
-      device itype* out,                                         \
-      constant float& eps,                                       \
-      constant uint& axis_size,                                  \
-      constant uint& w_stride,                                   \
-      uint gid [[thread_position_in_grid]],                      \
-      uint lid [[thread_position_in_threadgroup]],               \
-      uint lsize [[threads_per_threadgroup]],                    \
-      uint simd_lane_id [[thread_index_in_simdgroup]],           \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);    \
-                                                                 \
-  template [[host_name("vjp_rms_looped" #name)]] [[kernel]] void \
-  vjp_rms_looped<itype>(                                         \
-      const device itype* x,                                     \
-      const device itype* w,                                     \
-      const device itype* g,                                     \
-      device itype* gx,                                          \
-      device itype* gw,                                          \
-      constant float& eps,                                       \
-      constant uint& axis_size,                                  \
-      constant uint& w_stride,                                   \
-      uint gid [[thread_position_in_grid]],                      \
-      uint lid [[thread_position_in_threadgroup]],               \
-      uint lsize [[threads_per_threadgroup]],                    \
-      uint simd_lane_id [[thread_index_in_simdgroup]],           \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_rms(name, itype)      \
-  instantiate_rms_single_row(name, itype) \
-  instantiate_rms_looped(name, itype)
+#define instantiate_rms(name, itype)                                \
+  instantiate_kernel("rms" #name, rms_single_row, itype)            \
+  instantiate_kernel("vjp_rms" #name, vjp_rms_single_row, itype)    \
+  instantiate_kernel("rms_looped" #name, rms_looped, itype)         \
+  instantiate_kernel("vjp_rms_looped" #name, vjp_rms_looped, itype)
 
 instantiate_rms(float32, float)
 instantiate_rms(float16, half)

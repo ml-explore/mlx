@@ -18,3 +18,4 @@ Common Optimizers
    AdamW
    Adamax
    Lion
+   MultiOptimizer

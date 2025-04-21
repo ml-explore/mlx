@@ -17,7 +17,7 @@ struct ScalarT<float16_t, N> {
 #endif
 
 template <>
-static constexpr int max_size<float16_t> = N;
+inline constexpr int max_size<float16_t> = N;
 
 #define SIMD_FP16_DEFAULT_UNARY(op)                    \
   template <>                                          \

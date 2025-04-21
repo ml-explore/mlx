@@ -36,10 +36,12 @@ Operations
    bitwise_or
    bitwise_xor
    block_masked_mm
+   broadcast_arrays
    broadcast_to
    ceil
    clip
    concatenate
+   contiguous
    conj
    conjugate
    convolve
@@ -101,6 +103,7 @@ Operations
    log10
    log1p
    logaddexp
+   logcumsumexp
    logical_not
    logical_and
    logical_or

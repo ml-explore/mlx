@@ -3,11 +3,14 @@
 import unittest
 
 import mlx.core as mx
-import mlx_tests
-from mlx.nn.utils import average_gradients
+import mlx_distributed_tests
 
 
-class TestDistributed(mlx_tests.MLXTestCase):
+class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
+    @classmethod
+    def setUpClass(cls):
+        world = mx.distributed.init(strict=True, backend="mpi")
+
     def test_groups(self):
         world = mx.distributed.init()
         self.assertEqual(world.size(), 8)
@@ -27,27 +30,51 @@ class TestDistributed(mlx_tests.MLXTestCase):
     def test_all_reduce(self):
         world = mx.distributed.init()
         dtypes = [
-            mx.int8,
-            mx.uint8,
-            mx.int16,
-            mx.uint16,
-            mx.int32,
-            mx.uint32,
-            mx.float32,
-            mx.float16,
-            mx.bfloat16,
-            mx.complex64,
+            (mx.int8, 0),
+            (mx.uint8, 0),
+            (mx.int16, 0),
+            (mx.uint16, 0),
+            (mx.int32, 0),
+            (mx.uint32, 0),
+            (mx.float32, 1e-6),
+            (mx.float16, 5e-3),
+            (mx.bfloat16, 1e-1),
+            (mx.complex64, 1e-6),
         ]
-        for dt in dtypes:
-            x = mx.ones((2, 2, 4), dtype=dt)
-            y = mx.distributed.all_sum(x)
-            self.assertTrue(mx.all(y == world.size()))
+        sizes = [
+            (7,),
+            (10,),
+            (1024,),
+            (1024, 1024),
+        ]
+        key = mx.random.key(0)
+        group = world.split(world.rank() % 2)
 
-        sub = world.split(world.rank() % 2)
-        for dt in dtypes:
-            x = mx.ones((2, 2, 4), dtype=dt)
-            y = mx.distributed.all_sum(x, group=sub)
-            self.assertTrue(mx.all(y == sub.size()))
+        for dt, rtol in dtypes:
+            for sh in sizes:
+                for g in [world, group]:
+                    x = (
+                        mx.random.uniform(shape=(g.size(),) + sh, key=key) * 10
+                    ).astype(dt)
+
+                    # All sum
+                    y = mx.distributed.all_sum(x[g.rank()], group=g)
+                    z = x.sum(0)
+                    maxrelerror = (y - z).abs()
+                    if rtol > 0:
+                        maxrelerror /= z.abs()
+                    maxrelerror = maxrelerror.max()
+                    self.assertLessEqual(maxrelerror, rtol)
+
+                    # All max
+                    y = mx.distributed.all_max(x[g.rank()], group=g)
+                    z = x.max(0)
+                    self.assertTrue(mx.all(y == z))
+
+                    # All min
+                    y = mx.distributed.all_min(x[g.rank()], group=g)
+                    z = x.min(0)
+                    self.assertTrue(mx.all(y == z))
 
     def test_all_gather(self):
         world = mx.distributed.init()
@@ -120,77 +147,6 @@ class TestDistributed(mlx_tests.MLXTestCase):
         else:
             x = mx.distributed.recv_like(x, neighbor, group=pairs)
         mx.eval(y, x)
-
-    def test_average_gradients(self):
-        original_all_sum = mx.distributed.all_sum
-        n_calls = 0
-        xtype = None
-
-        def new_all_sum(x, **kwargs):
-            nonlocal n_calls
-            nonlocal xtype
-
-            n_calls += 1
-            if xtype is not None:
-                self.assertEqual(xtype, x.dtype)
-
-            return original_all_sum(x, **kwargs)
-
-        mx.distributed.all_sum = new_all_sum
-
-        try:
-            grads = [mx.ones(10) for i in range(10)]
-            new_grads = average_gradients(grads)
-            mx.eval(new_grads)
-            self.assertEqual(len(new_grads), 10)
-            self.assertTrue(all(mx.all(g == 1) for g in new_grads))
-            self.assertEqual(n_calls, 1)
-
-            n_calls = 0
-            new_grads = average_gradients(grads, all_reduce_size=4 * 50)
-            mx.eval(new_grads)
-            self.assertEqual(len(new_grads), 10)
-            self.assertTrue(all(mx.all(g == 1) for g in new_grads))
-            self.assertEqual(n_calls, 2)
-
-            n_calls = 0
-            new_grads = average_gradients(grads, all_reduce_size=0)
-            mx.eval(new_grads)
-            self.assertEqual(len(new_grads), 10)
-            self.assertTrue(all(mx.all(g == 1) for g in new_grads))
-            self.assertEqual(n_calls, 10)
-
-            n_calls = 0
-            xtype = mx.float16
-            new_grads = average_gradients(
-                grads, all_reduce_size=2 * 50, communication_type=mx.float16
-            )
-            mx.eval(new_grads)
-            self.assertEqual(len(new_grads), 10)
-            self.assertTrue(all(g.dtype == mx.float32 for g in new_grads))
-            self.assertTrue(all(mx.all(g == 1) for g in new_grads))
-            self.assertEqual(n_calls, 2)
-
-        finally:
-            mx.distributed.all_sum = original_all_sum
-
-    def test_donation(self):
-        x = mx.random.normal((1024,))
-        mx.eval(x)
-        mx.synchronize(mx.default_stream(mx.default_device()))
-
-        mx.metal.reset_peak_memory()
-        scale = mx.array(2.0)
-        y = mx.distributed.all_sum(x)
-        mx.eval(y)
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        all_sum_only = mx.metal.get_peak_memory()
-        y = mx.distributed.all_sum(x) * scale
-        mx.eval(y)
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        all_sum_with_binary = mx.metal.get_peak_memory()
-
-        self.assertEqual(all_sum_only, all_sum_with_binary)
 
 
 if __name__ == "__main__":

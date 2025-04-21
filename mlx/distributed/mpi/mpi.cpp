@@ -1,12 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
-#include <mpi.h>
+#include <iostream>
 
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/mpi/mpi_declarations.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \
@@ -17,6 +18,12 @@
       return;                                                      \
     }                                                              \
   }
+
+#ifdef __APPLE__
+static constexpr const char* libmpi_name = "libmpi.dylib";
+#else
+static constexpr const char* libmpi_name = "libmpi.so";
+#endif
 
 namespace mlx::core::distributed::mpi {
 
@@ -43,12 +50,66 @@ void simple_sum(
 template void simple_sum<float16_t>(void*, void*, int*, MPI_Datatype*);
 template void simple_sum<bfloat16_t>(void*, void*, int*, MPI_Datatype*);
 
+template <typename T>
+void simple_max(
+    void* input,
+    void* accumulator,
+    int* len,
+    MPI_Datatype* datatype) {
+  T* in = (T*)input;
+  T* acc = (T*)accumulator;
+  int N = *len;
+
+  while (N-- > 0) {
+    *acc = std::max(*acc, *in);
+    acc++;
+    in++;
+  }
+}
+template void simple_max<float16_t>(void*, void*, int*, MPI_Datatype*);
+template void simple_max<bfloat16_t>(void*, void*, int*, MPI_Datatype*);
+template void simple_max<complex64_t>(void*, void*, int*, MPI_Datatype*);
+
+template <typename T>
+void simple_min(
+    void* input,
+    void* accumulator,
+    int* len,
+    MPI_Datatype* datatype) {
+  T* in = (T*)input;
+  T* acc = (T*)accumulator;
+  int N = *len;
+
+  while (N-- > 0) {
+    *acc = std::min(*acc, *in);
+    acc++;
+    in++;
+  }
+}
+template void simple_min<float16_t>(void*, void*, int*, MPI_Datatype*);
+template void simple_min<bfloat16_t>(void*, void*, int*, MPI_Datatype*);
+template void simple_min<complex64_t>(void*, void*, int*, MPI_Datatype*);
+
 struct MPIWrapper {
   MPIWrapper() {
     initialized_ = false;
 
-    libmpi_handle_ = dlopen("libmpi.dylib", RTLD_NOW | RTLD_GLOBAL);
+    libmpi_handle_ = dlopen(libmpi_name, RTLD_NOW | RTLD_GLOBAL);
     if (libmpi_handle_ == nullptr) {
+      return;
+    }
+
+    // Check library version and warn if it isn't Open MPI
+    int (*get_version)(char*, int*);
+    LOAD_SYMBOL(MPI_Get_library_version, get_version);
+    char version_ptr[MPI_MAX_LIBRARY_VERSION_STRING];
+    int version_length = 0;
+    get_version(version_ptr, &version_length);
+    std::string_view version(version_ptr, version_length);
+    if (version.find("Open MPI") == std::string::npos) {
+      std::cerr << "[mpi] MPI found but it does not appear to be Open MPI."
+                << "MLX requires Open MPI but this is " << version << std::endl;
+      libmpi_handle_ = nullptr;
       return;
     }
 
@@ -72,6 +133,8 @@ struct MPIWrapper {
 
     // Ops
     LOAD_SYMBOL(ompi_mpi_op_sum, op_sum_);
+    LOAD_SYMBOL(ompi_mpi_op_max, op_max_);
+    LOAD_SYMBOL(ompi_mpi_op_min, op_min_);
 
     // Datatypes
     LOAD_SYMBOL(ompi_mpi_c_bool, mpi_bool_);
@@ -106,9 +169,15 @@ struct MPIWrapper {
       mpi_type_contiguous(2, mpi_uint8_, &mpi_bfloat16_);
       mpi_type_commit(&mpi_bfloat16_);
 
-      // Custom sum ops
+      // Custom reduction ops
       mpi_op_create(&simple_sum<float16_t>, 1, &op_sum_f16_);
       mpi_op_create(&simple_sum<bfloat16_t>, 1, &op_sum_bf16_);
+      mpi_op_create(&simple_max<float16_t>, 1, &op_max_f16_);
+      mpi_op_create(&simple_max<bfloat16_t>, 1, &op_max_bf16_);
+      mpi_op_create(&simple_max<complex64_t>, 1, &op_max_c64_);
+      mpi_op_create(&simple_min<float16_t>, 1, &op_min_f16_);
+      mpi_op_create(&simple_min<bfloat16_t>, 1, &op_min_bf16_);
+      mpi_op_create(&simple_min<complex64_t>, 1, &op_min_c64_);
 
       initialized_ = true;
     }
@@ -170,6 +239,32 @@ struct MPIWrapper {
     }
   }
 
+  MPI_Op op_max(const array& arr) {
+    switch (arr.dtype()) {
+      case float16:
+        return op_max_f16_;
+      case bfloat16:
+        return op_max_bf16_;
+      case complex64:
+        return op_max_c64_;
+      default:
+        return op_max_;
+    }
+  }
+
+  MPI_Op op_min(const array& arr) {
+    switch (arr.dtype()) {
+      case float16:
+        return op_min_f16_;
+      case bfloat16:
+        return op_min_bf16_;
+      case complex64:
+        return op_min_c64_;
+      default:
+        return op_min_;
+    }
+  }
+
   void* libmpi_handle_;
 
   // API
@@ -198,6 +293,14 @@ struct MPIWrapper {
   MPI_Op op_sum_;
   MPI_Op op_sum_f16_;
   MPI_Op op_sum_bf16_;
+  MPI_Op op_max_;
+  MPI_Op op_max_f16_;
+  MPI_Op op_max_bf16_;
+  MPI_Op op_max_c64_;
+  MPI_Op op_min_;
+  MPI_Op op_min_f16_;
+  MPI_Op op_min_bf16_;
+  MPI_Op op_min_c64_;
 
   // Datatypes
   MPI_Datatype mpi_bool_;
@@ -282,6 +385,36 @@ class MPIGroup : public GroupImpl {
         input.size(),
         mpi().datatype(input),
         mpi().op_sum(input),
+        comm_);
+  }
+
+  void all_max(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_reduce,
+        (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                    : input.data<void>(),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        mpi().op_max(input),
+        comm_);
+  }
+
+  void all_min(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_reduce,
+        (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                    : input.data<void>(),
+        output.data<void>(),
+        input.size(),
+        mpi().datatype(input),
+        mpi().op_min(input),
         comm_);
   }
 

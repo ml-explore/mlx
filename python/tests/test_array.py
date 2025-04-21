@@ -109,6 +109,18 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
         self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
 
+    def test_iinfo(self):
+        with self.assertRaises(ValueError):
+            mx.iinfo(mx.float32)
+
+        self.assertEqual(mx.iinfo(mx.int32).min, np.iinfo(np.int32).min)
+        self.assertEqual(mx.iinfo(mx.int32).max, np.iinfo(np.int32).max)
+        self.assertEqual(mx.iinfo(mx.int32).dtype, mx.int32)
+
+        self.assertEqual(mx.iinfo(mx.uint32).min, np.iinfo(np.uint32).min)
+        self.assertEqual(mx.iinfo(mx.uint32).max, np.iinfo(np.uint32).max)
+        self.assertEqual(mx.iinfo(mx.int8).dtype, mx.int8)
+
 
 class TestEquality(mlx_tests.MLXTestCase):
     def test_array_eq_array(self):
@@ -1496,6 +1508,7 @@ class TestArray(mlx_tests.MLXTestCase):
             ("prod", 1),
             ("min", 1),
             ("max", 1),
+            ("logcumsumexp", 1),
             ("logsumexp", 1),
             ("mean", 1),
             ("var", 1),
@@ -1803,7 +1816,6 @@ class TestArray(mlx_tests.MLXTestCase):
         b = pickle.loads(pickle.dumps(a))
         self.assertTrue(mx.array_equal(mx.array(a), mx.array(b)))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_multi_output_leak(self):
         def fun():
             a = mx.zeros((2**20))
@@ -1813,10 +1825,10 @@ class TestArray(mlx_tests.MLXTestCase):
 
         fun()
         mx.synchronize()
-        peak_1 = mx.metal.get_peak_memory()
+        peak_1 = mx.get_peak_memory()
         fun()
         mx.synchronize()
-        peak_2 = mx.metal.get_peak_memory()
+        peak_2 = mx.get_peak_memory()
         self.assertEqual(peak_1, peak_2)
 
         def fun():
@@ -1826,10 +1838,10 @@ class TestArray(mlx_tests.MLXTestCase):
 
         fun()
         mx.synchronize()
-        peak_1 = mx.metal.get_peak_memory()
+        peak_1 = mx.get_peak_memory()
         fun()
         mx.synchronize()
-        peak_2 = mx.metal.get_peak_memory()
+        peak_2 = mx.get_peak_memory()
         self.assertEqual(peak_1, peak_2)
 
     def test_add_numpy(self):
@@ -1999,6 +2011,14 @@ class TestArray(mlx_tests.MLXTestCase):
             t()
         used = get_mem()
         self.assertEqual(expected, used)
+
+    def test_scalar_integer_conversion_overflow(self):
+        y = mx.array(2000000000, dtype=mx.int32)
+        x = 3000000000
+        with self.assertRaises(ValueError):
+            y + x
+        with self.assertRaises(ValueError):
+            mx.add(y, x)
 
 
 if __name__ == "__main__":

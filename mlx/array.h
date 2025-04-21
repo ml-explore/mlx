@@ -339,11 +339,11 @@ class array {
     return allocator::allocator().size(buffer());
   }
 
-  // Return a copy of the shared pointer
-  // to the array::Data struct
-  std::shared_ptr<Data> data_shared_ptr() const {
+  // Return the shared pointer to the array::Data struct
+  const std::shared_ptr<Data>& data_shared_ptr() const {
     return array_desc_->data;
   }
+
   // Return a raw pointer to the arrays data
   template <typename T>
   T* data() {

@@ -119,12 +119,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   // Make sure that the last dimension is contiguous
   auto set_output = [s = stream(), &out](const array& x) {
-    bool no_copy = x.strides()[x.ndim() - 1] == 1;
-    if (x.ndim() > 1) {
-      auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back());
-    }
-    if (no_copy) {
+    if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       if (x.is_donatable()) {
         out.copy_shared_buffer(x);
       } else {
@@ -146,18 +141,6 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto in = set_output(inputs[0]);
 
   switch (in.dtype()) {
-    case bool_:
-    case uint8:
-    case uint16:
-    case uint32:
-    case uint64:
-    case int8:
-    case int16:
-    case int32:
-    case int64:
-      throw std::runtime_error(
-          "Softmax is defined only for floating point types");
-      break;
     case float32:
       softmax<float, float>(in, out, stream());
       break;
@@ -178,9 +161,9 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
     case float64:
       softmax<double, double>(in, out, stream());
       break;
-    case complex64:
-      throw std::invalid_argument(
-          "[Softmax] Not yet implemented for complex64");
+    default:
+      throw std::runtime_error(
+          "[softmax] Only defined for floating point types.");
       break;
   }
 }

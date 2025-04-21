@@ -1,11 +1,11 @@
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/sdpa_vector.h"
+// clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/sdpa_vector.h"
 
 using namespace metal;
 
-// clang-format off
 // SDPA vector instantiations
 #define instantiate_sdpa_vector_aggregation(type, value_dim) \
   instantiate_kernel(                                        \
@@ -32,9 +32,11 @@ using namespace metal;
   instantiate_sdpa_vector(type, 64, 64)          \
   instantiate_sdpa_vector(type, 96, 96)          \
   instantiate_sdpa_vector(type, 128, 128)        \
+  instantiate_sdpa_vector(type, 256, 256)        \
   instantiate_sdpa_vector_aggregation(type, 64)  \
   instantiate_sdpa_vector_aggregation(type, 96)  \
-  instantiate_sdpa_vector_aggregation(type, 128)
+  instantiate_sdpa_vector_aggregation(type, 128) \
+  instantiate_sdpa_vector_aggregation(type, 256)
 
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)

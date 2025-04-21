@@ -993,6 +993,9 @@ array concatenate(
     throw std::invalid_argument(
         "[concatenate] No arrays provided for concatenation");
   }
+  if (arrays.size() == 1) {
+    return arrays[0];
+  }
 
   auto ax = normalize_axis_index(axis, arrays[0].ndim(), "[concatenate] ");
 
@@ -2356,6 +2359,29 @@ array logsumexp(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
+  if (a.size() == 0) {
+    throw std::invalid_argument("[logsumexp] Received empty array.");
+  }
+  if (a.ndim() == 0 && !axes.empty()) {
+    throw std::invalid_argument(
+        "[logsumexp] Received non-empty axes for array with 0 dimensions.");
+  }
+  bool is_complex = issubdtype(a.dtype(), complexfloating);
+  if (!is_complex && axes.size() == 1 &&
+      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+    auto dtype = at_least_float(a.dtype());
+    auto out_shape = a.shape();
+    out_shape.back() = 1;
+    auto out = array(
+        std::move(out_shape),
+        dtype,
+        std::make_shared<LogSumExp>(to_stream(s)),
+        {astype(a, dtype, s)});
+    if (!keepdims) {
+      out = squeeze(out, -1, s);
+    }
+    return out;
+  }
   auto maxval = stop_gradient(max(a, axes, true, s), s);
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
   out = add(out, reshape(maxval, out.shape(), s), s);
@@ -2823,6 +2849,19 @@ array matmul(
   }
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
+  // Complex matmul in terms of real matmuls
+  if (out_type == complex64) {
+    auto a_real = real(a, s);
+    auto b_real = real(b, s);
+    auto a_imag = imag(a, s);
+    auto b_imag = imag(b, s);
+    auto c_real =
+        subtract(matmul(a_real, b_real, s), matmul(a_imag, b_imag, s), s);
+    auto c_imag = add(matmul(a_real, b_imag, s), matmul(a_imag, b_real, s), s);
+    return add(
+        c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
+  }
+
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[matmul] Only real floating point types are supported but "
@@ -3331,8 +3370,14 @@ array softmax(
   if (a.size() == 0) {
     return a;
   }
+  if (a.ndim() == 0 && !axes.empty()) {
+    throw std::invalid_argument(
+        "[softmax] Received non-empty axes for array with 0 dimensions.");
+  }
 
-  if (axes.size() == 1 && (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+  bool is_complex = issubdtype(a.dtype(), complexfloating);
+  if (!is_complex && axes.size() == 1 &&
+      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
     auto dtype = at_least_float(a.dtype());
     return array(
         a.shape(),
@@ -3341,7 +3386,7 @@ array softmax(
         {astype(a, dtype, s)});
   } else {
     auto in = a;
-    if (precise) {
+    if (precise && !is_complex) {
       in = astype(a, float32, s);
     }
     auto a_max = stop_gradient(max(in, axes, /*keepdims = */ true, s), s);
@@ -3456,6 +3501,28 @@ array cummin(
       a.dtype(),
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::Min, axis, reverse, inclusive),
+      {a});
+}
+
+array logcumsumexp(
+    const array& a,
+    int axis,
+    bool reverse /* = false*/,
+    bool inclusive /* = true*/,
+    StreamOrDevice s /* = {}*/) {
+  int ndim = a.ndim();
+  if (axis >= ndim || axis < -ndim) {
+    std::ostringstream msg;
+    msg << "[logcumsumexp] Axis " << axis << " is out of bounds for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  axis = (axis + a.ndim()) % a.ndim();
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Scan>(
+          to_stream(s), Scan::ReduceType::LogAddExp, axis, reverse, inclusive),
       {a});
 }
 
@@ -3961,6 +4028,7 @@ array gather_qmm(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
@@ -4000,13 +4068,19 @@ array gather_qmm(
   return array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherQMM>(to_stream(s), group_size, bits, transpose),
+      std::make_shared<GatherQMM>(
+          to_stream(s),
+          group_size,
+          bits,
+          transpose,
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
       {astype(x, out_type, s),
-       w,
+       std::move(w),
        astype(scales, out_type, s),
        astype(biases, out_type, s),
-       lhs_indices,
-       rhs_indices});
+       std::move(lhs_indices),
+       std::move(rhs_indices)});
 }
 
 array tensordot(
@@ -4147,6 +4221,14 @@ array addmm(
 
   // Type promotion
   auto out_type = result_type(a, b, c);
+
+  if (out_type == complex64) {
+    return add(
+        multiply(matmul(a, b, s), array(alpha), s),
+        multiply(array(beta), c, s),
+        s);
+  }
+
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[addmm] Only real floating point types are supported but "
@@ -4424,6 +4506,7 @@ array gather_mm(
     array b,
     std::optional<array> lhs_indices_ /* = std::nullopt */,
     std::optional<array> rhs_indices_ /* = std::nullopt */,
+    bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   // If no indices, fall back to full matmul
   if (!lhs_indices_ && !rhs_indices_) {
@@ -4499,12 +4582,18 @@ array gather_mm(
   out_shape.push_back(M);
   out_shape.push_back(N);
 
-  // Caculate array
+  // Make the output array
   auto out = array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherMM>(to_stream(s)),
-      {a, b, lhs_indices, rhs_indices});
+      std::make_shared<GatherMM>(
+          to_stream(s),
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
+      {std::move(a),
+       std::move(b),
+       std::move(lhs_indices),
+       std::move(rhs_indices)});
 
   // Remove the possibly inserted singleton dimensions
   std::vector<int> axes;
@@ -4826,8 +4915,10 @@ array operator^(const array& a, const array& b) {
 }
 
 array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = result_type(a, b);
+  if (t == bool_) {
+    t = uint8;
+  }
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),
@@ -4840,8 +4931,10 @@ array operator<<(const array& a, const array& b) {
 }
 
 array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = result_type(a, b);
+  if (t == bool_) {
+    t = uint8;
+  }
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),

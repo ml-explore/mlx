@@ -206,6 +206,30 @@ void init_array(nb::module_& m) {
         return os.str();
       });
 
+  nb::class_<mx::iinfo>(
+      m,
+      "iinfo",
+      R"pbdoc(
+      Get information on integer types.
+      )pbdoc")
+      .def(nb::init<mx::Dtype>())
+      .def_ro(
+          "min",
+          &mx::iinfo::min,
+          R"pbdoc(The smallest representable number.)pbdoc")
+      .def_ro(
+          "max",
+          &mx::iinfo::max,
+          R"pbdoc(The largest representable number.)pbdoc")
+      .def_ro("dtype", &mx::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
+      .def("__repr__", [](const mx::iinfo& i) {
+        std::ostringstream os;
+        os << "iinfo("
+           << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
+           << ")";
+        return os.str();
+      });
+
   nb::class_<ArrayAt>(
       m,
       "ArrayAt",
@@ -1178,6 +1202,28 @@ void init_array(nb::module_& m) {
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`max`.")
+      .def(
+          "logcumsumexp",
+          [](const mx::array& a,
+             std::optional<int> axis,
+             bool reverse,
+             bool inclusive,
+             mx::StreamOrDevice s) {
+            if (axis) {
+              return mx::logcumsumexp(a, *axis, reverse, inclusive, s);
+            } else {
+              // TODO: Implement that in the C++ API as well. See concatenate
+              // above.
+              return mx::logcumsumexp(
+                  mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+            }
+          },
+          "axis"_a = nb::none(),
+          nb::kw_only(),
+          "reverse"_a = false,
+          "inclusive"_a = true,
+          "stream"_a = nb::none(),
+          "See :func:`logcumsumexp`.")
       .def(
           "logsumexp",
           [](const mx::array& a,

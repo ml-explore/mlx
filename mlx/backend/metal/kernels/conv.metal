@@ -276,6 +276,128 @@ instantiate_naive_conv_2d_blocks(float16, half);
 instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
 
 ///////////////////////////////////////////////////////////////////////////////
+/// Depthwise convolution kernels
+///////////////////////////////////////////////////////////////////////////////
+
+constant int ker_h [[function_constant(00)]];
+constant int ker_w [[function_constant(01)]];
+constant int str_h [[function_constant(10)]];
+constant int str_w [[function_constant(11)]];
+constant int tgp_h [[function_constant(100)]];
+constant int tgp_w [[function_constant(101)]];
+constant bool do_flip [[function_constant(200)]];
+
+constant int span_h = tgp_h * str_h + ker_h - 1;
+constant int span_w = tgp_w * str_w + ker_w - 1;
+constant int span_hw = span_h * span_w;
+
+template <typename T>
+[[kernel]] void depthwise_conv_2d(
+    const device T* in [[buffer(0)]],
+    const device T* wt [[buffer(1)]],
+    device T* out [[buffer(2)]],
+    const constant MLXConvParams<2>& params [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 gid [[thread_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int tc = 8;
+  constexpr int tw = 8;
+  constexpr int th = 4;
+
+  constexpr int c_per_thr = 8;
+
+  constexpr int TGH = th * 2 + 6;
+  constexpr int TGW = tw * 2 + 6;
+  constexpr int TGC = tc;
+
+  threadgroup T ins[TGH * TGW * TGC];
+
+  const int n_tgblocks_h = params.oS[0] / th;
+  const int n = tid.z / n_tgblocks_h;
+  const int tghid = tid.z % n_tgblocks_h;
+  const int oh = tghid * th + lid.z;
+  const int ow = gid.y;
+  const int c = gid.x;
+
+  in += n * params.in_strides[0];
+
+  // Load in
+  {
+    constexpr int n_threads = th * tw * tc;
+    const int tg_oh = (tghid * th) * str_h - params.pad[0];
+    const int tg_ow = (tid.y * tw) * str_w - params.pad[1];
+    const int tg_c = tid.x * tc;
+
+    const int thread_idx = simd_gid * 32 + simd_lid;
+    constexpr int thr_per_hw = tc / c_per_thr;
+    constexpr int hw_per_group = n_threads / thr_per_hw;
+
+    const int thr_c = thread_idx % thr_per_hw;
+    const int thr_hw = thread_idx / thr_per_hw;
+
+    for (int hw = thr_hw; hw < span_hw; hw += hw_per_group) {
+      const int h = hw / span_w;
+      const int w = hw % span_w;
+
+      const int ih = tg_oh + h;
+      const int iw = tg_ow + w;
+
+      const int in_s_offset = h * span_w * TGC + w * TGC;
+
+      if (ih >= 0 && ih < params.iS[0] && iw >= 0 && iw < params.iS[1]) {
+        const auto in_load =
+            in + ih * params.in_strides[1] + iw * params.in_strides[2] + tg_c;
+
+        MLX_MTL_PRAGMA_UNROLL
+        for (int cc = 0; cc < c_per_thr; ++cc) {
+          ins[in_s_offset + c_per_thr * thr_c + cc] =
+              in_load[c_per_thr * thr_c + cc];
+        }
+      } else {
+        MLX_MTL_PRAGMA_UNROLL
+        for (int cc = 0; cc < c_per_thr; ++cc) {
+          ins[in_s_offset + c_per_thr * thr_c + cc] = T(0);
+        }
+      }
+    }
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  wt += c * params.wt_strides[0];
+
+  const auto ins_ptr =
+      &ins[lid.z * str_h * span_w * TGC + lid.y * str_w * TGC + lid.x];
+  float o = 0.;
+  for (int h = 0; h < ker_h; ++h) {
+    for (int w = 0; w < ker_w; ++w) {
+      int wt_h = h;
+      int wt_w = w;
+      if (do_flip) {
+        wt_h = ker_h - h - 1;
+        wt_w = ker_w - w - 1;
+      }
+      auto inv = ins_ptr[h * span_w * TGC + w * TGC];
+      auto wtv = wt[wt_h * ker_w + wt_w];
+      o += inv * wtv;
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_none);
+
+  out += n * params.out_strides[0] + oh * params.out_strides[1] +
+      ow * params.out_strides[2];
+  out[c] = static_cast<T>(o);
+}
+
+#define instantiate_depthconv2d(iname, itype) \
+  instantiate_kernel("depthwise_conv_2d_" #iname, depthwise_conv_2d, itype)
+
+instantiate_depthconv2d(float32, float);
+instantiate_depthconv2d(float16, half);
+instantiate_depthconv2d(bfloat16, bfloat16_t);
+
+///////////////////////////////////////////////////////////////////////////////
 /// Winograd kernels
 ///////////////////////////////////////////////////////////////////////////////
 

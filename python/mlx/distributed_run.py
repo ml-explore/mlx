@@ -172,7 +172,7 @@ def parse_hostfile(parser, hostfile):
             for i, h in enumerate(json.load(f)):
                 hosts.append(Host(i, h["ssh"], h.get("ips", [])))
         return hosts
-    except e:
+    except Exception as e:
         parser.error(f"Failed to parse hostfile {str(hostfile)} ({str(e)})")
 
 
@@ -761,6 +761,8 @@ def main():
         "--cwd", help="Set the working directory on each node to the provided one"
     )
     args, rest = parser.parse_known_args()
+    if rest[0] == "--":
+        rest.pop(0)
 
     if args.print_python:
         print(sys.executable)

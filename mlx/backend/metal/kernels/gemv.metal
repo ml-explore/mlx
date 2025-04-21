@@ -341,7 +341,7 @@ struct GEMVTKernel {
 
         MLX_MTL_PRAGMA_UNROLL
         for (int tm = 0; tm < TM; tm++) {
-          auto vc = float(v_coeff[tm]);
+          auto vc = static_cast<AccT>(v_coeff[tm]);
           for (int tn = 0; tn < TN; tn++) {
             inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
           }

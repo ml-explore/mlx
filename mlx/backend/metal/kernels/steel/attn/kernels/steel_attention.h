@@ -229,7 +229,7 @@ template <
   // Init to -Inf
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
-    max_score[i] = Limits<AccumType>::min;
+    max_score[i] = Limits<AccumType>::finite_min;
   }
 
   int kb_lim = params->NK;
@@ -237,6 +237,7 @@ template <
   if (do_causal) {
     int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
+    kb_lim = min(params->NK, kb_lim);
   }
 
   // Loop over KV seq length
@@ -272,7 +273,7 @@ template <
     if (!align_K && kb == (params->NK_aligned)) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
+      constexpr auto neg_inf = Limits<selem_t>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
@@ -290,10 +291,10 @@ template <
     }
 
     // Mask out if causal
-    if (do_causal && kb >= (kb_lim - (BQ + BK - 1) / BK - int(!align_K))) {
+    if (do_causal && kb >= (kb_lim - ((BQ + BK - 1) / BK) - int(!align_K))) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
+      constexpr auto neg_inf = Limits<selem_t>::finite_min;
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
@@ -316,7 +317,7 @@ template <
     if (has_mask) {
       using stile_t = decltype(Stile);
       using selem_t = typename stile_t::elem_type;
-      constexpr auto neg_inf = -metal::numeric_limits<selem_t>::infinity();
+      constexpr auto neg_inf = Limits<selem_t>::finite_min;
 
       constexpr bool is_bool = is_same_v<MaskType, bool>;
       using melem_t = typename metal::conditional_t<is_bool, bool, selem_t>;

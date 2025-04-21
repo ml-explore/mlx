@@ -58,6 +58,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/scan.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/select.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/threefry.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
@@ -73,8 +74,8 @@ target_sources(
 if(MLX_BUILD_ACCELERATE)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/bnns.cpp)
 else()
-  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/no_fp16.cpp
-                             ${CMAKE_CURRENT_SOURCE_DIR}/gemms/no_bf16.cpp)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simd_fp16.cpp
+                             ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simd_bf16.cpp)
 endif()
 
 if(IOS)

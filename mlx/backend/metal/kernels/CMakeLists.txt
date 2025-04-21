@@ -13,6 +13,10 @@ function(build_kernel_base TARGET SRCFILE DEPS)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()
+  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+    set(METAL_FLAGS ${METAL_FLAGS}
+                    "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
   if(MLX_METAL_VERSION GREATER_EQUAL 310)
     set(VERSION_INCLUDES
         ${PROJECT_SOURCE_DIR}/mlx/backend/metal/kernels/metal_3_1)
@@ -65,6 +69,7 @@ set(STEEL_HEADERS
     steel/gemm/loader.h
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
+    steel/gemm/kernels/steel_gemm_gather.h
     steel/gemm/kernels/steel_gemm_masked.h
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
@@ -105,12 +110,14 @@ if(NOT MLX_METAL_JIT)
   build_kernel(quantized quantized.h ${STEEL_HEADERS})
   build_kernel(scan scan.h)
   build_kernel(softmax softmax.h)
+  build_kernel(logsumexp logsumexp.h)
   build_kernel(sort sort.h)
   build_kernel(ternary ternary.h ternary_ops.h)
   build_kernel(unary unary.h unary_ops.h)
   build_kernel(steel/conv/kernels/steel_conv ${STEEL_HEADERS})
   build_kernel(steel/conv/kernels/steel_conv_general ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_fused ${STEEL_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)

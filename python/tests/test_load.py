@@ -385,16 +385,16 @@ class TestLoad(mlx_tests.MLXTestCase):
         mx.eval(x)
         save_file = os.path.join(self.test_dir, "donation.npy")
         mx.save(save_file, x)
-        mx.synchronize(mx.default_stream(mx.default_device()))
+        mx.synchronize()
 
-        mx.metal.reset_peak_memory()
+        mx.reset_peak_memory()
         scale = mx.array(2.0)
         y = mx.load(save_file)
         mx.eval(y)
-        load_only = mx.metal.get_peak_memory()
+        load_only = mx.get_peak_memory()
         y = mx.load(save_file) * scale
         mx.eval(y)
-        load_with_binary = mx.metal.get_peak_memory()
+        load_with_binary = mx.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
 

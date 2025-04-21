@@ -5,11 +5,7 @@
 #include "mlx/backend/metal/kernels/arange.h"
 
 #define instantiate_arange(tname, type)                                 \
-  template [[host_name("arange" #tname)]] [[kernel]] void arange<type>( \
-      constant const type& start,                                       \
-      constant const type& step,                                        \
-      device type* out,                                                 \
-      uint index [[thread_position_in_grid]]);
+  instantiate_kernel("arange" #tname, arange, type)
 
 instantiate_arange(uint8, uint8_t)
 instantiate_arange(uint16, uint16_t)

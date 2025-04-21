@@ -9,47 +9,13 @@ using namespace metal;
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/softmax.h"
 
-#define instantiate_softmax(name, itype)                          \
-  template [[host_name("block_softmax_" #name)]] [[kernel]] void        \
-  softmax_single_row<itype>(                                      \
-      const device itype* in,                                     \
-      device itype* out,                                          \
-      constant int& axis_size,                                    \
-      uint gid [[thread_position_in_grid]],                       \
-      uint _lid [[thread_position_in_threadgroup]],               \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);     \
-  template [[host_name("looped_softmax_" #name)]] [[kernel]] void \
-  softmax_looped<itype>(                                          \
-      const device itype* in,                                     \
-      device itype* out,                                          \
-      constant int& axis_size,                                    \
-      uint gid [[threadgroup_position_in_grid]],                  \
-      uint lid [[thread_position_in_threadgroup]],                \
-      uint lsize [[threads_per_threadgroup]],                     \
-      uint simd_lane_id [[thread_index_in_simdgroup]],            \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+#define instantiate_softmax(name, itype)                                \
+  instantiate_kernel("block_softmax_" #name, softmax_single_row, itype) \
+  instantiate_kernel("looped_softmax_" #name, softmax_looped, itype)
 
-#define instantiate_softmax_precise(name, itype)                          \
-  template [[host_name("block_softmax_precise_" #name)]] [[kernel]] void        \
-  softmax_single_row<itype, float>(                                       \
-      const device itype* in,                                             \
-      device itype* out,                                                  \
-      constant int& axis_size,                                            \
-      uint gid [[thread_position_in_grid]],                               \
-      uint _lid [[thread_position_in_threadgroup]],                       \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                    \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);             \
-  template [[host_name("looped_softmax_precise_" #name)]] [[kernel]] void \
-  softmax_looped<itype, float>(                                           \
-      const device itype* in,                                             \
-      device itype* out,                                                  \
-      constant int& axis_size,                                            \
-      uint gid [[threadgroup_position_in_grid]],                          \
-      uint lid [[thread_position_in_threadgroup]],                        \
-      uint lsize [[threads_per_threadgroup]],                             \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                    \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+#define instantiate_softmax_precise(name, itype)                                       \
+  instantiate_kernel("block_softmax_precise_" #name, softmax_single_row, itype, float) \
+  instantiate_kernel("looped_softmax_precise_" #name, softmax_looped, itype, float)
 
 instantiate_softmax(float32, float)
 instantiate_softmax(float16, half)

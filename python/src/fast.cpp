@@ -124,14 +124,45 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "scaled_dot_product_attention",
-      &mx::fast::scaled_dot_product_attention,
+      [](const mx::array& queries,
+         const mx::array& keys,
+         const mx::array& values,
+         const float scale,
+         const std::variant<std::monostate, std::string, mx::array>& mask,
+         mx::StreamOrDevice s) {
+        bool has_mask = !std::holds_alternative<std::monostate>(mask);
+        bool has_str_mask =
+            has_mask && std::holds_alternative<std::string>(mask);
+        bool has_arr_mask = has_mask && std::holds_alternative<mx::array>(mask);
+
+        if (has_mask) {
+          if (has_str_mask) {
+            auto mask_str = std::get<std::string>(mask);
+            if (mask_str != "causal") {
+              std::ostringstream msg;
+              msg << "[scaled_dot_product_attention] invalid mask option '"
+                  << mask_str << "'. Must be 'causal', or an array.";
+              throw std::invalid_argument(msg.str());
+            }
+            return mx::fast::scaled_dot_product_attention(
+                queries, keys, values, scale, mask_str, {}, s);
+          } else {
+            auto mask_arr = std::get<mx::array>(mask);
+            return mx::fast::scaled_dot_product_attention(
+                queries, keys, values, scale, "", {mask_arr}, s);
+          }
+
+        } else {
+          return mx::fast::scaled_dot_product_attention(
+              queries, keys, values, scale, "", {}, s);
+        }
+      },
       "q"_a,
       "k"_a,
       "v"_a,
       nb::kw_only(),
       "scale"_a,
       "mask"_a = nb::none(),
-      "memory_efficient_threshold"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, stream: Union[None, Stream, Device] = None) -> array"),
@@ -164,10 +195,10 @@ void init_fast(nb::module_& parent_module) {
             k (array): Keys with shape ``[B, N_kv, T_kv, D]``.
             v (array): Values with shape ``[B, N_kv, T_kv, D]``.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
-            mask (Union[None, str, array], optional): A causal, boolean or additive 
-               mask to apply to the query-key scores. The mask can have at most 4 
-               dimensions and must be broadcast-compatible with the shape 
-               ``[B, N, T_q, T_kv]``. If an additive mask is given its type must 
+            mask (Union[None, str, array], optional): A causal, boolean or additive
+               mask to apply to the query-key scores. The mask can have at most 4
+               dimensions and must be broadcast-compatible with the shape
+               ``[B, N, T_q, T_kv]``. If an additive mask is given its type must
                promote to the promoted type of ``q``, ``k``, and ``v``.
         Returns:
             array: The output array.

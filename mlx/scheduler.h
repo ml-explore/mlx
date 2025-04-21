@@ -129,7 +129,7 @@ class Scheduler {
     int n_tasks_old = n_active_tasks();
     if (n_tasks_old > 1) {
       completion_cv.wait(lk, [this, n_tasks_old] {
-        return this->n_active_tasks() != n_tasks_old;
+        return this->n_active_tasks() < n_tasks_old;
       });
     }
   }
