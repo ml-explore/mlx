@@ -16,7 +16,7 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-std::pair<std::vector<mx::array>, mx::Kwargs> validate_and_extract_inputs(
+std::pair<mx::Args, mx::Kwargs> validate_and_extract_inputs(
     const nb::args& args,
     const nb::kwargs& kwargs,
     const std::string& prefix) {
@@ -29,7 +29,7 @@ std::pair<std::vector<mx::array>, mx::Kwargs> validate_and_extract_inputs(
           "and/or dictionary of arrays.");
     }
   };
-  std::vector<mx::array> args_;
+  mx::Args args_;
   mx::Kwargs kwargs_;
   if (args.size() == 0) {
     // No args so kwargs must be keyword arrays
