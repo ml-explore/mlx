@@ -5196,8 +5196,8 @@ void init_ops(nb::module_& m) {
           throw std::invalid_argument(
               "[broadcast_shapes] Must provide at least one shape.");
 
-        mx::Shape result;
-        for (size_t i = 0; i < shapes.size(); ++i) {
+        mx::Shape result = nb::cast<mx::Shape>(shapes[0]);
+        for (size_t i = 1; i < shapes.size(); ++i) {
           if (!nb::isinstance<mx::Shape>(shapes[i]) &&
               !nb::isinstance<nb::tuple>(shapes[i]))
             throw std::invalid_argument(
