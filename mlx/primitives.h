@@ -711,6 +711,7 @@ class Convolution : public UnaryPrimitive {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(Convolution)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
