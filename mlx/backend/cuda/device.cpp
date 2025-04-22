@@ -42,6 +42,13 @@ Device::Device(int device) : device_(device) {
         "Device {} does not support synchronization in managed memory.",
         device_));
   }
+  // The cublasLt handle is used by matmul.
+  make_current();
+  cublasLtCreate(&lt_);
+}
+
+Device::~Device() {
+  cublasLtDestroy(lt_);
 }
 
 void Device::make_current() {
