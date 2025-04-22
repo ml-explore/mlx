@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <numeric>
 #include <set>
 
@@ -109,7 +108,7 @@ array fft_impl(
   for (auto ax : axes) {
     n.push_back(a.shape(ax));
   }
-  if (real && inverse) {
+  if (real && inverse && a.ndim() > 0) {
     n.back() = (n.back() - 1) * 2;
   }
   return fft_impl(a, n, axes, real, inverse, s);
