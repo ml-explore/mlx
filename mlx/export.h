@@ -2,14 +2,14 @@
 
 #pragma once
 
-#include <map>
 #include <set>
+#include <unordered_map>
 #include "mlx/array.h"
 
 namespace mlx::core {
 
 using Args = std::vector<array>;
-using Kwargs = std::map<std::string, array>;
+using Kwargs = std::unordered_map<std::string, array>;
 
 struct FunctionExporter;
 

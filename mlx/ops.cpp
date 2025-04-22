@@ -3504,6 +3504,28 @@ array cummin(
       {a});
 }
 
+array logcumsumexp(
+    const array& a,
+    int axis,
+    bool reverse /* = false*/,
+    bool inclusive /* = true*/,
+    StreamOrDevice s /* = {}*/) {
+  int ndim = a.ndim();
+  if (axis >= ndim || axis < -ndim) {
+    std::ostringstream msg;
+    msg << "[logcumsumexp] Axis " << axis << " is out of bounds for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  axis = (axis + a.ndim()) % a.ndim();
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Scan>(
+          to_stream(s), Scan::ReduceType::LogAddExp, axis, reverse, inclusive),
+      {a});
+}
+
 /** Convolution operations */
 
 namespace {
@@ -4006,6 +4028,7 @@ array gather_qmm(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
@@ -4045,13 +4068,19 @@ array gather_qmm(
   return array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherQMM>(to_stream(s), group_size, bits, transpose),
+      std::make_shared<GatherQMM>(
+          to_stream(s),
+          group_size,
+          bits,
+          transpose,
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
       {astype(x, out_type, s),
-       w,
+       std::move(w),
        astype(scales, out_type, s),
        astype(biases, out_type, s),
-       lhs_indices,
-       rhs_indices});
+       std::move(lhs_indices),
+       std::move(rhs_indices)});
 }
 
 array tensordot(
@@ -4477,6 +4506,7 @@ array gather_mm(
     array b,
     std::optional<array> lhs_indices_ /* = std::nullopt */,
     std::optional<array> rhs_indices_ /* = std::nullopt */,
+    bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   // If no indices, fall back to full matmul
   if (!lhs_indices_ && !rhs_indices_) {
@@ -4552,12 +4582,18 @@ array gather_mm(
   out_shape.push_back(M);
   out_shape.push_back(N);
 
-  // Caculate array
+  // Make the output array
   auto out = array(
       std::move(out_shape),
       out_type,
-      std::make_shared<GatherMM>(to_stream(s)),
-      {a, b, lhs_indices, rhs_indices});
+      std::make_shared<GatherMM>(
+          to_stream(s),
+          sorted_indices && !rhs_indices_,
+          sorted_indices && !lhs_indices_),
+      {std::move(a),
+       std::move(b),
+       std::move(lhs_indices),
+       std::move(rhs_indices)});
 
   // Remove the possibly inserted singleton dimensions
   std::vector<int> axes;
@@ -4879,8 +4915,10 @@ array operator^(const array& a, const array& b) {
 }
 
 array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = result_type(a, b);
+  if (t == bool_) {
+    t = uint8;
+  }
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),
@@ -4893,8 +4931,10 @@ array operator<<(const array& a, const array& b) {
 }
 
 array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Bit shift on bool always up-casts to uint8
-  auto t = promote_types(result_type(a, b), uint8);
+  auto t = result_type(a, b);
+  if (t == bool_) {
+    t = uint8;
+  }
   return bitwise_impl(
       astype(a, t, s),
       astype(b, t, s),

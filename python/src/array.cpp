@@ -1203,6 +1203,28 @@ void init_array(nb::module_& m) {
           "stream"_a = nb::none(),
           "See :func:`max`.")
       .def(
+          "logcumsumexp",
+          [](const mx::array& a,
+             std::optional<int> axis,
+             bool reverse,
+             bool inclusive,
+             mx::StreamOrDevice s) {
+            if (axis) {
+              return mx::logcumsumexp(a, *axis, reverse, inclusive, s);
+            } else {
+              // TODO: Implement that in the C++ API as well. See concatenate
+              // above.
+              return mx::logcumsumexp(
+                  mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+            }
+          },
+          "axis"_a = nb::none(),
+          nb::kw_only(),
+          "reverse"_a = false,
+          "inclusive"_a = true,
+          "stream"_a = nb::none(),
+          "See :func:`logcumsumexp`.")
+      .def(
           "logsumexp",
           [](const mx::array& a,
              const IntOrVec& axis,

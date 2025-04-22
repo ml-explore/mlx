@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "mlx/backend/metal/kernels/binary_ops.h"
+
 #define DEFINE_SIMD_SCAN()                                               \
   template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
   T simd_scan(T val) {                                                   \
@@ -129,6 +131,29 @@ struct CumMin {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
       x = (x <= other) ? x : other;
+    }
+    return x;
+  }
+
+  U simd_exclusive_scan(U x) {
+    x = simd_scan(x);
+    return simd_shuffle_and_fill_up(x, init, 1);
+  }
+};
+
+template <typename U>
+struct CumLogaddexp {
+  static constexpr constant U init = Limits<U>::min;
+
+  template <typename T>
+  U operator()(U a, T b) {
+    return LogAddExp{}(a, static_cast<U>(b));
+  }
+
+  U simd_scan(U x) {
+    for (int i = 1; i <= 16; i *= 2) {
+      U other = simd_shuffle_and_fill_up(x, init, i);
+      x = LogAddExp{}(x, other);
     }
     return x;
   }

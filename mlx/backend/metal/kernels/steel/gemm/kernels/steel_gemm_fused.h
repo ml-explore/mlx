@@ -15,10 +15,6 @@ constant bool align_M [[function_constant(200)]];
 constant bool align_N [[function_constant(201)]];
 constant bool align_K [[function_constant(202)]];
 
-constant bool do_gather [[function_constant(300)]];
-
-constant bool gather_bias = do_gather && use_out_source;
-
 // clang-format off
 template <
     typename T,
@@ -39,12 +35,6 @@ template <
     const constant GEMMAddMMParams* addmm_params [[buffer(5), function_constant(use_out_source)]],
     const constant int* batch_shape [[buffer(6)]],
     const constant int64_t* batch_strides [[buffer(7)]],
-    const constant uint32_t* lhs_indices [[buffer(10), function_constant(do_gather)]],
-    const constant uint32_t* rhs_indices [[buffer(11), function_constant(do_gather)]],
-    const constant uint32_t* C_indices [[buffer(12), function_constant(gather_bias)]],
-    const constant int* operand_shape [[buffer(13), function_constant(do_gather)]],
-    const constant int64_t* operand_strides [[buffer(14), function_constant(do_gather)]],
-    const constant packed_int3& operand_batch_ndim [[buffer(15), function_constant(do_gather)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -81,84 +71,26 @@ template <
   }
 
   // Adjust for batch
+  if (has_batch) {
+    const constant auto* A_bstrides = batch_strides;
+    const constant auto* B_bstrides = batch_strides + params->batch_ndim;
 
-  // Handle gather
-  if (do_gather) {
-    // Read indices
-    uint32_t indx_A, indx_B, indx_C;
+    ulong2 batch_offsets = elem_to_loc_broadcast(
+        tid.z, batch_shape, A_bstrides, B_bstrides, params->batch_ndim);
 
-    if (has_batch) {
-      const constant auto* indx_A_bstrides = batch_strides;
-      const constant auto* indx_B_bstrides = batch_strides + params->batch_ndim;
-
-      ulong2 indx_offsets = elem_to_loc_broadcast(
-          tid.z,
-          batch_shape,
-          indx_A_bstrides,
-          indx_B_bstrides,
-          params->batch_ndim);
-      indx_A = lhs_indices[indx_offsets.x];
-      indx_B = rhs_indices[indx_offsets.y];
-
-      if (use_out_source) {
-        const constant auto* indx_C_bstrides =
-            indx_B_bstrides + params->batch_ndim;
-        auto indx_offset_C = elem_to_loc(
-            tid.z, batch_shape, indx_C_bstrides, params->batch_ndim);
-        indx_C = C_indices[indx_offset_C];
-      }
-    } else {
-      indx_A = lhs_indices[params->batch_stride_a * tid.z];
-      indx_B = rhs_indices[params->batch_stride_b * tid.z];
-
-      if (use_out_source) {
-        indx_C = C_indices[addmm_params->batch_stride_c * tid.z];
-      }
-    }
-
-    // Translate indices to offsets
-    int batch_ndim_A = operand_batch_ndim.x;
-    const constant int* batch_shape_A = operand_shape;
-    const constant auto* batch_strides_A = operand_strides;
-    A += elem_to_loc(indx_A, batch_shape_A, batch_strides_A, batch_ndim_A);
-
-    int batch_ndim_B = operand_batch_ndim.y;
-    const constant int* batch_shape_B = batch_shape_A + batch_ndim_A;
-    const constant auto* batch_strides_B = batch_strides_A + batch_ndim_A;
-    B += elem_to_loc(indx_B, batch_shape_B, batch_strides_B, batch_ndim_B);
+    A += batch_offsets.x;
+    B += batch_offsets.y;
 
     if (use_out_source) {
-      int batch_ndim_C = operand_batch_ndim.z;
-      const constant int* batch_shape_C = batch_shape_B + batch_ndim_B;
-      const constant auto* batch_strides_C = batch_strides_B + batch_ndim_B;
-      C += elem_to_loc(indx_C, batch_shape_C, batch_strides_C, batch_ndim_C);
+      const constant auto* C_bstrides = B_bstrides + params->batch_ndim;
+      C += elem_to_loc(tid.z, batch_shape, C_bstrides, params->batch_ndim);
     }
+  } else {
+    A += params->batch_stride_a * tid.z;
+    B += params->batch_stride_b * tid.z;
 
-  }
-
-  // Handle regular batch
-  else {
-    if (has_batch) {
-      const constant auto* A_bstrides = batch_strides;
-      const constant auto* B_bstrides = batch_strides + params->batch_ndim;
-
-      ulong2 batch_offsets = elem_to_loc_broadcast(
-          tid.z, batch_shape, A_bstrides, B_bstrides, params->batch_ndim);
-
-      A += batch_offsets.x;
-      B += batch_offsets.y;
-
-      if (use_out_source) {
-        const constant auto* C_bstrides = B_bstrides + params->batch_ndim;
-        C += elem_to_loc(tid.z, batch_shape, C_bstrides, params->batch_ndim);
-      }
-    } else {
-      A += params->batch_stride_a * tid.z;
-      B += params->batch_stride_b * tid.z;
-
-      if (use_out_source) {
-        C += addmm_params->batch_stride_c * tid.z;
-      }
+    if (use_out_source) {
+      C += addmm_params->batch_stride_c * tid.z;
     }
   }
 

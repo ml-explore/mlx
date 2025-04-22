@@ -104,9 +104,21 @@ constexpr bool operator==(complex64_t a, complex64_t b) {
 constexpr complex64_t operator+(complex64_t a, complex64_t b) {
   return {a.real + b.real, a.imag + b.imag};
 }
+constexpr complex64_t operator+(float a, complex64_t b) {
+  return {a + b.real, b.imag};
+}
+constexpr complex64_t operator+(complex64_t a, float b) {
+  return {a.real + b, a.imag};
+}
 
 constexpr complex64_t operator-(complex64_t a, complex64_t b) {
   return {a.real - b.real, a.imag - b.imag};
+}
+constexpr complex64_t operator-(float a, complex64_t b) {
+  return {a - b.real, -b.imag};
+}
+constexpr complex64_t operator-(complex64_t a, float b) {
+  return {a.real - b, a.imag};
 }
 
 constexpr complex64_t operator*(complex64_t a, complex64_t b) {
@@ -117,6 +129,13 @@ constexpr complex64_t operator/(complex64_t a, complex64_t b) {
   auto denom = b.real * b.real + b.imag * b.imag;
   auto x = a.real * b.real + a.imag * b.imag;
   auto y = a.imag * b.real - a.real * b.imag;
+  return {x / denom, y / denom};
+}
+
+constexpr complex64_t operator/(float a, complex64_t b) {
+  auto denom = b.real * b.real + b.imag * b.imag;
+  auto x = a * b.real;
+  auto y = -a * b.imag;
   return {x / denom, y / denom};
 }
 

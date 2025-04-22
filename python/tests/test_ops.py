@@ -1857,6 +1857,30 @@ class TestOps(mlx_tests.MLXTestCase):
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
 
+    def test_logcumsumexp(self):
+        npop = np.logaddexp.accumulate
+        mxop = mx.logcumsumexp
+
+        a_npy = np.random.randn(32, 32, 32).astype(np.float32)
+        a_mlx = mx.array(a_npy)
+
+        for axis in (0, 1, 2):
+            c_npy = npop(a_npy, axis=axis)
+            c_mlx = mxop(a_mlx, axis=axis)
+            self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
+        edge_cases_npy = [
+            np.float32([-float("inf")] * 8),
+            np.float32([-float("inf"), 0, -float("inf")]),
+            np.float32([-float("inf"), float("inf"), -float("inf")]),
+        ]
+        edge_cases_mlx = [mx.array(a) for a in edge_cases_npy]
+
+        for a_npy, a_mlx in zip(edge_cases_npy, edge_cases_mlx):
+            c_npy = npop(a_npy, axis=0)
+            c_mlx = mxop(a_mlx, axis=0)
+            self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
         a_mlx = mx.array(a_npy)
@@ -2909,6 +2933,35 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.random.uniform(shape=(128, 4))
         out = a[::-1]
         self.assertTrue(mx.array_equal(out[-1, :], a[0, :]))
+
+    def test_complex_ops(self):
+        x = mx.array(
+            [
+                3.0 + 4.0j,
+                -5.0 + 12.0j,
+                -8.0 + 0.0j,
+                0.0 + 9.0j,
+                0.0 + 0.0j,
+            ]
+        )
+
+        ops = ["arccos", "arcsin", "arctan", "square", "sqrt"]
+        for op in ops:
+            with self.subTest(op=op):
+                np_op = getattr(np, op)
+                mx_op = getattr(mx, op)
+                self.assertTrue(np.allclose(mx_op(x), np_op(x)))
+
+        x = mx.array(
+            [
+                3.0 + 4.0j,
+                -5.0 + 12.0j,
+                -8.0 + 0.0j,
+                0.0 + 9.0j,
+                9.0 + 1.0j,
+            ]
+        )
+        self.assertTrue(np.allclose(mx.rsqrt(x), 1.0 / np.sqrt(x)))
 
 
 if __name__ == "__main__":

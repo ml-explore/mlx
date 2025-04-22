@@ -1275,6 +1275,61 @@ std::vector<array> Convolution::vjp(
   return grads;
 }
 
+std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto do_conv = [&](const array& in, const array& w, int groups) {
+    return conv_general(
+        in,
+        w,
+        kernel_strides_,
+        padding_,
+        kernel_dilation_,
+        input_dilation_,
+        groups,
+        flip_,
+        stream());
+  };
+  bool in_vmap = axes[0] >= 0;
+  bool w_vmap = axes[1] >= 0;
+  auto in = inputs[0];
+  auto w = inputs[1];
+  if (in_vmap && !w_vmap) {
+    // flatten / unflatten the batch dimension
+    // of the input / output
+    if (axes[0] > 0) {
+      in = moveaxis(in, axes[0], 0, stream());
+    }
+    auto out = do_conv(flatten(in, 0, 1, stream()), w, groups_);
+    out = unflatten(out, 0, {in.shape(0), in.shape(1)}, stream());
+    return {{out}, {0}};
+  } else if (!in_vmap && w_vmap) {
+    // flatten into the output channels of w
+    // unflatten the channels of the output
+    if (axes[1] > 0) {
+      w = moveaxis(w, axes[1], 0, stream());
+    }
+    auto out = do_conv(in, flatten(w, 0, 1, stream()), groups_);
+    out = unflatten(out, -1, {w.shape(0), w.shape(1)}, stream());
+    return {{out}, {static_cast<int>(out.ndim() - 2)}};
+  } else if (in_vmap && w_vmap) {
+    // use a group convolution when both inputs are vmapped
+    auto b = in.shape(axes[0]);
+    in = moveaxis(in, axes[0], -2, stream());
+    in = flatten(in, -2, -1, stream());
+    if (axes[1] > 0) {
+      w = moveaxis(w, axes[1], 0, stream());
+    }
+    auto c_out = w.shape(1);
+    w = flatten(w, 0, 1, stream());
+    auto out = do_conv(in, w, groups_ * b);
+    out = unflatten(out, -1, {b, c_out}, stream());
+    return {{out}, {static_cast<int>(out.ndim() - 2)}};
+  } else {
+    return {{do_conv(in, w, groups_)}, {-1}};
+  }
+}
+
 bool Convolution::is_equivalent(const Primitive& other) const {
   const Convolution& c_other = static_cast<const Convolution&>(other);
   return padding_ == c_other.padding_ &&
@@ -3080,6 +3135,8 @@ std::vector<array> GatherQMM::vjp(
   auto& lhs_indices = primals[4];
   auto& rhs_indices = primals[5];
 
+  bool sorted = left_sorted_ || right_sorted_;
+
   for (auto arg : argnums) {
     // gradient wrt to x
     if (arg == 0) {
@@ -3098,6 +3155,7 @@ std::vector<array> GatherQMM::vjp(
                       !transpose_,
                       group_size_,
                       bits_,
+                      sorted,
                       stream()),
                   -3,
                   stream()),
@@ -3478,6 +3536,45 @@ std::vector<array> Scan::vjp(
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(cotangents[0], axis_, !reverse_, inclusive_, stream())};
+  } else if (reduce_type_ == Scan::LogAddExp) {
+    // Ref:
+    // https://github.com/tensorflow/tensorflow/blob/2a5910906a0e0f3dbc186ff9db6386d81a63448c/tensorflow/python/ops/math_grad.py#L1832-L1863
+
+    auto x = primals[0];
+    auto grad = cotangents[0];
+    auto results = outputs[0];
+
+    auto zero = zeros({1}, grad.dtype(), stream());
+    auto grad_min = array(finfo(grad.dtype()).min, grad.dtype());
+
+    // Split the incoming gradient into positive and negative part
+    // in order to take logs. This is required for stable results.
+    auto log_abs_grad = log(abs(grad, stream()), stream());
+    auto log_grad_positive =
+        where(greater(grad, zero, stream()), log_abs_grad, grad_min, stream());
+    auto log_grad_negative =
+        where(less(grad, zero, stream()), log_abs_grad, grad_min, stream());
+
+    auto output_pos = exp(
+        add(logcumsumexp(
+                subtract(log_grad_positive, results, stream()),
+                axis_,
+                !reverse_,
+                inclusive_,
+                stream()),
+            x,
+            stream()));
+    auto output_neg = exp(
+        add(logcumsumexp(
+                subtract(log_grad_negative, results, stream()),
+                axis_,
+                !reverse_,
+                inclusive_,
+                stream()),
+            x,
+            stream()));
+
+    return {subtract(output_pos, output_neg, stream())};
   } else if (reduce_type_ == Scan::Prod) {
     auto in = primals[0];
     // Find the location of the first 0 and set it to 1:
@@ -4856,6 +4953,8 @@ std::vector<array> GatherMM::vjp(
   int N = cotan.shape(-1);
   int K = primals[0].shape(-1);
 
+  bool sorted = left_sorted_ || right_sorted_;
+
   for (auto arg : argnums) {
     if (arg == 0) {
       // M X N * (K X N).T -> M X K
@@ -4866,7 +4965,8 @@ std::vector<array> GatherMM::vjp(
       base = reshape(base, {-1, M, K}, stream());
 
       // g : (out_batch_shape) + (M, K)
-      auto g = gather_mm(cotan, bt, std::nullopt, rhs_indices, stream());
+      auto g =
+          gather_mm(cotan, bt, std::nullopt, rhs_indices, sorted, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, lhs_indices, g, 0, stream());
 
@@ -4881,7 +4981,8 @@ std::vector<array> GatherMM::vjp(
       base = reshape(base, {-1, K, N}, stream());
 
       // g : (out_batch_shape) + (K, N)
-      auto g = gather_mm(at, cotan, lhs_indices, std::nullopt, stream());
+      auto g =
+          gather_mm(at, cotan, lhs_indices, std::nullopt, sorted, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
 
@@ -4892,6 +4993,12 @@ std::vector<array> GatherMM::vjp(
     }
   }
   return vjps;
+}
+
+bool GatherMM::is_equivalent(const Primitive& other) const {
+  const GatherMM& g_other = static_cast<const GatherMM&>(other);
+  return left_sorted_ == g_other.left_sorted_ &&
+      right_sorted_ == g_other.right_sorted_;
 }
 
 bool BlockMaskedMM::is_equivalent(const Primitive& other) const {

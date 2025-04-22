@@ -1508,6 +1508,7 @@ class TestArray(mlx_tests.MLXTestCase):
             ("prod", 1),
             ("min", 1),
             ("max", 1),
+            ("logcumsumexp", 1),
             ("logsumexp", 1),
             ("mean", 1),
             ("var", 1),

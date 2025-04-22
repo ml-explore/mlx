@@ -97,8 +97,7 @@ TEST_CASE("test export primitives with state") {
 TEST_CASE("test export functions with kwargs") {
   std::string file_path = get_temp_file("model.mlxfn");
 
-  auto fun =
-      [](const std::map<std::string, array>& kwargs) -> std::vector<array> {
+  auto fun = [](const Kwargs& kwargs) -> std::vector<array> {
     return {kwargs.at("x") + kwargs.at("y")};
   };
 
