@@ -21,18 +21,14 @@ namespace mlx::core::metal {
 
 // Note, this function must be left inline in a header so that it is not
 // dynamically linked.
-inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
+inline std::string get_binary_directory() {
   Dl_info info;
-  std::string mtllib_path;
-  std::string lib_ext = lib_name + ".metallib";
-
-  int success = dladdr((void*)get_colocated_mtllib_path, &info);
+  std::string directory;
+  int success = dladdr((void*)get_binary_directory, &info);
   if (success) {
-    auto mtllib = fs::path(info.dli_fname).remove_filename() / lib_ext;
-    mtllib_path = mtllib.c_str();
+    directory = fs::path(info.dli_fname).remove_filename().c_str();
   }
-
-  return mtllib_path;
+  return directory;
 }
 
 using MTLFCList =
