@@ -63,6 +63,13 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
       std::vector<array>{std::forward<Arrays>(xs)...});
 }
 
+std::tuple<Shape, Strides, Strides> collapse_batches(
+    const array& a,
+    const array& b);
+
+std::tuple<Shape, Strides, Strides, Strides>
+collapse_batches(const array& a, const array& b, const array& c);
+
 // The single array version of the above.
 std::pair<Shape, Strides> collapse_contiguous_dims(
     const Shape& shape,
