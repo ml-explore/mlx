@@ -109,7 +109,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
 NO_GPU(ArgPartition)
-NO_GPU(ArgSort)
 NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Convolution)
@@ -134,7 +133,6 @@ NO_GPU(ScatterAxis)
 NO_GPU(Select)
 NO_GPU(SliceUpdate)
 NO_GPU(Softmax)
-NO_GPU(Sort)
 NO_GPU_MULTI(SVD)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
