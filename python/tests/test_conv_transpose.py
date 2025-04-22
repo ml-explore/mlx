@@ -596,6 +596,215 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
 
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_torch_conv_tranpose_1d_output_padding(self):
+        def run_conv_transpose_1d_output_padding(
+            N, C, O, iH, kH, stride, padding, output_padding, dtype="float32", atol=1e-5
+        ):
+            with self.subTest(
+                dtype=dtype,
+                N=N,
+                C=C,
+                O=O,
+                iH=iH,
+                kH=kH,
+                stride=stride,
+                padding=padding,
+                output_padding=output_padding,
+            ):
+                np_dtype = getattr(np, dtype)
+                np.random.seed(0)
+                in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
+                wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
+
+                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_pt = torch.from_numpy(in_np.transpose(0, 2, 1))
+                wt_pt = torch.from_numpy(wt_np.transpose(2, 0, 1))
+
+                out_mx = mx.conv_transpose1d(
+                    in_mx,
+                    wt_mx,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+
+                out_pt = torch.conv_transpose1d(
+                    in_pt,
+                    wt_pt,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+                out_pt = torch.transpose(out_pt, 2, 1)
+
+                self.assertEqual(out_pt.shape, out_mx.shape)
+                self.assertTrue(np.allclose(out_pt.numpy(), out_mx, atol=atol))
+
+        for dtype in ("float32",):
+            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+                for iH, kH, stride, padding, output_padding in (
+                    (3, 2, 2, 0, 1),
+                    (5, 3, 2, 1, 0),
+                    (7, 4, 3, 1, 2),
+                ):
+                    run_conv_transpose_1d_output_padding(
+                        N, C, O, iH, kH, stride, padding, output_padding, dtype=dtype
+                    )
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_torch_conv_transpose_2d_output_padding(self):
+        def run_conv_transpose_2d_output_padding(
+            N,
+            C,
+            O,
+            idim,
+            kdim,
+            stride,
+            padding,
+            output_padding,
+            dtype="float32",
+            atol=1e-5,
+        ):
+            with self.subTest(
+                dtype=dtype,
+                N=N,
+                C=C,
+                O=O,
+                idim=idim,
+                kdim=kdim,
+                stride=stride,
+                padding=padding,
+                output_padding=output_padding,
+            ):
+                np_dtype = getattr(np, dtype)
+                np.random.seed(0)
+                iH, iW = idim
+                kH, kW = kdim
+                in_np = np.random.normal(0, 1.0 / C, (N, iH, iW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0, 1.0 / C, (O, kH, kW, C)).astype(np_dtype)
+
+                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2))
+                wt_pt = torch.from_numpy(wt_np.transpose(3, 0, 1, 2))
+
+                out_mx = mx.conv_transpose2d(
+                    in_mx,
+                    wt_mx,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+
+                out_pt = torch.conv_transpose2d(
+                    in_pt,
+                    wt_pt,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+                out_pt = torch.permute(out_pt, (0, 2, 3, 1)).numpy(force=True)
+
+                self.assertEqual(out_pt.shape, out_mx.shape)
+                self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
+
+        for dtype in ("float32",):
+            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+                for idim, kdim, stride, padding, output_padding in (
+                    ((3, 3), (2, 2), (2, 2), (0, 0), (1, 1)),
+                    ((5, 5), (3, 3), (2, 2), (1, 1), (0, 0)),
+                    ((7, 7), (4, 4), (3, 3), (1, 1), (2, 2)),
+                ):
+                    run_conv_transpose_2d_output_padding(
+                        N,
+                        C,
+                        O,
+                        idim,
+                        kdim,
+                        stride,
+                        padding,
+                        output_padding,
+                        dtype=dtype,
+                    )
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_torch_conv_transpose_3d_output_padding(self):
+        def run_conv_transpose_3d_output_padding(
+            N,
+            C,
+            O,
+            idim,
+            kdim,
+            stride,
+            padding,
+            output_padding,
+            dtype="float32",
+            atol=1e-5,
+        ):
+            with self.subTest(
+                dtype=dtype,
+                N=N,
+                C=C,
+                O=O,
+                idim=idim,
+                kdim=kdim,
+                stride=stride,
+                padding=padding,
+                output_padding=output_padding,
+            ):
+                np_dtype = getattr(np, dtype)
+                np.random.seed(0)
+                iD, iH, iW = idim
+                kD, kH, kW = kdim
+                in_np = np.random.normal(0, 1.0 / C, (N, iD, iH, iW, C)).astype(
+                    np_dtype
+                )
+                wt_np = np.random.normal(0, 1.0 / C, (O, kD, kH, kW, C)).astype(
+                    np_dtype
+                )
+
+                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_pt = torch.from_numpy(in_np.transpose(0, 4, 1, 2, 3))
+                wt_pt = torch.from_numpy(wt_np.transpose(4, 0, 1, 2, 3))
+
+                out_mx = mx.conv_transpose3d(
+                    in_mx,
+                    wt_mx,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+                out_pt = torch.conv_transpose3d(
+                    in_pt,
+                    wt_pt,
+                    stride=stride,
+                    padding=padding,
+                    output_padding=output_padding,
+                )
+                out_pt = torch.permute(out_pt, (0, 2, 3, 4, 1)).numpy(force=True)
+
+                self.assertEqual(out_pt.shape, out_mx.shape)
+                self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
+
+        for dtype in ("float32",):
+            for N, C, O in ((1, 1, 1), (1, 6, 1), (4, 32, 64)):
+                for idim, kdim, stride, padding, output_padding in (
+                    ((3, 3, 3), (2, 2, 2), (2, 2, 2), (0, 0, 0), (1, 1, 1)),
+                    ((5, 5, 5), (3, 3, 3), (2, 2, 2), (1, 1, 1), (0, 0, 0)),
+                    ((7, 7, 7), (4, 4, 4), (3, 3, 3), (1, 1, 1), (2, 2, 2)),
+                ):
+                    run_conv_transpose_3d_output_padding(
+                        N,
+                        C,
+                        O,
+                        idim,
+                        kdim,
+                        stride,
+                        padding,
+                        output_padding,
+                        dtype=dtype,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
