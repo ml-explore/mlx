@@ -19,10 +19,6 @@ namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
-std::string search_colocated_mtllib(
-    const fs::path& dli_path,
-    const std::string& lib_name);
-
 // Note, this function must be left inline in a header so that it is not
 // dynamically linked.
 inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
@@ -32,7 +28,8 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
 
   int success = dladdr((void*)get_colocated_mtllib_path, &info);
   if (success) {
-    mtllib_path = search_colocated_mtllib(fs::path(info.dli_fname), lib_ext);
+    auto mtllib = fs::path(info.dli_fname).remove_filename() / lib_ext;
+    mtllib_path = mtllib.c_str();
   }
 
   return mtllib_path;
