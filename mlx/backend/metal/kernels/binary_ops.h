@@ -131,7 +131,6 @@ struct LogAddExp {
         : (maxval + log1p(metal::exp(minval - maxval)));
   };
 
-  template <>
   complex64_t operator()(complex64_t x, complex64_t y) {
     if (metal::isnan(x.real) || metal::isnan(x.imag) || metal::isnan(y.real) ||
         metal::isnan(y.imag)) {
