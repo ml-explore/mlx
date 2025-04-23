@@ -104,4 +104,5 @@ instantiate_scan_helper(min_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumMi
 instantiate_scan_helper(min_complex64_complex64, complex64_t, complex64_t, CumMin, 2)
 instantiate_scan_helper(logaddexp_float16_float16,     half,        half,        CumLogaddexp, 4)
 instantiate_scan_helper(logaddexp_float32_float32,     float,       float,       CumLogaddexp, 4)
-instantiate_scan_helper(logaddexp_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumLogaddexp, 4) // clang-format on
+instantiate_scan_helper(logaddexp_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumLogaddexp, 4)
+instantiate_scan_helper(logaddexp_complex64_complex64, complex64_t, complex64_t, CumLogaddexp, 2) // clang-format on
