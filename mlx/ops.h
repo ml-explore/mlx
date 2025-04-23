@@ -1291,6 +1291,7 @@ array conv_transpose1d(
     int stride = 1,
     int padding = 0,
     int dilation = 1,
+    int output_padding = 0,
     int groups = 1,
     StreamOrDevice s = {});
 
@@ -1301,6 +1302,7 @@ array conv_transpose2d(
     const std::pair<int, int>& stride = {1, 1},
     const std::pair<int, int>& padding = {0, 0},
     const std::pair<int, int>& dilation = {1, 1},
+    const std::pair<int, int>& output_padding = {0, 0},
     int groups = 1,
     StreamOrDevice s = {});
 
@@ -1311,6 +1313,7 @@ array conv_transpose3d(
     const std::tuple<int, int, int>& stride = {1, 1, 1},
     const std::tuple<int, int, int>& padding = {0, 0, 0},
     const std::tuple<int, int, int>& dilation = {1, 1, 1},
+    const std::tuple<int, int, int>& output_padding = {0, 0, 0},
     int groups = 1,
     StreamOrDevice s = {});
 
