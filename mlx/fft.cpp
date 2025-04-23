@@ -3,7 +3,6 @@
 #include <cmath>
 #include <numeric>
 #include <set>
-#include <sstream>
 
 #include "mlx/fft.h"
 #include "mlx/ops.h"

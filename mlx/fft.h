@@ -6,7 +6,10 @@
 
 #include "array.h"
 #include "device.h"
+#include "mlx/mlx.h"
 #include "utils.h"
+
+namespace mx = mlx::core;
 
 namespace mlx::core::fft {
 
@@ -144,6 +147,50 @@ inline array irfft2(
     const std::vector<int>& axes = {-2, -1},
     StreamOrDevice s = {}) {
   return irfftn(a, axes, s);
+}
+
+inline array stft(
+    const array& x,
+    int n_fft = 2048,
+    int hop_length = -1,
+    int win_length = -1,
+    const array& window = mx::array({}),
+    bool center = true,
+    const std::string& pad_mode = "reflect",
+    bool normalized = false,
+    bool onesided = true,
+    StreamOrDevice s = {}) {
+  return mlx::core::fft::stft(
+      x,
+      n_fft,
+      hop_length,
+      win_length,
+      window,
+      center,
+      pad_mode,
+      normalized,
+      onesided,
+      s);
+}
+
+inline array istft(
+    const array& stft_matrix,
+    int hop_length = -1,
+    int win_length = -1,
+    const array& window = mx::array({}),
+    bool center = true,
+    int length = -1,
+    bool normalized = false,
+    StreamOrDevice s = {}) {
+  return mlx::core::fft::istft(
+      stft_matrix,
+      hop_length,
+      win_length,
+      window,
+      center,
+      length,
+      normalized,
+      s);
 }
 
 } // namespace mlx::core::fft

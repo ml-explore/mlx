@@ -10,7 +10,7 @@ namespace mx = mlx::core;
 void time_value_and_grad() {
   auto x = mx::ones({200, 1000});
   mx::eval(x);
-  auto fn = [](mx::array x) {
+  auto fn = [](mx::x) {
     for (int i = 0; i < 20; ++i) {
       x = mx::log(mx::exp(x));
     }
