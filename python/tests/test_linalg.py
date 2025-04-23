@@ -232,6 +232,11 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, M_plus in zip(AB, pinvs):
             self.assertTrue(mx.allclose(M @ M_plus @ M, M, rtol=0, atol=1e-3))
 
+        # Test singular matrix
+        A = mx.array([[4.0, 1.0], [4.0, 1.0]])
+        A_plus = mx.linalg.pinv(A, stream=mx.cpu)
+        self.assertTrue(mx.allclose(A @ A_plus @ A, A))
+
     def test_cholesky_inv(self):
         mx.random.seed(7)
 
