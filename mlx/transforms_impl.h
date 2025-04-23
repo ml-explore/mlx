@@ -26,7 +26,7 @@ struct InTracing {
   }
   ~InTracing() {
     grad_counter -= trace_stack().back().second;
-    trace_stack.pop_back();
+    trace_stack().pop_back();
   }
 
   static bool in_tracing() {
@@ -43,7 +43,7 @@ struct InTracing {
 
  private:
   static int grad_counter;
-  static std::vector<char>& trace_stack();
+  static std::vector<std::pair<char, char>>& trace_stack();
 };
 
 struct RetainGraph {
