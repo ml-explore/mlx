@@ -3043,5 +3043,45 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(mx.rsqrt(x), 1.0 / np.sqrt(x)))
 
 
+class TestBroadcast(mlx_tests.MLXTestCase):
+    def test_broadcast_shapes(self):
+        # Basic broadcasting
+        self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))
+        self.assertEqual(mx.broadcast_shapes((4, 1, 6), (5, 6)), (4, 5, 6))
+        self.assertEqual(mx.broadcast_shapes((5, 1, 4), (1, 3, 4)), (5, 3, 4))
+
+        # Multiple arguments
+        self.assertEqual(mx.broadcast_shapes((1, 1), (1, 8), (7, 1)), (7, 8))
+        self.assertEqual(
+            mx.broadcast_shapes((6, 1, 5), (1, 7, 1), (6, 7, 5)), (6, 7, 5)
+        )
+
+        # Same shapes
+        self.assertEqual(mx.broadcast_shapes((3, 4, 5), (3, 4, 5)), (3, 4, 5))
+
+        # Single argument
+        self.assertEqual(mx.broadcast_shapes((2, 3)), (2, 3))
+
+        # Empty shapes
+        self.assertEqual(mx.broadcast_shapes((), ()), ())
+        self.assertEqual(mx.broadcast_shapes((), (1,)), (1,))
+        self.assertEqual(mx.broadcast_shapes((1,), ()), (1,))
+
+        # Broadcasting with zeroes
+        self.assertEqual(mx.broadcast_shapes((0,), (0,)), (0,))
+        self.assertEqual(mx.broadcast_shapes((1, 0, 5), (3, 1, 5)), (3, 0, 5))
+        self.assertEqual(mx.broadcast_shapes((5, 0), (0, 5, 0)), (0, 5, 0))
+
+        # Error cases
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes((3, 4), (4, 3))
+
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes((2, 3, 4), (2, 5, 4))
+
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes()
+
+
 if __name__ == "__main__":
     unittest.main()

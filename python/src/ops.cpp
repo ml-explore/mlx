@@ -5189,4 +5189,46 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The row or col contiguous output.
     )pbdoc");
+  m.def(
+      "broadcast_shapes",
+      [](const nb::args& shapes) {
+        if (shapes.size() == 0)
+          throw std::invalid_argument(
+              "[broadcast_shapes] Must provide at least one shape.");
+
+        mx::Shape result = nb::cast<mx::Shape>(shapes[0]);
+        for (size_t i = 1; i < shapes.size(); ++i) {
+          if (!nb::isinstance<mx::Shape>(shapes[i]) &&
+              !nb::isinstance<nb::tuple>(shapes[i]))
+            throw std::invalid_argument(
+                "[broadcast_shapes] Expects a sequence of shapes (tuple or list of ints).");
+          result = mx::broadcast_shapes(result, nb::cast<mx::Shape>(shapes[i]));
+        }
+
+        return nb::tuple(nb::cast(result));
+      },
+      nb::sig("def broadcast_shapes(*shapes: Sequence[int]) -> Tuple[int]"),
+      R"pbdoc(
+        Broadcast shapes.
+
+        Returns the shape that results from broadcasting the supplied array shapes
+        against each other.
+
+        Args:
+            *shapes (Sequence[int]): The shapes to broadcast.
+
+        Returns:
+            tuple: The broadcasted shape.
+
+        Raises:
+            ValueError: If the shapes cannot be broadcast.
+
+        Example:
+            >>> mx.broadcast_shapes((1,), (3, 1))
+            (3, 1)
+            >>> mx.broadcast_shapes((6, 7), (5, 6, 1), (7,))
+            (5, 6, 7)
+            >>> mx.broadcast_shapes((5, 1, 4), (1, 3, 1))
+            (5, 3, 4)
+      )pbdoc");
 }
