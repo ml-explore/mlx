@@ -65,6 +65,7 @@ struct finfo {
   Dtype dtype;
   double min;
   double max;
+  double eps;
 };
 
 /** Holds information about integral types. */
