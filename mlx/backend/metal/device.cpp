@@ -108,7 +108,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
   auto bundles = NS::Bundle::allBundles();
   for (int i = 0, c = (int)bundles->count(); i < c; i++) {
     auto bundle = reinterpret_cast<NS::Bundle*>(bundles->object(i));
-    library = try_load_bundle(device, bundle->resourceURL());
+    library = try_load_bundle(device, bundle->resourceURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
     }
