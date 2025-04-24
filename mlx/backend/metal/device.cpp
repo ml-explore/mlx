@@ -69,8 +69,8 @@ MTL::Library* try_load_bundle(
   if (bundle != nullptr) {
     std::string resource_path =
         std::string(bundle->resourceURL()->fileSystemRepresentation()) + "/" +
-        lib_name + ".metallib" auto [lib, error] =
-            load_library_from_path(device, resource_path.c_str());
+        lib_name + ".metallib";
+    auto [lib, error] = load_library_from_path(device, resource_path.c_str());
     if (lib) {
       return lib;
     }
