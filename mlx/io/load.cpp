@@ -335,7 +335,10 @@ ThreadPool& thread_pool() {
   return pool_;
 }
 
-ThreadPool ParallelFileReader::thread_pool_{4};
+ThreadPool& ParallelFileReader::thread_pool() {
+  static ThreadPool thread_pool{4};
+  return thread_pool;
+}
 
 void ParallelFileReader::read(char* data, size_t n) {
   while (n != 0) {
@@ -371,7 +374,8 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
       break;
     } else {
       size_t m = batch_size_;
-      futs.emplace_back(thread_pool_.enqueue(readfn, offset, m, data));
+      futs.emplace_back(
+          ParallelFileReader::thread_pool().enqueue(readfn, offset, m, data));
       data += m;
       n -= m;
       offset += m;

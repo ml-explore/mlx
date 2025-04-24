@@ -5,11 +5,14 @@
 
 namespace mlx::core {
 
-static Device default_device_{
-    metal::is_available() ? Device::gpu : Device::cpu};
+Device& mutable_default_device() {
+  static Device default_device{
+      metal::is_available() ? Device::gpu : Device::cpu};
+  return default_device;
+}
 
 const Device& default_device() {
-  return default_device_;
+  return mutable_default_device();
 }
 
 void set_default_device(const Device& d) {
@@ -17,7 +20,7 @@ void set_default_device(const Device& d) {
     throw std::invalid_argument(
         "[set_default_device] Cannot set gpu device without gpu backend.");
   }
-  default_device_ = d;
+  mutable_default_device() = d;
 }
 
 bool operator==(const Device& lhs, const Device& rhs) {

@@ -42,7 +42,10 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-std::vector<std::pair<char, char>> detail::InTracing::trace_stack{};
+std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
+  static std::vector<std::pair<char, char>> trace_stack_;
+  return trace_stack_;
+}
 int detail::InTracing::grad_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
