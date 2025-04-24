@@ -69,8 +69,8 @@ MTL::Library* try_load_bundle(
   if (bundle != nullptr) {
     std::string resource_path =
         std::string(bundle->resourceURL()->fileSystemRepresentation()) + "/" +
-        lib_name + ".metallib" auto [lib, error] =
-            load_library_from_path(device, resource_path.c_str());
+        lib_name + ".metallib";
+    auto [lib, error] = load_library_from_path(device, resource_path.c_str());
     if (lib) {
       return lib;
     }
@@ -108,7 +108,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
   auto bundles = NS::Bundle::allBundles();
   for (int i = 0, c = (int)bundles->count(); i < c; i++) {
     auto bundle = reinterpret_cast<NS::Bundle*>(bundles->object(i));
-    library = try_load_bundle(device, bundle->resourceURL());
+    library = try_load_bundle(device, bundle->resourceURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
     }
