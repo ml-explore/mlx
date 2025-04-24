@@ -24,6 +24,7 @@
    .. autosummary::
    
       ~finfo.dtype
+      ~finfo.eps
       ~finfo.max
       ~finfo.min
    
