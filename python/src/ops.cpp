@@ -3455,8 +3455,8 @@ void init_ops(nb::module_& m) {
         1D convolution over an input with several channels
 
         Args:
-            input (array): Input array of shape ``(N, H, C_in)``.
-            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            input (array): Input array of shape ``(N, L, C_in)``.
+            weight (array): Weight array of shape ``(C_out, K, C_in)``.
             stride (int, optional): Kernel stride. Default: ``1``.
             padding (int, optional): Input padding. Default: ``0``.
             dilation (int, optional): Kernel dilation. Default: ``1``.
@@ -3514,7 +3514,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             input (array): Input array of shape ``(N, H, W, C_in)``.
-            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, KH, KW, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3586,7 +3586,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             input (array): Input array of shape ``(N, D, H, W, C_in)``.
-            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, KD, KH, KW, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3619,8 +3619,8 @@ void init_ops(nb::module_& m) {
         1D transposed convolution over an input with several channels
 
         Args:
-            input (array): Input array of shape ``(N, H, C_in)``.
-            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            input (array): Input array of shape ``(N, L, C_in)``.
+            weight (array): Weight array of shape ``(C_out, K, C_in)``.
             stride (int, optional): Kernel stride. Default: ``1``.
             padding (int, optional): Input padding. Default: ``0``.
             dilation (int, optional): Kernel dilation. Default: ``1``.
@@ -3697,7 +3697,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             input (array): Input array of shape ``(N, H, W, C_in)``.
-            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, KH, KW, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3783,7 +3783,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             input (array): Input array of shape ``(N, D, H, W, C_in)``.
-            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, KD, KH, KW, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
