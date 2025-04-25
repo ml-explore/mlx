@@ -4882,8 +4882,9 @@ array bitwise_impl(
     const array& b,
     BitwiseBinary::Op op,
     const std::string& op_name,
-    const StreamOrDevice& s) {
-  auto out_type = promote_types(a.dtype(), b.dtype());
+    const StreamOrDevice& s,
+    std::optional<Dtype> out_type_ = std::nullopt) {
+  auto out_type = out_type_ ? *out_type_ : promote_types(a.dtype(), b.dtype());
   if (!(issubdtype(out_type, integer) || out_type == bool_)) {
     std::ostringstream msg;
     msg << "[" << op_name
@@ -4928,12 +4929,7 @@ array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (t == bool_) {
     t = uint8;
   }
-  return bitwise_impl(
-      astype(a, t, s),
-      astype(b, t, s),
-      BitwiseBinary::Op::LeftShift,
-      "left_shift",
-      s);
+  return bitwise_impl(a, b, BitwiseBinary::Op::LeftShift, "left_shift", s, t);
 }
 array operator<<(const array& a, const array& b) {
   return left_shift(a, b);
@@ -4949,7 +4945,8 @@ array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       astype(b, t, s),
       BitwiseBinary::Op::RightShift,
       "right_shift",
-      s);
+      s,
+      t);
 }
 array operator>>(const array& a, const array& b) {
   return right_shift(a, b);
