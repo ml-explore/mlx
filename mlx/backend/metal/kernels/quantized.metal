@@ -120,4 +120,34 @@
   instantiate_quantized_groups(6) \
   instantiate_quantized_groups(8)
 
+instantiate_kernel(
+  "trellis_viterbi_float16_t_overlap_0",
+  trellis_viterbi,
+  float16_t,
+  false)
+instantiate_kernel(
+  "trellis_viterbi_float16_t_overlap_1",
+  trellis_viterbi,
+  float16_t,
+  true)
+
+instantiate_kernel(
+  "trellis_backtrack_overlap_0",
+  trellis_backtrack,
+  false)
+instantiate_kernel(
+  "trellis_backtrack_overlap_1",
+  trellis_backtrack,
+  true)
+
+instantiate_kernel(
+  "qmv_fast_float16_t_gs_64_b_2_batch_0_mode_1",
+  qmv_fast,
+  float16_t,
+  64,
+  2,
+  false,
+  true)
+
+
 instantiate_quantized_all() // clang-format on

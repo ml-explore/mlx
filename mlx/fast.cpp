@@ -1048,7 +1048,8 @@ trellis_quantize(const array& w_, int bits, StreamOrDevice s_) {
   int T = Tx * Ty;
   auto scale = std(astype(w_, float32, s), s);
   auto w = divide(w_, scale, s);
-  w = astype(w, float16, s);
+  w = astype(w, w_.dtype(), s);
+  scale = astype(scale, w_.dtype(), s);
 
   w = reshape(w, {M / Tx, Tx, -1, Ty}, s);
   w = transpose(w, {0, 2, 1, 3}, s);
@@ -1067,7 +1068,7 @@ trellis_quantize(const array& w_, int bits, StreamOrDevice s_) {
         {w_batch});
     q_batch = slice(q_batch, {0, 0}, q_batch.shape(), {1, L / bits}, s);
     q = slice_update(q, q_batch, {i, 0}, {i + batch_size, q.shape(-1)}, s);
-    eval(q);
+    //    eval(q);
   }
 
   q = reshape(q, {M / Tx, -1, Tx, Ty * bits / L}, s);

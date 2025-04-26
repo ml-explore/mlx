@@ -5,7 +5,6 @@ from typing import Callable, Literal, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
-from mlx.nn.layers.viterbi import quantize as trellis_quantize
 from mlx.utils import tree_map_with_path
 
 

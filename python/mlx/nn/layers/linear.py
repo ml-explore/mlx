@@ -6,7 +6,6 @@ from typing import Any, Literal
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.quantized import QuantizedLinear
-from mlx.nn.layers.viterbi import quantize as trellis_quantize
 
 
 class Identity(Module):
