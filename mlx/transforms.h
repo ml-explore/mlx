@@ -223,7 +223,82 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
  * Checkpoint the gradient of a function. Namely, discard all intermediate
  * state and recalculate it when we need to compute the gradient.
  */
+
+/**
+ * Computes the Jacobian of a function using reverse-mode AD.
+ *
+ * @param fun The function whose Jacobian is to be computed.
+ * @param argnums The indices of the arguments to differentiate with respect to.
+ * @param has_aux Whether the function returns auxiliary data.
+ * @param holomorphic Whether the function is holomorphic.
+ * @param allow_int Whether to allow differentiation with respect to integer
+ * inputs.
+ * @return A function that computes the Jacobian of `fun`.
+ */
 std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
     std::function<std::vector<array>(const std::vector<array>&)> fun);
+
+std::function<std::vector<array>(const std::vector<array>&)> jacrev(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    const std::vector<int>& argnums = {0},
+    bool has_aux = false,
+    bool holomorphic = false,
+    bool allow_int = false);
+
+/**
+ * Computes the Jacobian of a function using forward-mode AD.
+ *
+ * @param fun The function whose Jacobian is to be computed.
+ * @param primals The input arrays to compute the Jacobian with respect to.
+ * @param has_aux Whether the function returns auxiliary data.
+ * @return A pair containing the outputs of the function and the Jacobian.
+ */
+std::pair<std::vector<array>, std::vector<array>> jacfwd(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    const std::vector<array>& primals,
+    bool has_aux = false);
+
+/**
+ * Computes the Hessian of a function.
+ *
+ * @param fun The function whose Hessian is to be computed.
+ * @param argnums The indices of the arguments to differentiate with respect to.
+ * @param has_aux Whether the function returns auxiliary data.
+ * @param holomorphic Whether the function is holomorphic.
+ * @return A function that computes the Hessian of `fun`.
+ */
+std::function<std::vector<array>(const std::vector<array>&)> hessian(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    const std::vector<int>& argnums = {0},
+    bool has_aux = false,
+    bool holomorphic = false);
+
+/**
+ * Overload for scalar functions: Computes the Jacobian of a unary function
+ * using reverse-mode AD.
+ */
+std::function<array(const array&)> jacrev(
+    const std::function<array(const array&)>& fun,
+    int argnum = 0,
+    bool has_aux = false,
+    bool holomorphic = false,
+    bool allow_int = false);
+
+/**
+ * Overload for scalar functions: Computes the Jacobian of a unary function
+ * using forward-mode AD.
+ */
+std::pair<array, array> jacfwd(
+    const std::function<array(const array&)>& fun,
+    const array& primal);
+
+/**
+ * Overload for scalar functions: Computes the Hessian of a unary function.
+ */
+std::function<array(const array&)> hessian(
+    const std::function<array(const array&)>& fun,
+    int argnum = 0,
+    bool has_aux = false,
+    bool holomorphic = false);
 
 } // namespace mlx::core

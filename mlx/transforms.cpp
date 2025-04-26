@@ -1045,7 +1045,8 @@ std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
 
 std::pair<std::vector<array>, std::vector<array>> jacfwd(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<array>& primals) {
+    const std::vector<array>& primals,
+    bool has_aux = false) {
   detail::InTracing in_tracing{false, true};
   auto outputs = fun(primals);
 
@@ -1124,4 +1125,144 @@ std::pair<array, array> jacfwd(
   auto [outputs, jacobian] = jacfwd(vec_fun, {primal});
   return {outputs[0], jacobian[0]};
 }
+
+std::function<std::vector<array>(const std::vector<array>&)> jacrev(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    const std::vector<int>& argnums = {0},
+    bool has_aux = false,
+    bool holomorphic = false,
+    bool allow_int = false) {
+  return [fun, argnums, has_aux, holomorphic, allow_int](
+             const std::vector<array>& inputs) -> std::vector<array> {
+    for (const auto& input : inputs) {
+      if (!allow_int && issubdtype(input.dtype(), integer)) {
+        throw std::invalid_argument(
+            "[jacrev] Differentiation with respect to integer inputs is not allowed.");
+      }
+    }
+
+    std::vector<array> outputs;
+    auto pullback =
+        std::function<std::vector<array>(const std::vector<array>&)>();
+    if (!has_aux) {
+      auto vjp_result =
+          vjp(fun, inputs, std::vector<array>(outputs.size(), array(1.0f)));
+      outputs = std::move(vjp_result.first);
+      pullback = [vjp_result](const std::vector<array>& cotangents) {
+        return vjp_result.second;
+      };
+    } else {
+      std::vector<array> aux;
+      std::vector<array> outputs = fun(inputs);
+      auto [_, grads] =
+          vjp(fun, inputs, std::vector<array>(outputs.size(), array(1.0f)));
+      pullback = [grads](const std::vector<array>& cotangents) {
+        return grads;
+      };
+      aux = {};
+    }
+
+    // Compute the Jacobian row-by-row
+    std::vector<array> jacobian;
+    auto basis = [](const std::vector<array>& outputs) {
+      std::vector<array> basis_vectors;
+      for (size_t i = 0; i < outputs.size(); ++i) {
+        array basis_vector = zeros_like(outputs[i]);
+        basis_vector.data<float>()[i] = 1.0f;
+        basis_vectors.push_back(basis_vector);
+      }
+      return basis_vectors;
+    }(outputs);
+    for (const auto& tangent : basis) {
+      auto row = pullback({tangent});
+      jacobian.push_back(row[0]);
+    }
+
+    // Reshape and return the Jacobian
+    auto combine_jacobian =
+        [](const std::vector<array>& jacobian_rows) -> array {
+      if (jacobian_rows.empty()) {
+        throw std::invalid_argument(
+            "[combine_jacobian] Jacobian rows are empty.");
+      }
+      // Assuming all rows have the same shape
+      std::vector<int> combined_shape = {
+          static_cast<int>(jacobian_rows.size())};
+      combined_shape.insert(
+          combined_shape.end(),
+          jacobian_rows[0].shape().begin(),
+          jacobian_rows[0].shape().end());
+      array combined = zeros(
+          combined_shape,
+          jacobian_rows[0].dtype(),
+          jacobian_rows[0].primitive().stream());
+      for (size_t i = 0; i < jacobian_rows.size(); ++i) {
+        std::copy(
+            jacobian_rows[i].data<float>(),
+            jacobian_rows[i].data<float>() + jacobian_rows[i].size(),
+            combined.data<float>() + i * jacobian_rows[i].size());
+      }
+      return combined;
+    };
+    auto jacobian_combined = combine_jacobian(jacobian);
+    return {jacobian_combined};
+  };
+}
+
+std::function<std::vector<array>(const std::vector<array>&)> hessian(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    const std::vector<int>& argnums = {0},
+    bool has_aux = false,
+    bool holomorphic = false) {
+  return
+      [fun, argnums, has_aux, holomorphic](const std::vector<array>& inputs) {
+        // Compute the Jacobian using reverse-mode AD
+        auto jacobian_fn = jacrev(fun, argnums, has_aux, holomorphic);
+        auto jacobian = jacobian_fn(inputs);
+
+        // Compute the Hessian by applying forward-mode AD to the Jacobian
+        auto hessian_fn = jacfwd(jacobian_fn, inputs);
+        return hessian_fn.first;
+      };
+}
+
+std::function<array(const array&)> jacrev(
+    const std::function<array(const array&)>& fun,
+    int argnum = 0,
+    bool has_aux = false,
+    bool holomorphic = false,
+    bool allow_int = false) {
+  return [fun, argnum, has_aux, holomorphic, allow_int](const array& input) {
+    // Wrap the scalar function into a vectorized function
+    auto vec_fun = [fun](const std::vector<array>& inputs) {
+      return std::vector<array>{fun(inputs[0])};
+    };
+
+    // Use the existing jacrev implementation for vectorized functions
+    auto jacobian_fn =
+        jacrev(vec_fun, {argnum}, has_aux, holomorphic, allow_int);
+    auto jacobian_result = jacobian_fn({input});
+    return jacobian_result[0];
+  };
+}
+
+// Overload for scalar functions
+std::function<array(const array&)> hessian(
+    const std::function<array(const array&)>& fun,
+    int argnum = 0,
+    bool has_aux = false,
+    bool holomorphic = false) {
+  return [fun, argnum, has_aux, holomorphic](const array& input) {
+    // Wrap the scalar function into a vectorized function
+    auto vec_fun = [fun](const std::vector<array>& inputs) {
+      return std::vector<array>{fun(inputs[0])};
+    };
+
+    // Compute the Hessian using the vectorized function
+    auto hessian_fn = hessian(vec_fun, {argnum}, has_aux, holomorphic);
+    auto hessian_result = hessian_fn({input});
+    return hessian_result[0];
+  };
+}
+
 } // namespace mlx::core

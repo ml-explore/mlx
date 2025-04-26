@@ -1506,4 +1506,141 @@ void init_transforms(nb::module_& m) {
     tree_cache().clear();
     mx::detail::compile_clear_cache();
   }));
+
+  m.def(
+      "jacrev",
+      [](const nb::callable& fun,
+         const std::optional<IntOrVec>& argnums,
+         bool has_aux = false,
+         bool holomorphic = false,
+         bool allow_int = false) {
+        auto [argnums_vec, _] = validate_argnums_argnames(argnums, {});
+        return mlx_func(
+            [fun, argnums_vec, has_aux, holomorphic, allow_int](
+                const nb::args& args, const nb::kwargs& kwargs) {
+              auto inputs = tree_flatten(args, false);
+              auto jacobian_fn = mx::jacrev(
+                  [&fun](const std::vector<mx::array>& inputs) {
+                    return tree_flatten(fun(*tree_unflatten(args, inputs)));
+                  },
+                  argnums_vec,
+                  has_aux,
+                  holomorphic,
+                  allow_int);
+              auto jacobian = jacobian_fn(inputs);
+              return tree_unflatten(args, jacobian);
+            },
+            fun);
+      },
+      "fun"_a,
+      "argnums"_a = nb::none(),
+      "has_aux"_a = false,
+      "holomorphic"_a = false,
+      "allow_int"_a = false,
+      nb::sig(
+          "def jacrev(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, has_aux: bool = False, holomorphic: bool = False, allow_int: bool = False) -> Callable"),
+      R"pbdoc(
+      Compute the Jacobian of a function using reverse-mode AD.
+
+      Args:
+          fun (Callable): A function which takes a variable number of
+            :class:`array` or trees of :class:`array` and returns
+            a variable number of :class:`array` or trees of :class:`array`.
+          argnums (int or list(int), optional): Specify the index (or indices)
+            of the positional arguments of ``fun`` to compute the Jacobian
+            with respect to. Defaults to ``0``.
+          has_aux (bool, optional): Whether ``fun`` returns auxiliary data.
+            Defaults to ``False``.
+          holomorphic (bool, optional): Whether ``fun`` is holomorphic.
+            Defaults to ``False``.
+          allow_int (bool, optional): Whether to allow differentiation with
+            respect to integer inputs. Defaults to ``False``.
+
+      Returns:
+          Callable: A function which computes the Jacobian of ``fun``.
+    )pbdoc");
+
+  m.def(
+      "jacfwd",
+      [](const nb::callable& fun, bool has_aux = false) {
+        return mlx_func(
+            [fun, has_aux](const nb::args& args, const nb::kwargs& kwargs) {
+              auto inputs = tree_flatten(args, false);
+              auto jacobian_fn = mx::jacfwd(
+                  [&fun](const std::vector<mx::array>& inputs) {
+                    return tree_flatten(fun(*tree_unflatten(args, inputs)));
+                  },
+                  inputs,
+                  has_aux);
+              auto [outputs, jacobian] = jacobian_fn(inputs);
+              return std::make_pair(
+                  tree_unflatten(args, outputs),
+                  tree_unflatten(args, jacobian));
+            },
+            fun);
+      },
+      "fun"_a,
+      "has_aux"_a = false,
+      nb::sig("def jacfwd(fun: Callable, has_aux: bool = False) -> Callable"),
+      R"pbdoc(
+        Compute the Jacobian of a function using forward-mode AD.
+
+        Args:
+            fun (Callable): A function which takes a variable number of
+              :class:`array` or trees of :class:`array` and returns
+              a variable number of :class:`array` or trees of :class:`array`.
+            has_aux (bool, optional): Whether ``fun`` returns auxiliary data.
+              Defaults to ``False``.
+
+        Returns:
+            Callable: A function which computes the Jacobian of ``fun``.
+      )pbdoc");
+
+  m.def(
+      "hessian",
+      [](const nb::callable& fun,
+         const std::optional<IntOrVec>& argnums,
+         bool has_aux = false,
+         bool holomorphic = false) {
+        auto [argnums_vec, _] = validate_argnums_argnames(argnums, {});
+        return mlx_func(
+            [fun, argnums_vec, has_aux, holomorphic](
+                const nb::args& args, const nb::kwargs& kwargs) {
+              auto inputs = tree_flatten(args, false);
+              auto hessian_fn = mx::hessian(
+                  [&fun](const std::vector<mx::array>& inputs) {
+                    return tree_flatten(fun(*tree_unflatten(args, inputs)));
+                  },
+                  argnums_vec,
+                  has_aux,
+                  holomorphic);
+              auto hessian = hessian_fn(inputs);
+              return tree_unflatten(args, hessian);
+            },
+            fun);
+      },
+      "fun"_a,
+      "argnums"_a = nb::none(),
+      "has_aux"_a = false,
+      "holomorphic"_a = false,
+      nb::sig(
+          "def hessian(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, has_aux: bool = False, holomorphic: bool = False) -> Callable"),
+      R"pbdoc(
+        Compute the Hessian of a function.
+
+        Args:
+            fun (Callable): A function which takes a variable number of
+              :class:`array` or trees of :class:`array` and returns
+              a variable number of :class:`array` or trees of :class:`array`.
+            argnums (int or list(int), optional): Specify the index (or indices)
+              of the positional arguments of ``fun`` to compute the Hessian
+              with respect to. Defaults to ``0``.
+            has_aux (bool, optional): Whether ``fun`` returns auxiliary data.
+              Defaults to ``False``.
+            holomorphic (bool, optional): Whether ``fun`` is holomorphic.
+              Defaults to ``False``.
+
+        Returns:
+            Callable: A function which computes the Hessian of ``fun``.
+      )pbdoc");
 }
