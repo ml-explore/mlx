@@ -166,6 +166,7 @@ MTL::Library* load_library(
           << error->localizedDescription()->utf8String();
       throw std::runtime_error(msg.str());
     }
+    return lib;
   }
 
   // We have been given a path so try to load from lib_path / lib_name.metallib
@@ -178,6 +179,7 @@ MTL::Library* load_library(
           << "> with error " << error->localizedDescription()->utf8String();
       throw std::runtime_error(msg.str());
     }
+    return lib;
   }
 
   // Try to load the colocated library
