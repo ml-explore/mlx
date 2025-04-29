@@ -145,5 +145,23 @@ inline array irfft2(
     StreamOrDevice s = {}) {
   return irfftn(a, axes, s);
 }
+/** Shift the zero-frequency component to the center of the spectrum. */
+array fftshift(const array& a, StreamOrDevice s = {});
+
+/** Shift the zero-frequency component to the center of the spectrum along
+ * specified axes. */
+array fftshift(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+
+/** The inverse of fftshift. */
+array ifftshift(const array& a, StreamOrDevice s = {});
+
+/** The inverse of fftshift along specified axes. */
+array ifftshift(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core::fft
