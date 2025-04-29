@@ -6,9 +6,9 @@
 #include "mlx/allocator.h"
 
 #ifdef __APPLE__
-#include "mlx/backend/no_metal/apple_memory.h"
+#include "mlx/backend/no_gpu/apple_memory.h"
 #elif defined(__linux__)
-#include "mlx/backend/no_metal/linux_memory.h"
+#include "mlx/backend/no_gpu/linux_memory.h"
 #else
 size_t get_memory_size() {
   return 0;

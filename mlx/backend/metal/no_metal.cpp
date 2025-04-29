@@ -2,9 +2,13 @@
 
 #include <stdexcept>
 
-#include "mlx/backend/metal.h"
+#include "mlx/backend/metal/metal.h"
 
 namespace mlx::core::metal {
+
+bool is_available() {
+  return false;
+}
 
 void start_capture(std::string) {}
 void stop_capture() {}
