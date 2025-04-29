@@ -40,6 +40,8 @@ bool is_available(const Device& d) {
     case Device::gpu:
       return gpu::is_available();
   }
+  // appease compiler
+  return false;
 }
 
 } // namespace mlx::core
