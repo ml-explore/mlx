@@ -95,7 +95,7 @@ template <
 
   Q += tidl.z * params->Q_strides[0] + // Batch
       tidl.y * params->Q_strides[1] + // Head
-      tidl.x * BQ * params->Q_strides[2]; // Seqeunce
+      tidl.x * BQ * params->Q_strides[2]; // Sequence
 
   ulong kv_head_idx = int(tid.y) / params->gqa_factor;
   K += tidl.z * params->K_strides[0] + // Batch
@@ -106,7 +106,7 @@ template <
 
   O += tidl.z * params->O_strides[0] + // Batch
       tidl.y * params->O_strides[1] + // Head
-      tidl.x * BQ * params->O_strides[2]; // Seqeunce
+      tidl.x * BQ * params->O_strides[2]; // Sequence
 
   if (has_mask) {
     mask += tidl.z * mask_params->M_strides[0] + // Batch

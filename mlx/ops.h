@@ -569,7 +569,7 @@ inline array std(const array& a, StreamOrDevice s = {}) {
   return std(a, false, 0, to_stream(s));
 }
 
-/** Computes the standard deviatoin of the elements of an array along the given
+/** Computes the standard deviation of the elements of an array along the given
  * axes */
 array std(
     const array& a,

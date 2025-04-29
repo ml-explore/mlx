@@ -113,7 +113,7 @@ struct BlockLoader {
         tmp_val[j] = src[(tmp_idx[j] ? i * src_ld + j : 0)];
       }
 
-      // Zero out uneeded values
+      // Zero out unneeded values
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         tmp_val[j] = tmp_idx[j] ? tmp_val[j] : T(0);
