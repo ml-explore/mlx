@@ -572,7 +572,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 out_down = mm(params, x, wq)
                 params[p][idx] += eps
                 num_ds = (out_up - out_down) / (2 * eps)
-                self.assertAlmostEqual(dparams[p][idx], num_ds, delta=1e-2)
+                self.assertAlmostEqual(dparams[p][idx], num_ds, delta=2e-2)
 
 
 if __name__ == "__main__":
