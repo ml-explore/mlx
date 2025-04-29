@@ -2,10 +2,9 @@
 
 #pragma once
 
+#include <string>
 #include <unordered_map>
 #include <variant>
-
-#include "mlx/array.h"
 
 namespace mlx::core::metal {
 

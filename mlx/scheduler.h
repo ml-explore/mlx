@@ -8,8 +8,7 @@
 #include <thread>
 #include <unordered_map>
 
-#include "mlx/backend/metal/metal.h"
-#include "mlx/backend/metal/metal_impl.h"
+#include "mlx/backend/gpu/eval.h"
 #include "mlx/device.h"
 #include "mlx/stream.h"
 
@@ -67,7 +66,7 @@ struct StreamThread {
 class Scheduler {
  public:
   Scheduler() : n_active_tasks_(0) {
-    if (metal::is_available()) {
+    if (is_available(Device::gpu)) {
       default_streams_.insert({Device::gpu, new_stream(Device::gpu)});
     }
     default_streams_.insert({Device::cpu, new_stream(Device::cpu)});
@@ -83,7 +82,7 @@ class Scheduler {
     streams_.emplace_back(streams_.size(), d);
     if (d == Device::gpu) {
       threads_.push_back(nullptr);
-      metal::new_stream(streams_.back());
+      gpu::new_stream(streams_.back());
     } else {
       threads_.push_back(new StreamThread{});
     }
