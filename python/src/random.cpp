@@ -422,7 +422,7 @@ void init_random(nb::module_& parent_module) {
             axis (int, optional): The axis which specifies the distribution.
                Default: ``-1``.
             shape (list(int), optional): The shape of the output. This must
-               be broadcast compatable with ``logits.shape`` with the ``axis``
+               be broadcast compatible with ``logits.shape`` with the ``axis``
                dimension removed. Default: ``None``
             num_samples (int, optional): The number of samples to draw from each
               of the categorical distributions in ``logits``. The output will have

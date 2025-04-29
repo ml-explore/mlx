@@ -10,7 +10,7 @@ For many sizes, GPU FFTs are memory bandwidth bound so
 read/write performance is important.
 
 Where possible, we read 128 bits sequentially in each thread,
-coalesced with accesses from adajcent threads for optimal performance.
+coalesced with accesses from adjacent threads for optimal performance.
 
 We implement specialized reading/writing for:
   - FFT

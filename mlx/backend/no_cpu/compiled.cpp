@@ -18,7 +18,7 @@ void Compiled::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   throw std::runtime_error(
-      "[Compiled::eval_cpu] CPU compialtion not supported on the platform.");
+      "[Compiled::eval_cpu] CPU compilation not supported on the platform.");
 }
 
 } // namespace mlx::core

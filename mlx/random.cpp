@@ -223,7 +223,7 @@ array multivariate_normal(
 
   auto n = mean.shape(-1);
 
-  // Check shapes comatibility of mean and cov
+  // Check shapes compatibility of mean and cov
   if (cov.shape(-1) != cov.shape(-2)) {
     throw std::invalid_argument(
         "[multivariate_normal] last two dimensions of cov must be equal.");
@@ -402,7 +402,7 @@ array categorical(
   if (broadcast_shapes(shape, reduced_shape) != shape) {
     std::ostringstream msg;
     msg << "[categorical] Requested shape " << shape
-        << " is not broadcast compatable with reduced logits shape"
+        << " is not broadcast compatible with reduced logits shape"
         << reduced_shape << ".";
     throw std::invalid_argument(msg.str());
   }
