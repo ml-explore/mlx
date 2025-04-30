@@ -2,7 +2,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 
 #include "mlx/backend/metal/kernels/steel/attn/params.h"

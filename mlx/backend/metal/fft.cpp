@@ -7,10 +7,10 @@
 
 #include "mlx/3rdparty/pocketfft.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/metal/binary.h"
-#include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/kernels.h"
-#include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
