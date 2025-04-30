@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/fence.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/thread_safey.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
@@ -68,6 +69,7 @@ void Fence::wait(Stream stream, const array& x) {
     return;
   }
 
+  std::lock_guard<std::mutex> lock(gpu::metal_operation_mutex);
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
 
@@ -116,6 +118,7 @@ void Fence::update(Stream stream, const array& x) {
     return;
   }
 
+  std::lock_guard<std::mutex> lock(gpu::metal_operation_mutex);
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
   if (!f.use_fast) {
