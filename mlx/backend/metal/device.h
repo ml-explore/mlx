@@ -266,4 +266,6 @@ class Device {
 
 Device& device(mlx::core::Device);
 
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
+
 } // namespace mlx::core::metal

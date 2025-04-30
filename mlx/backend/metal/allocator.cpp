@@ -1,7 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/metal.h"
-#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/memory.h"
 
