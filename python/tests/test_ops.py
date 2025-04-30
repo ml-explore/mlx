@@ -2961,6 +2961,11 @@ class TestOps(mlx_tests.MLXTestCase):
             y2 = mx.roll(x, s, a)
             self.assertTrue(mx.array_equal(y1, y2).item())
 
+    def test_roll_errors(self):
+        x = mx.array([])
+        result = mx.roll(x, [0], [0])
+        self.assertTrue(mx.array_equal(result, x))
+
     def test_real_imag(self):
         x = mx.random.uniform(shape=(4, 4))
         out = mx.real(x)
