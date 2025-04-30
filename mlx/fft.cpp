@@ -207,7 +207,7 @@ array fftshift(
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
-    // Match PyTorch's implementation
+    // Match NumPy's implementation
     shifts.push_back(a.shape(axis) / 2);
   }
 
@@ -232,9 +232,9 @@ array ifftshift(
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
-    // Match PyTorch's implementation
+    // Match NumPy's implementation
     int size = a.shape(axis);
-    shifts.push_back((size + 1) / 2);
+    shifts.push_back(-(size / 2));
   }
 
   return roll(a, shifts, axes, s);

@@ -479,8 +479,7 @@ void init_fft(nb::module_& parent_module) {
         Args:
             a (array): The input array.
             axes (list(int), optional): Axes over which to perform the shift.
-               If None, shift all axes. Each axis can be negative and will be
-               converted to a positive axis using the same rules as NumPy.
+               If ``None``, shift all axes. 
 
         Returns:
             array: The shifted array with the same shape as the input.
@@ -500,14 +499,13 @@ void init_fft(nb::module_& parent_module) {
       "axes"_a = nb::none(),
       "stream"_a = nb::none(),
       R"pbdoc(
-        The inverse of fftshift. While identical to fftshift for even-length axes,
+        The inverse of :func:`fftshift`. While identical to :func:`fftshift` for even-length axes,
         the behavior differs for odd-length axes.
 
         Args:
             a (array): The input array.
             axes (list(int), optional): Axes over which to perform the inverse shift.
-               If None, shift all axes. Each axis can be negative and will be
-               converted to a positive axis using the same rules as NumPy.
+               If ``None``, shift all axes. 
 
         Returns:
             array: The inverse-shifted array with the same shape as the input.
