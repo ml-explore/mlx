@@ -132,6 +132,11 @@ struct ContiguousIterator {
 };
 
 inline auto check_contiguity(const Shape& shape, const Strides& strides) {
+  // Conditions for {row/col}_contiguous
+  // - cumulative product of shapes is equal to the strides (we can ignore axes
+  //   with size == 1)
+  //   - in the forward direction (column contiguous)
+  //   - in the reverse direction (row contiguous)
   size_t no_broadcast_data_size = 1;
   int64_t f_stride = 1;
   int64_t b_stride = 1;

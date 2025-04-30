@@ -71,7 +71,12 @@ void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
        (allow_col_major_ && in.flags().col_contiguous))) {
     out.copy_shared_buffer(in);
   } else {
-    copy_gpu(in, out, CopyType::General);
+    out.set_data(allocator::malloc(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+        stream());
   }
 }
 

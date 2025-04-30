@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include "mlx/backend/common/broadcasting.h"
+#include "mlx/backend/common/transpose.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 
@@ -19,26 +20,19 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
         "AsStrided must be used with row contiguous arrays only.");
   }
 
-  // Compute the flags given the shape and strides
-  bool row_contiguous = true, col_contiguous = true;
-  size_t r = 1, c = 1;
-  for (int i = strides_.size() - 1, j = 0; i >= 0; i--, j++) {
-    row_contiguous &= (r == strides_[i]) || (shape_[i] == 1);
-    col_contiguous &= (c == strides_[j]) || (shape_[j] == 1);
-    r *= shape_[i];
-    c *= shape_[j];
-  }
+  // Calculate the contiguity based on the given shape and strides
+  auto [ds, rc, cc] = check_contiguity(shape_, strides_);
   auto flags = in.flags();
+
   // TODO: Compute the contiguous flag in a better way cause now we are
   //       unnecessarily strict.
-  flags.contiguous = row_contiguous || col_contiguous;
-  flags.row_contiguous = row_contiguous;
-  flags.col_contiguous = col_contiguous;
+  flags.contiguous = rc || cc;
+  flags.row_contiguous = rc;
+  flags.col_contiguous = cc;
 
-  // There is no easy way to compute the actual data size so we use out.size().
-  // The contiguous flag will almost certainly not be set so no code should
-  // rely on data_size anyway.
-  size_t data_size = out.size();
+  // There is no easy way to compute the actual data size so we use out.size()
+  // when the array is not contiguous.
+  size_t data_size = flags.contiguous ? ds : out.size();
 
   return out.copy_shared_buffer(in, strides_, flags, data_size, offset_);
 }
@@ -270,36 +264,7 @@ void StopGradient::eval(const std::vector<array>& inputs, array& out) {
 
 void Transpose::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
-  Strides out_strides(out.ndim());
-  auto& in = inputs[0];
-  for (int ax = 0; ax < axes_.size(); ++ax) {
-    out_strides[ax] = in.strides()[axes_[ax]];
-  }
-
-  // Conditions for {row/col}_contiguous
-  // - array must be contiguous (no gaps)
-  // - underlying buffer size should have the same size as the array
-  // - cumulative product of shapes is equal to the strides (we can ignore axes
-  //   with size == 1)
-  //   - in the forward direction (column contiguous)
-  //   - in the reverse direction (row contiguous)
-  // - vectors are both row and col contiguous (hence if both row/col are
-  //   true, they stay true)
-  auto flags = in.flags();
-  if (flags.contiguous && in.data_size() == in.size()) {
-    int64_t f_stride = 1;
-    int64_t b_stride = 1;
-    flags.col_contiguous = true;
-    flags.row_contiguous = true;
-    for (int i = 0, ri = out.ndim() - 1; i < out.ndim(); ++i, --ri) {
-      flags.col_contiguous &= (out_strides[i] == f_stride || out.shape(i) == 1);
-      f_stride *= out.shape(i);
-      flags.row_contiguous &=
-          (out_strides[ri] == b_stride || out.shape(ri) == 1);
-      b_stride *= out.shape(ri);
-    }
-  }
-  out.copy_shared_buffer(in, out_strides, flags, in.data_size());
+  transpose(inputs[0], out, axes_);
 }
 
 } // namespace mlx::core
