@@ -3859,6 +3859,9 @@ TEST_CASE("test roll") {
   y = roll(x, {1, 2}, {0, 1});
   CHECK(array_equal(y, array({8, 9, 5, 6, 7, 3, 4, 0, 1, 2}, {2, 5}))
             .item<bool>());
+
+  y = roll(array({}), 0, 0);
+  CHECK(array_equal(y, array({})).item<bool>());
 }
 
 TEST_CASE("test contiguous") {

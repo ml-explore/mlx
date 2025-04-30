@@ -5025,8 +5025,11 @@ array roll(
     }
 
     auto sh = shift[i];
-    auto split_index =
-        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+    auto size = a.shape(ax);
+    if (size == 0) {
+      continue; // skip rolling this axis if it has size 0
+    }
+    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);
