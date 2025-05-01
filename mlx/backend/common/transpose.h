@@ -7,5 +7,6 @@
 namespace mlx::core {
 
 void transpose(const array& in, array& out, const std::vector<int>& axes);
+void as_transposed(array& out, const std::vector<int>& axes);
 
 } // namespace mlx::core

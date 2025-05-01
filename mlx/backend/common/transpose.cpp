@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <cassert>
+
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
@@ -26,6 +28,30 @@ void transpose(const array& in, array& out, const std::vector<int>& axes) {
     flags.col_contiguous = cc;
   }
   out.copy_shared_buffer(in, out_strides, flags, in.data_size());
+}
+
+void as_transposed(array& out, const std::vector<int>& axes) {
+  assert(out.data_size() == out.size() && out.flags().contiguous);
+
+  // Calculate the contiguous strides.
+  Strides strides(out.ndim(), 1);
+  for (int i = out.ndim() - 2; i >= 0; i--) {
+    strides[i] = strides[i + 1] * out.shape(i);
+  }
+
+  // Calculate the new strides for transposing.
+  Strides new_strides;
+  new_strides.reserve(out.ndim());
+  for (auto ax : axes) {
+    new_strides.push_back(strides[ax]);
+  }
+
+  auto [ds, rc, cc] = check_contiguity(out.shape(), new_strides);
+  auto flags = out.flags();
+  flags.row_contiguous = rc;
+  flags.col_contiguous = cc;
+
+  out.copy_shared_buffer(out, new_strides, flags, ds);
 }
 
 } // namespace mlx::core
