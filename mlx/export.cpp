@@ -470,6 +470,9 @@ bool FunctionTable::match(
     if (x.dtype() != y.dtype()) {
       return false;
     }
+    if (x.ndim() != y.ndim()) {
+      return false;
+    }
     if (!shapeless && x.shape() != y.shape()) {
       return false;
     }
