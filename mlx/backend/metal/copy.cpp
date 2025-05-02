@@ -104,6 +104,8 @@ void copy_gpu_inplace(
             "[Copy::eval_gpu] Dynamic output offset requires GeneralGeneral copy");
       }
     }
+  } else {
+    work_per_thread = get_work_per_thread(in.dtype());
   }
   concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
   auto kernel = dynamic ? get_dynamic_copy_kernel(d, kernel_name, in, out)
@@ -165,13 +167,19 @@ void copy_gpu_inplace(
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
-    size_t nthreads = out.data_size();
+    size_t nthreads = ceildiv(out.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                                : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims;
+    if (large) {
+      compute_encoder.set_bytes<int64_t>(out.data_size(), 2);
+      grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+    } else {
+      compute_encoder.set_bytes<int>(out.data_size(), 2);
+      grid_dims = MTL::Size(nthreads, 1, 1);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
@@ -214,14 +222,21 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   compute_encoder.set_input_array(val, 0);
   compute_encoder.set_output_array(out, 1);
 
+  int work_per_thread = get_work_per_thread(val.dtype());
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  size_t nthreads = out.data_size();
+  size_t nthreads = ceildiv(out.data_size(), work_per_thread);
   if (thread_group_size > nthreads) {
     thread_group_size = nthreads;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                              : MTL::Size(nthreads, 1, 1);
+  MTL::Size grid_dims;
+  if (large) {
+    compute_encoder.set_bytes<int64_t>(out.data_size(), 2);
+    grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+  } else {
+    compute_encoder.set_bytes<int>(out.data_size(), 2);
+    grid_dims = MTL::Size(nthreads, 1, 1);
+  }
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
