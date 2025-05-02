@@ -168,6 +168,15 @@ void merge_one(array& dst, array& src, ParentsMap& parents_map) {
     parent.first.inputs()[parent.second] = dst;
     pairs.push_back(parent);
   }
+
+  // If src is a parent of dst, remove it from dst's parents
+  for (auto it = pairs.begin(); it != pairs.end();) {
+    if (it->first.id() == src.id()) {
+      it = pairs.erase(it);
+    } else {
+      it++;
+    }
+  }
   // Remove the source from the map to avoid fusing with it again
   parents_map.erase(src_parents);
 }
