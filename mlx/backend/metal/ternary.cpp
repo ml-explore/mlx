@@ -106,7 +106,6 @@ void ternary_op_gpu_inplace(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     // Launch a 1D or 2D grid of threads
-    auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     size_t nthreads = ceildiv(out.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
