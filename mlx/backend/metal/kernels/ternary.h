@@ -5,8 +5,8 @@ template <typename T, typename Op, int N = WorkPerThread<T>::n>
     device const bool* a,
     device const T* b,
     device const T* c,
-    constant uint& size,
     device T* d,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
   index *= N;
   for (int i = 0; i < N && (index + i) < size; ++i) {
