@@ -138,7 +138,7 @@ void Fence::update(Stream stream, const array& x) {
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(x, 0);
   compute_encoder.set_bytes(nthreads, 1);
-  compute_encoder.dispatch_threadgroups(group_dims, grid_dims);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   // Barrier on previous kernels
   compute_encoder.barrier();
