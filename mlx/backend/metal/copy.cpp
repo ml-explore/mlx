@@ -1,34 +1,14 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <sstream>
-
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
 constexpr int MAX_COPY_SPECIALIZED_DIMS = 3;
-
-void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
-  bool donated = set_copy_output_data(in, out, ctype);
-  if (donated && in.dtype() == out.dtype()) {
-    // If the output has the same type as the input then there is nothing to
-    // copy, just use the buffer.
-    return;
-  }
-  if (ctype == CopyType::GeneralGeneral) {
-    ctype = CopyType::General;
-  }
-  copy_gpu_inplace(in, out, ctype, s);
-}
-
-void copy_gpu(const array& in, array& out, CopyType ctype) {
-  copy_gpu(in, out, ctype, out.primitive().stream());
-}
 
 void copy_gpu_inplace(
     const array& in,
@@ -182,28 +162,6 @@ void copy_gpu_inplace(
     }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
-}
-
-void copy_gpu_inplace(
-    const array& in,
-    array& out,
-    CopyType ctype,
-    const Stream& s) {
-  assert(in.shape() == out.shape());
-  return copy_gpu_inplace(
-      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
-}
-
-void copy_gpu_inplace(
-    const array& in,
-    array& out,
-    const Strides& i_strides,
-    int64_t i_offset,
-    CopyType ctype,
-    const Stream& s) {
-  assert(in.shape() == out.shape());
-  return copy_gpu_inplace(
-      in, out, in.shape(), i_strides, out.strides(), i_offset, 0, ctype, s);
 }
 
 void fill_gpu(const array& val, array& out, const Stream& s) {
