@@ -1,21 +1,28 @@
 // Copyright © 2024 Apple Inc.
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void unary_v(
     device const T* in,
     device U* out,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
-  out[index] = Op()(in[index]);
+  index *= N;
+  for (int i = 0; i < N && (index + i) < size; ++i) {
+    out[index + i] = Op()(in[index + i]);
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void unary_v2(
     device const T* in,
     device U* out,
+    constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = index.x + grid_dim.x * int64_t(index.y);
-  out[offset] = Op()(in[offset]);
+  auto offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  for (int i = 0; i < N && (offset + i) < size; ++i) {
+    out[offset + i] = Op()(in[offset + i]);
+  }
 }
 
 template <
