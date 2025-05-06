@@ -16,6 +16,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gather.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gather_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
