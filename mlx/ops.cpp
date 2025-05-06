@@ -473,8 +473,19 @@ array hadamard_transform(
     std::optional<float> scale_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   // Default to an orthonormal Hadamard matrix scaled by 1/sqrt(N)
-  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(a.shape(-1));
+  int n = a.ndim() > 0 ? a.shape(-1) : 1;
+  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(n);
   auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
+
+  // Nothing to do for a scalar
+  if (n == 1) {
+    if (scale == 1) {
+      return a;
+    }
+
+    return multiply(a, array(scale, dtype), s);
+  }
+
   return array(
       a.shape(),
       dtype,
@@ -3769,6 +3780,7 @@ array conv_transpose_general(
     std::vector<int> stride,
     std::vector<int> padding,
     std::vector<int> dilation,
+    std::vector<int> output_padding,
     int groups,
     StreamOrDevice s) {
   std::vector<int> padding_lo(padding.size());
@@ -3782,7 +3794,8 @@ array conv_transpose_general(
 
     int in_size = 1 + (conv_output_shape - 1);
     int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
-    padding_hi[i] = in_size - out_size + padding[i];
+    padding_hi[i] = in_size - out_size + padding[i] +
+        output_padding[i]; // Adjust with output_padding
   }
 
   return conv_general(
@@ -3805,10 +3818,11 @@ array conv_transpose1d(
     int stride /* = 1 */,
     int padding /* = 0 */,
     int dilation /* = 1 */,
+    int output_padding /* = 0 */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
-      in_, wt_, {stride}, {padding}, {dilation}, groups, s);
+      in_, wt_, {stride}, {padding}, {dilation}, {output_padding}, groups, s);
 }
 
 /** 2D transposed convolution with a filter */
@@ -3818,6 +3832,7 @@ array conv_transpose2d(
     const std::pair<int, int>& stride /* = {1, 1} */,
     const std::pair<int, int>& padding /* = {0, 0} */,
     const std::pair<int, int>& dilation /* = {1, 1} */,
+    const std::pair<int, int>& output_padding /* = {0, 0} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
@@ -3826,6 +3841,7 @@ array conv_transpose2d(
       {stride.first, stride.second},
       {padding.first, padding.second},
       {dilation.first, dilation.second},
+      {output_padding.first, output_padding.second},
       groups,
       s);
 }
@@ -3837,6 +3853,7 @@ array conv_transpose3d(
     const std::tuple<int, int, int>& stride /* = {1, 1, 1} */,
     const std::tuple<int, int, int>& padding /* = {0, 0, 0} */,
     const std::tuple<int, int, int>& dilation /* = {1, 1, 1} */,
+    const std::tuple<int, int, int>& output_padding /* = {0, 0, 0} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
@@ -3845,6 +3862,9 @@ array conv_transpose3d(
       {std::get<0>(stride), std::get<1>(stride), std::get<2>(stride)},
       {std::get<0>(padding), std::get<1>(padding), std::get<2>(padding)},
       {std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)},
+      {std::get<0>(output_padding),
+       std::get<1>(output_padding),
+       std::get<2>(output_padding)},
       groups,
       s);
 }
@@ -4873,8 +4893,9 @@ array bitwise_impl(
     const array& b,
     BitwiseBinary::Op op,
     const std::string& op_name,
-    const StreamOrDevice& s) {
-  auto out_type = promote_types(a.dtype(), b.dtype());
+    const StreamOrDevice& s,
+    std::optional<Dtype> out_type_ = std::nullopt) {
+  auto out_type = out_type_ ? *out_type_ : promote_types(a.dtype(), b.dtype());
   if (!(issubdtype(out_type, integer) || out_type == bool_)) {
     std::ostringstream msg;
     msg << "[" << op_name
@@ -4919,12 +4940,7 @@ array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (t == bool_) {
     t = uint8;
   }
-  return bitwise_impl(
-      astype(a, t, s),
-      astype(b, t, s),
-      BitwiseBinary::Op::LeftShift,
-      "left_shift",
-      s);
+  return bitwise_impl(a, b, BitwiseBinary::Op::LeftShift, "left_shift", s, t);
 }
 array operator<<(const array& a, const array& b) {
   return left_shift(a, b);
@@ -4940,7 +4956,8 @@ array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       astype(b, t, s),
       BitwiseBinary::Op::RightShift,
       "right_shift",
-      s);
+      s,
+      t);
 }
 array operator>>(const array& a, const array& b) {
   return right_shift(a, b);
@@ -5019,8 +5036,11 @@ array roll(
     }
 
     auto sh = shift[i];
-    auto split_index =
-        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+    auto size = a.shape(ax);
+    if (size == 0) {
+      continue; // skip rolling this axis if it has size 0
+    }
+    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);

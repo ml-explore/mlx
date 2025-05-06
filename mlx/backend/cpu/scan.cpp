@@ -330,7 +330,8 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
             reduce_type_, in, out, axis_, reverse_, inclusive_);
         break;
       case complex64:
-        throw std::runtime_error("Scan ops do not support complex types yet");
+        scan_dispatch<complex64_t, complex64_t>(
+            reduce_type_, in, out, axis_, reverse_, inclusive_);
         break;
     }
   });

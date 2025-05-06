@@ -25,6 +25,8 @@ class ConvTranspose1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+        output_padding(int, optional): Additional size added to one side of the
+            output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
             Default: ``True``
     """
@@ -37,6 +39,7 @@ class ConvTranspose1d(Module):
         stride: int = 1,
         padding: int = 0,
         dilation: int = 1,
+        output_padding: int = 0,
         bias: bool = True,
     ):
         super().__init__()
@@ -53,18 +56,25 @@ class ConvTranspose1d(Module):
         self.padding = padding
         self.dilation = dilation
         self.stride = stride
+        self.output_padding = output_padding
 
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
+            f"output_padding={self.output_padding}, "
             f"bias={'bias' in self}"
         )
 
     def __call__(self, x):
         y = mx.conv_transpose1d(
-            x, self.weight, self.stride, self.padding, self.dilation
+            x,
+            self.weight,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.output_padding,
         )
         if "bias" in self:
             y = y + self.bias
@@ -90,6 +100,8 @@ class ConvTranspose2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+        output_padding(int or tuple, optional): Additional size added to one
+            side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
@@ -102,13 +114,14 @@ class ConvTranspose2d(Module):
         stride: Union[int, tuple] = 1,
         padding: Union[int, tuple] = 0,
         dilation: Union[int, tuple] = 1,
+        output_padding: Union[int, tuple] = 0,
         bias: bool = True,
     ):
         super().__init__()
 
-        kernel_size, stride, padding = map(
+        kernel_size, stride, padding, output_padding = map(
             lambda x: (x, x) if isinstance(x, int) else x,
-            (kernel_size, stride, padding),
+            (kernel_size, stride, padding, output_padding),
         )
         scale = math.sqrt(1 / (in_channels * kernel_size[0] * kernel_size[1]))
         self.weight = mx.random.uniform(
@@ -122,18 +135,25 @@ class ConvTranspose2d(Module):
         self.padding = padding
         self.stride = stride
         self.dilation = dilation
+        self.output_padding = output_padding
 
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
+            f"output_padding={self.output_padding}, "
             f"bias={'bias' in self}"
         )
 
     def __call__(self, x):
         y = mx.conv_transpose2d(
-            x, self.weight, self.stride, self.padding, self.dilation
+            x,
+            self.weight,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.output_padding,
         )
         if "bias" in self:
             y = y + self.bias
@@ -160,6 +180,8 @@ class ConvTranspose3d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+        output_padding(int or tuple, optional): Additional size added to one
+            side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
@@ -172,13 +194,14 @@ class ConvTranspose3d(Module):
         stride: Union[int, tuple] = 1,
         padding: Union[int, tuple] = 0,
         dilation: Union[int, tuple] = 1,
+        output_padding: Union[int, tuple] = 0,
         bias: bool = True,
     ):
         super().__init__()
 
-        kernel_size, stride, padding = map(
+        kernel_size, stride, padding, output_padding = map(
             lambda x: (x, x, x) if isinstance(x, int) else x,
-            (kernel_size, stride, padding),
+            (kernel_size, stride, padding, output_padding),
         )
         scale = math.sqrt(
             1 / (in_channels * kernel_size[0] * kernel_size[1] * kernel_size[2])
@@ -194,18 +217,25 @@ class ConvTranspose3d(Module):
         self.padding = padding
         self.stride = stride
         self.dilation = dilation
+        self.output_padding = output_padding
 
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1:3]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
+            f"output_padding={self.output_padding}, "
             f"bias={'bias' in self}"
         )
 
     def __call__(self, x):
         y = mx.conv_transpose3d(
-            x, self.weight, self.stride, self.padding, self.dilation
+            x,
+            self.weight,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.output_padding,
         )
         if "bias" in self:
             y = y + self.bias

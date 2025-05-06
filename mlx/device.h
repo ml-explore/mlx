@@ -26,4 +26,6 @@ void set_default_device(const Device& d);
 bool operator==(const Device& lhs, const Device& rhs);
 bool operator!=(const Device& lhs, const Device& rhs);
 
+bool is_available(const Device& d);
+
 } // namespace mlx::core

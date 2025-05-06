@@ -1,12 +1,13 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
-#include "mlx/backend/metal/metal.h"
+#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/gpu/eval.h"
 
 namespace mlx::core {
 
 Stream default_stream(Device d) {
-  if (!metal::is_available() && d == Device::gpu) {
+  if (!gpu::is_available() && d == Device::gpu) {
     throw std::invalid_argument(
         "[default_stream] Cannot get gpu stream without gpu backend.");
   }
@@ -14,7 +15,7 @@ Stream default_stream(Device d) {
 }
 
 void set_default_stream(Stream s) {
-  if (!metal::is_available() && s.device == Device::gpu) {
+  if (!gpu::is_available() && s.device == Device::gpu) {
     throw std::invalid_argument(
         "[set_default_stream] Cannot set gpu stream without gpu backend.");
   }
@@ -26,7 +27,7 @@ Stream get_stream(int index) {
 }
 
 Stream new_stream(Device d) {
-  if (!metal::is_available() && d == Device::gpu) {
+  if (!gpu::is_available() && d == Device::gpu) {
     throw std::invalid_argument(
         "[new_stream] Cannot make gpu stream without gpu backend.");
   }
@@ -44,7 +45,7 @@ void synchronize(Stream s) {
     scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
     f.wait();
   } else {
-    metal::synchronize(s);
+    gpu::synchronize(s);
   }
 }
 

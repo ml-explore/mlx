@@ -103,10 +103,12 @@ class TestDtypes(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.finfo(mx.float32).min, np.finfo(np.float32).min)
         self.assertEqual(mx.finfo(mx.float32).max, np.finfo(np.float32).max)
+        self.assertEqual(mx.finfo(mx.float32).eps, np.finfo(np.float32).eps)
         self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
 
         self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
+        self.assertEqual(mx.finfo(mx.float16).eps, np.finfo(np.float16).eps)
         self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
 
     def test_iinfo(self):

@@ -15,6 +15,14 @@
 
 typedef half float16_t;
 
+// Work per thread values for different types. The values here are expected to
+// match get_work_per_thread in mlx/backend/metal/utils.h
+template <typename U>
+struct WorkPerThread {
+  static_assert(sizeof(U) <= 8, "Type too large");
+  static constexpr int constant n = 8 / sizeof(U);
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
 ///////////////////////////////////////////////////////////////////////////////
@@ -326,6 +334,23 @@ inline bfloat16_t log1p(bfloat16_t x) {
   }
 
   return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
+}
+
+inline complex64_t log1p(complex64_t in) {
+  float x = in.real;
+  float y = in.imag;
+  float zabs = metal::precise::sqrt(x * x + y * y);
+  float theta = metal::atan2(y, x + 1);
+  if (zabs < 0.5f) {
+    float r = x * (2 + x) + y * y;
+    if (r == 0) { // handle underflow
+      return {x, theta};
+    }
+    return {0.5f * log1p(r), theta};
+  } else {
+    auto z0 = metal::sqrt((x + 1) * (x + 1) + y * y);
+    return {metal::log(z0), theta};
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

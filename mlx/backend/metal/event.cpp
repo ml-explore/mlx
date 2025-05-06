@@ -2,7 +2,6 @@
 
 #include "mlx/event.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core {

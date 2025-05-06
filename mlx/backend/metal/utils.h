@@ -84,4 +84,12 @@ void concatenate(std::string& acc, T first, Args... args) {
   concatenate(acc, args...);
 }
 
+inline int get_work_per_thread(Dtype dtype) {
+  return std::max(1, 8 / dtype.size());
+}
+
+inline size_t ceildiv(size_t n, size_t m) {
+  return (n + m - 1) / m;
+}
+
 } // namespace mlx::core

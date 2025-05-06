@@ -1,9 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cstdlib>
+#include <filesystem>
 #include <sstream>
-
-#include <sys/sysctl.h>
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
@@ -11,9 +10,10 @@
 
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
-#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
+
+namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
@@ -66,8 +66,8 @@ MTL::Library* try_load_bundle(
   if (bundle != nullptr) {
     std::string resource_path =
         std::string(bundle->resourceURL()->fileSystemRepresentation()) + "/" +
-        lib_name + ".metallib" auto [lib, error] =
-            load_library_from_path(device, resource_path.c_str());
+        lib_name + ".metallib";
+    auto [lib, error] = load_library_from_path(device, resource_path.c_str());
     if (lib) {
       return lib;
     }
@@ -79,12 +79,18 @@ MTL::Library* try_load_bundle(
 // Firstly, search for the metallib in the same path as this binary
 std::pair<MTL::Library*, NS::Error*> load_colocated_library(
     MTL::Device* device,
-    const std::string& lib_name) {
-  std::string lib_path = get_colocated_mtllib_path(lib_name);
-  if (lib_path.size() != 0) {
-    return load_library_from_path(device, lib_path.c_str());
+    const std::string& relative_path) {
+  std::string binary_dir = get_binary_directory();
+  if (binary_dir.size() == 0) {
+    return {nullptr, nullptr};
   }
-  return {nullptr, nullptr};
+
+  auto path = fs::path(binary_dir) / relative_path;
+  if (!path.has_extension()) {
+    path.replace_extension(".metallib");
+  }
+
+  return load_library_from_path(device, path.c_str());
 }
 
 std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
@@ -99,7 +105,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
   auto bundles = NS::Bundle::allBundles();
   for (int i = 0, c = (int)bundles->count(); i < c; i++) {
     auto bundle = reinterpret_cast<NS::Bundle*>(bundles->object(i));
-    library = try_load_bundle(device, bundle->resourceURL());
+    library = try_load_bundle(device, bundle->resourceURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
     }
@@ -109,33 +115,34 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
-  NS::Error *error1, *error2, *error3;
+  NS::Error* error[4];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
-  std::tie(lib, error1) = load_colocated_library(device, "mlx");
+  std::tie(lib, error[0]) = load_colocated_library(device, "mlx");
+  if (lib) {
+    return lib;
+  }
+
+  std::tie(lib, error[1]) = load_colocated_library(device, "Resources/mlx");
   if (lib) {
     return lib;
   }
 
   // Then try default.metallib in a SwiftPM bundle if we have one
-  std::tie(lib, error2) = load_swiftpm_library(device, "default");
+  std::tie(lib, error[2]) = load_swiftpm_library(device, "default");
   if (lib) {
     return lib;
   }
 
   // Finally try default_mtllib_path
-  std::tie(lib, error3) = load_library_from_path(device, default_mtllib_path);
+  std::tie(lib, error[3]) = load_library_from_path(device, default_mtllib_path);
   if (!lib) {
     std::ostringstream msg;
     msg << "Failed to load the default metallib. ";
-    if (error1 != nullptr) {
-      msg << error1->localizedDescription()->utf8String() << " ";
-    }
-    if (error2 != nullptr) {
-      msg << error2->localizedDescription()->utf8String() << " ";
-    }
-    if (error3 != nullptr) {
-      msg << error3->localizedDescription()->utf8String() << " ";
+    for (int i = 0; i < 4; i++) {
+      if (error[i] != nullptr) {
+        msg << error[i]->localizedDescription()->utf8String() << " ";
+      }
     }
     throw std::runtime_error(msg.str());
   }
@@ -156,6 +163,7 @@ MTL::Library* load_library(
           << error->localizedDescription()->utf8String();
       throw std::runtime_error(msg.str());
     }
+    return lib;
   }
 
   // We have been given a path so try to load from lib_path / lib_name.metallib
@@ -168,6 +176,7 @@ MTL::Library* load_library(
           << "> with error " << error->localizedDescription()->utf8String();
       throw std::runtime_error(msg.str());
     }
+    return lib;
   }
 
   // Try to load the colocated library
@@ -188,8 +197,8 @@ MTL::Library* load_library(
 
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
-      << "We attempted to load it from <" << get_colocated_mtllib_path(lib_name)
-      << ">";
+      << "We attempted to load it from <" << get_binary_directory() << "/"
+      << lib_name << ".metallib" << ">";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";
 #endif
@@ -758,44 +767,6 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   };
   return std::unique_ptr<void, std::function<void(void*)>>(
       NS::AutoreleasePool::alloc()->init(), dtor);
-}
-
-void new_stream(Stream stream) {
-  if (stream.device == mlx::core::Device::gpu) {
-    device(stream.device).new_queue(stream.index);
-  }
-}
-
-const std::unordered_map<std::string, std::variant<std::string, size_t>>&
-device_info() {
-  auto init_device_info = []()
-      -> std::unordered_map<std::string, std::variant<std::string, size_t>> {
-    auto pool = new_scoped_memory_pool();
-    auto raw_device = device(default_device()).mtl_device();
-    auto name = std::string(raw_device->name()->utf8String());
-    auto arch = std::string(raw_device->architecture()->name()->utf8String());
-
-    size_t memsize = 0;
-    size_t length = sizeof(memsize);
-    sysctlbyname("hw.memsize", &memsize, &length, NULL, 0);
-
-    size_t rsrc_limit = 0;
-    sysctlbyname("iogpu.rsrc_limit", &rsrc_limit, &length, NULL, 0);
-    if (rsrc_limit == 0) {
-      rsrc_limit = 499000;
-    }
-
-    return {
-        {"device_name", name},
-        {"architecture", arch},
-        {"max_buffer_length", raw_device->maxBufferLength()},
-        {"max_recommended_working_set_size",
-         raw_device->recommendedMaxWorkingSetSize()},
-        {"memory_size", memsize},
-        {"resource_limit", rsrc_limit}};
-  };
-  static auto device_info_ = init_device_info();
-  return device_info_;
 }
 
 } // namespace mlx::core::metal

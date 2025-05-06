@@ -130,6 +130,24 @@ struct LogAddExp {
         ? maxval
         : (maxval + log1p(metal::exp(minval - maxval)));
   };
+
+  complex64_t operator()(complex64_t x, complex64_t y) {
+    if (metal::isnan(x.real) || metal::isnan(x.imag) || metal::isnan(y.real) ||
+        metal::isnan(y.imag)) {
+      return metal::numeric_limits<float>::quiet_NaN();
+    }
+    constexpr float inf = metal::numeric_limits<float>::infinity();
+    complex64_t maxval = x > y ? x : y;
+    complex64_t minval = x < y ? x : y;
+    if (minval.real == -inf || maxval.real == inf)
+      return maxval;
+    float m = metal::exp(minval.real - maxval.real);
+    complex64_t dexp{
+        m * metal::cos(minval.imag - maxval.imag),
+        m * metal::sin(minval.imag - maxval.imag),
+    };
+    return maxval + log1p(dexp);
+  }
 };
 
 struct Maximum {

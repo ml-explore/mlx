@@ -197,6 +197,13 @@ void init_array(nb::module_& m) {
           "max",
           &mx::finfo::max,
           R"pbdoc(The largest representable number.)pbdoc")
+      .def_ro(
+          "eps",
+          &mx::finfo::eps,
+          R"pbdoc(
+            The difference between 1.0 and the next smallest
+            representable number larger than 1.0.
+          )pbdoc")
       .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
       .def("__repr__", [](const mx::finfo& f) {
         std::ostringstream os;

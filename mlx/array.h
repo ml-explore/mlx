@@ -356,7 +356,7 @@ class array {
   }
 
   enum Status {
-    // The ouptut of a computation which has not been scheduled.
+    // The output of a computation which has not been scheduled.
     // For example, the status of `x` in `auto x = a + b`.
     unscheduled,
 

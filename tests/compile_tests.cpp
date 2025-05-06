@@ -795,3 +795,12 @@ TEST_CASE("test compile lambda") {
   out = cfun2({array(0)});
   CHECK_EQ(out[0].item<int>(), 3);
 }
+
+TEST_CASE("test compile with no-ops") {
+  auto fun = [](const std::vector<array>& inputs) {
+    return std::vector<array>{abs(stop_gradient(abs(inputs[0])))};
+  };
+  auto in = array(1.0);
+  auto out = compile(fun)({in})[0];
+  CHECK_EQ(out.inputs()[0].id(), in.id());
+}
