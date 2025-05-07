@@ -3,5 +3,5 @@
 #include <mutex>
 
 namespace mlx::core::gpu {
-    extern std::mutex metal_operation_mutex;
+extern std::mutex metal_operation_mutex;
 }
