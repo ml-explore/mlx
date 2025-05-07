@@ -309,7 +309,6 @@ TEST_CASE("test fft grads") {
   CHECK_EQ(vjp_out.shape(), Shape{5, 5});
 }
 
-<<<<<<< HEAD
 TEST_CASE("test stft and istft") {
   int n_fft = 4;
   int hop_length = 2;
@@ -383,7 +382,8 @@ TEST_CASE("test stft and istft") {
     CHECK_EQ(stft_result.shape(1), n_fft);
   }
 }
-== == == = TEST_CASE("test fftshift and ifftshift") {
+
+TEST_CASE("test fftshift and ifftshift") {
   // Test 1D array with even length
   auto x = arange(8);
   auto y = fft::fftshift(x);
@@ -440,4 +440,3 @@ TEST_CASE("test stft and istft") {
   CHECK_THROWS_AS(fft::ifftshift(x, {3}), std::invalid_argument);
   CHECK_THROWS_AS(fft::ifftshift(x, {-5}), std::invalid_argument);
 }
->>>>>>> 5a1a5d5ed16f69af7c3ce56dd94e4502661e1565
