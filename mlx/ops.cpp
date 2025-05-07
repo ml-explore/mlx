@@ -1248,6 +1248,10 @@ array pad(
         {a, astype(pad_value, a.dtype(), s)});
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "symmetric") {
+    return symmetric_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "reflect") {
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";
@@ -5114,6 +5118,92 @@ array contiguous(
       a.dtype(),
       std::make_shared<Contiguous>(to_stream(s), allow_col_major),
       {a});
+}
+
+array symmetric_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    const Shape& out_shape,
+    StreamOrDevice s /* = {} */) {
+  array out = zeros(out_shape, a.dtype(), s);
+  auto stops = a.shape();
+  for (int i = 0; i < stops.size(); i++) {
+    stops[i] += low_pad_size[i];
+  }
+  // Copy over values from the unpadded array
+  array padded = slice_update(out, a, low_pad_size, stops, s);
+
+  for (int axis = 0; axis < a.ndim(); axis++) {
+    if (low_pad_size[axis] > 0) {
+      Shape starts(a.ndim(), 0);
+      starts[axis] = 1;
+      auto stops = a.shape();
+      stops[axis] = low_pad_size[axis] + 1;
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = 0;
+      stops[axis] = low_pad_size[axis];
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+
+    if (high_pad_size[axis] > 0) {
+      Shape starts(a.ndim(), 0);
+      starts[axis] = -high_pad_size[axis] - 1;
+      auto stops = out.shape();
+      stops[axis] = -high_pad_size[axis];
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = -high_pad_size[axis];
+      stops[axis] = out.shape(axis);
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+  }
+  return padded;
+}
+
+array reflect_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    const Shape& out_shape,
+    StreamOrDevice s /* = {} */) {
+  array out = zeros(out_shape, a.dtype(), s);
+  auto stops = a.shape();
+  for (int i = 0; i < stops.size(); i++) {
+    stops[i] += low_pad_size[i];
+  }
+  // Copy over values from the unpadded array
+  array padded = slice_update(out, a, low_pad_size, stops, s);
+
+  for (int axis = 0; axis < a.ndim(); axis++) {
+    if (low_pad_size[axis] > 0) {
+      Shape starts(a.ndim(), 0);
+      starts[axis] = 1;
+      auto stops = a.shape();
+      stops[axis] = low_pad_size[axis] + 1;
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = 0;
+      stops[axis] = low_pad_size[axis];
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+
+    if (high_pad_size[axis] > 0) {
+      Shape starts(a.ndim(), 0);
+      starts[axis] = -high_pad_size[axis] - 1;
+      auto stops = out.shape();
+      stops[axis] = -high_pad_size[axis];
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = -high_pad_size[axis];
+      stops[axis] = out.shape(axis);
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+  }
+  return padded;
 }
 
 } // namespace mlx::core
