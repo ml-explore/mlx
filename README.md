@@ -91,7 +91,7 @@ for more information on building the C++ and Python APIs from source.
 Check out the [contribution guidelines](https://github.com/ml-explore/mlx/tree/main/CONTRIBUTING.md) for more information
 on contributing to MLX. See the
 [docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
-information on building from source, and running tests.
+information on building from source and running tests.
 
 We are grateful for all of [our
 contributors](https://github.com/ml-explore/mlx/tree/main/ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
