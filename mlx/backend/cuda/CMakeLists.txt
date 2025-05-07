@@ -17,6 +17,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gather_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
@@ -25,6 +26,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/scatter.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/scatter_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
