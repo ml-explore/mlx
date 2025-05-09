@@ -632,7 +632,7 @@ void fft_op(
   func_consts.push_back(make_int(&rader_m, 3));
 
   // The overall number of FFTs we're going to compute for this input
-  int size = out.dtype() == float32 ? out.size() : in.size();
+  size_t size = out.dtype() == float32 ? out.size() : in.size();
   if (real && inverse && four_step_params.required) {
     size = out.size();
   }
@@ -659,8 +659,6 @@ void fft_op(
     // We can perform 2 RFFTs at once so the batch size is halved.
     batch_size = (batch_size + 2 - 1) / 2;
   }
-  int out_buffer_size = out.size();
-
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto in_type_str = in.dtype() == float32 ? "float" : "float2";
   auto out_type_str = out.dtype() == float32 ? "float" : "float2";
