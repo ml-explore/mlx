@@ -9,6 +9,78 @@
 namespace mlx::core::cu {
 
 ///////////////////////////////////////////////////////////////////////////////
+// Unary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)           \
+  template <typename T>                              \
+  __forceinline__ __device__ auto NAME(T x) {        \
+    if constexpr (cuda::std::is_same_v<T, __half>) { \
+      return HALF_OP(x);                             \
+    } else {                                         \
+      return ::NAME(x);                              \
+    }                                                \
+  }
+#else
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)                         \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x) {                      \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x);                                           \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x);                                           \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
+  }
+#endif
+
+#define MLX_DEFINE_UNARY_OP_FALLBCK(NAME)                          \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x) {                      \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return ::NAME(__half2float(x));                              \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return ::NAME(__bfloat162float(x));                          \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
+  }
+
+MLX_DEFINE_UNARY_OP(abs, __habs)
+MLX_DEFINE_UNARY_OP(ceil, hceil)
+MLX_DEFINE_UNARY_OP(cos, hcos)
+MLX_DEFINE_UNARY_OP(exp, hexp)
+MLX_DEFINE_UNARY_OP(floor, hfloor)
+MLX_DEFINE_UNARY_OP(isnan, __hisnan)
+MLX_DEFINE_UNARY_OP(log, hlog)
+MLX_DEFINE_UNARY_OP(log2, hlog2)
+MLX_DEFINE_UNARY_OP(log10, hlog10)
+MLX_DEFINE_UNARY_OP(rint, hrint)
+MLX_DEFINE_UNARY_OP(rsqrt, hrsqrt)
+MLX_DEFINE_UNARY_OP(sin, hsin)
+MLX_DEFINE_UNARY_OP(sqrt, hsqrt)
+MLX_DEFINE_UNARY_OP_FALLBCK(acos)
+MLX_DEFINE_UNARY_OP_FALLBCK(acosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(asin)
+MLX_DEFINE_UNARY_OP_FALLBCK(asinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(atan)
+MLX_DEFINE_UNARY_OP_FALLBCK(atanh)
+MLX_DEFINE_UNARY_OP_FALLBCK(cosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(log1p)
+MLX_DEFINE_UNARY_OP_FALLBCK(sinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(tan)
+#if __CUDA_ARCH__ >= 1280
+MLX_DEFINE_UNARY_OP(tanh, htanh)
+#else
+MLX_DEFINE_UNARY_OP_FALLBCK(tanh)
+#endif
+
+#undef MLX_DEFINE_UNARY_OP
+#undef MLX_DEFINE_UNARY_OP_FALLBCK
+
+///////////////////////////////////////////////////////////////////////////////
 // Missing C++ operator overrides for CUDA 7.
 ///////////////////////////////////////////////////////////////////////////////
 
