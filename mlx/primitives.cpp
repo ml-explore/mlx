@@ -1055,7 +1055,8 @@ array conv_weight_backward_patches(
     const array& wt,
     const array& cotan,
     const std::vector<int>& kernel_strides,
-    const std::vector<int>& padding,
+    const std::vector<int>& padding_lo,
+    const std::vector<int>& padding_hi,
     StreamOrDevice s) {
   // Resolve Padded input shapes and strides
   Shape padding_starts(in.ndim(), 0);
@@ -1064,9 +1065,9 @@ array conv_weight_backward_patches(
 
   // padded shape
   for (int i = 1; i < in.ndim() - 1; i++) {
-    in_padded_shape[i] += 2 * padding[i - 1];
-    padding_ends[i] += padding[i - 1];
-    padding_starts[i] += padding[i - 1];
+    in_padded_shape[i] += padding_lo[i - 1] + padding_hi[i - 1];
+    padding_ends[i] += padding_lo[i - 1];
+    padding_starts[i] += padding_lo[i - 1];
   }
 
   // padded strides (contiguous)
@@ -1078,9 +1079,16 @@ array conv_weight_backward_patches(
   // Pad input
   std::vector<int> padded_axes(in.ndim() - 2, 0);
   std::iota(padded_axes.begin(), padded_axes.end(), 1);
-  Shape padding_(padding.begin(), padding.end());
-  auto in_padded = pad(
-      in, padded_axes, padding_, padding_, array(0, in.dtype()), "constant", s);
+  Shape padding_lo_(padding_lo.begin(), padding_lo.end());
+  Shape padding_hi_(padding_hi.begin(), padding_hi.end());
+  auto in_padded =
+      pad(in,
+          padded_axes,
+          padding_lo_,
+          padding_hi_,
+          array(0, in.dtype()),
+          "constant",
+          s);
 
   // Resolve strided patches
 
@@ -1147,16 +1155,16 @@ std::vector<array> Convolution::vjp(
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
-      std::vector<int> padding_lo = padding_;
-      std::vector<int> padding_hi = padding_;
+      std::vector<int> padding_lo = padding_lo_;
+      std::vector<int> padding_hi = padding_hi_;
 
       for (int i = 0; i < padding_lo.size(); ++i) {
         int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-        padding_lo[i] = wt_size - padding_[i] - 1;
+        padding_lo[i] = wt_size - padding_lo_[i] - 1;
 
         int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
         int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
-        padding_hi[i] = in_size - out_size + padding_[i];
+        padding_hi[i] = in_size - out_size + padding_hi_[i];
       }
 
       // Check for negative padding
@@ -1226,18 +1234,12 @@ std::vector<array> Convolution::vjp(
 
       if (no_dilation && !flip_ && groups_ == 1) {
         auto grad = conv_weight_backward_patches(
-            in, wt, cotan, kernel_strides_, padding_, stream());
+            in, wt, cotan, kernel_strides_, padding_lo_, padding_hi_, stream());
         grads.push_back(grad);
       } else {
-        std::vector<int> padding_lo = padding_;
-        std::vector<int> padding_hi = padding_;
+        std::vector<int> padding_lo = padding_lo_;
+        std::vector<int> padding_hi = padding_hi_;
 
-        for (int i = 0; i < padding_hi.size(); ++i) {
-          int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
-          int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
-          int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-          padding_hi[i] = out_size - in_size + wt_size - padding_[i] - 1;
-        }
         auto cotan_trans = swapaxes(cotan, 0, -1, stream());
         auto in_trans = group_transpose(in, -1, 0, -1);
 
@@ -1283,7 +1285,8 @@ std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
         in,
         w,
         kernel_strides_,
-        padding_,
+        padding_lo_,
+        padding_hi_,
         kernel_dilation_,
         input_dilation_,
         groups,
@@ -1332,7 +1335,8 @@ std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
 
 bool Convolution::is_equivalent(const Primitive& other) const {
   const Convolution& c_other = static_cast<const Convolution&>(other);
-  return padding_ == c_other.padding_ &&
+  return padding_lo_ == c_other.padding_lo_ &&
+      padding_hi_ == c_other.padding_hi_ &&
       kernel_strides_ == c_other.kernel_strides_ &&
       kernel_dilation_ == c_other.kernel_dilation_ &&
       input_dilation_ == c_other.input_dilation_ &&
