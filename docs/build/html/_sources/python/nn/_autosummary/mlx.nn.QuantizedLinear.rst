@@ -13,6 +13,5 @@
    .. autosummary::
    
          ~QuantizedLinear.from_linear
-         ~QuantizedLinear.unfreeze
    
    
