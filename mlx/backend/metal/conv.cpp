@@ -944,8 +944,6 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
     wt = arr_copy;
   }
 
-  auto padding_ = padding_lo_;
-
   // 3D conv
   if (out.ndim() == 5) {
     conv_3D_gpu(
@@ -954,7 +952,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         in,
         wt,
         out,
-        padding_,
+        padding_lo_,
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
@@ -969,7 +967,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         in,
         wt,
         out,
-        padding_,
+        padding_lo_,
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
@@ -985,7 +983,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         in,
         wt,
         out,
-        padding_,
+        padding_lo_,
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
