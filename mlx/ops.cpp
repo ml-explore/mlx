@@ -3974,6 +3974,7 @@ array conv_general(
           to_stream(s),
           stride,
           padding_lo,
+          padding_hi,
           kernel_dilation,
           input_dilation,
           groups,
