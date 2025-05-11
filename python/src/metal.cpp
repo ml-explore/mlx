@@ -49,21 +49,21 @@ void init_metal(nb::module_& m) {
   metal.def(
       "set_memory_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_memory_limt", "mx.set_memory_limit");
+        DEPRECATE("mx.metal.set_memory_limit", "mx.set_memory_limit");
         return mx::set_memory_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_cache_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_cache_limt", "mx.set_cache_limit");
+        DEPRECATE("mx.metal.set_cache_limit", "mx.set_cache_limit");
         return mx::set_cache_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_wired_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_wired_limt", "mx.set_wired_limit");
+        DEPRECATE("mx.metal.set_wired_limit", "mx.set_wired_limit");
         return mx::set_wired_limit(limit);
       },
       "limit"_a);
