@@ -2830,6 +2830,9 @@ class TestOps(mlx_tests.MLXTestCase):
         return H
 
     def test_hadamard(self):
+        with self.assertRaises(ValueError):
+            mx.hadamard_transform(mx.array([]))
+
         h28_str = """
         +------++----++-+--+-+--++--
         -+-----+++-----+-+--+-+--++-
