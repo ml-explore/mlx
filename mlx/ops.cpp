@@ -4330,6 +4330,10 @@ array addmm(
 
     c = reshape(c, c_reshape, s);
   }
+  if (c.shape() != out_shape) {
+    throw std::invalid_argument(
+        "[addmm] input c must broadcast to the output shape");
+  }
 
   auto out = array(
       std::move(out_shape),
