@@ -132,6 +132,10 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[AddMM::eval_cpu] Currently only supports float32.");
   }
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(out.nbytes()));
+    return;
+  }
 
   // Fill output with C
   auto& c = inputs[2];
@@ -139,7 +143,9 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy(c, out, ctype, stream());
-
+  if (inputs[0].shape(-1) == 0) {
+    return;
+  }
   matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 

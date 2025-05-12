@@ -745,6 +745,19 @@ class TestBlas(mlx_tests.MLXTestCase):
         mx.eval(c)
         self.assertEqual(c.shape, (0, 0))
 
+        c = mx.array([], dtype=mx.float32)
+        a = mx.array([], dtype=mx.float32)
+        b = mx.array([], dtype=mx.float32)
+        out = mx.addmm(a, b, c)
+        mx.eval(out)
+        self.assertEqual(out.shape, ())
+
+        a = mx.zeros(shape=(5, 0))
+        b = mx.zeros(shape=(0, 5))
+        c = mx.random.uniform(shape=(5, 5))
+        out = mx.addmm(c, a, b)
+        self.assertTrue(mx.allclose(out, c))
+
     def test_block_masked_matmul(self):
         def ref_block_masked_mm(
             a, b, block_size, out_mask=None, lhs_mask=None, rhs_mask=None
