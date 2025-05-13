@@ -3175,6 +3175,10 @@ array scatter_axis(
     throw std::invalid_argument(msg.str());
   }
 
+  if (a.size() == 0) {
+    return a;
+  }
+
   auto upd = astype(values, a.dtype(), s);
 
   // Squeeze leading singletons out of update

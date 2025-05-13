@@ -1255,6 +1255,12 @@ class TestOps(mlx_tests.MLXTestCase):
         np.put_along_axis(out_np, np.array(indices), np.array(update), axis=-2)
         self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
 
+        a = mx.array([], mx.float32)
+        b = mx.put_along_axis(a, a, a, axis=None)
+        mx.eval(b)
+        self.assertEqual(b.size, 0)
+        self.assertEqual(b.shape, a.shape)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
