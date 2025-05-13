@@ -1960,43 +1960,44 @@ std::vector<array> FFT::vjp(
     n_elements *= inverse_ ? cotangents[0].shape(ax) : primals[0].shape(ax);
   }
 
-  if (real_) {
+  if (real_ && inverse_) {
     // Make a mask to account for the double use in the forward pass.
-    // Everything except the DC and nyquist frequencies gets halved or doubled.
-    int N =
-        inverse_ ? in.shape(axes_.back()) : cotangents[0].shape(axes_.back());
+    // Everything except the DC and nyquist frequencies gets doubled.
+    int N = in.shape(axes_.back());
+    bool odd = cotangents[0].shape(axes_.back()) % 2;
     Shape c(in.ndim(), 1);
     c[axes_.back()] = N;
     array indices = reshape(arange(N, stream()), std::move(c), stream());
     array first(0, indices.dtype());
-    array last(N - 1, indices.dtype());
-
-    if (inverse_) {
-      auto starts = Shape(in.ndim(), 0);
-      auto stops = in.shape();
-
-      array one(1 / n_elements, in.dtype());
-      array two(2 / n_elements, in.dtype());
-      array mask =
-          where((first < indices) & (indices < last), two, one, stream());
-
-      return {
-          multiply(fft::rfftn(cotangents[0], axes, stream()), mask, stream())};
-    } else {
-      Shape n;
-      for (auto ax : axes_) {
-        n.push_back(in.shape(ax));
-      }
-      array one(1, complex64);
-      array half(0.5, complex64);
-      array mask =
-          where((first < indices) & (indices < last), half, one, stream());
-      return {multiply(
-          fft::irfftn(
-              multiply(cotangents[0], mask, stream()), n, axes, stream()),
-          array(n_elements, in.dtype()),
-          stream())};
+    array last(N - 1 + odd, indices.dtype());
+    array one(1 / n_elements, in.dtype());
+    array two(2 / n_elements, in.dtype());
+    array mask =
+        where((first < indices) & (indices < last), two, one, stream());
+    return {
+        multiply(fft::rfftn(cotangents[0], axes, stream()), mask, stream())};
+  } else if (real_) {
+    Shape n;
+    for (auto ax : axes_) {
+      n.push_back(in.shape(ax));
     }
+    // Make a mask to account for the double use in the forward pass.
+    // Everything except the DC and nyquist frequencies gets halved.
+    int N = cotangents[0].shape(axes_.back());
+    bool odd = in.shape(axes_.back()) % 2;
+    Shape c(in.ndim(), 1);
+    c[axes_.back()] = N;
+    array indices = reshape(arange(N, stream()), std::move(c), stream());
+    array first(0, indices.dtype());
+    array last(N - 1 + odd, indices.dtype());
+    array one(1, complex64);
+    array half(0.5, complex64);
+    array mask =
+        where((first < indices) & (indices < last), half, one, stream());
+    return {multiply(
+        fft::irfftn(multiply(cotangents[0], mask, stream()), n, axes, stream()),
+        array(n_elements, in.dtype()),
+        stream())};
   } else if (inverse_) {
     return {multiply(
         fft::fftn(cotangents[0], axes, stream()),
