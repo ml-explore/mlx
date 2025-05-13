@@ -178,8 +178,8 @@ array uniform(
 
 inline array complex_normal(
     Shape shape,
-    const float loc,
-    const float scale,
+    const std::optional<array>& loc,
+    const std::optional<array>& scale,
     const std::optional<array>& key,
     StreamOrDevice s) {
   auto stream = to_stream(s);
@@ -188,21 +188,22 @@ inline array complex_normal(
   shape.push_back(2);
   auto samples =
       erfinv(uniform(low, high, shape, float32, key, stream), stream);
-  if (scale != 1.0) {
-    samples = multiply(array(scale, float32), samples, stream);
+  samples = squeeze(view(samples, complex64, stream), -1, stream);
+  if (scale.has_value()) {
+    samples = multiply(*scale, samples, stream);
   }
-  if (loc != 0.0) {
-    samples = add(array(loc, float32), samples, stream);
+  if (loc.has_value()) {
+    samples = add(*loc, samples, stream);
   }
-  return squeeze(view(samples, complex64, stream), -1, stream);
+  return samples;
 }
 
 array normal(
     const Shape& shape,
     Dtype dtype,
-    const float loc /* = 0.0 */,
-    const float scale /* = 1.0 */,
-    const std::optional<array>& key /*= nullopt */,
+    const std::optional<array>& loc,
+    const std::optional<array>& scale,
+    const std::optional<array>& key,
     StreamOrDevice s /* = {} */) {
   if (dtype == complex64) {
     return complex_normal(shape, loc, scale, key, s);
@@ -212,10 +213,13 @@ array normal(
   auto low = above_minus_one_with_default(dtype);
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
-  samples = multiply(
-      array(std::sqrt(2.0) * scale, dtype), erfinv(samples, stream), stream);
-  if (loc != 0.0) {
-    samples = add(array(loc, dtype), samples, stream);
+  auto applied_scale = array(std::sqrt(2.0), dtype);
+  if (scale.has_value()) {
+    applied_scale = multiply(applied_scale, *scale, stream);
+  }
+  samples = multiply(applied_scale, erfinv(samples, stream), stream);
+  if (loc.has_value()) {
+    samples = add(*loc, samples, stream);
   }
   return samples;
 }
