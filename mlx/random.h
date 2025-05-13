@@ -100,7 +100,7 @@ array normal(
     const std::optional<array>& scale,
     const std::optional<array>& key,
     StreamOrDevice s = {});
-array normal(
+inline array normal(
     const Shape& shape,
     Dtype dtype,
     const float loc,
