@@ -1259,7 +1259,7 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.put_along_axis(a, a, a, axis=None)
         mx.eval(b)
         self.assertEqual(b.size, 0)
-        self.assertEqual(b.shape, tuple())
+        self.assertEqual(b.shape, a.shape)
 
     def test_split(self):
         a = mx.array([1, 2, 3])
