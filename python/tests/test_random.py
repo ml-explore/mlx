@@ -381,6 +381,12 @@ class TestRandom(mlx_tests.MLXTestCase):
             b = mx.random.normal((10,))
             sample = mx.random.normal((2, 10, 2), loc=b, scale=b)
 
+        b = mx.random.normal((3, 1, 2))
+        sample = mx.random.normal((3, 4, 2), dtype=mx.float16, loc=b, scale=b)
+        mx.eval(sample)
+        self.assertEqual(sample.shape, (3, 4, 2))
+        self.assertEqual(sample.dtype, mx.float16)
+
 
 if __name__ == "__main__":
     unittest.main()

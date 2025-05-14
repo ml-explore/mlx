@@ -215,11 +215,12 @@ array normal(
   auto samples = uniform(low, high, shape, dtype, key, stream);
   auto applied_scale = array(std::sqrt(2.0), dtype);
   if (scale.has_value()) {
-    applied_scale = multiply(applied_scale, *scale, stream);
+    applied_scale =
+        multiply(applied_scale, astype(*scale, dtype, stream), stream);
   }
   samples = multiply(applied_scale, erfinv(samples, stream), stream);
   if (loc.has_value()) {
-    samples = add(*loc, samples, stream);
+    samples = add(astype(*loc, dtype, stream), samples, stream);
   }
   return samples;
 }
