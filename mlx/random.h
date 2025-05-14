@@ -96,10 +96,22 @@ inline array uniform(
 array normal(
     const Shape& shape,
     Dtype dtype,
+    const std::optional<array>& loc,
+    const std::optional<array>& scale,
+    const std::optional<array>& key,
+    StreamOrDevice s = {});
+inline array normal(
+    const Shape& shape,
+    Dtype dtype,
     const float loc,
     const float scale,
     const std::optional<array>& key = std::nullopt,
-    StreamOrDevice s = {});
+    StreamOrDevice s = {}) {
+  auto loc_ = loc == 0 ? std::nullopt : std::make_optional(array(loc, dtype));
+  auto scale_ =
+      scale == 1 ? std::nullopt : std::make_optional(array(scale, dtype));
+  return normal(shape, dtype, loc_, scale_, key, s);
+}
 inline array normal(
     const Shape& shape,
     const float loc,
@@ -113,13 +125,13 @@ inline array normal(
     const Dtype dtype,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
-  return normal(shape, dtype, 0.0, 1.0, key, s);
+  return normal(shape, dtype, std::nullopt, std::nullopt, key, s);
 }
 inline array normal(
     const Shape& shape,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
-  return normal(shape, float32, 0.0, 1.0, key, s);
+  return normal(shape, float32, std::nullopt, std::nullopt, key, s);
 }
 
 /** Generate samples from a multivariate normal distribution. **/
