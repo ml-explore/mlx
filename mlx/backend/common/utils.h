@@ -165,4 +165,11 @@ void shared_buffer_reshape(
     const array& in,
     const Strides& out_strides,
     array& out);
+
+template <typename T>
+inline std::vector<T> remove_index(std::vector<T> vec, size_t index) {
+  vec.erase(std::next(vec.begin(), index));
+  return vec;
+}
+
 } // namespace mlx::core
