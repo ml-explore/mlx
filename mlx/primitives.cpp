@@ -875,6 +875,43 @@ std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
   return {{linalg::cholesky(a, upper_, stream())}, {ax}};
 }
 
+std::pair<std::vector<array>, std::vector<int>> Eig::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+
+  bool needs_move = axes[0] >= (inputs[0].ndim() - 2);
+  auto a = needs_move ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  auto ax = needs_move ? 0 : axes[0];
+
+  std::vector<array> outputs;
+  if (compute_eigenvectors_) {
+    auto [values, vectors] = linalg::eig(a, stream());
+    outputs = {values, vectors};
+  } else {
+    outputs = {linalg::eigvals(a, stream())};
+  }
+
+  return {outputs, std::vector<int>(outputs.size(), ax)};
+}
+
+std::vector<Shape> Eig::output_shapes(const std::vector<array>& inputs) {
+  auto shape = inputs[0].shape();
+  shape.pop_back(); // Remove last dimension for eigenvalues
+  if (compute_eigenvectors_) {
+    return {
+        std::move(shape), inputs[0].shape()}; // Eigenvalues and eigenvectors
+  } else {
+    return {std::move(shape)}; // Only eigenvalues
+  }
+}
+
+bool Eig::is_equivalent(const Primitive& other) const {
+  auto& e_other = static_cast<const Eig&>(other);
+  return compute_eigenvectors_ == e_other.compute_eigenvectors_;
+}
+
 std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

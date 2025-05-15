@@ -331,6 +331,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(SVD),
       SERIALIZE_PRIMITIVE(Inverse),
       SERIALIZE_PRIMITIVE(Cholesky),
+      SERIALIZE_PRIMITIVE(Eig),
       SERIALIZE_PRIMITIVE(Eigh),
       SERIALIZE_PRIMITIVE(AffineQuantize),
       SERIALIZE_PRIMITIVE(RMSNorm),

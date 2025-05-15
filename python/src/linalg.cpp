@@ -236,7 +236,7 @@ void init_linalg(nb::module_& parent_module) {
 
         Returns:
             Union[tuple(array, ...), array]:
-              If compute_uv is ``True`` returns the ``U``, ``S``, and ``Vt`` matrices, such that 
+              If compute_uv is ``True`` returns the ``U``, ``S``, and ``Vt`` matrices, such that
               ``A = U @ diag(S) @ Vt``. If compute_uv is ``False`` returns singular values array ``S``.
       )pbdoc");
   m.def(
@@ -407,6 +407,76 @@ void init_linalg(nb::module_& parent_module) {
         Returns:
             array: The cross product of ``a`` and ``b`` along the specified axis.
       )pbdoc");
+  m.def(
+      "eigvals",
+      &mx::linalg::eigvals,
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Compute the eigenvalues of a square matrix.
+
+        This function differs from :func:`numpy.linalg.eigvals` in that the
+        return type is always complex even if the eigenvalues are all real.
+
+        This function supports arrays with at least 2 dimensions. When the
+        input has more than two dimensions, the eigenvalues are computed for
+        each matrix in the last two dimensions.
+
+        Args:
+            a (array): The input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The eigenvalues (not necessarily in order).
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> eigenvalues = mx.linalg.eigvals(A, stream=mx.cpu)
+            >>> eigenvalues
+            array([3+0j, -1+0j], dtype=complex64)
+      )pbdoc");
+  m.def(
+      "eig",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        auto result = mx::linalg::eig(a, s);
+        return nb::make_tuple(result.first, result.second);
+      },
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Compute the eigenvalues and eigenvectors of a square matrix.
+
+        This function differs from :func:`numpy.linalg.eig` in that the
+        return type is always complex even if the eigenvalues are all real.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the eigenvalues and eigenvectors are
+        computed for each matrix in the last two dimensions.
+
+        Args:
+            a (array): The input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            Tuple[array, array]:
+              A tuple containing the eigenvalues and the normalized right
+              eigenvectors. The column ``v[:, i]`` is the eigenvector
+              corresponding to the i-th eigenvalue.
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> w, v = mx.linalg.eig(A, stream=mx.cpu)
+            >>> w
+            array([3+0j, -1+0j], dtype=complex64)
+            >>> v
+            array([[0.707107+0j, 0.707107+0j],
+                   [-0.707107+0j, 0.707107+0j]], dtype=complex64)
+      )pbdoc");
+
   m.def(
       "eigvalsh",
       &mx::linalg::eigvalsh,
