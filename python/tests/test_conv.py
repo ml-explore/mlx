@@ -1130,6 +1130,28 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
 
+    def test_basic_grad_shapes(self):
+        def loss_fn(kernel, inputs, strides, groups):
+            return mx.sum(
+                mx.conv_general(
+                    inputs,
+                    kernel,
+                    stride=strides,
+                    groups=groups,
+                )
+            )
+
+        for in_shape, k_shape, strides, groups in [
+            ((3, 5, 4), (6, 2, 2), (2,), 2),
+            ((3, 5, 4), (24, 2, 1), (2,), 4),
+            ((3, 5, 5, 4), (6, 2, 2, 2), (2, 1), 2),
+            ((3, 5, 5, 4), (24, 2, 2, 1), (2, 2), 4),
+        ]:
+            grads = mx.grad(loss_fn)(
+                mx.zeros(k_shape), mx.zeros(in_shape), strides, groups
+            )
+            self.assertEqual(grads.shape, k_shape)
+
 
 if __name__ == "__main__":
     unittest.main()
