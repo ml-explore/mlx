@@ -2022,6 +2022,15 @@ class TestArray(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.add(y, x)
 
+    def test_real_imag(self):
+        x = mx.array([1.0])
+        self.assertEqual(x.real.item(), 1.0)
+        self.assertEqual(x.imag.item(), 0.0)
+
+        x = mx.array([1.0 + 1.0j])
+        self.assertEqual(x.imag.item(), 1.0)
+        self.assertEqual(x.real.item(), 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

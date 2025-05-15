@@ -319,6 +319,18 @@ void init_array(nb::module_& m) {
           R"pbdoc(
             The array's :class:`Dtype`.
           )pbdoc")
+      .def_prop_ro(
+          "real",
+          [](const mx::array& a) { return mx::real(a); },
+          R"pbdoc(
+            The real part of a complex array.
+          )pbdoc")
+      .def_prop_ro(
+          "imag",
+          [](const mx::array& a) { return mx::imag(a); },
+          R"pbdoc(
+            The imaginary part of a complex array.
+          )pbdoc")
       .def(
           "item",
           &to_scalar,
