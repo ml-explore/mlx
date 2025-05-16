@@ -634,6 +634,7 @@ class TestVmap(mlx_tests.MLXTestCase):
         self.assertEqual(fy.shape, (4, 5, 6, 7))
 
     def test_leaks(self):
+        mx.synchronize()
         if mx.metal.is_available():
             mem_pre = mx.get_active_memory()
         else:
