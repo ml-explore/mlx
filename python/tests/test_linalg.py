@@ -423,6 +423,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         A_np = (A_np + np.transpose(A_np, (0, 2, 1))) / 2
         check_eigs_and_vecs(A_np)
 
+        # Test with complex inputs
+        A_np = (
+            np.random.randn(8, 8, 2).astype(np.float32).view(np.complex64).squeeze(-1)
+        )
+        A_np = A_np + A_np.T.conj()
+        check_eigs_and_vecs(A_np)
+
         # Test error cases
         with self.assertRaises(ValueError):
             mx.linalg.eigh(mx.array([1.0, 2.0]))  # 1D array
