@@ -3584,21 +3584,21 @@ Shape conv_out_shape(
 
   if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << "for "
+    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (kernel_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid kernel dilation " << kernel_dilation << "for "
+    msg << "[conv] Invalid kernel dilation " << kernel_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (input_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid input dilation " << input_dilation << "for "
+    msg << "[conv] Invalid input dilation " << input_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
