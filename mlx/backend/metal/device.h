@@ -95,8 +95,8 @@ struct CommandEncoder {
     return enc_->setBytes(&v, sizeof(T), idx);
   }
 
-  void set_threadgroup_memory_length(size_t length, NS::UInteger index) {
-    enc_->setThreadgroupMemoryLength(length, index);
+  void set_threadgroup_memory_length(size_t length, int idx) {
+    enc_->setThreadgroupMemoryLength(length, idx);
   }
 
   ConcurrentContext start_concurrent() {
