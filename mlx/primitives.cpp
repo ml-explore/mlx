@@ -3548,7 +3548,7 @@ std::vector<array> Reduce::vjp(
   }
 
   else {
-    throw std::runtime_error("Reduce type VJP not yet implemented.");
+    return {zeros_like(in, stream())};
   }
 }
 
