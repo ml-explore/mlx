@@ -140,6 +140,7 @@ NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
+NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
 namespace fast {
