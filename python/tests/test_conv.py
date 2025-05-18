@@ -1152,6 +1152,27 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             self.assertEqual(grads.shape, k_shape)
 
+    def test_1d_conv_with_2d(self):
+        x = mx.random.uniform(shape=(2, 10, 16))
+        y = mx.random.normal(shape=(16, 3, 16))
+
+        out = mx.conv1d(x, y, padding=1)
+        out_2d = mx.conv2d(
+            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        )
+
+        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+
+        x = mx.random.uniform(shape=(2, 10, 4))
+        y = mx.random.normal(shape=(4, 3, 4))
+
+        out = mx.conv1d(x, y, padding=1)
+        out_2d = mx.conv2d(
+            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        )
+
+        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+
 
 if __name__ == "__main__":
     unittest.main()
