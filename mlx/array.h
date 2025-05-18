@@ -224,6 +224,10 @@ class array {
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
+    Data(Data&& o) : buffer(o.buffer), d(o.d) {
+      o.buffer = allocator::Buffer(nullptr);
+      o.d = [](allocator::Buffer) {};
+    }
     ~Data() {
       d(buffer);
     }

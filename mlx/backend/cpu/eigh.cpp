@@ -12,6 +12,133 @@ namespace mlx::core {
 
 namespace {
 
+template <typename T, class Enable = void>
+struct EighWork {};
+
+template <typename T>
+struct EighWork<
+    T,
+    typename std::enable_if<std::is_floating_point<T>::value>::type> {
+  using R = T;
+
+  char jobz;
+  char uplo;
+  int N;
+  int lwork;
+  int liwork;
+  int info;
+  std::vector<array::Data> buffers;
+
+  EighWork(char jobz_, char uplo_, int N_)
+      : jobz(jobz_), uplo(uplo_), N(N_), lwork(-1), liwork(-1) {
+    T work;
+    int iwork;
+    syevd<T>(
+        &jobz,
+        &uplo,
+        &N,
+        nullptr,
+        &N,
+        nullptr,
+        &work,
+        &lwork,
+        &iwork,
+        &liwork,
+        &info);
+    lwork = static_cast<int>(work);
+    liwork = iwork;
+    buffers.emplace_back(allocator::malloc(sizeof(T) * lwork));
+    buffers.emplace_back(allocator::malloc(sizeof(int) * liwork));
+  }
+
+  void run(T* vectors, T* values) {
+    syevd<T>(
+        &jobz,
+        &uplo,
+        &N,
+        vectors,
+        &N,
+        values,
+        static_cast<T*>(buffers[0].buffer.raw_ptr()),
+        &lwork,
+        static_cast<int*>(buffers[1].buffer.raw_ptr()),
+        &liwork,
+        &info);
+  }
+};
+
+template <>
+struct EighWork<std::complex<float>> {
+  using T = std::complex<float>;
+  using R = float;
+
+  char jobz;
+  char uplo;
+  int N;
+  int lwork;
+  int lrwork;
+  int liwork;
+  int info;
+  std::vector<array::Data> buffers;
+
+  EighWork(char jobz_, char uplo_, int N_)
+      : jobz(jobz_), uplo(uplo_), N(N_), lwork(-1), lrwork(-1), liwork(-1) {
+    T work;
+    R rwork;
+    int iwork;
+    heevd<T>(
+        &jobz,
+        &uplo,
+        &N,
+        nullptr,
+        &N,
+        nullptr,
+        &work,
+        &lwork,
+        &rwork,
+        &lrwork,
+        &iwork,
+        &liwork,
+        &info);
+    lwork = static_cast<int>(work.real());
+    lrwork = static_cast<int>(rwork);
+    liwork = iwork;
+    buffers.emplace_back(allocator::malloc(sizeof(T) * lwork));
+    buffers.emplace_back(allocator::malloc(sizeof(R) * lrwork));
+    buffers.emplace_back(allocator::malloc(sizeof(int) * liwork));
+  }
+
+  void run(T* vectors, R* values) {
+    heevd<T>(
+        &jobz,
+        &uplo,
+        &N,
+        vectors,
+        &N,
+        values,
+        static_cast<T*>(buffers[0].buffer.raw_ptr()),
+        &lwork,
+        static_cast<R*>(buffers[1].buffer.raw_ptr()),
+        &lrwork,
+        static_cast<int*>(buffers[2].buffer.raw_ptr()),
+        &liwork,
+        &info);
+    if (jobz == 'V') {
+      // We have pre-transposed the vectors but we also must conjugate them
+      // when they are complex.
+      //
+      // We could vectorize this but it is so fast in comparison to heevd that
+      // it doesn't really matter.
+      for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+          *vectors = std::conj(*vectors);
+          vectors++;
+        }
+      }
+    }
+  }
+};
+
 template <typename T>
 void eigh_impl(
     array& vectors,
@@ -19,8 +146,10 @@ void eigh_impl(
     const std::string& uplo,
     bool compute_eigenvectors,
     Stream stream) {
+  using R = typename EighWork<T>::R;
+
   auto vec_ptr = vectors.data<T>();
-  auto eig_ptr = values.data<T>();
+  auto eig_ptr = values.data<R>();
   char jobz = compute_eigenvectors ? 'V' : 'N';
 
   auto& encoder = cpu::get_command_encoder(stream);
@@ -33,49 +162,17 @@ void eigh_impl(
                     N = vectors.shape(-1),
                     size = vectors.size()]() mutable {
     // Work query
-    int lwork = -1;
-    int liwork = -1;
-    int info;
-    {
-      T work;
-      int iwork;
-      syevd<T>(
-          &jobz,
-          &uplo,
-          &N,
-          nullptr,
-          &N,
-          nullptr,
-          &work,
-          &lwork,
-          &iwork,
-          &liwork,
-          &info);
-      lwork = static_cast<int>(work);
-      liwork = iwork;
-    }
+    EighWork<T> work(jobz, uplo, N);
 
-    auto work_buf = array::Data{allocator::malloc(sizeof(T) * lwork)};
-    auto iwork_buf = array::Data{allocator::malloc(sizeof(int) * liwork)};
+    // Work loop
     for (size_t i = 0; i < size / (N * N); ++i) {
-      syevd<T>(
-          &jobz,
-          &uplo,
-          &N,
-          vec_ptr,
-          &N,
-          eig_ptr,
-          static_cast<T*>(work_buf.buffer.raw_ptr()),
-          &lwork,
-          static_cast<int*>(iwork_buf.buffer.raw_ptr()),
-          &liwork,
-          &info);
+      work.run(vec_ptr, eig_ptr);
       vec_ptr += N * N;
       eig_ptr += N;
-      if (info != 0) {
+      if (work.info != 0) {
         std::stringstream msg;
         msg << "[Eigh::eval_cpu] Eigenvalue decomposition failed with error code "
-            << info;
+            << work.info;
         throw std::runtime_error(msg.str());
       }
     }
@@ -129,6 +226,10 @@ void Eigh::eval_cpu(
       break;
     case float64:
       eigh_impl<double>(
+          vectors, values, uplo_, compute_eigenvectors_, stream());
+      break;
+    case complex64:
+      eigh_impl<std::complex<float>>(
           vectors, values, uplo_, compute_eigenvectors_, stream());
       break;
     default:
