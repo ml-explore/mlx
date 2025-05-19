@@ -182,8 +182,8 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
         (thread_group_size + simd_size - 1) / simd_size * simd_size;
     assert(thread_group_size <= kernel->maxTotalThreadsPerThreadgroup());
 
-    size_t n_threads = out.size() * thread_group_size;
-    MTL::Size grid_dims = MTL::Size(n_threads, 1, 1);
+    auto gd = get_2d_grid_dims(out.shape(), out.strides());
+    MTL::Size grid_dims = MTL::Size(thread_group_size, gd.width, gd.height);
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
