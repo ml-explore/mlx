@@ -81,9 +81,6 @@ class TestUpsample(mlx_tests.MLXTestCase):
                     ((11, 21), (3.0, 3.0)),
                     ((11, 21), (3.0, 2.0)),
                 ):
-                    # only test linear and cubic interpolation
-                    # there will be numerical difference in nearest
-                    # due to different indices selection.
                     for mode in ("cubic", "linear", "nearest"):
                         for align_corner in (False, True):
                             if mode == "nearest" and align_corner:
