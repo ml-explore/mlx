@@ -12,7 +12,7 @@ from mlx.nn.layers.base import Module
 def _scaled_indices(N, scale, align_corners, dim, ndims):
     M = int(scale * N)
     if align_corners:
-        indices = ((mx.arange(M, dtype=mx.float32) + 0.5) * (N / M) - 0.5).round()
+        indices = (mx.arange(M, dtype=mx.float32) + 0.5) * (N / M) - 0.5
     else:
         step = 1 / scale
         start = ((M - 1) * step - N + 1) / 2
@@ -25,7 +25,7 @@ def _scaled_indices(N, scale, align_corners, dim, ndims):
 
 
 def _nearest_indices(N, scale, dim, ndims):
-    return _scaled_indices(N, scale, True, dim, ndims).astype(mx.uint32)
+    return _scaled_indices(N, scale, True, dim, ndims).round().astype(mx.uint32)
 
 
 def _linear_indices(N, scale, align_corners, dim, ndims):
