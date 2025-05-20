@@ -28,7 +28,8 @@ macro(mlx_build_metallib)
   # Collect compile options
   set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
   if(MLX_METAL_DEBUG OR MTLLIB_DEBUG)
-    set(MTLLIB_COMPILE_OPTIONS ${MTLLIB_COMPILE_OPTIONS} -gline-tables-only -frecord-sources)
+    set(MTLLIB_COMPILE_OPTIONS ${MTLLIB_COMPILE_OPTIONS} -gline-tables-only
+                               -frecord-sources)
   endif()
 
   # Prepare metallib build command
