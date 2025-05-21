@@ -128,8 +128,8 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
-        vals[i] = (offset + i < axis_size) ? AccT(in[offset + i])
-                                           : Limits<AccT>::finite_min;
+        vals[i] =
+            (offset + i < axis_size) ? AccT(in[offset + i]) : Limits<AccT>::min;
       }
     }
     prevmax = maxval;

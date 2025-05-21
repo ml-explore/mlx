@@ -103,8 +103,8 @@ template <typename T, typename AccT = float, int N_READS = 4>
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
-        vals[i] = (offset + i < axis_size) ? AccT(in[offset + i])
-                                           : Limits<AccT>::finite_min;
+        vals[i] =
+            (offset + i < axis_size) ? AccT(in[offset + i]) : Limits<AccT>::min;
       }
     }
     prevmax = maxval;
