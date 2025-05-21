@@ -134,10 +134,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   normalizer = simd_sum(local_normalizer[simd_lane_id]);
 
-  if (simd_group_id == 0) {
-    normalizer = simd_sum(local_normalizer[simd_lane_id]);
-    if (simd_lane_id == 0) {
-      out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
-    }
+  if (lid == 0) {
+    out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
   }
 }
