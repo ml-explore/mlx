@@ -25,7 +25,7 @@ target_compile_options(mlx
 # Compute capability 7 is required for synchronization between CPU/GPU with
 # managed memory. TODO: Add more architectures for potential performance gain.
 set(MLX_CUDA_ARCHITECTURES
-    "75;80"
+    "70;80"
     CACHE STRING "CUDA architectures")
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
