@@ -15,6 +15,16 @@
 
 namespace mlx::core {
 
+// Like MLX_SWITCH_ALL_TYPES but for booleans.
+#define MLX_SWITCH_BOOL(BOOL, BOOL_ALIAS, ...) \
+  if (BOOL) {                                  \
+    constexpr bool BOOL_ALIAS = true;          \
+    __VA_ARGS__;                               \
+  } else {                                     \
+    constexpr bool BOOL_ALIAS = false;         \
+    __VA_ARGS__;                               \
+  }
+
 // Helper macros for dispatch macros (see below).
 #define MLX_INTERNAL_IF_CASE(DIM, BLOCK_DIM, ...) \
   }                                               \

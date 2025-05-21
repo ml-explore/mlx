@@ -13,12 +13,16 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gather.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gather_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/segmented_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scatter.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scatter_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
@@ -31,11 +35,22 @@ target_compile_definitions(mlx PUBLIC MLX_USE_CUDA)
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 
+# Ignore uncommon types in ops to speed up compilation.
+if(MLX_FAST_COMPILE)
+  target_compile_definitions(mlx PUBLIC MLX_FAST_COMPILE)
+endif()
+
 # Compute capability 7 is required for synchronization between CPU/GPU with
 # managed memory. TODO: Add more architectures for potential performance gain.
-set(MLX_CUDA_ARCHITECTURES
-    "70;80"
-    CACHE STRING "CUDA architectures")
+if(MLX_FAST_COMPILE)
+  set(MLX_CUDA_ARCHITECTURES
+      "70"
+      CACHE STRING "CUDA architectures")
+else()
+  set(MLX_CUDA_ARCHITECTURES
+      "70;80"
+      CACHE STRING "CUDA architectures")
+endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
