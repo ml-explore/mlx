@@ -10,6 +10,10 @@
 
 namespace mlx::core::fast {
 
+bool RMSNorm::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
+
 void RMSNorm::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -205,6 +209,10 @@ void RMSNormVJP::eval_gpu(
     strided_reduce_general_dispatch(
         gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
   }
+}
+
+bool LayerNorm::use_fallback(Stream s) {
+  return s.device == Device::cpu;
 }
 
 void LayerNorm::eval_gpu(
