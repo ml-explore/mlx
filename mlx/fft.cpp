@@ -1,4 +1,6 @@
 // Copyright © 2023 Apple Inc.
+
+#include <cmath>
 #include <numeric>
 #include <set>
 
@@ -189,6 +191,124 @@ array irfftn(const array& a, StreamOrDevice s /* = {} */) {
   return fft_impl(a, true, true, s);
 }
 
+array stft(
+    const array& x,
+    int n_fft = 2048,
+    int hop_length = -1,
+    int win_length = -1,
+    const array& window,
+    bool center = true,
+    const std::string& pad_mode = "reflect",
+    bool normalized = false,
+    bool onesided = true,
+    StreamOrDevice s /* = {} */) {
+  if (hop_length == -1)
+    hop_length = n_fft / 4;
+  if (win_length == -1)
+    win_length = n_fft;
+
+  array win = (window.size() == 0) ? ones({win_length}, float32, s) : window;
+
+  if (win_length < n_fft) {
+    int pad_left = (n_fft - win_length) / 2;
+    int pad_right = n_fft - win_length - pad_left;
+    win = mlx::core::pad(
+        win, {{pad_left, pad_right}}, array(0, float32), "constant", s);
+  }
+
+  array padded_x = x;
+  if (center) {
+    int pad_width = n_fft / 2;
+    padded_x = mlx::core::pad(
+        padded_x, {{pad_width, pad_width}}, array(0, x.dtype()), pad_mode, s);
+  }
+
+  int n_frames = 1 + (padded_x.shape(0) - n_fft) / hop_length;
+
+  Shape strided_shape = {n_frames, n_fft};
+  Strides strided_strides = {
+      hop_length * static_cast<long long>(sizeof(float32)),
+      static_cast<long long>(sizeof(float32))};
+  array frames = as_strided(padded_x, strided_shape, strided_strides, 0, s);
+
+  array stacked_frames = multiply(frames, win, s);
+  array stft_result = mlx::core::fft::rfftn(stacked_frames, {n_fft}, {-1}, s);
+
+  if (normalized) {
+    array n_fft_array = full({1}, static_cast<float>(n_fft), float32, s);
+    stft_result = divide(stft_result, sqrt(n_fft_array, s), s);
+  }
+
+  if (onesided) {
+    stft_result = slice(stft_result, {}, {n_fft / 2 + 1}, s);
+  }
+
+  return stft_result;
+}
+
+array istft(
+    const array& stft_matrix,
+    int hop_length = -1,
+    int win_length = -1,
+    const array& window,
+    bool center = true,
+    int length = -1,
+    bool normalized = false,
+    StreamOrDevice s /* = {} */) {
+  int n_fft = (stft_matrix.shape(-1) - 1) * 2;
+  if (hop_length == -1)
+    hop_length = n_fft / 4;
+  if (win_length == -1)
+    win_length = n_fft;
+
+  array win = (window.size() == 0) ? ones({win_length}, float32, s) : window;
+
+  if (win_length < n_fft) {
+    int pad_left = (n_fft - win_length) / 2;
+    int pad_right = n_fft - win_length - pad_left;
+    win = mlx::core::pad(
+        win, {{pad_left, pad_right}}, array(0, float32), "constant", s);
+  }
+
+  array frames = mlx::core::fft::irfftn(stft_matrix, {n_fft}, {-1}, s);
+  frames = multiply(frames, win, s);
+
+  int signal_length = (frames.shape(0) - 1) * hop_length + n_fft;
+  array signal = zeros({signal_length}, float32, s);
+  array window_sum = zeros({signal_length}, float32, s);
+
+  Shape strided_shape = {frames.shape(0), n_fft};
+  Strides strided_strides = {
+      hop_length * static_cast<long long>(sizeof(float32)),
+      static_cast<long long>(sizeof(float32))};
+  array signal_strided =
+      as_strided(signal, strided_shape, strided_strides, 0, s);
+  array window_sum_strided =
+      as_strided(window_sum, strided_shape, strided_strides, 0, s);
+
+  signal_strided = add(signal_strided, frames, s);
+  window_sum_strided = add(window_sum_strided, win, s);
+
+  signal = divide(signal, window_sum, s);
+
+  if (center) {
+    int pad_width = n_fft / 2;
+    signal = slice(signal, {pad_width}, {signal.shape(0) - pad_width}, s);
+  }
+
+  if (length > 0) {
+    if (signal.shape(0) > length) {
+      signal = slice(signal, {0}, {length}, s);
+    } else if (signal.shape(0) < length) {
+      int pad_length = length - signal.shape(0);
+      signal = mlx::core::pad(
+          signal, {{0, pad_length}}, array(0, signal.dtype()), "constant", s);
+    }
+  }
+
+  return signal;
+}
+
 array fftshift(
     const array& a,
     const std::vector<int>& axes,
@@ -258,5 +378,4 @@ array ifftshift(const array& a, StreamOrDevice s /* = {} */) {
   std::iota(axes.begin(), axes.end(), 0);
   return ifftshift(a, axes, s);
 }
-
 } // namespace mlx::core::fft
