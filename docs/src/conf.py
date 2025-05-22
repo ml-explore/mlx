@@ -10,7 +10,7 @@ import mlx.core as mx
 # -- Project information -----------------------------------------------------
 
 project = "MLX"
-copyright = "2023, MLX Contributors"
+copyright = "2023, Apple"
 author = "MLX Contributors"
 version = ".".join(mx.__version__.split(".")[:3])
 release = version
