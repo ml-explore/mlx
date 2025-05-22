@@ -7,6 +7,10 @@ namespace mlx::core::fast {
 
 constexpr int n_per_thread = 4;
 
+bool RoPE::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
+
 void RoPE::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
