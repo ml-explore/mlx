@@ -231,6 +231,9 @@ target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
 
+# Do not add mlx_EXPORTS define for shared library.
+set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
+
 FetchContent_Declare(
   fmt
   GIT_REPOSITORY https://github.com/fmtlib/fmt.git
