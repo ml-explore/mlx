@@ -2863,29 +2863,29 @@ array matmul(
     throw std::invalid_argument(msg.str());
   }
 
-// complex matmul using Karatsuba's Algorithm
+  // complex matmul using Karatsuba's Algorithm
 
-if (a.dtype() == complex64 && b.dtype() == complex64) {
-  // Extract real and imaginary parts
-  auto a_real = real(a, s);
-  auto a_imag = imag(a, s);
-  auto b_real = real(b, s);
-  auto b_imag = imag(b, s);
+  if (a.dtype() == complex64 && b.dtype() == complex64) {
+    // Extract real and imaginary parts
+    auto a_real = real(a, s);
+    auto a_imag = imag(a, s);
+    auto b_real = real(b, s);
+    auto b_imag = imag(b, s);
 
-  // Compute real and imaginary components of the result
-  auto m1 = matmul(a_real, b_real, s);
-  auto m2 = matmul(a_imag, b_imag, s);
-  auto m3 = matmul(add(a_real, a_imag, s), add(b_real, b_imag, s), s);
+    // Compute real and imaginary components of the result
+    auto m1 = matmul(a_real, b_real, s);
+    auto m2 = matmul(a_imag, b_imag, s);
+    auto m3 = matmul(add(a_real, a_imag, s), add(b_real, b_imag, s), s);
 
-  auto c_real = subtract(m1, m2, s);
-  auto c_imag = subtract(m3, add(m1, m2, s), s);
+    auto c_real = subtract(m1, m2, s);
+    auto c_imag = subtract(m3, add(m1, m2, s), s);
 
-  return add(c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
-}
+    return add(
+        c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
+  }
 
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
- 
 
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
