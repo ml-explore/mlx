@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/stream.h"
 
+#include <cublasLt.h>
 #include <thrust/execution_policy.h>
 
 #include <unordered_map>
@@ -46,6 +47,7 @@ class DeviceStream {
 class Device {
  public:
   explicit Device(int device);
+  ~Device();
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -58,9 +60,17 @@ class Device {
   int cuda_device() const {
     return device_;
   }
+  int compute_capability_major() const {
+    return compute_capability_major_;
+  }
+  cublasLtHandle_t lt_handle() const {
+    return lt_;
+  }
 
  private:
   int device_;
+  int compute_capability_major_;
+  cublasLtHandle_t lt_;
   std::unordered_map<int, DeviceStream> streams_;
 };
 

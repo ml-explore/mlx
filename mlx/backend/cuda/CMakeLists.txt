@@ -6,13 +6,29 @@
 target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/binary.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gather.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gather_axis.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce/segmented_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scatter.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scatter_axis.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
@@ -20,11 +36,22 @@ target_sources(
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 
+# Ignore uncommon types in ops to speed up compilation.
+if(MLX_FAST_COMPILE)
+  target_compile_definitions(mlx PUBLIC MLX_FAST_COMPILE)
+endif()
+
 # Compute capability 7 is required for synchronization between CPU/GPU with
 # managed memory. TODO: Add more architectures for potential performance gain.
-set(MLX_CUDA_ARCHITECTURES
-    "70;80"
-    CACHE STRING "CUDA architectures")
+if(MLX_FAST_COMPILE)
+  set(MLX_CUDA_ARCHITECTURES
+      "70"
+      CACHE STRING "CUDA architectures")
+else()
+  set(MLX_CUDA_ARCHITECTURES
+      "70;80"
+      CACHE STRING "CUDA architectures")
+endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
@@ -49,6 +76,9 @@ target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:nvtx3-cpp>)
 # Make cuda runtime APIs available in non-cuda files.
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+
+# Use cublasLt.
+target_link_libraries(mlx PRIVATE CUDA::cublasLt_static)
 
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe

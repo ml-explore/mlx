@@ -34,14 +34,24 @@ CommandEncoder& DeviceStream::get_encoder() {
 }
 
 Device::Device(int device) : device_(device) {
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &compute_capability_major_, cudaDevAttrComputeCapabilityMajor, device_));
   // Validate the requirements of device.
   int attr = 0;
-  cudaDeviceGetAttribute(&attr, cudaDevAttrConcurrentManagedAccess, device_);
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &attr, cudaDevAttrConcurrentManagedAccess, device_));
   if (attr != 1) {
     throw std::runtime_error(fmt::format(
         "Device {} does not support synchronization in managed memory.",
         device_));
   }
+  // The cublasLt handle is used by matmul.
+  make_current();
+  cublasLtCreate(&lt_);
+}
+
+Device::~Device() {
+  cublasLtDestroy(lt_);
 }
 
 void Device::make_current() {

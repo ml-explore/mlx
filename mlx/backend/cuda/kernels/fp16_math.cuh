@@ -2,12 +2,183 @@
 
 #pragma once
 
+#include <cuComplex.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace mlx::core::cu {
+
+///////////////////////////////////////////////////////////////////////////////
+// Constant values for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#define MLX_DEFINE_CONSTEXPR_VALUE(NAME, HALF_VALUE, BF16_VALUE, ...) \
+  template <typename T>                                               \
+  constexpr __host__ __device__ T NAME() {                            \
+    if constexpr (cuda::std::is_same_v<T, __half>) {                  \
+      uint16_t value = HALF_VALUE;                                    \
+      return __builtin_bit_cast(__half, value);                       \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {    \
+      uint16_t value = BF16_VALUE;                                    \
+      return __builtin_bit_cast(__nv_bfloat16, value);                \
+    } else {                                                          \
+      __VA_ARGS__                                                     \
+    }                                                                 \
+  }
+
+MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{0, 0};
+  } else {
+    return 0;
+  }
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{1, 1};
+  } else {
+    return 1;
+  }
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, {
+  return cuda::std::numeric_limits<T>::infinity();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, {
+  return -cuda::std::numeric_limits<T>::infinity();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(max_value, 0x7BFF, 0x7F7F, {
+  return cuda::std::numeric_limits<T>::max();
+})
+
+MLX_DEFINE_CONSTEXPR_VALUE(lowest_value, 0xFBFF, 0xFF7F, {
+  return cuda::std::numeric_limits<T>::lowest();
+})
+
+#undef MLX_DEFINE_CONSTEXPR_VALUE
+
+///////////////////////////////////////////////////////////////////////////////
+// Unary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)           \
+  template <typename T>                              \
+  __forceinline__ __device__ auto NAME(T x) {        \
+    if constexpr (cuda::std::is_same_v<T, __half>) { \
+      return HALF_OP(x);                             \
+    } else {                                         \
+      return ::NAME(x);                              \
+    }                                                \
+  }
+#else
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)                         \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x) {                      \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x);                                           \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x);                                           \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
+  }
+#endif
+
+#define MLX_DEFINE_UNARY_OP_FALLBCK(NAME)                          \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x) {                      \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return ::NAME(__half2float(x));                              \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return ::NAME(__bfloat162float(x));                          \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
+  }
+
+MLX_DEFINE_UNARY_OP(abs, __habs)
+MLX_DEFINE_UNARY_OP(ceil, hceil)
+MLX_DEFINE_UNARY_OP(cos, hcos)
+MLX_DEFINE_UNARY_OP(exp, hexp)
+MLX_DEFINE_UNARY_OP(floor, hfloor)
+MLX_DEFINE_UNARY_OP(isnan, __hisnan)
+MLX_DEFINE_UNARY_OP(log, hlog)
+MLX_DEFINE_UNARY_OP(log2, hlog2)
+MLX_DEFINE_UNARY_OP(log10, hlog10)
+MLX_DEFINE_UNARY_OP(rint, hrint)
+MLX_DEFINE_UNARY_OP(rsqrt, hrsqrt)
+MLX_DEFINE_UNARY_OP(sin, hsin)
+MLX_DEFINE_UNARY_OP(sqrt, hsqrt)
+MLX_DEFINE_UNARY_OP_FALLBCK(acos)
+MLX_DEFINE_UNARY_OP_FALLBCK(acosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(asin)
+MLX_DEFINE_UNARY_OP_FALLBCK(asinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(atan)
+MLX_DEFINE_UNARY_OP_FALLBCK(atanh)
+MLX_DEFINE_UNARY_OP_FALLBCK(cosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(log1p)
+MLX_DEFINE_UNARY_OP_FALLBCK(sinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(tan)
+#if __CUDA_ARCH__ >= 1280
+MLX_DEFINE_UNARY_OP(tanh, htanh)
+#else
+MLX_DEFINE_UNARY_OP_FALLBCK(tanh)
+#endif
+
+#undef MLX_DEFINE_UNARY_OP
+#undef MLX_DEFINE_UNARY_OP_FALLBCK
+
+///////////////////////////////////////////////////////////////////////////////
+// Binary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
+
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)          \
+  template <typename T>                              \
+  __forceinline__ __device__ auto NAME(T x, T y) {   \
+    if constexpr (cuda::std::is_same_v<T, __half>) { \
+      return HALF_OP(x, y);                          \
+    } else {                                         \
+      return ::NAME(x, y);                           \
+    }                                                \
+  }
+#else
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)                        \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x, T y) {                 \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x, y);                                        \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x, y);                                        \
+    } else {                                                       \
+      return ::NAME(x, y);                                         \
+    }                                                              \
+  }
+#endif
+
+MLX_DEFINE_BINARY_OP(max, __hmax)
+MLX_DEFINE_BINARY_OP(min, __hmin)
+
+#undef MLX_DEFINE_BINARY_OP
+
+template <typename T>
+__forceinline__ __device__ T fmod(T x, T y) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __float2half(::fmod(__half2float(x), __half2float(y)));
+#if CUDART_VERSION >= 12000 || __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __float2bfloat16(::fmod(__bfloat162float(x), __bfloat162float(y)));
+#endif
+  } else {
+    return ::fmod(x, y);
+  }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Additional C++ operator overrides between half types and native types.

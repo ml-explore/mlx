@@ -8,6 +8,8 @@
 
 namespace mlx::core {
 
+std::string get_primitive_string(Primitive* primitive);
+
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
   int64_t loc = 0;
@@ -60,6 +62,13 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
   return collapse_contiguous_dims(
       std::vector<array>{std::forward<Arrays>(xs)...});
 }
+
+std::tuple<Shape, Strides, Strides> collapse_batches(
+    const array& a,
+    const array& b);
+
+std::tuple<Shape, Strides, Strides, Strides>
+collapse_batches(const array& a, const array& b, const array& c);
 
 // The single array version of the above.
 std::pair<Shape, Strides> collapse_contiguous_dims(

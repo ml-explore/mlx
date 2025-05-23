@@ -1,9 +1,10 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/dtype_utils.cuh"
+#include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/kernels/arange.cuh"
 #include "mlx/backend/cuda/kernels/fp16_math.cuh"
+#include "mlx/backend/cuda/kernels/random.cuh"
 #include "mlx/distributed/primitives.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
@@ -43,6 +44,59 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("RandomBits::eval_gpu");
+  assert(inputs.size() == 1);
+
+  // keys has shape (N1, ..., NK, 2)
+  // out has shape (N1, ..., NK, M1, M2, ...)
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+
+  size_t elems_per_key = out.size() / num_keys;
+  size_t bytes_per_key = out.itemsize() * elems_per_key;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  size_t out_per_key = (bytes_per_key + 4 - 1) / 4;
+  size_t half_size = out_per_key / 2;
+  bool odd = out_per_key % 2;
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  encoder.launch_kernel([&](cudaStream_t stream) {
+    dim3 grid_dim{
+        static_cast<uint32_t>(num_keys),
+        static_cast<uint32_t>(half_size + odd)};
+    dim3 block_dim = get_block_dims(grid_dim.x, grid_dim.y, 1);
+    dim3 num_blocks{
+        cuda::ceil_div(grid_dim.x, block_dim.x),
+        cuda::ceil_div(grid_dim.y, block_dim.y)};
+    if (keys.flags().row_contiguous) {
+      cu::rbitsc<<<num_blocks, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          grid_dim,
+          odd,
+          bytes_per_key);
+    } else {
+      cu::rbits<<<num_blocks, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          grid_dim,
+          odd,
+          bytes_per_key,
+          keys.ndim(),
+          const_param(keys.shape()),
+          const_param(keys.strides()));
+    }
+  });
+}
+
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
@@ -54,98 +108,32 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
-NO_GPU(Abs)
-NO_GPU(Add)
-NO_GPU(AddMM)
-NO_GPU(ArcCos)
-NO_GPU(ArcCosh)
-NO_GPU(ArcSin)
-NO_GPU(ArcSinh)
-NO_GPU(ArcTan)
-NO_GPU(ArcTan2)
-NO_GPU(ArcTanh)
 NO_GPU(ArgPartition)
-NO_GPU(ArgReduce)
-NO_GPU(ArgSort)
-NO_GPU(BitwiseBinary)
-NO_GPU(BitwiseInvert)
 NO_GPU(BlockMaskedMM)
-NO_GPU(Ceil)
 NO_GPU_MULTI(Compiled)
-NO_GPU(Conjugate)
 NO_GPU(Convolution)
-NO_GPU(Cos)
-NO_GPU(Cosh)
-NO_GPU(Divide)
 NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)
 NO_GPU(DynamicSliceUpdate)
-NO_GPU(Remainder)
-NO_GPU(Equal)
-NO_GPU(Erf)
-NO_GPU(ErfInv)
-NO_GPU(Exp)
-NO_GPU(Expm1)
 NO_GPU(FFT)
-NO_GPU(Floor)
-NO_GPU(Gather)
-NO_GPU(GatherAxis)
 NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
-NO_GPU(Greater)
-NO_GPU(GreaterEqual)
 NO_GPU(Hadamard)
-NO_GPU(Imag)
-NO_GPU(Less)
-NO_GPU(LessEqual)
 NO_GPU(Load)
-NO_GPU(Log)
-NO_GPU(Log1p)
-NO_GPU(LogicalNot)
-NO_GPU(LogicalAnd)
-NO_GPU(LogicalOr)
-NO_GPU(LogAddExp)
-NO_GPU(LogSumExp)
 NO_GPU_MULTI(LUF)
-NO_GPU(Matmul)
-NO_GPU(Maximum)
-NO_GPU(Minimum)
-NO_GPU(Multiply)
-NO_GPU(Negative)
-NO_GPU(NotEqual)
 NO_GPU(Partition)
-NO_GPU(Power)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
-NO_GPU(RandomBits)
-NO_GPU(Real)
-NO_GPU(Reduce)
-NO_GPU(Round)
 NO_GPU(Scan)
-NO_GPU(Scatter)
-NO_GPU(ScatterAxis)
 NO_GPU(Select)
-NO_GPU(Sigmoid)
-NO_GPU(Sign)
-NO_GPU(Sin)
-NO_GPU(Sinh)
 NO_GPU(SliceUpdate)
-NO_GPU(Softmax)
-NO_GPU(Sort)
-NO_GPU(Square)
-NO_GPU(Sqrt)
-NO_GPU(Subtract)
 NO_GPU_MULTI(SVD)
-NO_GPU(Tan)
-NO_GPU(Tanh)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
 namespace fast {
-NO_GPU_MULTI(LayerNorm)
-NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_MULTI(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_MULTI(RoPE)
