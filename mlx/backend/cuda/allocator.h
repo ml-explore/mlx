@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/buffer_cache.h"
 
 #include <mutex>
 #include <set>
@@ -38,10 +39,15 @@ class CudaAllocator : public allocator::Allocator {
   void reset_peak_memory();
   size_t get_memory_limit();
   size_t set_memory_limit(size_t limit);
+  size_t get_cache_memory() const;
+  size_t set_cache_limit(size_t limit);
+  void clear_cache();
 
  private:
   CudaAllocator();
   friend CudaAllocator& allocator();
+
+  void cuda_free(CudaBuffer* buf);
 
   std::mutex worker_mutex_;
   std::unique_ptr<Worker> worker_;
@@ -49,6 +55,8 @@ class CudaAllocator : public allocator::Allocator {
 
   std::mutex mutex_;
   size_t memory_limit_;
+  size_t max_pool_size_;
+  BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
 };
