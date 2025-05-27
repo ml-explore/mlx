@@ -875,6 +875,43 @@ std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
   return {{linalg::cholesky(a, upper_, stream())}, {ax}};
 }
 
+std::pair<std::vector<array>, std::vector<int>> Eig::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+
+  bool needs_move = axes[0] >= (inputs[0].ndim() - 2);
+  auto a = needs_move ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  auto ax = needs_move ? 0 : axes[0];
+
+  std::vector<array> outputs;
+  if (compute_eigenvectors_) {
+    auto [values, vectors] = linalg::eig(a, stream());
+    outputs = {values, vectors};
+  } else {
+    outputs = {linalg::eigvals(a, stream())};
+  }
+
+  return {outputs, std::vector<int>(outputs.size(), ax)};
+}
+
+std::vector<Shape> Eig::output_shapes(const std::vector<array>& inputs) {
+  auto shape = inputs[0].shape();
+  shape.pop_back(); // Remove last dimension for eigenvalues
+  if (compute_eigenvectors_) {
+    return {
+        std::move(shape), inputs[0].shape()}; // Eigenvalues and eigenvectors
+  } else {
+    return {std::move(shape)}; // Only eigenvalues
+  }
+}
+
+bool Eig::is_equivalent(const Primitive& other) const {
+  auto& e_other = static_cast<const Eig&>(other);
+  return compute_eigenvectors_ == e_other.compute_eigenvectors_;
+}
+
 std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -1055,7 +1092,8 @@ array conv_weight_backward_patches(
     const array& wt,
     const array& cotan,
     const std::vector<int>& kernel_strides,
-    const std::vector<int>& padding,
+    const std::vector<int>& padding_lo,
+    const std::vector<int>& padding_hi,
     StreamOrDevice s) {
   // Resolve Padded input shapes and strides
   Shape padding_starts(in.ndim(), 0);
@@ -1064,9 +1102,9 @@ array conv_weight_backward_patches(
 
   // padded shape
   for (int i = 1; i < in.ndim() - 1; i++) {
-    in_padded_shape[i] += 2 * padding[i - 1];
-    padding_ends[i] += padding[i - 1];
-    padding_starts[i] += padding[i - 1];
+    in_padded_shape[i] += padding_lo[i - 1] + padding_hi[i - 1];
+    padding_ends[i] += padding_lo[i - 1];
+    padding_starts[i] += padding_lo[i - 1];
   }
 
   // padded strides (contiguous)
@@ -1078,9 +1116,14 @@ array conv_weight_backward_patches(
   // Pad input
   std::vector<int> padded_axes(in.ndim() - 2, 0);
   std::iota(padded_axes.begin(), padded_axes.end(), 1);
-  Shape padding_(padding.begin(), padding.end());
-  auto in_padded = pad(
-      in, padded_axes, padding_, padding_, array(0, in.dtype()), "constant", s);
+  auto in_padded =
+      pad(in,
+          padded_axes,
+          Shape(padding_lo),
+          Shape(padding_hi),
+          array(0, in.dtype()),
+          "constant",
+          s);
 
   // Resolve strided patches
 
@@ -1147,16 +1190,16 @@ std::vector<array> Convolution::vjp(
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
-      std::vector<int> padding_lo = padding_;
-      std::vector<int> padding_hi = padding_;
+      std::vector<int> padding_lo = padding_lo_;
+      std::vector<int> padding_hi = padding_hi_;
 
       for (int i = 0; i < padding_lo.size(); ++i) {
         int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-        padding_lo[i] = wt_size - padding_[i] - 1;
+        padding_lo[i] = wt_size - padding_lo_[i] - 1;
 
         int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
         int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
-        padding_hi[i] = in_size - out_size + padding_[i];
+        padding_hi[i] = in_size - out_size + padding_hi_[i];
       }
 
       // Check for negative padding
@@ -1226,18 +1269,18 @@ std::vector<array> Convolution::vjp(
 
       if (no_dilation && !flip_ && groups_ == 1) {
         auto grad = conv_weight_backward_patches(
-            in, wt, cotan, kernel_strides_, padding_, stream());
+            in, wt, cotan, kernel_strides_, padding_lo_, padding_hi_, stream());
         grads.push_back(grad);
       } else {
-        std::vector<int> padding_lo = padding_;
-        std::vector<int> padding_hi = padding_;
+        auto padding_hi = padding_lo_;
 
         for (int i = 0; i < padding_hi.size(); ++i) {
           int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
           int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
           int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-          padding_hi[i] = out_size - in_size + wt_size - padding_[i] - 1;
+          padding_hi[i] = out_size - in_size + wt_size - padding_hi[i] - 1;
         }
+
         auto cotan_trans = swapaxes(cotan, 0, -1, stream());
         auto in_trans = group_transpose(in, -1, 0, -1);
 
@@ -1245,7 +1288,7 @@ std::vector<array> Convolution::vjp(
             /* const array& input = */ in_trans,
             /* const array& weight = */ cotan_trans,
             /* std::vector<int> stride = */ kernel_dilation_,
-            /* std::vector<int> padding_lo = */ padding_lo,
+            /* std::vector<int> padding_lo = */ padding_lo_,
             /* std::vector<int> padding_hi = */ padding_hi,
             /* std::vector<int> kernel_dilation = */ kernel_strides_,
             /* std::vector<int> input_dilation = */ input_dilation_,
@@ -1283,7 +1326,8 @@ std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
         in,
         w,
         kernel_strides_,
-        padding_,
+        padding_lo_,
+        padding_hi_,
         kernel_dilation_,
         input_dilation_,
         groups,
@@ -1332,7 +1376,8 @@ std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
 
 bool Convolution::is_equivalent(const Primitive& other) const {
   const Convolution& c_other = static_cast<const Convolution&>(other);
-  return padding_ == c_other.padding_ &&
+  return padding_lo_ == c_other.padding_lo_ &&
+      padding_hi_ == c_other.padding_hi_ &&
       kernel_strides_ == c_other.kernel_strides_ &&
       kernel_dilation_ == c_other.kernel_dilation_ &&
       input_dilation_ == c_other.input_dilation_ &&
@@ -1484,14 +1529,16 @@ std::vector<array> Divide::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
+  array denominator_bar = conjugate(primals[1], stream());
   for (auto arg : argnums) {
     if (arg == 0) {
-      vjps.push_back(divide(cotangents[0], primals[1], stream()));
+      vjps.push_back(divide(cotangents[0], denominator_bar, stream()));
     } else {
       vjps.push_back(negative(
           divide(
-              multiply(cotangents[0], primals[0], stream()),
-              square(primals[1], stream()),
+              multiply(
+                  cotangents[0], conjugate(primals[0], stream()), stream()),
+              square(denominator_bar, stream()),
               stream()),
           stream()));
     }
@@ -1946,30 +1993,74 @@ std::vector<array> FFT::vjp(
   assert(argnums.size() == 1);
   auto& in = primals[0];
   std::vector<int> axes(axes_.begin(), axes_.end());
+
+  // TODO: Add it as an option to do an unnormalized or scaled fft so that this
+  //       isn't part of the graph.
+  double n_elements = 1;
+  for (auto ax : axes) {
+    n_elements *= inverse_ ? cotangents[0].shape(ax) : primals[0].shape(ax);
+  }
+
   if (real_ && inverse_) {
-    auto out = fft::fftn(cotangents[0], axes, stream());
-    auto start = Shape(out.ndim(), 0);
-    auto stop = in.shape();
-    out = slice(out, start, stop, stream());
-    auto mask_shape = out.shape();
-    mask_shape[axes_.back()] -= 2;
-    auto mask = full(mask_shape, 2.0f, stream());
-    auto pad_shape = out.shape();
-    pad_shape[axes_.back()] = 1;
-    auto pad = full(pad_shape, 1.0f, stream());
-    mask = concatenate({pad, mask, pad}, axes_.back(), stream());
-    return {multiply(mask, out, stream())};
+    // Make a mask to account for the double use in the forward pass.
+    // Everything except the DC and nyquist frequencies gets doubled.
+    int N = in.shape(axes_.back());
+    bool odd = cotangents[0].shape(axes_.back()) % 2;
+    Shape c(in.ndim(), 1);
+    c[axes_.back()] = N;
+    array indices = reshape(arange(N, stream()), std::move(c), stream());
+    array first(0, indices.dtype());
+    array last(N - 1 + odd, indices.dtype());
+    array one(1 / n_elements, in.dtype());
+    array two(2 / n_elements, in.dtype());
+    array mask = where(
+        logical_and(
+            greater(indices, first, stream()),
+            less(indices, last, stream()),
+            stream()),
+        two,
+        one,
+        stream());
+    return {
+        multiply(fft::rfftn(cotangents[0], axes, stream()), mask, stream())};
   } else if (real_) {
     Shape n;
     for (auto ax : axes_) {
-      n.push_back(in.shape()[ax]);
+      n.push_back(in.shape(ax));
     }
-    return {astype(
-        fft::fftn(cotangents[0], n, axes, stream()), in.dtype(), stream())};
+    // Make a mask to account for the double use in the forward pass.
+    // Everything except the DC and nyquist frequencies gets halved.
+    int N = cotangents[0].shape(axes_.back());
+    bool odd = in.shape(axes_.back()) % 2;
+    Shape c(in.ndim(), 1);
+    c[axes_.back()] = N;
+    array indices = reshape(arange(N, stream()), std::move(c), stream());
+    array first(0, indices.dtype());
+    array last(N - 1 + odd, indices.dtype());
+    array one(1, complex64);
+    array half(0.5, complex64);
+    array mask = where(
+        logical_and(
+            greater(indices, first, stream()),
+            less(indices, last, stream()),
+            stream()),
+        half,
+        one,
+        stream());
+    return {multiply(
+        fft::irfftn(multiply(cotangents[0], mask, stream()), n, axes, stream()),
+        array(n_elements, in.dtype()),
+        stream())};
   } else if (inverse_) {
-    return {fft::ifftn(cotangents[0], axes, stream())};
+    return {multiply(
+        fft::fftn(cotangents[0], axes, stream()),
+        array(1 / n_elements, complex64),
+        stream())};
   } else {
-    return {fft::fftn(cotangents[0], axes, stream())};
+    return {multiply(
+        fft::ifftn(cotangents[0], axes, stream()),
+        array(n_elements, complex64),
+        stream())};
   }
 }
 
@@ -2772,7 +2863,8 @@ std::vector<array> Multiply::vjp(
     const std::vector<array>&) {
   std::vector<array> vjps;
   for (auto arg : argnums) {
-    vjps.push_back(multiply(primals[1 - arg], cotangents[0], stream()));
+    vjps.push_back(multiply(
+        conjugate(primals[1 - arg], stream()), cotangents[0], stream()));
   }
   return vjps;
 }
@@ -3456,7 +3548,7 @@ std::vector<array> Reduce::vjp(
   }
 
   else {
-    throw std::runtime_error("Reduce type VJP not yet implemented.");
+    return {zeros_like(in, stream())};
   }
 }
 

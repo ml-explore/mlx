@@ -11,6 +11,8 @@ add_executable(tests ${PROJECT_SOURCE_DIR}/tests/tests.cpp)
 
 if(MLX_BUILD_METAL)
   set(METAL_TEST_SOURCES gpu_tests.cpp metal_thread_safety_tests.cpp)
+elseif(MLX_BUILD_CUDA)
+  set(METAL_TEST_SOURCES gpu_tests.cpp)
 endif()
 
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)

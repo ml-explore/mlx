@@ -15,6 +15,14 @@
 
 typedef half float16_t;
 
+// Work per thread values for different types. The values here are expected to
+// match get_work_per_thread in mlx/backend/metal/utils.h
+template <typename U>
+struct WorkPerThread {
+  static_assert(sizeof(U) <= 8, "Type too large");
+  static constexpr int constant n = 8 / sizeof(U);
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
 ///////////////////////////////////////////////////////////////////////////////

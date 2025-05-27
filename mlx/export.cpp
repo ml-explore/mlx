@@ -331,6 +331,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(SVD),
       SERIALIZE_PRIMITIVE(Inverse),
       SERIALIZE_PRIMITIVE(Cholesky),
+      SERIALIZE_PRIMITIVE(Eig),
       SERIALIZE_PRIMITIVE(Eigh),
       SERIALIZE_PRIMITIVE(AffineQuantize),
       SERIALIZE_PRIMITIVE(RMSNorm),
@@ -468,6 +469,9 @@ bool FunctionTable::match(
   auto match_inputs = [shapeless = this->shapeless](
                           const array& x, const array& y) {
     if (x.dtype() != y.dtype()) {
+      return false;
+    }
+    if (x.ndim() != y.ndim()) {
       return false;
     }
     if (!shapeless && x.shape() != y.shape()) {

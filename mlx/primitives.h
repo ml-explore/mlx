@@ -689,13 +689,15 @@ class Convolution : public UnaryPrimitive {
   explicit Convolution(
       Stream stream,
       const std::vector<int>& kernel_strides,
-      const std::vector<int>& padding,
+      const std::vector<int>& padding_lo,
+      const std::vector<int>& padding_hi,
       const std::vector<int>& kernel_dilation,
       const std::vector<int>& input_dilation,
       const int groups = 1,
       const bool flip = false)
       : UnaryPrimitive(stream),
-        padding_(padding),
+        padding_lo_(padding_lo),
+        padding_hi_(padding_hi),
         kernel_strides_(kernel_strides),
         kernel_dilation_(kernel_dilation),
         input_dilation_(input_dilation),
@@ -716,7 +718,8 @@ class Convolution : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_tuple(
-        padding_,
+        padding_lo_,
+        padding_hi_,
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
@@ -725,7 +728,8 @@ class Convolution : public UnaryPrimitive {
   }
 
  private:
-  std::vector<int> padding_;
+  std::vector<int> padding_lo_;
+  std::vector<int> padding_hi_;
   std::vector<int> kernel_strides_;
   std::vector<int> kernel_dilation_;
   std::vector<int> input_dilation_;
@@ -2375,6 +2379,29 @@ class Cholesky : public UnaryPrimitive {
 
  private:
   bool upper_;
+};
+
+class Eig : public Primitive {
+ public:
+  explicit Eig(Stream stream, bool compute_eigenvectors)
+      : Primitive(stream), compute_eigenvectors_(compute_eigenvectors) {}
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Eig)
+
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+
+  bool is_equivalent(const Primitive& other) const override;
+  auto state() const {
+    return compute_eigenvectors_;
+  }
+
+ private:
+  bool compute_eigenvectors_;
 };
 
 class Eigh : public Primitive {

@@ -1088,6 +1088,91 @@ class TestConv(mlx_tests.MLXTestCase):
                         atol=2e-5 if dtype == np.float32 else 5e-4,
                     )
 
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_asymmetric_padding(self):
+        inputs = np.random.normal(size=(2, 8, 8, 8, 3)).astype(np.float32)
+        kernel = np.random.normal(size=(2, 3, 3, 3, 3)).astype(np.float32)
+        strides = (2, 2, 2)
+
+        pt_out = torch.conv3d(
+            torch.permute(torch.tensor(inputs), (0, 4, 1, 2, 3)),
+            torch.permute(torch.tensor(kernel), (0, 4, 1, 2, 3)),
+            stride=strides,
+            padding=2,
+        )
+        pt_out = torch.permute(pt_out, (0, 2, 3, 4, 1))[:, 1:, 1:, 1:, :].numpy()
+
+        mx_out = mx.conv_general(
+            mx.array(inputs),
+            mx.array(kernel),
+            stride=strides,
+            padding=([0, 0, 0], [1, 1, 1]),
+        )
+
+        self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
+
+        inputs = np.random.normal(size=(2, 10, 10, 3)).astype(np.float32)
+        kernel = np.random.normal(size=(2, 2, 2, 3)).astype(np.float32)
+
+        pt_out = torch.conv2d(
+            torch.permute(torch.tensor(inputs), (0, 3, 1, 2)),
+            torch.permute(torch.tensor(kernel), (0, 3, 1, 2)),
+            stride=1,
+            padding=(1, 0),
+        )
+        pt_out = torch.permute(pt_out, (0, 2, 3, 1))[:, 1:].numpy()
+
+        mx_out = mx.conv_general(
+            mx.array(inputs),
+            mx.array(kernel),
+            stride=1,
+            padding=([0, 0], [1, 0]),
+        )
+        self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
+
+    def test_basic_grad_shapes(self):
+        def loss_fn(kernel, inputs, strides, groups):
+            return mx.sum(
+                mx.conv_general(
+                    inputs,
+                    kernel,
+                    stride=strides,
+                    groups=groups,
+                )
+            )
+
+        for in_shape, k_shape, strides, groups in [
+            ((3, 5, 4), (6, 2, 2), (2,), 2),
+            ((3, 5, 4), (24, 2, 1), (2,), 4),
+            ((3, 5, 5, 4), (6, 2, 2, 2), (2, 1), 2),
+            ((3, 5, 5, 4), (24, 2, 2, 1), (2, 2), 4),
+        ]:
+            grads = mx.grad(loss_fn)(
+                mx.zeros(k_shape), mx.zeros(in_shape), strides, groups
+            )
+            self.assertEqual(grads.shape, k_shape)
+
+    def test_1d_conv_with_2d(self):
+        x = mx.random.uniform(shape=(2, 10, 16))
+        y = mx.random.normal(shape=(16, 3, 16))
+
+        out = mx.conv1d(x, y, padding=1)
+        out_2d = mx.conv2d(
+            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        )
+
+        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+
+        x = mx.random.uniform(shape=(2, 10, 4))
+        y = mx.random.normal(shape=(4, 3, 4))
+
+        out = mx.conv1d(x, y, padding=1)
+        out_2d = mx.conv2d(
+            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        )
+
+        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+
 
 if __name__ == "__main__":
     unittest.main()

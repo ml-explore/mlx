@@ -589,6 +589,10 @@ class TestBlas(mlx_tests.MLXTestCase):
         alpha = 0.5
         beta = 2.0
 
+        # c must broadcast to the output shape
+        with self.assertRaises(ValueError):
+            mx.addmm(mx.zeros((2, 2, 2)), mx.zeros((2, 2)), mx.zeros((2, 2)))
+
         # Regular batched case
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (32, 16, 16)).astype(np.float32)
@@ -744,6 +748,19 @@ class TestBlas(mlx_tests.MLXTestCase):
         c = a @ b
         mx.eval(c)
         self.assertEqual(c.shape, (0, 0))
+
+        c = mx.array(1.0, dtype=mx.float32)
+        a = mx.array([], dtype=mx.float32)
+        b = mx.array([], dtype=mx.float32)
+        out = mx.addmm(c, a, b)
+        self.assertEqual(out.item(), 1.0)
+        self.assertEqual(out.shape, ())
+
+        a = mx.zeros(shape=(5, 0))
+        b = mx.zeros(shape=(0, 5))
+        c = mx.random.uniform(shape=(5, 5))
+        out = mx.addmm(c, a, b)
+        self.assertTrue(mx.allclose(out, c))
 
     def test_block_masked_matmul(self):
         def ref_block_masked_mm(

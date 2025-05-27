@@ -16,6 +16,8 @@ Linear Algebra
     cross
     qr
     svd
+    eigvals
+    eig
     eigvalsh
     eigh
     lu

@@ -95,6 +95,10 @@ struct CommandEncoder {
     return enc_->setBytes(&v, sizeof(T), idx);
   }
 
+  void set_threadgroup_memory_length(size_t length, int idx) {
+    enc_->setThreadgroupMemoryLength(length, idx);
+  }
+
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }

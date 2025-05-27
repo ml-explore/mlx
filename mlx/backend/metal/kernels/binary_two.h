@@ -12,82 +12,103 @@ template <typename T, typename U, typename Op>
   d[index] = out[1];
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_sv(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
-  auto out = Op()(a[0], b[index]);
-  c[index] = out[0];
-  d[index] = out[1];
+  index *= N;
+  for (int i = 0; i < N && (index + i) < size; ++i) {
+    auto out = Op()(a[0], b[index + i]);
+    c[index + i] = out[0];
+    d[index + i] = out[1];
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_vs(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
-  auto out = Op()(a[index], b[0]);
-  c[index] = out[0];
-  d[index] = out[1];
+  index *= N;
+  for (int i = 0; i < N && (index + i) < size; ++i) {
+    auto out = Op()(a[index + i], b[0]);
+    c[index + i] = out[0];
+    d[index + i] = out[1];
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_vv(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
-  auto out = Op()(a[index], b[index]);
-  c[index] = out[0];
-  d[index] = out[1];
+  index *= N;
+  for (int i = 0; i < N && (index + i) < size; ++i) {
+    auto out = Op()(a[index + i], b[index + i]);
+    c[index + i] = out[0];
+    d[index + i] = out[1];
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_sv2(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = index.x + grid_dim.x * int64_t(index.y);
-  auto out = Op()(a[0], b[offset]);
-  c[offset] = out[0];
-  d[offset] = out[1];
+  auto offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  for (int i = 0; i < N && (offset + i) < size; ++i) {
+    auto out = Op()(a[0], b[offset + i]);
+    c[offset + i] = out[0];
+    d[offset + i] = out[1];
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_vs2(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = index.x + grid_dim.x * int64_t(index.y);
-  auto out = Op()(a[offset], b[0]);
-  c[offset] = out[0];
-  d[offset] = out[1];
+  auto offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  for (int i = 0; i < N && (offset + i) < size; ++i) {
+    auto out = Op()(a[offset + i], b[0]);
+    c[offset + i] = out[0];
+    d[offset + i] = out[1];
+  }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void binary_vv2(
     device const T* a,
     device const T* b,
     device U* c,
     device U* d,
+    constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = index.x + grid_dim.x * int64_t(index.y);
-  auto out = Op()(a[offset], b[offset]);
-  c[offset] = out[0];
-  d[offset] = out[1];
+  auto offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  for (int i = 0; i < N && (offset + i) < size; ++i) {
+    auto out = Op()(a[offset + i], b[offset + i]);
+    c[offset + i] = out[0];
+    d[offset + i] = out[1];
+  }
 }
 
 template <typename T, typename U, typename Op, typename IdxT = int64_t>

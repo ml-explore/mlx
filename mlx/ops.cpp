@@ -472,9 +472,24 @@ array hadamard_transform(
     const array& a,
     std::optional<float> scale_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
+  if (a.size() == 0) {
+    throw std::invalid_argument(
+        "[hadamard_transform] Does not support empty arrays.");
+  }
   // Default to an orthonormal Hadamard matrix scaled by 1/sqrt(N)
-  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(a.shape(-1));
+  int n = a.ndim() > 0 ? a.shape(-1) : 1;
+  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(n);
   auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
+
+  // Nothing to do for a scalar
+  if (n == 1) {
+    if (scale == 1) {
+      return a;
+    }
+
+    return multiply(a, array(scale, dtype), s);
+  }
+
   return array(
       a.shape(),
       dtype,
@@ -3160,6 +3175,10 @@ array scatter_axis(
     throw std::invalid_argument(msg.str());
   }
 
+  if (a.size() == 0) {
+    return a;
+  }
+
   auto upd = astype(values, a.dtype(), s);
 
   // Squeeze leading singletons out of update
@@ -3565,21 +3584,21 @@ Shape conv_out_shape(
 
   if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << "for "
+    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (kernel_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid kernel dilation " << kernel_dilation << "for "
+    msg << "[conv] Invalid kernel dilation " << kernel_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (input_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid input dilation " << input_dilation << "for "
+    msg << "[conv] Invalid input dilation " << input_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
@@ -3963,6 +3982,7 @@ array conv_general(
           to_stream(s),
           stride,
           padding_lo,
+          padding_hi,
           kernel_dilation,
           input_dilation,
           groups,
@@ -4313,6 +4333,10 @@ array addmm(
     }
 
     c = reshape(c, c_reshape, s);
+  }
+  if (c.shape() != out_shape) {
+    throw std::invalid_argument(
+        "[addmm] input c must broadcast to the output shape");
   }
 
   auto out = array(

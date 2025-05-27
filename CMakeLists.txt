@@ -34,6 +34,7 @@ option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
+option(MLX_BUILD_CUDA "Build cuda backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
@@ -81,6 +82,10 @@ if(MLX_BUILD_METAL)
   set(METAL_LIB "-framework Metal")
   set(FOUNDATION_LIB "-framework Foundation")
   set(QUARTZ_LIB "-framework QuartzCore")
+endif()
+
+if(MLX_BUILD_CUDA)
+  enable_language(CUDA)
 endif()
 
 if(MLX_BUILD_METAL AND NOT METAL_LIB)
@@ -225,6 +230,9 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
+
+# Do not add mlx_EXPORTS define for shared library.
+set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
 
 FetchContent_Declare(
   fmt

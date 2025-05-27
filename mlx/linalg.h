@@ -99,6 +99,10 @@ array cross(
     int axis = -1,
     StreamOrDevice s = {});
 
+std::pair<array, array> eig(const array& a, StreamOrDevice s = {});
+
+array eigvals(const array& a, StreamOrDevice s = {});
+
 array eigvalsh(const array& a, std::string UPLO = "L", StreamOrDevice s = {});
 
 std::pair<array, array>

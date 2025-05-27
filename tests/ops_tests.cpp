@@ -1036,6 +1036,9 @@ TEST_CASE("test reduction ops") {
     x = array({-inf, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), -inf);
 
+    x = repeat(array(-inf), 5000);
+    CHECK_EQ(logsumexp(x).item<float>(), -inf);
+
     x = array({0.0f, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), 0.0f);
 
