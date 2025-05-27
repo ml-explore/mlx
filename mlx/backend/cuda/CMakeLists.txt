@@ -17,6 +17,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
+
 # Enable defining device lambda functions.
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
