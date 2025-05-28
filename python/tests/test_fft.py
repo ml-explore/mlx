@@ -316,7 +316,11 @@ class TestFFT(mlx_tests.MLXTestCase):
 
             dfdx = mx.grad(f)(x)
             dgdx = torch.func.grad(g)(torch.tensor(x))
-            self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
+            if dfdx.dtype == mx.complex64:
+                self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
+            else:
+                dgdx_mx = mx.array(dgdx.detach().cpu().numpy())
+                self.assertLess((dfdx - dgdx_mx).abs().max() / dgdx_mx.abs().mean(), 1e-4)
 
 
 if __name__ == "__main__":
