@@ -24,7 +24,7 @@ inline constexpr short get_bytes_per_pack(int bits, int wsize = 8) {
 
 template <typename T, int bits>
 void extract_bits(const uint8_t* w_in, T* w_out) {
-  assert(bits == 3 || bits == 6);
+  static_assert(bits == 3 || bits == 5 || bits == 6);
   if (bits == 3) {
     w_out[0] = static_cast<T>(w_in[0] & 0x7);
     w_out[1] = static_cast<T>((w_in[0] & 0x38) >> 3);
@@ -84,7 +84,7 @@ void _qmm(
         T scale = *scales_local++;
         T bias = *biases_local++;
         for (int ng = 0; ng < packs_in_group; ng++) {
-          if (bits == 3 || bits == 5 || bits == 6) {
+          if constexpr (bits == 3 || bits == 5 || bits == 6) {
             T wl[pack_factor];
             extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)
@@ -141,7 +141,7 @@ void _qmm_t(
         T bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw++) {
-          if (bits == 3 || bits == 5 || bits == 6) {
+          if constexpr (bits == 3 || bits == 5 || bits == 6) {
             T wl[pack_factor];
             extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)

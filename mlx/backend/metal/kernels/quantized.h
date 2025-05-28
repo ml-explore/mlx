@@ -2555,6 +2555,7 @@ template <typename T, const int group_size, const int bits>
     out[6] = ((w[2] & 0x1c) >> 2) * scale + bias;
     out[7] = ((w[2] & 0xe0) >> 5) * scale + bias;
   } else if (bits == 5) {
+    w += offset * bytes_per_pack;
     out[0] = (w[0] & 0x1f) * scale + bias;
     out[1] = (((w[0] & 0xe0) >> 5) + ((w[1] & 0x3) << 3)) * scale + bias;
     out[2] = ((w[1] & 0x7c) >> 2) * scale + bias;
