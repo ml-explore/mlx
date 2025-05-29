@@ -13,22 +13,9 @@ namespace mlx::core {
 std::string type_to_name(const Dtype& t);
 std::string type_to_name(const array& a);
 
-// Compute the thread block dimensions which fit the given
-// input dimensions.
-// - The thread block dimensions will be powers of two
-// - The thread block size will be less than 2^pow2
+// Compute the grid and block dimensions, check backend/common/utils.h for docs.
 MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
-
-// Computes a 2D grid where each element is < UINT_MAX
-// Assumes:
-// - overall size (product of non-broadcasted dimensions) is < UINT_MAX^2
-// - shape and strides correspond to a contiguous (no holes) but
-//   possibly broadcasted array
 MTL::Size get_2d_grid_dims(const Shape& shape, const Strides& strides);
-
-// Same as above but we do an implicit division with divisor.
-// Basically, equivalent to factorizing
-//    Prod(s \forall s in shape if strides[s] > 0) / divisor.
 MTL::Size
 get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor);
 
@@ -57,8 +44,6 @@ inline void debug_set_primitive_buffer_label(
   command_buffer->setLabel(make_string(label));
 #endif
 }
-
-std::string get_primitive_string(Primitive* primitive);
 
 template <typename T>
 constexpr bool is_numeric_except_char = std::is_arithmetic_v<T> &&
