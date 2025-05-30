@@ -839,14 +839,14 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
   if (group_size != 32 && group_size != 64 && group_size != 128) {
     std::ostringstream msg;
     msg << "[quantize] The requested group size " << group_size
-        << " is not supported. The supported group sizes are 64 and 128.";
+        << " is not supported. The supported group sizes are 32, 64, and 128.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (bits != 2 && bits != 3 && bits != 4 && bits != 6 && bits != 8) {
+  if (bits < 2 || bits > 8 || bits == 7) {
     std::ostringstream msg;
     msg << "[quantize] The requested number of bits " << bits
-        << " is not supported. The supported bits are 2, 3, 4, 6 and 8.";
+        << " is not supported. The supported bits are 2, 3, 4, 5, 6 and 8.";
     throw std::invalid_argument(msg.str());
   }
 
