@@ -30,141 +30,18 @@ void* Buffer::raw_ptr() {
 
 namespace metal {
 
-namespace {
-
-BufferCache::BufferCache(ResidencySet& residency_set)
-    : head_(nullptr),
-      tail_(nullptr),
-      pool_size_(0),
-      residency_set_(residency_set) {}
-
-BufferCache::~BufferCache() {
-  auto pool = metal::new_scoped_memory_pool();
-  clear();
-}
-
-int BufferCache::clear() {
-  int n_release = 0;
-  for (auto& [size, holder] : buffer_pool_) {
-    if (holder->buf) {
-      if (!holder->buf->heap()) {
-        residency_set_.erase(holder->buf);
-      }
-      holder->buf->release();
-      n_release++;
-    }
-    delete holder;
-  }
-  buffer_pool_.clear();
-  pool_size_ = 0;
-  head_ = nullptr;
-  tail_ = nullptr;
-  return n_release;
-}
-
-MTL::Buffer* BufferCache::reuse_from_cache(size_t size) {
-  // Find the closest buffer in pool
-  MTL::Buffer* pbuf = nullptr;
-
-  auto it = buffer_pool_.lower_bound(size);
-
-  // Make sure we use most of the available memory
-  while (!pbuf && it != buffer_pool_.end() &&
-         it->first < std::min(2 * size, size + 2 * vm_page_size)) {
-    // Collect from the cache
-    pbuf = it->second->buf;
-
-    // Remove from cache
-    remove_from_list(it->second);
-    delete it->second;
-    it = buffer_pool_.erase(it);
-  }
-
-  if (pbuf) {
-    pool_size_ -= pbuf->length();
-  }
-
-  return pbuf;
-}
-
-void BufferCache::recycle_to_cache(MTL::Buffer* buf) {
-  // Add to cache
-  if (buf) {
-    BufferHolder* bh = new BufferHolder(buf);
-    add_at_head(bh);
-    pool_size_ += buf->length();
-    buffer_pool_.insert({buf->length(), bh});
-  }
-}
-
-int BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
-  if (min_bytes_to_free >= 0.9 * pool_size_) {
-    return clear();
-  } else {
-    int n_release = 0;
-    size_t total_bytes_freed = 0;
-
-    while (tail_ && (total_bytes_freed < min_bytes_to_free)) {
-      if (tail_->buf) {
-        total_bytes_freed += tail_->buf->length();
-        if (!tail_->buf->heap()) {
-          residency_set_.erase(tail_->buf);
-        }
-        tail_->buf->release();
-        tail_->buf = nullptr;
-        n_release++;
-      }
-      remove_from_list(tail_);
-    }
-    pool_size_ -= total_bytes_freed;
-    return n_release;
-  }
-}
-
-void BufferCache::add_at_head(BufferCache::BufferHolder* to_add) {
-  if (!to_add)
-    return;
-
-  if (!head_) {
-    head_ = to_add;
-    tail_ = to_add;
-  } else {
-    head_->prev = to_add;
-    to_add->next = head_;
-    head_ = to_add;
-  }
-}
-
-void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
-  if (!to_remove) {
-    return;
-  }
-
-  // If in the middle
-  if (to_remove->prev && to_remove->next) {
-    to_remove->prev->next = to_remove->next;
-    to_remove->next->prev = to_remove->prev;
-  } else if (to_remove->prev && to_remove == tail_) { // If tail
-    tail_ = to_remove->prev;
-    tail_->next = nullptr;
-  } else if (to_remove == head_ && to_remove->next) { // If head
-    head_ = to_remove->next;
-    head_->prev = nullptr;
-  } else if (to_remove == head_ && to_remove == tail_) { // If only element
-    head_ = nullptr;
-    tail_ = nullptr;
-  }
-
-  to_remove->prev = nullptr;
-  to_remove->next = nullptr;
-}
-
-} // namespace
-
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       residency_set_(device_),
-      buffer_cache_(residency_set_) {
+      buffer_cache_(
+          vm_page_size,
+          [](MTL::Buffer* buf) { return buf->length(); },
+          [this](MTL::Buffer* buf) {
+            if (!buf->heap()) {
+              residency_set_.erase(buf);
+            }
+            buf->release();
+          }) {
   auto pool = metal::new_scoped_memory_pool();
   auto memsize = std::get<size_t>(device_info().at("memory_size"));
   auto max_rec_size =
@@ -193,6 +70,7 @@ MetalAllocator::~MetalAllocator() {
   if (heap_) {
     heap_->release();
   }
+  buffer_cache_.clear();
 }
 
 size_t MetalAllocator::set_cache_limit(size_t limit) {
