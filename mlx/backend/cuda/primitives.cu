@@ -73,7 +73,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
 
 NO_GPU(ArgPartition)
 NO_GPU(BlockMaskedMM)
-NO_GPU_MULTI(Compiled)
 NO_GPU(Convolution)
 NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)
