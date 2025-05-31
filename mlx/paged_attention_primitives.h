@@ -19,6 +19,7 @@ class PagedAttention : public UnaryPrimitive {
       int block_size,
       int num_kv_heads,
       int max_num_blocks_per_seq,
+      int max_num_partitions,
       int q_stride,
       int kv_block_stride,
       int kv_head_stride,
@@ -33,6 +34,7 @@ class PagedAttention : public UnaryPrimitive {
         block_size_(block_size),
         num_kv_heads_(num_kv_heads),
         max_num_blocks_per_seq_(max_num_blocks_per_seq),
+        max_num_partitions_(max_num_partitions),
         q_stride_(q_stride),
         kv_block_stride_(kv_block_stride),
         kv_head_stride_(kv_head_stride),
@@ -67,6 +69,7 @@ class PagedAttention : public UnaryPrimitive {
   int block_size_;
   int num_kv_heads_;
   int max_num_blocks_per_seq_;
+  int max_num_partitions_;
   int q_stride_;
   int kv_block_stride_;
   int kv_head_stride_;

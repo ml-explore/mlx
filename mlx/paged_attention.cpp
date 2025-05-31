@@ -157,6 +157,7 @@ array paged_attention(
           num_kv_heads,
           softmax_scale,
           max_num_blocks_per_seq,
+          max_num_partitions,
           q_stride,
           kv_block_stride,
           kv_head_stride,
