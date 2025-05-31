@@ -18,7 +18,10 @@ CudaAllocator::CudaAllocator()
     : buffer_cache_(
           getpagesize(),
           [](CudaBuffer* buf) { return buf->size; },
-          [this](CudaBuffer* buf) { cuda_free(buf); }) {
+          [this](CudaBuffer* buf) {
+            cuda_free(buf->data);
+            delete buf;
+          }) {
   // TODO: Set memory limit for multi-device.
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
@@ -70,7 +73,8 @@ void CudaAllocator::free(Buffer buffer) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     lock.unlock();
-    cuda_free(buf);
+    cuda_free(buf->data);
+    delete buf;
   }
 }
 
@@ -85,6 +89,25 @@ size_t CudaAllocator::size(Buffer buffer) const {
 void CudaAllocator::register_this_thread() {
   std::lock_guard lock(worker_mutex_);
   allowed_threads_.insert(std::this_thread::get_id());
+}
+
+void CudaAllocator::cuda_free(void* buf) {
+  // If cuda_free() is called from a unregistered thread, reschedule the call to
+  // worker.
+  {
+    std::lock_guard lock(worker_mutex_);
+    if (allowed_threads_.count(std::this_thread::get_id()) == 0) {
+      if (!worker_) {
+        worker_.reset(new Worker);
+      }
+      worker_->add_task([this, buf]() { this->cuda_free(buf); });
+      worker_->end_batch();
+      worker_->commit();
+      return;
+    }
+  }
+
+  cudaFree(buf);
 }
 
 size_t CudaAllocator::get_active_memory() const {
@@ -123,26 +146,6 @@ size_t CudaAllocator::set_cache_limit(size_t limit) {
 void CudaAllocator::clear_cache() {
   std::lock_guard lk(mutex_);
   buffer_cache_.clear();
-}
-
-void CudaAllocator::cuda_free(CudaBuffer* buf) {
-  // If cuda_free() is called from a unregistered thread, reschedule the call to
-  // worker.
-  {
-    std::lock_guard lock(worker_mutex_);
-    if (allowed_threads_.count(std::this_thread::get_id()) == 0) {
-      if (!worker_) {
-        worker_.reset(new Worker);
-      }
-      worker_->add_task([this, buf]() { this->cuda_free(buf); });
-      worker_->end_batch();
-      worker_->commit();
-      return;
-    }
-  }
-
-  cudaFree(buf->data);
-  delete buf;
 }
 
 CudaAllocator& allocator() {

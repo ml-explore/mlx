@@ -34,6 +34,9 @@ class CudaAllocator : public allocator::Allocator {
   // buffers there would result in dead lock.
   void register_this_thread();
 
+  // Call cudaFree in the safe thread.
+  void cuda_free(void* buf);
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();
@@ -46,8 +49,6 @@ class CudaAllocator : public allocator::Allocator {
  private:
   CudaAllocator();
   friend CudaAllocator& allocator();
-
-  void cuda_free(CudaBuffer* buf);
 
   std::mutex worker_mutex_;
   std::unique_ptr<Worker> worker_;
