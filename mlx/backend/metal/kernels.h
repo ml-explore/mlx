@@ -239,6 +239,13 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     int wn,
     bool transpose);
 
+MTL::ComputePipelineState* get_paged_attention_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const std::string&);
+
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
 std::string

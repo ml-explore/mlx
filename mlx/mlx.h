@@ -16,6 +16,7 @@
 #include "mlx/linalg.h"
 #include "mlx/memory.h"
 #include "mlx/ops.h"
+#include "mlx/paged_attention.h"
 #include "mlx/random.h"
 #include "mlx/stream.h"
 #include "mlx/transforms.h"
