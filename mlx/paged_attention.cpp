@@ -64,9 +64,9 @@ array paged_attention(
   const auto& bt_shape = block_tables.shape();
   const auto& cl_shape = context_lens.shape();
 
-  int64_t num_seqs = q_shape[0];
-  int64_t num_heads = q_shape[1];
-  int64_t head_size = q_shape[2];
+  int num_seqs = q_shape[0];
+  int num_heads = q_shape[1];
+  int head_size = q_shape[2];
 
   // Allowed head sizes
   switch (head_size) {
@@ -84,6 +84,8 @@ array paged_attention(
           "{64, 80, 96, 112, 128, 192, 256}");
   }
 
+  int max_num_blocks_per_seq = bt_shape[1];
+
   // block_tables first dimension must match num_seqs
   if (bt_shape[0] != num_seqs) {
     std::stringstream ss;
@@ -93,11 +95,11 @@ array paged_attention(
   }
 
   // Extract k_cache dimensions
-  int64_t num_blocks = kc_shape[0];
-  int64_t num_kv_heads = kc_shape[1];
-  int64_t head_size_kc = kc_shape[2];
-  int64_t block_size = kc_shape[3];
-  int64_t x = kc_shape[4];
+  int num_blocks = kc_shape[0];
+  int num_kv_heads = kc_shape[1];
+  int head_size_kc = kc_shape[2];
+  int block_size = kc_shape[3];
+  int x = kc_shape[4];
 
   if (head_size_kc * x != head_size) {
     std::stringstream ss;
@@ -121,8 +123,8 @@ array paged_attention(
     throw std::invalid_argument(ss.str());
   }
 
-  constexpr int64_t partition_size = 512;
-  int64_t max_num_partitions =
+  constexpr int partition_size = 512;
+  int max_num_partitions =
       (max_context_len + partition_size - 1) / partition_size; // ceil‑div
   bool use_v1 = ((max_num_partitions == 1) || (num_seqs * num_heads > 512)) &&
       (partition_size % block_size == 0);
@@ -139,11 +141,28 @@ array paged_attention(
     inputs.push_back(std::move(alibi_slopes.value()));
   }
 
+  int q_stride = q.strides()[0];
+  int kv_block_stride = k_cache.strides()[0];
+  int kv_head_stride = k_cache.strides()[1];
+
   return array(
       std::move(out_shape),
       q.dtype(),
       std::make_shared<PagedAttention>(
-          to_stream(s), use_v1, max_context_len, softmax_scale, softcapping),
+          to_stream(s),
+          use_v1,
+          max_context_len,
+          head_size,
+          block_size,
+          num_kv_heads,
+          softmax_scale,
+          max_num_blocks_per_seq,
+          q_stride,
+          kv_block_stride,
+          kv_head_stride,
+          num_heads,
+          num_seqs,
+          softcapping),
       inputs);
 }
 
