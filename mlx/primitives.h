@@ -627,6 +627,7 @@ class Compiled : public Primitive {
   const std::vector<array> outputs_;
   const std::vector<array> tape_;
   const std::unordered_set<uintptr_t> constant_ids_;
+  const std::function<bool(size_t)> is_constant_;
 
   std::string kernel_lib_;
 };

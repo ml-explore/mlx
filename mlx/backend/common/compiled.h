@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 
+#include <functional>
 #include <iomanip>
 #include <sstream>
 #include <unordered_set>
@@ -60,8 +61,19 @@ bool compiled_check_contiguity(
 void compiled_allocate_outputs(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::vector<array>& inputs_,
-    const std::unordered_set<uintptr_t>& constant_ids_,
+    const std::function<bool(size_t)>& is_constant,
+    bool contiguous);
+
+// Collapse contiguous dims ignoring scalars and constants.
+std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
+    const std::vector<array>& inputs,
+    const array& out,
+    const std::function<bool(size_t)>& is_constant);
+
+// Return whether the kernel should use large index.
+bool compiled_use_large_index(
+    const std::vector<array>& inputs,
+    const std::vector<array>& outputs,
     bool contiguous);
 
 } // namespace mlx::core

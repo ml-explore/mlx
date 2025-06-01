@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/compiled.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
 #include "mlx/fast_primitives.h"
@@ -82,7 +83,11 @@ Compiled::Compiled(
       inputs_(std::move(inputs)),
       outputs_(std::move(outputs)),
       tape_(std::move(tape)),
-      constant_ids_(std::move(constant_ids)) {}
+      constant_ids_(std::move(constant_ids)),
+      is_constant_([this](size_t i) {
+        return constant_ids_.find(inputs_[i].id()) != constant_ids_.end();
+      }),
+      kernel_lib_(build_lib_name(inputs_, outputs_, tape_, constant_ids_)) {}
 
 std::vector<array> Compiled::vjp(
     const std::vector<array>&,

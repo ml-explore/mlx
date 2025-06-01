@@ -11,8 +11,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-using namespace fmt::literals;
-
 namespace mlx::core {
 
 inline void build_kernel(
@@ -21,21 +19,12 @@ inline void build_kernel(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
     const std::vector<array>& tape,
-    const std::unordered_set<uintptr_t>& constant_ids,
+    const std::function<bool(size_t)>& is_constant,
     bool contiguous,
     int ndim,
     bool dynamic_dims,
     bool use_big_index = false,
     int work_per_thread = 1) {
-  // All outputs should have the exact same shape and will be row contiguous
-  auto output_shape = outputs[0].shape();
-  auto output_strides = outputs[0].strides();
-
-  // Constants are scalars that are captured by value and cannot change
-  auto is_constant = [&constant_ids](const array& x) {
-    return constant_ids.find(x.id()) != constant_ids.end();
-  };
-
   NodeNamer namer;
   bool add_indices = false;
   int cnt = 0;
@@ -45,13 +34,14 @@ inline void build_kernel(
       "[[host_name(\"{0}\")]]\n[[kernel]] void {0}(\n", kernel_name);
 
   // Add the input arguments
-  for (auto& x : inputs) {
-    auto& xname = namer.get_name(x);
-
+  for (size_t i = 0; i < inputs.size(); ++i) {
     // Skip constants from the input list
-    if (is_constant(x)) {
+    if (is_constant(i)) {
       continue;
     }
+
+    const auto& x = inputs[i];
+    auto& xname = namer.get_name(x);
 
     // Scalars and contiguous need no strides
     if (!is_scalar(x) && !contiguous) {
@@ -80,8 +70,6 @@ inline void build_kernel(
   }
   // Add output strides and shape to extract the indices.
   if (!contiguous) {
-    os += fmt::format(
-        "    constant const int64_t* output_strides [[buffer({0})]],\n", cnt++);
     os += fmt::format(
         "    constant const int* output_shape [[buffer({0})]],\n", cnt++);
   } else {
@@ -125,7 +113,7 @@ inline void build_kernel(
     auto& x = inputs[i];
     auto& xname = namer.get_name(x);
 
-    if (is_constant(x)) {
+    if (is_constant(i)) {
       auto type_str = get_type_string(x.dtype());
       std::ostringstream ss;
       print_constant(ss, x);
@@ -271,11 +259,6 @@ inline void build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  // Make the name for the kernel library
-  if (kernel_lib_.empty()) {
-    kernel_lib_ = build_lib_name(inputs_, outputs_, tape_, constant_ids_);
-  }
-
   // Get the kernel if someone else built it already
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -290,7 +273,7 @@ void Compiled::eval_gpu(
         inputs_,
         outputs_,
         tape_,
-        constant_ids_,
+        is_constant_,
         /* contiguous = */ true,
         /* ndim = */ 0,
         /* dynamic_dims = */ false,
@@ -302,7 +285,7 @@ void Compiled::eval_gpu(
         inputs_,
         outputs_,
         tape_,
-        constant_ids_,
+        is_constant_,
         /* contiguous = */ true,
         /* ndim = */ 0,
         /* dynamic_dims = */ false,
@@ -315,7 +298,7 @@ void Compiled::eval_gpu(
           inputs_,
           outputs_,
           tape_,
-          constant_ids_,
+          is_constant_,
           /* contiguous = */ false,
           /* ndim = */ i,
           /* dynamic_dims = */ false,
@@ -328,7 +311,7 @@ void Compiled::eval_gpu(
             inputs_,
             outputs_,
             tape_,
-            constant_ids_,
+            is_constant_,
             /* contiguous = */ false,
             /* ndim = */ i,
             /* dynamic_dims = */ false,
@@ -342,7 +325,7 @@ void Compiled::eval_gpu(
         inputs_,
         outputs_,
         tape_,
-        constant_ids_,
+        is_constant_,
         /* contiguous = */ false,
         /* ndim = */ 0,
         /* dynamic_dims = */ true,
@@ -354,7 +337,7 @@ void Compiled::eval_gpu(
         inputs_,
         outputs_,
         tape_,
-        constant_ids_,
+        is_constant_,
         /* contiguous = */ false,
         /* ndim = */ 0,
         /* dynamic_dims = */ true,
@@ -363,70 +346,13 @@ void Compiled::eval_gpu(
     return kernel;
   });
 
-  // Figure out which kernel we are using
-  auto& output_shape = outputs[0].shape();
-  auto contiguous = compiled_check_contiguity(inputs, output_shape);
-
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
-  std::vector<Strides> initial_strides;
-  initial_strides.push_back(outputs[0].strides());
-  Shape shape;
-  std::vector<Strides> strides;
-  if (!contiguous) {
-    for (int i = 0; i < inputs.size(); i++) {
-      // Skip constants.
-      if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
-        continue;
-      }
-      auto& x = inputs[i];
+  auto [contiguous, shape, strides] =
+      compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
-      // Skip scalar inputs.
-      if (is_scalar(x)) {
-        continue;
-      }
-
-      // Broadcast the inputs to the output shape.
-      Strides xstrides;
-      int j = 0;
-      for (; j < output_shape.size() - x.ndim(); j++) {
-        if (output_shape[j] == 1) {
-          xstrides.push_back(outputs[0].strides()[j]);
-        } else {
-          xstrides.push_back(0);
-        }
-      }
-      for (int i = 0; i < x.ndim(); i++, j++) {
-        if (x.shape(i) == 1) {
-          if (output_shape[j] == 1) {
-            xstrides.push_back(outputs[0].strides()[j]);
-          } else {
-            xstrides.push_back(0);
-          }
-        } else {
-          xstrides.push_back(x.strides()[i]);
-        }
-      }
-      initial_strides.push_back(std::move(xstrides));
-    }
-    std::tie(shape, strides) =
-        collapse_contiguous_dims(output_shape, initial_strides, INT32_MAX);
-  }
-
-  bool large;
-  if (contiguous) {
-    size_t max_size = 0;
-    for (auto& in : inputs) {
-      max_size = std::max(max_size, in.data_size());
-    }
-    large = (max_size > UINT32_MAX);
-  } else {
-    size_t max_size = 0;
-    for (auto& o : outputs) {
-      max_size = std::max(max_size, o.size());
-    }
-    large = (max_size > UINT32_MAX);
-  }
+  // Whether to use large index.
+  bool large = compiled_use_large_index(inputs, outputs, contiguous);
 
   // Get the kernel from the lib
   int ndim = shape.size();
@@ -451,7 +377,7 @@ void Compiled::eval_gpu(
   int stride_idx = 1; // idx 0 is the output strides
   Strides in_strides;
   for (int i = 0; i < inputs.size(); i++) {
-    if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
+    if (is_constant_(i)) {
       continue;
     }
     auto& x = inputs[i];
@@ -468,8 +394,7 @@ void Compiled::eval_gpu(
     compute_encoder.set_vector_bytes(in_strides, cnt++);
   }
 
-  compiled_allocate_outputs(
-      inputs, outputs, inputs_, constant_ids_, contiguous);
+  compiled_allocate_outputs(inputs, outputs, is_constant_, contiguous);
 
   // Put the outputs in
   for (auto& x : outputs) {
@@ -478,7 +403,6 @@ void Compiled::eval_gpu(
 
   // Put the output shape and strides in
   if (!contiguous) {
-    compute_encoder.set_vector_bytes(strides[0], cnt++);
     compute_encoder.set_vector_bytes(shape, cnt++);
   } else {
     auto size = outputs[0].data_size();
