@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.array &#8212; MLX 0.25.2 documentation</title>
+    <title>mlx.core.array &#8212; MLX 0.26.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=fe4f2727"></script>
+    <script src="../../_static/documentation_options.js?v=8cd87d29"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.25.2 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.25.2 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -193,6 +193,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.ndim.html">mlx.core.array.ndim</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.shape.html">mlx.core.array.shape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.size.html">mlx.core.array.size</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.real.html">mlx.core.array.real</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.imag.html">mlx.core.array.imag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.abs.html">mlx.core.array.abs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.all.html">mlx.core.array.all</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.any.html">mlx.core.array.any</a></li>
@@ -503,6 +505,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.cross.html">mlx.core.linalg.cross</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.eigvals.html">mlx.core.linalg.eigvals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.eig.html">mlx.core.linalg.eig</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.eigvalsh.html">mlx.core.linalg.eigvalsh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.eigh.html">mlx.core.linalg.eigh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.lu.html">mlx.core.linalg.lu</a></li>
@@ -1080,14 +1084,20 @@ document.write(`
 <tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.dtype.html#mlx.core.array.dtype" title="mlx.core.array.dtype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dtype</span></code></a></p></td>
 <td><p>The array's <a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dtype</span></code></a>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.itemsize.html#mlx.core.array.itemsize" title="mlx.core.array.itemsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">itemsize</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.imag.html#mlx.core.array.imag" title="mlx.core.array.imag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">imag</span></code></a></p></td>
+<td><p>The imaginary part of a complex array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.itemsize.html#mlx.core.array.itemsize" title="mlx.core.array.itemsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">itemsize</span></code></a></p></td>
 <td><p>The size of the array's datatype in bytes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.nbytes.html#mlx.core.array.nbytes" title="mlx.core.array.nbytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">nbytes</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.nbytes.html#mlx.core.array.nbytes" title="mlx.core.array.nbytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">nbytes</span></code></a></p></td>
 <td><p>The number of bytes in the array.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.ndim.html#mlx.core.array.ndim" title="mlx.core.array.ndim"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ndim</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.ndim.html#mlx.core.array.ndim" title="mlx.core.array.ndim"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ndim</span></code></a></p></td>
 <td><p>The array's dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.real.html#mlx.core.array.real" title="mlx.core.array.real"><code class="xref py py-obj docutils literal notranslate"><span class="pre">real</span></code></a></p></td>
+<td><p>The real part of a complex array.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.shape.html#mlx.core.array.shape" title="mlx.core.array.shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shape</span></code></a></p></td>
 <td><p>The shape of the array as a Python tuple.</p></td>
@@ -1175,7 +1185,7 @@ By MLX Contributors
 
   <p class="copyright">
     
-      © Copyright 2023, MLX Contributors.
+      © Copyright 2023, Apple.
       <br/>
     
   </p>
