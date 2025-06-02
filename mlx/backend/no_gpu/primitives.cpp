@@ -10,12 +10,29 @@
     throw std::runtime_error(#func " has no GPU implementation.");     \
   }
 
+#define NO_GPU_USE_FALLBACK(func)     \
+  bool func::use_fallback(Stream s) { \
+    return true;                      \
+  }                                   \
+  NO_GPU_MULTI(func)
+
 #define NO_GPU(func)                                                  \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
     throw std::runtime_error(#func " has no GPU implementation.");    \
   }
 
 namespace mlx::core {
+
+bool fast::ScaledDotProductAttention::use_fallback(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_mask,
+    bool has_arr_mask,
+    bool do_causal,
+    Stream s) {
+  return true;
+}
 
 NO_GPU(Abs)
 NO_GPU(Add)
@@ -130,11 +147,11 @@ NO_GPU_MULTI(Eig)
 NO_GPU(View)
 
 namespace fast {
-NO_GPU_MULTI(LayerNorm)
+NO_GPU_USE_FALLBACK(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
-NO_GPU_MULTI(RMSNorm)
+NO_GPU_USE_FALLBACK(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
-NO_GPU_MULTI(RoPE)
+NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(AffineQuantize)
 NO_GPU_MULTI(CustomKernel)

@@ -43,6 +43,8 @@ class RMSNorm : public Custom {
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
 
+  static bool use_fallback(Stream stream);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
     throw std::runtime_error("NYI");
@@ -65,7 +67,6 @@ class RMSNorm : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -91,7 +92,6 @@ class RMSNormVJP : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -102,6 +102,8 @@ class LayerNorm : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
+
+  static bool use_fallback(Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -124,7 +126,6 @@ class LayerNorm : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -150,7 +151,6 @@ class LayerNormVJP : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -170,6 +170,8 @@ class RoPE : public Custom {
         base_(base),
         scale_(scale),
         forward_(forward) {}
+
+  static bool use_fallback(Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -193,7 +195,6 @@ class RoPE : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   int dims_;
   bool traditional_;
   float base_;
@@ -209,6 +210,15 @@ class ScaledDotProductAttention : public Custom {
       const float scale,
       const bool do_causal)
       : Custom(stream, fallback), scale_(scale), do_causal_(do_causal) {}
+
+  static bool use_fallback(
+      const array& q,
+      const array& k,
+      const array& v,
+      bool has_mask,
+      bool has_arr_mask,
+      bool do_causal,
+      Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -230,7 +240,6 @@ class ScaledDotProductAttention : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
   bool do_causal_;
 };
@@ -263,7 +272,6 @@ class AffineQuantize : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   int group_size_;
   int bits_;
   bool dequantize_;
