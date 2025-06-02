@@ -2864,8 +2864,7 @@ array matmul(
   }
 
   // complex matmul using Karatsuba's Algorithm
-
-  if (a.dtype() == complex64 && b.dtype() == complex64) {
+  if (a.dtype() == complex64 || b.dtype() == complex64) {
     // Extract real and imaginary parts
     auto a_real = real(a, s);
     auto a_imag = imag(a, s);
