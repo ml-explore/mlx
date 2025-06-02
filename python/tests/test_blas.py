@@ -1210,18 +1210,18 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(c, c_np))
 
         # Test addmm
-        M = 16
-        K = 50
-        N = 32
-
-        def rand(shape):
-            return mx.random.uniform(shape=shape) + 1j * mx.random.uniform(shape=shape)
-
         a = rand((M, K))
         b = rand((K, N))
         c = rand((M, N))
         out = mx.addmm(c, a, b, 2.0, 2.0)
         out_np = 2.0 * np.matmul(a, b) + 2.0 * c
+        self.assertTrue(np.allclose(out, out_np))
+
+        # complex with real
+        a = rand((M, K)).real
+        b = rand((K, N))
+        c = mx.matmul(a, b)
+        c_np = np.matmul(a, b)
         self.assertTrue(np.allclose(out, out_np))
 
 
