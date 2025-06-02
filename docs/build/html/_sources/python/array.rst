@@ -19,6 +19,8 @@ Array
     array.ndim
     array.shape
     array.size
+    array.real
+    array.imag
     array.abs
     array.all
     array.any

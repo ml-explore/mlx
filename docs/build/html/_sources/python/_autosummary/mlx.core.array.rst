@@ -70,9 +70,11 @@
       ~array.T
       ~array.at
       ~array.dtype
+      ~array.imag
       ~array.itemsize
       ~array.nbytes
       ~array.ndim
+      ~array.real
       ~array.shape
       ~array.size
    
