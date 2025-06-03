@@ -146,18 +146,9 @@ inline void build_kernel(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
     const std::vector<array>& tape,
-    const std::unordered_set<uintptr_t>& constant_ids,
+    const std::function<bool(size_t)>& is_constant,
     bool contiguous,
     int ndim) {
-  // All outputs should have the exact same shape and will be row contiguous
-  auto output_shape = outputs[0].shape();
-  auto output_strides = outputs[0].strides();
-
-  // Constants are scalars that are captured by value and cannot change
-  auto is_constant = [&constant_ids](const array& x) {
-    return constant_ids.find(x.id()) != constant_ids.end();
-  };
-
   NodeNamer namer;
 
 #ifdef _MSC_VER
@@ -170,13 +161,14 @@ inline void build_kernel(
 
   // Add the input arguments
   int cnt = 0;
-  for (auto& x : inputs) {
-    auto& xname = namer.get_name(x);
-
+  for (size_t i = 0; i < inputs.size(); ++i) {
     // Skip constants from the input list
-    if (is_constant(x)) {
+    if (is_constant(i)) {
       continue;
     }
+
+    const auto& x = inputs[i];
+    auto& xname = namer.get_name(x);
 
     auto tstr = get_type_string(x.dtype());
     os << "  " << tstr << "* " << xname << " = (" << tstr << "*)args[" << cnt++
@@ -211,10 +203,11 @@ inline void build_kernel(
   }
 
   // Read the inputs in tmps
-  for (auto& x : inputs) {
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    const auto& x = inputs[i];
     auto& xname = namer.get_name(x);
 
-    if (is_constant(x)) {
+    if (is_constant(i)) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = ";
       print_constant(os, x);
       os << ";" << std::endl;
@@ -264,8 +257,9 @@ inline void build_kernel(
   } else {
     for (int d = ndim - 1; d >= 0; --d) {
       // Update pointers
-      for (auto& x : inputs) {
-        if (is_constant(x) || is_scalar(x)) {
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        const auto& x = inputs[i];
+        if (is_constant(i) || is_scalar(x)) {
           continue;
         }
         auto& xname = namer.get_name(x);
@@ -287,65 +281,37 @@ inline void build_kernel(
 void Compiled::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  if (kernel_lib_.empty()) {
-    kernel_lib_ = build_lib_name(inputs_, outputs_, tape_, constant_ids_);
-  }
-
-  // Figure out which kernel we are using
-  auto& shape = outputs[0].shape();
-  auto contiguous = compiled_check_contiguity(inputs, shape);
   auto& encoder = cpu::get_command_encoder(stream());
 
-  // Handle all broadcasting and collect function input arguments
+  // Collapse contiguous dims to route to a faster kernel if possible. Also
+  // handle all broadcasting.
+  auto [contiguous, shape, strides] =
+      compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
+
+  // Collect function input arguments.
   std::vector<void*> args;
-  std::vector<std::vector<size_t>> strides;
-  for (int i = 0; i < inputs.size(); i++) {
-    // Skip constants.
-    if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
+  int strides_index = 1;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (is_constant_(i)) {
       continue;
     }
-    auto& x = inputs[i];
+    const auto& x = inputs[i];
     encoder.set_input_array(x);
     args.push_back((void*)x.data<void>());
-
-    if (contiguous || is_scalar(x)) {
-      continue;
+    if (!contiguous && !is_scalar(x)) {
+      args.push_back(strides[strides_index++].data());
     }
-
-    // Broadcast the input to the output shape.
-    std::vector<size_t> xstrides;
-    int j = 0;
-    for (; j < shape.size() - x.ndim(); j++) {
-      if (shape[j] == 1) {
-        xstrides.push_back(outputs[0].strides()[j]);
-      } else {
-        xstrides.push_back(0);
-      }
-    }
-    for (int i = 0; i < x.ndim(); i++, j++) {
-      if (x.shape(i) == 1) {
-        if (shape[j] == 1) {
-          xstrides.push_back(outputs[0].strides()[j]);
-        } else {
-          xstrides.push_back(0);
-        }
-      } else {
-        xstrides.push_back(x.strides()[i]);
-      }
-    }
-    strides.push_back(std::move(xstrides));
-    args.push_back(strides.back().data());
   }
 
   // Get the kernel name from the lib
   int ndim = shape.size();
   auto kernel_name = kernel_lib_ + (contiguous ? "_contiguous" : "_strided_");
   if (!contiguous) {
-    kernel_name += std::to_string(shape.size());
+    kernel_name += std::to_string(ndim);
   }
 
   // Get the function
-  auto fn_ptr = compile(kernel_name, [&]() {
+  auto fn_ptr = compile(kernel_name, [&, contiguous = contiguous]() {
     std::ostringstream kernel;
     kernel << get_kernel_preamble() << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
@@ -355,7 +321,7 @@ void Compiled::eval_cpu(
         inputs_,
         outputs_,
         tape_,
-        constant_ids_,
+        is_constant_,
         contiguous,
         ndim);
     // Close extern "C"
@@ -363,26 +329,22 @@ void Compiled::eval_cpu(
     return kernel.str();
   });
 
-  compiled_allocate_outputs(
-      inputs, outputs, inputs_, constant_ids_, contiguous);
+  compiled_allocate_outputs(inputs, outputs, is_constant_, contiguous);
 
   for (auto& x : outputs) {
     args.push_back(x.data<void>());
     encoder.set_output_array(x);
   }
-  Shape out_shape;
   if (!contiguous) {
-    out_shape = outputs[0].shape();
-    args.push_back((void*)out_shape.data());
+    args.push_back((void*)shape.data());
   } else {
     args.push_back((void*)outputs[0].data_size());
   }
   auto fun = (void (*)(void**))fn_ptr;
-  encoder.dispatch(
-      [fun,
-       args = std::move(args),
-       strides = std::move(strides),
-       out_shape = std::move(out_shape)]() mutable { fun(args.data()); });
+  encoder.dispatch([fun,
+                    args = std::move(args),
+                    strides = std::move(strides),
+                    shape = std::move(shape)]() mutable { fun(args.data()); });
 }
 
 } // namespace mlx::core
