@@ -73,6 +73,16 @@ void CustomKernel::eval_gpu(
   }
 
   const auto [tx, ty, tz] = threadgroup_;
+  auto tg_size = tx * ty * tz;
+  auto max_tg_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (tg_size > max_tg_size) {
+    std::ostringstream msg;
+    msg << "Thread group size (" << tg_size << ") is greater than "
+        << " the maximum allowed threads per threadgroup (" << max_tg_size
+        << ").";
+    throw std::invalid_argument(msg.str());
+  }
+
   const auto [gx, gy, gz] = grid_;
   MTL::Size group_dims =
       MTL::Size(std::min(tx, gx), std::min(ty, gy), std::min(tz, gz));

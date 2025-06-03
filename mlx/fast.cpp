@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <numeric>
 #include <regex>
@@ -1228,6 +1229,10 @@ MetalKernelFunction metal_kernel(
       attributes.push_back("  " + dtype + " " + attr + " [[" + attr + "]]");
     }
   }
+  auto now = std::chrono::system_clock::now();
+  int64_t timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          now.time_since_epoch())
+                          .count();
 
   return [=,
           shape_infos = std::move(shape_infos),
@@ -1271,14 +1276,15 @@ MetalKernelFunction metal_kernel(
 
     std::ostringstream func_name;
     std::string template_def = "";
-    std::string hash_key = "";
+    std::string template_hash = "";
     if (!template_args.empty()) {
       std::regex disallowed_chars("\\<|\\>|(, )");
       template_def = write_template(template_args);
-      hash_key = std::regex_replace(template_def, disallowed_chars, "_");
-      hash_key.pop_back();
+      template_hash = std::regex_replace(template_def, disallowed_chars, "_");
+      template_hash.pop_back();
     }
-    func_name << "custom_kernel_" << name << hash_key;
+    func_name << "custom_kernel_" << name << "_" << template_hash << "_"
+              << timestamp;
     std::string kernel_name = func_name.str();
 
     std::string kernel_source = write_signature(
