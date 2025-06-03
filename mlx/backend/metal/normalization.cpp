@@ -255,12 +255,13 @@ void LayerNorm::eval_gpu(
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 6656;
   std::string op_name = "layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(out);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -372,12 +373,13 @@ void LayerNormVJP::eval_gpu(
         g, gb, "sum", plan, {0}, compute_encoder, d, s);
   }
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 8192;
   std::string op_name = "vjp_layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(gx);
 
