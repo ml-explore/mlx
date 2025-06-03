@@ -3,8 +3,6 @@
 
 #include <functional>
 #include <iomanip>
-#include <sstream>
-#include <unordered_set>
 
 #include "mlx/array.h"
 #include "mlx/primitives.h"
@@ -14,12 +12,6 @@ namespace mlx::core {
 inline bool is_static_cast(const Primitive& p) {
   return (typeid(p) == typeid(Broadcast) || typeid(p) == typeid(AsType));
 }
-
-std::string build_lib_name(
-    const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
-    const std::vector<array>& tape,
-    const std::unordered_set<uintptr_t>& constant_ids);
 
 std::string get_type_string(Dtype d);
 
