@@ -727,6 +727,8 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
     const array& out,
     int bm,
     int bn,
@@ -749,7 +751,7 @@ MTL::ComputePipelineState* get_steel_conv_general_kernel(
                          wn);
     return kernel_source.str();
   });
-  return d.get_kernel(kernel_name, lib);
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_fft_kernel(

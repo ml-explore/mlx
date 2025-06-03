@@ -137,6 +137,52 @@ struct Conv2DInputBlockLoaderGeneral {
     }
   }
 
+  METAL_FUNC void load_safe(const short remaining_k) const {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
+      // Find bounds
+      int n = read_n[i];
+
+      int h_flip = params->flip ? params->wS[0] - weight_h - 1 : weight_h;
+      int w_flip = params->flip ? params->wS[1] - weight_w - 1 : weight_w;
+
+      int ih_dil = read_ih[i] + h_flip * params->kdil[0];
+      int iw_dil = read_iw[i] + w_flip * params->kdil[1];
+
+      int ih = ih_dil / params->idil[0];
+      int iw = iw_dil / params->idil[1];
+
+      size_t offset = ih * params->in_strides[1] + iw * params->in_strides[2];
+
+      // Read from input if in bounds
+      if ((n < params->N) && (ih_dil >= 0 && ih < params->iS[0]) &&
+          (iw_dil >= 0 && iw < params->iS[1])) {
+        if (bj + vec_size <= remaining_k) {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < vec_size; ++j) {
+            dst[is * dst_ld + j] = (src[i])[offset + j];
+          }
+        } else {
+          for (short j = 0; j < vec_size; ++j) {
+            if (bj + j < remaining_k) {
+              dst[is * dst_ld + j] = (src[i])[offset + j];
+            } else {
+              dst[is * dst_ld + j] = T(0);
+            }
+          }
+        }
+      }
+
+      // Zero pad otherwise
+      else {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; ++j) {
+          dst[is * dst_ld + j] = T(0);
+        }
+      }
+    }
+  }
+
   /* Iteration helper */
   METAL_FUNC void next() {
     weight_w += jump_params->f_wgt_jump_w;
@@ -251,6 +297,55 @@ struct Conv2DWeightBlockLoaderGeneral {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
             dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+          }
+        } else {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < vec_size; j++) {
+            dst[i * dst_ld + j] = T(0);
+          }
+        }
+      }
+    }
+  }
+
+  METAL_FUNC void load_safe(const short remaining_k) const {
+    const device T* curr_src = src + weight_h * params->wt_strides[1] +
+        weight_w * params->wt_strides[2];
+
+    if ((start_row + BN <= params->O)) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < BN; i += TROWS) {
+        if (bj + vec_size <= remaining_k) {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < vec_size; j++) {
+            dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+          }
+        } else {
+          for (short j = 0; j < vec_size; j++) {
+            if (bj + j < remaining_k) {
+              dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+            } else {
+              dst[i * dst_ld + j] = T(0);
+            }
+          }
+        }
+      }
+    } else {
+      for (short i = 0; i < BN; i += TROWS) {
+        if ((start_row + i) < params->O) {
+          if (bj + vec_size <= remaining_k) {
+            STEEL_PRAGMA_UNROLL
+            for (short j = 0; j < vec_size; j++) {
+              dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+            }
+          } else {
+            for (short j = 0; j < vec_size; j++) {
+              if (bj + j < remaining_k) {
+                dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+              } else {
+                dst[i * dst_ld + j] = T(0);
+              }
+            }
           }
         } else {
           STEEL_PRAGMA_UNROLL

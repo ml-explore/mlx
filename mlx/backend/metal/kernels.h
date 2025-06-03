@@ -205,6 +205,8 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
     const array& out,
     int bm,
     int bn,

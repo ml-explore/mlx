@@ -2,6 +2,8 @@
 
 #include "mlx/backend/metal/kernels/steel/conv/loaders/loader_general.h"
 
+constant bool align_C [[function_constant(200)]];
+
 template <
     typename T,
     int BM,
@@ -118,23 +120,58 @@ implicit_gemm_conv_2d_general(
   // Prepare threadgroup mma operation
   mma_t mma_op(simd_gid, simd_lid);
 
-  int gemm_k_iterations =
-      base_wh_size * base_ww_size * gemm_params->gemm_k_iterations;
+  if (align_C) {
+    int gemm_k_iterations =
+        base_wh_size * base_ww_size * gemm_params->gemm_k_iterations;
 
-  for (int k = 0; k < gemm_k_iterations; k++) {
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    // Load elements into threadgroup
-    loader_a.load_unsafe();
-    loader_b.load_unsafe();
+    for (int k = 0; k < gemm_k_iterations; k++) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      // Load elements into threadgroup
+      loader_a.load_unsafe();
+      loader_b.load_unsafe();
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // Multiply and accumulate threadgroup elements
-    mma_op.mma(As, Bs);
+      // Multiply and accumulate threadgroup elements
+      mma_op.mma(As, Bs);
 
-    // Prepare for next iteration
-    loader_a.next();
-    loader_b.next();
+      // Prepare for next iteration
+      loader_a.next();
+      loader_b.next();
+    }
+  }
+
+  else {
+    for (int k = 1; k < gemm_params->gemm_k_iterations; k++) {
+      for (int j = 0; j < base_wh_size * base_ww_size; j++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        // Load elements into threadgroup
+        loader_a.load_unsafe();
+        loader_b.load_unsafe();
+
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Multiply and accumulate threadgroup elements
+        mma_op.mma(As, Bs);
+
+        // Prepare for next iteration
+        loader_a.next();
+        loader_b.next();
+      }
+    }
+    const short remaining_k = params->C % BK;
+    for (int j = 0; j < base_wh_size * base_ww_size; j++) {
+      // Load elements into threadgroup
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      loader_a.load_safe(remaining_k);
+      loader_b.load_safe(remaining_k);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      // Multiply and accumulate threadgroup elements
+      mma_op.mma(As, Bs);
+      // Prepare for next iteration
+      loader_a.next();
+      loader_b.next();
+    }
   }
 
   threadgroup_barrier(mem_flags::mem_none);
