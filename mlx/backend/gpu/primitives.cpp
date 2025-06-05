@@ -5,9 +5,17 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
 
+#if defined(MLX_USE_CUDA)
+#include <nvtx3/nvtx3.hpp>
+#endif
+
 #include <cassert>
 
+#if defined(MLX_USE_CUDA)
+#define MLX_PROFILER_RANGE(message) nvtx3::scoped_range r(message)
+#else
 #define MLX_PROFILER_RANGE(message)
+#endif
 
 namespace mlx::core {
 
