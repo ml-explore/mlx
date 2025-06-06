@@ -41,7 +41,9 @@ MTL::ComputePipelineState* get_unary_kernel(
     std::string kernel_source = metal::utils();
     concatenate(kernel_source, metal::unary_ops(), metal::unary());
     kernel_source +=
-        get_template_definition("v_" + lib_name, "unary_v", in_t, out_t, op);
+        get_template_definition("v_" + lib_name, "unary_v", in_t, out_t, op, 1);
+    kernel_source +=
+        get_template_definition("vn_" + lib_name, "unary_v", in_t, out_t, op);
     kernel_source +=
         get_template_definition("v2_" + lib_name, "unary_v2", in_t, out_t, op);
     kernel_source += get_template_definition(
@@ -61,9 +63,9 @@ void append_binary_kernels(
     std::string& kernel_source) {
   const std::array<std::pair<std::string, std::string>, 10> kernel_types = {{
       {"ss", "binary_ss"},
-      {"vs", "binary_vs"},
-      {"sv", "binary_sv"},
-      {"vv", "binary_vv"},
+      {"vsn", "binary_vs"},
+      {"svn", "binary_sv"},
+      {"vvn", "binary_vv"},
       {"vs2", "binary_vs2"},
       {"sv2", "binary_sv2"},
       {"vv2", "binary_vv2"},
@@ -78,6 +80,12 @@ void append_binary_kernels(
     kernel_source +=
         get_template_definition(name + "_" + lib_name, func, in_t, out_t, op);
   }
+  kernel_source += get_template_definition(
+      "vs_" + lib_name, "binary_vs", in_t, out_t, op, 1);
+  kernel_source += get_template_definition(
+      "sv_" + lib_name, "binary_sv", in_t, out_t, op, 1);
+  kernel_source += get_template_definition(
+      "sv_" + lib_name, "binary_sv", in_t, out_t, op, 1);
   kernel_source += get_template_definition(
       "g1_" + lib_name, "binary_g_nd1", in_t, out_t, op, "int");
   kernel_source += get_template_definition(
@@ -134,7 +142,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
     std::string kernel_source = metal::utils();
     concatenate(kernel_source, metal::ternary_ops(), metal::ternary());
     const std::array<std::pair<std::string, std::string>, 5> kernel_types = {{
-        {"v", "ternary_v"},
+        {"vn", "ternary_v"},
         {"v2", "ternary_v2"},
         {"g1large", "ternary_g_nd1"},
         {"g2large", "ternary_g_nd2"},
@@ -144,6 +152,8 @@ MTL::ComputePipelineState* get_ternary_kernel(
       kernel_source +=
           get_template_definition(name + "_" + lib_name, func, t_str, op);
     }
+    kernel_source +=
+        get_template_definition("v_" + lib_name, "ternary_v", t_str, op, 1);
     kernel_source += get_template_definition(
         "g1_" + lib_name, "ternary_g_nd1", t_str, op, "int");
     kernel_source += get_template_definition(
