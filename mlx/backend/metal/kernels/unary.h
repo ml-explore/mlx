@@ -7,8 +7,14 @@ template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
     constant uint& size,
     uint index [[thread_position_in_grid]]) {
   index *= N;
-  for (int i = 0; i < N && (index + i) < size; ++i) {
-    out[index + i] = Op()(in[index + i]);
+  if (N > 1 && index + N > size) {
+    for (int i = 0; index + i < size; ++i) {
+      out[index + i] = Op()(in[index + i]);
+    }
+  } else {
+    for (int i = 0; i < N; ++i) {
+      out[index + i] = Op()(in[index + i]);
+    }
   }
 }
 
@@ -19,9 +25,15 @@ template <typename T, typename U, typename Op, int N = WorkPerThread<T>::n>
     constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = N * (index.x + grid_dim.x * int64_t(index.y));
-  for (int i = 0; i < N && (offset + i) < size; ++i) {
-    out[offset + i] = Op()(in[offset + i]);
+  int64_t offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  if (N > 1 && offset + N > size) {
+    for (int i = 0; offset + i < size; ++i) {
+      out[offset + i] = Op()(in[offset + i]);
+    }
+  } else {
+    for (int i = 0; i < N; ++i) {
+      out[offset + i] = Op()(in[offset + i]);
+    }
   }
 }
 

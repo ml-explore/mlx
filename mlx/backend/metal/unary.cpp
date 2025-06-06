@@ -43,8 +43,8 @@ void unary_op_gpu_inplace(
   int work_per_thread;
   std::string kernel_name;
   if (contig) {
-    work_per_thread = get_work_per_thread(in.dtype());
-    kernel_name = (large ? "v2" : "v");
+    work_per_thread = get_work_per_thread(in.dtype(), in.data_size());
+    kernel_name = (large ? "v2" : (work_per_thread > 1 ? "vn" : "v"));
   } else {
     work_per_thread = large ? 4 : 1;
     kernel_name = "gn" + std::to_string(work_per_thread);

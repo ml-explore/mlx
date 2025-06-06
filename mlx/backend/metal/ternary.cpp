@@ -45,7 +45,7 @@ void ternary_op_gpu_inplace(
     work_per_thread = large ? 4 : 2;
   } else {
     large = out.data_size() > INT32_MAX;
-    work_per_thread = get_work_per_thread(b.dtype());
+    work_per_thread = get_work_per_thread(b.dtype(), out.data_size());
   }
   std::string kernel_name;
   if (topt == TernaryOpType::General) {
@@ -60,6 +60,8 @@ void ternary_op_gpu_inplace(
     }
   } else if (large) {
     kernel_name = "v2";
+  } else if (work_per_thread > 1) {
+    kernel_name = "vn";
   } else {
     kernel_name = "v";
   }

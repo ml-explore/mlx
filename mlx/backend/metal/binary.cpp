@@ -31,13 +31,13 @@ std::string get_kernel_name(
       kname = "ss";
       break;
     case BinaryOpType::ScalarVector:
-      kname = (large ? "sv2" : "sv");
+      kname = "sv";
       break;
     case BinaryOpType::VectorScalar:
-      kname = (large ? "vs2" : "vs");
+      kname = "vs";
       break;
     case BinaryOpType::VectorVector:
-      kname = (large ? "vv2" : "vv");
+      kname = "vv";
       break;
     case BinaryOpType::General:
       kname = "g";
@@ -50,6 +50,13 @@ std::string get_kernel_name(
         kname += "large";
       }
       break;
+  }
+  if (bopt != BinaryOpType::General && bopt != BinaryOpType::ScalarScalar) {
+    if (large) {
+      kname += "2";
+    } else if (work_per_thread > 1) {
+      kname += "n";
+    }
   }
   concatenate(kname, "_", op, type_to_name(a));
   return kname;
@@ -90,7 +97,7 @@ void binary_op_gpu_inplace(
     work_per_thread = large ? 4 : 2;
   } else {
     large = out.data_size() > UINT32_MAX;
-    work_per_thread = get_work_per_thread(a.dtype());
+    work_per_thread = get_work_per_thread(a.dtype(), out.data_size());
   }
   std::string kernel_name =
       get_kernel_name(bopt, op, a, large, shape.size(), work_per_thread);
