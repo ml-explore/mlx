@@ -12,6 +12,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
@@ -52,6 +53,9 @@ target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:nvtx3-cpp>)
 # Make cuda runtime APIs available in non-cuda files.
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+
+# Use cublasLt.
+target_link_libraries(mlx PRIVATE CUDA::cublasLt)
 
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
