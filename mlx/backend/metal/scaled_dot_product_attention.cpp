@@ -73,7 +73,7 @@ void sdpa_full_self_attention_metal(
   std::string hash_name = kname.str();
 
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+  auto kernel = d.get_kernel(base_name, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   const int NQ = (qL + bq - 1) / bq;
@@ -180,7 +180,7 @@ void sdpa_vector(
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname, "mlx", hash_name, func_consts);
+  auto kernel = d.get_kernel(kname, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
@@ -281,7 +281,7 @@ void sdpa_vector_2pass(
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname, "mlx", hash_name, func_consts);
+  auto kernel = d.get_kernel(kname, hash_name, func_consts);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 

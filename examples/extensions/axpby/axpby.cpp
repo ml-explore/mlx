@@ -172,11 +172,11 @@ void Axpby::eval_gpu(
   kname << (contiguous_kernel ? "contiguous_" : "general_");
   kname << type_to_name(out);
 
-  // Make sure the metal library is available
-  d.register_library("mlx_ext");
+  // Load the metal library
+  auto lib = d.get_library("mlx_ext");
 
   // Make a kernel from this metal library
-  auto kernel = d.get_kernel(kname.str(), "mlx_ext");
+  auto kernel = d.get_kernel(kname.str(), lib);
 
   // Prepare to encode kernel
   auto& compute_encoder = d.get_command_encoder(s.index);

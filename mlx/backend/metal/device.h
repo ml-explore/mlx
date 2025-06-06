@@ -187,13 +187,15 @@ class Device {
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
 
-  void register_library(
-      const std::string& lib_name,
-      const std::string& lib_path = "");
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::string& path = "");
 
   MTL::Library* get_library(
       const std::string& name,
       const std::function<std::string(void)>& builder);
+
+  void clear_library(const std::string& name);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
@@ -204,7 +206,6 @@ class Device {
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
-      const std::string& lib_name = "mlx",
       const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
@@ -258,10 +259,13 @@ class Device {
   std::unordered_map<int32_t, DeviceStream> stream_map_;
 
   std::shared_mutex kernel_mtx_;
-  std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
-
   std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
+  MTL::Library* default_library_;
+  std::unordered_map<
+      MTL::Library*,
+      std::unordered_map<std::string, MTL::ComputePipelineState*>>
+      library_kernels_;
   const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
   int max_ops_per_buffer_;

@@ -146,7 +146,7 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
     int,
     int,
     int) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
@@ -207,7 +207,7 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int,
     int,
     bool) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_gemv_masked_kernel(
@@ -259,7 +259,7 @@ MTL::ComputePipelineState* get_fft_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const std::string&) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_quantized_kernel(
@@ -283,7 +283,7 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     int,
     int,
     bool) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 } // namespace mlx::core
