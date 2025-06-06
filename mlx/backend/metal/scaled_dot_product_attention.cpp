@@ -369,7 +369,7 @@ bool ScaledDotProductAttention::use_fallback(
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);
 
-  const bool supports_sdpa_full =
+  const bool supports_sdpa_full = query_sequence_length > 8 &&
       sdpa_full_supported_mask && sdpa_full_supported_head_dim;
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&

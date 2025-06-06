@@ -255,12 +255,13 @@ void LayerNorm::eval_gpu(
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 6656;
   std::string op_name = "layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(out);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -272,7 +273,13 @@ void LayerNorm::eval_gpu(
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
-      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
+        std::ostringstream msg;
+        msg << "[layer_norm] Threadgroup size " << threadgroup_size
+            << " is larger than the maximum allowed threadgroup size "
+            << kernel->maxTotalThreadsPerThreadgroup();
+        throw std::runtime_error(msg.str());
+      }
       size_t n_threads = n_rows * threadgroup_size;
       grid_dims = MTL::Size(n_threads, 1, 1);
       group_dims = MTL::Size(threadgroup_size, 1, 1);
@@ -372,12 +379,13 @@ void LayerNormVJP::eval_gpu(
         g, gb, "sum", plan, {0}, compute_encoder, d, s);
   }
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 8192;
   std::string op_name = "vjp_layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(gx);
 
@@ -394,7 +402,13 @@ void LayerNormVJP::eval_gpu(
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
-      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
+        std::ostringstream msg;
+        msg << "[vjp_layer_norm] Threadgroup size " << threadgroup_size
+            << " is larger than the maximum allowed threadgroup size "
+            << kernel->maxTotalThreadsPerThreadgroup();
+        throw std::runtime_error(msg.str());
+      }
       size_t n_threads = n_rows * threadgroup_size;
       grid_dims = MTL::Size(n_threads, 1, 1);
       group_dims = MTL::Size(threadgroup_size, 1, 1);
