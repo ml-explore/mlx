@@ -55,10 +55,10 @@ void copy_gpu_inplace(
   std::string kernel_name;
   switch (ctype) {
     case CopyType::Scalar:
-      kernel_name = (large ? "s2" : "s");
+      kernel_name = large ? "s2" : "s";
       break;
     case CopyType::Vector:
-      kernel_name = (large ? "v2" : "v");
+      kernel_name = large ? "v2" : "v";
       break;
     case CopyType::General:
       kernel_name = "g";
@@ -85,7 +85,10 @@ void copy_gpu_inplace(
       }
     }
   } else {
-    work_per_thread = get_work_per_thread(in.dtype());
+    work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
+    if (work_per_thread > 1) {
+      kernel_name += "n";
+    }
   }
   concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
   auto kernel = dynamic ? get_dynamic_copy_kernel(d, kernel_name, in, out)
@@ -170,9 +173,10 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   }
   out.set_data(allocator::malloc(out.nbytes()));
   bool large = out.data_size() > UINT32_MAX;
+  int work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
   auto& d = metal::device(s.device);
-  std::string kernel_name = std::string(large ? "s2" : "s") + "_copy" +
-      type_to_name(val) + type_to_name(out);
+  std::string kernel_name = large ? "s2" : (work_per_thread > 1 ? "sn" : "s");
+  concatenate(kernel_name, "_copy", type_to_name(val), type_to_name(out));
   auto kernel = get_copy_kernel(d, kernel_name, val, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -180,7 +184,6 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   compute_encoder.set_input_array(val, 0);
   compute_encoder.set_output_array(out, 1);
 
-  int work_per_thread = get_work_per_thread(val.dtype());
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   size_t nthreads = ceildiv(out.data_size(), work_per_thread);
   if (thread_group_size > nthreads) {

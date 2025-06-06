@@ -180,12 +180,17 @@ MTL::ComputePipelineState* get_copy_kernel(
     kernel_source += metal::copy();
     auto in_type = get_type_string(in.dtype());
     auto out_type = get_type_string(out.dtype());
+    kernel_source += get_template_definition(
+        "s_" + lib_name, "copy_s", in_type, out_type, 1);
     kernel_source +=
-        get_template_definition("s_" + lib_name, "copy_s", in_type, out_type);
+        get_template_definition("sn_" + lib_name, "copy_s", in_type, out_type);
     kernel_source +=
         get_template_definition("s2_" + lib_name, "copy_s2", in_type, out_type);
+    kernel_source += get_template_definition(
+        "v_" + lib_name, "copy_v", in_type, out_type, 1);
     kernel_source +=
-        get_template_definition("v_" + lib_name, "copy_v", in_type, out_type);
+        get_template_definition("vn_" + lib_name, "copy_v", in_type, out_type);
+
     kernel_source +=
         get_template_definition("v2_" + lib_name, "copy_v2", in_type, out_type);
 

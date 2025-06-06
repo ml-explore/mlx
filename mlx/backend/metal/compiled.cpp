@@ -278,7 +278,21 @@ void Compiled::eval_gpu(
         /* ndim = */ 0,
         /* dynamic_dims = */ false,
         /* use_big_index = */ false,
-        /* work_per_thread = */ work_per_thread);
+        /* work_per_thread = */ 1);
+    if (work_per_thread > 1) {
+      build_kernel(
+          kernel,
+          kernel_lib_ + "_contiguous_n",
+          inputs_,
+          outputs_,
+          tape_,
+          is_constant_,
+          /* contiguous = */ true,
+          /* ndim = */ 0,
+          /* dynamic_dims = */ false,
+          /* use_big_index = */ false,
+          /* work_per_thread = */ work_per_thread);
+    }
     build_kernel(
         kernel,
         kernel_lib_ + "_contiguous_large",
@@ -358,11 +372,19 @@ void Compiled::eval_gpu(
   int ndim = shape.size();
   bool dynamic = ndim >= 8;
   auto kernel_name = kernel_lib_ + (contiguous ? "_contiguous" : "_strided_");
+  int work_per_thread = 1;
   if (!contiguous) {
     if (dynamic) {
       kernel_name += "dynamic";
     } else {
       kernel_name += std::to_string(shape.size());
+    }
+    work_per_thread = ndim > 3 ? (large ? 4 : 2) : 1;
+  } else {
+    work_per_thread =
+        get_work_per_thread(outputs[0].dtype(), outputs[0].data_size());
+    if (work_per_thread > 1 && !large) {
+      kernel_name += "_n";
     }
   }
   if (large) {
@@ -420,7 +442,6 @@ void Compiled::eval_gpu(
 
   // Launch the kernel
   if (contiguous) {
-    int work_per_thread = get_work_per_thread(outputs[0].dtype());
     size_t nthreads = ceildiv(outputs[0].data_size(), work_per_thread);
     MTL::Size group_dims(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
@@ -433,7 +454,6 @@ void Compiled::eval_gpu(
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
     size_t rest = outputs[0].size() / (dim0 * dim1);
-    int work_per_thread = ndim > 3 ? (large ? 4 : 2) : 1;
     dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     int pow2;
