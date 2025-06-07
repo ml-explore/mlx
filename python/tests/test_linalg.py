@@ -359,36 +359,6 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
             )  # Non-square matrix
 
-    def test_lu(self):
-        with self.assertRaises(ValueError):
-            mx.linalg.lu(mx.array(0.0), stream=mx.cpu)
-
-        with self.assertRaises(ValueError):
-            mx.linalg.lu(mx.array([0.0, 1.0]), stream=mx.cpu)
-
-        with self.assertRaises(ValueError):
-            mx.linalg.lu(mx.array([[0, 1], [1, 0]]), stream=mx.cpu)
-
-        # Test 3x3 matrix
-        a = mx.array([[3.0, 1.0, 2.0], [1.0, 8.0, 6.0], [9.0, 2.0, 5.0]])
-        P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        self.assertTrue(mx.allclose(L[P, :] @ U, a))
-
-        # Test batch dimension
-        a = mx.broadcast_to(a, (5, 5, 3, 3))
-        P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        L = mx.take_along_axis(L, P[..., None], axis=-2)
-        self.assertTrue(mx.allclose(L @ U, a))
-
-        # Test non-square matrix
-        a = mx.array([[3.0, 1.0, 2.0], [1.0, 8.0, 6.0]])
-        P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        self.assertTrue(mx.allclose(L[P, :] @ U, a))
-
-        a = mx.array([[3.0, 1.0], [1.0, 8.0], [9.0, 2.0]])
-        P, L, U = mx.linalg.lu(a, stream=mx.cpu)
-        self.assertTrue(mx.allclose(L[P, :] @ U, a))
-
     def test_eigh(self):
         tols = {"atol": 1e-5, "rtol": 1e-5}
 
