@@ -172,7 +172,7 @@ void RMSNormVJP::eval_gpu(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
-    auto kernel = d.get_kernel(op_name, "mlx", hash_name, func_consts);
+    auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {
@@ -395,7 +395,7 @@ void LayerNormVJP::eval_gpu(
   };
 
   {
-    auto kernel = d.get_kernel(op_name, "mlx", hash_name, func_consts);
+    auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {
