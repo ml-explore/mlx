@@ -766,9 +766,7 @@ void dispatch_conv_2D_gpu(
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
 
-  else if (
-      (conv_params.C % 16 == 0 && conv_params.O % 16 == 0) || out_large ||
-      true) {
+  else if ((conv_params.C % 16 == 0 && conv_params.O % 16 == 0) || out_large) {
     return implicit_gemm_conv_2D_general_gpu(s, d, in, wt, out, conv_params);
   }
 
