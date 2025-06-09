@@ -353,7 +353,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 3.0)))
 
 
-class TestSchedulers(unittest.TestCase):
+class TestSchedulers(mlx_tests.MLXTestCase):
     def test_decay_lr(self):
         for optim_class in optimizers_dict.values():
             lr_schedule = opt.step_decay(1e-1, 0.9, 1)

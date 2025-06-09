@@ -198,7 +198,7 @@ class TestInequality(mlx_tests.MLXTestCase):
     def test_dlx_device_type(self):
         a = mx.array([1, 2, 3])
         device_type, device_id = a.__dlpack_device__()
-        self.assertIn(device_type, [1, 8])
+        self.assertIn(device_type, [1, 8, 13])
         self.assertEqual(device_id, 0)
 
         if device_type == 8:

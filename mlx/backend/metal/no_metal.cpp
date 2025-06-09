@@ -3,8 +3,11 @@
 #include <stdexcept>
 
 #include "mlx/backend/metal/metal.h"
+#include "mlx/fast.h"
 
-namespace mlx::core::metal {
+namespace mlx::core {
+
+namespace metal {
 
 bool is_available() {
   return false;
@@ -19,4 +22,21 @@ device_info() {
       "[metal::device_info] Cannot get device info without metal backend");
 };
 
-} // namespace mlx::core::metal
+} // namespace metal
+
+namespace fast {
+
+MetalKernelFunction metal_kernel(
+    const std::string&,
+    const std::vector<std::string>&,
+    const std::vector<std::string>&,
+    const std::string&,
+    const std::string&,
+    bool ensure_row_contiguous,
+    bool atomic_outputs) {
+  throw std::runtime_error("[metal_kernel] No GPU back-end.");
+}
+
+} // namespace fast
+
+} // namespace mlx::core
