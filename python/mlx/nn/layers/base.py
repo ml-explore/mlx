@@ -176,7 +176,9 @@ class Module(dict):
             if extras := (new_weights.keys() - curr_weights.keys()):
                 num_extra = len(extras)
                 extras = ",\n".join(sorted(extras))
-                raise ValueError(f"Received {num_extra} parameters not in model: \n{extras}.")
+                raise ValueError(
+                    f"Received {num_extra} parameters not in model: \n{extras}."
+                )
             if missing := (curr_weights.keys() - new_weights.keys()):
                 num_missing = len(missing)
                 missing = ",\n".join(sorted(missing))
