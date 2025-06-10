@@ -55,6 +55,9 @@ endif()
 
 if(MLX_BUILD_CUDA)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/cuda)
+else()
+  target_sources(mlx
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/backend/cuda/no_cuda.cpp)
 endif()
 
 if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
