@@ -719,9 +719,9 @@ class Convolution : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_tuple(
+        kernel_strides_,
         padding_lo_,
         padding_hi_,
-        kernel_strides_,
         kernel_dilation_,
         input_dilation_,
         groups_,
