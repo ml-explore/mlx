@@ -13,8 +13,39 @@
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <fmt/format.h>
+#include <cuda/cmath>
 
 namespace mlx::core {
+
+// Convert a number between 1~3 to constexpr.
+#define MLX_SWITCH_1_2_3(N, NDIM, ...) \
+  switch (N) {                         \
+    case 1: {                          \
+      constexpr int NDIM = 1;          \
+      __VA_ARGS__;                     \
+      break;                           \
+    }                                  \
+    case 2: {                          \
+      constexpr int NDIM = 2;          \
+      __VA_ARGS__;                     \
+      break;                           \
+    }                                  \
+    case 3: {                          \
+      constexpr int NDIM = 3;          \
+      __VA_ARGS__;                     \
+      break;                           \
+    }                                  \
+  }
+
+// Like MLX_SWITCH_ALL_TYPES but for booleans.
+#define MLX_SWITCH_BOOL(BOOL, BOOL_ALIAS, ...) \
+  if (BOOL) {                                  \
+    constexpr bool BOOL_ALIAS = true;          \
+    __VA_ARGS__;                               \
+  } else {                                     \
+    constexpr bool BOOL_ALIAS = false;         \
+    __VA_ARGS__;                               \
+  }
 
 // Maps CPU types to CUDA types.
 template <typename T>
@@ -65,5 +96,36 @@ dim3 get_2d_grid_dims(
     const Shape& shape,
     const Strides& strides,
     size_t divisor);
+
+// Return a block size that achieves maximum potential occupancy for kernel.
+template <typename T>
+inline uint max_occupancy_block_dim(T kernel) {
+  int _, block_dim;
+  CHECK_CUDA_ERROR(cudaOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel));
+  return block_dim;
+}
+
+// Get the num_blocks and block_dims that maximize occupancy for |kernel|,
+// assuming each thread handles |work_per_thread| elements of |arr|.
+template <typename T>
+inline std::tuple<dim3, uint> get_launch_args(
+    T kernel,
+    const array& arr,
+    bool large,
+    int work_per_thread = 1) {
+  size_t nthreads = cuda::ceil_div(arr.size(), work_per_thread);
+  uint block_dim = max_occupancy_block_dim(kernel);
+  if (block_dim > nthreads) {
+    block_dim = nthreads;
+  }
+  dim3 num_blocks;
+  if (large) {
+    num_blocks = get_2d_grid_dims(arr.shape(), arr.strides(), work_per_thread);
+    num_blocks.x = cuda::ceil_div(num_blocks.x, block_dim);
+  } else {
+    num_blocks.x = cuda::ceil_div(nthreads, block_dim);
+  }
+  return std::make_tuple(num_blocks, block_dim);
+}
 
 } // namespace mlx::core
