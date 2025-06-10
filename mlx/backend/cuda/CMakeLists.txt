@@ -7,7 +7,11 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_dynamic.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
@@ -27,6 +31,15 @@ target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
 # Enable defining device lambda functions.
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
+
+# CUDA 12.8 emits warning #20280-D for copy kernels which is a false positive.
+# Explicitly pass this flag to suppress the warning, it is safe to set it to
+# true but the warning wouldn't be suppressed.
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+  target_compile_options(
+    mlx
+    PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--static-global-template-stub=false>")
+endif()
 
 # Compute capability 7 is required for synchronization between CPU/GPU with
 # managed memory. TODO: Add more architectures for potential performance gain.
