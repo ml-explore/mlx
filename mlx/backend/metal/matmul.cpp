@@ -179,12 +179,12 @@ void steel_matmul_regular(
     int ldd,
     bool transpose_a,
     bool transpose_b,
+    std::vector<array>& copies,
     Shape batch_shape,
     Strides batch_strides,
     int64_t A_batch_stride,
     int64_t B_batch_stride,
-    int64_t matrix_stride_out,
-    std::vector<array>& copies) {
+    int64_t matrix_stride_out) {
   using namespace mlx::steel;
 
   // Determine dispatch kernel
@@ -563,12 +563,12 @@ void steel_matmul(
       /* int ldd = */ N,
       /* bool transpose_a = */ transpose_a,
       /* bool transpose_b = */ transpose_b,
+      /* std::vector<array>& copies = */ copies,
       /* Shape batch_shape = */ std::move(batch_shape),
       /* Strides batch_strides = */ std::move(batch_strides),
       /* int64_t A_batch_stride = */ A_batch_stride.back(),
       /* int64_t B_batch_stride = */ B_batch_stride.back(),
-      /* int64_t matrix_stride_out = */ matrix_stride_out,
-      /* std::vector<array>& copies = */ copies);
+      /* int64_t matrix_stride_out = */ matrix_stride_out);
 }
 
 template <bool CHECK_AB = true>

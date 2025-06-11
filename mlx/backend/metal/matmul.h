@@ -21,12 +21,12 @@ void steel_matmul_regular(
     int ldd,
     bool transpose_a,
     bool transpose_b,
+    std::vector<array>& copies,
     Shape batch_shape,
     Strides batch_strides,
     int64_t A_batch_stride,
     int64_t B_batch_stride,
-    int64_t matrix_stride_out,
-    std::vector<array>& copies);
+    int64_t matrix_stride_out);
 
 void steel_matmul(
     const Stream& s,
