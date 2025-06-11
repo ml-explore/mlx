@@ -164,11 +164,13 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
     wn = 2;                                                               \
   }
 
-void steel_matmul_regular(
+template <bool CHECK_AB>
+void steel_matmul_regular_axpby(
     const Stream& s,
     metal::Device& d,
     const array& a,
     const array& b,
+    const array& c,
     array& out,
     int M,
     int N,
@@ -184,7 +186,10 @@ void steel_matmul_regular(
     Strides batch_strides,
     int64_t A_batch_stride,
     int64_t B_batch_stride,
-    int64_t matrix_stride_out) {
+    int64_t matrix_stride_out,
+    int64_t C_batch_stride /* = 0*/,
+    float alpha /* = 1.0f */,
+    float beta /* = 0.0f */) {
   using namespace mlx::steel;
 
   // Determine dispatch kernel
