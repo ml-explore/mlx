@@ -72,7 +72,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
   }
 
 NO_GPU(ArgPartition)
-NO_GPU(ArgReduce)
 NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Convolution)
