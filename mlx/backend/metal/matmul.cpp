@@ -503,8 +503,6 @@ void steel_matmul_axpby(
     Strides C_batch_stride /* = {} */,
     float alpha /* = 1.0f */,
     float beta /* = 0.0f */) {
-  using namespace mlx::steel;
-
   if (batch_shape.empty()) {
     /////////////////////////////////////////////////////////////////////////////
     // Check and collapse batch dimensions
