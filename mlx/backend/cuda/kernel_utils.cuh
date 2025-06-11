@@ -47,6 +47,31 @@ namespace mlx::core {
     __VA_ARGS__;                               \
   }
 
+// Convert a block_dim to constexpr between WARP_SIZE and WARP_SIZE ^ 2.
+#define MLX_SWITCH_BLOCK_DIM(NUM_THREADS, BLOCK_DIM, ...)   \
+  {                                                         \
+    uint32_t _num_threads = NUM_THREADS;                    \
+    if (_num_threads <= WARP_SIZE) {                        \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE;             \
+      __VA_ARGS__;                                          \
+    } else if (_num_threads <= WARP_SIZE * 2) {             \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE * 2;         \
+      __VA_ARGS__;                                          \
+    } else if (_num_threads <= WARP_SIZE * 4) {             \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE * 4;         \
+      __VA_ARGS__;                                          \
+    } else if (_num_threads <= WARP_SIZE * 8) {             \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE * 8;         \
+      __VA_ARGS__;                                          \
+    } else if (_num_threads <= WARP_SIZE * 16) {            \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE * 16;        \
+      __VA_ARGS__;                                          \
+    } else {                                                \
+      constexpr uint32_t BLOCK_DIM = WARP_SIZE * WARP_SIZE; \
+      __VA_ARGS__;                                          \
+    }                                                       \
+  }
+
 // Maps CPU types to CUDA types.
 template <typename T>
 struct CTypeToCudaType {
