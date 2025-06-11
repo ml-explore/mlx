@@ -20,6 +20,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/random.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
@@ -27,6 +28,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/segmented_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
