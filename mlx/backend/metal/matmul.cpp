@@ -164,6 +164,10 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
     wn = 2;                                                               \
   }
 
+///////////////////////////////////////////////////////////////////////////////
+// Regular steel matmul dispatch
+///////////////////////////////////////////////////////////////////////////////
+
 template <bool CHECK_AB>
 void steel_matmul_regular_axpby(
     const Stream& s,
@@ -296,8 +300,10 @@ void steel_matmul_regular_axpby(
 
   compute_encoder.set_bytes(params, 4);
 
-  compute_encoder.set_vector_bytes(batch_shape, 6);
-  compute_encoder.set_vector_bytes(batch_strides, 7);
+  if (has_batch) {
+    compute_encoder.set_vector_bytes(batch_shape, 6);
+    compute_encoder.set_vector_bytes(batch_strides, 7);
+  }
 
   if (use_out_source) {
     int ldc = c.strides()[c.ndim() - 2];
@@ -319,6 +325,10 @@ void steel_matmul_regular_axpby(
   // Record copies
   d.add_temporaries(std::move(copies), s.index);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Split k steel matmul
+///////////////////////////////////////////////////////////////////////////////
 
 template <bool CHECK_AB = true>
 void steel_gemm_splitk_axpby(
@@ -466,38 +476,9 @@ void steel_gemm_splitk_axpby(
   d.add_temporaries(std::move(copies), s.index);
 }
 
-inline void steel_gemm_splitk(
-    const Stream& s,
-    metal::Device& d,
-    const array& a,
-    const array& b,
-    array& out,
-    int M,
-    int N,
-    int K,
-    int batch_size_out,
-    int lda,
-    int ldb,
-    bool transpose_a,
-    bool transpose_b,
-    std::vector<array>& copies) {
-  return steel_gemm_splitk_axpby<false>(
-      /* const Stream& s = */ s,
-      /* metal::Device& d = */ d,
-      /* const array& a = */ a,
-      /* const array& b = */ b,
-      /* const array& c = */ b,
-      /* array& out = */ out,
-      /* int M = */ M,
-      /* int N = */ N,
-      /* int K = */ K,
-      /* int batch_size_out = */ batch_size_out,
-      /* int lda = */ lda,
-      /* int ldb = */ ldb,
-      /* bool transpose_a = */ transpose_a,
-      /* bool transpose_b = */ transpose_b,
-      /* std::vector<array>& copies = */ copies);
-}
+///////////////////////////////////////////////////////////////////////////////
+// Split matmul routing
+///////////////////////////////////////////////////////////////////////////////
 
 template <bool CHECK_AB>
 void steel_matmul_axpby(
@@ -636,6 +617,10 @@ void steel_matmul_axpby(
       /* float alpha = */ alpha,
       /* float beta = */ beta);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// GEMV dispatch
+///////////////////////////////////////////////////////////////////////////////
 
 template <bool CHECK_AB = true>
 void gemv_axbpy(
@@ -812,6 +797,10 @@ inline void gemv(
       /* Strides B_batch_stride = */ B_batch_stride);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Matmul implementation
+///////////////////////////////////////////////////////////////////////////////
+
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (!issubdtype(out.dtype(), floating)) {
@@ -912,6 +901,10 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* Strides A_batch_stride = */ std::move(A_batch_stride),
       /* Strides B_batch_stride = */ std::move(B_batch_stride));
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// AddMM implementation
+///////////////////////////////////////////////////////////////////////////////
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 3);
@@ -1042,6 +1035,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* float alpha = */ alpha_,
       /* float beta = */ beta_);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// BlockMaskedMM implementation
+///////////////////////////////////////////////////////////////////////////////
 
 void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   using namespace mlx::steel;
@@ -1430,6 +1427,10 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   d.add_temporaries(std::move(copies), s.index);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// GatherMM implementation
+///////////////////////////////////////////////////////////////////////////////
 
 void gather_mm_rhs(
     const array& a_,
