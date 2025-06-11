@@ -17,10 +17,7 @@
 #include "python/src/indexing.h"
 #include "python/src/utils.h"
 
-#include "mlx/device.h"
-#include "mlx/ops.h"
-#include "mlx/transforms.h"
-#include "mlx/utils.h"
+#include "mlx/mlx.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -461,9 +458,12 @@ void init_array(nb::module_& m) {
       .def(
           "__dlpack_device__",
           [](const mx::array& a) {
+            // See
+            // https://github.com/dmlc/dlpack/blob/5c210da409e7f1e51ddf445134a4376fdbd70d7d/include/dlpack/dlpack.h#L74
             if (mx::metal::is_available()) {
-              // Metal device is available
               return nb::make_tuple(8, 0);
+            } else if (mx::cu::is_available()) {
+              return nb::make_tuple(13, 0);
             } else {
               // CPU device
               return nb::make_tuple(1, 0);

@@ -212,6 +212,29 @@ jobs:
               METAL_DEBUG_ERROR_MODE=0 \
               python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
 
+  cuda_build_and_test:
+    machine:
+      image: linux-cuda-12:default
+      resource_class: gpu.nvidia.small.gen2
+    steps:
+      - checkout
+      - run:
+          name: Install Python package
+          command: |
+            sudo apt-get update
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
+            python -m venv env
+            source env/bin/activate
+            CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
+              CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
+              pip install -e ".[dev]"
+      - run:
+          name: Run Python tests
+          command: |
+            source env/bin/activate
+            LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
+
   build_release:
     parameters:
       python_version:
@@ -348,6 +371,7 @@ workflows:
             parameters:
               macosx_deployment_target: ["13.5", "14.0"]
       - linux_build_and_test
+      - cuda_build_and_test 
       - build_documentation 
 
   build_pypi_release:
@@ -454,6 +478,8 @@ workflows:
             parameters:
               macosx_deployment_target: ["13.5", "14.0"]
       - linux_build_and_test:
+          requires: [ hold ]
+      - cuda_build_and_test:
           requires: [ hold ]
   nightly_build:
     when:

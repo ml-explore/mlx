@@ -12,6 +12,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_dynamic.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu

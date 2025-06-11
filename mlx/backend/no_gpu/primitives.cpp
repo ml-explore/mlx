@@ -2,7 +2,6 @@
 
 #include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
-#include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 
 #define NO_GPU_MULTI(func)                                             \
@@ -156,18 +155,6 @@ NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(AffineQuantize)
 NO_GPU_MULTI(CustomKernel)
-
-MetalKernelFunction metal_kernel(
-    const std::string&,
-    const std::vector<std::string>&,
-    const std::vector<std::string>&,
-    const std::string&,
-    const std::string&,
-    bool ensure_row_contiguous,
-    bool atomic_outputs) {
-  throw std::runtime_error("[metal_kernel] No GPU back-end.");
-}
-
 } // namespace fast
 
 namespace distributed {
