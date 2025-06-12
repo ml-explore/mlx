@@ -322,41 +322,6 @@ void DynamicSliceUpdate::eval_gpu(
       /* const std::optional<array>& dynamic_o_offset = */ out_offset);
 }
 
-void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  if (out.size() == 0) {
-    out.set_data(nullptr);
-    return;
-  }
-
-  auto& in = inputs[0];
-  auto& upd = inputs[1];
-
-  if (upd.size() == 0) {
-    out.copy_shared_buffer(in);
-    return;
-  }
-
-  auto ctype = in.flags().contiguous && in.size() == in.data_size()
-      ? CopyType::Vector
-      : CopyType::General;
-  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
-  auto [data_offset, out_strides] =
-      prepare_slice(out, start_indices_, strides_);
-
-  // Do copy
-  copy_gpu_inplace(
-      /* const array& src = */ upd,
-      /* array& dst = */ out,
-      /* const Shape& data_shape = */ upd.shape(),
-      /* const Strides& i_strides = */ upd.strides(),
-      /* const Strides& o_strides = */ out_strides,
-      /* int64_t i_offset = */ 0,
-      /* int64_t o_offset = */ data_offset,
-      /* CopyType ctype = */ CopyType::GeneralGeneral,
-      /* const Stream& s = */ stream());
-}
-
 void QRF::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
