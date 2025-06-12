@@ -162,6 +162,27 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_nd(
   return cuda::std::make_tuple(a_loc, b_loc);
 }
 
+template <int NDIM, typename IdxT = int64_t>
+inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_nd(
+    IdxT elem,
+    const int* shape,
+    const int64_t* a_strides,
+    const int64_t* b_strides,
+    const int64_t* c_strides) {
+  IdxT a_loc = 0;
+  IdxT b_loc = 0;
+  IdxT c_loc = 0;
+#pragma unroll
+  for (int i = NDIM - 1; i >= 0; --i) {
+    int dim_idx = elem % shape[i];
+    a_loc += dim_idx * a_strides[i];
+    b_loc += dim_idx * b_strides[i];
+    c_loc += dim_idx * c_strides[i];
+    elem /= shape[i];
+  }
+  return cuda::std::make_tuple(a_loc, b_loc, c_loc);
+}
+
 // Optimized version when ndim is larger than 4.
 template <typename IdxT = int64_t>
 inline __host__ __device__ IdxT
@@ -189,6 +210,26 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc);
+}
+
+template <typename IdxT = int64_t>
+inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_4d(
+    IdxT elem,
+    const int* shape,
+    const int64_t* a_strides,
+    const int64_t* b_strides,
+    const int64_t* c_strides,
+    int ndim) {
+  auto [a_loc, b_loc, c_loc] =
+      elem_to_loc_nd<3>(elem, shape, a_strides, b_strides, c_strides);
+  for (int i = ndim - 1; i >= 3; --i) {
+    int dim_idx = elem % shape[i];
+    a_loc += dim_idx * a_strides[i];
+    b_loc += dim_idx * b_strides[i];
+    c_loc += dim_idx * c_strides[i];
+    elem /= shape[i];
+  }
+  return cuda::std::make_tuple(a_loc, b_loc, c_loc);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
