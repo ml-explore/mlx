@@ -244,8 +244,7 @@ void LayerNorm::eval_gpu(
     }
   };
 
-  array o = set_output(inputs[0]);
-  const array& x = o.data_shared_ptr() ? o : out;
+  const array x = set_output(inputs[0]);
   const array& w = inputs[1];
   const array& b = inputs[2];
 
