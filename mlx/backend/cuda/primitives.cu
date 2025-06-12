@@ -1,9 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/device/arange.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/kernels/arange.cuh"
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
 #include "mlx/distributed/primitives.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"

@@ -1,13 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
 // This file includes host-only utilies for writing CUDA kernels, the difference
-// from backend/cuda/kernels/utils.cuh is that the latter file only include
+// from backend/cuda/device/utils.cuh is that the latter file only include
 // device-only code.
 
 #pragma once
 
 #include "mlx/array.h"
-#include "mlx/backend/cuda/kernels/utils.cuh"
+#include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuComplex.h>
 #include <cuda_bf16.h>

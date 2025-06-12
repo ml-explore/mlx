@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
-#include "mlx/backend/cuda/kernels/utils.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
+#include "mlx/backend/cuda/device/utils.cuh"
 
 namespace mlx::core::cu {
 

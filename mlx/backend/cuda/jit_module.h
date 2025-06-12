@@ -4,7 +4,7 @@
 
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/cuda/kernels/config.h"
+#include "mlx/backend/cuda/device/config.h"
 
 #include <deque>
 #include <unordered_map>

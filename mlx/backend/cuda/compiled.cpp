@@ -129,9 +129,9 @@ struct FusedKernelBuilder {
 } // namespace cu
 
 constexpr const char* g_jit_includes = R"(
-#include "mlx/backend/cuda/kernels/binary_ops.cuh"
-#include "mlx/backend/cuda/kernels/unary_ops.cuh"
-#include "mlx/backend/cuda/kernels/utils.cuh"
+#include "mlx/backend/cuda/device/binary_ops.cuh"
+#include "mlx/backend/cuda/device/unary_ops.cuh"
+#include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
 

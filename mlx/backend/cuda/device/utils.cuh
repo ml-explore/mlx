@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/kernels/config.h"
+#include "mlx/backend/cuda/device/config.h"
 
 #include <cuComplex.h>
 #include <cuda_bf16.h>
