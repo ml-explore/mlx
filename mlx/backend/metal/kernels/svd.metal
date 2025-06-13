@@ -154,6 +154,63 @@ template <typename T>
 }
 
 /**
+ * Check convergence of Jacobi iterations
+ * Computes the Frobenius norm of off-diagonal elements
+ */
+template <typename T>
+[[kernel]] void svd_check_convergence(
+    const device T* AtA [[buffer(0)]],
+    device SVDConvergenceInfo* convergence [[buffer(1)]],
+    const constant SVDParams& params [[buffer(2)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]]) {
+
+  const int N = params.N;
+  const int batch_idx = tid.z;
+  const int thread_id = lid.x;
+  const int threads_per_group = 256; // Assuming 256 threads per group
+
+  // Shared memory for reduction
+  threadgroup float shared_sum[256];
+
+  const device T* AtA_batch = AtA + batch_idx * (N * N);
+  device SVDConvergenceInfo* conv_batch = convergence + batch_idx;
+
+  // Each thread computes sum of squares of some off-diagonal elements
+  float local_sum = 0.0f;
+
+  for (int idx = thread_id; idx < N * N; idx += threads_per_group) {
+    int i = idx / N;
+    int j = idx % N;
+
+    // Only consider off-diagonal elements
+    if (i != j) {
+      float val = static_cast<float>(AtA_batch[i * N + j]);
+      local_sum += val * val;
+    }
+  }
+
+  // Store in shared memory
+  shared_sum[thread_id] = local_sum;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Reduction to compute total off-diagonal norm
+  for (int stride = threads_per_group / 2; stride > 0; stride /= 2) {
+    if (thread_id < stride) {
+      shared_sum[thread_id] += shared_sum[thread_id + stride];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  // Thread 0 writes the result
+  if (thread_id == 0) {
+    float off_diagonal_norm = sqrt(shared_sum[0]);
+    conv_batch->off_diagonal_norm = off_diagonal_norm;
+    conv_batch->converged = (off_diagonal_norm < params.tolerance);
+  }
+}
+
+/**
  * Compute singular vectors U and V
  */
 template <typename T>
@@ -176,44 +233,50 @@ template <typename T>
     return; // Skip if not computing singular vectors
   }
 
+  const int total_pairs = (N * (N - 1)) / 2;
+  const device JacobiRotation* rot_batch = rotations + batch_idx * total_pairs;
+
   // Initialize V as identity matrix (right singular vectors)
   if (i < N && j < N) {
     device T* V_batch = V + batch_idx * (N * N);
     V_batch[i * N + j] = (i == j) ? T(1) : T(0);
-  }
 
-  // Apply all Jacobi rotations to V in reverse order
-  const int total_pairs = (N * (N - 1)) / 2;
-  const device JacobiRotation* rot_batch = rotations + batch_idx * total_pairs;
+    // Apply accumulated Jacobi rotations to build V
+    // This gives us the right singular vectors
+    for (int rot_idx = 0; rot_idx < total_pairs; rot_idx++) {
+      int p = rot_batch[rot_idx].p;
+      int q = rot_batch[rot_idx].q;
+      T c = static_cast<T>(rot_batch[rot_idx].cos_theta);
+      T s = static_cast<T>(rot_batch[rot_idx].sin_theta);
 
-  // Note: In a real implementation, we'd need to apply rotations iteratively
-  // This is a simplified version for the basic implementation
-  for (int rot_idx = 0; rot_idx < total_pairs; rot_idx++) {
-    int p = rot_batch[rot_idx].p;
-    int q = rot_batch[rot_idx].q;
-    T c = rot_batch[rot_idx].cos_theta;
-    T s = rot_batch[rot_idx].sin_theta;
-
-    if (i < N && (j == p || j == q)) {
-      device T* V_batch = V + batch_idx * (N * N);
-      if (j == p) {
+      // Apply rotation to columns p and q of V
+      if (j == p || j == q) {
         T vip = V_batch[i * N + p];
         T viq = V_batch[i * N + q];
         V_batch[i * N + p] = c * vip - s * viq;
-      } else if (j == q) {
-        T vip = V_batch[i * N + p];
-        T viq = V_batch[i * N + q];
         V_batch[i * N + q] = s * vip + c * viq;
       }
     }
   }
 
-  // Compute U = A * V * S^(-1) (simplified for basic implementation)
-  // In practice, this would be done more efficiently
+  // Compute U = A * V * S^(-1) for left singular vectors
   if (i < M && j < N) {
     device T* U_batch = U + batch_idx * (M * M);
-    // For now, just initialize U as identity (placeholder)
-    U_batch[i * M + j] = (i == j && i < N) ? T(1) : T(0);
+    const device T* A_batch = A + batch_idx * params.matrix_stride;
+    const device T* V_batch = V + batch_idx * (N * N);
+
+    // U[:, j] = A * V[:, j] / S[j]
+    // This is a simplified computation - in practice we'd need the singular values
+    T sum = T(0);
+    for (int k = 0; k < N; k++) {
+      sum += A_batch[i * N + k] * V_batch[k * N + j];
+    }
+
+    // For now, store the result without normalization
+    // Proper normalization would require the computed singular values
+    if (j < M) {
+      U_batch[i * M + j] = sum;
+    }
   }
 }
 
@@ -227,6 +290,9 @@ decltype(svd_jacobi_iteration<float>) svd_jacobi_iteration<float>;
 template [[host_name("svd_extract_singular_values_float")]] [[kernel]]
 decltype(svd_extract_singular_values<float>) svd_extract_singular_values<float>;
 
+template [[host_name("svd_check_convergence_float")]] [[kernel]]
+decltype(svd_check_convergence<float>) svd_check_convergence<float>;
+
 template [[host_name("svd_compute_vectors_float")]] [[kernel]]
 decltype(svd_compute_vectors<float>) svd_compute_vectors<float>;
 
@@ -239,6 +305,9 @@ decltype(svd_jacobi_iteration<double>) svd_jacobi_iteration<double>;
 
 template [[host_name("svd_extract_singular_values_double")]] [[kernel]]
 decltype(svd_extract_singular_values<double>) svd_extract_singular_values<double>;
+
+template [[host_name("svd_check_convergence_double")]] [[kernel]]
+decltype(svd_check_convergence<double>) svd_check_convergence<double>;
 
 template [[host_name("svd_compute_vectors_double")]] [[kernel]]
 decltype(svd_compute_vectors<double>) svd_compute_vectors<double>;
