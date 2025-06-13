@@ -21,9 +21,60 @@ enum class SVDAlgorithm {
 };
 
 SVDAlgorithm select_svd_algorithm(int M, int N, Dtype dtype) {
-  // For now, always use one-sided Jacobi
-  // Future PRs will add algorithm selection heuristics
+  // Algorithm selection based on matrix properties
+
+  // For very large matrices, we might want different algorithms in the future
+  if (std::max(M, N) > 2048) {
+    // For now, still use Jacobi but with different parameters
+    return SVDAlgorithm::JACOBI_ONE_SIDED;
+  }
+
+  // For very rectangular matrices, one-sided Jacobi is efficient
+  double aspect_ratio = static_cast<double>(std::max(M, N)) / std::min(M, N);
+  if (aspect_ratio > 3.0) {
+    return SVDAlgorithm::JACOBI_ONE_SIDED;
+  }
+
+  // Default to one-sided Jacobi for most cases
   return SVDAlgorithm::JACOBI_ONE_SIDED;
+}
+
+/**
+ * Compute SVD parameters based on matrix size and algorithm
+ */
+SVDParams compute_svd_params(
+    int M,
+    int N,
+    size_t num_matrices,
+    bool compute_uv,
+    SVDAlgorithm algorithm) {
+  const int K = std::min(M, N);
+
+  // Adjust parameters based on matrix size and algorithm
+  int max_iterations = 100;
+  float tolerance = 1e-6f;
+
+  // For larger matrices, we might need more iterations
+  if (std::max(M, N) > 512) {
+    max_iterations = 200;
+    tolerance = 1e-5f; // Slightly relaxed tolerance for large matrices
+  }
+
+  // For very small matrices, we can use tighter tolerance
+  if (std::max(M, N) < 64) {
+    tolerance = 1e-7f;
+  }
+
+  return SVDParams{
+      M, // M
+      N, // N
+      K, // K
+      max_iterations, // max_iterations
+      tolerance, // tolerance
+      static_cast<int>(num_matrices), // batch_size
+      M * N, // matrix_stride
+      compute_uv // compute_uv
+  };
 }
 
 /**
@@ -77,17 +128,10 @@ void svd_metal_impl(
   const int K = std::min(M, N);
   const size_t num_matrices = a.size() / (M * N);
 
-  // Set up SVD parameters
-  SVDParams params{
-      M, // M
-      N, // N
-      K, // K
-      100, // max_iterations
-      1e-6f, // tolerance
-      static_cast<int>(num_matrices), // batch_size
-      M * N, // matrix_stride
-      compute_uv // compute_uv
-  };
+  // Select algorithm and compute parameters
+  SVDAlgorithm algorithm = select_svd_algorithm(M, N, a.dtype());
+  SVDParams params =
+      compute_svd_params(M, N, num_matrices, compute_uv, algorithm);
 
   // Allocate workspace arrays
   array AtA({static_cast<int>(num_matrices), N, N}, a.dtype(), nullptr, {});
@@ -101,6 +145,14 @@ void svd_metal_impl(
       nullptr,
       {}); // JacobiRotation struct storage
   rotations.set_data(allocator::malloc(rotations.nbytes()));
+
+  // Allocate convergence tracking
+  array convergence_info(
+      {static_cast<int>(num_matrices), 3},
+      float32,
+      nullptr,
+      {}); // SVDConvergenceInfo struct storage
+  convergence_info.set_data(allocator::malloc(convergence_info.nbytes()));
 
   // Get command encoder
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -118,22 +170,40 @@ void svd_metal_impl(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
-  // Step 2: Jacobi iterations
-  for (int iter = 0; iter < params.max_iterations; iter++) {
-    auto kernel =
-        d.get_kernel("svd_jacobi_iteration_" + get_type_string(a.dtype()));
-    compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(AtA, 0);
-    compute_encoder.set_input_array(rotations, 1);
-    // Note: convergence checking would go here in a complete implementation
-    compute_encoder.set_bytes(params, 3);
+  // Step 2: Jacobi iterations with convergence checking
+  bool converged = false;
+  for (int iter = 0; iter < params.max_iterations && !converged; iter++) {
+    // Perform Jacobi iteration
+    {
+      auto kernel =
+          d.get_kernel("svd_jacobi_iteration_" + get_type_string(a.dtype()));
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(AtA, 0);
+      compute_encoder.set_input_array(rotations, 1);
+      compute_encoder.set_input_array(convergence_info, 2);
+      compute_encoder.set_bytes(params, 3);
 
-    MTL::Size grid_dims = MTL::Size(total_pairs, 1, num_matrices);
-    MTL::Size group_dims = MTL::Size(std::min(256, total_pairs), 1, 1);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
+      MTL::Size grid_dims = MTL::Size(total_pairs, 1, num_matrices);
+      MTL::Size group_dims = MTL::Size(std::min(256, total_pairs), 1, 1);
+      compute_encoder.dispatch_threads(grid_dims, group_dims);
+    }
 
-    // In a complete implementation, we would check convergence here
-    // For now, we just run a fixed number of iterations
+    // Check convergence every few iterations to avoid overhead
+    if (iter % 5 == 4 || iter == params.max_iterations - 1) {
+      auto kernel =
+          d.get_kernel("svd_check_convergence_" + get_type_string(a.dtype()));
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(AtA, 0);
+      compute_encoder.set_input_array(convergence_info, 1);
+      compute_encoder.set_bytes(params, 2);
+
+      MTL::Size grid_dims = MTL::Size(1, 1, num_matrices);
+      MTL::Size group_dims = MTL::Size(256, 1, 1);
+      compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+      // Note: In a complete implementation, we would read back convergence
+      // status from GPU and break early. For now, we run all iterations.
+    }
   }
 
   // Step 3: Extract singular values
@@ -173,7 +243,7 @@ void svd_metal_impl(
   }
 
   // Add temporary arrays for cleanup
-  d.add_temporaries({AtA, rotations}, s.index);
+  d.add_temporaries({AtA, rotations, convergence_info}, s.index);
 }
 
 // Explicit template instantiations
