@@ -77,14 +77,103 @@ void svd_metal_impl(
   const int K = std::min(M, N);
   const size_t num_matrices = a.size() / (M * N);
 
-  // TODO: Implement actual Metal SVD computation in subsequent PRs
-  // For now, throw an informative error
-  throw std::runtime_error(
-      "[SVD::eval_gpu] Metal SVD implementation in progress. "
-      "Matrix size: " +
-      std::to_string(M) + "x" + std::to_string(N) +
-      ", batch size: " + std::to_string(num_matrices) +
-      ", compute_uv: " + (compute_uv ? "true" : "false"));
+  // Set up SVD parameters
+  SVDParams params{
+      M, // M
+      N, // N
+      K, // K
+      100, // max_iterations
+      1e-6f, // tolerance
+      static_cast<int>(num_matrices), // batch_size
+      M * N, // matrix_stride
+      compute_uv // compute_uv
+  };
+
+  // Allocate workspace arrays
+  array AtA({static_cast<int>(num_matrices), N, N}, a.dtype(), nullptr, {});
+  AtA.set_data(allocator::malloc(AtA.nbytes()));
+
+  // Allocate rotation storage for Jacobi algorithm
+  const int total_pairs = (N * (N - 1)) / 2;
+  array rotations(
+      {static_cast<int>(num_matrices), total_pairs, 4},
+      float32,
+      nullptr,
+      {}); // JacobiRotation struct storage
+  rotations.set_data(allocator::malloc(rotations.nbytes()));
+
+  // Get command encoder
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  // Step 1: Preprocess - compute A^T * A
+  {
+    auto kernel = d.get_kernel("svd_preprocess_" + get_type_string(a.dtype()));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_output_array(AtA, 1);
+    compute_encoder.set_bytes(params, 2);
+
+    MTL::Size grid_dims = MTL::Size(N, N, num_matrices);
+    MTL::Size group_dims = MTL::Size(std::min(32, N), std::min(32, N), 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+
+  // Step 2: Jacobi iterations
+  for (int iter = 0; iter < params.max_iterations; iter++) {
+    auto kernel =
+        d.get_kernel("svd_jacobi_iteration_" + get_type_string(a.dtype()));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(AtA, 0);
+    compute_encoder.set_input_array(rotations, 1);
+    // Note: convergence checking would go here in a complete implementation
+    compute_encoder.set_bytes(params, 3);
+
+    MTL::Size grid_dims = MTL::Size(total_pairs, 1, num_matrices);
+    MTL::Size group_dims = MTL::Size(std::min(256, total_pairs), 1, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    // In a complete implementation, we would check convergence here
+    // For now, we just run a fixed number of iterations
+  }
+
+  // Step 3: Extract singular values
+  {
+    auto kernel = d.get_kernel(
+        "svd_extract_singular_values_" + get_type_string(a.dtype()));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(AtA, 0);
+
+    if (compute_uv) {
+      compute_encoder.set_output_array(outputs[1], 1); // S
+    } else {
+      compute_encoder.set_output_array(outputs[0], 1); // S
+    }
+    compute_encoder.set_bytes(params, 2);
+
+    MTL::Size grid_dims = MTL::Size(K, 1, num_matrices);
+    MTL::Size group_dims = MTL::Size(std::min(256, K), 1, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+
+  // Step 4: Compute singular vectors (if requested)
+  if (compute_uv) {
+    auto kernel =
+        d.get_kernel("svd_compute_vectors_" + get_type_string(a.dtype()));
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(rotations, 1);
+    compute_encoder.set_output_array(outputs[0], 2); // U
+    compute_encoder.set_output_array(outputs[2], 3); // V
+    compute_encoder.set_bytes(params, 4);
+
+    MTL::Size grid_dims =
+        MTL::Size(std::max(M, N), std::max(M, N), num_matrices);
+    MTL::Size group_dims = MTL::Size(16, 16, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+
+  // Add temporary arrays for cleanup
+  d.add_temporaries({AtA, rotations}, s.index);
 }
 
 // Explicit template instantiations
