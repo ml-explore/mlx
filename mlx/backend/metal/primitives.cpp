@@ -18,6 +18,15 @@
 
 namespace mlx::core {
 
+// Forward declaration for SVD implementation
+template <typename T>
+void svd_metal_impl(
+    const array& a,
+    std::vector<array>& outputs,
+    bool compute_uv,
+    metal::Device& d,
+    const Stream& s);
+
 template <typename T>
 void arange_set_scalars(T start, T next, metal::CommandEncoder& enc) {
   enc.set_bytes(start, 0);
@@ -331,7 +340,20 @@ void QRF::eval_gpu(
 void SVD::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("[SVD::eval_gpu] Metal SVD NYI.");
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  switch (inputs[0].dtype()) {
+    case float32:
+      svd_metal_impl<float>(inputs[0], outputs, compute_uv_, d, s);
+      break;
+    case float64:
+      svd_metal_impl<double>(inputs[0], outputs, compute_uv_, d, s);
+      break;
+    default:
+      throw std::runtime_error(
+          "[SVD::eval_gpu] only supports float32 or float64.");
+  }
 }
 
 void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {

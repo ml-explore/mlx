@@ -52,6 +52,7 @@ if(MLX_METAL_JIT)
   make_jit_source(softmax)
   make_jit_source(scan)
   make_jit_source(sort)
+  make_jit_source(svd)
   make_jit_source(
     reduce kernels/reduction/reduce_all.h kernels/reduction/reduce_col.h
     kernels/reduction/reduce_row.h kernels/reduction/reduce_init.h)
@@ -110,6 +111,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/svd.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
