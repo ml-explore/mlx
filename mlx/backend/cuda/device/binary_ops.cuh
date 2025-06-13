@@ -196,7 +196,7 @@ struct Power {
     } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
       if (base.y == 0 && base.x == 0) {
         if (isnan(exp.x) || isnan(exp.y)) {
-          auto nan = cuda::std::numeric_limits<T>::quiet_NaN();
+          auto nan = cuda::std::numeric_limits<float>::quiet_NaN();
           return make_cuFloatComplex(nan, nan);
         }
         return make_cuFloatComplex(0.0, 0.0);

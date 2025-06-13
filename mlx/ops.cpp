@@ -2847,21 +2847,6 @@ array matmul(
         "[matmul] Got 0 dimension input. Inputs must "
         "have at least one dimension.");
   }
-  if (a.ndim() == 1) {
-    // Insert a singleton dim in the beginning
-    a = expand_dims(a, 0, s);
-  }
-  if (b.ndim() == 1) {
-    // Insert a singleton dim at the end
-    b = expand_dims(b, 1, s);
-  }
-  if (a.shape(-1) != b.shape(-2)) {
-    std::ostringstream msg;
-    msg << "[matmul] Last dimension of first input with shape " << a.shape()
-        << " must match second to last dimension of"
-        << " second input with shape " << b.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
 
   // complex matmul using Karatsuba's Algorithm
   if (a.dtype() == complex64 || b.dtype() == complex64) {
@@ -2881,6 +2866,22 @@ array matmul(
 
     return add(
         c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
+  }
+
+  if (a.ndim() == 1) {
+    // Insert a singleton dim in the beginning
+    a = expand_dims(a, 0, s);
+  }
+  if (b.ndim() == 1) {
+    // Insert a singleton dim at the end
+    b = expand_dims(b, 1, s);
+  }
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[matmul] Last dimension of first input with shape " << a.shape()
+        << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
   }
 
   // Type promotion
@@ -4240,6 +4241,16 @@ array addmm(
         "have at least one dimension.");
   }
 
+  // Type promotion
+  auto out_type = result_type(a, b, c);
+
+  if (out_type == complex64) {
+    return add(
+        multiply(matmul(a, b, s), array(alpha), s),
+        multiply(array(beta), c, s),
+        s);
+  }
+
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
     a = expand_dims(a, 0, s);
@@ -4255,16 +4266,6 @@ array addmm(
         << " must match second to last dimension of"
         << " second input with shape " << b.shape() << ".";
     throw std::invalid_argument(msg.str());
-  }
-
-  // Type promotion
-  auto out_type = result_type(a, b, c);
-
-  if (out_type == complex64) {
-    return add(
-        multiply(matmul(a, b, s), array(alpha), s),
-        multiply(array(beta), c, s),
-        s);
   }
 
   if (!issubdtype(out_type, floating)) {
