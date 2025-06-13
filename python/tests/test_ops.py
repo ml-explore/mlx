@@ -3078,6 +3078,13 @@ class TestOps(mlx_tests.MLXTestCase):
         )
         self.assertTrue(np.allclose(mx.rsqrt(x), 1.0 / np.sqrt(x)))
 
+    def test_complex_power(self):
+        out = mx.power(mx.array(0j), 2)
+        self.assertEqual(out.item(), 0j)
+
+        out = mx.power(mx.array(0j), float("nan"))
+        self.assertTrue(mx.isnan(out))
+
 
 class TestBroadcast(mlx_tests.MLXTestCase):
     def test_broadcast_shapes(self):
