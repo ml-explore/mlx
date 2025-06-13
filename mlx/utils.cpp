@@ -69,7 +69,12 @@ inline void PrintFormatter::print(std::ostream& os, double val) {
   os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
-  os << val;
+  os << val.real();
+  if (val.imag() >= 0 || std::isnan(val.imag())) {
+    os << "+" << val.imag() << "j";
+  } else {
+    os << "-" << -val.imag() << "j";
+  }
 }
 
 PrintFormatter& get_global_formatter() {
