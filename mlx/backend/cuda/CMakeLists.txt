@@ -44,8 +44,8 @@ target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
 file(
   GLOB MLX_JIT_SOURCES
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-  "${CMAKE_CURRENT_SOURCE_DIR}/kernels/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/kernels/*.cuh")
+  "${CMAKE_CURRENT_SOURCE_DIR}/device/*.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/device/*.cuh")
 string(JOIN ":" MLX_JIT_SOURCES_ARG ${MLX_JIT_SOURCES})
 add_custom_command(
   OUTPUT gen/cuda_jit_sources.h
