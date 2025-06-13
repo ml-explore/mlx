@@ -8,6 +8,7 @@ target_sources(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.cu
@@ -18,6 +19,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
@@ -36,6 +38,24 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
+
+# Embed kernel sources in binary for JIT compilation.
+file(
+  GLOB MLX_JIT_SOURCES
+  RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  "${CMAKE_CURRENT_SOURCE_DIR}/kernels/*.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/kernels/*.cuh")
+string(JOIN ":" MLX_JIT_SOURCES_ARG ${MLX_JIT_SOURCES})
+add_custom_command(
+  OUTPUT gen/cuda_jit_sources.h
+  COMMAND
+    ${CMAKE_COMMAND} -DMLX_SOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+    -DMLX_JIT_SOURCES=${MLX_JIT_SOURCES_ARG} -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/bin2h.cmake"
+  DEPENDS bin2h.cmake ${MLX_JIT_SOURCES})
+add_custom_target(cuda_jit_sources DEPENDS gen/cuda_jit_sources.h)
+add_dependencies(mlx cuda_jit_sources)
+target_include_directories(mlx PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen")
 
 # Enable defining device lambda functions.
 target_compile_options(mlx
@@ -86,6 +106,9 @@ target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
 # Use cublasLt.
 target_link_libraries(mlx PRIVATE CUDA::cublasLt)
+
+# Use NVRTC and driver APIs.
+target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe

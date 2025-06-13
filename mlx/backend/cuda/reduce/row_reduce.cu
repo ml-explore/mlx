@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/kernels/cast_op.cuh"
+#include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
 
 #include <cooperative_groups.h>

@@ -12,6 +12,8 @@ namespace cu {
 class Device;
 }
 
+struct Dtype;
+
 // Cuda stream managed with RAII.
 class CudaStream {
  public:
@@ -34,5 +36,8 @@ void check_cuda_error(const char* name, cudaError_t err);
 
 // The macro version that prints the command that failed.
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
+
+// Convert Dtype to CUDA C++ types.
+const char* dtype_to_cuda_type(const Dtype& dtype);
 
 } // namespace mlx::core

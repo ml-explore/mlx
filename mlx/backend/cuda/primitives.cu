@@ -1,9 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/device/arange.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/kernels/arange.cuh"
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
 #include "mlx/distributed/primitives.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
@@ -73,7 +73,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
 
 NO_GPU(ArgPartition)
 NO_GPU(BlockMaskedMM)
-NO_GPU_MULTI(Compiled)
 NO_GPU(Convolution)
 NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)

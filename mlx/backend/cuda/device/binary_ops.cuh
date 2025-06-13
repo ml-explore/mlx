@@ -1,6 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 
 #include <cuComplex.h>
 #include <cuda/std/array>

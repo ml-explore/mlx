@@ -2,10 +2,10 @@
 
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/device/cucomplex_math.cuh"
+#include "mlx/backend/cuda/device/unary_ops.cuh"
 #include "mlx/backend/cuda/iterators/general_iterator.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/kernels/cucomplex_math.cuh"
-#include "mlx/backend/cuda/kernels/unary_ops.cuh"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 

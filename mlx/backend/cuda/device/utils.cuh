@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/device/config.h"
+
 #include <cuComplex.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
@@ -21,14 +23,8 @@ namespace mlx::core::cu {
 // CUDA kernel utils
 ///////////////////////////////////////////////////////////////////////////////
 
-// All existing NVIDIA hardware has a fixed 32 warp size. Though a built-in
-// warpSize variable exists, using it would prevent compile-time optimizations.
-#define WARP_SIZE 32
-
 // To pass shape/strides to kernels via constant memory, their size must be
 // known at compile time.
-#define MAX_NDIM 8
-
 using Shape = cuda::std::array<int32_t, MAX_NDIM>;
 using Strides = cuda::std::array<int64_t, MAX_NDIM>;
 
