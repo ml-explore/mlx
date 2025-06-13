@@ -83,12 +83,14 @@ SVDParams compute_svd_params(
 void validate_svd_inputs(const array& a) {
   if (a.ndim() < 2) {
     throw std::invalid_argument(
-        "[SVD::eval_gpu] Input must have >= 2 dimensions");
+        "[SVD::eval_gpu] Input must have >= 2 dimensions, got " +
+        std::to_string(a.ndim()) + "D array");
   }
 
   if (a.dtype() != float32 && a.dtype() != float64) {
     throw std::invalid_argument(
-        "[SVD::eval_gpu] Only float32 and float64 supported");
+        "[SVD::eval_gpu] Only float32 and float64 supported, got " +
+        to_string(a.dtype()));
   }
 
   // Check for reasonable matrix size
@@ -97,12 +99,21 @@ void validate_svd_inputs(const array& a) {
   if (M > 4096 || N > 4096) {
     throw std::invalid_argument(
         "[SVD::eval_gpu] Matrix too large for current implementation. "
-        "Maximum supported size is 4096x4096");
+        "Got " +
+        std::to_string(M) + "x" + std::to_string(N) +
+        ", maximum supported size is 4096x4096");
   }
 
   if (M == 0 || N == 0) {
     throw std::invalid_argument(
-        "[SVD::eval_gpu] Matrix dimensions must be positive");
+        "[SVD::eval_gpu] Matrix dimensions must be positive, got " +
+        std::to_string(M) + "x" + std::to_string(N));
+  }
+
+  // Check for NaN or Inf values
+  if (!isfinite(a).all().item<bool>()) {
+    throw std::invalid_argument(
+        "[SVD::eval_gpu] Input matrix contains NaN or Inf values");
   }
 }
 
@@ -128,14 +139,26 @@ void svd_metal_impl(
   const int K = std::min(M, N);
   const size_t num_matrices = a.size() / (M * N);
 
+  // Log performance information for debugging
+  if (M * N > 1024 * 1024) { // Log for large matrices
+    std::cerr << "[SVD::eval_gpu] Processing " << num_matrices
+              << " matrices of size " << M << "x" << N << std::endl;
+  }
+
   // Select algorithm and compute parameters
   SVDAlgorithm algorithm = select_svd_algorithm(M, N, a.dtype());
   SVDParams params =
       compute_svd_params(M, N, num_matrices, compute_uv, algorithm);
 
-  // Allocate workspace arrays
+  // Allocate workspace arrays with error checking
   array AtA({static_cast<int>(num_matrices), N, N}, a.dtype(), nullptr, {});
-  AtA.set_data(allocator::malloc(AtA.nbytes()));
+  try {
+    AtA.set_data(allocator::malloc(AtA.nbytes()));
+  } catch (const std::exception& e) {
+    throw std::runtime_error(
+        "[SVD::eval_gpu] Failed to allocate workspace memory for A^T*A: " +
+        std::string(e.what()));
+  }
 
   // Allocate rotation storage for Jacobi algorithm
   const int total_pairs = (N * (N - 1)) / 2;
@@ -144,7 +167,13 @@ void svd_metal_impl(
       float32,
       nullptr,
       {}); // JacobiRotation struct storage
-  rotations.set_data(allocator::malloc(rotations.nbytes()));
+  try {
+    rotations.set_data(allocator::malloc(rotations.nbytes()));
+  } catch (const std::exception& e) {
+    throw std::runtime_error(
+        "[SVD::eval_gpu] Failed to allocate rotation storage: " +
+        std::string(e.what()));
+  }
 
   // Allocate convergence tracking
   array convergence_info(
@@ -152,7 +181,13 @@ void svd_metal_impl(
       float32,
       nullptr,
       {}); // SVDConvergenceInfo struct storage
-  convergence_info.set_data(allocator::malloc(convergence_info.nbytes()));
+  try {
+    convergence_info.set_data(allocator::malloc(convergence_info.nbytes()));
+  } catch (const std::exception& e) {
+    throw std::runtime_error(
+        "[SVD::eval_gpu] Failed to allocate convergence tracking: " +
+        std::string(e.what()));
+  }
 
   // Get command encoder
   auto& compute_encoder = d.get_command_encoder(s.index);
