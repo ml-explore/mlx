@@ -95,6 +95,9 @@ Dims get_2d_grid_dims_common(
     const Strides& strides,
     size_t divisor);
 
+// Get both the block and a grid of blocks that covers dim0, dim1 and dim2.
+std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2);
+
 struct ContiguousIterator {
   inline void step() {
     int dims = shape_.size();

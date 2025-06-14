@@ -94,7 +94,6 @@ NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
 namespace fast {
-NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(AffineQuantize)
 NO_GPU_MULTI(CustomKernel)

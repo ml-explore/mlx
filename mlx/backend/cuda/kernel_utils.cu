@@ -23,4 +23,11 @@ dim3 get_2d_grid_dims(
   return dim3(std::get<0>(dims), std::get<1>(dims), std::get<2>(dims));
 }
 
+std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2) {
+  auto [grid, block] = get_grid_and_block_common(dim0, dim1, dim2);
+  auto [gx, gy, gz] = grid;
+  auto [bx, by, bz] = block;
+  return std::make_pair(dim3(gx, gy, gz), dim3(bx, by, bz));
+}
+
 } // namespace mlx::core

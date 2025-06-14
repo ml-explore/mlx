@@ -121,6 +121,7 @@ dim3 get_2d_grid_dims(
     const Shape& shape,
     const Strides& strides,
     size_t divisor);
+std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2);
 
 // Return a block size that achieves maximum potential occupancy for kernel.
 template <typename T>
