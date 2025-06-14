@@ -1,6 +1,9 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
-namespace mlx::core {
+// Note: These structs are defined outside namespace for Metal kernel
+// compatibility Metal kernels cannot access namespaced types directly
 
 /**
  * Parameters for SVD Metal kernels
@@ -12,7 +15,7 @@ struct SVDParams {
   const int max_iterations; // Maximum Jacobi iterations
   const float tolerance; // Convergence threshold
   const int batch_size; // Number of matrices in batch
-  const int64_t matrix_stride; // Stride between matrices in batch
+  const long matrix_stride; // Stride between matrices in batch
   const bool compute_uv; // Whether to compute U and V matrices
 };
 
@@ -34,4 +37,9 @@ struct SVDConvergenceInfo {
   bool converged; // Whether algorithm has converged
 };
 
+namespace mlx::core {
+// Namespace aliases for C++ code
+using ::JacobiRotation;
+using ::SVDConvergenceInfo;
+using ::SVDParams;
 } // namespace mlx::core
