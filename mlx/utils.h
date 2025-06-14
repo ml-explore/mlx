@@ -149,6 +149,11 @@ inline bool metal_fast_synch() {
   return metal_fast_synch;
 }
 
+inline bool enable_tf32() {
+  static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 1);
+  return enable_tf32_;
+}
+
 } // namespace env
 
 } // namespace mlx::core
