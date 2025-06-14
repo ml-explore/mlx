@@ -145,7 +145,7 @@ bool compiler_supports_device_sass(Device& device) {
   }
 }
 
-#define INCLUDE_PREFIX "mlx/backend/cuda/kernels/"
+#define INCLUDE_PREFIX "mlx/backend/cuda/device/"
 
 constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "atomic_ops.cuh",
