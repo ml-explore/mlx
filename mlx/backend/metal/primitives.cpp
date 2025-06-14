@@ -348,7 +348,10 @@ void SVD::eval_gpu(
       svd_metal_impl<float>(inputs[0], outputs, compute_uv_, d, s);
       break;
     case float64:
-      svd_metal_impl<double>(inputs[0], outputs, compute_uv_, d, s);
+      // Metal does not support double precision, fall back to CPU
+      throw std::runtime_error(
+          "[SVD::eval_gpu] Double precision not supported on Metal GPU. "
+          "Use mx.set_default_device(mx.cpu) for float64 SVD operations.");
       break;
     default:
       throw std::runtime_error(
