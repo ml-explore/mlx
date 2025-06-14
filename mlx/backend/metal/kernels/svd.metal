@@ -1,5 +1,3 @@
-// Copyright © 2024 Apple Inc.
-
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/svd.h"

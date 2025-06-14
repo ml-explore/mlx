@@ -1,5 +1,3 @@
-// Copyright © 2024 Apple Inc.
-
 #include "mlx/backend/metal/kernels/svd.h"
 #include "mlx/allocator.h"
 #include "mlx/backend/metal/device.h"
