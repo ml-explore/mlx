@@ -823,4 +823,20 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_svd_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool compute_uv) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source = metal::utils();
+    kernel_source += metal::svd();
+    kernel_source += get_template_definition(
+        kernel_name, lib_name, get_type_string(out.dtype()));
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 } // namespace mlx::core
