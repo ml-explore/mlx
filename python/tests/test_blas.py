@@ -1195,6 +1195,16 @@ class TestBlas(mlx_tests.MLXTestCase):
         c_np = np.matmul(np.array(a).T, b)
         self.assertTrue(np.allclose(c, c_np))
 
+        # Check shapes
+        a = mx.random.normal((2, 3)).astype(mx.complex64)
+        b = mx.random.normal((3,))
+        self.assertEqual((a @ b).shape, (2,))
+
+        a = mx.random.normal((2, 3)).astype(mx.complex64)
+        b = mx.random.normal((3,))
+        c = mx.random.normal((2,))
+        self.assertEqual(mx.addmm(c, a, b).shape, (2,))
+
     def test_complex_gemm(self):
         M = 16
         K = 50

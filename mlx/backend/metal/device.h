@@ -177,6 +177,10 @@ class Device {
     return arch_;
   }
 
+  int get_architecture_gen() const {
+    return arch_gen_;
+  }
+
   void new_queue(int index);
 
   MTL::CommandQueue* get_queue(Stream stream);
@@ -268,6 +272,7 @@ class Device {
       library_kernels_;
   const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
+  int arch_gen_;
   int max_ops_per_buffer_;
   int max_mb_per_buffer_;
 };

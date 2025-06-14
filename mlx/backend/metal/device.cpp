@@ -297,6 +297,9 @@ Device::Device() {
   device_ = load_device();
   default_library_ = load_default_library(device_);
   arch_ = std::string(device_->architecture()->name()->utf8String());
+  int ag_tens = arch_[arch_.size() - 3] - '0';
+  int ag_ones = arch_[arch_.size() - 2] - '0';
+  arch_gen_ = ag_tens * 10 + ag_ones;
   auto arch = arch_.back();
   switch (arch) {
     case 'p': // phone
