@@ -91,7 +91,7 @@ void unary_op_gpu_inplace(
           } else {
             auto [shape, strides] = collapse_contiguous_dims(in);
             auto [in_begin, in_end] = cu::make_general_iterators<int64_t>(
-                in_ptr, in.data_size(), shape, strides);
+                in_ptr, in.size(), shape, strides);
             thrust::transform(policy, in_begin, in_end, out_ptr, Op());
           }
         } else {
