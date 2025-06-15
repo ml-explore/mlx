@@ -51,6 +51,7 @@ Layers
    RMSNorm
    ReLU
    ReLU6
+   ReLUSquared
    RNN
    RoPE
    SELU
