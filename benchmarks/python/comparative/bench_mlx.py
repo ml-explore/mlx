@@ -223,6 +223,11 @@ def relu6(x):
         y = nn.relu6(y)
     mx.eval(y)
 
+def relu_squared(x):
+    y = x
+    for i in range(100):
+        y = nn.relu_squared(y)
+    mx.eval(y)
 
 def softplus(x):
     y = x
@@ -457,6 +462,9 @@ if __name__ == "__main__":
 
     elif args.benchmark == "relu6":
         print(bench(relu6, x))
+
+    elif args.benchmark == "relu_squared":
+        print(bench(relu_squared, x))
 
     elif args.benchmark == "celu":
         print(bench(celu, x))

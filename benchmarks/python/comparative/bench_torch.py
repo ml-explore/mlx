@@ -156,6 +156,13 @@ def relu6(x):
         y = torch.nn.functional.relu6(y)
     sync_if_needed(x)
 
+@torch.no_grad()
+def relu_squared(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.relu(y)
+        y = torch.square(y)
+    sync_if_needed(x)
 
 @torch.no_grad()
 def softplus(x):
@@ -406,6 +413,9 @@ if __name__ == "__main__":
 
     elif args.benchmark == "relu6":
         print(bench(relu6, x))
+
+    elif args.benchmark == "relu_squared":
+        print(bench(relu_squared, x))
 
     elif args.benchmark == "softplus":
         print(bench(softplus, x))
