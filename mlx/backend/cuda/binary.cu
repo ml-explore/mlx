@@ -264,7 +264,6 @@ BINARY_GPU(Add)
 BINARY_GPU(ArcTan2)
 BINARY_GPU(Divide)
 BINARY_GPU(Remainder)
-BINARY_GPU(Equal)
 BINARY_GPU(Greater)
 BINARY_GPU(GreaterEqual)
 BINARY_GPU(Less)
@@ -278,6 +277,17 @@ BINARY_GPU(Multiply)
 BINARY_GPU(NotEqual)
 BINARY_GPU(Power)
 BINARY_GPU(Subtract)
+
+void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Equal::eval_gpu");
+  auto& s = out.primitive().stream();
+  auto op = get_primitive_string(this);
+  if (equal_nan_) {
+    binary_op_gpu<cu::NaNEqual>(inputs, out, op, s);
+  } else {
+    binary_op_gpu<cu::Equal>(inputs, out, op, s);
+  }
+}
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("BitwiseBinary::eval_gpu");
