@@ -12,8 +12,6 @@ namespace mlx::core {
 
 namespace cu {
 
-namespace cg = cooperative_groups;
-
 template <typename T, bool traditional, bool forward>
 __device__ void rope_single_impl(
     const T* in,
