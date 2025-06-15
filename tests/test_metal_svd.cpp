@@ -91,8 +91,6 @@ TEST_CASE("test metal svd jacobi implementation") {
 
   CHECK(cpu_error.item<float>() < 1e-5);
   CHECK(gpu_error.item<float>() < 1e-2); // Relaxed tolerance for Jacobi method
-
-  MESSAGE("✅ Metal Jacobi SVD implementation works!");
 }
 
 TEST_CASE("test metal svd input validation") {
@@ -286,11 +284,6 @@ TEST_CASE("test metal svd performance characteristics") {
       CHECK(u.shape() == std::vector<int>{size, size});
       CHECK(s.shape() == std::vector<int>{size});
       CHECK(vt.shape() == std::vector<int>{size, size});
-
-      // Log timing for manual inspection
-      MESSAGE(
-          "SVD of " << size << "x" << size << " matrix took "
-                    << duration.count() << "ms");
     }
   }
 }

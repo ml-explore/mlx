@@ -11,32 +11,14 @@
 #include "mlx/scheduler.h"
 
 /**
- * COMPLETE METAL SVD IMPLEMENTATION
- *
- * This file implements a full GPU-accelerated SVD using the one-sided Jacobi
+ * Implementation of a full GPU-accelerated SVD using the one-sided Jacobi
  * algorithm.
- *
- * IMPLEMENTED FEATURES:
- * ✅ Complete Jacobi iteration algorithm with proper Givens rotations
- * ✅ A^T*A preprocessing for numerical stability
- * ✅ Convergence checking based on off-diagonal Frobenius norm
- * ✅ Singular value extraction via sqrt of eigenvalues
- * ✅ Singular vector computation (both U and V^T)
- * ✅ Batched operations for multiple matrices
- * ✅ Proper Metal kernel orchestration and memory management
- * ✅ Full integration with MLX primitive system
- * ✅ Comprehensive test framework
- *
- * ALGORITHM: One-sided Jacobi SVD
  * - Computes A^T*A and diagonalizes it using Jacobi rotations
  * - Singular values: σᵢ = √λᵢ where λᵢ are eigenvalues of A^T*A
  * - Right singular vectors: V from eigenvectors of A^T*A
- * - Left singular vectors: U = A*V*Σ⁻¹
+ * - Left singular vectors: U = A*V*Σ^-1
  *
- * PERFORMANCE: Optimized for matrices up to 4096x4096
- * PRECISION: Float32 (Metal limitation)
- *
- * STATUS: Complete implementation ready for production use
+ * - Precision: Float32 (Metal limitation)
  */
 
 namespace mlx::core {
@@ -163,19 +145,6 @@ void validate_svd_inputs(const array& a) {
 
 } // anonymous namespace
 
-/**
- * Metal implementation of SVD using one-sided Jacobi algorithm
- *
- * IMPLEMENTED FEATURES:
- * - Complete Jacobi iteration algorithm with proper rotation matrices
- * - Convergence checking based on off-diagonal norm
- * - Singular value extraction from diagonalized A^T*A
- * - Singular vector computation (U and V^T)
- * - Batched operations support
- * - Full GPU acceleration using Metal compute kernels
- *
- * CURRENT STATUS: Working implementation with Metal GPU acceleration
- */
 template <typename T>
 void svd_metal_impl(
     const array& a,
