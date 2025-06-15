@@ -223,11 +223,13 @@ def relu6(x):
         y = nn.relu6(y)
     mx.eval(y)
 
+
 def relu_squared(x):
     y = x
     for i in range(100):
         y = nn.relu_squared(y)
     mx.eval(y)
+
 
 def softplus(x):
     y = x

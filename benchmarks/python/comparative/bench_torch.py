@@ -156,6 +156,7 @@ def relu6(x):
         y = torch.nn.functional.relu6(y)
     sync_if_needed(x)
 
+
 @torch.no_grad()
 def relu_squared(x):
     y = x
@@ -163,6 +164,7 @@ def relu_squared(x):
         y = torch.nn.functional.relu(y)
         y = torch.square(y)
     sync_if_needed(x)
+
 
 @torch.no_grad()
 def softplus(x):
