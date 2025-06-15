@@ -209,4 +209,14 @@ Dims get_2d_grid_dims_common(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
 }
 
+std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2) {
+  auto [bx, by, bz] = get_block_dims_common(dim0, dim1, dim2);
+  auto gx = (dim0 + bx - 1) / bx;
+  auto gy = (dim1 + by - 1) / by;
+  auto gz = (dim2 + bz - 1) / bz;
+
+  return std::make_pair(
+      std::make_tuple(gx, gy, gz), std::make_tuple(bx, by, bz));
+}
+
 } // namespace mlx::core
