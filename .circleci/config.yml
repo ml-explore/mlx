@@ -234,6 +234,7 @@ jobs:
           command: |
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
+            LOW_MEMORY=1 DEVICE=gpu python -m tests discover python/tests -v
 
   build_release:
     parameters:
