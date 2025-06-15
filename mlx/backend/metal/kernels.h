@@ -241,6 +241,12 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     int wn,
     bool transpose);
 
+MTL::ComputePipelineState* get_svd_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool compute_uv);
+
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
 std::string
