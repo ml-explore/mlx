@@ -155,4 +155,4 @@ class TestReduce(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(failfast=True)
+    mlx_tests.MLXTestRunner(failfast=True)

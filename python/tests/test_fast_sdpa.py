@@ -607,7 +607,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
         out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
-    def test_sdpa_prommote_mask(self):
+    def test_sdpa_promote_mask(self):
         mask = mx.array(2.0, mx.bfloat16)
         D = 64
         Nq = 4
@@ -653,4 +653,4 @@ class TestSDPA(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(failfast=True)
+    mlx_tests.MLXTestRunner(failfast=True)
