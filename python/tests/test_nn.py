@@ -955,7 +955,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
-    
+
     def test_silu(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.silu(x)
@@ -983,12 +983,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
-        
+
         x_extreme = mx.array([200.0, -200.0])
         y_clipped = nn.clipped_silu(x_extreme, a_min=-50, a_max=50)
         expected_clipped = mx.array([50.0, -50.0])
         self.assertTrue(mx.all(mx.abs(y_clipped - expected_clipped) < epsilon))
-        
+
         y_custom = nn.ClippedSiLU(a_min=-10, a_max=10)(x_extreme)
         expected_custom = mx.array([10.0, -10.0])
         self.assertTrue(mx.all(mx.abs(y_custom - expected_custom) < epsilon))
