@@ -130,11 +130,13 @@ struct FusedKernelBuilder {
 
 constexpr const char* g_jit_includes = R"(
 #include "mlx/backend/cuda/device/binary_ops.cuh"
+#include "mlx/backend/cuda/device/ternary_ops.cuh"
 #include "mlx/backend/cuda/device/unary_ops.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
 
+#define inf cuda::std::numeric_limits<float>::infinity()
 )";
 
 void Compiled::eval_gpu(

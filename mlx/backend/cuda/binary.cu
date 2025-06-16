@@ -150,10 +150,10 @@ void binary_op_gpu_inplace(
             auto [shape, strides] = collapse_contiguous_dims(a, b, out);
             auto& a_strides = strides[0];
             auto& b_strides = strides[1];
-            bool large = a.data_size() > UINT32_MAX ||
-                b.data_size() > UINT32_MAX || out.data_size() > UINT32_MAX;
+            bool large = a.data_size() > INT32_MAX ||
+                b.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
             MLX_SWITCH_BOOL(large, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+              using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
               int ndim = shape.size();
               if (ndim <= 3) {
                 MLX_SWITCH_1_2_3(ndim, NDIM, {
