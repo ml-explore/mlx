@@ -136,9 +136,9 @@ def silu(x):
 def clipped_silu(x, a_min=-100, a_max=100):
     r"""Applies the Clipped Sigmoid Linear Unit.
 
-    Applies :math:`\text{clip}(x \sigma(x), a\_min, a\_max)` element wise, where 
+    Applies :math:`\text{clip}(x \sigma(x), a\_min, a\_max)` element wise, where
     :math:`\sigma(\cdot)` is the logistic sigmoid.
-    
+
     Args:
         a_min: minimum value for clipping. Default: ``-100``
         a_max: maximum value for clipping. Default: ``100``
@@ -506,7 +506,7 @@ class ClippedSiLU(Module):
     r"""Applies the Clipped Sigmoid Linear Unit.
 
     See :func:`clipped_silu` for the functional equivalent.
-    
+
     Args:
         a_min: minimum value for clipping. Default: ``-100``
         a_max: maximum value for clipping. Default: ``100``
