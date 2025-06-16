@@ -136,22 +136,33 @@ inline uint max_occupancy_block_dim(T kernel) {
 template <typename T>
 inline std::tuple<dim3, uint> get_launch_args(
     T kernel,
-    const array& arr,
+    size_t size,
+    const Shape& shape,
+    const Strides& strides,
     bool large,
     int work_per_thread = 1) {
-  size_t nthreads = cuda::ceil_div(arr.size(), work_per_thread);
+  size_t nthreads = cuda::ceil_div(size, work_per_thread);
   uint block_dim = max_occupancy_block_dim(kernel);
   if (block_dim > nthreads) {
     block_dim = nthreads;
   }
   dim3 num_blocks;
   if (large) {
-    num_blocks = get_2d_grid_dims(arr.shape(), arr.strides(), work_per_thread);
+    num_blocks = get_2d_grid_dims(shape, strides, work_per_thread);
     num_blocks.x = cuda::ceil_div(num_blocks.x, block_dim);
   } else {
     num_blocks.x = cuda::ceil_div(nthreads, block_dim);
   }
   return std::make_tuple(num_blocks, block_dim);
+}
+
+template <typename T>
+inline std::tuple<dim3, uint> get_launch_args(
+    T kernel,
+    const array& arr,
+    bool large,
+    int work_per_thread = 1) {
+  return get_launch_args(kernel, arr.size(), arr.shape(), arr.strides(), large, work_per_thread);
 }
 
 } // namespace mlx::core

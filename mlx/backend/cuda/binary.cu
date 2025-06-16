@@ -165,7 +165,7 @@ void binary_op_gpu_inplace(
                       a.data<InType>(),
                       b.data<InType>(),
                       out.data<OutType>(),
-                      out.data_size(),
+                      out.size(),
                       const_param<NDIM>(shape),
                       const_param<NDIM>(a_strides),
                       const_param<NDIM>(b_strides));
@@ -178,7 +178,7 @@ void binary_op_gpu_inplace(
                     a.data<InType>(),
                     b.data<InType>(),
                     out.data<OutType>(),
-                    out.data_size(),
+                    out.size(),
                     const_param(shape),
                     const_param(a_strides),
                     const_param(b_strides),
@@ -197,7 +197,7 @@ void binary_op_gpu_inplace(
                 kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
               }
               auto [num_blocks, block_dims] =
-                  get_launch_args(kernel, out, LARGE);
+                    get_launch_args(kernel, out.data_size(), out.shape(), out.strides(), LARGE);
               kernel<<<num_blocks, block_dims, 0, stream>>>(
                   a.data<InType>(),
                   b.data<InType>(),
