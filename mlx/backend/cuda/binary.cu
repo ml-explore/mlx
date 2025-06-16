@@ -101,10 +101,12 @@ constexpr bool supports_binary_op() {
     return std::is_same_v<Out, bool> && std::is_same_v<In, bool>;
   }
   if (std::is_same_v<Op, NaNEqual>) {
-    return std::is_same_v<Out, bool> &&
-        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+    return std::is_same_v<Out, bool> && is_inexact_v<In>;
   }
-  if (std::is_same_v<Op, LogAddExp> || std::is_same_v<Op, ArcTan2>) {
+  if (std::is_same_v<Op, LogAddExp>) {
+    return std::is_same_v<In, Out> && is_inexact_v<In>;
+  }
+  if (std::is_same_v<Op, ArcTan2>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if (std::is_same_v<Op, BitwiseAnd> || std::is_same_v<Op, BitwiseOr> ||

@@ -31,6 +31,9 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
   if (dtype == bfloat16) {
     return "__nv_bfloat16";
   }
+  if (dtype == complex64) {
+    return "cuComplex";
+  }
 #define SPECIALIZE_DtypeToString(CPP_TYPE, DTYPE) \
   if (dtype == DTYPE) {                           \
     return #CPP_TYPE;                             \
