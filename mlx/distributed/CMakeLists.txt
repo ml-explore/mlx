@@ -6,3 +6,4 @@ target_sources(
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mpi)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ring)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/nccl)

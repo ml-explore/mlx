@@ -2,9 +2,11 @@
 
 #include <unordered_map>
 
+#include <iostream>
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
+#include "mlx/distributed/nccl/nccl.h"
 #include "mlx/distributed/ring/ring.h"
 
 namespace mlx::core::distributed {
@@ -111,6 +113,8 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
     group = mpi::init(strict);
   } else if (bk == "ring") {
     group = ring::init(strict);
+  } else if (bk == "nccl") {
+    group = nccl::init(strict);
   } else if (bk == "any") {
     group = ring::init(false);
     bk_ = "ring";
