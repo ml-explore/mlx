@@ -2,7 +2,6 @@
 
 #include <unordered_map>
 
-#include <iostream>
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
