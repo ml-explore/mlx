@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/cucomplex_math.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuComplex.h>
@@ -124,11 +124,13 @@ struct LogAddExp {
         ? maxval
         : T(float(maxval) + log1p(expf(minval - maxval)));
   };
- 
+
   __device__ cuComplex operator()(cuComplex x, cuComplex y) {
     if (isnan(cuCrealf(x)) || isnan(cuCimagf(x)) || isnan(cuCrealf(y)) ||
         isnan(cuCimagf(y))) {
-      return {cuda::std::numeric_limits<float>::quiet_NaN(), cuda::std::numeric_limits<float>::quiet_NaN()};
+      return {
+          cuda::std::numeric_limits<float>::quiet_NaN(),
+          cuda::std::numeric_limits<float>::quiet_NaN()};
     }
     constexpr float inf = cuda::std::numeric_limits<float>::infinity();
     auto maxval = x > y ? x : y;

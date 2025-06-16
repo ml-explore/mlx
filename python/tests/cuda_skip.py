@@ -25,32 +25,25 @@ cuda_skip = {
     "TestReduce.test_expand_sums",
     "TestReduce.test_many_reduction_axes",
     "TestUpsample.test_torch_upsample",
-
     # DivMod NYI
     "TestOps.test_divmod",
     "TestEval.test_multi_output_eval_during_transform",
-
     # Partition NYI
     "TestAutograd.test_topk_grad",
     "TestOps.test_argpartition",
     "TestOps.test_partition",
-
     # Block masked matmul NYI
     "TestBlas.test_block_masked_matmul",
-
     # Gather matmul NYI
     "TestBlas.test_gather_matmul",
     "TestBlas.test_gather_matmul_grad",
-
     # Scan NYI
     "TestAutograd.test_cumprod_grad",
     "TestOps.test_scans",
     "TestOps.test_logcumsumexp",
-
     # Hadamard NYI
     "TestOps.test_hadamard",
     "TestOps.test_hadamard_grad_vmap",
-
     # Convolutions NYI
     "TestConv.test_1d_conv_with_2d",
     "TestConv.test_asymmetric_padding",
@@ -82,7 +75,6 @@ cuda_skip = {
     "TestLayers.test_conv1d",
     "TestLayers.test_conv2d",
     "TestVmap.test_vmap_conv",
-
     # FFTs NYI
     "TestFFT.test_fft",
     "TestFFT.test_fft_big_powers_of_two",
@@ -93,7 +85,6 @@ cuda_skip = {
     "TestFFT.test_fft_large_numbers",
     "TestFFT.test_fft_shared_mem",
     "TestFFT.test_fftn",
-
     # Lapack ops NYI
     "TestLinalg.test_cholesky",
     "TestLinalg.test_cholesky_inv",
@@ -109,7 +100,6 @@ cuda_skip = {
     "TestLinalg.test_svd_decomposition",
     "TestVmap.test_vmap_svd",
     "TestLinalg.test_tri_inverse",
-
     # Quantization NYI
     "TestQuantized.test_gather_matmul_grad",
     "TestQuantized.test_gather_qmm",
