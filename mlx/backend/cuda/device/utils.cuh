@@ -187,8 +187,8 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_nd(
 template <typename IdxT = int64_t>
 inline __host__ __device__ IdxT
 elem_to_loc_4d(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
-  IdxT loc = elem_to_loc_nd<3>(elem, shape, strides);
-  for (int i = ndim - 1; i >= 3; --i) {
+  IdxT loc = 0;
+  for (int i = ndim - 1; i >= 0; --i) {
     loc += (elem % shape[i]) * IdxT(strides[i]);
     elem /= shape[i];
   }
@@ -202,8 +202,9 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
     const int64_t* a_strides,
     const int64_t* b_strides,
     int ndim) {
-  auto [a_loc, b_loc] = elem_to_loc_nd<3>(elem, shape, a_strides, b_strides);
-  for (int i = ndim - 1; i >= 3; --i) {
+  IdxT a_loc = 0;
+  IdxT b_loc = 0;
+  for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
     a_loc += dim_idx * a_strides[i];
     b_loc += dim_idx * b_strides[i];
@@ -220,9 +221,10 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_4d(
     const int64_t* b_strides,
     const int64_t* c_strides,
     int ndim) {
-  auto [a_loc, b_loc, c_loc] =
-      elem_to_loc_nd<3>(elem, shape, a_strides, b_strides, c_strides);
-  for (int i = ndim - 1; i >= 3; --i) {
+  IdxT a_loc = 0;
+  IdxT b_loc = 0;
+  IdxT c_loc = 0;
+  for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
     a_loc += dim_idx * a_strides[i];
     b_loc += dim_idx * b_strides[i];
@@ -335,5 +337,22 @@ struct LoopedElemToLoc<1, false, OffsetT> {
     return offset;
   }
 };
+
+inline __device__ cuComplex log1p(cuComplex in) {
+  float x = cuCrealf(in);
+  float y = cuCimagf(in);
+  float zabs = sqrt(x * x + y * y);
+  float theta = atan2f(y, x + 1);
+  if (zabs < 0.5f) {
+    float r = x * (2 + x) + y * y;
+    if (r == 0) { // handle underflow
+      return {x, theta};
+    }
+    return {0.5f * log1pf(r), theta};
+  } else {
+    auto z0 = sqrt((x + 1) * (x + 1) + y * y);
+    return {log(z0), theta};
+  }
+}
 
 } // namespace mlx::core::cu

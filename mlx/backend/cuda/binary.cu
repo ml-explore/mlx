@@ -101,10 +101,12 @@ constexpr bool supports_binary_op() {
     return std::is_same_v<Out, bool> && std::is_same_v<In, bool>;
   }
   if (std::is_same_v<Op, NaNEqual>) {
-    return std::is_same_v<Out, bool> &&
-        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+    return std::is_same_v<Out, bool> && is_inexact_v<In>;
   }
-  if (std::is_same_v<Op, LogAddExp> || std::is_same_v<Op, ArcTan2>) {
+  if (std::is_same_v<Op, LogAddExp>) {
+    return std::is_same_v<In, Out> && is_inexact_v<In>;
+  }
+  if (std::is_same_v<Op, ArcTan2>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if (std::is_same_v<Op, BitwiseAnd> || std::is_same_v<Op, BitwiseOr> ||
@@ -150,10 +152,10 @@ void binary_op_gpu_inplace(
             auto [shape, strides] = collapse_contiguous_dims(a, b, out);
             auto& a_strides = strides[0];
             auto& b_strides = strides[1];
-            bool large = a.data_size() > UINT32_MAX ||
-                b.data_size() > UINT32_MAX || out.data_size() > UINT32_MAX;
+            bool large = a.data_size() > INT32_MAX ||
+                b.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
             MLX_SWITCH_BOOL(large, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+              using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
               int ndim = shape.size();
               if (ndim <= 3) {
                 MLX_SWITCH_1_2_3(ndim, NDIM, {

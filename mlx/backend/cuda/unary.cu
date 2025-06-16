@@ -27,13 +27,12 @@ constexpr bool supports_unary_op() {
       std::is_same_v<Op, ArcSin> || std::is_same_v<Op, ArcSinh> ||
       std::is_same_v<Op, ArcTan> || std::is_same_v<Op, ArcTanh> ||
       std::is_same_v<Op, Erf> || std::is_same_v<Op, ErfInv> ||
-      std::is_same_v<Op, Expm1> || std::is_same_v<Op, Log1p> ||
-      std::is_same_v<Op, Sigmoid> || std::is_same_v<Op, Sqrt> ||
-      std::is_same_v<Op, Rsqrt>) {
+      std::is_same_v<Op, Expm1> || std::is_same_v<Op, Sigmoid> ||
+      std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Rsqrt>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if (std::is_same_v<Op, Log> || std::is_same_v<Op, Log2> ||
-      std::is_same_v<Op, Log10>) {
+      std::is_same_v<Op, Log10> || std::is_same_v<Op, Log1p>) {
     return std::is_same_v<In, Out> && is_inexact_v<In>;
   }
   if (std::is_same_v<Op, BitwiseInvert>) {
