@@ -102,6 +102,11 @@ inline constexpr bool is_floating_v =
     cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double> ||
     cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t>;
 
+// Type traits for detecting complex or real floating point numbers.
+template <typename T>
+inline constexpr bool is_inexact_v =
+    is_floating_v<T> || cuda::std::is_same_v<T, complex64_t>;
+
 // Utility to copy data from vector to array in host.
 template <int NDIM = MAX_NDIM, typename T = int32_t>
 inline cuda::std::array<T, NDIM> const_param(const std::vector<T>& vec) {
@@ -136,22 +141,34 @@ inline uint max_occupancy_block_dim(T kernel) {
 template <typename T>
 inline std::tuple<dim3, uint> get_launch_args(
     T kernel,
-    const array& arr,
+    size_t size,
+    const Shape& shape,
+    const Strides& strides,
     bool large,
     int work_per_thread = 1) {
-  size_t nthreads = cuda::ceil_div(arr.size(), work_per_thread);
+  size_t nthreads = cuda::ceil_div(size, work_per_thread);
   uint block_dim = max_occupancy_block_dim(kernel);
   if (block_dim > nthreads) {
     block_dim = nthreads;
   }
   dim3 num_blocks;
   if (large) {
-    num_blocks = get_2d_grid_dims(arr.shape(), arr.strides(), work_per_thread);
+    num_blocks = get_2d_grid_dims(shape, strides, work_per_thread);
     num_blocks.x = cuda::ceil_div(num_blocks.x, block_dim);
   } else {
     num_blocks.x = cuda::ceil_div(nthreads, block_dim);
   }
   return std::make_tuple(num_blocks, block_dim);
+}
+
+template <typename T>
+inline std::tuple<dim3, uint> get_launch_args(
+    T kernel,
+    const array& arr,
+    bool large,
+    int work_per_thread = 1) {
+  return get_launch_args(
+      kernel, arr.size(), arr.shape(), arr.strides(), large, work_per_thread);
 }
 
 } // namespace mlx::core

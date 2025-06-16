@@ -45,6 +45,18 @@ struct CastOp<
   }
 };
 
+template <typename SrcT, typename DstT>
+struct CastOp<
+    SrcT,
+    DstT,
+    cuda::std::enable_if_t<cuda::std::is_same_v<SrcT, DstT>>> {
+  static constexpr bool is_castable = true;
+
+  __device__ SrcT operator()(SrcT x) {
+    return x;
+  }
+};
+
 // Return an iterator that cast the value to DstT using CastOp.
 template <typename DstT, typename Iterator>
 __host__ __device__ auto make_cast_iterator(Iterator it) {

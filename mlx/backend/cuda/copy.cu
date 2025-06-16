@@ -6,7 +6,7 @@
 namespace mlx::core {
 
 void copy_gpu_inplace(
-    const array& in_,
+    const array& in,
     array& out,
     const Shape& shape,
     const Strides& strides_in,
@@ -20,7 +20,6 @@ void copy_gpu_inplace(
   if (out.size() == 0) {
     return;
   }
-  const array& in = in_.data_shared_ptr() ? in_ : out;
 
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);

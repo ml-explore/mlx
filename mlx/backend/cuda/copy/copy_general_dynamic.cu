@@ -65,9 +65,9 @@ void copy_general_dynamic(
     MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
       const InType* in_ptr = in.data<InType>() + offset_in;
       OutType* out_ptr = out.data<OutType>() + offset_out;
-      bool large = in.data_size() > UINT32_MAX || out.data_size() > UINT32_MAX;
+      bool large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
       MLX_SWITCH_BOOL(large, LARGE, {
-        using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+        using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
         int ndim = shape.size();
         if (ndim <= 3) {
           MLX_SWITCH_1_2_3(ndim, NDIM, {
@@ -76,7 +76,7 @@ void copy_general_dynamic(
             kernel<<<num_blocks, block_dims, 0, stream>>>(
                 in_ptr,
                 out_ptr,
-                out.data_size(),
+                out.size(),
                 const_param<NDIM>(shape),
                 const_param<NDIM>(strides_in),
                 const_param<NDIM>(strides_out),
@@ -89,7 +89,7 @@ void copy_general_dynamic(
           kernel<<<num_blocks, block_dims, 0, stream>>>(
               in_ptr,
               out_ptr,
-              out.data_size(),
+              out.size(),
               const_param(shape),
               const_param(strides_in),
               const_param(strides_out),

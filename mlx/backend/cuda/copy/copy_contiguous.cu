@@ -43,7 +43,8 @@ void copy_contiguous(
         if (ctype == CopyType::Vector) {
           kernel = cu::copy_v<InType, OutType, IdxT>;
         }
-        auto [num_blocks, block_dims] = get_launch_args(kernel, out, LARGE);
+        auto [num_blocks, block_dims] = get_launch_args(
+            kernel, out.data_size(), out.shape(), out.strides(), LARGE);
         kernel<<<num_blocks, block_dims, 0, stream>>>(
             in.data<InType>() + in_offset,
             out.data<OutType>() + out_offset,
