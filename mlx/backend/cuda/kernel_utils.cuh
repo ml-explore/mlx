@@ -102,6 +102,11 @@ inline constexpr bool is_floating_v =
     cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double> ||
     cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t>;
 
+// Type traits for detecting complex or real floating point numbers.
+template <typename T>
+inline constexpr bool is_inexact_v =
+    is_floating_v<T> || cuda::std::is_same_v<T, complex64_t>;
+
 // Utility to copy data from vector to array in host.
 template <int NDIM = MAX_NDIM, typename T = int32_t>
 inline cuda::std::array<T, NDIM> const_param(const std::vector<T>& vec) {

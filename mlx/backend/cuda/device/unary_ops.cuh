@@ -5,6 +5,8 @@
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
+#include <math_constants.h>
+
 namespace mlx::core::cu {
 
 struct Abs {
@@ -183,21 +185,38 @@ struct Imag {
 struct Log {
   template <typename T>
   __device__ T operator()(T x) {
-    return log(x);
+    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      auto r = log(cuCrealf(Abs{}(x)));
+      auto i = atan2f(cuCimagf(x), cuCrealf(x));
+      return {r, i};
+    } else {
+      return log(x);
+    }
   }
 };
 
 struct Log2 {
   template <typename T>
   __device__ T operator()(T x) {
-    return log2(x);
+    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      auto y = Log{}(x);
+      return {cuCrealf(y) / CUDART_LN2_F, cuCimagf(y) / CUDART_LN2_F};
+    } else {
+      return log2(x);
+    }
   }
 };
 
 struct Log10 {
   template <typename T>
   __device__ T operator()(T x) {
-    return log10(x);
+    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      auto y = Log{}(x);
+      return {cuCrealf(y) / CUDART_LNT_F, cuCimagf(y) / CUDART_LNT_F};
+      return y;
+    } else {
+      return log10(x);
+    }
   }
 };
 
