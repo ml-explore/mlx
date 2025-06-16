@@ -10,13 +10,13 @@
 
 namespace mlx::core {
 
-#define MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, ...)    \
-  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {                  \
-    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {              \
-      using InType = cuda_type_t<CTYPE_IN>;                     \
-      using OutType = cuda_type_t<CTYPE_OUT>;                   \
-      __VA_ARGS__;                                              \
-    });                                                         \
+#define MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, ...) \
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {               \
+    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {           \
+      using InType = cuda_type_t<CTYPE_IN>;                  \
+      using OutType = cuda_type_t<CTYPE_OUT>;                \
+      __VA_ARGS__;                                           \
+    });                                                      \
   })
 
 void copy_contiguous(

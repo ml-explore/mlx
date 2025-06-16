@@ -167,7 +167,8 @@ inline std::tuple<dim3, uint> get_launch_args(
     const array& arr,
     bool large,
     int work_per_thread = 1) {
-  return get_launch_args(kernel, arr.size(), arr.shape(), arr.strides(), large, work_per_thread);
+  return get_launch_args(
+      kernel, arr.size(), arr.shape(), arr.strides(), large, work_per_thread);
 }
 
 } // namespace mlx::core

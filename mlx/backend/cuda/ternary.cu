@@ -142,7 +142,8 @@ void ternary_op_gpu_inplace(
         MLX_SWITCH_BOOL(out.data_size() > UINT32_MAX, LARGE, {
           using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
           auto kernel = cu::ternary_v<Op, DType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(kernel, out.data_size(), out.shape(), out.strides(), LARGE);
+          auto [num_blocks, block_dims] = get_launch_args(
+              kernel, out.data_size(), out.shape(), out.strides(), LARGE);
           kernel<<<num_blocks, block_dims, 0, stream>>>(
               a.data<bool>(),
               b.data<DType>(),

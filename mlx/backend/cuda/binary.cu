@@ -196,8 +196,8 @@ void binary_op_gpu_inplace(
               } else if (bopt == BinaryOpType::VectorVector) {
                 kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
               }
-              auto [num_blocks, block_dims] =
-                    get_launch_args(kernel, out.data_size(), out.shape(), out.strides(), LARGE);
+              auto [num_blocks, block_dims] = get_launch_args(
+                  kernel, out.data_size(), out.shape(), out.strides(), LARGE);
               kernel<<<num_blocks, block_dims, 0, stream>>>(
                   a.data<InType>(),
                   b.data<InType>(),

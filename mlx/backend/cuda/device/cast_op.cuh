@@ -57,7 +57,6 @@ struct CastOp<
   }
 };
 
-
 // Return an iterator that cast the value to DstT using CastOp.
 template <typename DstT, typename Iterator>
 __host__ __device__ auto make_cast_iterator(Iterator it) {
