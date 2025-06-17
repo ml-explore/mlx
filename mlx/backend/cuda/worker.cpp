@@ -80,7 +80,9 @@ void Worker::thread_fn() {
       }
       worker_tasks_.erase(worker_tasks_.begin(), end);
     }
-    for (auto& task : tasks) {
+    // Make sure tasks are cleared before the next wait
+    for (int i = 0; i < tasks.size(); ++i) {
+      auto task = std::move(tasks[i]);
       task();
     }
     worker_event_.wait(batch + 1);

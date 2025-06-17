@@ -6,7 +6,6 @@ cuda_skip = {
     "TestEinsum.test_ellipses",
     "TestEinsum.test_opt_einsum_test_cases",
     "TestLoad.test_load_f8_e4m3",
-    "TestMemory.test_memory_info",
     "TestLayers.test_group_norm",
     "TestLayers.test_pooling",
     "TestLayers.test_quantized_embedding",

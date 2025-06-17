@@ -6,6 +6,7 @@
 
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
+#include <future>
 
 namespace mlx::core {
 
@@ -105,6 +106,16 @@ void CommandEncoder::end_encoding() {
 
 void CommandEncoder::commit() {
   worker_.commit(stream_.last_cuda_stream());
+}
+
+void CommandEncoder::synchronize() {
+  stream().synchronize();
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  worker_.end_batch();
+  worker_.commit();
+  f.wait();
 }
 
 Device& device(mlx::core::Device device) {

@@ -62,7 +62,7 @@ void finalize(Stream s) {
 
 void synchronize(Stream s) {
   nvtx3::scoped_range r("gpu::synchronize");
-  cu::get_stream(s).synchronize();
+  cu::get_command_encoder(s).synchronize();
 }
 
 } // namespace mlx::core::gpu
