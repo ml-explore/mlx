@@ -71,10 +71,8 @@ bool fast::ScaledDotProductAttention::use_fallback(
     throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
-NO_GPU(ArgPartition)
 NO_GPU(BlockMaskedMM)
 NO_GPU(Convolution)
-NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)
 NO_GPU(DynamicSliceUpdate)
 NO_GPU(FFT)
@@ -83,7 +81,6 @@ NO_GPU(GatherQMM)
 NO_GPU(Hadamard)
 NO_GPU(Load)
 NO_GPU_MULTI(LUF)
-NO_GPU(Partition)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
 NO_GPU(Scan)

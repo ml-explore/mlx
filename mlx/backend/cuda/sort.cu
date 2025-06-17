@@ -86,7 +86,6 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     axis += in.ndim();
   }
   int nsort = in.shape(axis);
-  int nsegments = in.data_size() / nsort;
   int last_dim = in.ndim() - 1;
 
   // If we are not sorting the innermost dimension of a contiguous array,
@@ -100,7 +99,11 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     out = array(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
     encoder.add_temporary(out);
   } else {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(
+        allocator::malloc(in.data_size() * out.itemsize()),
+        in.data_size(),
+        in.strides(),
+        in.flags());
   }
 
   encoder.launch_kernel([&](cudaStream_t stream) {
@@ -134,7 +137,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               indices.data<uint32_t>(),
               out.data<uint32_t>(),
               in.data_size(),
-              nsegments,
+              in.data_size() / nsort,
               offsets,
               offsets + 1,
               stream);
@@ -144,7 +147,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               in.data<Type>(),
               out.data<Type>(),
               in.data_size(),
-              nsegments,
+              in.data_size() / nsort,
               offsets,
               offsets + 1,
               stream);
@@ -174,6 +177,16 @@ void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Sort::eval_gpu");
   assert(inputs.size() == 1);
+  gpu_sort(stream(), inputs[0], out, axis_, false);
+}
+
+void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("ArgPartition::eval_gpu");
+  gpu_sort(stream(), inputs[0], out, axis_, true);
+}
+
+void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Partition::eval_gpu");
   gpu_sort(stream(), inputs[0], out, axis_, false);
 }
 
