@@ -106,7 +106,6 @@ void CudaAllocator::cuda_free(void* buf) {
       return;
     }
   }
-
   cudaFree(buf);
 }
 

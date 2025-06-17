@@ -123,6 +123,9 @@ class CommandEncoder {
     return has_gpu_work_;
   }
 
+  // Wait until kernels and completion handlers are finished
+  void synchronize();
+
  private:
   Device& device_;
   DeviceStream& stream_;
