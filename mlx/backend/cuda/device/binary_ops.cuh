@@ -22,7 +22,7 @@ struct FloorDivide {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x / y;
     } else {
-      return trunc(x / y);
+      return truncf(x / y);
     }
   }
 };
@@ -132,7 +132,7 @@ struct LogAddExp {
           cuda::std::numeric_limits<float>::quiet_NaN(),
           cuda::std::numeric_limits<float>::quiet_NaN()};
     }
-    constexpr float inf = cuda::std::numeric_limits<float>::infinity();
+    float inf = cuda::std::numeric_limits<float>::infinity();
     auto maxval = x > y ? x : y;
     auto minval = x < y ? x : y;
     if (cuCrealf(minval) == -inf || cuCrealf(maxval) == inf)

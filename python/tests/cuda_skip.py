@@ -1,10 +1,8 @@
 cuda_skip = {
     "TestArray.test_api",
-    "TestAutograd.test_update_state",
     "TestBF16.test_arg_reduction_ops",
     "TestBF16.test_reduction_ops",
     "TestBlas.test_complex_gemm",
-    "TestCompile.test_compile_dynamic_dims",
     "TestEinsum.test_ellipses",
     "TestEinsum.test_opt_einsum_test_cases",
     "TestLoad.test_load_f8_e4m3",
@@ -14,24 +12,14 @@ cuda_skip = {
     "TestLayers.test_quantized_embedding",
     "TestLayers.test_sin_pe",
     "TestLayers.test_upsample",
-    "TestOps.test_array_equal",
     "TestOps.test_complex_ops",
     "TestOps.test_dynamic_slicing",
     "TestOps.test_softmax",
-    "TestOps.test_sort",
-    "TestOps.test_tile",
     "TestReduce.test_axis_permutation_sums",
     "TestReduce.test_dtypes",
     "TestReduce.test_expand_sums",
     "TestReduce.test_many_reduction_axes",
     "TestUpsample.test_torch_upsample",
-    # DivMod NYI
-    "TestOps.test_divmod",
-    "TestEval.test_multi_output_eval_during_transform",
-    # Partition NYI
-    "TestAutograd.test_topk_grad",
-    "TestOps.test_argpartition",
-    "TestOps.test_partition",
     # Block masked matmul NYI
     "TestBlas.test_block_masked_matmul",
     # Gather matmul NYI
