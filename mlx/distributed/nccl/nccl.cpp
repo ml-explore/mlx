@@ -75,12 +75,12 @@ inline void recvAll(int sock, void* buf, size_t len) {
   }
 }
 
-inline void bootstrapUniqueId(
+inline void bootstrap_unique_id(
     ncclUniqueId& id,
     int rank,
     int size,
     const std::string& initMethod) {
-  // Parse the init method to extract the host and port
+
   if (initMethod.rfind("tcp://", 0) != 0)
     throw;
   auto hostport = initMethod.substr(6);
@@ -89,10 +89,8 @@ inline void bootstrapUniqueId(
   int port = std::stoi(hostport.substr(colon + 1));
 
   if (rank == 0) {
-    // create a unique id on the rank 0
     CHECK_NCCL(ncclGetUniqueId(&id));
 
-    // create a socket to send the unique id to all other ranks
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
     if (sock < 0) {
@@ -107,8 +105,6 @@ inline void bootstrapUniqueId(
     serv.sin_port = htons(port);
 
     int reuse = 1;
-    // Without this, if I crash or restart your rank-0 process quickly,
-    // the OS might refuse to let you bind to the same port, so reuse
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
       std::ostringstream msg;
       msg << "[nccl] setsockopt() failed: " << strerror(errno);
@@ -236,7 +232,6 @@ void dispatch_dtype(const array& arr, F&& f) {
 } // namespace detail
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
-// init communication in the constructor (?)
 class NCCLGroup : public GroupImpl {
  public:
   NCCLGroup(int worldRank, int worldSize, const std::string initMethod)
@@ -334,6 +329,7 @@ class NCCLGroup : public GroupImpl {
       Stream stream,
       ncclDataType_t dt,
       ncclRedOp_t op) {
+        
     CHECK_NCCL(ncclAllReduce(
         input.data<T>(),
         output.data<T>(),
