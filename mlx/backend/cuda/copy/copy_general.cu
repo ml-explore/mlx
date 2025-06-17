@@ -63,25 +63,30 @@ void copy_general(
       MLX_SWITCH_BOOL(large, LARGE, {
         using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
         int ndim = shape.size();
+        size_t data_size = 1;
+        for (auto& s : shape)
+          data_size *= s;
         if (ndim <= 3) {
           MLX_SWITCH_1_2_3(ndim, NDIM, {
             auto kernel = cu::copy_gg_nd<InType, OutType, IdxT, NDIM>;
-            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+            auto [num_blocks, block_dims] =
+                get_launch_args(kernel, data_size, shape, out.strides(), large);
             kernel<<<num_blocks, block_dims, 0, stream>>>(
                 in_ptr,
                 out_ptr,
-                out.size(),
+                data_size,
                 const_param<NDIM>(shape),
                 const_param<NDIM>(strides_in),
                 const_param<NDIM>(strides_out));
           });
         } else { // ndim >= 4
           auto kernel = cu::copy_gg<InType, OutType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+          auto [num_blocks, block_dims] =
+              get_launch_args(kernel, data_size, shape, out.strides(), large);
           kernel<<<num_blocks, block_dims, 0, stream>>>(
               in_ptr,
               out_ptr,
-              out.size(),
+              data_size,
               const_param(shape),
               const_param(strides_in),
               const_param(strides_out),
