@@ -30,6 +30,16 @@ MLX is also available on conda-forge. To install MLX with conda do:
 
    conda install conda-forge::mlx
 
+CUDA
+^^^^
+
+MLX has a CUDA backend which you can use on any Linux platform with CUDA 12
+and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:
+
+.. code-block:: shell
+
+    pip install mlx-cuda
+
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
@@ -64,6 +74,8 @@ Build Requirements
 
 Python API
 ^^^^^^^^^^
+
+.. _python install:
 
 To build and install the MLX python library from source, first, clone MLX from
 `its GitHub repo <https://github.com/ml-explore/mlx>`_:
@@ -106,6 +118,8 @@ IDE:
 
 C++ API
 ^^^^^^^
+
+.. _cpp install:
 
 Currently, MLX must be built and installed from source.
 
@@ -185,6 +199,7 @@ should point to the path to the built metal library.
 
       xcrun -sdk macosx --show-sdk-version
 
+
 Binary Size Minimization
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -212,6 +227,50 @@ on a given machine. Note run-time compilation incurs a cold-start cost which can
 be anwywhere from a few hundred millisecond to a few seconds depending on the
 application. Once a kernel is compiled, it will be cached by the system. The
 Metal kernel cache persists across reboots.
+
+Linux
+^^^^^
+
+To build from source on Linux (CPU only), install the BLAS and LAPACK headers.
+For example on Ubuntu, run the following:
+
+.. code-block:: shell
+
+   apt-get update -y
+   apt-get install libblas-dev liblapack-dev liblapacke-dev -y
+
+From here follow the instructions to install either the :ref:`Python <python
+install>` or :ref:`C++ <cpp install>` APIs.
+
+CUDA
+^^^^
+
+To build from source on Linux with CUDA, install the BLAS and LAPACK headers
+and the CUDA toolkit. For example on Ubuntu, run the following:
+
+.. code-block:: shell
+
+   wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+   dpkg -i cuda-keyring_1.1-1_all.deb
+   apt-get update -y
+   apt-get -y install cuda-toolkit-12-9
+   apt-get install libblas-dev liblapack-dev liblapacke-dev -y
+
+
+When building either the Python or C++ APIs make sure to pass the cmake flag
+``MLX_BUILD_CUDA=ON``. For example, to build the Python API run:
+
+.. code-block:: shell
+
+  CMAKE_BUILD_PARALLEL_LEVEL=8 CMAKE_ARGS="-DMLX_BUILD_CUDA=ON" pip install -e ".[dev]"
+
+To build the C++ package run:
+
+.. code-block:: shell
+
+   mkdir -p build && cd build
+   cmake .. -DMLX_BUILD_CUDA=ON && make -j
+
 
 Troubleshooting
 ^^^^^^^^^^^^^^^

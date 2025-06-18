@@ -16,6 +16,9 @@ parameters:
   linux_release:
     type: boolean
     default: false
+  cuda_release:
+    type: boolean
+    default: false
 
 jobs:
   build_documentation:
@@ -104,7 +107,7 @@ jobs:
           command: |
             echo "stubs"
             pip install typing_extensions
-            python setup.py generate_stubs 
+            python setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
@@ -162,7 +165,7 @@ jobs:
           command: |
             source env/bin/activate
             pip install typing_extensions
-            python setup.py generate_stubs 
+            python setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
@@ -223,7 +226,6 @@ jobs:
           command: |
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
-            sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
             python -m venv env
             source env/bin/activate
             CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
@@ -283,7 +285,7 @@ jobs:
           command: |
             source env/bin/activate
             pip install typing_extensions
-            python setup.py generate_stubs 
+            python setup.py generate_stubs
       - run:
           name: Build Python package
           command: |
@@ -342,7 +344,7 @@ jobs:
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               pip install . -v
             pip install typing_extensions
-            python setup.py generate_stubs 
+            python setup.py generate_stubs
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python -m build --wheel
@@ -353,6 +355,48 @@ jobs:
           command: |
             source env/bin/activate
             twine upload wheelhouse/*
+      - store_artifacts:
+          path: wheelhouse/
+
+  build_cuda_release:
+    parameters:
+      python_version:
+        type: string
+        default: "3.9"
+      extra_env:
+        type: string
+        default: "DEV_RELEASE=1"
+    machine:
+      image: linux-cuda-12:default
+      resource_class: gpu.nvidia.small.gen2
+    steps:
+      - checkout
+      - run:
+          name: Build wheel
+          command: |
+            sudo apt-get update
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            python -m venv env
+            source env/bin/activate
+            pip install auditwheel
+            pip install patchelf
+            pip install build
+            pip install twine
+            << parameters.extra_env >> \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
+              CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
+              pip install ".[dev]" -v
+            python setup.py generate_stubs
+            << parameters.extra_env >> \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
+              CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
+              python -m build --wheel
+            bash python/scripts/repair_cuda.sh
+      - run:
+          name: Upload package
+          command: |
+            source env/bin/activate
+            twine upload wheelhouse/*.whl
       - store_artifacts:
           path: wheelhouse/
 
@@ -621,6 +665,17 @@ workflows:
         - << pipeline.parameters.linux_release >>
     jobs:
       - build_linux_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              extra_env: ["PYPI_RELEASE=1"]
+  cuda_test_release:
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.cuda_release >>
+    jobs:
+      - build_cuda_release:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
