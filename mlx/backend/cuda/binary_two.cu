@@ -157,7 +157,7 @@ void binary_op_gpu_inplace(
               if (ndim <= 3) {
                 MLX_SWITCH_1_2_3(ndim, NDIM, {
                   auto kernel =
-                      &cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
+                      cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
                   auto [num_blocks, block_dims] =
                       get_launch_args(kernel, out_a, large);
                   kernel<<<num_blocks, block_dims, 0, stream>>>(

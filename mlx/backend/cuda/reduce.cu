@@ -21,29 +21,15 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(!axes_.empty());
   assert(out.size() != in.size());
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  // out.set_data(allocator::malloc(out.nbytes()));
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
+  // encoder.set_input_array(in);
+  // encoder.set_output_array(out);
 
-  // Fill out with init value.
   if (in.size() == 0) {
-    encoder.launch_kernel([&](cudaStream_t stream) {
-      MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-        MLX_SWITCH_REDUCE_OPS(reduce_type_, OP, {
-          using InType = cuda_type_t<CTYPE>;
-          using OutType = cu::ReduceResult<OP, InType>::type;
-          thrust::fill_n(
-              cu::thrust_policy(stream),
-              thrust::device_pointer_cast(out.data<OutType>()),
-              out.data_size(),
-              cu::ReduceInit<OP, InType>::value());
-        });
-      });
-    });
-    return;
+    throw std::runtime_error("Should never reach here.");
   }
 
   // Reduce.
@@ -59,8 +45,12 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     plan = get_reduction_plan(in, axes_);
   }
 
-  if ((plan.type == ContiguousAllReduce) ||
-      (plan.type == ContiguousReduce && plan.shape.size() == 1)) {
+  if (plan.type == ContiguousAllReduce) {
+    all_reduce(encoder, in, out, reduce_type_);
+    return;
+  }
+
+  if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
     segmented_reduce(encoder, in, out, reduce_type_, axes_, plan);
     return;
   }

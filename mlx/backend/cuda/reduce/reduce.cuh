@@ -47,6 +47,12 @@ namespace mlx::core {
     throw std::invalid_argument("Unknown reduce type."); \
   }
 
+void all_reduce(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
+
 void segmented_reduce(
     cu::CommandEncoder& encoder,
     const array& in,
