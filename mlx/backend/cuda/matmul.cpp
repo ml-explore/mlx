@@ -162,11 +162,15 @@ class MatMul {
       }
     }
 
-    array workspace(
-        allocator::malloc(heuristic_.workspaceSize),
-        {static_cast<int>(heuristic_.workspaceSize)},
-        int8);
-    encoder.add_temporary(workspace);
+    void *workspace_ptr = nullptr;
+    if (heuristic_.workspaceSize > 0) {
+        array workspace(
+            allocator::malloc(heuristic_.workspaceSize),
+            {static_cast<int>(heuristic_.workspaceSize)},
+            int8);
+        encoder.add_temporary(workspace);
+        workspace_ptr = workspace.data<void>();
+    }
 
     encoder.launch_kernel([&](cudaStream_t stream) {
       CHECK_CUBLAS_ERROR(cublasLtMatmul(
@@ -183,8 +187,8 @@ class MatMul {
           out,
           out_desc_,
           &heuristic_.algo,
-          workspace.data<void>(),
-          workspace.nbytes(),
+          workspace_ptr,
+          heuristic_.workspaceSize,
           stream));
     });
   }
