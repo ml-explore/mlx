@@ -48,7 +48,7 @@ __device__ void atomic_reduce(T* x, T y) {
 
 // Reduce ops.
 struct And {
-  __device__ bool operator()(bool a, bool b) {
+  __device__ __forceinline__ bool operator()(bool a, bool b) {
     return a && b;
   }
 
@@ -58,7 +58,7 @@ struct And {
 };
 
 struct Or {
-  __device__ bool operator()(bool a, bool b) {
+  __device__ __forceinline__ bool operator()(bool a, bool b) {
     return a || b;
   }
 
@@ -69,7 +69,7 @@ struct Or {
 
 struct Sum {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a + b;
   }
 
@@ -93,7 +93,7 @@ struct Sum {
 
 struct Prod {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a * b;
   }
 
@@ -105,7 +105,7 @@ struct Prod {
 
 struct Min {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a < b ? a : b;
   }
 
@@ -117,7 +117,7 @@ struct Min {
 
 struct Max {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a > b ? a : b;
   }
 
