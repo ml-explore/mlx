@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/worker.h"
+#include "mlx/backend/rocm/utils.h"
 
 namespace mlx::core::rocm {
 
@@ -17,7 +18,7 @@ Worker::~Worker() {
   }
 }
 
-void Worker::enqueue(std::function<void()> task) {
+void Worker::add_task(std::function<void()> task) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     tasks_.push(task);
@@ -25,14 +26,28 @@ void Worker::enqueue(std::function<void()> task) {
   cv_.notify_one();
 }
 
-void Worker::commit() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  committed_ = true;
+void Worker::consume_in_this_thread() {
+  std::queue<std::function<void()>> local_tasks;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    local_tasks.swap(tasks_);
+  }
+
+  while (!local_tasks.empty()) {
+    auto task = local_tasks.front();
+    local_tasks.pop();
+    task();
+  }
 }
 
-void Worker::join() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  cv_.wait(lock, [this] { return tasks_.empty() && committed_; });
+void Worker::commit(hipStream_t stream) {
+  // Synchronize with stream and then process tasks
+  CHECK_HIP_ERROR(hipStreamSynchronize(stream));
+  consume_in_this_thread();
+}
+
+void Worker::commit() {
+  cv_.notify_all();
 }
 
 void Worker::worker_loop() {

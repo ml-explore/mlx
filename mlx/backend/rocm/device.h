@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/worker.h"
 #include "mlx/stream.h"
 
@@ -11,7 +12,9 @@
 
 #include <unordered_map>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
+
+namespace rocm {
 
 class Device;
 class CommandEncoder;
@@ -138,4 +141,6 @@ CommandEncoder& get_command_encoder(Stream s);
 // Utility function to check HIP errors
 void check_hip_error(const char* msg, hipError_t error);
 
-} // namespace mlx::core::rocm
+} // namespace rocm
+
+} // namespace mlx::core
