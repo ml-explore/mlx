@@ -174,20 +174,26 @@ if __name__ == "__main__":
     )
     package_dir = {"": "python"}
     package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
+    install_requires = []
+    build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
+    if build_cuda:
+        install_requires = ["nvidia-cublas-cu12", "nvidia-cuda-nvrtc-cu12"]
 
     setup(
-        name="mlx",
+        name="mlx-cuda" if build_cuda else "mlx",
         version=get_version(),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
+        license="MIT",
         url="https://github.com/ml-explore/mlx",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,
         include_package_data=True,
+        install_requires=install_requires,
         extras_require={
             "dev": [
                 "nanobind==2.4.0",
