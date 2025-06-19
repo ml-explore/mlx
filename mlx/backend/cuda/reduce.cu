@@ -21,12 +21,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(!axes_.empty());
   assert(out.size() != in.size());
 
-  // out.set_data(allocator::malloc(out.nbytes()));
-
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  // encoder.set_input_array(in);
-  // encoder.set_output_array(out);
 
   if (in.size() == 0) {
     throw std::runtime_error("Should never reach here.");
@@ -47,11 +43,6 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   if (plan.type == ContiguousAllReduce) {
     all_reduce(encoder, in, out, reduce_type_);
-    return;
-  }
-
-  if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
-    segmented_reduce(encoder, in, out, reduce_type_, axes_, plan);
     return;
   }
 

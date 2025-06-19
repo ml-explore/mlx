@@ -13,26 +13,6 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-namespace {
-
-// TODO: Should make a custom complex type
-template <typename U, typename T>
-inline __device__ U __cast(T x) {
-  return static_cast<U>(x);
-}
-
-template <>
-inline __device__ bool __cast<bool, cuComplex>(cuComplex x) {
-  return x.x != 0 && x.y != 0;
-}
-
-template <>
-inline __device__ cuComplex __cast<cuComplex, bool>(bool x) {
-  return x ? make_cuFloatComplex(1, 1) : make_cuFloatComplex(0, 0);
-}
-
-} // namespace
-
 template <typename T, typename U, typename ReduceOp, int N = 4>
 __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   auto grid = cg::this_grid();
@@ -54,8 +34,8 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
 
   for (size_t i = start; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
-    for (int i = 0; i < N; i++) {
-      accs[i] = op(accs[i], __cast<U, T>(vals[i]));
+    for (int j = 0; j < N; j++) {
+      accs[j] = op(accs[j], __cast<U, T>(vals[j]));
     }
   }
 
@@ -74,15 +54,17 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   }
   accs[0] = cg::reduce(warp, accs[0], op);
 
-  __shared__ U shared_accumulators[32];
-  if (warp.thread_rank() == 0) {
-    shared_accumulators[warp.meta_group_rank()] = accs[0];
+  if (warp.meta_group_size() > 1) {
+    __shared__ U shared_accumulators[32];
+    if (warp.thread_rank() == 0) {
+      shared_accumulators[warp.meta_group_rank()] = accs[0];
+    }
+    block.sync();
+    accs[0] = (warp.thread_rank() < warp.meta_group_size())
+        ? shared_accumulators[warp.thread_rank()]
+        : init;
+    accs[0] = cg::reduce(warp, accs[0], op);
   }
-  block.sync();
-  accs[0] = (warp.thread_rank() < warp.meta_group_size())
-      ? shared_accumulators[warp.thread_rank()]
-      : init;
-  accs[0] = cg::reduce(warp, accs[0], op);
 
   if (block.thread_rank() == 0) {
     out[grid.block_rank()] = accs[0];
@@ -96,7 +78,7 @@ void all_reduce(
     const array& in,
     array& out,
     Reduce::ReduceType reduce_type) {
-  constexpr int N_READS = 4;
+  constexpr int N_READS = 8;
 
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -118,14 +100,13 @@ void all_reduce(
     }
     size_t reductions_per_block = std::max(
         static_cast<size_t>(threads), (reductions + blocks - 1) / blocks);
-    size_t block_step = reductions_per_block * N_READS;
+    size_t block_step = reductions_per_block * N;
 
     return std::make_tuple(blocks, threads, block_step);
   };
 
   int blocks, threads;
   size_t block_step;
-  bool large = in.size() > N_READS * 1024;
   array x = in;
 
   // Large array so allocate an intermediate and accumulate there
