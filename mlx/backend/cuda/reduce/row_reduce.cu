@@ -249,8 +249,6 @@ __global__ void row_reduce_looped(
   size_t full_blocks = args.row_size / (BLOCK_DIM_X * N_READS);
   size_t final_offset = full_blocks * BLOCK_DIM_X * N_READS;
 
-  in += elem_to_loc(out_idx, args.shape.data(), args.strides.data(), args.ndim);
-
   for (size_t n = 0; n < args.non_row_reductions; n++) {
     for (size_t r = 0; r < full_blocks; r++) {
       T vals[N_READS];
