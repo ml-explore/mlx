@@ -42,6 +42,7 @@ option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
+option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 
 # --------------------- Processor tests -------------------------
 message(
@@ -234,12 +235,16 @@ target_include_directories(
 # Do not add mlx_EXPORTS define for shared library.
 set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
 
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 10.2.1
-  EXCLUDE_FROM_ALL)
-FetchContent_MakeAvailable(fmt)
+if(USE_SYSTEM_FMT)
+  find_package(fmt REQUIRED)
+else()
+  FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 10.2.1
+    EXCLUDE_FROM_ALL)
+  FetchContent_MakeAvailable(fmt)
+endif()
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 
 if(MLX_BUILD_PYTHON_BINDINGS)
