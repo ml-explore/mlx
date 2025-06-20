@@ -260,7 +260,7 @@ class TestBase(mlx_tests.MLXTestCase):
             m = m.update_modules({"list": ["hi"]})
 
         # Allow updating a strict subset
-        m = nn.Sequential(nn.Linear(3, 3), nn. Linear(3, 3))
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
         m.update_modules({"layers": [{}, nn.Linear(3, 4)]})
         self.assertEqual(m.layers[1].weight.shape, (4, 3))
 
