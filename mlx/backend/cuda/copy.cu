@@ -24,7 +24,6 @@ void copy_gpu_inplace(
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-
   if (ctype == CopyType::Scalar || ctype == CopyType::Vector) {
     copy_contiguous(encoder, ctype, in, out, offset_in, offset_out);
     return;

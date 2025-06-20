@@ -155,8 +155,8 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_nd(
 #pragma unroll
   for (int i = NDIM - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc);
@@ -175,9 +175,9 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_nd(
 #pragma unroll
   for (int i = NDIM - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
-    c_loc += dim_idx * c_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
+    c_loc += dim_idx * IdxT(c_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc, c_loc);
@@ -206,8 +206,8 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
   IdxT b_loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc);
@@ -226,9 +226,9 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_4d(
   IdxT c_loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
-    c_loc += dim_idx * c_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
+    c_loc += dim_idx * IdxT(c_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc, c_loc);

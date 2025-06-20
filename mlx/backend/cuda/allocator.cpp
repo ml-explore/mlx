@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/cuda/worker.h"
+#include "mlx/utils.h"
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
@@ -14,9 +15,11 @@ namespace mlx::core {
 
 namespace cu {
 
+constexpr int page_size = 16384;
+
 CudaAllocator::CudaAllocator()
     : buffer_cache_(
-          getpagesize(),
+          page_size,
           [](CudaBuffer* buf) { return buf->size; },
           [this](CudaBuffer* buf) {
             cuda_free(buf->data);
@@ -31,7 +34,14 @@ CudaAllocator::CudaAllocator()
 
 Buffer CudaAllocator::malloc(size_t size) {
   // Find available buffer from cache.
+  auto orig_size = size;
   std::unique_lock lock(mutex_);
+  if (size < page_size) {
+    size = next_power_of_2(size);
+  } else {
+    size = page_size * ((size + page_size - 1) / page_size);
+  }
+
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure or are over the maximum cache size,
