@@ -207,6 +207,8 @@ if __name__ == "__main__":
     compare_filtered("elu --size 32x16x1024 --cpu")
     compare_filtered("relu6 --size 32x16x1024")
     compare_filtered("relu6 --size 32x16x1024 --cpu")
+    compare_filtered("relu_squared --size 32x16x1024")
+    compare_filtered("relu_squared --size 32x16x1024 --cpu")
     compare_filtered("softplus --size 32x16x1024")
     compare_filtered("softplus --size 32x16x1024 --cpu")
     compare_filtered("celu --size 32x16x1024")
