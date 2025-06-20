@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/cuda/worker.h"
+#include "mlx/utils.h"
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
