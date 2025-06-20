@@ -1,6 +1,5 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/utils.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/cuda/worker.h"

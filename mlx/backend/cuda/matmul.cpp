@@ -362,9 +362,18 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       a_batch_strides.back(),
       b_batch_strides.back());
 
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
+  auto nbatch = batch_count / batch_shape.back();
+  if (nbatch == 1) {
+    matmul.run(encoder, out.data<int8_t>(), a.data<int8_t>(), b.data<int8_t>());
+    return;
+  }
+
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
-  for (size_t i = 0; i < batch_count / batch_shape.back(); ++i) {
+  for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,
         out.data<int8_t>() + out.itemsize() * i * batch_shape.back() * M * N,
@@ -448,10 +457,21 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       b_batch_strides.back(),
       c_batch_strides.back());
 
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(c);
+  encoder.set_output_array(out);
+
+  auto nbatch = batch_count / batch_shape.back();
+  if (nbatch == 1) {
+    matmul.run(encoder, out.data<int8_t>(), a.data<int8_t>(), b.data<int8_t>(), c.data<int8_t>(), alpha_, beta_);
+    return;
+  }
+
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
   ContiguousIterator c_it(batch_shape, c_batch_strides, batch_shape.size() - 1);
-  for (size_t i = 0; i < batch_count / batch_shape.back(); ++i) {
+  for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,
         out.data<int8_t>() + out.itemsize() * i * batch_shape.back() * M * N,
