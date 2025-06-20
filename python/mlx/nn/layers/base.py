@@ -413,7 +413,7 @@ class Module(dict):
                             f'Module does not have sub-module named "{k}".'
                         )
             elif isinstance(modules, list):
-                for i in range(len(dst)):
+                for i in range(len(modules)):
                     current_value = dst[i]
                     new_value = modules[i]
                     if self.is_module(current_value) and self.is_module(new_value):
