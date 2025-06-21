@@ -1,0 +1,8 @@
+if(MLX_BUILD_CUDA)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nccl.cpp)
+  find_package(NCCL REQUIRED)
+  target_link_libraries(mlx PRIVATE ${NCCL_LIBRARIES})
+  target_include_directories(mlx PRIVATE ${NCCL_INCLUDE_DIRS})
+else()
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_nccl.cpp)
+endif()
