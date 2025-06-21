@@ -15,6 +15,9 @@ namespace cg = cooperative_groups;
 
 template <typename T, typename U, typename ReduceOp, int N = 4>
 __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
+  // TODO: Process multiple "rows" in each thread
+  constexpr int M = 1;
+
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -23,10 +26,8 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   ReduceOp op;
 
   T vals[N];
-  U accs[N];
-  for (int i = 0; i < N; i++) {
-    accs[i] = init;
-  }
+  U accs[M];
+  accs[0] = init;
 
   size_t start = grid.block_rank() * block_step;
   size_t end = start + block_step;
@@ -35,7 +36,7 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   for (size_t i = start; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
-      accs[j] = op(accs[j], __cast<U, T>(vals[j]));
+      accs[0] = op(accs[0], __cast<U, T>(vals[j]));
     }
   }
 
@@ -45,26 +46,12 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
     cub::LoadDirectBlocked(
         block.thread_rank(), in + offset, vals, block_end, __cast<T, U>(init));
     for (int i = 0; i < N; i++) {
-      accs[i] = op(accs[i], __cast<U, T>(vals[i]));
+      accs[0] = op(accs[0], __cast<U, T>(vals[i]));
     }
   }
 
-  for (int i = 1; i < N; i++) {
-    accs[0] = op(accs[0], accs[i]);
-  }
-  accs[0] = cg::reduce(warp, accs[0], op);
-
-  if (warp.meta_group_size() > 1) {
-    __shared__ U shared_accumulators[32];
-    if (warp.thread_rank() == 0) {
-      shared_accumulators[warp.meta_group_rank()] = accs[0];
-    }
-    block.sync();
-    accs[0] = (warp.thread_rank() < warp.meta_group_size())
-        ? shared_accumulators[warp.thread_rank()]
-        : init;
-    accs[0] = cg::reduce(warp, accs[0], op);
-  }
+  __shared__ U shared_accumulators[32];
+  block_reduce(block, warp, accs, shared_accumulators, op, init);
 
   if (block.thread_rank() == 0) {
     out[grid.block_rank()] = accs[0];
