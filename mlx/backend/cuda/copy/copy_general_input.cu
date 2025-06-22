@@ -50,39 +50,39 @@ void copy_general_input(
     int64_t offset_out,
     const Shape& shape,
     const Strides& strides_in) {
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
-      const InType* in_ptr = in.data<InType>() + offset_in;
-      OutType* out_ptr = out.data<OutType>() + offset_out;
-      bool large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
-      MLX_SWITCH_BOOL(large, LARGE, {
-        using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
-        int ndim = shape.size();
-        if (ndim <= 3) {
-          MLX_SWITCH_1_2_3(ndim, NDIM, {
-            auto kernel = cu::copy_g_nd<InType, OutType, IdxT, NDIM>;
-            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-            kernel<<<num_blocks, block_dims, 0, stream>>>(
-                in_ptr,
-                out_ptr,
-                out.size(),
-                const_param<NDIM>(shape),
-                const_param<NDIM>(strides_in));
-          });
-        } else { // ndim >= 4
-          auto kernel = cu::copy_g<InType, OutType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
-              in_ptr,
-              out_ptr,
-              out.size(),
-              const_param(shape),
-              const_param(strides_in),
-              ndim);
-        }
-      });
-    });
-  });
+//  encoder.launch_kernel([&](cudaStream_t stream) {
+//    MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
+//      const InType* in_ptr = in.data<InType>() + offset_in;
+//      OutType* out_ptr = out.data<OutType>() + offset_out;
+//      bool large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
+//      MLX_SWITCH_BOOL(large, LARGE, {
+//        using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
+//        int ndim = shape.size();
+//        if (ndim <= 3) {
+//          MLX_SWITCH_1_2_3(ndim, NDIM, {
+//            auto kernel = cu::copy_g_nd<InType, OutType, IdxT, NDIM>;
+//            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+//            kernel<<<num_blocks, block_dims, 0, stream>>>(
+//                in_ptr,
+//                out_ptr,
+//                out.size(),
+//                const_param<NDIM>(shape),
+//                const_param<NDIM>(strides_in));
+//          });
+//        } else { // ndim >= 4
+//          auto kernel = cu::copy_g<InType, OutType, IdxT>;
+//          auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+//          kernel<<<num_blocks, block_dims, 0, stream>>>(
+//              in_ptr,
+//              out_ptr,
+//              out.size(),
+//              const_param(shape),
+//              const_param(strides_in),
+//              ndim);
+//        }
+//      });
+//    });
+//  });
 }
 
 } // namespace mlx::core

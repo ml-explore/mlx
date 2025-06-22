@@ -37,22 +37,20 @@ void eval(array& arr) {
   }
 
   auto& encoder = cu::get_command_encoder(arr.primitive().stream());
-  if (encoder.has_gpu_work()) {
-    // Keep used buffers alive until kernel finishes running.
-    std::unordered_set<std::shared_ptr<array::Data>> buffers;
-    for (auto& in : arr.inputs()) {
-      buffers.insert(in.data_shared_ptr());
-    }
-    for (auto& s : arr.siblings()) {
-      buffers.insert(s.data_shared_ptr());
-    }
-    // Remove the output if it was donated to by an input.
-    if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-      buffers.erase(it);
-    }
-    encoder.add_completed_handler([buffers = std::move(buffers)]() {});
+  // Keep used buffers alive until kernel finishes running.
+  std::unordered_set<std::shared_ptr<array::Data>> buffers;
+  for (auto& in : arr.inputs()) {
+    buffers.insert(in.data_shared_ptr());
   }
-  encoder.end_encoding();
+  for (auto& s : arr.siblings()) {
+    buffers.insert(s.data_shared_ptr());
+  }
+  // Remove the output if it was donated to by an input.
+  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
+    buffers.erase(it);
+  }
+  encoder.add_completed_handler([buffers = std::move(buffers)]() {});
+  encoder.maybe_commit();
 }
 
 void finalize(Stream s) {

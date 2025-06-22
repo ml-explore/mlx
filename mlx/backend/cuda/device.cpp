@@ -12,28 +12,6 @@ namespace mlx::core {
 
 namespace cu {
 
-DeviceStream::DeviceStream(Device& device) : device_(device), stream_(device) {}
-
-void DeviceStream::synchronize() {
-  cudaStreamSynchronize(stream_);
-}
-
-cudaStream_t DeviceStream::schedule_cuda_stream() {
-  // TODO: Return a stream that maximizes parallelism.
-  return stream_;
-}
-
-cudaStream_t DeviceStream::last_cuda_stream() {
-  return stream_;
-}
-
-CommandEncoder& DeviceStream::get_encoder() {
-  if (!encoder_) {
-    encoder_ = std::make_unique<CommandEncoder>(*this);
-  }
-  return *encoder_;
-}
-
 Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
       &compute_capability_major_, cudaDevAttrComputeCapabilityMajor, device_));
@@ -67,49 +45,66 @@ void Device::make_current() {
   }
 }
 
-DeviceStream& Device::get_stream(Stream s) {
-  auto it = streams_.find(s.index);
-  if (it == streams_.end()) {
-    it = streams_.try_emplace(s.index, *this).first;
+CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
+  CHECK_CUDA_ERROR(cudaGraphCreate(&graph, 0));
+  cudaStreamBeginCaptureToGraph(enc.stream(), graph, NULL, NULL, 0, cudaStreamCaptureModeGlobal);
+}
+
+CommandEncoder::CaptureContext::~CaptureContext() {
+  cudaStreamEndCapture(enc.stream(), &graph);
+  cudaGraphNode_t capturedGraphNode;
+  cudaGraphAddChildGraphNode(&capturedGraphNode, enc.graph_, NULL, 0, graph);
+  CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
+  // TODO wire dependencies
+}
+
+CommandEncoder& Device::get_command_encoder(Stream s) {
+  auto it = encoders_.find(s.index);
+  if (it == encoders_.end()) {
+    it = encoders_.try_emplace(s.index, *this).first;
   }
   return it->second;
 }
 
-CommandEncoder::CommandEncoder(DeviceStream& s)
-    : device_(s.device()), stream_(s) {}
+CommandEncoder::CommandEncoder(Device& d) : stream_(d) {
+  CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
+}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
 }
 
-void CommandEncoder::end_encoding() {
-  if (!temporaries_.empty()) {
-    add_completed_handler([temporaries = std::move(temporaries_)]() {});
-  }
+void CommandEncoder::set_input_array(const array& arr) {
+}
 
-  // There is no kernel running, run completion handlers immediately.
-  if (!has_gpu_work_) {
-    worker_.consume_in_this_thread();
-    return;
-  }
-  has_gpu_work_ = false;
+void CommandEncoder::set_output_array(const array& arr) {
+}
 
-  // Put completion handlers in a batch.
-  worker_.end_batch();
-
-  // Signaling kernel completion is expensive, delay until enough batches.
-  // TODO: This number is arbitrarily picked, profile for a better stragety.
-  if (worker_.uncommited_batches() > 8) {
+void CommandEncoder::maybe_commit() {
+  if (num_ops_ > 8) {
     commit();
   }
 }
 
 void CommandEncoder::commit() {
-  worker_.commit(stream_.last_cuda_stream());
+  if (!temporaries_.empty()) {
+    add_completed_handler([temporaries = std::move(temporaries_)]() {});
+  }
+
+  // Put completion handlers in a batch.
+  worker_.end_batch();
+
+  // TODO maybe cache the graph and try to update the cached version
+  cudaGraphExec_t graph_exec;
+  CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+  CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+  CHECK_CUDA_ERROR(cudaGraphDestroy(graph_));
+  CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
+  worker_.commit(stream_);
 }
 
 void CommandEncoder::synchronize() {
-  stream().synchronize();
+  cudaStreamSynchronize(stream_);
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });
@@ -127,12 +122,8 @@ Device& device(mlx::core::Device device) {
   return it->second;
 }
 
-DeviceStream& get_stream(Stream s) {
-  return device(s.device).get_stream(s);
-}
-
 CommandEncoder& get_command_encoder(Stream s) {
-  return get_stream(s).get_encoder();
+  return device(s.device).get_command_encoder(s);
 }
 
 } // namespace cu
