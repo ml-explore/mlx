@@ -110,19 +110,20 @@ void all_reduce(
     intermediate.set_data(allocator::malloc(intermediate.nbytes()));
     encoder.add_temporary(intermediate);
     encoder.set_output_array(intermediate);
-    encoder.launch_kernel([&](cudaStream_t stream) {
-      dispatch_all_types(dt, [&](auto type_tag) {
-        dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-          using OP = MLX_GET_TYPE(reduce_type_tag);
-          using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-          using U = typename cu::ReduceResult<OP, T>::type;
-          auto kernel = cu::all_reduce<T, U, OP, N_READS>;
-          kernel<<<blocks, threads, 0, stream>>>(
-              static_cast<T*>(indata),
-              intermediate.data<U>(),
-              block_step,
-              insize);
-        });
+    dispatch_all_types(dt, [&](auto type_tag) {
+      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+        using OP = MLX_GET_TYPE(reduce_type_tag);
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        using U = typename cu::ReduceResult<OP, T>::type;
+        auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+        encoder.add_kernel_node(
+            kernel,
+            blocks,
+            threads,
+            static_cast<T*>(indata),
+            intermediate.data<U>(),
+            block_step,
+            insize);
       });
     });
 
@@ -135,16 +136,20 @@ void all_reduce(
   }
 
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dispatch_all_types(dt, [&](auto type_tag) {
-      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
-        auto kernel = cu::all_reduce<T, U, OP, N_READS>;
-        kernel<<<blocks, threads, 0, stream>>>(
-            static_cast<T*>(indata), out.data<U>(), block_step, insize);
-      });
+  dispatch_all_types(dt, [&](auto type_tag) {
+    dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename cu::ReduceResult<OP, T>::type;
+      auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          blocks,
+          threads,
+          static_cast<T*>(indata),
+          out.data<U>(),
+          block_step,
+          insize);
     });
   });
 }

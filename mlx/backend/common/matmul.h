@@ -12,16 +12,11 @@ namespace mlx::core {
 inline std::tuple<Shape, Strides, Strides> collapse_batches(
     const array& a,
     const array& b) {
-  // Get and check the shape for the batched dims
-  Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
-  Shape B_bshape{b.shape().begin(), b.shape().end() - 2};
-  if (A_bshape != B_bshape) {
-    std::ostringstream msg;
-    msg << "[matmul] Got matrices with incorrectly broadcasted shapes: " << "A "
-        << a.shape() << ", B " << b.shape() << ".";
-    throw std::runtime_error(msg.str());
+  if (a.ndim() == 2) {
+    return {{1}, {0}, {0}};
   }
 
+  Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
   Strides A_bstride{a.strides().begin(), a.strides().end() - 2};
   Strides B_bstride{b.strides().begin(), b.strides().end() - 2};
 
@@ -42,17 +37,11 @@ inline std::tuple<Shape, Strides, Strides> collapse_batches(
 
 inline std::tuple<Shape, Strides, Strides, Strides>
 collapse_batches(const array& a, const array& b, const array& c) {
-  // Get and check the shape for the batched dims
-  Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
-  Shape B_bshape{b.shape().begin(), b.shape().end() - 2};
-  Shape C_bshape{c.shape().begin(), c.shape().end() - 2};
-  if (A_bshape != B_bshape || A_bshape != C_bshape) {
-    std::ostringstream msg;
-    msg << "[addmm] Got matrices with incorrectly broadcasted shapes: " << "A "
-        << a.shape() << ", B " << b.shape() << ", B " << c.shape() << ".";
-    throw std::runtime_error(msg.str());
+  if (a.ndim() == 2) {
+    return {{1}, {0}, {0}, {0}};
   }
 
+  Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
   Strides A_bstride{a.strides().begin(), a.strides().end() - 2};
   Strides B_bstride{b.strides().begin(), b.strides().end() - 2};
   Strides C_bstride{c.strides().begin(), c.strides().end() - 2};

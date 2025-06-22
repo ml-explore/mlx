@@ -141,19 +141,21 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dispatch_float_types(out.dtype(), "softmax", [&](auto type_tag) {
-      constexpr int N_READS = 4;
-      dispatch_block_dim(
-          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-            using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-            auto kernel = cu::softmax<DataType, DataType, block_dim(), N_READS>;
-            if (precise) {
-              kernel = cu::softmax<DataType, float, block_dim(), N_READS>;
-            }
-            kernel<<<n_rows, block_dim(), 0, stream>>>(
-                in.data<DataType>(), out.data<DataType>(), axis_size);
-          });
+  dispatch_float_types(out.dtype(), "softmax", [&](auto type_tag) {
+    constexpr int N_READS = 4;
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      auto kernel = cu::softmax<DataType, DataType, block_dim(), N_READS>;
+      if (precise) {
+        kernel = cu::softmax<DataType, float, block_dim(), N_READS>;
+      }
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          block_dim(),
+          in.data<DataType>(),
+          out.data<DataType>(),
+          axis_size);
     });
   });
 }

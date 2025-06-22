@@ -308,76 +308,89 @@ void RoPE::eval_gpu(
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(donated ? out : in);
   encoder.set_input_array(offset);
+  if (with_freqs) {
+    encoder.set_input_array(inputs[2]);
+  }
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
-      dispatch_bool(traditional_, [&](auto traditional) {
-        dispatch_bool(forward_, [&](auto forward) {
-          using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-          if (single && !with_freqs) {
-            auto kernel =
-                cu::rope_single<DataType, traditional.value, forward.value>;
-            uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-            kernel<<<grid, block, 0, stream>>>(
-                (donated ? out : in).data<DataType>(),
-                out.data<DataType>(),
-                offset.data<int32_t>(),
-                scale_,
-                std::log2(base_),
-                mat_size,
-                dims);
-          } else if (single) {
-            auto kernel = cu::
-                rope_single_freqs<DataType, traditional.value, forward.value>;
-            uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-            kernel<<<grid, block, 0, stream>>>(
-                (donated ? out : in).data<DataType>(),
-                out.data<DataType>(),
-                offset.data<int32_t>(),
-                inputs[2].data<float>(),
-                scale_,
-                mat_size,
-                dims,
-                inputs[2].strides(0));
-          } else if (with_freqs) {
-            auto kernel =
-                cu::rope_freqs<DataType, traditional.value, forward.value>;
-            uint3 dims =
-                make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
-            dims.z = (dims.z + 3) / 4;
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-            kernel<<<grid, block, 0, stream>>>(
-                (donated ? out : in).data<DataType>(),
-                out.data<DataType>(),
-                offset.data<int32_t>(),
-                inputs[2].data<float>(),
-                scale_,
-                std::log2(base_),
-                strides,
-                out_strides,
-                in.size() / mat_size,
-                dims,
-                inputs[2].strides(0));
-          } else {
-            auto kernel = cu::rope<DataType, traditional.value, forward.value>;
-            uint3 dims =
-                make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
-            dims.z = (dims.z + 3) / 4;
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-            kernel<<<grid, block, 0, stream>>>(
-                (donated ? out : in).data<DataType>(),
-                out.data<DataType>(),
-                offset.data<int32_t>(),
-                scale_,
-                std::log2(base_),
-                strides,
-                out_strides,
-                in.size() / mat_size,
-                dims);
-          }
-        });
+  dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
+    dispatch_bool(traditional_, [&](auto traditional) {
+      dispatch_bool(forward_, [&](auto forward) {
+        using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        if (single && !with_freqs) {
+          auto kernel =
+              cu::rope_single<DataType, traditional.value, forward.value>;
+          uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              (donated ? out : in).data<DataType>(),
+              out.data<DataType>(),
+              offset.data<int32_t>(),
+              scale_,
+              std::log2(base_),
+              mat_size,
+              dims);
+        } else if (single) {
+          auto kernel =
+              cu::rope_single_freqs<DataType, traditional.value, forward.value>;
+          uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              (donated ? out : in).data<DataType>(),
+              out.data<DataType>(),
+              offset.data<int32_t>(),
+              inputs[2].data<float>(),
+              scale_,
+              mat_size,
+              dims,
+              inputs[2].strides(0));
+        } else if (with_freqs) {
+          auto kernel =
+              cu::rope_freqs<DataType, traditional.value, forward.value>;
+          uint3 dims =
+              make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
+          dims.z = (dims.z + 3) / 4;
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              (donated ? out : in).data<DataType>(),
+              out.data<DataType>(),
+              offset.data<int32_t>(),
+              inputs[2].data<float>(),
+              scale_,
+              std::log2(base_),
+              strides,
+              out_strides,
+              in.size() / mat_size,
+              dims,
+              inputs[2].strides(0));
+        } else {
+          auto kernel = cu::rope<DataType, traditional.value, forward.value>;
+          uint3 dims =
+              make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
+          dims.z = (dims.z + 3) / 4;
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              (donated ? out : in).data<DataType>(),
+              out.data<DataType>(),
+              offset.data<int32_t>(),
+              scale_,
+              std::log2(base_),
+              strides,
+              out_strides,
+              in.size() / mat_size,
+              dims);
+        }
       });
     });
   });
