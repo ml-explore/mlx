@@ -10,6 +10,7 @@
 #include <thrust/execution_policy.h>
 
 #include <unordered_map>
+#include <unordered_set>
 
 namespace mlx::core::cu {
 
@@ -48,14 +49,14 @@ class CommandEncoder {
   // Wait until kernels and completion handlers are finished
   void synchronize();
 
-
  private:
+  void insert_graph_dependencies(cudaGraphNode_t  node);
   CudaStream stream_;
   cudaGraph_t graph_;
   Worker worker_;
   int num_ops_{0};
   std::vector<std::shared_ptr<array::Data>> temporaries_;
-  std::vector<std::uintptr_t> active_inputs_;
+  std::unordered_set<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, cudaGraphNode_t> node_map_;
 };

@@ -265,10 +265,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
   // Signal the event in its stream
   for (auto& [_, e] : events) {
     auto s = e.stream();
-    e.signal(s);
     if (s.device == Device::gpu) {
       gpu::finalize(s);
     }
+    e.signal(s);
   }
 
   return synchronizer;

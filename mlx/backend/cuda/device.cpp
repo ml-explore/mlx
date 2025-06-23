@@ -52,10 +52,35 @@ CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
 
 CommandEncoder::CaptureContext::~CaptureContext() {
   cudaStreamEndCapture(enc.stream(), &graph);
-  cudaGraphNode_t capturedGraphNode;
-  cudaGraphAddChildGraphNode(&capturedGraphNode, enc.graph_, NULL, 0, graph);
+  cudaGraphNode_t captured_node;
+  cudaGraphAddChildGraphNode(&captured_node, enc.graph_, NULL, 0, graph);
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
-  // TODO wire dependencies
+  enc.insert_graph_dependencies(captured_node);
+
+  // Increment number of graph ops
+  enc.num_ops_++;
+}
+
+void CommandEncoder::insert_graph_dependencies(cudaGraphNode_t  node) {
+  std::vector<cudaGraphNode_t> deps;
+  for (auto d : active_deps_) {
+    if (auto it = node_map_.find(d); it != node_map_.end()) {
+      deps.push_back(it->second);
+    }
+  }
+  active_deps_.clear();
+
+  for (auto o : active_outputs_) {
+    node_map_.emplace(o, node);
+  }
+  active_outputs_.clear();
+
+  if (deps.size() == 1) {
+    cudaGraphAddDependencies(graph_, deps.data(), &node, deps.size());
+  } else {
+    std::vector<cudaGraphNode_t> to_nodes(deps.size(), node);
+    cudaGraphAddDependencies(graph_, deps.data(), to_nodes.data(), deps.size());
+  }
 }
 
 CommandEncoder& Device::get_command_encoder(Stream s) {
@@ -98,6 +123,8 @@ void CommandEncoder::commit() {
   cudaGraphExec_t graph_exec;
   CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
   CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+  num_ops_ = 0;
+  node_map_.clear();
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph_));
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
   worker_.commit(stream_);
