@@ -13,7 +13,6 @@ cuda_skip = {
     "TestLayers.test_upsample",
     "TestOps.test_complex_ops",
     "TestOps.test_dynamic_slicing",
-    "TestOps.test_softmax",
     "TestReduce.test_axis_permutation_sums",
     "TestReduce.test_dtypes",
     "TestReduce.test_expand_sums",
