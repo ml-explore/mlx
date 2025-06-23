@@ -78,32 +78,31 @@ void unary_op_gpu_inplace(
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {
-      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
-        if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
-          using InType = cuda_type_t<CTYPE_IN>;
-          using OutType = cuda_type_t<CTYPE_OUT>;
-          auto policy = cu::thrust_policy(stream);
-          auto in_ptr = thrust::device_pointer_cast(in.data<InType>());
-          auto out_ptr = thrust::device_pointer_cast(out.data<OutType>());
-          if (in.flags().contiguous) {
-            thrust::transform(
-                policy, in_ptr, in_ptr + in.data_size(), out_ptr, Op());
-          } else {
-            auto [shape, strides] = collapse_contiguous_dims(in);
-            auto [in_begin, in_end] = cu::make_general_iterators<int64_t>(
-                in_ptr, in.size(), shape, strides);
-            thrust::transform(policy, in_begin, in_end, out_ptr, Op());
-          }
+  auto capture = encoder.capture_context();
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {
+    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
+      if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
+        using InType = cuda_type_t<CTYPE_IN>;
+        using OutType = cuda_type_t<CTYPE_OUT>;
+        auto policy = cu::thrust_policy(encoder.stream());
+        auto in_ptr = thrust::device_pointer_cast(in.data<InType>());
+        auto out_ptr = thrust::device_pointer_cast(out.data<OutType>());
+        if (in.flags().contiguous) {
+          thrust::transform(
+              policy, in_ptr, in_ptr + in.data_size(), out_ptr, Op());
         } else {
-          throw std::runtime_error(fmt::format(
-              "Can not do unary op {} on input of {} with output of {}.",
-              op,
-              dtype_to_string(in.dtype()),
-              dtype_to_string(out.dtype())));
+          auto [shape, strides] = collapse_contiguous_dims(in);
+          auto [in_begin, in_end] = cu::make_general_iterators<int64_t>(
+              in_ptr, in.size(), shape, strides);
+          thrust::transform(policy, in_begin, in_end, out_ptr, Op());
         }
-      });
+      } else {
+        throw std::runtime_error(fmt::format(
+            "Can not do unary op {} on input of {} with output of {}.",
+            op,
+            dtype_to_string(in.dtype()),
+            dtype_to_string(out.dtype())));
+      }
     });
   });
 }

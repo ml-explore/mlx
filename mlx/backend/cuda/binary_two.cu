@@ -137,41 +137,28 @@ void binary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_output_array(out_a);
   encoder.set_output_array(out_b);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, {
-      MLX_SWITCH_ALL_TYPES(out_a.dtype(), CTYPE_OUT, {
-        if constexpr (cu::supports_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
-          using InType = cuda_type_t<CTYPE_IN>;
-          using OutType = cuda_type_t<CTYPE_OUT>;
+  auto capture = encoder.capture_context();
+  MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, {
+    MLX_SWITCH_ALL_TYPES(out_a.dtype(), CTYPE_OUT, {
+      if constexpr (cu::supports_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
+        using InType = cuda_type_t<CTYPE_IN>;
+        using OutType = cuda_type_t<CTYPE_OUT>;
+        auto& stream = encoder.stream();
 
-          auto bopt = get_binary_op_type(a, b);
-          if (bopt == BinaryOpType::General) {
-            auto [shape, strides] = collapse_contiguous_dims(a, b, out_a);
-            auto& a_strides = strides[0];
-            auto& b_strides = strides[1];
-            bool large = a.data_size() > INT32_MAX ||
-                b.data_size() > INT32_MAX || out_a.data_size() > INT32_MAX;
-            MLX_SWITCH_BOOL(large, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
-              int ndim = shape.size();
-              if (ndim <= 3) {
-                MLX_SWITCH_1_2_3(ndim, NDIM, {
-                  auto kernel =
-                      cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
-                  auto [num_blocks, block_dims] =
-                      get_launch_args(kernel, out_a, large);
-                  kernel<<<num_blocks, block_dims, 0, stream>>>(
-                      a.data<InType>(),
-                      b.data<InType>(),
-                      out_a.data<OutType>(),
-                      out_b.data<OutType>(),
-                      out_a.size(),
-                      const_param<NDIM>(shape),
-                      const_param<NDIM>(a_strides),
-                      const_param<NDIM>(b_strides));
-                });
-              } else {
-                auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
+        auto bopt = get_binary_op_type(a, b);
+        if (bopt == BinaryOpType::General) {
+          auto [shape, strides] = collapse_contiguous_dims(a, b, out_a);
+          auto& a_strides = strides[0];
+          auto& b_strides = strides[1];
+          bool large = a.data_size() > INT32_MAX ||
+              b.data_size() > INT32_MAX || out_a.data_size() > INT32_MAX;
+          MLX_SWITCH_BOOL(large, LARGE, {
+            using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
+            int ndim = shape.size();
+            if (ndim <= 3) {
+              MLX_SWITCH_1_2_3(ndim, NDIM, {
+                auto kernel =
+                    cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
                 auto [num_blocks, block_dims] =
                     get_launch_args(kernel, out_a, large);
                 kernel<<<num_blocks, block_dims, 0, stream>>>(
@@ -180,45 +167,58 @@ void binary_op_gpu_inplace(
                     out_a.data<OutType>(),
                     out_b.data<OutType>(),
                     out_a.size(),
-                    const_param(shape),
-                    const_param(a_strides),
-                    const_param(b_strides),
-                    ndim);
-              }
-            });
-          } else {
-            MLX_SWITCH_BOOL(out_a.data_size() > UINT32_MAX, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
-              auto kernel = cu::binary_ss<Op, InType, OutType, IdxT>;
-              if (bopt == BinaryOpType::ScalarVector) {
-                kernel = cu::binary_sv<Op, InType, OutType, IdxT>;
-              } else if (bopt == BinaryOpType::VectorScalar) {
-                kernel = cu::binary_vs<Op, InType, OutType, IdxT>;
-              } else if (bopt == BinaryOpType::VectorVector) {
-                kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
-              }
-              auto [num_blocks, block_dims] = get_launch_args(
-                  kernel,
-                  out_a.data_size(),
-                  out_a.shape(),
-                  out_a.strides(),
-                  LARGE);
+                    const_param<NDIM>(shape),
+                    const_param<NDIM>(a_strides),
+                    const_param<NDIM>(b_strides));
+              });
+            } else {
+              auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
+              auto [num_blocks, block_dims] =
+                  get_launch_args(kernel, out_a, large);
               kernel<<<num_blocks, block_dims, 0, stream>>>(
                   a.data<InType>(),
                   b.data<InType>(),
                   out_a.data<OutType>(),
                   out_b.data<OutType>(),
-                  out_a.data_size());
-            });
-          }
+                  out_a.size(),
+                  const_param(shape),
+                  const_param(a_strides),
+                  const_param(b_strides),
+                  ndim);
+            }
+          });
         } else {
-          throw std::runtime_error(fmt::format(
-              "Can not do binary op {} on inputs of {} with result of {}.",
-              op,
-              dtype_to_string(a.dtype()),
-              dtype_to_string(out_a.dtype())));
+          MLX_SWITCH_BOOL(out_a.data_size() > UINT32_MAX, LARGE, {
+            using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+            auto kernel = cu::binary_ss<Op, InType, OutType, IdxT>;
+            if (bopt == BinaryOpType::ScalarVector) {
+              kernel = cu::binary_sv<Op, InType, OutType, IdxT>;
+            } else if (bopt == BinaryOpType::VectorScalar) {
+              kernel = cu::binary_vs<Op, InType, OutType, IdxT>;
+            } else if (bopt == BinaryOpType::VectorVector) {
+              kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
+            }
+            auto [num_blocks, block_dims] = get_launch_args(
+                kernel,
+                out_a.data_size(),
+                out_a.shape(),
+                out_a.strides(),
+                LARGE);
+            kernel<<<num_blocks, block_dims, 0, stream>>>(
+                a.data<InType>(),
+                b.data<InType>(),
+                out_a.data<OutType>(),
+                out_b.data<OutType>(),
+                out_a.data_size());
+          });
         }
-      });
+      } else {
+        throw std::runtime_error(fmt::format(
+            "Can not do binary op {} on inputs of {} with result of {}.",
+            op,
+            dtype_to_string(a.dtype()),
+            dtype_to_string(out_a.dtype())));
+      }
     });
   });
 }

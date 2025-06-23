@@ -35,23 +35,22 @@ void copy_contiguous(
     array& out,
     int64_t in_offset,
     int64_t out_offset) {
-//  encoder.launch_kernel([&](cudaStream_t stream) {
-//    MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
-//      MLX_SWITCH_BOOL(out.data_size() > UINT32_MAX, LARGE, {
-//        using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
-//        auto kernel = cu::copy_s<InType, OutType, IdxT>;
-//        if (ctype == CopyType::Vector) {
-//          kernel = cu::copy_v<InType, OutType, IdxT>;
-//        }
-//        auto [num_blocks, block_dims] = get_launch_args(
-//            kernel, out.data_size(), out.shape(), out.strides(), LARGE);
-//        kernel<<<num_blocks, block_dims, 0, stream>>>(
-//            in.data<InType>() + in_offset,
-//            out.data<OutType>() + out_offset,
-//            out.data_size());
-//      });
-//    });
-//  });
+  auto capture = encoder.capture_context();
+  MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
+    MLX_SWITCH_BOOL(out.data_size() > UINT32_MAX, LARGE, {
+      using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+      auto kernel = cu::copy_s<InType, OutType, IdxT>;
+      if (ctype == CopyType::Vector) {
+        kernel = cu::copy_v<InType, OutType, IdxT>;
+      }
+      auto [num_blocks, block_dims] = get_launch_args(
+          kernel, out.data_size(), out.shape(), out.strides(), LARGE);
+      kernel<<<num_blocks, block_dims, 0, encoder.stream()>>>(
+          in.data<InType>() + in_offset,
+          out.data<OutType>() + out_offset,
+          out.data_size());
+    });
+  });
 }
 
 } // namespace mlx::core
