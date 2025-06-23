@@ -25,7 +25,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
 
   if (in.size() == 0) {
-    throw std::runtime_error("Should never reach here.");
+    init_reduce(encoder, in, out, reduce_type_);
+    return;
   }
 
   // Reduce.

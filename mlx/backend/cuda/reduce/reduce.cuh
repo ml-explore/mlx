@@ -53,14 +53,6 @@ void all_reduce(
     array& out,
     Reduce::ReduceType reduce_type);
 
-void segmented_reduce(
-    cu::CommandEncoder& encoder,
-    const array& in,
-    array& out,
-    Reduce::ReduceType reduce_type,
-    const std::vector<int>& axes,
-    const ReductionPlan& plan);
-
 void row_reduce(
     cu::CommandEncoder& encoder,
     const array& in,
@@ -76,5 +68,11 @@ void col_reduce(
     Reduce::ReduceType reduce_type,
     const std::vector<int>& axes,
     const ReductionPlan& plan);
+
+void init_reduce(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
 
 } // namespace mlx::core

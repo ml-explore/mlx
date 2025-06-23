@@ -234,7 +234,7 @@ void row_reduce_simple(
         using U = cu::ReduceResult<OP, T>::type;
 
         // Calculate the grid and block dims
-        size_t reductions = plan.shape.back() / N_READS;
+        size_t reductions = (plan.shape.back() + N_READS - 1) / N_READS;
         dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
         int threads = std::min(1024UL, reductions);
         threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
@@ -284,7 +284,7 @@ void row_reduce_looped(
         // Calculate the grid and block dims
         args.convert_shapes_to_contiguous(x, axes);
         dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
-        size_t reductions = args.row_size / N_READS;
+        size_t reductions = (args.row_size + N_READS - 1) / N_READS;
         int threads = std::min(1024UL, reductions);
         threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
         dim3 block(threads, 1, 1);
