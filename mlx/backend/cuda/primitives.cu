@@ -102,10 +102,4 @@ NO_GPU_MULTI(Send)
 NO_GPU_MULTI(Recv)
 } // namespace distributed
 
-// TODO uncomment when working
-NO_GPU(Gather)
-NO_GPU(GatherAxis)
-NO_GPU(Scatter)
-NO_GPU(ScatterAxis)
-
 } // namespace mlx::core

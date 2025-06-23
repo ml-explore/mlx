@@ -71,7 +71,7 @@ void CommandEncoder::insert_graph_dependencies(cudaGraphNode_t  node) {
   active_deps_.clear();
 
   for (auto o : active_outputs_) {
-    node_map_.emplace(o, node);
+    node_map_.emplace(o, node).first->second = node;
   }
   active_outputs_.clear();
 

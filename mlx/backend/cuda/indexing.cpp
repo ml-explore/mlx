@@ -122,9 +122,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.set_input_array(in);
   }
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    mod.launch_kernel(stream, kernel_name, out, large);
-  });
+  auto capture = encoder.capture_context();
+  mod.launch_kernel(encoder.stream(), kernel_name, out, large);
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -222,9 +221,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.set_input_array(in);
   }
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    mod.launch_kernel(stream, kernel_name, upd, large);
-  });
+  auto capture = encoder.capture_context();
+  mod.launch_kernel(encoder.stream(), kernel_name, upd, large);
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -309,9 +307,8 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.set_input_array(in);
   }
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    mod.launch_kernel(stream, kernel_name, idx, large);
-  });
+  auto capture = encoder.capture_context();
+  mod.launch_kernel(encoder.stream(), kernel_name, idx, large);
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -412,9 +409,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.set_input_array(in);
   }
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    mod.launch_kernel(stream, kernel_name, idx, large);
-  });
+  auto capture = encoder.capture_context();
+  mod.launch_kernel(encoder.stream(), kernel_name, idx, large);
 }
 
 } // namespace mlx::core
