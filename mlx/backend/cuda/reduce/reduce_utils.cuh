@@ -113,7 +113,7 @@ inline void allocate_same_layout(
   auto out_strides = in.strides();
   for (auto ax : axes) {
     for (auto& s : out_strides) {
-      if (s > in.strides(ax)) {
+      if (s > in.strides(ax) && in.strides(ax) > 0) {
         s /= in.shape(ax);
       }
     }

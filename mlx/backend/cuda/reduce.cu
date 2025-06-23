@@ -34,7 +34,19 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // If it is a general reduce then copy the input to a contiguous array and
   // recompute the plan.
-  if (plan.type == GeneralReduce) {
+  //
+  // TODO: Instead of copying we can use elem-to-loc to deal with broadcasting
+  //       like we do in Metal. When it comes to broadcasted reduction axes
+  //       some can be ignored eg for min/max.
+  bool broadcasted = false;
+  for (int i = 0, j = 0; i < in.ndim() && !broadcasted; i++) {
+    if (j < axes_.size() && axes_[j] == i) {
+      j++;
+    } else {
+      broadcasted = in.strides(i) == 0;
+    }
+  }
+  if (plan.type == GeneralReduce || broadcasted) {
     array in_copy(in.shape(), in.dtype(), nullptr, {});
     copy_gpu(in, in_copy, CopyType::General, s);
     encoder.add_temporary(in_copy);

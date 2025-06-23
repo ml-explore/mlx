@@ -1,5 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
+#include <numeric>
+
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
@@ -57,20 +59,24 @@ struct RowReduceArgs {
   }
 
   // Convert shape and strides as if in was contiguous
-  void convert_shapes_to_contiguous(
-      const array& in,
-      const std::vector<int>& axes) {
+  void sort_access_pattern(const array& in, const std::vector<int>& axes) {
     auto shape_vec = in.shape();
     auto strides_vec = in.strides();
-    size_t s = 1;
-    for (int i = in.ndim() - 1; i >= 0; i--) {
-      strides_vec[i] = s;
-      s *= shape_vec[i];
-    }
     std::tie(shape_vec, strides_vec) =
         shapes_without_reduction_axes(shape_vec, strides_vec, axes);
+    std::vector<int> indices(shape_vec.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::sort(indices.begin(), indices.end(), [&](int left, int right) {
+      return strides_vec[left] > strides_vec[right];
+    });
+    decltype(shape_vec) sorted_shape;
+    decltype(strides_vec) sorted_strides;
+    for (auto idx : indices) {
+      sorted_shape.push_back(shape_vec[idx]);
+      sorted_strides.push_back(strides_vec[idx]);
+    }
     std::tie(shape_vec, strides_vec) =
-        collapse_contiguous_dims(shape_vec, strides_vec);
+        collapse_contiguous_dims(sorted_shape, sorted_strides);
     shape = const_param(shape_vec);
     strides = const_param(strides_vec);
     ndim = shape_vec.size();
@@ -282,7 +288,7 @@ void row_reduce_looped(
         using U = cu::ReduceResult<OP, T>::type;
 
         // Calculate the grid and block dims
-        args.convert_shapes_to_contiguous(x, axes);
+        args.sort_access_pattern(x, axes);
         dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
         size_t reductions = (args.row_size + N_READS - 1) / N_READS;
         int threads = std::min(1024UL, reductions);

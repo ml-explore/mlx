@@ -104,13 +104,24 @@ col_reduce_looped(T* in, U* out, const __grid_constant__ ColReduceArgs args) {
   loop.next(thread_y, args.reduce_shape.data(), args.reduce_strides.data());
   size_t total = args.non_col_reductions * args.reduction_size;
   if (tile_x * BN + BN <= args.reduction_stride) {
-    for (size_t r = thread_y; r < total; r += BM) {
-      T vals[N_READS];
-      cub::LoadDirectBlockedVectorized(thread_x, in + loop.location(), vals);
-      for (int i = 0; i < N_READS; i++) {
-        totals[i] = op(totals[i], __cast<U, T>(vals[i]));
+    if (args.reduction_stride % N_READS == 0) {
+      for (size_t r = thread_y; r < total; r += BM) {
+        T vals[N_READS];
+        cub::LoadDirectBlockedVectorized(thread_x, in + loop.location(), vals);
+        for (int i = 0; i < N_READS; i++) {
+          totals[i] = op(totals[i], __cast<U, T>(vals[i]));
+        }
+        loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
       }
-      loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
+    } else {
+      for (size_t r = thread_y; r < total; r += BM) {
+        T vals[N_READS];
+        cub::LoadDirectBlocked(thread_x, in + loop.location(), vals);
+        for (int i = 0; i < N_READS; i++) {
+          totals[i] = op(totals[i], __cast<U, T>(vals[i]));
+        }
+        loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
+      }
     }
   } else {
     for (size_t r = thread_y; r < total; r += BM) {
@@ -157,11 +168,13 @@ col_reduce_looped(T* in, U* out, const __grid_constant__ ColReduceArgs args) {
 inline auto output_grid_for_col_reduce(
     const array& out,
     const cu::ColReduceArgs& args) {
-  auto out_shape = out.shape();
-  auto out_strides = out.strides();
-  while (!out_shape.empty() && out_strides.back() < args.reduction_stride) {
-    out_shape.pop_back();
-    out_strides.pop_back();
+  Shape out_shape;
+  Strides out_strides;
+  for (int i = 0; i < out.ndim(); i++) {
+    if (out.strides(i) >= args.reduction_stride) {
+      out_shape.push_back(out.shape(i));
+      out_strides.push_back(out.strides(i));
+    }
   }
   return get_2d_grid_dims(out_shape, out_strides);
 }
