@@ -308,6 +308,9 @@ void RoPE::eval_gpu(
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(donated ? out : in);
   encoder.set_input_array(offset);
+  if (with_freqs) {
+    encoder.set_input_array(inputs[2]);
+  }
   encoder.set_output_array(out);
   auto capture = encoder.capture_context();
   MLX_SWITCH_FLOAT_TYPES_CHECKED(in.dtype(), "rope", CTYPE, {
