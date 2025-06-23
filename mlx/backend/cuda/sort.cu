@@ -50,32 +50,6 @@ array swapaxes_in_eval(const array& in, int axis1, int axis2) {
   return out;
 }
 
-template <typename... Args>
-void segmented_sort_pairs(cu::CommandEncoder& encoder, Args&&... args) {
-  // Allocate temporary storage.
-  size_t size;
-  CHECK_CUDA_ERROR(
-      cub::DeviceSegmentedSort::StableSortPairs(nullptr, size, args...));
-  array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
-  encoder.add_temporary(temp);
-  // Run op.
-  CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortPairs(
-      temp.data<void>(), size, args...));
-}
-
-template <typename... Args>
-void segmented_sort(cu::CommandEncoder& encoder, Args&&... args) {
-  // Allocate temporary storage.
-  size_t size;
-  CHECK_CUDA_ERROR(
-      cub::DeviceSegmentedSort::StableSortKeys(nullptr, size, args...));
-  array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
-  encoder.add_temporary(temp);
-  // Run op.
-  CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortKeys(
-      temp.data<void>(), size, args...));
-}
-
 void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
   array out = out_;
   auto& encoder = cu::get_command_encoder(s);
@@ -105,33 +79,30 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
-        using Type = cuda_type_t<CTYPE>;
-        auto offsets = thrust::make_transform_iterator(
-            thrust::make_counting_iterator(0),
-            [nsort] __device__(int i) { return i * nsort; });
-        if (argsort) {
-          // Indices in the sorted dimension.
-          array indices(
-              allocator::malloc(out.nbytes()), in.shape(), out.dtype());
-          encoder.add_temporary(indices);
-          thrust::transform(
-              cu::thrust_policy(stream),
-              thrust::counting_iterator<uint32_t>(0),
-              thrust::counting_iterator<uint32_t>(indices.data_size()),
-              thrust::device_pointer_cast(indices.data<uint32_t>()),
-              ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    auto& stream = encoder.stream();
+    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
+      using Type = cuda_type_t<CTYPE>;
+      auto offsets = thrust::make_transform_iterator(
+          thrust::make_counting_iterator(0),
+          [nsort] __device__(int i) { return i * nsort; });
 
-          // In argsort though we don't need the result of sorted values, the
-          // API requires us to provide an array to store it.
-          array discard(allocator::malloc(in.nbytes()), in.shape(), in.dtype());
-          encoder.add_temporary(discard);
+      if (argsort) {
+        // Indices in the sorted dimension.
+        array indices(
+            allocator::malloc(out.nbytes()), in.shape(), out.dtype());
+        encoder.add_temporary(indices);
 
-          segmented_sort_pairs(
-              encoder,
-              in.data<Type>(),
+        // In argsort though we don't need the result of sorted values, the
+        // API requires us to provide an array to store it.
+        array discard(allocator::malloc(in.nbytes()), in.shape(), in.dtype());
+        encoder.add_temporary(discard);
+
+        size_t size;
+        CHECK_CUDA_ERROR(
+            cub::DeviceSegmentedSort::StableSortKeys(
+              nullptr, 
+              size,
               discard.data<Type>(),
               indices.data<uint32_t>(),
               out.data<uint32_t>(),
@@ -139,23 +110,47 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               in.data_size() / nsort,
               offsets,
               offsets + 1,
-              stream);
-        } else {
-          segmented_sort(
-              encoder,
-              in.data<Type>(),
-              out.data<Type>(),
-              in.data_size(),
-              in.data_size() / nsort,
-              offsets,
-              offsets + 1,
-              stream);
-        }
+              stream));
+
+        array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
+        encoder.add_temporary(temp);
+
+        // Start capturing after all allocations
+        auto capture = encoder.capture_context();
+        thrust::transform(
+            cu::thrust_policy(stream),
+            thrust::counting_iterator<uint32_t>(0),
+            thrust::counting_iterator<uint32_t>(indices.data_size()),
+            thrust::device_pointer_cast(indices.data<uint32_t>()),
+            ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
+
+        segmented_sort_pairs(
+            encoder,
+            in.data<Type>(),
+            discard.data<Type>(),
+            indices.data<uint32_t>(),
+            out.data<uint32_t>(),
+            in.data_size(),
+            in.data_size() / nsort,
+            offsets,
+            offsets + 1,
+            stream);
       } else {
-        throw std::runtime_error(
-            "CUDA backend does not support sorting complex numbers");
+
+        segmented_sort(
+            encoder,
+            in.data<Type>(),
+            out.data<Type>(),
+            in.data_size(),
+            in.data_size() / nsort,
+            offsets,
+            offsets + 1,
+            stream);
       }
-    });
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support sorting complex numbers");
+    }
   });
 
   if (!is_segmented_sort) {

@@ -100,9 +100,14 @@ void CommandEncoder::add_completed_handler(std::function<void()> task) {
 }
 
 void CommandEncoder::set_input_array(const array& arr) {
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.insert(id);
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.insert(id);
+  active_outputs_.push_back(id);
 }
 
 void CommandEncoder::maybe_commit() {

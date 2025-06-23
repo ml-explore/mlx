@@ -42,7 +42,7 @@ class MatMul {
       int64_t ldb,
       int32_t batch_count,
       int64_t a_batch_stride,
-      int64_t b_batch_stride) {
+      int64_t b_batch_stride) : handle_(device.lt_handle()) {
     heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
     auto scale_type = dtype_to_cuda_type(dtype);
@@ -147,7 +147,7 @@ class MatMul {
     if (heuristic_.state != CUBLAS_STATUS_SUCCESS) {
       int ret = 0;
       CHECK_CUBLAS_ERROR(cublasLtMatmulAlgoGetHeuristic(
-          encoder.device().lt_handle(),
+          handle_,
           matmul_desc_,
           a_desc_,
           b_desc_,
@@ -172,25 +172,24 @@ class MatMul {
       workspace_ptr = workspace.data<void>();
     }
 
-    encoder.launch_kernel([&](cudaStream_t stream) {
-      CHECK_CUBLAS_ERROR(cublasLtMatmul(
-          encoder.device().lt_handle(),
-          matmul_desc_,
-          &alpha,
-          a,
-          a_desc_,
-          b,
-          b_desc_,
-          &beta,
-          c ? c : out,
-          c ? c_desc_ : out_desc_,
-          out,
-          out_desc_,
-          &heuristic_.algo,
-          workspace_ptr,
-          heuristic_.workspaceSize,
-          stream));
-    });
+    auto capture = encoder.capture_context();
+    CHECK_CUBLAS_ERROR(cublasLtMatmul(
+        handle_,
+        matmul_desc_,
+        &alpha,
+        a,
+        a_desc_,
+        b,
+        b_desc_,
+        &beta,
+        c ? c : out,
+        c ? c_desc_ : out_desc_,
+        out,
+        out_desc_,
+        &heuristic_.algo,
+        workspace_ptr,
+        heuristic_.workspaceSize,
+        encoder.stream()));
   }
 
  private:
@@ -259,6 +258,7 @@ class MatMul {
     return desc;
   }
 
+  cublasLtHandle_t handle_{nullptr};
   cublasLtMatmulDesc_t matmul_desc_{nullptr};
   cublasLtMatmulPreference_t pref_{nullptr};
   cublasLtMatrixLayout_t a_desc_{nullptr};
@@ -348,7 +348,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Invoke cublasLt
 
   cu::MatMul matmul(
-      encoder.device(),
+      cu::device(s.device),
       a.dtype(),
       a_transposed,
       M,
@@ -440,7 +440,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Invoke cublasLt
 
   cu::MatMul matmul(
-      encoder.device(),
+      cu::device(s.device),
       a.dtype(),
       a_transposed,
       M,

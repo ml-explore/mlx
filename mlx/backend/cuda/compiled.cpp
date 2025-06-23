@@ -222,9 +222,9 @@ void Compiled::eval_gpu(
   for (const auto& out : outputs) {
     encoder.set_output_array(out);
   }
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    mod.launch_kernel(stream, kernel_name, outputs[0], large);
-  });
+
+  auto capture = encoder.capture_context();
+  mod.launch_kernel(encoder.stream(), kernel_name, outputs[0], large);
 }
 
 } // namespace mlx::core

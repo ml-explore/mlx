@@ -103,28 +103,9 @@ NO_GPU_MULTI(Recv)
 } // namespace distributed
 
 // TODO uncomment when working
-NO_GPU(AddMM)
-NO_GPU(ArgPartition)
-NO_GPU(ArgSort)
-NO_GPU_MULTI(Compiled)
 NO_GPU(Gather)
 NO_GPU(GatherAxis)
-NO_GPU(LogSumExp)
-NO_GPU(Matmul)
-NO_GPU(Partition)
-NO_GPU(RandomBits)
-NO_GPU(Reduce)
 NO_GPU(Scatter)
 NO_GPU(ScatterAxis)
-NO_GPU(Softmax)
-NO_GPU(Sort)
-
-namespace fast {
-NO_GPU_USE_FALLBACK(LayerNorm)
-NO_GPU_MULTI(LayerNormVJP)
-NO_GPU_USE_FALLBACK(RMSNorm)
-NO_GPU_MULTI(RMSNormVJP)
-NO_GPU_USE_FALLBACK(RoPE)
-} // namespace fast
 
 } // namespace mlx::core
