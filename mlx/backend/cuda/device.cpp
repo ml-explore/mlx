@@ -55,31 +55,51 @@ CommandEncoder::CaptureContext::~CaptureContext() {
   cudaGraphNode_t captured_node;
   cudaGraphAddChildGraphNode(&captured_node, enc.graph_, NULL, 0, graph);
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
-  enc.insert_graph_dependencies(captured_node);
-
-  // Increment number of graph ops
-  enc.num_ops_++;
+  if (enc.in_concurrent_) {
+    enc.concurrent_nodes_.push_back(captured_node);
+  } else {
+    enc.insert_graph_dependencies({captured_node});
+  }
+}
+CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc) : enc(enc) {
+  enc.in_concurrent_ = true;
 }
 
-void CommandEncoder::insert_graph_dependencies(cudaGraphNode_t  node) {
+CommandEncoder::ConcurrentContext::~ConcurrentContext() {
+  enc.in_concurrent_ = false;
+  enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
+}
+
+void CommandEncoder::insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes) {
+  // Increment number of graph ops
+  num_ops_++;
+
   std::vector<cudaGraphNode_t> deps;
-  for (auto d : active_deps_) {
-    if (auto it = node_map_.find(d); it != node_map_.end()) {
-      deps.push_back(it->second);
+  {
+    std::unordered_set<cudaGraphNode_t> set_deps;
+    for (auto d : active_deps_) {
+      if (auto it = node_map_.find(d); it != node_map_.end()) {
+        set_deps.insert(it->second);
+      }
     }
+    deps.insert(deps.end(), set_deps.begin(), set_deps.end());
   }
   active_deps_.clear();
 
   for (auto o : active_outputs_) {
-    node_map_.emplace(o, node).first->second = node;
+    for (auto node : nodes) {
+      node_map_.emplace(o, node).first->second = node;
+    }
   }
   active_outputs_.clear();
 
-  if (deps.size() == 1) {
-    cudaGraphAddDependencies(graph_, deps.data(), &node, deps.size());
-  } else {
-    std::vector<cudaGraphNode_t> to_nodes(deps.size(), node);
-    cudaGraphAddDependencies(graph_, deps.data(), to_nodes.data(), deps.size());
+  for (auto node : nodes) {
+    if (deps.size() == 1) {
+      cudaGraphAddDependencies(graph_, deps.data(), &node, deps.size());
+    } else {
+      std::vector<cudaGraphNode_t> to_nodes(deps.size(), node);
+      cudaGraphAddDependencies(graph_, deps.data(), to_nodes.data(), deps.size());
+    }
   }
 }
 
@@ -111,7 +131,7 @@ void CommandEncoder::set_output_array(const array& arr) {
 }
 
 void CommandEncoder::maybe_commit() {
-  if (num_ops_ > 8) {
+  if (num_ops_ > 10) {
     commit();
   }
 }
@@ -123,11 +143,55 @@ void CommandEncoder::commit() {
 
   // Put completion handlers in a batch.
   worker_.end_batch();
+  static cudaGraphExec_t graph_exec = NULL;
 
-  // TODO maybe cache the graph and try to update the cached version
-  cudaGraphExec_t graph_exec;
-  CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+  // Try the in-place update
+  if (graph_exec != NULL) {
+//    cudaGraphExecUpdateResultInfo update_result;
+//    cudaGraphExecUpdate(graph_exec, graph_, &update_result);
+//    switch (update_result.result) {
+//      case cudaGraphExecUpdateSuccess:
+//        std::cout << "The update succeeded";
+//        break;
+//      case cudaGraphExecUpdateError:
+//        std::cout << "The update failed for an unexpected reason which is described in the return value of the function";
+//        break;
+//      case cudaGraphExecUpdateErrorTopologyChanged:
+//        std::cout << "The update failed because the topology changed";
+//        break;
+//      case cudaGraphExecUpdateErrorNodeTypeChanged:
+//        std::cout << "The update failed because a node type changed";
+//        break;
+//      case cudaGraphExecUpdateErrorFunctionChanged:
+//        std::cout << "The update failed because the function of a kernel node changed (CUDA driver < 11.2)";
+//        break;
+//      case cudaGraphExecUpdateErrorParametersChanged:
+//        std::cout << "The update failed because the parameters changed in a way that is not supported";
+//        break;
+//      case cudaGraphExecUpdateErrorNotSupported:
+//        std::cout << "The update failed because something about the node is not supported";
+//        break;
+//      case cudaGraphExecUpdateErrorUnsupportedFunctionChange:
+//        std::cout << "The update failed because the function of a kernel node changed in an unsupported way";
+//        break;
+//      case cudaGraphExecUpdateErrorAttributesChanged:
+//        std::cout << "The update failed because the node attributes changed in a way that is not supported";
+//    }
+//    std::cout << std::endl;
+//    if (update_result.result == cudaGraphExecUpdateSuccess) {
+//      std::cout << "SUCCES ! " << std::endl;
+//    } else {
+//      std::cout << "FAIL AND DESTROY ! " << std::endl;
+//    if (update_result.result != cudaGraphExecUpdateSuccess) {
+      CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
+      graph_exec = NULL;
+//    }
+  }
+  if (graph_exec == NULL) {
+    CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+  }
   CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+
   num_ops_ = 0;
   node_map_.clear();
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph_));

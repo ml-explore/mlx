@@ -373,6 +373,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
+  auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,
@@ -478,6 +479,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
   ContiguousIterator c_it(batch_shape, c_batch_strides, batch_shape.size() - 1);
+  auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,

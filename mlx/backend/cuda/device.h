@@ -22,6 +22,11 @@ class CommandEncoder {
     cudaGraph_t graph;
     CommandEncoder& enc;
   };
+  struct ConcurrentContext {
+    ConcurrentContext(CommandEncoder& enc);
+    ~ConcurrentContext();
+    CommandEncoder& enc;
+  };
 
   explicit CommandEncoder(Device& d);
 
@@ -31,6 +36,10 @@ class CommandEncoder {
   CaptureContext capture_context() {
     return CaptureContext{*this};
   }
+  ConcurrentContext concurrent_context() {
+    return ConcurrentContext{*this};
+  }
+
   void set_input_array(const array& arr);
   void set_output_array(const array& arr);
 
@@ -50,11 +59,13 @@ class CommandEncoder {
   void synchronize();
 
  private:
-  void insert_graph_dependencies(cudaGraphNode_t  node);
+  void insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes);
   CudaStream stream_;
   cudaGraph_t graph_;
   Worker worker_;
   int num_ops_{0};
+  bool in_concurrent_{false};
+  std::vector<cudaGraphNode_t> concurrent_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   std::unordered_set<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
