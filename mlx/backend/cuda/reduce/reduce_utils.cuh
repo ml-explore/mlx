@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <numeric>
+
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
@@ -106,19 +108,31 @@ inline void allocate_same_layout(
     array& out,
     const array& in,
     const std::vector<int>& axes) {
-  // Initialize out such that it matches in's layout. Basically we keep any
-  // transpositions as it were and that allows us either to skip finding the
-  // location of the output that matches the input or simply contiguous read or
-  // writes.
-  auto out_strides = in.strides();
-  for (auto ax : axes) {
-    for (auto& s : out_strides) {
-      if (s > in.strides(ax) && in.strides(ax) > 0) {
-        s /= in.shape(ax);
-      }
-    }
+  // Calculate the transpositions applied to in in order to apply them to out.
+  std::vector<int> axis_order(in.ndim());
+  std::iota(axis_order.begin(), axis_order.end(), 0);
+  std::sort(axis_order.begin(), axis_order.end(), [&](int left, int right) {
+    return in.strides(left) > in.strides(right);
+  });
+
+  // Transpose the shape and calculate the strides
+  Shape out_shape(in.ndim());
+  Strides out_strides(in.ndim(), 1);
+  for (int i = 0; i < in.ndim(); i++) {
+    out_shape[i] = out.shape(axis_order[i]);
   }
-  auto [data_size, rc, cc] = check_contiguity(out.shape(), out_strides);
+  for (int i = in.ndim() - 2; i >= 0; i--) {
+    out_strides[i] = out_shape[i + 1] * out_strides[i + 1];
+  }
+
+  // Reverse the axis order to get the final strides
+  Strides final_strides(in.ndim());
+  for (int i = 0; i < in.ndim(); i++) {
+    final_strides[axis_order[i]] = out_strides[i];
+  }
+
+  // Calculate the resulting contiguity and do the memory allocation
+  auto [data_size, rc, cc] = check_contiguity(out.shape(), final_strides);
   auto fl = in.flags();
   fl.row_contiguous = rc;
   fl.col_contiguous = cc;
@@ -126,7 +140,7 @@ inline void allocate_same_layout(
   out.set_data(
       allocator::malloc(out.nbytes()),
       data_size,
-      out_strides,
+      final_strides,
       fl,
       allocator::free);
 }

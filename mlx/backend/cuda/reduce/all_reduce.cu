@@ -33,18 +33,17 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   size_t end = start + block_step;
   size_t check = min(end, size);
 
-  for (size_t i = start; i + block.size() * N <= check; i += block.size() * N) {
+  size_t i = start;
+  for (; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
       accs[0] = op(accs[0], __cast<U, T>(vals[j]));
     }
   }
 
-  if (end > size) {
-    size_t offset = end - block.size() * N;
-    int block_end = size - offset;
+  if (i < check) {
     cub::LoadDirectBlocked(
-        block.thread_rank(), in + offset, vals, block_end, __cast<T, U>(init));
+        block.thread_rank(), in + i, vals, check - i, __cast<T, U>(init));
     for (int i = 0; i < N; i++) {
       accs[0] = op(accs[0], __cast<U, T>(vals[i]));
     }
@@ -70,24 +69,27 @@ void all_reduce(
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto get_args = [](size_t size, int N) {
-    size_t reductions = size / N;
-    int threads = 512;
-    size_t full_blocks = (reductions + threads - 1) / threads;
+    int threads = std::min(512UL, (size + N - 1) / N);
+    threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    int reductions_per_step = threads * N;
+    size_t steps_needed =
+        (size + reductions_per_step - 1) / reductions_per_step;
+
     int blocks;
-    if (full_blocks < 32) {
+    if (steps_needed < 32) {
       blocks = 1;
-    } else if (full_blocks < 128) {
+    } else if (steps_needed < 128) {
       blocks = 32;
-    } else if (full_blocks < 512) {
+    } else if (steps_needed < 512) {
       blocks = 128;
-    } else if (full_blocks < 1024) {
+    } else if (steps_needed < 1024) {
       blocks = 512;
     } else {
       blocks = 1024;
     }
-    size_t reductions_per_block = std::max(
-        static_cast<size_t>(threads), (reductions + blocks - 1) / blocks);
-    size_t block_step = reductions_per_block * N;
+
+    size_t steps_per_block = (steps_needed + blocks - 1) / blocks;
+    size_t block_step = steps_per_block * reductions_per_step;
 
     return std::make_tuple(blocks, threads, block_step);
   };
@@ -99,7 +101,6 @@ void all_reduce(
   // Large array so allocate an intermediate and accumulate there
   std::tie(blocks, threads, block_step) = get_args(x.size(), N_READS);
   if (blocks > 1) {
-    std::tie(blocks, threads, block_step) = get_args(x.size(), N_READS);
     array intermediate({blocks}, out.dtype(), nullptr, {});
     intermediate.set_data(allocator::malloc(intermediate.nbytes()));
     encoder.add_temporary(intermediate);

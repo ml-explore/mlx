@@ -46,7 +46,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       broadcasted = in.strides(i) == 0;
     }
   }
-  if (plan.type == GeneralReduce || broadcasted) {
+  if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
     array in_copy(in.shape(), in.dtype(), nullptr, {});
     copy_gpu(in, in_copy, CopyType::General, s);
     encoder.add_temporary(in_copy);

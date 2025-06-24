@@ -105,12 +105,28 @@ __global__ void row_reduce_simple(T* in, U* out, size_t n_rows, int size) {
   in += start_row * size;
   out += start_row;
 
-  for (size_t r = 0; r < full_blocks; r++) {
-    for (int k = 0; k < M; k++) {
-      cub::LoadDirectBlockedVectorized<T, N>(
-          block.thread_rank(), in + k * size + r * (block.size() * N), vals[k]);
-      for (int j = 0; j < N; j++) {
-        accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+  if (size % N == 0) {
+    for (size_t r = 0; r < full_blocks; r++) {
+      for (int k = 0; k < M; k++) {
+        cub::LoadDirectBlockedVectorized<T, N>(
+            block.thread_rank(),
+            in + k * size + r * (block.size() * N),
+            vals[k]);
+        for (int j = 0; j < N; j++) {
+          accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+        }
+      }
+    }
+  } else {
+    for (size_t r = 0; r < full_blocks; r++) {
+      for (int k = 0; k < M; k++) {
+        cub::LoadDirectBlocked(
+            block.thread_rank(),
+            in + k * size + r * (block.size() * N),
+            vals[k]);
+        for (int j = 0; j < N; j++) {
+          accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+        }
       }
     }
   }

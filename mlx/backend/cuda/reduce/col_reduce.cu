@@ -1,5 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
+#include <numeric>
+
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
@@ -47,8 +49,19 @@ struct ColReduceArgs {
       shape_vec.pop_back();
       strides_vec.pop_back();
     }
+    std::vector<int> indices(shape_vec.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::sort(indices.begin(), indices.end(), [&](int left, int right) {
+      return strides_vec[left] > strides_vec[right];
+    });
+    decltype(shape_vec) sorted_shape;
+    decltype(strides_vec) sorted_strides;
+    for (auto idx : indices) {
+      sorted_shape.push_back(shape_vec[idx]);
+      sorted_strides.push_back(strides_vec[idx]);
+    }
     std::tie(shape_vec, strides_vec) =
-        collapse_contiguous_dims(shape_vec, strides_vec);
+        collapse_contiguous_dims(sorted_shape, sorted_strides);
     shape = const_param(shape_vec);
     strides = const_param(strides_vec);
     ndim = shape_vec.size();
@@ -167,16 +180,18 @@ col_reduce_looped(T* in, U* out, const __grid_constant__ ColReduceArgs args) {
 
 inline auto output_grid_for_col_reduce(
     const array& out,
-    const cu::ColReduceArgs& args) {
-  Shape out_shape;
-  Strides out_strides;
-  for (int i = 0; i < out.ndim(); i++) {
-    if (out.strides(i) >= args.reduction_stride) {
-      out_shape.push_back(out.shape(i));
-      out_strides.push_back(out.strides(i));
-    }
+    const cu::ColReduceArgs& args,
+    int bn) {
+  int gx, gy = 1;
+  size_t n_inner_blocks = cuda::ceil_div(args.reduction_stride, bn);
+  size_t n_outer_blocks = out.size() / args.reduction_stride;
+  size_t n_blocks = n_outer_blocks * n_inner_blocks;
+  while (n_blocks / gy > INT32_MAX) {
+    gy *= 2;
   }
-  return get_2d_grid_dims(out_shape, out_strides);
+  gx = cuda::ceil_div(n_blocks, gy);
+
+  return dim3(gx, gy, 1);
 }
 
 void col_reduce_looped(
@@ -207,16 +222,7 @@ void col_reduce_looped(
           constexpr int N_READS = 4;
           constexpr int BM = 32;
           constexpr int BN = 32;
-          dim3 grid = output_grid_for_col_reduce(out, args);
-          size_t extra_blocks = cuda::ceil_div(args.reduction_stride, BN);
-          if (grid.x * extra_blocks < INT32_MAX) {
-            grid.x *= extra_blocks;
-          } else if (grid.y * extra_blocks < 65536) {
-            grid.y *= extra_blocks;
-          } else {
-            throw std::runtime_error(
-                "[col_reduce_looped] Need to factorize reduction_stride");
-          }
+          dim3 grid = output_grid_for_col_reduce(out, args, BN);
           int blocks = BM * BN / N_READS;
           auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS>;
           kernel<<<grid, blocks, 0, stream>>>(x.data<T>(), out.data<U>(), args);

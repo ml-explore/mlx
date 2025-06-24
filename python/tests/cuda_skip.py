@@ -12,7 +12,6 @@ cuda_skip = {
     "TestLayers.test_upsample",
     "TestOps.test_complex_ops",
     "TestOps.test_dynamic_slicing",
-    "TestReduce.test_axis_permutation_sums",
     "TestReduce.test_dtypes",
     "TestUpsample.test_torch_upsample",
     # Block masked matmul NYI
