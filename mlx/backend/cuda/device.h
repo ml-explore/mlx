@@ -10,7 +10,6 @@
 #include <thrust/execution_policy.h>
 
 #include <unordered_map>
-#include <unordered_set>
 
 namespace mlx::core::cu {
 
@@ -68,7 +67,7 @@ class CommandEncoder {
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> concurrent_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
-  std::unordered_set<std::uintptr_t> active_deps_;
+  std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, cudaGraphNode_t> node_map_;
 };

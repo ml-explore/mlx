@@ -7,6 +7,7 @@
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
 #include <future>
+#include <unordered_set>
 
 namespace mlx::core {
 
@@ -76,13 +77,17 @@ void CommandEncoder::insert_graph_dependencies(std::vector<cudaGraphNode_t> node
 
   std::vector<cudaGraphNode_t> deps;
   {
+    // Dependencies must be added in the same order to produce a consistent
+    // topology
     std::unordered_set<cudaGraphNode_t> set_deps;
     for (auto d : active_deps_) {
       if (auto it = node_map_.find(d); it != node_map_.end()) {
-        set_deps.insert(it->second);
+        auto [_, inserted] = set_deps.insert(it->second);
+        if (inserted) {
+          deps.push_back(it->second);
+        }
       }
     }
-    deps.insert(deps.end(), set_deps.begin(), set_deps.end());
   }
   active_deps_.clear();
 
@@ -121,12 +126,12 @@ void CommandEncoder::add_completed_handler(std::function<void()> task) {
 
 void CommandEncoder::set_input_array(const array& arr) {
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
-  active_deps_.insert(id);
+  active_deps_.push_back(id);
 }
 
 void CommandEncoder::set_output_array(const array& arr) {
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
-  active_deps_.insert(id);
+  active_deps_.push_back(id);
   active_outputs_.push_back(id);
 }
 
@@ -141,11 +146,12 @@ void CommandEncoder::commit() {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   if (num_ops_ > 0) {
-    // Try the in-place update
+    // Try in-place update
     if (graph_exec_ != NULL) {
       cudaGraphExecUpdateResultInfo update_result;
       cudaGraphExecUpdate(graph_exec_, graph_, &update_result);
       if (update_result.result != cudaGraphExecUpdateSuccess) {
+        cudaGetLastError();
         CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec_));
         graph_exec_ = NULL;
       }
