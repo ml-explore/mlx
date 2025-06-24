@@ -108,9 +108,14 @@ inline void allocate_same_layout(
     array& out,
     const array& in,
     const std::vector<int>& axes) {
-  if (out.ndim() < in.ndim()) {
+  if (in.flags().row_contiguous) {
     out.set_data(allocator::malloc(out.nbytes()));
     return;
+  }
+
+  if (out.ndim() < in.ndim()) {
+    throw std::runtime_error(
+        "Reduction without keepdims only supported for row-contiguous inputs");
   }
 
   // Calculate the transpositions applied to in in order to apply them to out.
