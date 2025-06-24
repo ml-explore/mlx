@@ -62,6 +62,7 @@ class CommandEncoder {
   void insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes);
   CudaStream stream_;
   cudaGraph_t graph_;
+  cudaGraphExec_t graph_exec_{NULL};
   Worker worker_;
   int num_ops_{0};
   bool in_concurrent_{false};
