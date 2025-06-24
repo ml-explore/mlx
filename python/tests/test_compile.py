@@ -2,6 +2,7 @@
 
 import gc
 import io
+import math
 import unittest
 from functools import partial
 
@@ -978,6 +979,17 @@ class TestCompile(mlx_tests.MLXTestCase):
             mem_post = 0
 
         self.assertEqual(mem_pre, mem_post)
+
+    def test_double_constant(self):
+        with mx.stream(mx.cpu):
+            x = mx.array(1.0, dtype=mx.float64)
+
+            def fun(x):
+                return (x + math.pi) * 2.0
+
+            y = fun(x).item()
+            y_compiled = mx.compile(fun)(x).item()
+            self.assertEqual(y, y_compiled)
 
 
 if __name__ == "__main__":
