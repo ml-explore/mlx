@@ -7,6 +7,7 @@
 #include "mlx/stream.h"
 
 #include <cublasLt.h>
+#include <cuda.h>
 #include <thrust/execution_policy.h>
 
 #include <unordered_map>
@@ -53,6 +54,18 @@ class CommandEncoder {
       add_kernel_node((void*) func, grid_dim, block_dim, ptrs);
   }
 
+  void add_kernel_node(
+      CUfunction func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      void** params);
+
+  void add_kernel_node(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      void** params);
+
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
   }
@@ -70,11 +83,6 @@ class CommandEncoder {
 
  private:
   void insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes);
-  void add_kernel_node(
-      void* func,
-      dim3 grid_dim,
-      dim3 block_dim,
-      void** params);
 
   CudaStream stream_;
   cudaGraph_t graph_;

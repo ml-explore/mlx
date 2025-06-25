@@ -50,7 +50,6 @@ void copy_general_input(
     int64_t offset_out,
     const Shape& shape,
     const Strides& strides_in) {
-  auto capture = encoder.capture_context();
   MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
     const InType* in_ptr = in.data<InType>() + offset_in;
     OutType* out_ptr = out.data<OutType>() + offset_out;
@@ -63,7 +62,10 @@ void copy_general_input(
         MLX_SWITCH_1_2_3(ndim, NDIM, {
           auto kernel = cu::copy_g_nd<InType, OutType, IdxT, NDIM>;
           auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
               in_ptr,
               out_ptr,
               out.size(),
@@ -73,7 +75,10 @@ void copy_general_input(
       } else { // ndim >= 4
         auto kernel = cu::copy_g<InType, OutType, IdxT>;
         auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-        kernel<<<num_blocks, block_dims, 0, stream>>>(
+        encoder.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
             in_ptr,
             out_ptr,
             out.size(),

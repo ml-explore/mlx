@@ -312,7 +312,6 @@ void RoPE::eval_gpu(
     encoder.set_input_array(inputs[2]);
   }
   encoder.set_output_array(out);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_FLOAT_TYPES_CHECKED(in.dtype(), "rope", CTYPE, {
     using DataType = cuda_type_t<CTYPE>;
     auto& stream = encoder.stream();
@@ -322,7 +321,10 @@ void RoPE::eval_gpu(
           auto kernel = cu::rope_single<DataType, TRADITIONAL, FORWARD>;
           uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-          kernel<<<grid, block, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
               (donated ? out : in).data<DataType>(),
               out.data<DataType>(),
               offset.data<int32_t>(),
@@ -349,7 +351,10 @@ void RoPE::eval_gpu(
               make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
           dims.z = (dims.z + 3) / 4;
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-          kernel<<<grid, block, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
               (donated ? out : in).data<DataType>(),
               out.data<DataType>(),
               offset.data<int32_t>(),
@@ -367,7 +372,10 @@ void RoPE::eval_gpu(
               make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
           dims.z = (dims.z + 3) / 4;
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-          kernel<<<grid, block, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
               (donated ? out : in).data<DataType>(),
               out.data<DataType>(),
               offset.data<int32_t>(),

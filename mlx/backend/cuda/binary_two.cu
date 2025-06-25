@@ -137,7 +137,6 @@ void binary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_output_array(out_a);
   encoder.set_output_array(out_b);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, {
     MLX_SWITCH_ALL_TYPES(out_a.dtype(), CTYPE_OUT, {
       if constexpr (cu::supports_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
@@ -161,7 +160,10 @@ void binary_op_gpu_inplace(
                     cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
                 auto [num_blocks, block_dims] =
                     get_launch_args(kernel, out_a, large);
-                kernel<<<num_blocks, block_dims, 0, stream>>>(
+                encoder.add_kernel_node(
+                    kernel,
+                    num_blocks,
+                    block_dims,
                     a.data<InType>(),
                     b.data<InType>(),
                     out_a.data<OutType>(),
@@ -175,7 +177,10 @@ void binary_op_gpu_inplace(
               auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
               auto [num_blocks, block_dims] =
                   get_launch_args(kernel, out_a, large);
-              kernel<<<num_blocks, block_dims, 0, stream>>>(
+              encoder.add_kernel_node(
+                  kernel,
+                  num_blocks,
+                  block_dims,
                   a.data<InType>(),
                   b.data<InType>(),
                   out_a.data<OutType>(),
@@ -204,7 +209,10 @@ void binary_op_gpu_inplace(
                 out_a.shape(),
                 out_a.strides(),
                 LARGE);
-            kernel<<<num_blocks, block_dims, 0, stream>>>(
+            encoder.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
                 a.data<InType>(),
                 b.data<InType>(),
                 out_a.data<OutType>(),

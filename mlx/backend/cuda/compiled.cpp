@@ -3,6 +3,7 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/jit_module.h"
+#include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 
@@ -178,6 +179,7 @@ void Compiled::eval_gpu(
   // Whether to use large index.
   bool large = compiled_use_large_index(inputs, outputs, contiguous);
 
+  cu::KernelArgs args;
   // Put inputs.
   int strides_index = 1;
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -185,26 +187,26 @@ void Compiled::eval_gpu(
       continue;
     }
     const auto& x = inputs[i];
-    mod.append_arg(x);
+    args.append(x);
     if (!contiguous && !is_scalar(x)) {
-      mod.append_arg(strides_vec[strides_index++]);
+      args.append(strides_vec[strides_index++]);
     }
   }
 
   // Put outputs.
   compiled_allocate_outputs(inputs, outputs, is_constant_, contiguous);
   for (auto& x : outputs) {
-    mod.append_arg(x);
+    args.append(x);
   }
 
   // Put shape and size.
   if (!contiguous) {
-    mod.append_arg(shape);
+    args.append(shape);
   }
   if (large) {
-    mod.append_arg<int64_t>(outputs[0].data_size());
+    args.append<int64_t>(outputs[0].data_size());
   } else {
-    mod.append_arg<uint32_t>(outputs[0].data_size());
+    args.append<uint32_t>(outputs[0].data_size());
   }
 
   // Launch kernel.
@@ -223,8 +225,14 @@ void Compiled::eval_gpu(
     encoder.set_output_array(out);
   }
 
-  auto capture = encoder.capture_context();
-  mod.launch_kernel(encoder.stream(), kernel_name, outputs[0], large);
+  auto kernel = mod.get_kernel(kernel_name);
+  auto [num_blocks, block_dims] =
+      get_launch_args(kernel, outputs[0], large);
+  encoder.add_kernel_node(
+      kernel,
+      num_blocks,
+      block_dims,
+      args.args());
 }
 
 } // namespace mlx::core

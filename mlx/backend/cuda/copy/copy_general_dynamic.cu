@@ -61,7 +61,6 @@ void copy_general_dynamic(
     const Strides& strides_out,
     const array& dynamic_offset_in,
     const array& dynamic_offset_out) {
-  auto capture = encoder.capture_context();
   MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
     const InType* in_ptr = in.data<InType>() + offset_in;
     OutType* out_ptr = out.data<OutType>() + offset_out;
@@ -74,7 +73,10 @@ void copy_general_dynamic(
         MLX_SWITCH_1_2_3(ndim, NDIM, {
           auto kernel = cu::copy_gg_dynamic_nd<InType, OutType, IdxT, NDIM>;
           auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
               in_ptr,
               out_ptr,
               out.size(),
@@ -87,7 +89,10 @@ void copy_general_dynamic(
       } else { // ndim >= 4
         auto kernel = cu::copy_gg_dynamic<InType, OutType, IdxT>;
         auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-        kernel<<<num_blocks, block_dims, 0, stream>>>(
+        encoder.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
             in_ptr,
             out_ptr,
             out.size(),

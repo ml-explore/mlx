@@ -91,7 +91,6 @@ void ternary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_input_array(c);
   encoder.set_output_array(out);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE, {
     using DType = cuda_type_t<CTYPE>;
 
@@ -112,7 +111,10 @@ void ternary_op_gpu_inplace(
             auto kernel = cu::ternary_g_nd<Op, DType, IdxT, NDIM>;
             auto [num_blocks, block_dims] =
                 get_launch_args(kernel, out, large);
-            kernel<<<num_blocks, block_dims, 0, stream>>>(
+            encoder.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
                 a.data<bool>(),
                 b.data<DType>(),
                 c.data<DType>(),
@@ -126,7 +128,10 @@ void ternary_op_gpu_inplace(
         } else {
           auto kernel = cu::ternary_g<Op, DType, IdxT>;
           auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
+          encoder.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
               a.data<bool>(),
               b.data<DType>(),
               c.data<DType>(),
@@ -145,7 +150,10 @@ void ternary_op_gpu_inplace(
         auto kernel = cu::ternary_v<Op, DType, IdxT>;
         auto [num_blocks, block_dims] = get_launch_args(
             kernel, out.data_size(), out.shape(), out.strides(), LARGE);
-        kernel<<<num_blocks, block_dims, 0, stream>>>(
+        encoder.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
             a.data<bool>(),
             b.data<DType>(),
             c.data<DType>(),

@@ -164,17 +164,22 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   int32_t threads_x = cuda::ceil_div(total, threads_y);
   auto [grid, block] = get_grid_and_block(threads_x, threads_y, 1);
-  auto capture = encoder.capture_context();
   auto& stream = encoder.stream();
   if (keys.flags().row_contiguous) {
-    cu::rbitsc<<<grid, block, 0, stream>>>(
+    encoder.add_kernel_node(
+        cu::rbitsc,
+        grid,
+        block,
         keys.data<uint32_t>(),
         out.data<uint8_t>(),
         grid_dims,
         odd,
         bytes_per_key);
   } else {
-    cu::rbits<<<grid, block, 0, stream>>>(
+    encoder.add_kernel_node(
+        cu::rbits,
+        grid,
+        block,
         keys.data<uint32_t>(),
         out.data<uint8_t>(),
         grid_dims,

@@ -141,7 +141,6 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "softmax", CTYPE, {
     using DataType = cuda_type_t<CTYPE>;
     constexpr int N_READS = 4;
@@ -150,7 +149,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       if (precise) {
         kernel = cu::softmax<DataType, float, BLOCK_DIM, N_READS>;
       }
-      kernel<<<n_rows, BLOCK_DIM, 0, encoder.stream()>>>(
+      encoder.add_kernel_node(
+          kernel, n_rows, BLOCK_DIM, 
           in.data<DataType>(), out.data<DataType>(), axis_size);
     });
   });

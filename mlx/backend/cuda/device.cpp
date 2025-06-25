@@ -161,6 +161,31 @@ void CommandEncoder::add_kernel_node(
     }
 }
 
+void CommandEncoder::add_kernel_node(
+      CUfunction func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      void** params) {
+    CUDA_KERNEL_NODE_PARAMS kernel_params = {0};
+    kernel_params.func = func;
+    kernel_params.gridDimX = grid_dim.x;
+    kernel_params.gridDimY = grid_dim.y;
+    kernel_params.gridDimZ = grid_dim.z;
+    kernel_params.blockDimX = block_dim.x;
+    kernel_params.blockDimY = block_dim.y;
+    kernel_params.blockDimZ = block_dim.z;
+    kernel_params.kernelParams = params;
+    CUgraphNode node;
+    cuGraphAddKernelNode(
+        &node, graph_, NULL, 0, &kernel_params);
+    if (in_concurrent_) {
+      concurrent_nodes_.push_back(node);
+    } else {
+      insert_graph_dependencies({node});
+    }
+}
+
+
 void CommandEncoder::commit() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
