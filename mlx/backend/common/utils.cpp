@@ -199,11 +199,14 @@ Dims get_2d_grid_dims_common(
       }
     }
   }
-  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX || divisor > 1) {
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
     throw std::runtime_error("Unable to safely factor shape.");
   }
   if (grid_y > grid_x) {
     std::swap(grid_x, grid_y);
+  }
+  if (divisor > 1) {
+    grid_x = ((grid_x + divisor - 1) / divisor) * divisor;
   }
   return std::make_tuple(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
