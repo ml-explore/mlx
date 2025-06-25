@@ -136,7 +136,7 @@ void CommandEncoder::set_output_array(const array& arr) {
 }
 
 void CommandEncoder::maybe_commit() {
-  if (num_ops_ > 10) {
+  if (num_ops_ > 20) {
     commit();
   }
 }
@@ -176,8 +176,8 @@ void CommandEncoder::add_kernel_node(
     kernel_params.blockDimZ = block_dim.z;
     kernel_params.kernelParams = params;
     CUgraphNode node;
-    cuGraphAddKernelNode(
-        &node, graph_, NULL, 0, &kernel_params);
+    CHECK_CUDA_ERROR(cuGraphAddKernelNode(
+        &node, graph_, NULL, 0, &kernel_params));
     if (in_concurrent_) {
       concurrent_nodes_.push_back(node);
     } else {

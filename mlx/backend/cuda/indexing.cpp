@@ -434,6 +434,7 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }
+  encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] =
       get_launch_args(kernel, idx, large);
