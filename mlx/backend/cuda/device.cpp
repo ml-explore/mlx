@@ -141,6 +141,26 @@ void CommandEncoder::maybe_commit() {
   }
 }
 
+void CommandEncoder::add_kernel_node(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      void** params) {
+    cudaKernelNodeParams kernel_params = {0};
+    kernel_params.func = func;
+    kernel_params.gridDim = grid_dim;
+    kernel_params.blockDim = block_dim;
+    kernel_params.kernelParams = params;
+    cudaGraphNode_t node;
+    CHECK_CUDA_ERROR(cudaGraphAddKernelNode(
+        &node, graph_, NULL, 0, &kernel_params));
+    if (in_concurrent_) {
+      concurrent_nodes_.push_back(node);
+    } else {
+      insert_graph_dependencies({node});
+    }
+}
+
 void CommandEncoder::commit() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});

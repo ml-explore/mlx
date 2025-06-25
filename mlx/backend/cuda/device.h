@@ -42,6 +42,17 @@ class CommandEncoder {
   void set_input_array(const array& arr);
   void set_output_array(const array& arr);
 
+  template <typename F, typename... Params>
+  void add_kernel_node(F* func, dim3 grid_dim, dim3 block_dim, Params&&... params) {
+      constexpr size_t num = sizeof...(Params);
+      void* ptrs[num];
+      size_t i = 0;
+      ([&](auto&& p){
+          ptrs[i++] = static_cast<void*>(&p);
+      }(std::forward<Params>(params)), ...);
+      add_kernel_node((void*) func, grid_dim, block_dim, ptrs);
+  }
+
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
   }
@@ -59,6 +70,12 @@ class CommandEncoder {
 
  private:
   void insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes);
+  void add_kernel_node(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      void** params);
+
   CudaStream stream_;
   cudaGraph_t graph_;
   cudaGraphExec_t graph_exec_{NULL};

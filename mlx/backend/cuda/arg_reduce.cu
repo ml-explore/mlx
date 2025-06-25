@@ -151,7 +151,6 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_REAL_TYPES_CHECKED(in.dtype(), "ArgReduce", CTYPE, {
     using InType = cuda_type_t<CTYPE>;
     constexpr uint32_t N_READS = 4;
@@ -170,7 +169,10 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
             BLOCK_DIM,
             N_READS>;
       }
-      kernel<<<num_blocks, block_dims, 0, encoder.stream()>>>(
+      encoder.add_kernel_node(
+          kernel,
+          num_blocks,
+          block_dims,
           in.data<InType>(),
           out.data<uint32_t>(),
           out.size(),
