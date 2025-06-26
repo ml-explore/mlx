@@ -9,13 +9,38 @@
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
+#include <cooperative_groups.h>
 #include <nvtx3/nvtx3.hpp>
-#include <thrust/device_ptr.h>
-#include <thrust/transform.h>
 
 namespace mlx::core {
 
 namespace cu {
+
+namespace cg = cooperative_groups;
+
+template <typename Op, typename In, typename Out, typename IdxT>
+__global__ void unary_v(const In* in, Out* out, IdxT size) {
+  IdxT index = cg::this_grid().thread_rank();
+  if (index < size) {
+    out[index] = Op{}(in[index]);
+  }
+}
+
+template <typename Op, typename In, typename Out, typename IdxT>
+__global__ void unary_g(
+    const In* in,
+    Out* out,
+    IdxT size,
+    const __grid_constant__ Shape shape,
+    const __grid_constant__ Strides strides,
+    int ndim) {
+  IdxT index = cg::this_grid().thread_rank();
+  if (index < size) {
+    auto idx = elem_to_loc_4d(
+        index, shape.data(), strides.data(), ndim);
+    out[index] = Op{}(in[idx]);
+  }
+}
 
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {
@@ -74,28 +99,55 @@ void unary_op_gpu_inplace(
   if (in.size() == 0) {
     return;
   }
+  bool contig = in.flags().contiguous;
+  bool large;
+  if (!contig) {
+    large = in.data_size() > INT32_MAX || out.size() > INT32_MAX;
+  } else {
+    large = in.data_size() > UINT32_MAX;
+  }
 
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  auto capture = encoder.capture_context();
   MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {
     MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
       if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
-        using InType = cuda_type_t<CTYPE_IN>;
-        using OutType = cuda_type_t<CTYPE_OUT>;
-        auto policy = cu::thrust_policy(encoder.stream());
-        auto in_ptr = thrust::device_pointer_cast(in.data<InType>());
-        auto out_ptr = thrust::device_pointer_cast(out.data<OutType>());
-        if (in.flags().contiguous) {
-          thrust::transform(
-              policy, in_ptr, in_ptr + in.data_size(), out_ptr, Op());
-        } else {
-          auto [shape, strides] = collapse_contiguous_dims(in);
-          auto [in_begin, in_end] = cu::make_general_iterators<int64_t>(
-              in_ptr, in.size(), shape, strides);
-          thrust::transform(policy, in_begin, in_end, out_ptr, Op());
-        }
+        MLX_SWITCH_BOOL(large, LARGE, {
+          using InType = cuda_type_t<CTYPE_IN>;
+          using OutType = cuda_type_t<CTYPE_OUT>;
+          using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
+            if (contig) {
+                auto kernel = cu::unary_v<Op, InType, OutType, IdxT>;
+                auto [num_blocks, block_dims] = get_launch_args(
+                    kernel,
+                    out.data_size(),
+                    out.shape(),
+                    out.strides(),
+                    large);
+          encoder.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
+              in.data<InType>(),
+              out.data<OutType>(),
+              out.data_size());
+          } else {
+            auto [shape, strides] = collapse_contiguous_dims(in);
+            auto kernel = cu::unary_g<Op, InType, OutType, IdxT>;
+            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+            encoder.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
+                in.data<InType>(),
+                out.data<OutType>(),
+                out.data_size(),
+                const_param(shape),
+                const_param(strides),
+                shape.size());
+          }
+      });
       } else {
         throw std::runtime_error(fmt::format(
             "Can not do unary op {} on input of {} with output of {}.",
