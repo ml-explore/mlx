@@ -109,8 +109,7 @@ void ternary_op_gpu_inplace(
         if (ndim <= 3) {
           MLX_SWITCH_1_2_3(ndim, NDIM, {
             auto kernel = cu::ternary_g_nd<Op, DType, IdxT, NDIM>;
-            auto [num_blocks, block_dims] =
-                get_launch_args(kernel, out, large);
+            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
             encoder.add_kernel_node(
                 kernel,
                 num_blocks,

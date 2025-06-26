@@ -36,8 +36,7 @@ __global__ void unary_g(
     int ndim) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto idx = elem_to_loc_4d(
-        index, shape.data(), strides.data(), ndim);
+    auto idx = elem_to_loc_4d(index, shape.data(), strides.data(), ndim);
     out[index] = Op{}(in[idx]);
   }
 }
@@ -117,21 +116,17 @@ void unary_op_gpu_inplace(
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
           using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
-            if (contig) {
-                auto kernel = cu::unary_v<Op, InType, OutType, IdxT>;
-                auto [num_blocks, block_dims] = get_launch_args(
-                    kernel,
-                    out.data_size(),
-                    out.shape(),
-                    out.strides(),
-                    large);
-          encoder.add_kernel_node(
-              kernel,
-              num_blocks,
-              block_dims,
-              in.data<InType>(),
-              out.data<OutType>(),
-              out.data_size());
+          if (contig) {
+            auto kernel = cu::unary_v<Op, InType, OutType, IdxT>;
+            auto [num_blocks, block_dims] = get_launch_args(
+                kernel, out.data_size(), out.shape(), out.strides(), large);
+            encoder.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
+                in.data<InType>(),
+                out.data<OutType>(),
+                out.data_size());
           } else {
             auto [shape, strides] = collapse_contiguous_dims(in);
             auto kernel = cu::unary_g<Op, InType, OutType, IdxT>;
@@ -147,7 +142,7 @@ void unary_op_gpu_inplace(
                 const_param(strides),
                 shape.size());
           }
-      });
+        });
       } else {
         throw std::runtime_error(fmt::format(
             "Can not do unary op {} on input of {} with output of {}.",

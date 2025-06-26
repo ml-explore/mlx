@@ -10,10 +10,10 @@
 
 #include "cuda_jit_sources.h"
 
-#include <fmt/format.h>
-#include <nvtx3/nvtx3.hpp>
 #include <cuda.h>
+#include <fmt/format.h>
 #include <nvrtc.h>
+#include <nvtx3/nvtx3.hpp>
 
 #include <cassert>
 #include <numeric>
@@ -128,13 +128,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
 
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] =
-      get_launch_args(kernel, out, large);
-  encoder.add_kernel_node(
-      kernel,
-      num_blocks,
-      block_dims,
-      args.args());
+  auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -234,13 +229,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] =
-      get_launch_args(kernel, upd, large);
-  encoder.add_kernel_node(
-      kernel,
-      num_blocks,
-      block_dims,
-      args.args());
+  auto [num_blocks, block_dims] = get_launch_args(kernel, upd, large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -327,13 +317,8 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] =
-      get_launch_args(kernel, idx, large);
-  encoder.add_kernel_node(
-      kernel,
-      num_blocks,
-      block_dims,
-      args.args());
+  auto [num_blocks, block_dims] = get_launch_args(kernel, idx, large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -436,13 +421,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] =
-      get_launch_args(kernel, idx, large);
-  encoder.add_kernel_node(
-      kernel,
-      num_blocks,
-      block_dims,
-      args.args());
+  auto [num_blocks, block_dims] = get_launch_args(kernel, idx, large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
 }
 
 } // namespace mlx::core

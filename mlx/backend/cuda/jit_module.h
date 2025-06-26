@@ -52,20 +52,20 @@ struct KernelArgs {
 
   // Make sure the arg is copied to an array with size of NDIM.
   template <size_t NDIM = MAX_NDIM, typename T>
-  void append_ndim(const std::vector<T>& vec) {
+  void append_ndim(std::vector<T> vec) {
     if (vec.size() > NDIM) {
       throw std::runtime_error(
           fmt::format("ndim can not be larger than {}.", NDIM));
     }
-    std::vector<T> copied(NDIM);
-    std::copy(vec.begin(), vec.end(), copied.begin());
-    append(std::move(copied));
+    vec.resize(NDIM);
+    append(std::move(vec));
   }
 
- private:
   void append_ptr(const void* v) {
     args_.push_back(const_cast<void*>(v));
   }
+
+ private:
 
   std::vector<void*> args_;
 
@@ -96,7 +96,6 @@ class JitModule {
   CUfunction get_kernel(const std::string& kernel_name);
 
  private:
-
   CUmodule module_{nullptr};
   std::unordered_map<std::string, CUfunction> kernels_;
 };

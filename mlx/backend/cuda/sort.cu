@@ -89,8 +89,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
 
       if (argsort) {
         // Indices in the sorted dimension.
-        array indices(
-            allocator::malloc(out.nbytes()), in.shape(), out.dtype());
+        array indices(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
         encoder.add_temporary(indices);
 
         // In argsort though we don't need the result of sorted values, the
@@ -99,19 +98,18 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         encoder.add_temporary(discard);
 
         size_t size;
-        CHECK_CUDA_ERROR(
-            cub::DeviceSegmentedSort::StableSortPairs(
-              nullptr, 
-              size,
-              in.data<Type>(),
-              discard.data<Type>(),
-              indices.data<uint32_t>(),
-              out.data<uint32_t>(),
-              in.data_size(),
-              in.data_size() / nsort,
-              offsets,
-              offsets + 1,
-              stream));
+        CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortPairs(
+            nullptr,
+            size,
+            in.data<Type>(),
+            discard.data<Type>(),
+            indices.data<uint32_t>(),
+            out.data<uint32_t>(),
+            in.data_size(),
+            in.data_size() / nsort,
+            offsets,
+            offsets + 1,
+            stream));
 
         array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
         encoder.add_temporary(temp);
@@ -125,41 +123,37 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             thrust::device_pointer_cast(indices.data<uint32_t>()),
             ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
 
-        CHECK_CUDA_ERROR(
-            cub::DeviceSegmentedSort::StableSortPairs(
-              temp.data<void>(),
-              size,
-              in.data<Type>(),
-              discard.data<Type>(),
-              indices.data<uint32_t>(),
-              out.data<uint32_t>(),
-              in.data_size(),
-              in.data_size() / nsort,
-              offsets,
-              offsets + 1,
-              stream));
+        CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortPairs(
+            temp.data<void>(),
+            size,
+            in.data<Type>(),
+            discard.data<Type>(),
+            indices.data<uint32_t>(),
+            out.data<uint32_t>(),
+            in.data_size(),
+            in.data_size() / nsort,
+            offsets,
+            offsets + 1,
+            stream));
       } else {
-
         size_t size;
-        CHECK_CUDA_ERROR(
-            cub::DeviceSegmentedSort::StableSortKeys(
-              nullptr, 
-              size,
-              in.data<Type>(),
-              out.data<Type>(),
-              in.data_size(),
-              in.data_size() / nsort,
-              offsets,
-              offsets + 1,
-              stream));
+        CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortKeys(
+            nullptr,
+            size,
+            in.data<Type>(),
+            out.data<Type>(),
+            in.data_size(),
+            in.data_size() / nsort,
+            offsets,
+            offsets + 1,
+            stream));
 
         array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
         encoder.add_temporary(temp);
 
         // Start capturing after allocations
         auto capture = encoder.capture_context();
-        CHECK_CUDA_ERROR(
-            cub::DeviceSegmentedSort::StableSortKeys(
+        CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortKeys(
             temp.data<void>(),
             size,
             in.data<Type>(),

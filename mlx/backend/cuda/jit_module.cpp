@@ -187,7 +187,6 @@ constexpr const char* g_headers[] = {
 
 } // namespace
 
-
 JitModule::JitModule(
     Device& device,
     const std::string& module_name,

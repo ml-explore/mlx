@@ -230,15 +230,15 @@ void RMSNorm::eval_gpu(
     MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
       auto kernel = cu::rms_norm<DataType, BLOCK_DIM, N_READS>;
       encoder.add_kernel_node(
-        kernel,
-        n_rows,
-        BLOCK_DIM,
-        x.data<DataType>(),
-        w.data<DataType>(),
-        out.data<DataType>(),
-        eps_,
-        axis_size,
-        w_stride);
+          kernel,
+          n_rows,
+          BLOCK_DIM,
+          x.data<DataType>(),
+          w.data<DataType>(),
+          out.data<DataType>(),
+          eps_,
+          axis_size,
+          w_stride);
     });
   });
 }
@@ -318,17 +318,17 @@ void RMSNormVJP::eval_gpu(
       MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
         auto kernel = cu::rms_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
         encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          BLOCK_DIM,
-          x.data<DataType>(),
-          w.data<DataType>(),
-          g.data<DataType>(),
-          gx.data<DataType>(),
-          gw_temp.data<DataType>(),
-          eps_,
-          axis_size,
-          w_stride);
+            kernel,
+            n_rows,
+            BLOCK_DIM,
+            x.data<DataType>(),
+            w.data<DataType>(),
+            g.data<DataType>(),
+            gx.data<DataType>(),
+            gw_temp.data<DataType>(),
+            eps_,
+            axis_size,
+            w_stride);
       });
     });
   });

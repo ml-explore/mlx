@@ -134,9 +134,11 @@ template <typename T>
 inline uint max_occupancy_block_dim(T kernel) {
   int _, block_dim;
   if constexpr (std::is_same_v<T, CUfunction>) {
-    CHECK_CUDA_ERROR(cuOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel, 0, 0, 0));
+    CHECK_CUDA_ERROR(
+        cuOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel, 0, 0, 0));
   } else {
-    CHECK_CUDA_ERROR(cudaOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel));
+    CHECK_CUDA_ERROR(
+        cudaOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel));
   }
   return block_dim;
 }

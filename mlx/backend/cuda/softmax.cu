@@ -150,8 +150,12 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
         kernel = cu::softmax<DataType, float, BLOCK_DIM, N_READS>;
       }
       encoder.add_kernel_node(
-          kernel, n_rows, BLOCK_DIM, 
-          in.data<DataType>(), out.data<DataType>(), axis_size);
+          kernel,
+          n_rows,
+          BLOCK_DIM,
+          in.data<DataType>(),
+          out.data<DataType>(),
+          axis_size);
     });
   });
 }

@@ -44,14 +44,15 @@ class CommandEncoder {
   void set_output_array(const array& arr);
 
   template <typename F, typename... Params>
-  void add_kernel_node(F* func, dim3 grid_dim, dim3 block_dim, Params&&... params) {
-      constexpr size_t num = sizeof...(Params);
-      void* ptrs[num];
-      size_t i = 0;
-      ([&](auto&& p){
-          ptrs[i++] = static_cast<void*>(&p);
-      }(std::forward<Params>(params)), ...);
-      add_kernel_node((void*) func, grid_dim, block_dim, ptrs);
+  void
+  add_kernel_node(F* func, dim3 grid_dim, dim3 block_dim, Params&&... params) {
+    constexpr size_t num = sizeof...(Params);
+    void* ptrs[num];
+    size_t i = 0;
+    ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
+         std::forward<Params>(params)),
+     ...);
+    add_kernel_node((void*)func, grid_dim, block_dim, ptrs);
   }
 
   void add_kernel_node(
@@ -60,11 +61,8 @@ class CommandEncoder {
       dim3 block_dim,
       void** params);
 
-  void add_kernel_node(
-      void* func,
-      dim3 grid_dim,
-      dim3 block_dim,
-      void** params);
+  void
+  add_kernel_node(void* func, dim3 grid_dim, dim3 block_dim, void** params);
 
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
@@ -82,14 +80,15 @@ class CommandEncoder {
   void synchronize();
 
  private:
-
   struct GraphNode {
     cudaGraphNode_t node;
     char id;
     bool is_subgraph;
   };
 
-  void insert_graph_dependencies(cudaGraphNode_t node, bool is_subgraph = false);
+  void insert_graph_dependencies(
+      cudaGraphNode_t node,
+      bool is_subgraph = false);
   void insert_graph_dependencies(std::vector<GraphNode> nodes);
 
   CudaStream stream_;

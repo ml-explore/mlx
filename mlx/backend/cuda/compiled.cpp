@@ -189,7 +189,7 @@ void Compiled::eval_gpu(
     const auto& x = inputs[i];
     args.append(x);
     if (!contiguous && !is_scalar(x)) {
-      args.append(strides_vec[strides_index++]);
+      args.append_ptr(strides_vec[strides_index++].data());
     }
   }
 
@@ -201,7 +201,7 @@ void Compiled::eval_gpu(
 
   // Put shape and size.
   if (!contiguous) {
-    args.append(shape);
+    args.append_ptr(shape.data());
   }
   if (large) {
     args.append<int64_t>(outputs[0].data_size());
@@ -226,13 +226,8 @@ void Compiled::eval_gpu(
   }
 
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] =
-      get_launch_args(kernel, outputs[0], large);
-  encoder.add_kernel_node(
-      kernel,
-      num_blocks,
-      block_dims,
-      args.args());
+  auto [num_blocks, block_dims] = get_launch_args(kernel, outputs[0], large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
 }
 
 } // namespace mlx::core

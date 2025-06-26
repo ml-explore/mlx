@@ -152,7 +152,9 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
           kernel,
           n_rows,
           BLOCK_DIM,
-          in.data<DataType>(), out.data<DataType>(), axis_size);
+          in.data<DataType>(),
+          out.data<DataType>(),
+          axis_size);
     });
   });
 }

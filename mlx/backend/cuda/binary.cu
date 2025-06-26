@@ -150,15 +150,14 @@ void binary_op_gpu_inplace(
           auto [shape, strides] = collapse_contiguous_dims(a, b, out);
           auto& a_strides = strides[0];
           auto& b_strides = strides[1];
-          bool large = a.data_size() > INT32_MAX ||
-              b.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
+          bool large = a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
+              out.data_size() > INT32_MAX;
           MLX_SWITCH_BOOL(large, LARGE, {
             using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
             int ndim = shape.size();
             if (ndim <= 3) {
               MLX_SWITCH_1_2_3(ndim, NDIM, {
-                auto kernel =
-                    &cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
+                auto kernel = &cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
                 auto [num_blocks, block_dims] =
                     get_launch_args(kernel, out, large);
                 encoder.add_kernel_node(
@@ -177,10 +176,10 @@ void binary_op_gpu_inplace(
               auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
               auto [num_blocks, block_dims] =
                   get_launch_args(kernel, out, large);
-                encoder.add_kernel_node(
-                    kernel,
-                    num_blocks,
-                    block_dims,
+              encoder.add_kernel_node(
+                  kernel,
+                  num_blocks,
+                  block_dims,
                   a.data<InType>(),
                   b.data<InType>(),
                   out.data<OutType>(),

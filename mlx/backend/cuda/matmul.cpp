@@ -42,7 +42,8 @@ class MatMul {
       int64_t ldb,
       int32_t batch_count,
       int64_t a_batch_stride,
-      int64_t b_batch_stride) : handle_(device.lt_handle()) {
+      int64_t b_batch_stride)
+      : handle_(device.lt_handle()) {
     heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
     auto scale_type = dtype_to_cuda_type(dtype);
@@ -273,7 +274,7 @@ class MatMul {
 namespace {
 
 std::tuple<bool, int64_t, array>
-check_transpose(std::vector<array>& copies, const Stream& s, const array& arr) {
+check_transpose(cu::CommandEncoder &enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
   auto sty = arr.strides()[arr.ndim() - 1];
   if (sty == 1 && stx == arr.shape(-1)) {
@@ -283,7 +284,7 @@ check_transpose(std::vector<array>& copies, const Stream& s, const array& arr) {
   } else {
     array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
     copy_gpu(arr, arr_copy, CopyType::General, s);
-    copies.push_back(arr_copy);
+    enc.add_temporary(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }
 }
@@ -317,13 +318,8 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
-  std::vector<array> copies;
-  auto [a_transposed, lda, a] = check_transpose(copies, s, a_pre);
-  auto [b_transposed, ldb, b] = check_transpose(copies, s, b_pre);
-
-  for (auto& temp : copies) {
-    encoder.add_temporary(temp);
-  }
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -406,14 +402,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
-  std::vector<array> copies;
-  auto [a_transposed, lda, a] = check_transpose(copies, s, a_pre);
-  auto [b_transposed, ldb, b] = check_transpose(copies, s, b_pre);
-  auto [c_transposed, ldc, c] = check_transpose(copies, s, c_pre);
-
-  for (auto& temp : copies) {
-    encoder.add_temporary(temp);
-  }
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
+  auto [c_transposed, ldc, c] = check_transpose(encoder, s, c_pre);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions

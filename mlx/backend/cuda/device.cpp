@@ -52,18 +52,34 @@ void Device::make_current() {
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph, 0));
-  CHECK_CUDA_ERROR(cudaStreamBeginCaptureToGraph(enc.stream(), graph, NULL, NULL, 0, cudaStreamCaptureModeGlobal));
+  CHECK_CUDA_ERROR(cudaStreamBeginCaptureToGraph(
+      enc.stream(), graph, NULL, NULL, 0, cudaStreamCaptureModeGlobal));
 }
 
 CommandEncoder::CaptureContext::~CaptureContext() {
   CHECK_CUDA_ERROR(cudaStreamEndCapture(enc.stream(), &graph));
-  cudaGraphNode_t captured_node;
-  CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&captured_node, enc.graph_, NULL, 0, graph));
+  size_t num_nodes;
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, NULL, &num_nodes));
+  if (num_nodes == 1) {
+    cudaGraphNode_t captured_node;
+    CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, &captured_node, &num_nodes));
+    CUDA_KERNEL_NODE_PARAMS params;
+    CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
+    cudaGraphNode_t node;
+    CHECK_CUDA_ERROR(
+      cuGraphAddKernelNode(&node, enc.graph_, NULL, 0, &params));
+    enc.insert_graph_dependencies(node);
+  } else {
+    cudaGraphNode_t node;
+    CHECK_CUDA_ERROR(
+        cudaGraphAddChildGraphNode(&node, enc.graph_, NULL, 0, graph));
+    enc.insert_graph_dependencies(node, true);
+  }
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
-  enc.insert_graph_dependencies(captured_node, true);
 }
 
-CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc) : enc(enc) {
+CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc)
+    : enc(enc) {
   enc.in_concurrent_ = true;
 }
 
@@ -72,7 +88,9 @@ CommandEncoder::ConcurrentContext::~ConcurrentContext() {
   enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
 }
 
-void CommandEncoder::insert_graph_dependencies(cudaGraphNode_t node, bool is_subgraph /* = false */) {
+void CommandEncoder::insert_graph_dependencies(
+    cudaGraphNode_t node,
+    bool is_subgraph /* = false */) {
   if (is_subgraph) {
     graph_node_count_++;
   }
@@ -159,41 +177,40 @@ void CommandEncoder::maybe_commit() {
 }
 
 void CommandEncoder::add_kernel_node(
-      void* func,
-      dim3 grid_dim,
-      dim3 block_dim,
-      void** params) {
-    cudaKernelNodeParams kernel_params = {0};
-    kernel_params.func = func;
-    kernel_params.gridDim = grid_dim;
-    kernel_params.blockDim = block_dim;
-    kernel_params.kernelParams = params;
-    cudaGraphNode_t node;
-    CHECK_CUDA_ERROR(cudaGraphAddKernelNode(
-        &node, graph_, NULL, 0, &kernel_params));
-    insert_graph_dependencies(node);
+    void* func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    void** params) {
+  cudaKernelNodeParams kernel_params = {0};
+  kernel_params.func = func;
+  kernel_params.gridDim = grid_dim;
+  kernel_params.blockDim = block_dim;
+  kernel_params.kernelParams = params;
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(
+      cudaGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
+  insert_graph_dependencies(node);
 }
 
 void CommandEncoder::add_kernel_node(
-      CUfunction func,
-      dim3 grid_dim,
-      dim3 block_dim,
-      void** params) {
-    CUDA_KERNEL_NODE_PARAMS kernel_params = {0};
-    kernel_params.func = func;
-    kernel_params.gridDimX = grid_dim.x;
-    kernel_params.gridDimY = grid_dim.y;
-    kernel_params.gridDimZ = grid_dim.z;
-    kernel_params.blockDimX = block_dim.x;
-    kernel_params.blockDimY = block_dim.y;
-    kernel_params.blockDimZ = block_dim.z;
-    kernel_params.kernelParams = params;
-    CUgraphNode node;
-    CHECK_CUDA_ERROR(cuGraphAddKernelNode(
-        &node, graph_, NULL, 0, &kernel_params));
-    insert_graph_dependencies(node);
+    CUfunction func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    void** params) {
+  CUDA_KERNEL_NODE_PARAMS kernel_params = {0};
+  kernel_params.func = func;
+  kernel_params.gridDimX = grid_dim.x;
+  kernel_params.gridDimY = grid_dim.y;
+  kernel_params.gridDimZ = grid_dim.z;
+  kernel_params.blockDimX = block_dim.x;
+  kernel_params.blockDimY = block_dim.y;
+  kernel_params.blockDimZ = block_dim.z;
+  kernel_params.kernelParams = params;
+  CUgraphNode node;
+  CHECK_CUDA_ERROR(
+      cuGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
+  insert_graph_dependencies(node);
 }
-
 
 void CommandEncoder::commit() {
   if (!temporaries_.empty()) {
@@ -201,7 +218,8 @@ void CommandEncoder::commit() {
   }
   if (node_count_ > 0) {
     if (!from_nodes_.empty()) {
-      CHECK_CUDA_ERROR(cudaGraphAddDependencies(graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(
+          graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
     }
 
     graph_key_ += "--";
@@ -221,7 +239,8 @@ void CommandEncoder::commit() {
     }
     if (graph_exec == NULL) {
       // TODO free those in destructor
-      CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+      CHECK_CUDA_ERROR(
+          cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
     }
     CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
 

@@ -245,33 +245,35 @@ void row_reduce_simple(
   //       2 passes. Something like 32 * out.size() and then do a warp reduce.
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+      using T = cuda_type_t<CTYPE>;
+      using U = cu::ReduceResult<OP, T>::type;
 
-        // Cub doesn't like const pointers for vectorized loads. (sigh)
-        T* indata = const_cast<T*>(in.data<T>());
+      // Cub doesn't like const pointers for vectorized loads. (sigh)
+      T* indata = const_cast<T*>(in.data<T>());
 
-        // Calculate the grid and block dims
-        size_t reductions = (plan.shape.back() + N_READS - 1) / N_READS;
-        dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
-        int threads = std::min(1024UL, reductions);
-        threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-        dim3 block(threads, 1, 1);
+      // Calculate the grid and block dims
+      size_t reductions = (plan.shape.back() + N_READS - 1) / N_READS;
+      dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
+      int threads = std::min(1024UL, reductions);
+      threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+      dim3 block(threads, 1, 1);
 
-        // Pick the kernel
-        auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
-        if (grid.x >= 1024) {
-          grid.x = (grid.x + 1) / 2;
-          kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
-        }
+      // Pick the kernel
+      auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
+      if (grid.x >= 1024) {
+        grid.x = (grid.x + 1) / 2;
+        kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
+      }
 
-        // Launch
-        kernel<<<grid, block, 0, stream>>>(
-            indata, out.data<U>(), out.size(), plan.shape.back());
-      });
+    int size = plan.shape.back();
+    encoder.add_kernel_node(
+      kernel,
+      grid,
+      block,
+      indata, out.data<U>(), out.size(), size);
+
     });
   });
 }
@@ -292,36 +294,37 @@ void row_reduce_looped(
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+      using T = cuda_type_t<CTYPE>;
+      using U = cu::ReduceResult<OP, T>::type;
 
-        // Cub doesn't like const pointers for vectorized loads. (sigh)
-        T* indata = const_cast<T*>(in.data<T>());
+      // Cub doesn't like const pointers for vectorized loads. (sigh)
+      T* indata = const_cast<T*>(in.data<T>());
 
-        // Calculate the grid and block dims
-        args.sort_access_pattern(in, axes);
-        dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
-        size_t reductions = (args.row_size + N_READS - 1) / N_READS;
-        int threads = std::min(1024UL, reductions);
-        threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-        dim3 block(threads, 1, 1);
+      // Calculate the grid and block dims
+      args.sort_access_pattern(in, axes);
+      dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
+      size_t reductions = (args.row_size + N_READS - 1) / N_READS;
+      int threads = std::min(1024UL, reductions);
+      threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+      dim3 block(threads, 1, 1);
 
-        // Pick the kernel
-        auto kernel = cu::row_reduce_looped<T, U, OP, 1, 32, N_READS>;
-        MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
-          MLX_SWITCH_BLOCK_DIM(threads, THREADS, {
-            kernel = cu::row_reduce_looped<T, U, OP, NDIM, THREADS, N_READS>;
-            block.x = THREADS;
-          });
+      // Pick the kernel
+      auto kernel = cu::row_reduce_looped<T, U, OP, 1, 32, N_READS>;
+      MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
+        MLX_SWITCH_BLOCK_DIM(threads, THREADS, {
+          kernel = cu::row_reduce_looped<T, U, OP, NDIM, THREADS, N_READS>;
+          block.x = THREADS;
         });
-
-        // Launch
-        kernel<<<grid, block, 0, stream>>>(
-            indata, out.data<U>(), out.size(), args);
       });
+
+      encoder.add_kernel_node(
+        kernel,
+        grid,
+        block,
+        indata,
+        out.data<U>(), out.size(), args);
     });
   });
 }
