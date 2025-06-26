@@ -82,19 +82,31 @@ class CommandEncoder {
   void synchronize();
 
  private:
-  void insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes);
+
+  struct GraphNode {
+    cudaGraphNode_t node;
+    char id;
+    bool is_subgraph;
+  };
+
+  void insert_graph_dependencies(cudaGraphNode_t node, bool is_subgraph = false);
+  void insert_graph_dependencies(std::vector<GraphNode> nodes);
 
   CudaStream stream_;
   cudaGraph_t graph_;
-  cudaGraphExec_t graph_exec_{NULL};
   Worker worker_;
-  int num_ops_{0};
+  char node_count_{0};
+  char graph_node_count_{0};
   bool in_concurrent_{false};
-  std::vector<cudaGraphNode_t> concurrent_nodes_;
+  std::vector<cudaGraphNode_t> from_nodes_;
+  std::vector<cudaGraphNode_t> to_nodes_;
+  std::string graph_key_;
+  std::vector<GraphNode> concurrent_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
+  std::unordered_map<std::string, cudaGraphExec_t> graph_cache_;
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
-  std::unordered_map<std::uintptr_t, cudaGraphNode_t> node_map_;
+  std::unordered_map<std::uintptr_t, GraphNode> node_map_;
 };
 
 class Device {

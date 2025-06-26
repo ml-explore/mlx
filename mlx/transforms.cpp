@@ -268,6 +268,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     if (s.device == Device::gpu) {
       gpu::finalize(s);
     }
+    // TODO fix that
     e.signal(s);
   }
 

@@ -2,7 +2,7 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/worker.h"
-#include "mlx/backend/metal/metal.h"
+#include "mlx/utils.h"
 
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
@@ -10,6 +10,10 @@
 #include <unordered_set>
 
 namespace mlx::core {
+
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER
+// This should be less than 255
+constexpr int default_max_nodes_per_graph = 20;
 
 namespace cu {
 
@@ -56,12 +60,9 @@ CommandEncoder::CaptureContext::~CaptureContext() {
   cudaGraphNode_t captured_node;
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&captured_node, enc.graph_, NULL, 0, graph));
   CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
-  if (enc.in_concurrent_) {
-    enc.concurrent_nodes_.push_back(captured_node);
-  } else {
-    enc.insert_graph_dependencies({captured_node});
-  }
+  enc.insert_graph_dependencies(captured_node, true);
 }
+
 CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc) : enc(enc) {
   enc.in_concurrent_ = true;
 }
@@ -71,18 +72,26 @@ CommandEncoder::ConcurrentContext::~ConcurrentContext() {
   enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
 }
 
-void CommandEncoder::insert_graph_dependencies(std::vector<cudaGraphNode_t> nodes) {
-  // Increment number of graph ops
-  num_ops_++;
+void CommandEncoder::insert_graph_dependencies(cudaGraphNode_t node, bool is_subgraph /* = false */) {
+  if (is_subgraph) {
+    graph_node_count_++;
+  }
+  if (in_concurrent_) {
+    concurrent_nodes_.push_back(GraphNode{node, node_count_++, is_subgraph});
+  } else {
+    insert_graph_dependencies({GraphNode{node, node_count_++, is_subgraph}});
+  }
+}
 
-  std::vector<cudaGraphNode_t> deps;
+void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
+  std::vector<GraphNode> deps;
   {
     // Dependencies must be added in the same order to produce a consistent
     // topology
     std::unordered_set<cudaGraphNode_t> set_deps;
     for (auto d : active_deps_) {
       if (auto it = node_map_.find(d); it != node_map_.end()) {
-        auto [_, inserted] = set_deps.insert(it->second);
+        auto [_, inserted] = set_deps.insert(it->second.node);
         if (inserted) {
           deps.push_back(it->second);
         }
@@ -92,18 +101,26 @@ void CommandEncoder::insert_graph_dependencies(std::vector<cudaGraphNode_t> node
   active_deps_.clear();
 
   for (auto o : active_outputs_) {
-    for (auto node : nodes) {
+    for (auto& node : nodes) {
       node_map_.emplace(o, node).first->second = node;
     }
   }
   active_outputs_.clear();
 
-  for (auto node : nodes) {
-    if (deps.size() == 1) {
-      CHECK_CUDA_ERROR(cudaGraphAddDependencies(graph_, deps.data(), &node, deps.size()));
-    } else {
-      std::vector<cudaGraphNode_t> to_nodes(deps.size(), node);
-      CHECK_CUDA_ERROR(cudaGraphAddDependencies(graph_, deps.data(), to_nodes.data(), deps.size()));
+  for (auto& from : deps) {
+    for (auto& to : nodes) {
+      from_nodes_.push_back(from.node);
+      to_nodes_.push_back(to.node);
+      if (from.is_subgraph) {
+        graph_key_ += from.id;
+      }
+      graph_key_ += from.id;
+      graph_key_ += char(254);
+      if (to.is_subgraph) {
+        graph_key_ += to.id;
+      }
+      graph_key_ += to.id;
+      graph_key_ += char(255);
     }
   }
 }
@@ -136,7 +153,7 @@ void CommandEncoder::set_output_array(const array& arr) {
 }
 
 void CommandEncoder::maybe_commit() {
-  if (num_ops_ > 20) {
+  if (node_count_ >= env::max_ops_per_buffer(default_max_nodes_per_graph)) {
     commit();
   }
 }
@@ -154,11 +171,7 @@ void CommandEncoder::add_kernel_node(
     cudaGraphNode_t node;
     CHECK_CUDA_ERROR(cudaGraphAddKernelNode(
         &node, graph_, NULL, 0, &kernel_params));
-    if (in_concurrent_) {
-      concurrent_nodes_.push_back(node);
-    } else {
-      insert_graph_dependencies({node});
-    }
+    insert_graph_dependencies(node);
 }
 
 void CommandEncoder::add_kernel_node(
@@ -178,11 +191,7 @@ void CommandEncoder::add_kernel_node(
     CUgraphNode node;
     CHECK_CUDA_ERROR(cuGraphAddKernelNode(
         &node, graph_, NULL, 0, &kernel_params));
-    if (in_concurrent_) {
-      concurrent_nodes_.push_back(node);
-    } else {
-      insert_graph_dependencies({node});
-    }
+    insert_graph_dependencies(node);
 }
 
 
@@ -190,23 +199,38 @@ void CommandEncoder::commit() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
-  if (num_ops_ > 0) {
-    // Try in-place update
-    if (graph_exec_ != NULL) {
+  if (node_count_ > 0) {
+    if (!from_nodes_.empty()) {
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+    }
+
+    graph_key_ += "--";
+    graph_key_ += node_count_;
+    graph_key_ += graph_node_count_;
+    auto [it, _] = graph_cache_.emplace(graph_key_, nullptr);
+    auto& graph_exec = it->second;
+
+    if (graph_exec != NULL) {
       cudaGraphExecUpdateResultInfo update_result;
-      cudaGraphExecUpdate(graph_exec_, graph_, &update_result);
+      cudaGraphExecUpdate(graph_exec, graph_, &update_result);
       if (update_result.result != cudaGraphExecUpdateSuccess) {
         cudaGetLastError();
-        CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec_));
-        graph_exec_ = NULL;
+        CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
+        graph_exec = NULL;
       }
     }
-    if (graph_exec_ == NULL) {
-      CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec_, graph_, NULL, NULL, 0));
+    if (graph_exec == NULL) {
+      // TODO free those in destructor
+      CHECK_CUDA_ERROR(cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
     }
-    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec_, stream_));
+    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
 
-    num_ops_ = 0;
+    // Reset state
+    node_count_ = 0;
+    graph_node_count_ = 0;
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_key_.clear();
     node_map_.clear();
     CHECK_CUDA_ERROR(cudaGraphDestroy(graph_));
     CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
