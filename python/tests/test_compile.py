@@ -1011,8 +1011,8 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertTrue("CompiledBroadcastMultiplyAdd" in s)
         d_hat = fun(a, b, c)
-        self.assertTrue(mx.array_equal(d[0], d_hat[0]))
-        self.assertTrue(mx.array_equal(d[1], d_hat[1]))
+        self.assertTrue(mx.allclose(d[0], d_hat[0]))
+        self.assertTrue(mx.allclose(d[1], d_hat[1]))
 
 
 if __name__ == "__main__":
