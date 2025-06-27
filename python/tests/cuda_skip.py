@@ -1,7 +1,6 @@
 cuda_skip = {
     "TestArray.test_api",
     "TestBF16.test_arg_reduction_ops",
-    "TestBF16.test_reduction_ops",
     "TestBlas.test_complex_gemm",
     "TestEinsum.test_ellipses",
     "TestEinsum.test_opt_einsum_test_cases",
@@ -13,11 +12,7 @@ cuda_skip = {
     "TestLayers.test_upsample",
     "TestOps.test_complex_ops",
     "TestOps.test_dynamic_slicing",
-    "TestOps.test_softmax",
-    "TestReduce.test_axis_permutation_sums",
     "TestReduce.test_dtypes",
-    "TestReduce.test_expand_sums",
-    "TestReduce.test_many_reduction_axes",
     "TestUpsample.test_torch_upsample",
     # Block masked matmul NYI
     "TestBlas.test_block_masked_matmul",

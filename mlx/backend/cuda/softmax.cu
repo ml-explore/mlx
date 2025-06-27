@@ -51,7 +51,7 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
         make_cast_iterator<AccT>(in),
         vals,
         axis_size,
-        Limits<AccT>::finite_min());
+        Limits<AccT>::min());
     prevmax = maxval;
     maxval = max_op(maxval, cub::ThreadReduce(vals, max_op));
     // Online normalizer calculation for softmax:
@@ -79,7 +79,7 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
   block.sync();
   maxval = warp.thread_rank() < warp.meta_group_size()
       ? local_max[warp.thread_rank()]
-      : Limits<AccT>::finite_min();
+      : Limits<AccT>::min();
   maxval = cg::reduce(warp, maxval, max_op);
   normalizer = normalizer * softmax_exp(prevmax - maxval);
   if (warp.thread_rank() == 0) {

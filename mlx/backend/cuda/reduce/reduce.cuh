@@ -47,13 +47,11 @@ namespace mlx::core {
     throw std::invalid_argument("Unknown reduce type."); \
   }
 
-void segmented_reduce(
+void all_reduce(
     cu::CommandEncoder& encoder,
     const array& in,
     array& out,
-    Reduce::ReduceType reduce_type,
-    const std::vector<int>& axes,
-    const ReductionPlan& plan);
+    Reduce::ReduceType reduce_type);
 
 void row_reduce(
     cu::CommandEncoder& encoder,
@@ -70,5 +68,11 @@ void col_reduce(
     Reduce::ReduceType reduce_type,
     const std::vector<int>& axes,
     const ReductionPlan& plan);
+
+void init_reduce(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
 
 } // namespace mlx::core

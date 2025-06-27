@@ -21,28 +21,11 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(!axes_.empty());
   assert(out.size() != in.size());
 
-  out.set_data(allocator::malloc(out.nbytes()));
-
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
 
-  // Fill out with init value.
   if (in.size() == 0) {
-    encoder.launch_kernel([&](cudaStream_t stream) {
-      MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-        MLX_SWITCH_REDUCE_OPS(reduce_type_, OP, {
-          using InType = cuda_type_t<CTYPE>;
-          using OutType = cu::ReduceResult<OP, InType>::type;
-          thrust::fill_n(
-              cu::thrust_policy(stream),
-              thrust::device_pointer_cast(out.data<OutType>()),
-              out.data_size(),
-              cu::ReduceInit<OP, InType>::value());
-        });
-      });
-    });
+    init_reduce(encoder, in, out, reduce_type_);
     return;
   }
 
@@ -51,7 +34,19 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // If it is a general reduce then copy the input to a contiguous array and
   // recompute the plan.
-  if (plan.type == GeneralReduce) {
+  //
+  // TODO: Instead of copying we can use elem-to-loc to deal with broadcasting
+  //       like we do in Metal. When it comes to broadcasted reduction axes
+  //       some can be ignored eg for min/max.
+  bool broadcasted = false;
+  for (int i = 0, j = 0; i < in.ndim() && !broadcasted; i++) {
+    if (j < axes_.size() && axes_[j] == i) {
+      j++;
+    } else {
+      broadcasted = in.strides(i) == 0;
+    }
+  }
+  if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
     array in_copy(in.shape(), in.dtype(), nullptr, {});
     copy_gpu(in, in_copy, CopyType::General, s);
     encoder.add_temporary(in_copy);
@@ -59,9 +54,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     plan = get_reduction_plan(in, axes_);
   }
 
-  if ((plan.type == ContiguousAllReduce) ||
-      (plan.type == ContiguousReduce && plan.shape.size() == 1)) {
-    segmented_reduce(encoder, in, out, reduce_type_, axes_, plan);
+  if (plan.type == ContiguousAllReduce) {
+    all_reduce(encoder, in, out, reduce_type_);
     return;
   }
 
