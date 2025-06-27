@@ -241,19 +241,18 @@ void row_reduce_simple(
   // kernel.
   allocate_same_layout(out, in, axes);
 
-  // Just a way to get out of the constness because cub doesn't like it ...
-  // (sigh)
-  array x = in;
-
   // TODO: If out.size() < 1024 which will be a common case then write this in
   //       2 passes. Something like 32 * out.size() and then do a warp reduce.
-  encoder.set_input_array(x);
+  encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(x.dtype(), CTYPE, {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         using T = cuda_type_t<CTYPE>;
         using U = cu::ReduceResult<OP, T>::type;
+
+        // Cub doesn't like const pointers for vectorized loads. (sigh)
+        T* indata = const_cast<T*>(in.data<T>());
 
         // Calculate the grid and block dims
         size_t reductions = (plan.shape.back() + N_READS - 1) / N_READS;
@@ -271,7 +270,7 @@ void row_reduce_simple(
 
         // Launch
         kernel<<<grid, block, 0, stream>>>(
-            x.data<T>(), out.data<U>(), out.size(), plan.shape.back());
+            indata, out.data<U>(), out.size(), plan.shape.back());
       });
     });
   });
@@ -291,20 +290,19 @@ void row_reduce_looped(
   // contiguously as possible.
   allocate_same_layout(out, in, axes);
 
-  // Just a way to get out of the constness because cub doesn't like it ...
-  // (sigh)
-  array x = in;
-
-  encoder.set_input_array(x);
+  encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(x.dtype(), CTYPE, {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         using T = cuda_type_t<CTYPE>;
         using U = cu::ReduceResult<OP, T>::type;
 
+        // Cub doesn't like const pointers for vectorized loads. (sigh)
+        T* indata = const_cast<T*>(in.data<T>());
+
         // Calculate the grid and block dims
-        args.sort_access_pattern(x, axes);
+        args.sort_access_pattern(in, axes);
         dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
         size_t reductions = (args.row_size + N_READS - 1) / N_READS;
         int threads = std::min(1024UL, reductions);
@@ -322,7 +320,7 @@ void row_reduce_looped(
 
         // Launch
         kernel<<<grid, block, 0, stream>>>(
-            x.data<T>(), out.data<U>(), out.size(), args);
+            indata, out.data<U>(), out.size(), args);
       });
     });
   });

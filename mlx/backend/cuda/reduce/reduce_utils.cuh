@@ -146,7 +146,7 @@ inline void allocate_same_layout(
   auto fl = in.flags();
   fl.row_contiguous = rc;
   fl.col_contiguous = cc;
-  fl.contiguous = data_size == out.size();
+  fl.contiguous = true;
   out.set_data(
       allocator::malloc(out.nbytes()),
       data_size,

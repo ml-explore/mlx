@@ -38,12 +38,18 @@ struct ColReduceArgs {
       const array& in,
       const ReductionPlan& plan,
       const std::vector<int>& axes) {
+    using ShapeVector = decltype(plan.shape);
+    using StridesVector = decltype(plan.strides);
+
+    ShapeVector shape_vec;
+    StridesVector strides_vec;
+
     assert(!plan.shape.empty());
     reduction_size = plan.shape.back();
     reduction_stride = plan.strides.back();
 
     int64_t stride_back = 1;
-    auto [shape_vec, strides_vec] = shapes_without_reduction_axes(in, axes);
+    std::tie(shape_vec, strides_vec) = shapes_without_reduction_axes(in, axes);
     while (!shape_vec.empty() && stride_back < reduction_stride) {
       stride_back *= shape_vec.back();
       shape_vec.pop_back();
@@ -54,8 +60,8 @@ struct ColReduceArgs {
     std::sort(indices.begin(), indices.end(), [&](int left, int right) {
       return strides_vec[left] > strides_vec[right];
     });
-    decltype(shape_vec) sorted_shape;
-    decltype(strides_vec) sorted_strides;
+    ShapeVector sorted_shape;
+    StridesVector sorted_strides;
     for (auto idx : indices) {
       sorted_shape.push_back(shape_vec[idx]);
       sorted_strides.push_back(strides_vec[idx]);
@@ -206,18 +212,17 @@ void col_reduce_looped(
   // contiguously as possible.
   allocate_same_layout(out, in, axes);
 
-  // Just a way to get out of the constness because cub doesn't like it ...
-  // (sigh)
-  array x = in;
-
-  encoder.set_input_array(x);
+  encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(x.dtype(), CTYPE, {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
           using T = cuda_type_t<CTYPE>;
           using U = cu::ReduceResult<OP, T>::type;
+
+          // Cub doesn't like const pointers for vectorized loads. (sigh)
+          T* indata = const_cast<T*>(in.data<T>());
 
           constexpr int N_READS = 4;
           constexpr int BM = 32;
@@ -225,7 +230,7 @@ void col_reduce_looped(
           dim3 grid = output_grid_for_col_reduce(out, args, BN);
           int blocks = BM * BN / N_READS;
           auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS>;
-          kernel<<<grid, blocks, 0, stream>>>(x.data<T>(), out.data<U>(), args);
+          kernel<<<grid, blocks, 0, stream>>>(indata, out.data<U>(), args);
         });
       });
     });
@@ -247,8 +252,7 @@ void col_reduce(
   //   a subrow of the fast moving axis. For instance 32 elements.
   //
   // Notes: As in row reduce we opt to read as much in order as possible and
-  // leave
-  //        transpositions as they are (contrary to our Metal backend).
+  //        leave transpositions as they are (contrary to our Metal backend).
   //
   //        Moreover we need different kernels for short rows and tuning
 

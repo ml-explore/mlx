@@ -31,7 +31,6 @@ void init_reduce(
     out.set_data(allocator::malloc(out.nbytes()));
   }
 
-  encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {

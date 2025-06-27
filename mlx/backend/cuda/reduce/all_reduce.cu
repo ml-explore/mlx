@@ -96,43 +96,52 @@ void all_reduce(
 
   int blocks, threads;
   size_t block_step;
-  array x = in;
+  size_t insize = in.size();
+  Dtype dt = in.dtype();
+
+  // Cub doesn't like const pointers for load (sigh).
+  void* indata = const_cast<void*>(in.data<void>());
 
   // Large array so allocate an intermediate and accumulate there
-  std::tie(blocks, threads, block_step) = get_args(x.size(), N_READS);
+  std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
+  encoder.set_input_array(in);
   if (blocks > 1) {
     array intermediate({blocks}, out.dtype(), nullptr, {});
     intermediate.set_data(allocator::malloc(intermediate.nbytes()));
     encoder.add_temporary(intermediate);
-    encoder.set_input_array(x);
     encoder.set_output_array(intermediate);
     encoder.launch_kernel([&](cudaStream_t stream) {
-      MLX_SWITCH_ALL_TYPES(x.dtype(), CTYPE, {
+      MLX_SWITCH_ALL_TYPES(dt, CTYPE, {
         MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
           using T = cuda_type_t<CTYPE>;
           using U = cu::ReduceResult<OP, T>::type;
           auto kernel = cu::all_reduce<T, U, OP, N_READS>;
           kernel<<<blocks, threads, 0, stream>>>(
-              x.data<T>(), intermediate.data<U>(), block_step, x.size());
+              static_cast<T*>(indata),
+              intermediate.data<U>(),
+              block_step,
+              insize);
         });
       });
     });
 
     // Set the input for the next step and recalculate the blocks
-    x = intermediate;
-    std::tie(blocks, threads, block_step) = get_args(x.size(), N_READS);
+    indata = intermediate.data<void>();
+    dt = intermediate.dtype();
+    insize = intermediate.size();
+    std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
+    encoder.set_input_array(intermediate);
   }
 
-  encoder.set_input_array(x);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(x.dtype(), CTYPE, {
+    MLX_SWITCH_ALL_TYPES(dt, CTYPE, {
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         using T = cuda_type_t<CTYPE>;
         using U = cu::ReduceResult<OP, T>::type;
         auto kernel = cu::all_reduce<T, U, OP, N_READS>;
         kernel<<<blocks, threads, 0, stream>>>(
-            x.data<T>(), out.data<U>(), block_step, x.size());
+            static_cast<T*>(indata), out.data<U>(), block_step, insize);
       });
     });
   });
