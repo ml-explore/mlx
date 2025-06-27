@@ -72,6 +72,17 @@ def relu6(x):
 
 
 @partial(mx.compile, shapeless=True)
+def relu_squared(x):
+    r"""Applies the Rectified Linear Unit squared.
+
+    Applies :math:`\max(x, 0)^2` element wise.
+
+    Reference: https://arxiv.org/abs/2109.08668v2
+    """
+    return relu(x).square()
+
+
+@partial(mx.compile, shapeless=True)
 def softmax(x, axis=-1):
     r"""Applies the Softmax function.
 
@@ -417,6 +428,18 @@ class ReLU6(Module):
     r"""Applies the Rectified Linear Unit 6.
 
     See :func:`relu6` for the functional equivalent.
+    """
+
+
+@_make_activation_module(relu_squared)
+class ReLUSquared(Module):
+    r"""Applies the Rectified Linear Unit squared.
+
+    Applies :math:`\max(x, 0)^2` element wise.
+
+    Reference: https://arxiv.org/abs/2109.08668v2
+
+    See :func:`relu_squared` for the functional equivalent.
     """
 
 

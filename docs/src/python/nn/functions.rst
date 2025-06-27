@@ -28,6 +28,7 @@ simple functions.
    prelu
    relu
    relu6
+   relu_squared
    selu
    sigmoid
    silu
