@@ -404,7 +404,7 @@ class Module(dict):
                             dst[k] = new_value
                         elif isinstance(current_value, (dict, list)):
                             apply(current_value, new_value)
-                        elif strict:
+                        elif strict and new_value != {}:
                             raise ValueError(
                                 f"Received invalid type: {type(new_value).__name__}."
                             )
@@ -420,7 +420,7 @@ class Module(dict):
                         dst[i] = new_value
                     elif isinstance(current_value, (dict, list)):
                         apply(current_value, new_value)
-                    elif strict:
+                    elif strict and new_value != {}:
                         raise ValueError(
                             f"Received invalid type: {type(new_value).__name__}."
                         )
