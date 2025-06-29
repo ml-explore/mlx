@@ -258,22 +258,23 @@ void LayerNorm::eval_gpu(
   encoder.set_input_array(w);
   encoder.set_input_array(b);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "layernorm", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr uint32_t N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = cu::layer_norm<DataType, BLOCK_DIM, N_READS>;
-        kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-            x.data<DataType>(),
-            w.data<DataType>(),
-            b.data<DataType>(),
-            out.data<DataType>(),
-            eps_,
-            axis_size,
-            w_stride,
-            b_stride);
-      });
+  MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "layernorm", CTYPE, {
+    using DataType = cuda_type_t<CTYPE>;
+    constexpr uint32_t N_READS = 4;
+    MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
+      auto kernel = cu::layer_norm<DataType, BLOCK_DIM, N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          BLOCK_DIM,
+          x.data<DataType>(),
+          w.data<DataType>(),
+          b.data<DataType>(),
+          out.data<DataType>(),
+          eps_,
+          axis_size,
+          w_stride,
+          b_stride);
     });
   });
 }
@@ -356,23 +357,24 @@ void LayerNormVJP::eval_gpu(
   encoder.set_input_array(g);
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
-  encoder.launch_kernel([&, x = x, g = g](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(gx.dtype(), "layernorm_vjp", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr int N_READS = 4;
-      MLX_SWITCH_BOOL(has_w, HAS_W, {
-        MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-          auto kernel = cu::layer_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
-          kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-              x.data<DataType>(),
-              w.data<DataType>(),
-              g.data<DataType>(),
-              gx.data<DataType>(),
-              gw_temp.data<DataType>(),
-              eps_,
-              axis_size,
-              w_stride);
-        });
+  MLX_SWITCH_FLOAT_TYPES_CHECKED(gx.dtype(), "layernorm_vjp", CTYPE, {
+    using DataType = cuda_type_t<CTYPE>;
+    constexpr int N_READS = 4;
+    MLX_SWITCH_BOOL(has_w, HAS_W, {
+      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
+        auto kernel = cu::layer_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
+        encoder.add_kernel_node(
+            kernel,
+            n_rows,
+            BLOCK_DIM,
+            x.data<DataType>(),
+            w.data<DataType>(),
+            g.data<DataType>(),
+            gx.data<DataType>(),
+            gw_temp.data<DataType>(),
+            eps_,
+            axis_size,
+            w_stride);
       });
     });
   });

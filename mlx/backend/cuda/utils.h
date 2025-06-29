@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 
 namespace mlx::core {
@@ -33,6 +34,7 @@ class CudaStream {
 
 // Throw exception if the cuda API does not succeed.
 void check_cuda_error(const char* name, cudaError_t err);
+void check_cuda_error(const char* name, CUresult err);
 
 // The macro version that prints the command that failed.
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))

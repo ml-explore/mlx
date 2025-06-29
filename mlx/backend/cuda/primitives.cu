@@ -27,19 +27,18 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&, this](cudaStream_t stream) {
-    MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, {
-      using OutType = cuda_type_t<CTYPE>;
-      CTYPE step =
-          static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_);
-      thrust::transform(
-          cu::thrust_policy(stream),
-          thrust::counting_iterator<uint32_t>(0),
-          thrust::counting_iterator<uint32_t>(out.data_size()),
-          thrust::device_pointer_cast(out.data<OutType>()),
-          cu::Arange<OutType>{
-              static_cast<OutType>(start_), static_cast<OutType>(step)});
-    });
+  auto capture = encoder.capture_context();
+  MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, {
+    using OutType = cuda_type_t<CTYPE>;
+    CTYPE step =
+        static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_);
+    thrust::transform(
+        cu::thrust_policy(encoder.stream()),
+        thrust::counting_iterator<uint32_t>(0),
+        thrust::counting_iterator<uint32_t>(out.data_size()),
+        thrust::device_pointer_cast(out.data<OutType>()),
+        cu::Arange<OutType>{
+            static_cast<OutType>(start_), static_cast<OutType>(step)});
   });
 }
 

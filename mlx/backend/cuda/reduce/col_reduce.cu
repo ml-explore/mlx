@@ -214,24 +214,23 @@ void col_reduce_looped(
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
-          using T = cuda_type_t<CTYPE>;
-          using U = cu::ReduceResult<OP, T>::type;
+  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+      MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
+        using T = cuda_type_t<CTYPE>;
+        using U = cu::ReduceResult<OP, T>::type;
 
-          // Cub doesn't like const pointers for vectorized loads. (sigh)
-          T* indata = const_cast<T*>(in.data<T>());
+        // Cub doesn't like const pointers for vectorized loads. (sigh)
+        T* indata = const_cast<T*>(in.data<T>());
 
-          constexpr int N_READS = 4;
-          constexpr int BM = 32;
-          constexpr int BN = 32;
-          dim3 grid = output_grid_for_col_reduce(out, args, BN);
-          int blocks = BM * BN / N_READS;
-          auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS>;
-          kernel<<<grid, blocks, 0, stream>>>(indata, out.data<U>(), args);
-        });
+        constexpr int N_READS = 4;
+        constexpr int BM = 32;
+        constexpr int BN = 32;
+        dim3 grid = output_grid_for_col_reduce(out, args, BN);
+        int blocks = BM * BN / N_READS;
+        auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS>;
+        encoder.add_kernel_node(
+            kernel, grid, blocks, indata, out.data<U>(), args);
       });
     });
   });

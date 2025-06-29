@@ -156,34 +156,39 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(keys);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dim3 grid_dims{num_keys, half_size + odd};
-    int64_t total = grid_dims.x * grid_dims.y;
-    int32_t threads_y = 1;
-    while ((total / threads_y) >= (1U << 31)) {
-      threads_y *= 2;
-    }
-    int32_t threads_x = cuda::ceil_div(total, threads_y);
-    auto [grid, block] = get_grid_and_block(threads_x, threads_y, 1);
-    if (keys.flags().row_contiguous) {
-      cu::rbitsc<<<grid, block, 0, stream>>>(
-          keys.data<uint32_t>(),
-          out.data<uint8_t>(),
-          grid_dims,
-          odd,
-          bytes_per_key);
-    } else {
-      cu::rbits<<<grid, block, 0, stream>>>(
-          keys.data<uint32_t>(),
-          out.data<uint8_t>(),
-          grid_dims,
-          odd,
-          bytes_per_key,
-          keys.ndim(),
-          const_param(keys.shape()),
-          const_param(keys.strides()));
-    }
-  });
+  dim3 grid_dims{num_keys, half_size + odd};
+  int64_t total = grid_dims.x * grid_dims.y;
+  int32_t threads_y = 1;
+  while ((total / threads_y) >= (1U << 31)) {
+    threads_y *= 2;
+  }
+  int32_t threads_x = cuda::ceil_div(total, threads_y);
+  auto [grid, block] = get_grid_and_block(threads_x, threads_y, 1);
+  auto& stream = encoder.stream();
+  if (keys.flags().row_contiguous) {
+    encoder.add_kernel_node(
+        cu::rbitsc,
+        grid,
+        block,
+        keys.data<uint32_t>(),
+        out.data<uint8_t>(),
+        grid_dims,
+        odd,
+        bytes_per_key);
+  } else {
+    encoder.add_kernel_node(
+        cu::rbits,
+        grid,
+        block,
+        keys.data<uint32_t>(),
+        out.data<uint8_t>(),
+        grid_dims,
+        odd,
+        bytes_per_key,
+        keys.ndim(),
+        const_param(keys.shape()),
+        const_param(keys.strides()));
+  }
 }
 
 } // namespace mlx::core
