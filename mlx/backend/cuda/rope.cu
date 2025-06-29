@@ -310,8 +310,8 @@ void RoPE::eval_gpu(
   encoder.set_input_array(offset);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(in.dtype(), "rope", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
+    dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       MLX_SWITCH_BOOL(traditional_, TRADITIONAL, {
         MLX_SWITCH_BOOL(forward_, FORWARD, {
           if (single && !with_freqs) {

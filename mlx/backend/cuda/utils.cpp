@@ -34,13 +34,7 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
   if (dtype == complex64) {
     return "cuComplex";
   }
-#define SPECIALIZE_DtypeToString(CPP_TYPE, DTYPE) \
-  if (dtype == DTYPE) {                           \
-    return #CPP_TYPE;                             \
-  }
-  MLX_FORALL_DTYPES(SPECIALIZE_DtypeToString)
-#undef SPECIALIZE_DtypeToString
-  return nullptr;
+  return dtype_to_string(dtype);
 }
 
 } // namespace mlx::core

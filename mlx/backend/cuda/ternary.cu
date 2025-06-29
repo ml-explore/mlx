@@ -92,8 +92,8 @@ void ternary_op_gpu_inplace(
   encoder.set_input_array(c);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE, {
-      using DType = cuda_type_t<CTYPE>;
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using DType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
       auto topt = get_ternary_op_type(a, b, c);
       if (topt == TernaryOpType::General) {

@@ -259,8 +259,8 @@ void LayerNorm::eval_gpu(
   encoder.set_input_array(b);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "layernorm", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
+    dispatch_float_types(out.dtype(), "layernorm", [&](auto type_tag) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       constexpr uint32_t N_READS = 4;
       MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
         auto kernel = cu::layer_norm<DataType, BLOCK_DIM, N_READS>;
@@ -357,8 +357,8 @@ void LayerNormVJP::eval_gpu(
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
   encoder.launch_kernel([&, x = x, g = g](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(gx.dtype(), "layernorm_vjp", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
+    dispatch_float_types(gx.dtype(), "layernorm_vjp", [&](auto type_tag) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       constexpr int N_READS = 4;
       MLX_SWITCH_BOOL(has_w, HAS_W, {
         MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {

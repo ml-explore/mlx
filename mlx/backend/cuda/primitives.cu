@@ -28,7 +28,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_output_array(out);
   encoder.launch_kernel([&, this](cudaStream_t stream) {
-    MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, {
+    dispatch_int_float_types(out.dtype(), "Arange", [&](auto type_tag) {
+      using CTYPE = MLX_GET_TYPE(type_tag);
       using OutType = cuda_type_t<CTYPE>;
       CTYPE step =
           static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_);

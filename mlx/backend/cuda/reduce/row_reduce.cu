@@ -246,10 +246,11 @@ void row_reduce_simple(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      using CTYPE = MLX_GET_TYPE(type_tag);
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+        using U = typename cu::ReduceResult<OP, T>::type;
 
         // Cub doesn't like const pointers for vectorized loads. (sigh)
         T* indata = const_cast<T*>(in.data<T>());
@@ -293,10 +294,11 @@ void row_reduce_looped(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      using CTYPE = MLX_GET_TYPE(type_tag);
       MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
         using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+        using U = typename cu::ReduceResult<OP, T>::type;
 
         // Cub doesn't like const pointers for vectorized loads. (sigh)
         T* indata = const_cast<T*>(in.data<T>());
