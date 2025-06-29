@@ -61,7 +61,9 @@ void CudaEvent::wait(Stream s) {
   if (s.device == mlx::core::Device::cpu) {
     scheduler::enqueue(s, [*this]() mutable { wait(); });
   } else {
-    wait(cu::get_command_encoder(s).stream());
+    auto& enc = cu::get_command_encoder(s);
+    enc.commit();
+    wait(enc.stream());
   }
 }
 
@@ -74,7 +76,9 @@ void CudaEvent::record(Stream s) {
   if (s.device == mlx::core::Device::cpu) {
     throw std::runtime_error("CudaEvent can not wait on cpu stream.");
   } else {
-    record(cu::get_command_encoder(s).stream());
+    auto& enc = cu::get_command_encoder(s);
+    enc.commit();
+    record(enc.stream());
   }
 }
 
@@ -136,6 +140,7 @@ void SharedEvent::wait(Stream s, uint64_t value) {
     scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
   } else {
     auto& encoder = get_command_encoder(s);
+    encoder.commit();
     wait(encoder.stream(), value);
     encoder.add_completed_handler([ac = ac_]() {});
   }
@@ -159,6 +164,7 @@ void SharedEvent::signal(Stream s, uint64_t value) {
     scheduler::enqueue(s, [*this, value]() mutable { signal(stream, value); });
   } else {
     auto& encoder = get_command_encoder(s);
+    encoder.commit();
     signal(encoder.stream(), value);
     encoder.add_completed_handler([ac = ac_]() {});
   }
