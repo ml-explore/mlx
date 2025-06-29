@@ -112,7 +112,8 @@ void all_reduce(
     encoder.set_output_array(intermediate);
     encoder.launch_kernel([&](cudaStream_t stream) {
       dispatch_all_types(dt, [&](auto type_tag) {
-        MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+        dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+          using OP = MLX_GET_TYPE(reduce_type_tag);
           using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
           using U = typename cu::ReduceResult<OP, T>::type;
           auto kernel = cu::all_reduce<T, U, OP, N_READS>;
@@ -136,7 +137,8 @@ void all_reduce(
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
     dispatch_all_types(dt, [&](auto type_tag) {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+        using OP = MLX_GET_TYPE(reduce_type_tag);
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename cu::ReduceResult<OP, T>::type;
         auto kernel = cu::all_reduce<T, U, OP, N_READS>;
