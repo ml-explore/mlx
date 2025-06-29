@@ -116,13 +116,13 @@ void all_reduce(
         using U = cu::ReduceResult<OP, T>::type;
         auto kernel = cu::all_reduce<T, U, OP, N_READS>;
         encoder.add_kernel_node(
-          kernel,
-          blocks,
-          threads,
-          static_cast<T*>(indata),
-          intermediate.data<U>(),
-          block_step,
-          insize);
+            kernel,
+            blocks,
+            threads,
+            static_cast<T*>(indata),
+            intermediate.data<U>(),
+            block_step,
+            insize);
       });
     });
 
@@ -136,11 +136,11 @@ void all_reduce(
 
   encoder.set_output_array(out);
   MLX_SWITCH_ALL_TYPES(dt, CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
-        auto kernel = cu::all_reduce<T, U, OP, N_READS>;
-        encoder.add_kernel_node(
+    MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
+      using T = cuda_type_t<CTYPE>;
+      using U = cu::ReduceResult<OP, T>::type;
+      auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+      encoder.add_kernel_node(
           kernel,
           blocks,
           threads,

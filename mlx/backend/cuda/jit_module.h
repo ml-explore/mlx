@@ -66,7 +66,6 @@ struct KernelArgs {
   }
 
  private:
-
   std::vector<void*> args_;
 
   // The cuLaunchKernel API requires passing pointers to arguments so store

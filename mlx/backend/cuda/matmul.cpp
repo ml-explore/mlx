@@ -274,7 +274,7 @@ class MatMul {
 namespace {
 
 std::tuple<bool, int64_t, array>
-check_transpose(cu::CommandEncoder &enc, const Stream& s, const array& arr) {
+check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
   auto sty = arr.strides()[arr.ndim() - 1];
   if (sty == 1 && stx == arr.shape(-1)) {

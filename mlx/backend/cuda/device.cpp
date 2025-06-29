@@ -66,8 +66,7 @@ CommandEncoder::CaptureContext::~CaptureContext() {
     CUDA_KERNEL_NODE_PARAMS params;
     CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
     cudaGraphNode_t node;
-    CHECK_CUDA_ERROR(
-      cuGraphAddKernelNode(&node, enc.graph_, NULL, 0, &params));
+    CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, enc.graph_, NULL, 0, &params));
     enc.insert_graph_dependencies(node);
   } else {
     cudaGraphNode_t node;

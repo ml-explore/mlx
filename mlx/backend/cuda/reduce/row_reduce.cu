@@ -267,13 +267,9 @@ void row_reduce_simple(
         kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
       }
 
-    int size = plan.shape.back();
-    encoder.add_kernel_node(
-      kernel,
-      grid,
-      block,
-      indata, out.data<U>(), out.size(), size);
-
+      int size = plan.shape.back();
+      encoder.add_kernel_node(
+          kernel, grid, block, indata, out.data<U>(), out.size(), size);
     });
   });
 }
@@ -320,11 +316,7 @@ void row_reduce_looped(
       });
 
       encoder.add_kernel_node(
-        kernel,
-        grid,
-        block,
-        indata,
-        out.data<U>(), out.size(), args);
+          kernel, grid, block, indata, out.data<U>(), out.size(), args);
     });
   });
 }

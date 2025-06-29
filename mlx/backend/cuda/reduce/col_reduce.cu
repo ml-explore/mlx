@@ -230,9 +230,7 @@ void col_reduce_looped(
         int blocks = BM * BN / N_READS;
         auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS>;
         encoder.add_kernel_node(
-          kernel,
-          grid,
-          blocks, indata, out.data<U>(), args);
+            kernel, grid, blocks, indata, out.data<U>(), args);
       });
     });
   });
