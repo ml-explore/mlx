@@ -264,6 +264,16 @@ class TestBase(mlx_tests.MLXTestCase):
         m.update_modules({"layers": [{}, nn.Linear(3, 4)]})
         self.assertEqual(m.layers[1].weight.shape, (4, 3))
 
+        # Using leaf_modules in the update should always work
+        class MyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stuff = [nn.Linear(2, 2), 0, nn.Linear(2, 2)]
+                self.more_stuff = {"hi": nn.Linear(2, 2), "bye": 0}
+
+        m = MyModel()
+        m.update_modules(m.leaf_modules())
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
