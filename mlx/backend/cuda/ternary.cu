@@ -102,7 +102,9 @@ void ternary_op_gpu_inplace(
                 c.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
             [&](auto large) {
               using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-              auto [shape, strides] = collapse_contiguous_dims(a, b, c, out);
+              Shape shape;
+              std::vector<Strides> strides;
+              std::tie(shape, strides) = collapse_contiguous_dims(a, b, c, out);
               auto& a_strides = strides[0];
               auto& b_strides = strides[1];
               auto& c_strides = strides[2];

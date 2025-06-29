@@ -153,7 +153,10 @@ void binary_op_gpu_inplace(
                     out_a.data_size() > INT32_MAX,
                 [&](auto large) {
                   using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-                  auto [shape, strides] = collapse_contiguous_dims(a, b, out_a);
+                  Shape shape;
+                  std::vector<Strides> strides;
+                  std::tie(shape, strides) =
+                      collapse_contiguous_dims(a, b, out_a);
                   auto& a_strides = strides[0];
                   auto& b_strides = strides[1];
                   int ndim = shape.size();
