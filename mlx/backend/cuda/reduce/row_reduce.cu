@@ -246,10 +246,11 @@ void row_reduce_simple(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+        using OP = MLX_GET_TYPE(reduce_type_tag);
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        using U = typename cu::ReduceResult<OP, T>::type;
 
         // Cub doesn't like const pointers for vectorized loads. (sigh)
         T* indata = const_cast<T*>(in.data<T>());
@@ -293,10 +294,11 @@ void row_reduce_looped(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+        using OP = MLX_GET_TYPE(reduce_type_tag);
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        using U = typename cu::ReduceResult<OP, T>::type;
 
         // Cub doesn't like const pointers for vectorized loads. (sigh)
         T* indata = const_cast<T*>(in.data<T>());
@@ -311,10 +313,16 @@ void row_reduce_looped(
 
         // Pick the kernel
         auto kernel = cu::row_reduce_looped<T, U, OP, 1, 32, N_READS>;
-        MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
-          MLX_SWITCH_BLOCK_DIM(threads, THREADS, {
-            kernel = cu::row_reduce_looped<T, U, OP, NDIM, THREADS, N_READS>;
-            block.x = THREADS;
+        dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
+          dispatch_block_dim(threads, [&](auto threads_constant) {
+            kernel = cu::row_reduce_looped<
+                T,
+                U,
+                OP,
+                reduce_ndim(),
+                threads_constant(),
+                N_READS>;
+            block.x = threads_constant();
           });
         });
 

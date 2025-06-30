@@ -225,19 +225,20 @@ void RMSNorm::eval_gpu(
   encoder.set_input_array(w);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "rms_norm", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
+    dispatch_float_types(out.dtype(), "rms_norm", [&](auto type_tag) {
       constexpr uint32_t N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = cu::rms_norm<DataType, BLOCK_DIM, N_READS>;
-        kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-            x.data<DataType>(),
-            w.data<DataType>(),
-            out.data<DataType>(),
-            eps_,
-            axis_size,
-            w_stride);
-      });
+      dispatch_block_dim(
+          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+            using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+            auto kernel = cu::rms_norm<DataType, block_dim(), N_READS>;
+            kernel<<<n_rows, block_dim(), 0, stream>>>(
+                x.data<DataType>(),
+                w.data<DataType>(),
+                out.data<DataType>(),
+                eps_,
+                axis_size,
+                w_stride);
+          });
     });
   });
 }
@@ -311,22 +312,28 @@ void RMSNormVJP::eval_gpu(
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
   encoder.launch_kernel([&, x = x, g = g](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(gx.dtype(), "rms_norm_vjp", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr int N_READS = 4;
-      MLX_SWITCH_BOOL(has_w, HAS_W, {
-        MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-          auto kernel = cu::rms_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
-          kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-              x.data<DataType>(),
-              w.data<DataType>(),
-              g.data<DataType>(),
-              gx.data<DataType>(),
-              gw_temp.data<DataType>(),
-              eps_,
-              axis_size,
-              w_stride);
-        });
+    dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
+      dispatch_bool(has_w, [&](auto has_w_constant) {
+        constexpr int N_READS = 4;
+        dispatch_block_dim(
+            cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+              using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+              constexpr int N_READS = 4;
+              auto kernel = cu::rms_norm_vjp<
+                  DataType,
+                  has_w_constant(),
+                  block_dim(),
+                  N_READS>;
+              kernel<<<n_rows, block_dim(), 0, stream>>>(
+                  x.data<DataType>(),
+                  w.data<DataType>(),
+                  g.data<DataType>(),
+                  gx.data<DataType>(),
+                  gw_temp.data<DataType>(),
+                  eps_,
+                  axis_size,
+                  w_stride);
+            });
       });
     });
   });

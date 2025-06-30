@@ -140,54 +140,64 @@ void binary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, {
-      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
+    dispatch_all_types(a.dtype(), [&](auto in_type_tag) {
+      dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+        using CTYPE_IN = MLX_GET_TYPE(in_type_tag);
+        using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
         if constexpr (cu::supports_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
           auto bopt = get_binary_op_type(a, b);
           if (bopt == BinaryOpType::General) {
-            auto [shape, strides] = collapse_contiguous_dims(a, b, out);
-            auto& a_strides = strides[0];
-            auto& b_strides = strides[1];
-            bool large = a.data_size() > INT32_MAX ||
-                b.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
-            MLX_SWITCH_BOOL(large, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, int32_t>;
-              int ndim = shape.size();
-              if (ndim <= 3) {
-                MLX_SWITCH_1_2_3(ndim, NDIM, {
-                  auto kernel =
-                      &cu::binary_g_nd<Op, InType, OutType, IdxT, NDIM>;
-                  auto [num_blocks, block_dims] =
-                      get_launch_args(kernel, out, large);
-                  kernel<<<num_blocks, block_dims, 0, stream>>>(
-                      a.data<InType>(),
-                      b.data<InType>(),
-                      out.data<OutType>(),
-                      out.size(),
-                      const_param<NDIM>(shape),
-                      const_param<NDIM>(a_strides),
-                      const_param<NDIM>(b_strides));
+            dispatch_bool(
+                a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
+                    out.data_size() > INT32_MAX,
+                [&](auto large) {
+                  using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+                  Shape shape;
+                  std::vector<Strides> strides;
+                  std::tie(shape, strides) =
+                      collapse_contiguous_dims(a, b, out);
+                  auto& a_strides = strides[0];
+                  auto& b_strides = strides[1];
+                  int ndim = shape.size();
+                  if (ndim <= 3) {
+                    dispatch_1_2_3(ndim, [&](auto dims_constant) {
+                      auto kernel = cu::binary_g_nd<
+                          Op,
+                          InType,
+                          OutType,
+                          IdxT,
+                          dims_constant()>;
+                      auto [num_blocks, block_dims] =
+                          get_launch_args(kernel, out, large());
+                      kernel<<<num_blocks, block_dims, 0, stream>>>(
+                          a.data<InType>(),
+                          b.data<InType>(),
+                          out.data<OutType>(),
+                          out.size(),
+                          const_param<dims_constant()>(shape),
+                          const_param<dims_constant()>(a_strides),
+                          const_param<dims_constant()>(b_strides));
+                    });
+                  } else {
+                    auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
+                    auto [num_blocks, block_dims] =
+                        get_launch_args(kernel, out, large());
+                    kernel<<<num_blocks, block_dims, 0, stream>>>(
+                        a.data<InType>(),
+                        b.data<InType>(),
+                        out.data<OutType>(),
+                        out.size(),
+                        const_param(shape),
+                        const_param(a_strides),
+                        const_param(b_strides),
+                        ndim);
+                  }
                 });
-              } else {
-                auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
-                auto [num_blocks, block_dims] =
-                    get_launch_args(kernel, out, large);
-                kernel<<<num_blocks, block_dims, 0, stream>>>(
-                    a.data<InType>(),
-                    b.data<InType>(),
-                    out.data<OutType>(),
-                    out.size(),
-                    const_param(shape),
-                    const_param(a_strides),
-                    const_param(b_strides),
-                    ndim);
-              }
-            });
           } else {
-            MLX_SWITCH_BOOL(out.data_size() > UINT32_MAX, LARGE, {
-              using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
+            dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
+              using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
               auto kernel = cu::binary_ss<Op, InType, OutType, IdxT>;
               if (bopt == BinaryOpType::ScalarVector) {
                 kernel = cu::binary_sv<Op, InType, OutType, IdxT>;
@@ -197,7 +207,7 @@ void binary_op_gpu_inplace(
                 kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
               }
               auto [num_blocks, block_dims] = get_launch_args(
-                  kernel, out.data_size(), out.shape(), out.strides(), LARGE);
+                  kernel, out.data_size(), out.shape(), out.strides(), large());
               kernel<<<num_blocks, block_dims, 0, stream>>>(
                   a.data<InType>(),
                   b.data<InType>(),

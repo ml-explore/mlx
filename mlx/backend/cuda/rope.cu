@@ -310,12 +310,12 @@ void RoPE::eval_gpu(
   encoder.set_input_array(offset);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(in.dtype(), "rope", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      MLX_SWITCH_BOOL(traditional_, TRADITIONAL, {
-        MLX_SWITCH_BOOL(forward_, FORWARD, {
+    dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
+      dispatch_bool(traditional_, [&](auto traditional) {
+        dispatch_bool(forward_, [&](auto forward) {
+          using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
           if (single && !with_freqs) {
-            auto kernel = cu::rope_single<DataType, TRADITIONAL, FORWARD>;
+            auto kernel = cu::rope_single<DataType, traditional(), forward()>;
             uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
             auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
             kernel<<<grid, block, 0, stream>>>(
@@ -327,7 +327,8 @@ void RoPE::eval_gpu(
                 mat_size,
                 dims);
           } else if (single) {
-            auto kernel = cu::rope_single_freqs<DataType, TRADITIONAL, FORWARD>;
+            auto kernel =
+                cu::rope_single_freqs<DataType, traditional(), forward()>;
             uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
             auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
             kernel<<<grid, block, 0, stream>>>(
@@ -340,7 +341,7 @@ void RoPE::eval_gpu(
                 dims,
                 inputs[2].strides(0));
           } else if (with_freqs) {
-            auto kernel = cu::rope_freqs<DataType, TRADITIONAL, FORWARD>;
+            auto kernel = cu::rope_freqs<DataType, traditional(), forward()>;
             uint3 dims =
                 make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
             dims.z = (dims.z + 3) / 4;
@@ -358,7 +359,7 @@ void RoPE::eval_gpu(
                 dims,
                 inputs[2].strides(0));
           } else {
-            auto kernel = cu::rope<DataType, TRADITIONAL, FORWARD>;
+            auto kernel = cu::rope<DataType, traditional(), forward()>;
             uint3 dims =
                 make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
             dims.z = (dims.z + 3) / 4;
