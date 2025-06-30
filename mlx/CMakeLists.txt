@@ -25,6 +25,16 @@ add_library(mlx_version OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
 target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
+if(${CMAKE_HOST_APPLE})
+  execute_process(
+    COMMAND sw_vers -productVersion
+    OUTPUT_VARIABLE MACOS_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(MACOS_VERSION VERSION_GREATER_EQUAL "15.5")
+    target_compile_options(mlx PUBLIC -Wno-elaborated-enum-base)
+  endif()
+endif()
+
 if(MSVC)
   # Disable some MSVC warnings to speed up compilation.
   target_compile_options(mlx PUBLIC /wd4068 /wd4244 /wd4267 /wd4804)
