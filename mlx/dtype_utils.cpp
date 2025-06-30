@@ -34,8 +34,9 @@ const char* dtype_to_string(Dtype arg) {
       return "float64";
     case complex64:
       return "complex64";
+    default:
+      return "unknown";
   }
-  return "unknown";
 }
 
 } // namespace mlx::core
