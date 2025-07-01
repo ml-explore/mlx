@@ -342,8 +342,6 @@ void LayerNormVJP::eval_gpu(
       encoder.add_temporary(gw_temp);
     }
   }
-  gw.set_data(allocator::malloc(gw.nbytes()));
-  gb.set_data(allocator::malloc(gb.nbytes()));
 
   // Finish with the gradient for b in case we had a b.
   if (gb.ndim() == 1 && gb.size() == axis_size) {

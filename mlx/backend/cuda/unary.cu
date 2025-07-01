@@ -20,38 +20,35 @@ namespace cu {
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {
   if (std::is_same_v<Op, Abs> || std::is_same_v<Op, Negative> ||
-      std::is_same_v<Op, Sign>) {
+      std::is_same_v<Op, Sign> || std::is_same_v<Op, Square>) {
     return std::is_same_v<In, Out>;
   }
-  if (std::is_same_v<Op, ArcCos> || std::is_same_v<Op, ArcCosh> ||
-      std::is_same_v<Op, ArcSin> || std::is_same_v<Op, ArcSinh> ||
-      std::is_same_v<Op, ArcTan> || std::is_same_v<Op, ArcTanh> ||
-      std::is_same_v<Op, Erf> || std::is_same_v<Op, ErfInv> ||
-      std::is_same_v<Op, Expm1> || std::is_same_v<Op, Sigmoid> ||
-      std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Rsqrt>) {
+  if (std::is_same_v<Op, ArcCosh> || std::is_same_v<Op, ArcSinh> ||
+      std::is_same_v<Op, ArcTanh> || std::is_same_v<Op, Erf> ||
+      std::is_same_v<Op, ErfInv> || std::is_same_v<Op, Expm1> ||
+      std::is_same_v<Op, Sigmoid>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
-  }
-  if (std::is_same_v<Op, Log> || std::is_same_v<Op, Log2> ||
-      std::is_same_v<Op, Log10> || std::is_same_v<Op, Log1p>) {
-    return std::is_same_v<In, Out> && is_inexact_v<In>;
   }
   if (std::is_same_v<Op, BitwiseInvert>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
         !std::is_same_v<In, bool>;
   }
-  if (std::is_same_v<Op, Ceil> || std::is_same_v<Op, Floor> ||
-      std::is_same_v<Op, Square>) {
+  if (std::is_same_v<Op, Ceil> || std::is_same_v<Op, Floor>) {
     return std::is_same_v<In, Out> && !std::is_same_v<In, complex64_t>;
   }
   if (std::is_same_v<Op, Conjugate>) {
     return std::is_same_v<In, Out> && std::is_same_v<In, complex64_t>;
   }
-  if (std::is_same_v<Op, Cos> || std::is_same_v<Op, Cosh> ||
-      std::is_same_v<Op, Exp> || std::is_same_v<Op, Round> ||
-      std::is_same_v<Op, Sin> || std::is_same_v<Op, Sinh> ||
-      std::is_same_v<Op, Tan> || std::is_same_v<Op, Tanh>) {
-    return std::is_same_v<In, Out> &&
-        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+  if (std::is_same_v<Op, ArcCos> || std::is_same_v<Op, ArcSin> ||
+      std::is_same_v<Op, ArcTan> || std::is_same_v<Op, Cos> ||
+      std::is_same_v<Op, Cosh> || std::is_same_v<Op, Exp> ||
+      std::is_same_v<Op, Log> || std::is_same_v<Op, Log2> ||
+      std::is_same_v<Op, Log10> || std::is_same_v<Op, Log1p> ||
+      std::is_same_v<Op, Round> || std::is_same_v<Op, Rsqrt> ||
+      std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Sin> ||
+      std::is_same_v<Op, Sinh> || std::is_same_v<Op, Tan> ||
+      std::is_same_v<Op, Tanh>) {
+    return std::is_same_v<In, Out> && is_inexact_v<In>;
   }
   if (std::is_same_v<Op, Imag> || std::is_same_v<Op, Real>) {
     return std::is_same_v<In, complex64_t> && std::is_same_v<Out, float>;

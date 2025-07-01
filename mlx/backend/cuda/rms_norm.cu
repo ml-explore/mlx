@@ -304,7 +304,6 @@ void RMSNormVJP::eval_gpu(
       encoder.add_temporary(gw_temp);
     }
   }
-  gw.set_data(allocator::malloc(gw.nbytes()));
 
   encoder.set_input_array(x);
   encoder.set_input_array(w);
