@@ -79,8 +79,10 @@ void unary_op_gpu_inplace(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {
-      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
+    dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
+      dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+        using CTYPE_IN = MLX_GET_TYPE(in_type_tag);
+        using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
         if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;

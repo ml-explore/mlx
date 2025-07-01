@@ -152,35 +152,29 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_REAL_TYPES_CHECKED(in.dtype(), "ArgReduce", CTYPE, {
-      using InType = cuda_type_t<CTYPE>;
+    dispatch_real_types(in.dtype(), "ArgReduce", [&](auto type_tag) {
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       constexpr uint32_t N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
-        dim3 block_dims{BLOCK_DIM, 1, 1};
-        auto kernel = &cu::arg_reduce_general<
-            InType,
-            cu::ArgMax<InType>,
-            BLOCK_DIM,
-            N_READS>;
-        if (reduce_type_ == ArgReduce::ArgMin) {
-          kernel = &cu::arg_reduce_general<
-              InType,
-              cu::ArgMin<InType>,
-              BLOCK_DIM,
-              N_READS>;
-        }
-        kernel<<<num_blocks, block_dims, 0, stream>>>(
-            in.data<InType>(),
-            out.data<uint32_t>(),
-            out.size(),
-            const_param(shape),
-            const_param(in_strides),
-            const_param(out_strides),
-            ndim,
-            axis_stride,
-            axis_size);
-      });
+      dispatch_block_dim(
+          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+            dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
+            auto kernel =
+                cu::arg_reduce_general<T, cu::ArgMax<T>, block_dim(), N_READS>;
+            if (reduce_type_ == ArgReduce::ArgMin) {
+              kernel = cu::
+                  arg_reduce_general<T, cu::ArgMin<T>, block_dim(), N_READS>;
+            }
+            kernel<<<num_blocks, block_dim(), 0, stream>>>(
+                in.data<T>(),
+                out.data<uint32_t>(),
+                out.size(),
+                const_param(shape),
+                const_param(in_strides),
+                const_param(out_strides),
+                ndim,
+                axis_stride,
+                axis_size);
+          });
     });
   });
 }

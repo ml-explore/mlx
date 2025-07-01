@@ -144,14 +144,15 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "logsumexp", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
+    dispatch_float_types(out.dtype(), "logsumexp", [&](auto type_tag) {
       constexpr int N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = cu::logsumexp<DataType, float, BLOCK_DIM, N_READS>;
-        kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-            in.data<DataType>(), out.data<DataType>(), axis_size);
-      });
+      dispatch_block_dim(
+          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+            using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+            auto kernel = cu::logsumexp<DataType, float, block_dim(), N_READS>;
+            kernel<<<n_rows, block_dim(), 0, stream>>>(
+                in.data<DataType>(), out.data<DataType>(), axis_size);
+          });
     });
   });
 }

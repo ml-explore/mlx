@@ -33,10 +33,11 @@ void init_reduce(
 
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using T = cuda_type_t<CTYPE>;
-        using U = cu::ReduceResult<OP, T>::type;
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
+        using OP = MLX_GET_TYPE(reduce_type_tag);
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        using U = typename cu::ReduceResult<OP, T>::type;
         auto kernel = cu::init_reduce<T, U, OP>;
         dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
         dim3 block(grid.x < 1024 ? grid.x : 1024, 1, 1);
