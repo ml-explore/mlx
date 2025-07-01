@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Custom Extensions in MLX &#8212; MLX 0.26.1 documentation</title>
+    <title>Custom Extensions in MLX &#8212; MLX 0.26.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=3724ff34"></script>
+    <script src="../_static/documentation_options.js?v=20507f52"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -1305,11 +1305,11 @@ below.</p>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">ostringstream</span><span class="w"> </span><span class="n">kname</span><span class="p">;</span>
 <span class="w">    </span><span class="n">kname</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;axpby_&quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;general_&quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">type_to_name</span><span class="p">(</span><span class="n">out</span><span class="p">);</span>
 
-<span class="w">    </span><span class="c1">// Make sure the metal library is available</span>
-<span class="w">    </span><span class="n">d</span><span class="p">.</span><span class="n">register_library</span><span class="p">(</span><span class="s">&quot;mlx_ext&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="c1">// Load the metal library</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">get_library</span><span class="p">(</span><span class="s">&quot;mlx_ext&quot;</span><span class="p">);</span>
 
 <span class="w">    </span><span class="c1">// Make a kernel from this metal library</span>
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">kernel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">get_kernel</span><span class="p">(</span><span class="n">kname</span><span class="p">.</span><span class="n">str</span><span class="p">(),</span><span class="w"> </span><span class="s">&quot;mlx_ext&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">kernel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">get_kernel</span><span class="p">(</span><span class="n">kname</span><span class="p">.</span><span class="n">str</span><span class="p">(),</span><span class="w"> </span><span class="n">lib</span><span class="p">);</span>
 
 <span class="w">    </span><span class="c1">// Prepare to encode kernel</span>
 <span class="w">    </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">compute_encoder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">.</span><span class="n">get_command_encoder</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">index</span><span class="p">);</span>
