@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Build and Install &#8212; MLX 0.26.1 documentation</title>
+    <title>Build and Install &#8212; MLX 0.26.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="_static/documentation_options.js?v=3724ff34"></script>
+    <script src="_static/documentation_options.js?v=20507f52"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.1 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.1 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -906,6 +906,7 @@ document.write(`
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-installation">Python Installation</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cuda">CUDA</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a></li>
 </ul>
 </li>
@@ -916,7 +917,9 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#binary-size-minimization">Binary Size Minimization</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">Troubleshooting</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#linux">Linux</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">CUDA</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">Troubleshooting</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#metal-not-found">Metal not found</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#x86-shell">x86 Shell</a></li>
 </ul>
@@ -958,6 +961,14 @@ It is highly recommended to use macOS 14 (Sonoma)</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>conda-forge::mlx
 </pre></div>
 </div>
+<section id="cuda">
+<h3>CUDA<a class="headerlink" href="#cuda" title="Link to this heading">#</a></h3>
+<p>MLX has a CUDA backend which you can use on any Linux platform with CUDA 12
+and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx-cuda
+</pre></div>
+</div>
+</section>
 <section id="troubleshooting">
 <h3>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">#</a></h3>
 <p><em>My OS and Python versions are in the required range but pip still does not find
@@ -988,7 +999,7 @@ the output of <code class="docutils literal notranslate"><span class="pre">uname
 </section>
 <section id="python-api">
 <h3>Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h3>
-<p>To build and install the MLX python library from source, first, clone MLX from
+<p id="python-install">To build and install the MLX python library from source, first, clone MLX from
 <a class="reference external" href="https://github.com/ml-explore/mlx">its GitHub repo</a>:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:ml-explore/mlx.git<span class="w"> </span>mlx<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>mlx
 </pre></div>
@@ -1018,7 +1029,7 @@ IDE:</p>
 </section>
 <section id="c-api">
 <h3>C++ API<a class="headerlink" href="#c-api" title="Link to this heading">#</a></h3>
-<p>Currently, MLX must be built and installed from source.</p>
+<p id="cpp-install">Currently, MLX must be built and installed from source.</p>
 <p>Similarly to the python library, to build and install the MLX C++ library start
 by cloning MLX from <a class="reference external" href="https://github.com/ml-explore/mlx">its GitHub repo</a>:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:ml-explore/mlx.git<span class="w"> </span>mlx<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>mlx
@@ -1041,8 +1052,8 @@ cmake<span class="w"> </span>..<span class="w"> </span><span class="o">&amp;&amp
 directory as the executable statically linked to <code class="docutils literal notranslate"><span class="pre">libmlx.a</span></code> or the
 preprocessor constant <code class="docutils literal notranslate"><span class="pre">METAL_PATH</span></code> should be defined at build time and it
 should point to the path to the built metal library.</p>
-<div class="pst-scrollable-table-container"><table class="table" id="id4">
-<caption><span class="caption-text">Build Options</span><a class="headerlink" href="#id4" title="Link to this table">#</a></caption>
+<div class="pst-scrollable-table-container"><table class="table" id="id5">
+<caption><span class="caption-text">Build Options</span><a class="headerlink" href="#id5" title="Link to this table">#</a></caption>
 <colgroup>
 <col style="width: 75.8%" />
 <col style="width: 24.2%" />
@@ -1125,8 +1136,40 @@ application. Once a kernel is compiled, it will be cached by the system. The
 Metal kernel cache persists across reboots.</p>
 </section>
 </section>
+<section id="linux">
+<h3>Linux<a class="headerlink" href="#linux" title="Link to this heading">#</a></h3>
+<p>To build from source on Linux (CPU only), install the BLAS and LAPACK headers.
+For example on Ubuntu, run the following:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>apt-get<span class="w"> </span>update<span class="w"> </span>-y
+apt-get<span class="w"> </span>install<span class="w"> </span>libblas-dev<span class="w"> </span>liblapack-dev<span class="w"> </span>liblapacke-dev<span class="w"> </span>-y
+</pre></div>
+</div>
+<p>From here follow the instructions to install either the <a class="reference internal" href="#python-install"><span class="std std-ref">Python</span></a> or <a class="reference internal" href="#cpp-install"><span class="std std-ref">C++</span></a> APIs.</p>
+</section>
 <section id="id3">
-<h3>Troubleshooting<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<h3>CUDA<a class="headerlink" href="#id3" title="Link to this heading">#</a></h3>
+<p>To build from source on Linux with CUDA, install the BLAS and LAPACK headers
+and the CUDA toolkit. For example on Ubuntu, run the following:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>wget<span class="w"> </span>https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+dpkg<span class="w"> </span>-i<span class="w"> </span>cuda-keyring_1.1-1_all.deb
+apt-get<span class="w"> </span>update<span class="w"> </span>-y
+apt-get<span class="w"> </span>-y<span class="w"> </span>install<span class="w"> </span>cuda-toolkit-12-9
+apt-get<span class="w"> </span>install<span class="w"> </span>libblas-dev<span class="w"> </span>liblapack-dev<span class="w"> </span>liblapacke-dev<span class="w"> </span>-y
+</pre></div>
+</div>
+<p>When building either the Python or C++ APIs make sure to pass the cmake flag
+<code class="docutils literal notranslate"><span class="pre">MLX_BUILD_CUDA=ON</span></code>. For example, to build the Python API run:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="nv">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DMLX_BUILD_CUDA=ON&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
+</pre></div>
+</div>
+<p>To build the C++ package run:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build
+cmake<span class="w"> </span>..<span class="w"> </span>-DMLX_BUILD_CUDA<span class="o">=</span>ON<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>-j
+</pre></div>
+</div>
+</section>
+<section id="id4">
+<h3>Troubleshooting<a class="headerlink" href="#id4" title="Link to this heading">#</a></h3>
 <section id="metal-not-found">
 <h4>Metal not found<a class="headerlink" href="#metal-not-found" title="Link to this heading">#</a></h4>
 <p>You see the following error when you try to build:</p>
@@ -1214,6 +1257,7 @@ wipe your build cache with <code class="docutils literal notranslate"><span clas
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-installation">Python Installation</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cuda">CUDA</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a></li>
 </ul>
 </li>
@@ -1224,7 +1268,9 @@ wipe your build cache with <code class="docutils literal notranslate"><span clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#binary-size-minimization">Binary Size Minimization</a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">Troubleshooting</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#linux">Linux</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id3">CUDA</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id4">Troubleshooting</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#metal-not-found">Metal not found</a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#x86-shell">x86 Shell</a></li>
 </ul>
