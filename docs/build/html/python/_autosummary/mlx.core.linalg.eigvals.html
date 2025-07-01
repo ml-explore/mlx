@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.linalg.eigvals &#8212; MLX 0.26.1 documentation</title>
+    <title>mlx.core.linalg.eigvals &#8212; MLX 0.26.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=3724ff34"></script>
+    <script src="../../_static/documentation_options.js?v=20507f52"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.1 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.1 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -923,7 +923,7 @@ document.write(`
 <dt class="sig sig-object py" id="mlx.core.linalg.eigvals">
 <span class="sig-name descname"><span class="pre">eigvals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.13)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.13)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.linalg.eigvals" title="Link to this definition">#</a></dt>
 <dd><p>Compute the eigenvalues of a square matrix.</p>
-<p>This function differs from <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.linalg.eigvals.html#numpy.linalg.eigvals" title="(in NumPy v2.2)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.linalg.eigvals()</span></code></a> in that the
+<p>This function differs from <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.linalg.eigvals.html#numpy.linalg.eigvals" title="(in NumPy v2.3)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.linalg.eigvals()</span></code></a> in that the
 return type is always complex even if the eigenvalues are all real.</p>
 <p>This function supports arrays with at least 2 dimensions. When the
 input has more than two dimensions, the eigenvalues are computed for

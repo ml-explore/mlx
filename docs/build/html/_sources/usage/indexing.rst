@@ -107,6 +107,16 @@ same array:
   >>> a
   array([1, 2, 0], dtype=int32)
 
+
+Note, unlike NumPy, updates to the same location are nondeterministic:
+
+.. code-block:: shell
+
+  >>> a = mx.array([1, 2, 3])
+  >>> a[[0, 0]] = mx.array([4, 5])
+
+The first element of ``a`` could be ``4`` or ``5``.
+
 Transformations of functions which use in-place updates are allowed and work as
 expected. For example:
 
