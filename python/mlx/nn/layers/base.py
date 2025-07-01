@@ -114,6 +114,12 @@ class Module(dict):
             super(Module, self).__setattr__(key, val)
             self.pop(key, None)
 
+    def __delattr__(self, name):
+        if (val := self.get(name, None)) is not None:
+            del self[name]
+        else:
+            super().__delattr__(name)
+
     def load_weights(
         self,
         file_or_weights: Union[str, List[Tuple[str, mx.array]]],

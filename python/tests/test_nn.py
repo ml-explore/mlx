@@ -274,6 +274,11 @@ class TestBase(mlx_tests.MLXTestCase):
         m = MyModel()
         m.update_modules(m.leaf_modules())
 
+    def test_parameter_deletion(self):
+        m = nn.Linear(32, 32)
+        del m.weight
+        self.assertFalse(hasattr(m, "weight"))
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
