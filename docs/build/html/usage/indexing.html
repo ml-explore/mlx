@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Indexing Arrays &#8212; MLX 0.26.1 documentation</title>
+    <title>Indexing Arrays &#8212; MLX 0.26.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=3724ff34"></script>
+    <script src="../_static/documentation_options.js?v=20507f52"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -921,7 +921,7 @@ document.write(`
   <section id="indexing-arrays">
 <span id="indexing"></span><h1>Indexing Arrays<a class="headerlink" href="#indexing-arrays" title="Link to this heading">#</a></h1>
 <p>For the most part, indexing an MLX <a class="reference internal" href="../python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array</span></code></a> works the same as indexing a
-NumPy <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.2)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a>. See the <a class="reference external" href="https://numpy.org/doc/stable/user/basics.indexing.html">NumPy documentation</a> for more details on
+NumPy <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.3)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a>. See the <a class="reference external" href="https://numpy.org/doc/stable/user/basics.indexing.html">NumPy documentation</a> for more details on
 how that works.</p>
 <p>For example, you can use regular integers and slices (<a class="reference internal" href="../python/_autosummary/mlx.core.slice.html#mlx.core.slice" title="mlx.core.slice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">slice</span></code></a>) to index arrays:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt;<span class="w"> </span><span class="nv">arr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>mx.arange<span class="o">(</span><span class="m">10</span><span class="o">)</span>
@@ -980,8 +980,8 @@ kernel would be extremely inefficient.</p>
 <p>Indexing with boolean masks is something that MLX may support in the future. In
 general, MLX has limited support for operations for which output
 <em>shapes</em> are dependent on input <em>data</em>. Other examples of these types of
-operations which MLX does not yet support include <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.nonzero.html#numpy.nonzero" title="(in NumPy v2.2)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.nonzero()</span></code></a> and the
-single input version of <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.where.html#numpy.where" title="(in NumPy v2.2)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.where()</span></code></a>.</p>
+operations which MLX does not yet support include <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.nonzero.html#numpy.nonzero" title="(in NumPy v2.3)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.nonzero()</span></code></a> and the
+single input version of <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.where.html#numpy.where" title="(in NumPy v2.3)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.where()</span></code></a>.</p>
 </section>
 <section id="in-place-updates">
 <h2>In Place Updates<a class="headerlink" href="#in-place-updates" title="Link to this heading">#</a></h2>
@@ -1003,6 +1003,12 @@ array<span class="o">([</span><span class="m">1</span>,<span class="w"> </span><
 array<span class="o">([</span><span class="m">1</span>,<span class="w"> </span><span class="m">2</span>,<span class="w"> </span><span class="m">0</span><span class="o">]</span>,<span class="w"> </span><span class="nv">dtype</span><span class="o">=</span>int32<span class="o">)</span>
 </pre></div>
 </div>
+<p>Note, unlike NumPy, updates to the same location are nondeterministic:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>&gt;&gt;&gt;<span class="w"> </span><span class="nv">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>mx.array<span class="o">([</span><span class="m">1</span>,<span class="w"> </span><span class="m">2</span>,<span class="w"> </span><span class="m">3</span><span class="o">])</span>
+&gt;&gt;&gt;<span class="w"> </span>a<span class="o">[[</span><span class="m">0</span>,<span class="w"> </span><span class="m">0</span><span class="o">]]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>mx.array<span class="o">([</span><span class="m">4</span>,<span class="w"> </span><span class="m">5</span><span class="o">])</span>
+</pre></div>
+</div>
+<p>The first element of <code class="docutils literal notranslate"><span class="pre">a</span></code> could be <code class="docutils literal notranslate"><span class="pre">4</span></code> or <code class="docutils literal notranslate"><span class="pre">5</span></code>.</p>
 <p>Transformations of functions which use in-place updates are allowed and work as
 expected. For example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">fun</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
