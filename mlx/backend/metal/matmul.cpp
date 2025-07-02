@@ -1864,4 +1864,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   gather_mm(a, b, lhs_indices, rhs_indices, out, M, N, K, d, s);
 }
 
+void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::invalid_argument("NYI");
+}
+
 } // namespace mlx::core

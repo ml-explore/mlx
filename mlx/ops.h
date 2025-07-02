@@ -1406,6 +1406,12 @@ array gather_mm(
     bool sorted_indices = false,
     StreamOrDevice s = {});
 
+/**
+ * Compute a matrix product but segment the inner dimension and write the
+ * result separately for each segment.
+ */
+array segmented_mm(array a, array b, array segments, StreamOrDevice s = {});
+
 /** Extract a diagonal or construct a diagonal array */
 array diagonal(
     const array& a,
