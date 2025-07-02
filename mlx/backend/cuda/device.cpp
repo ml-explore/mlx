@@ -107,7 +107,7 @@ CommandEncoder::ConcurrentContext::~ConcurrentContext() {
   auto outputs = std::move(enc.active_outputs_);
   enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
 
-  // Update output node to be the emtpy node
+  // Update output node to be the empty node
   for (auto o : outputs) {
     enc.node_map_.emplace(o, empty).first->second = empty;
   }
