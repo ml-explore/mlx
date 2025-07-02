@@ -71,6 +71,7 @@ set(STEEL_HEADERS
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_gather.h
     steel/gemm/kernels/steel_gemm_masked.h
+    steel/gemm/kernels/steel_gemm_segmented.h
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
     steel/utils/integral_constant.h)
@@ -120,6 +121,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
 endif()
 

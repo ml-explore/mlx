@@ -1874,11 +1874,37 @@ void segmented_mm(
     int K,
     metal::Device& d,
     const Stream& s) {
+  auto check_segments_layout = [&d, &s](const array& x) {
+    // Contiguous so return early
+    if (x.flags().row_contiguous) {
+      return std::make_tuple(true, x);
+    }
+
+    bool rc = true;
+    for (int i = 0; i < x.ndim() - 2; i++) {
+      rc &=
+          (x.strides(i + 1) * x.shape(i) == x.strides(i)) || (x.shape(i) == 1);
+    }
+    rc &= x.strides(x.ndim() - 1) == 1;
+    if (x.ndim() > 1) {
+      rc &= x.strides(x.ndim() - 2) == 1;
+    }
+
+    if (rc) {
+      return std::make_tuple(false, x);
+    }
+
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return std::make_tuple(true, x_copy);
+  };
+
   // Copy if needed
   std::vector<array> copies;
   auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
   auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
-  auto segments = ensure_row_contiguous(segments_, d, s);
+  auto [segments_contiguous, segments] = check_segments_layout(segments_);
   d.add_temporaries(std::move(copies), s.index);
 
   // Determine dispatch kernel
@@ -1916,6 +1942,7 @@ void segmented_mm(
       wn);
 
   metal::MTLFCList func_consts = {
+      {&segments_contiguous, MTL::DataType::DataTypeBool, 199},
       {&align_M, MTL::DataType::DataTypeBool, 200},
       {&align_N, MTL::DataType::DataTypeBool, 201},
   };
@@ -1926,6 +1953,8 @@ void segmented_mm(
   concatenate(
       hash_name,
       base_name,
+      "_segments_contiguous_",
+      segments_contiguous ? 't' : 'n',
       "_align_M_",
       align_M ? 't' : 'n',
       "_align_N_",
