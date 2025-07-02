@@ -91,73 +91,80 @@ void ternary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_input_array(c);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dispatch_all_types(out.dtype(), [&](auto type_tag) {
-      using DType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using DType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
-      auto topt = get_ternary_op_type(a, b, c);
-      if (topt == TernaryOpType::General) {
-        dispatch_bool(
-            a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
-                c.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
-            [&](auto large) {
-              using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-              Shape shape;
-              std::vector<Strides> strides;
-              std::tie(shape, strides) = collapse_contiguous_dims(a, b, c, out);
-              auto& a_strides = strides[0];
-              auto& b_strides = strides[1];
-              auto& c_strides = strides[2];
-              int ndim = shape.size();
-              if (ndim <= 3) {
-                dispatch_1_2_3(ndim, [&](auto dims_constant) {
-                  auto kernel =
-                      cu::ternary_g_nd<Op, DType, IdxT, dims_constant()>;
-                  auto [num_blocks, block_dims] =
-                      get_launch_args(kernel, out, large());
-                  kernel<<<num_blocks, block_dims, 0, stream>>>(
-                      a.data<bool>(),
-                      b.data<DType>(),
-                      c.data<DType>(),
-                      out.data<DType>(),
-                      out.size(),
-                      const_param<dims_constant()>(shape),
-                      const_param<dims_constant()>(a_strides),
-                      const_param<dims_constant()>(b_strides),
-                      const_param<dims_constant()>(c_strides));
-                });
-              } else {
-                auto kernel = cu::ternary_g<Op, DType, IdxT>;
+    auto topt = get_ternary_op_type(a, b, c);
+    if (topt == TernaryOpType::General) {
+      dispatch_bool(
+          a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
+              c.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
+          [&](auto large) {
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+            Shape shape;
+            std::vector<Strides> strides;
+            std::tie(shape, strides) = collapse_contiguous_dims(a, b, c, out);
+            auto& a_strides = strides[0];
+            auto& b_strides = strides[1];
+            auto& c_strides = strides[2];
+            int ndim = shape.size();
+            if (ndim <= 3) {
+              dispatch_1_2_3(ndim, [&](auto dims_constant) {
+                auto kernel =
+                    cu::ternary_g_nd<Op, DType, IdxT, dims_constant()>;
                 auto [num_blocks, block_dims] =
                     get_launch_args(kernel, out, large());
-                kernel<<<num_blocks, block_dims, 0, stream>>>(
+                encoder.add_kernel_node(
+                    kernel,
+                    num_blocks,
+                    block_dims,
                     a.data<bool>(),
                     b.data<DType>(),
                     c.data<DType>(),
                     out.data<DType>(),
-                    out.data_size(),
-                    const_param(shape),
-                    const_param(a_strides),
-                    const_param(b_strides),
-                    const_param(c_strides),
-                    ndim);
-              }
-            });
-      } else {
-        dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
-          using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
-          auto kernel = cu::ternary_v<Op, DType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(
-              kernel, out.data_size(), out.shape(), out.strides(), large());
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
-              a.data<bool>(),
-              b.data<DType>(),
-              c.data<DType>(),
-              out.data<DType>(),
-              out.data_size());
-        });
-      }
-    });
+                    out.size(),
+                    const_param<dims_constant()>(shape),
+                    const_param<dims_constant()>(a_strides),
+                    const_param<dims_constant()>(b_strides),
+                    const_param<dims_constant()>(c_strides));
+              });
+            } else {
+              auto kernel = cu::ternary_g<Op, DType, IdxT>;
+              auto [num_blocks, block_dims] =
+                  get_launch_args(kernel, out, large());
+              encoder.add_kernel_node(
+                  kernel,
+                  num_blocks,
+                  block_dims,
+                  a.data<bool>(),
+                  b.data<DType>(),
+                  c.data<DType>(),
+                  out.data<DType>(),
+                  out.data_size(),
+                  const_param(shape),
+                  const_param(a_strides),
+                  const_param(b_strides),
+                  const_param(c_strides),
+                  ndim);
+            }
+          });
+    } else {
+      dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
+        using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+        auto kernel = cu::ternary_v<Op, DType, IdxT>;
+        auto [num_blocks, block_dims] = get_launch_args(
+            kernel, out.data_size(), out.shape(), out.strides(), large());
+        encoder.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
+            a.data<bool>(),
+            b.data<DType>(),
+            c.data<DType>(),
+            out.data<DType>(),
+            out.data_size());
+      });
+    }
   });
 }
 

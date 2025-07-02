@@ -42,7 +42,8 @@ class MatMul {
       int64_t ldb,
       int32_t batch_count,
       int64_t a_batch_stride,
-      int64_t b_batch_stride) {
+      int64_t b_batch_stride)
+      : handle_(device.lt_handle()) {
     heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
     auto scale_type = dtype_to_cuda_type(dtype);
@@ -147,7 +148,7 @@ class MatMul {
     if (heuristic_.state != CUBLAS_STATUS_SUCCESS) {
       int ret = 0;
       CHECK_CUBLAS_ERROR(cublasLtMatmulAlgoGetHeuristic(
-          encoder.device().lt_handle(),
+          handle_,
           matmul_desc_,
           a_desc_,
           b_desc_,
@@ -172,25 +173,24 @@ class MatMul {
       workspace_ptr = workspace.data<void>();
     }
 
-    encoder.launch_kernel([&](cudaStream_t stream) {
-      CHECK_CUBLAS_ERROR(cublasLtMatmul(
-          encoder.device().lt_handle(),
-          matmul_desc_,
-          &alpha,
-          a,
-          a_desc_,
-          b,
-          b_desc_,
-          &beta,
-          c ? c : out,
-          c ? c_desc_ : out_desc_,
-          out,
-          out_desc_,
-          &heuristic_.algo,
-          workspace_ptr,
-          heuristic_.workspaceSize,
-          stream));
-    });
+    auto capture = encoder.capture_context();
+    CHECK_CUBLAS_ERROR(cublasLtMatmul(
+        handle_,
+        matmul_desc_,
+        &alpha,
+        a,
+        a_desc_,
+        b,
+        b_desc_,
+        &beta,
+        c ? c : out,
+        c ? c_desc_ : out_desc_,
+        out,
+        out_desc_,
+        &heuristic_.algo,
+        workspace_ptr,
+        heuristic_.workspaceSize,
+        encoder.stream()));
   }
 
  private:
@@ -259,6 +259,7 @@ class MatMul {
     return desc;
   }
 
+  cublasLtHandle_t handle_{nullptr};
   cublasLtMatmulDesc_t matmul_desc_{nullptr};
   cublasLtMatmulPreference_t pref_{nullptr};
   cublasLtMatrixLayout_t a_desc_{nullptr};
@@ -273,7 +274,7 @@ class MatMul {
 namespace {
 
 std::tuple<bool, int64_t, array>
-check_transpose(std::vector<array>& copies, const Stream& s, const array& arr) {
+check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
   auto sty = arr.strides()[arr.ndim() - 1];
   if (sty == 1 && stx == arr.shape(-1)) {
@@ -283,7 +284,7 @@ check_transpose(std::vector<array>& copies, const Stream& s, const array& arr) {
   } else {
     array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
     copy_gpu(arr, arr_copy, CopyType::General, s);
-    copies.push_back(arr_copy);
+    enc.add_temporary(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }
 }
@@ -317,13 +318,8 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
-  std::vector<array> copies;
-  auto [a_transposed, lda, a] = check_transpose(copies, s, a_pre);
-  auto [b_transposed, ldb, b] = check_transpose(copies, s, b_pre);
-
-  for (auto& temp : copies) {
-    encoder.add_temporary(temp);
-  }
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -348,7 +344,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Invoke cublasLt
 
   cu::MatMul matmul(
-      encoder.device(),
+      cu::device(s.device),
       a.dtype(),
       a_transposed,
       M,
@@ -373,6 +369,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
+  auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,
@@ -405,14 +402,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
-  std::vector<array> copies;
-  auto [a_transposed, lda, a] = check_transpose(copies, s, a_pre);
-  auto [b_transposed, ldb, b] = check_transpose(copies, s, b_pre);
-  auto [c_transposed, ldc, c] = check_transpose(copies, s, c_pre);
-
-  for (auto& temp : copies) {
-    encoder.add_temporary(temp);
-  }
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
+  auto [c_transposed, ldc, c] = check_transpose(encoder, s, c_pre);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -440,7 +432,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Invoke cublasLt
 
   cu::MatMul matmul(
-      encoder.device(),
+      cu::device(s.device),
       a.dtype(),
       a_transposed,
       M,
@@ -478,6 +470,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   ContiguousIterator a_it(batch_shape, a_batch_strides, batch_shape.size() - 1);
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
   ContiguousIterator c_it(batch_shape, c_batch_strides, batch_shape.size() - 1);
+  auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
     matmul.run(
         encoder,

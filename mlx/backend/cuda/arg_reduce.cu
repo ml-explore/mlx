@@ -151,30 +151,29 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    dispatch_real_types(in.dtype(), "ArgReduce", [&](auto type_tag) {
-      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-      constexpr uint32_t N_READS = 4;
-      dispatch_block_dim(
-          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-            dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
-            auto kernel =
-                cu::arg_reduce_general<T, cu::ArgMax<T>, block_dim(), N_READS>;
-            if (reduce_type_ == ArgReduce::ArgMin) {
-              kernel = cu::
-                  arg_reduce_general<T, cu::ArgMin<T>, block_dim(), N_READS>;
-            }
-            kernel<<<num_blocks, block_dim(), 0, stream>>>(
-                in.data<T>(),
-                out.data<uint32_t>(),
-                out.size(),
-                const_param(shape),
-                const_param(in_strides),
-                const_param(out_strides),
-                ndim,
-                axis_stride,
-                axis_size);
-          });
+  dispatch_real_types(in.dtype(), "ArgReduce", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr uint32_t N_READS = 4;
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
+      auto kernel =
+          cu::arg_reduce_general<T, cu::ArgMax<T>, block_dim(), N_READS>;
+      if (reduce_type_ == ArgReduce::ArgMin) {
+        kernel = cu::arg_reduce_general<T, cu::ArgMin<T>, block_dim(), N_READS>;
+      }
+      encoder.add_kernel_node(
+          kernel,
+          num_blocks,
+          block_dim(),
+          in.data<T>(),
+          out.data<uint32_t>(),
+          out.size(),
+          const_param(shape),
+          const_param(in_strides),
+          const_param(out_strides),
+          ndim,
+          axis_stride,
+          axis_size);
     });
   });
 }

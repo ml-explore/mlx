@@ -2,37 +2,22 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/worker.h"
-#include "mlx/backend/metal/metal.h"
+#include "mlx/utils.h"
 
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
 #include <future>
+#include <unordered_set>
 
 namespace mlx::core {
 
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER
+// This should be less than 255
+constexpr int default_max_nodes_per_graph = 20;
+
+constexpr int max_graph_cache_size = 100;
+
 namespace cu {
-
-DeviceStream::DeviceStream(Device& device) : device_(device), stream_(device) {}
-
-void DeviceStream::synchronize() {
-  cudaStreamSynchronize(stream_);
-}
-
-cudaStream_t DeviceStream::schedule_cuda_stream() {
-  // TODO: Return a stream that maximizes parallelism.
-  return stream_;
-}
-
-cudaStream_t DeviceStream::last_cuda_stream() {
-  return stream_;
-}
-
-CommandEncoder& DeviceStream::get_encoder() {
-  if (!encoder_) {
-    encoder_ = std::make_unique<CommandEncoder>(*this);
-  }
-  return *encoder_;
-}
 
 Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
@@ -67,49 +52,253 @@ void Device::make_current() {
   }
 }
 
-DeviceStream& Device::get_stream(Stream s) {
-  auto it = streams_.find(s.index);
-  if (it == streams_.end()) {
-    it = streams_.try_emplace(s.index, *this).first;
+CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
+  CHECK_CUDA_ERROR(cudaGraphCreate(&graph, 0));
+  CHECK_CUDA_ERROR(cudaStreamBeginCaptureToGraph(
+      enc.stream(), graph, NULL, NULL, 0, cudaStreamCaptureModeGlobal));
+}
+
+CommandEncoder::CaptureContext::~CaptureContext() {
+  CHECK_CUDA_ERROR(cudaStreamEndCapture(enc.stream(), &graph));
+  size_t num_nodes;
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, NULL, &num_nodes));
+  if (num_nodes == 1) {
+    cudaGraphNode_t captured_node;
+    CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, &captured_node, &num_nodes));
+    CUDA_KERNEL_NODE_PARAMS params;
+    CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
+    cudaGraphNode_t node;
+    CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, enc.graph_, NULL, 0, &params));
+    enc.insert_graph_dependencies(GraphNode{node, 'K'});
+  } else {
+    cudaGraphNode_t node;
+    CHECK_CUDA_ERROR(
+        cudaGraphAddChildGraphNode(&node, enc.graph_, NULL, 0, graph));
+    enc.insert_graph_dependencies(GraphNode{node, 'G'});
+  }
+  CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
+}
+
+CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc)
+    : enc(enc) {
+  enc.in_concurrent_ = true;
+}
+
+CommandEncoder::ConcurrentContext::~ConcurrentContext() {
+  enc.in_concurrent_ = false;
+
+  // Use an empty graph node for synchronization
+  CommandEncoder::GraphNode empty{NULL, 'E', std::to_string(enc.node_count_++)};
+  enc.empty_node_count_++;
+  CHECK_CUDA_ERROR(cudaGraphAddEmptyNode(&empty.node, enc.graph_, NULL, 0));
+
+  // Insert the concurrent -> empty node dependencies
+  for (auto& from : enc.concurrent_nodes_) {
+    enc.from_nodes_.push_back(from.node);
+    enc.to_nodes_.push_back(empty.node);
+    enc.graph_key_ += from.id;
+    enc.graph_key_ += from.node_type;
+    enc.graph_key_ += empty.id;
+    enc.graph_key_ += empty.node_type;
+  }
+
+  // Insert the input -> concurrent node dependencies without updating output
+  // nodes
+  auto outputs = std::move(enc.active_outputs_);
+  enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
+
+  // Update output node to be the empty node
+  for (auto o : outputs) {
+    enc.node_map_.emplace(o, empty).first->second = empty;
+  }
+}
+
+void CommandEncoder::insert_graph_dependencies(GraphNode node) {
+  if (node.node_type == 'G') {
+    graph_node_count_++;
+  }
+  node.id = std::to_string(node_count_++);
+  if (in_concurrent_) {
+    concurrent_nodes_.push_back(std::move(node));
+  } else {
+    std::vector<GraphNode> nodes;
+    nodes.push_back(std::move(node));
+    insert_graph_dependencies(std::move(nodes));
+  }
+}
+
+void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
+  std::vector<GraphNode> deps;
+  {
+    // Dependencies must be added in the same order to produce a consistent
+    // topology
+    std::unordered_set<cudaGraphNode_t> set_deps;
+    for (auto d : active_deps_) {
+      if (auto it = node_map_.find(d); it != node_map_.end()) {
+        auto [_, inserted] = set_deps.insert(it->second.node);
+        if (inserted) {
+          deps.push_back(it->second);
+        }
+      }
+    }
+  }
+  active_deps_.clear();
+
+  for (auto o : active_outputs_) {
+    for (auto& node : nodes) {
+      node_map_.emplace(o, node).first->second = node;
+    }
+  }
+  active_outputs_.clear();
+
+  for (auto& from : deps) {
+    for (auto& to : nodes) {
+      from_nodes_.push_back(from.node);
+      to_nodes_.push_back(to.node);
+      graph_key_ += from.id;
+      graph_key_ += from.node_type;
+      graph_key_ += to.id;
+      graph_key_ += to.node_type;
+    }
+  }
+}
+
+CommandEncoder& Device::get_command_encoder(Stream s) {
+  auto it = encoders_.find(s.index);
+  if (it == encoders_.end()) {
+    it = encoders_.try_emplace(s.index, *this).first;
   }
   return it->second;
 }
 
-CommandEncoder::CommandEncoder(DeviceStream& s)
-    : device_(s.device()), stream_(s) {}
+CommandEncoder::CommandEncoder(Device& d) : stream_(d) {
+  CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
+}
+
+void clear_graphs(std::unordered_map<std::string, cudaGraphExec_t>& graphs) {
+  for (auto& [_, graph_exec] : graphs) {
+    CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
+  }
+  graphs.clear();
+}
+
+CommandEncoder::~CommandEncoder() {
+  clear_graphs(graph_cache_);
+}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
 }
 
-void CommandEncoder::end_encoding() {
-  if (!temporaries_.empty()) {
-    add_completed_handler([temporaries = std::move(temporaries_)]() {});
-  }
+void CommandEncoder::set_input_array(const array& arr) {
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+}
 
-  // There is no kernel running, run completion handlers immediately.
-  if (!has_gpu_work_) {
-    worker_.consume_in_this_thread();
-    return;
-  }
-  has_gpu_work_ = false;
+void CommandEncoder::set_output_array(const array& arr) {
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+  active_outputs_.push_back(id);
+}
 
-  // Put completion handlers in a batch.
-  worker_.end_batch();
-
-  // Signaling kernel completion is expensive, delay until enough batches.
-  // TODO: This number is arbitrarily picked, profile for a better stragety.
-  if (worker_.uncommited_batches() > 8) {
+void CommandEncoder::maybe_commit() {
+  if (node_count_ >= env::max_ops_per_buffer(default_max_nodes_per_graph)) {
     commit();
   }
 }
 
+void CommandEncoder::add_kernel_node(
+    void* func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    void** params) {
+  cudaKernelNodeParams kernel_params = {0};
+  kernel_params.func = func;
+  kernel_params.gridDim = grid_dim;
+  kernel_params.blockDim = block_dim;
+  kernel_params.kernelParams = params;
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(
+      cudaGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
+  insert_graph_dependencies(GraphNode{node, 'K'});
+}
+
+void CommandEncoder::add_kernel_node(
+    CUfunction func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    void** params) {
+  CUDA_KERNEL_NODE_PARAMS kernel_params = {0};
+  kernel_params.func = func;
+  kernel_params.gridDimX = grid_dim.x;
+  kernel_params.gridDimY = grid_dim.y;
+  kernel_params.gridDimZ = grid_dim.z;
+  kernel_params.blockDimX = block_dim.x;
+  kernel_params.blockDimY = block_dim.y;
+  kernel_params.blockDimZ = block_dim.z;
+  kernel_params.kernelParams = params;
+  CUgraphNode node;
+  CHECK_CUDA_ERROR(
+      cuGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
+  insert_graph_dependencies(GraphNode{node, 'K'});
+}
+
 void CommandEncoder::commit() {
-  worker_.commit(stream_.last_cuda_stream());
+  if (!temporaries_.empty()) {
+    add_completed_handler([temporaries = std::move(temporaries_)]() {});
+  }
+  if (node_count_ > 0) {
+    if (!from_nodes_.empty()) {
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(
+          graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+    }
+    // TODO smarter cache policy
+    if (graph_cache_.size() > max_graph_cache_size) {
+      clear_graphs(graph_cache_);
+    }
+
+    graph_key_ += ".";
+    graph_key_ += std::to_string(node_count_);
+    graph_key_ += ".";
+    graph_key_ += std::to_string(graph_node_count_);
+    graph_key_ += ".";
+    graph_key_ += std::to_string(empty_node_count_);
+    auto [it, _] = graph_cache_.emplace(graph_key_, nullptr);
+    auto& graph_exec = it->second;
+
+    if (graph_exec != NULL) {
+      cudaGraphExecUpdateResultInfo update_result;
+      cudaGraphExecUpdate(graph_exec, graph_, &update_result);
+      if (update_result.result != cudaGraphExecUpdateSuccess) {
+        cudaGetLastError();
+        CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
+        graph_exec = NULL;
+      }
+    }
+    if (graph_exec == NULL) {
+      CHECK_CUDA_ERROR(
+          cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+    }
+    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+
+    // Reset state
+    node_count_ = 0;
+    graph_node_count_ = 0;
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_key_.clear();
+    node_map_.clear();
+    CHECK_CUDA_ERROR(cudaGraphDestroy(graph_));
+    CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
+  }
+
+  // Put completion handlers in a batch.
+  worker_.end_batch();
+  worker_.commit(stream_);
 }
 
 void CommandEncoder::synchronize() {
-  stream().synchronize();
+  cudaStreamSynchronize(stream_);
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });
@@ -127,12 +316,8 @@ Device& device(mlx::core::Device device) {
   return it->second;
 }
 
-DeviceStream& get_stream(Stream s) {
-  return device(s.device).get_stream(s);
-}
-
 CommandEncoder& get_command_encoder(Stream s) {
-  return get_stream(s).get_encoder();
+  return device(s.device).get_command_encoder(s);
 }
 
 } // namespace cu

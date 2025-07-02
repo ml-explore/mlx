@@ -24,6 +24,14 @@ void check_cuda_error(const char* name, cudaError_t err) {
   }
 }
 
+void check_cuda_error(const char* name, CUresult err) {
+  if (err != CUDA_SUCCESS) {
+    const char* err_str = "Unknown error";
+    cuGetErrorString(err, &err_str);
+    throw std::runtime_error(fmt::format("{} failed: {}", name, err_str));
+  }
+}
+
 const char* dtype_to_cuda_type(const Dtype& dtype) {
   switch (dtype) {
     case bool_:
