@@ -320,7 +320,7 @@ void RMSNormVJP::eval_gpu(
               constexpr int N_READS = 4;
               auto kernel = cu::rms_norm_vjp<
                   DataType,
-                  has_w_constant(),
+                  has_w_constant.value,
                   block_dim(),
                   N_READS>;
               kernel<<<n_rows, block_dim(), 0, stream>>>(
