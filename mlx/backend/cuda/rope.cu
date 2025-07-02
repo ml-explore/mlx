@@ -315,7 +315,8 @@ void RoPE::eval_gpu(
         dispatch_bool(forward_, [&](auto forward) {
           using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
           if (single && !with_freqs) {
-            auto kernel = cu::rope_single<DataType, traditional(), forward()>;
+            auto kernel =
+                cu::rope_single<DataType, traditional.value, forward.value>;
             uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
             auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
             kernel<<<grid, block, 0, stream>>>(
@@ -327,8 +328,8 @@ void RoPE::eval_gpu(
                 mat_size,
                 dims);
           } else if (single) {
-            auto kernel =
-                cu::rope_single_freqs<DataType, traditional(), forward()>;
+            auto kernel = cu::
+                rope_single_freqs<DataType, traditional.value, forward.value>;
             uint2 dims = make_uint2(dims_ / 2, in.size() / mat_size);
             auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
             kernel<<<grid, block, 0, stream>>>(
@@ -341,7 +342,8 @@ void RoPE::eval_gpu(
                 dims,
                 inputs[2].strides(0));
           } else if (with_freqs) {
-            auto kernel = cu::rope_freqs<DataType, traditional(), forward()>;
+            auto kernel =
+                cu::rope_freqs<DataType, traditional.value, forward.value>;
             uint3 dims =
                 make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
             dims.z = (dims.z + 3) / 4;
@@ -359,7 +361,7 @@ void RoPE::eval_gpu(
                 dims,
                 inputs[2].strides(0));
           } else {
-            auto kernel = cu::rope<DataType, traditional(), forward()>;
+            auto kernel = cu::rope<DataType, traditional.value, forward.value>;
             uint3 dims =
                 make_uint3(dims_ / 2, in.shape(-2), in.size() / mat_size);
             dims.z = (dims.z + 3) / 4;

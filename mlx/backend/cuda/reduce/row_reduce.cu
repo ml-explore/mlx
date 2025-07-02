@@ -319,10 +319,10 @@ void row_reduce_looped(
                 T,
                 U,
                 OP,
-                reduce_ndim(),
-                threads_constant(),
+                reduce_ndim.value,
+                threads_constant.value,
                 N_READS>;
-            block.x = threads_constant();
+            block.x = threads_constant.value;
           });
         });
 

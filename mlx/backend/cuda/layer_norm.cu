@@ -364,7 +364,7 @@ void LayerNormVJP::eval_gpu(
               using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
               auto kernel = cu::layer_norm_vjp<
                   DataType,
-                  has_w_constant(),
+                  has_w_constant.value,
                   block_dim(),
                   N_READS>;
               kernel<<<n_rows, block_dim(), 0, stream>>>(
