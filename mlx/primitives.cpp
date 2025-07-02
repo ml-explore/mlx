@@ -5091,20 +5091,46 @@ std::vector<array> GatherMM::vjp(
       vjps.push_back(reshape(gacc, base_shape, stream()));
 
     } else if (arg == 1) {
-      // (M X K).T * M X N -> K X N
-      auto base = zeros_like(primals[1], stream());
-      auto at = swapaxes(primals[0], -1, -2, stream());
+      if (sorted) {
+        // Make the segments based on the rhs_indices
+        int num_segments = primals[1].size() / K / N;
+        auto segments = zeros({num_segments}, uint32, stream());
+        segments = scatter_add_axis(
+            segments, rhs_indices, array(M, uint32), 0, stream());
+        segments = cumsum(segments, 0, false, true, stream());
+        segments =
+            concatenate({array({0}, {1}, uint32), segments}, 0, stream());
+        segments = as_strided(segments, {num_segments, 2}, {1, 1}, 0, stream());
 
-      auto base_shape = base.shape();
-      base = reshape(base, {-1, K, N}, stream());
+        // Reshape and transpose the inputs such that they are a big segmented
+        // matmul.
+        auto a = reshape(primals[0], {-1, K}, stream());
+        auto c = swapaxes(reshape(cotan, {-1, N}, stream()), 0, 1, stream());
 
-      // g : (out_batch_shape) + (K, N)
-      auto g =
-          gather_mm(at, cotan, lhs_indices, std::nullopt, sorted, stream());
-      g = expand_dims(g, -3, stream());
-      auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
+        // Calculate the gradient.
+        // Since the gather mm is often used as x @ w.T we will calculate the
+        // gradient as c @ a and transpose it before returning it which should
+        // save a copy in that case.
+        auto g = segmented_mm(c, a, segments, stream());
+        g = swapaxes(g, 1, 2, stream());
 
-      vjps.push_back(reshape(gacc, base_shape, stream()));
+        vjps.push_back(reshape(g, primals[1].shape(), stream()));
+      } else {
+        // (M X K).T * M X N -> K X N
+        auto base = zeros_like(primals[1], stream());
+        auto at = swapaxes(primals[0], -1, -2, stream());
+
+        auto base_shape = base.shape();
+        base = reshape(base, {-1, K, N}, stream());
+
+        // g : (out_batch_shape) + (K, N)
+        auto g =
+            gather_mm(at, cotan, lhs_indices, std::nullopt, sorted, stream());
+        g = expand_dims(g, -3, stream());
+        auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
+
+        vjps.push_back(reshape(gacc, base_shape, stream()));
+      }
     } else {
       throw std::invalid_argument(
           "[GatherMM] Cannot calculate VJP with respect to indices.");

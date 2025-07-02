@@ -4678,6 +4678,7 @@ array segmented_mm(
 
   a = astype(a, out_type, s);
   b = astype(b, out_type, s);
+  segments = astype(segments, uint32, s);
 
   Shape out_shape = segments.shape();
   out_shape.pop_back();

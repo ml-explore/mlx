@@ -19,7 +19,7 @@ template <
 [[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void segmented_mm(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
-    const device int32_t* segments [[buffer(2)]],
+    const device uint32_t* segments [[buffer(2)]],
     device T* C [[buffer(3)]],
     const constant GEMMParams* params [[buffer(4)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -68,7 +68,7 @@ template <
   C += c_row_long * params->ldd + c_col_long;
 
   // Move the pointers to the start of the segment
-  int32_t k_start, k_end;
+  uint32_t k_start, k_end;
   if (segments_contiguous) {
     k_start = segments[2 * tid.z];
     k_end = segments[2 * tid.z + 1];
@@ -92,7 +92,7 @@ template <
 
   // Matrix level alignment so only check K
   if (align_M && align_N) {
-    int k = k_start + BK;
+    uint32_t k = k_start + BK;
     for (; k <= k_end; k += BK) {
       threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -109,7 +109,7 @@ template <
       loader_a.next();
       loader_b.next();
     }
-    short k_remain = k_end - (k - BK);
+    short k_remain = BK - short(k - k_end);
     const short2 tile_dims_A =
         transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
     const short2 tile_dims_B =
@@ -125,7 +125,7 @@ template <
   } else {
     // Tile aligned do the same as above
     if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
-      int k = k_start + BK;
+      uint32_t k = k_start + BK;
       for (; k <= k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -142,7 +142,7 @@ template <
         loader_a.next();
         loader_b.next();
       }
-      short k_remain = k_end - (k - BK);
+      short k_remain = BK - short(k - k_end);
       const short2 tile_dims_A =
           transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
       const short2 tile_dims_B =
@@ -159,7 +159,7 @@ template <
 
     // Tile partially aligned check rows
     else if (align_N || tgp_bn == BN) {
-      int k = k_start + BK;
+      uint32_t k = k_start + BK;
       for (; k <= k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -177,7 +177,7 @@ template <
         loader_a.next();
         loader_b.next();
       }
-      short k_remain = k_end - (k - BK);
+      short k_remain = BK - short(k - k_end);
       const short2 tile_dims_A =
           transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
       const short2 tile_dims_B =
@@ -194,7 +194,7 @@ template <
 
     // Tile partially aligned check cols
     else if (align_M || tgp_bm == BM) {
-      int k = k_start + BK;
+      uint32_t k = k_start + BK;
       for (; k <= k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -212,7 +212,7 @@ template <
         loader_a.next();
         loader_b.next();
       }
-      short k_remain = k_end - (k - BK);
+      short k_remain = BK - short(k - k_end);
       const short2 tile_dims_A =
           transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
       const short2 tile_dims_B =
@@ -229,7 +229,7 @@ template <
 
     // Nothing aligned so check both rows and cols
     else {
-      int k = k_start + BK;
+      uint32_t k = k_start + BK;
       for (; k <= k_end; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -248,7 +248,7 @@ template <
         loader_a.next();
         loader_b.next();
       }
-      short k_remain = k_end - (k - BK);
+      short k_remain = BK - short(k - k_end);
       const short2 tile_dims_A =
           transpose_a ? short2(tgp_bm, k_remain) : short2(k_remain, tgp_bm);
       const short2 tile_dims_B =
