@@ -135,8 +135,6 @@ constexpr const char* g_jit_includes = R"(
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
-
-#define inf cuda::std::numeric_limits<float>::infinity()
 )";
 
 void Compiled::eval_gpu(
