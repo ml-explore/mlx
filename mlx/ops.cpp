@@ -4658,6 +4658,13 @@ array segmented_mm(
     throw std::invalid_argument("[segmented_mm] Batched matmul not supported");
   }
 
+  if (segments.ndim() < 1 || segments.shape().back() != 2) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] The segments should have shape (..., 2) but "
+        << segments.shape() << " was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
   // Type promotion
   auto out_type = result_type(a, b);
   if (!issubdtype(out_type, floating)) {
@@ -4673,6 +4680,7 @@ array segmented_mm(
   b = astype(b, out_type, s);
 
   Shape out_shape = segments.shape();
+  out_shape.pop_back();
   out_shape.push_back(a.shape(0));
   out_shape.push_back(b.shape(1));
 
