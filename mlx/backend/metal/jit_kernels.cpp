@@ -652,6 +652,43 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_steel_gemm_segmented_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::gemm(),
+        metal::steel_gemm_segmented(),
+        get_template_definition(
+            lib_name,
+            "segmented_mm",
+            get_type_string(out.dtype()),
+            bm,
+            bn,
+            bk,
+            wm,
+            wn,
+            transpose_a,
+            transpose_b));
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,

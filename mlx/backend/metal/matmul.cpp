@@ -1962,7 +1962,7 @@ void segmented_mm(
 
   // Get and set the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_steel_gemm_gather_kernel(
+  auto kernel = get_steel_gemm_segmented_kernel(
       d,
       base_name,
       hash_name,
@@ -1974,8 +1974,7 @@ void segmented_mm(
       bn,
       bk,
       wm,
-      wn,
-      false);
+      wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
