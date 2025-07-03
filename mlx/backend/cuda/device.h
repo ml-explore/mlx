@@ -93,6 +93,7 @@ class CommandEncoder {
   void insert_graph_dependencies(GraphNode node);
   void insert_graph_dependencies(std::vector<GraphNode> nodes);
 
+  Device& device_;
   CudaStream stream_;
   cudaGraph_t graph_;
   Worker worker_;
