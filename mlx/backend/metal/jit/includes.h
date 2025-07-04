@@ -34,6 +34,7 @@ const char* steel_gemm_fused();
 const char* steel_gemm_masked();
 const char* steel_gemm_splitk();
 const char* steel_gemm_gather();
+const char* steel_gemm_segmented();
 const char* conv();
 const char* steel_conv();
 const char* steel_conv_general();
