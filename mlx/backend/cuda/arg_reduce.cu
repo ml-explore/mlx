@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/iterators/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/dtype_utils.h"

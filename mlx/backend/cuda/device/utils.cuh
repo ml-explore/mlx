@@ -99,20 +99,20 @@ struct Limits<
     return cuda::std::numeric_limits<T>::infinity();
   }
   static constexpr __host__ __device__ T min() {
-#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
-    return -cuda::std::numeric_limits<T>::infinity();
-#else
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
     return -cuda::std::numeric_limits<float>::infinity();
+#else
+    return -cuda::std::numeric_limits<T>::infinity();
 #endif
   }
   static constexpr __host__ __device__ T finite_max() {
     return cuda::std::numeric_limits<T>::max();
   }
   static constexpr __host__ __device__ T finite_min() {
-#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
-    return cuda::std::numeric_limits<T>::lowest();
-#else
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
     return cuda::std::numeric_limits<float>::lowest();
+#else
+    return cuda::std::numeric_limits<T>::lowest();
 #endif
   }
 };
