@@ -28,6 +28,27 @@ namespace mlx::core::cu {
 using Shape = cuda::std::array<int32_t, MAX_NDIM>;
 using Strides = cuda::std::array<int64_t, MAX_NDIM>;
 
+// Vectorized load/store.
+template <typename T, int N>
+struct alignas(sizeof(T) * N) AlignedVector {
+  T val[N];
+};
+
+template <int N, typename T>
+inline __device__ AlignedVector<T, N> load_vector(
+    const T* ptr,
+    uint32_t offset) {
+  auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+  return from[offset];
+}
+
+template <int N, typename T>
+inline __device__ void
+store_vector(T* ptr, uint32_t offset, const AlignedVector<T, N>& vec) {
+  auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+  to[offset] = vec;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
 ///////////////////////////////////////////////////////////////////////////////
