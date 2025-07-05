@@ -3233,8 +3233,9 @@ std::vector<array> QuantizedMatmul::vjp(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
       if (!dsb) {
-        auto fc = flatten(cotangents[0], 0, -2, stream());
-        auto fx = flatten(primals[0], 0, -2, stream());
+        int ndim = primals[1].ndim();
+        auto fc = flatten(cotangents[0], 0, -ndim, stream());
+        auto fx = flatten(primals[0], 0, -ndim, stream());
         auto dw = transpose_
             ? matmul(swapaxes(fc, -1, -2, stream()), fx, stream())
             : matmul(swapaxes(fx, -1, -2, stream()), fc, stream());
@@ -3388,12 +3389,16 @@ std::vector<array> GatherQMM::vjp(
         vjps.push_back(
             sum(multiply(
                     *dsb,
-                    dequantize(
-                        w,
-                        ones_like(scales, stream()),
-                        zeros_like(biases, stream()),
-                        group_size_,
-                        bits_,
+                    unflatten(
+                        dequantize(
+                            w,
+                            ones_like(scales, stream()),
+                            zeros_like(biases, stream()),
+                            group_size_,
+                            bits_,
+                            stream()),
+                        -1,
+                        {-1, group_size_},
                         stream()),
                     stream()),
                 -1,
