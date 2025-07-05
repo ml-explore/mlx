@@ -3,7 +3,6 @@
 #include <numeric>
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
 
 #include <cooperative_groups.h>
@@ -113,7 +112,7 @@ __global__ void row_reduce_simple(T* in, U* out, size_t n_rows, int size) {
             in + k * size + r * (block.size() * N),
             vals[k]);
         for (int j = 0; j < N; j++) {
-          accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+          accs[k] = op(accs[k], cast_to<U>(vals[k][j]));
         }
       }
     }
@@ -125,7 +124,7 @@ __global__ void row_reduce_simple(T* in, U* out, size_t n_rows, int size) {
             in + k * size + r * (block.size() * N),
             vals[k]);
         for (int j = 0; j < N; j++) {
-          accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+          accs[k] = op(accs[k], cast_to<U>(vals[k][j]));
         }
       }
     }
@@ -138,9 +137,9 @@ __global__ void row_reduce_simple(T* in, U* out, size_t n_rows, int size) {
           in + k * size + final_offset,
           vals[k],
           size,
-          __cast<T, U>(init));
+          cast_to<T>(init));
       for (int j = 0; j < N; j++) {
-        accs[k] = op(accs[k], __cast<U, T>(vals[k][j]));
+        accs[k] = op(accs[k], cast_to<U>(vals[k][j]));
       }
     }
   }
@@ -199,7 +198,7 @@ __global__ void row_reduce_looped(
           in + loop.location() + r * BLOCK_DIM * N_READS,
           vals);
       for (int i = 0; i < N_READS; i++) {
-        total[0] = op(total[0], __cast<U, T>(vals[i]));
+        total[0] = op(total[0], cast_to<U>(vals[i]));
       }
     }
     if (final_offset < args.row_size) {
@@ -209,9 +208,9 @@ __global__ void row_reduce_looped(
           in + loop.location() + final_offset,
           vals,
           args.row_size - final_offset,
-          __cast<T, U>(init));
+          cast_to<T>(init));
       for (int i = 0; i < N_READS; i++) {
-        total[0] = op(total[0], __cast<U, T>(vals[i]));
+        total[0] = op(total[0], cast_to<U>(vals[i]));
       }
     }
     // TODO: Maybe block.sync() here?

@@ -55,22 +55,6 @@ __device__ void atomic_reduce(T* x, T y) {
   }
 }
 
-// TODO: Should make a custom complex type
-template <typename U, typename T>
-inline __device__ U __cast(T x) {
-  return static_cast<U>(x);
-}
-
-template <>
-inline __device__ bool __cast<bool, cuComplex>(cuComplex x) {
-  return x.x != 0 && x.y != 0;
-}
-
-template <>
-inline __device__ cuComplex __cast<cuComplex, bool>(bool x) {
-  return x ? make_cuFloatComplex(1, 1) : make_cuFloatComplex(0, 0);
-}
-
 template <typename T, int N, typename Block, typename Warp, typename Op>
 inline __device__ void
 block_reduce(Block block, Warp warp, T (&vals)[N], T* smem, Op op, T init) {
