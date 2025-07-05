@@ -63,6 +63,7 @@ if(MLX_METAL_JIT)
   make_jit_source(steel/gemm/kernels/steel_gemm_masked kernels/steel/defines.h)
   make_jit_source(steel/gemm/kernels/steel_gemm_gather)
   make_jit_source(steel/gemm/kernels/steel_gemm_splitk)
+  make_jit_source(steel/gemm/kernels/steel_gemm_segmented)
   make_jit_source(
     steel/conv/conv
     kernels/steel/utils.h

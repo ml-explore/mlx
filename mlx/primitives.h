@@ -526,6 +526,16 @@ class GatherMM : public UnaryPrimitive {
   bool right_sorted_;
 };
 
+class SegmentedMM : public UnaryPrimitive {
+ public:
+  explicit SegmentedMM(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_PRINT(SegmentedMM)
+};
+
 class BroadcastAxes : public UnaryPrimitive {
  public:
   explicit BroadcastAxes(Stream stream, std::vector<int> ignore_axes = {})

@@ -6,6 +6,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/backend/cpu/gemm.h"
 #include "mlx/backend/cpu/lapack.h"
 #include "mlx/primitives.h"
 
@@ -49,6 +50,58 @@ inline void mask_matrix(
         }
       }
     }
+  }
+}
+
+template <typename T>
+inline void segmented_mm(
+    const T* a,
+    const T* b,
+    const uint32_t* segments,
+    T* out,
+    bool a_transposed,
+    bool b_transposed,
+    size_t lda,
+    size_t ldb,
+    const Shape& a_shape,
+    const Strides& a_strides,
+    const Shape& b_shape,
+    const Strides& b_strides,
+    size_t num_segments,
+    const Shape& segments_shape,
+    const Strides& segments_strides) {
+  int ndim = a_shape.size();
+  Shape a_copy = a_shape;
+  Shape b_copy = b_shape;
+  int32_t M = a_copy[ndim - 2];
+  int32_t N = b_copy[ndim - 1];
+  for (int i = 0; i < num_segments; i++) {
+    uint32_t k_start =
+        segments[elem_to_loc(2 * i, segments_shape, segments_strides)];
+    uint32_t k_end =
+        segments[elem_to_loc(2 * i + 1, segments_shape, segments_strides)];
+    if (k_end <= k_start) {
+      std::fill_n(out + i * M * N, M * N, T(0));
+      continue;
+    }
+    a_copy[ndim - 1] = k_end - k_start;
+    b_copy[ndim - 2] = k_end - k_start;
+    matmul<T>(
+        a + k_start * a_strides[ndim - 1],
+        b + k_start * b_strides[ndim - 2],
+        out + i * M * N,
+        a_transposed,
+        b_transposed,
+        lda,
+        ldb,
+        N,
+        1.0,
+        0.0,
+        1,
+        a_copy,
+        a_strides,
+        b_copy,
+        b_strides);
   }
 }
 
@@ -435,6 +488,123 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   });
   encoder.add_temporaries(std::move(temps));
+}
+
+void SegmentedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& s = stream();
+  auto& encoder = cpu::get_command_encoder(stream());
+  auto check_transpose = [&s, &encoder](const array& x) {
+    auto stx = x.strides()[x.ndim() - 2];
+    auto sty = x.strides()[x.ndim() - 1];
+    if (stx == x.shape(-1) && sty == 1) {
+      return std::make_tuple(false, stx, x);
+    } else if (stx == 1 && sty == x.shape(-2)) {
+      return std::make_tuple(true, sty, x);
+    } else {
+      array xc(x.shape(), x.dtype(), nullptr, {});
+      copy(x, xc, CopyType::General, s);
+      encoder.add_temporary(xc);
+      int64_t stx = x.shape(-1);
+      return std::make_tuple(false, stx, xc);
+    }
+  };
+
+  auto [a_transposed, lda, a] = check_transpose(inputs[0]);
+  auto [b_transposed, ldb, b] = check_transpose(inputs[1]);
+  auto& segments = inputs[2];
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(segments);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    segments = array::unsafe_weak_copy(segments),
+                    out_ptr = out.data<void>(),
+                    a_transposed = a_transposed,
+                    b_transposed = b_transposed,
+                    lda = lda,
+                    ldb = ldb]() {
+    switch (a.dtype()) {
+      case float64:
+        segmented_mm<double>(
+            a.data<double>(),
+            b.data<double>(),
+            segments.data<uint32_t>(),
+            static_cast<double*>(out_ptr),
+            a_transposed,
+            b_transposed,
+            lda,
+            ldb,
+            a.shape(),
+            a.strides(),
+            b.shape(),
+            b.strides(),
+            segments.size() / 2,
+            segments.shape(),
+            segments.strides());
+        break;
+      case float32:
+        segmented_mm<float>(
+            a.data<float>(),
+            b.data<float>(),
+            segments.data<uint32_t>(),
+            static_cast<float*>(out_ptr),
+            a_transposed,
+            b_transposed,
+            lda,
+            ldb,
+            a.shape(),
+            a.strides(),
+            b.shape(),
+            b.strides(),
+            segments.size() / 2,
+            segments.shape(),
+            segments.strides());
+        break;
+      case float16:
+        segmented_mm<float16_t>(
+            a.data<float16_t>(),
+            b.data<float16_t>(),
+            segments.data<uint32_t>(),
+            static_cast<float16_t*>(out_ptr),
+            a_transposed,
+            b_transposed,
+            lda,
+            ldb,
+            a.shape(),
+            a.strides(),
+            b.shape(),
+            b.strides(),
+            segments.size() / 2,
+            segments.shape(),
+            segments.strides());
+        break;
+      case bfloat16:
+        segmented_mm<bfloat16_t>(
+            a.data<bfloat16_t>(),
+            b.data<bfloat16_t>(),
+            segments.data<uint32_t>(),
+            static_cast<bfloat16_t*>(out_ptr),
+            a_transposed,
+            b_transposed,
+            lda,
+            ldb,
+            a.shape(),
+            a.strides(),
+            b.shape(),
+            b.strides(),
+            segments.size() / 2,
+            segments.shape(),
+            segments.strides());
+        break;
+      default:
+        throw std::invalid_argument(
+            "Segmented mm supports only real float types.");
+    }
+  });
 }
 
 } // namespace mlx::core
