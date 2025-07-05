@@ -81,6 +81,7 @@ inline void segmented_mm(
     uint32_t k_end =
         segments[elem_to_loc(2 * i + 1, segments_shape, segments_strides)];
     if (k_end <= k_start) {
+      std::fill_n(out + i * M * N, M * N, T(0));
       continue;
     }
     a_copy[ndim - 1] = k_end - k_start;
