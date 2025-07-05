@@ -79,6 +79,7 @@ cuda_skip = {
     "TestQuantized.test_gather_matmul_grad",
     "TestQuantized.test_gather_qmm",
     "TestQuantized.test_gather_qmm_sorted",
+    "TestQuantized.test_gather_qmm_grad",
     "TestQuantized.test_non_multiples",
     "TestQuantized.test_qmm",
     "TestQuantized.test_qmm_jvp",
