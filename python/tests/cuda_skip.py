@@ -8,6 +8,9 @@ cuda_skip = {
     # Gather matmul NYI
     "TestBlas.test_gather_matmul",
     "TestBlas.test_gather_matmul_grad",
+    "TestBlas.test_gather_mm_sorted",
+    # Segmented matmul NYI
+    "TestBlas.test_segmented_mm",
     # Scan NYI
     "TestArray.test_api",
     "TestAutograd.test_cumprod_grad",
