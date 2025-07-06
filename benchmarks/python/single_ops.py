@@ -50,11 +50,13 @@ def time_maximum():
     mx.eval(a, b)
     time_fn(mx.maximum, a, b)
 
+
 def time_max():
     a = mx.random.uniform(shape=(32, 1024, 1024))
-    a[1,1] = mx.nan
+    a[1, 1] = mx.nan
     mx.eval(a)
     time_fn(mx.max, a, 0)
+
 
 def time_negative():
     a = mx.random.uniform(shape=(10000, 1000))

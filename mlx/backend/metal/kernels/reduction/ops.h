@@ -187,10 +187,10 @@ struct Max {
 
   template <typename T>
   T simd_reduce_impl(T val) {
-    if(simd_any(val != val)) {
+    if (simd_any(val != val)) {
       return static_cast<T>(NAN);
     }
-      return simd_max(val);
+    return simd_max(val);
   }
 
   static constexpr constant U init = Limits<U>::min;
@@ -208,21 +208,19 @@ struct Max {
 
   template <typename T>
   metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T a, T b) {
-    if(metal::isnan(a) || metal::isnan(b)) {
+    if (metal::isnan(a) || metal::isnan(b)) {
       return static_cast<T>(NAN);
     } else {
       return a > b ? a : b;
     }
   }
 
-
   template <>
   complex64_t operator()(complex64_t a, complex64_t b) {
-    if (metal::isnan(a.real) || metal::isnan(a.imag) || metal::isnan(b.real) || metal::isnan(b.imag)) {
+    if (metal::isnan(a.real) || metal::isnan(a.imag) || metal::isnan(b.real) ||
+        metal::isnan(b.imag)) {
       return static_cast<complex64_t>(NAN);
-    }     
+    }
     return a > b ? a : b;
-
   }
-
 };

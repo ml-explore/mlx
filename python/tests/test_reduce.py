@@ -168,7 +168,7 @@ class TestReduce(mlx_tests.MLXTestCase):
         for dtype in dtypes:
             with self.subTest(dtype=dtype):
                 x = (mx.random.normal((4, 4))).astype(getattr(mx, dtype))
-                indices = mx.random.randint(0, 4, shape=(6,)).reshape(3,2)
+                indices = mx.random.randint(0, 4, shape=(6,)).reshape(3, 2)
                 for idx in indices:
                     x[*idx] = mx.nan
                 x_np = np.array(x)
@@ -178,6 +178,7 @@ class TestReduce(mlx_tests.MLXTestCase):
                         out = getattr(mx, op)(x, axis=axis)
                         ref = getattr(np, op)(x_np, axis=axis)
                         self.assertTrue(np.array_equal(out, ref, equal_nan=True))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

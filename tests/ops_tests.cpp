@@ -1027,7 +1027,6 @@ TEST_CASE("test reduction ops") {
 
     x = array({1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f});
     CHECK(isnan(max(x).item<float>()));
-
   }
 
   // Test logsumexp
