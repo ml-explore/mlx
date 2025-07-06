@@ -1025,7 +1025,7 @@ TEST_CASE("test reduction ops") {
     CHECK(array_equal(min(x, 1), array({true, false})).item<bool>());
     CHECK(array_equal(min(x, 0), array({false, true, false})).item<bool>());
 
-    x = array({1.0f, NAN, 3.0f});
+    x = array({1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f});
     CHECK(isnan(max(x).item<float>()));
 
   }

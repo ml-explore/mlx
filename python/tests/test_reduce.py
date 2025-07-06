@@ -153,6 +153,31 @@ class TestReduce(mlx_tests.MLXTestCase):
         x = x.transpose(1, 0, 2, 3, 4, 5, 6, 7, 8, 9)
         check(x, (1, 3, 5, 7, 9))
 
+    def test_nanpropagation(self):
+        dtypes = [
+            "uint8",
+            "uint16",
+            "uint32",
+            "int8",
+            "int16",
+            "int32",
+            "float16",
+            "float32",
+        ]
+
+        for dtype in dtypes:
+            with self.subTest(dtype=dtype):
+                x = (mx.random.normal((4, 4))).astype(getattr(mx, dtype))
+                indices = mx.random.randint(0, 4, shape=(6,)).reshape(3,2)
+                for idx in indices:
+                    x[*idx] = mx.nan
+                x_np = np.array(x)
+
+                for op in ["max"]:
+                    for axis in [0, 1]:
+                        out = getattr(mx, op)(x, axis=axis)
+                        ref = getattr(np, op)(x_np, axis=axis)
+                        self.assertTrue(np.array_equal(out, ref, equal_nan=True))
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
