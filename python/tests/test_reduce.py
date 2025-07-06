@@ -179,6 +179,37 @@ class TestReduce(mlx_tests.MLXTestCase):
                         ref = getattr(np, op)(x_np, axis=axis)
                         self.assertTrue(np.array_equal(out, ref, equal_nan=True))
 
+    def test_nanpropagation_complex64(self):
+        complex_array_1 = mx.array(
+            [1 + 1j, 2 + 2j, 3 + 3j, mx.nan + 4j], dtype=mx.complex64
+        ).reshape(2, 2)
+        complex_array_2 = mx.array(
+            [1 + 1j, 2 + 2j, 3 + mx.nan * 1j, 4 + 4j], dtype=mx.complex64
+        ).reshape(2, 2)
+        complex_array_3 = mx.array(
+            [1 + 1j, 2 + mx.nan * 1j, 3 + 3j, 4 + 4j], dtype=mx.complex64
+        ).reshape(2, 2)
+        complex_array_4 = mx.array(
+            [mx.nan + 1j, 2 + 2j, 3 + 3j, 4 + 4j], dtype=mx.complex64
+        ).reshape(2, 2)
+
+        np_arrays = [
+            np.array(complex_array_1),
+            np.array(complex_array_2),
+            np.array(complex_array_3),
+            np.array(complex_array_4),
+        ]
+
+        for mx_arr, np_arr in zip(
+            [complex_array_1, complex_array_2, complex_array_3, complex_array_4],
+            np_arrays,
+        ):
+            for axis in [0, 1]:
+                for op in ["max"]:
+                    out = getattr(mx, op)(mx_arr, axis=axis)
+                    ref = getattr(np, op)(np_arr, axis=axis)
+                    self.assertTrue(np.array_equal(out, ref, equal_nan=True))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

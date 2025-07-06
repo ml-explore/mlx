@@ -217,10 +217,19 @@ struct Max {
 
   template <>
   complex64_t operator()(complex64_t a, complex64_t b) {
-    if (metal::isnan(a.real) || metal::isnan(a.imag) || metal::isnan(b.real) ||
-        metal::isnan(b.imag)) {
-      return static_cast<complex64_t>(NAN);
+    bool real_is_nan = metal::isnan(a.real) || metal::isnan(b.real);
+    bool imag_is_nan = metal::isnan(a.imag) || metal::isnan(b.imag);
+
+    if (!real_is_nan && !imag_is_nan) {
+      return a > b ? a : b;
+    } else if (real_is_nan && !imag_is_nan) {
+      return complex64_t(
+          static_cast<float>(NAN), a.imag > b.imag ? a.imag : b.imag);
+    } else if (!real_is_nan && imag_is_nan) {
+      return complex64_t(
+          a.real > b.real ? a.real : b.real, static_cast<float>(NAN));
+    } else {
+      return complex64_t(static_cast<float>(NAN), static_cast<float>(NAN));
     }
-    return a > b ? a : b;
   }
 };
