@@ -492,6 +492,16 @@ workflows:
             branches:
               ignore: /.*/
           upload-docs: true
+      - build_linux_release:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              extra_env: ["PYPI_RELEASE=1"]
 
   prb:
     when:

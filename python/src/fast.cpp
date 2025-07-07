@@ -175,11 +175,12 @@ void init_fast(nb::module_& parent_module) {
         * `Grouped Query Attention <https://arxiv.org/abs/2305.13245>`_
         * `Multi-Query Attention <https://arxiv.org/abs/1911.02150>`_
 
-        Note: The softmax operation is performed in ``float32`` regardless of
-        the input precision.
+        .. note::
 
-        Note: For Grouped Query Attention and Multi-Query Attention, the ``k``
-        and ``v`` inputs should not be pre-tiled to match ``q``.
+          * The softmax operation is performed in ``float32`` regardless of
+            the input precision.
+          * For Grouped Query Attention and Multi-Query Attention, the ``k``
+            and ``v`` inputs should not be pre-tiled to match ``q``.
 
         In the following the dimensions are given by:
 
@@ -195,13 +196,30 @@ void init_fast(nb::module_& parent_module) {
             k (array): Keys with shape ``[B, N_kv, T_kv, D]``.
             v (array): Values with shape ``[B, N_kv, T_kv, D]``.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
-            mask (Union[None, str, array], optional): A causal, boolean or additive
-               mask to apply to the query-key scores. The mask can have at most 4
-               dimensions and must be broadcast-compatible with the shape
-               ``[B, N, T_q, T_kv]``. If an additive mask is given its type must
-               promote to the promoted type of ``q``, ``k``, and ``v``.
+            mask (Union[None, str, array], optional): The mask to apply to the
+               query-key scores. The mask can be an array or a string indicating
+               the mask type. The only supported string type is ``"causal"``. If
+               the mask is an array it can be a boolean or additive mask. The mask
+               can have at most 4 dimensions and must be broadcast-compatible with
+               the shape ``[B, N, T_q, T_kv]``. If an additive mask is given its
+               type must promote to the promoted type of ``q``, ``k``, and ``v``.
         Returns:
             array: The output array.
+
+        Example:
+
+          .. code-block:: python
+
+            B = 2
+            N_q = N_kv = 32
+            T_q = T_kv = 1000
+            D = 128
+
+            q = mx.random.normal(shape=(B, N_q, T_q, D))
+            k = mx.random.normal(shape=(B, N_kv, T_kv, D))
+            v = mx.random.normal(shape=(B, N_kv, T_kv, D))
+            scale = D ** -0.5
+            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
       )pbdoc");
 
   m.def(
