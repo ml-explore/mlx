@@ -17,35 +17,106 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(a[0], b[0]);
+  int remaining = size - index * N_READS;
+  if (remaining <= 0) {
+    return;
+  }
+
+  if (remaining < N_READS) {
+    for (int i = 0; i < remaining; ++i) {
+      IdxT offset = index * N_READS + i;
+      out[offset] = Op{}(a[0], b[0]);
+    }
+  } else {
+    AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec.val[i] = Op{}(a[0], b[0]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(a[0], b[index]);
+  int remaining = size - index * N_READS;
+  if (remaining <= 0) {
+    return;
+  }
+
+  if (remaining < N_READS) {
+    for (int i = 0; i < remaining; ++i) {
+      IdxT offset = index * N_READS + i;
+      out[offset] = Op{}(a[0], b[offset]);
+    }
+  } else {
+    auto b_vec = load_vector<N_READS>(b, index);
+
+    AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec.val[i] = Op{}(a[0], b_vec.val[i]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(a[index], b[0]);
+  int remaining = size - index * N_READS;
+  if (remaining <= 0) {
+    return;
+  }
+
+  if (remaining < N_READS) {
+    for (int i = 0; i < remaining; ++i) {
+      IdxT offset = index * N_READS + i;
+      out[offset] = Op{}(a[offset], b[0]);
+    }
+  } else {
+    auto a_vec = load_vector<N_READS>(a, index);
+
+    AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec.val[i] = Op{}(a_vec.val[i], b[0]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_vv(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(a[index], b[index]);
+  int remaining = size - index * N_READS;
+  if (remaining <= 0) {
+    return;
+  }
+
+  if (remaining < N_READS) {
+    for (int i = 0; i < remaining; ++i) {
+      IdxT offset = index * N_READS + i;
+      out[offset] = Op{}(a[offset], b[offset]);
+    }
+  } else {
+    auto a_vec = load_vector<N_READS>(a, index);
+    auto b_vec = load_vector<N_READS>(b, index);
+
+    AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec.val[i] = Op{}(a_vec.val[i], b_vec.val[i]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
@@ -198,16 +269,23 @@ void binary_op_gpu_inplace(
         } else {
           dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
             using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
-            auto kernel = cu::binary_ss<Op, InType, OutType, IdxT>;
+            // TODO: Choose optimized value based on type size.
+            constexpr int N_READS = 4;
+            auto kernel = cu::binary_ss<Op, InType, OutType, IdxT, N_READS>;
             if (bopt == BinaryOpType::ScalarVector) {
-              kernel = cu::binary_sv<Op, InType, OutType, IdxT>;
+              kernel = cu::binary_sv<Op, InType, OutType, IdxT, N_READS>;
             } else if (bopt == BinaryOpType::VectorScalar) {
-              kernel = cu::binary_vs<Op, InType, OutType, IdxT>;
+              kernel = cu::binary_vs<Op, InType, OutType, IdxT, N_READS>;
             } else if (bopt == BinaryOpType::VectorVector) {
-              kernel = cu::binary_vv<Op, InType, OutType, IdxT>;
+              kernel = cu::binary_vv<Op, InType, OutType, IdxT, N_READS>;
             }
             auto [num_blocks, block_dims] = get_launch_args(
-                kernel, out.data_size(), out.shape(), out.strides(), large());
+                kernel,
+                out.data_size(),
+                out.shape(),
+                out.strides(),
+                large(),
+                N_READS);
             encoder.add_kernel_node(
                 kernel,
                 num_blocks,
