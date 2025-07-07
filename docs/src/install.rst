@@ -88,20 +88,20 @@ Then simply build and install MLX using pip:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install .
+  pip install .
 
 For developing, install the package with development dependencies, and use an
 editable install:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e ".[dev]"
+  pip install -e ".[dev]"
 
 Once the development dependencies are installed, you can build faster with:
 
 .. code-block:: shell
 
- CMAKE_BUILD_PARALLEL_LEVEL=8 python setup.py build_ext --inplace
+ python setup.py build_ext --inplace
 
 Run the tests with:
 
@@ -262,7 +262,7 @@ When building either the Python or C++ APIs make sure to pass the cmake flag
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL=8 CMAKE_ARGS="-DMLX_BUILD_CUDA=ON" pip install -e ".[dev]"
+  CMAKE_ARGS="-DMLX_BUILD_CUDA=ON" pip install -e ".[dev]"
 
 To build the C++ package run:
 

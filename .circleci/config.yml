@@ -41,7 +41,7 @@ jobs:
             pip install --upgrade pip
             pip install --upgrade cmake
             pip install -r docs/requirements.txt
-            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install . -v
+            pip install . -v
       - when:
           condition:
             not: << parameters.upload-docs >>
@@ -97,10 +97,8 @@ jobs:
           name: Install Python package
           command: |
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py build_ext --inplace
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python3 setup.py develop
       - run:
           name: Generate package stubs
@@ -157,8 +155,7 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
-            CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
+            DEBUG=1 CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
               pip install -e . -v
       - run:
           name: Generate package stubs
@@ -208,8 +205,7 @@ jobs:
           name: Run Python tests with JIT
           command: |
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
-              CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
+            CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
               pip install -e . -v
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
               METAL_DEBUG_ERROR_MODE=0 \
@@ -228,8 +224,7 @@ jobs:
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
             python -m venv env
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
-              CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
+            CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               pip install -e ".[dev]"
       - run:
           name: Run Python tests
@@ -278,7 +273,6 @@ jobs:
           command: |
             source env/bin/activate
             env -u MACOSX_DEPLOYMENT_TARGET DEV_RELEASE=1 \
-              CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
               pip install . -v
       - run:
           name: Generate package stubs
@@ -290,9 +284,7 @@ jobs:
           name: Build Python package
           command: |
             source env/bin/activate
-            << parameters.build_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
-              python -m build -w
+            << parameters.build_env >> python -m build -w
       - when:
           condition: << parameters.build_env >>
           steps:
@@ -340,14 +332,10 @@ jobs:
             pip install patchelf
             pip install build
             pip install twine
-            << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
-              pip install . -v
+            << parameters.extra_env >> pip install . -v
             pip install typing_extensions
             python setup.py generate_stubs
-            << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
-              python -m build --wheel
+            << parameters.extra_env >> python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
       - run:
@@ -383,12 +371,10 @@ jobs:
             pip install build
             pip install twine
             << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               pip install ".[dev]" -v
             python setup.py generate_stubs
             << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               python -m build --wheel
             bash python/scripts/repair_cuda.sh
