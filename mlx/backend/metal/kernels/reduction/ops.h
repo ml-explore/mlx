@@ -186,7 +186,12 @@ struct Max {
   DEFINE_SIMD_REDUCE()
 
   template <typename T>
-  T simd_reduce_impl(T val) {
+  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(T val) {
+    return simd_max(val);
+  }
+
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(T val) {
     if (simd_any(val != val)) {
       return static_cast<T>(NAN);
     }
