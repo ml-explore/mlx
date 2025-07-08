@@ -34,10 +34,9 @@ ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
     auto b_vec = load_vector<N_READS>(b, index);
     auto c_vec = load_vector<N_READS>(c, index);
 
-    AlignedVector<Out, N_READS> out_vec;
+    AlignedVector<T, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = CastOp<In, Out>{}(a_vec.val[i]);
       out_vec.val[i] = Op{}(a_vec.val[i], b_vec.val[i], c_vec.val[i]);
     }
 
@@ -171,7 +170,7 @@ void ternary_op_gpu_inplace(
           });
     } else {
       dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
-        using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+        using IdxT = std::conditional_t<large(), int64_t, int32_t>;
         // TODO: Choose optimized value based on type size.
         constexpr int N_READS = 4;
         auto kernel = cu::ternary_v<Op, DType, IdxT, N_READS>;

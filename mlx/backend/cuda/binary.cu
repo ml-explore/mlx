@@ -268,7 +268,7 @@ void binary_op_gpu_inplace(
               });
         } else {
           dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
-            using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
             auto kernel = cu::binary_ss<Op, InType, OutType, IdxT, N_READS>;

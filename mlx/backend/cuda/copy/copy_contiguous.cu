@@ -71,10 +71,10 @@ void copy_contiguous(
     int64_t out_offset) {
   dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
     dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
-      dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
+      dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
         using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
         using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
-        using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+        using IdxT = std::conditional_t<large(), int64_t, int32_t>;
         // TODO: Choose optimized value based on type size.
         constexpr int N_READS = 4;
         auto kernel = cu::copy_s<InType, OutType, IdxT, N_READS>;
