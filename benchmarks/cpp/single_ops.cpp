@@ -193,8 +193,8 @@ void time_reductions() {
   auto argmin_along_1 = [&a]() { return mx::argmin(a, 1, false); };
   TIME(argmin_along_1);
 
-  auto indices = mlx::core::array({1});
-  auto updates = mlx::core::reshape(mlx::core::array({NAN}), {1, 1, 1});
+  auto indices = mx::array({1});
+  auto updates = mx::reshape(mx::array({NAN}), {1, 1, 1});
   std::vector<int> axes{0};
   auto b = scatter(a, {indices}, updates, axes);
   mx::eval(b);
