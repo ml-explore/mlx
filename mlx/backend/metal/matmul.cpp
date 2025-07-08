@@ -1864,4 +1864,166 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   gather_mm(a, b, lhs_indices, rhs_indices, out, M, N, K, d, s);
 }
 
+void segmented_mm(
+    const array& a_,
+    const array& b_,
+    const array& segments_,
+    array& out,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  auto check_segments_layout = [&d, &s](const array& x) {
+    // Contiguous so return early
+    if (x.flags().row_contiguous) {
+      return std::make_tuple(true, x);
+    }
+
+    bool rc = true;
+    for (int i = 0; i < x.ndim() - 2; i++) {
+      rc &=
+          (x.strides(i + 1) * x.shape(i) == x.strides(i)) || (x.shape(i) == 1);
+    }
+    rc &= x.strides(x.ndim() - 1) == 1;
+    if (x.ndim() > 1) {
+      rc &= x.strides(x.ndim() - 2) == 1;
+    }
+
+    if (rc) {
+      return std::make_tuple(false, x);
+    }
+
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    d.add_temporary(x_copy, s.index);
+    return std::make_tuple(true, x_copy);
+  };
+
+  // Copy if needed
+  std::vector<array> copies;
+  auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
+  auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
+  auto [segments_contiguous, segments] = check_segments_layout(segments_);
+  d.add_temporaries(std::move(copies), s.index);
+
+  // Determine dispatch kernel
+  int bm = 64, bn = 64, bk = 16;
+  int wm = 2, wn = 2;
+  size_t batch_size_out = out.size() / M / N;
+
+  char devc = d.get_architecture().back();
+  GEMM_TPARAM_MACRO(devc)
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(128);
+  concatenate(
+      base_name,
+      "steel_segmented_mm_",
+      transpose_a ? 't' : 'n',
+      transpose_b ? 't' : 'n',
+      "_",
+      type_to_name(a),
+      "_",
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&segments_contiguous, MTL::DataType::DataTypeBool, 199},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_segments_contiguous_",
+      segments_contiguous ? 't' : 'n',
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_segmented_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      out,
+      transpose_a,
+      transpose_b,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Prepare the matmul params
+  steel::GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ static_cast<int>(lda),
+      /* const int ldb = */ static_cast<int>(ldb),
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */ 0,
+      /* const int64_t batch_stride_b = */ 0,
+      /* const int64_t batch_stride_d = */ M * N,
+      /* const int swizzle_log = */ 0,
+      /* const int gemm_k_iterations_aligned = */ 0,
+      /* const int batch_ndim = */ 0};
+
+  // Prepare the grid
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims =
+      MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(segments, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(params, 4);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& segments = inputs[2];
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // Extract shapes from inputs.
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  segmented_mm(a, b, segments, out, M, N, K, d, s);
+}
+
 } // namespace mlx::core

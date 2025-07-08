@@ -575,9 +575,17 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 2);
 
   // Set source info
-  compute_encoder.set_vector_bytes(remove_index(idx.shape(), axis_), 3);
-  compute_encoder.set_vector_bytes(remove_index(upd.strides(), axis_), 4);
-  compute_encoder.set_vector_bytes(remove_index(idx.strides(), axis_), 5);
+  if (ndim > 1) {
+    compute_encoder.set_vector_bytes(remove_index(idx.shape(), axis_), 3);
+    compute_encoder.set_vector_bytes(remove_index(upd.strides(), axis_), 4);
+    compute_encoder.set_vector_bytes(remove_index(idx.strides(), axis_), 5);
+  } else {
+    // The following will be ignored in the kernel but we still have to set
+    // some value so that metal validation passes.
+    compute_encoder.set_vector_bytes(idx.shape(), 3);
+    compute_encoder.set_vector_bytes(upd.strides(), 4);
+    compute_encoder.set_vector_bytes(idx.strides(), 5);
+  }
   compute_encoder.set_bytes(ndim - 1, 6);
   compute_encoder.set_bytes(axis_, 7);
   compute_encoder.set_bytes(out.shape(axis_), 8);

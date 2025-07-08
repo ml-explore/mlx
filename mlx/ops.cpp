@@ -4649,6 +4649,54 @@ array gather_mm(
   return axes.empty() ? out : squeeze(out, axes, s);
 }
 
+array segmented_mm(
+    array a,
+    array b,
+    array segments,
+    StreamOrDevice s /* = {} */) {
+  if (a.ndim() != 2 || b.ndim() != 2) {
+    throw std::invalid_argument("[segmented_mm] Batched matmul not supported");
+  }
+
+  if (segments.ndim() < 1 || segments.shape().back() != 2) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] The segments should have shape (..., 2) but "
+        << segments.shape() << " was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type(a, b);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (!issubdtype(segments.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[segmented_mm] Got segments with invalid dtype. Segments must be integral.");
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  segments = astype(segments, uint32, s);
+
+  Shape out_shape = segments.shape();
+  out_shape.pop_back();
+  out_shape.push_back(a.shape(0));
+  out_shape.push_back(b.shape(1));
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<SegmentedMM>(to_stream(s)),
+      {std::move(a), std::move(b), std::move(segments)});
+}
+
 array diagonal(
     const array& a,
     int offset /* = 0 */,
