@@ -264,19 +264,26 @@ void CommandEncoder::commit() {
     graph_key_ += std::to_string(graph_node_count_);
     graph_key_ += ".";
     graph_key_ += std::to_string(empty_node_count_);
-    auto [it, _] = graph_cache_.emplace(graph_key_, nullptr);
-    auto& graph_exec = it->second;
 
-    if (graph_exec != NULL) {
-      cudaGraphExecUpdateResultInfo update_result;
-      cudaGraphExecUpdate(graph_exec, graph_, &update_result);
-      if (update_result.result != cudaGraphExecUpdateSuccess) {
-        cudaGetLastError();
+    cudaGraphExec_t& graph_exec = graph_cache_[graph_key_];
+
+    if (graph_exec != nullptr) {
+      cudaGraphExecUpdateResult update_result;
+#if CUDART_VERSION >= 12000
+      cudaGraphExecUpdateResultInfo info;
+      cudaGraphExecUpdate(graph_exec, graph_, &info);
+      update_result = info.result;
+#else
+      cudaGraphNode_t error_node;
+      cudaGraphExecUpdate(graph_exec, graph_, &error_node, &update_result);
+#endif // CUDART_VERSION >= 12000
+      if (update_result != cudaGraphExecUpdateSuccess) {
+        cudaGetLastError(); // reset error
         CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
-        graph_exec = NULL;
+        graph_exec = nullptr;
       }
     }
-    if (graph_exec == NULL) {
+    if (graph_exec == nullptr) {
       CHECK_CUDA_ERROR(
           cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
     }
