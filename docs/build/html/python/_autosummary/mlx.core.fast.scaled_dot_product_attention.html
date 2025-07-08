@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.fast.scaled_dot_product_attention &#8212; MLX 0.26.2 documentation</title>
+    <title>mlx.core.fast.scaled_dot_product_attention &#8212; MLX 0.26.3 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=20507f52"></script>
+    <script src="../../_static/documentation_options.js?v=9bacfd4f"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.3 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.3 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -929,10 +929,15 @@ document.write(`
 <li><p><a class="reference external" href="https://arxiv.org/abs/2305.13245">Grouped Query Attention</a></p></li>
 <li><p><a class="reference external" href="https://arxiv.org/abs/1911.02150">Multi-Query Attention</a></p></li>
 </ul>
-<p>Note: The softmax operation is performed in <code class="docutils literal notranslate"><span class="pre">float32</span></code> regardless of
-the input precision.</p>
-<p>Note: For Grouped Query Attention and Multi-Query Attention, the <code class="docutils literal notranslate"><span class="pre">k</span></code>
-and <code class="docutils literal notranslate"><span class="pre">v</span></code> inputs should not be pre-tiled to match <code class="docutils literal notranslate"><span class="pre">q</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The softmax operation is performed in <code class="docutils literal notranslate"><span class="pre">float32</span></code> regardless of
+the input precision.</p></li>
+<li><p>For Grouped Query Attention and Multi-Query Attention, the <code class="docutils literal notranslate"><span class="pre">k</span></code>
+and <code class="docutils literal notranslate"><span class="pre">v</span></code> inputs should not be pre-tiled to match <code class="docutils literal notranslate"><span class="pre">q</span></code>.</p></li>
+</ul>
+</div>
 <p>In the following the dimensions are given by:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">B</span></code>: The batch size.</p></li>
@@ -949,11 +954,13 @@ and <code class="docutils literal notranslate"><span class="pre">v</span></code>
 <li><p><strong>k</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Keys with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_kv,</span> <span class="pre">T_kv,</span> <span class="pre">D]</span></code>.</p></li>
 <li><p><strong>v</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Values with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_kv,</span> <span class="pre">T_kv,</span> <span class="pre">D]</span></code>.</p></li>
 <li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Scale for queries (typically <code class="docutils literal notranslate"><span class="pre">1.0</span> <span class="pre">/</span> <span class="pre">sqrt(q.shape(-1)</span></code>)</p></li>
-<li><p><strong>mask</strong> (<em>Union</em><em>[</em><em>None</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>]</em><em>, </em><em>optional</em>) – A causal, boolean or additive
-mask to apply to the query-key scores. The mask can have at most 4
-dimensions and must be broadcast-compatible with the shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">T_q,</span> <span class="pre">T_kv]</span></code>. If an additive mask is given its type must
-promote to the promoted type of <code class="docutils literal notranslate"><span class="pre">q</span></code>, <code class="docutils literal notranslate"><span class="pre">k</span></code>, and <code class="docutils literal notranslate"><span class="pre">v</span></code>.</p></li>
+<li><p><strong>mask</strong> (<em>Union</em><em>[</em><em>None</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>]</em><em>, </em><em>optional</em>) – The mask to apply to the
+query-key scores. The mask can be an array or a string indicating
+the mask type. The only supported string type is <code class="docutils literal notranslate"><span class="pre">&quot;causal&quot;</span></code>. If
+the mask is an array it can be a boolean or additive mask. The mask
+can have at most 4 dimensions and must be broadcast-compatible with
+the shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">T_q,</span> <span class="pre">T_kv]</span></code>. If an additive mask is given its
+type must promote to the promoted type of <code class="docutils literal notranslate"><span class="pre">q</span></code>, <code class="docutils literal notranslate"><span class="pre">k</span></code>, and <code class="docutils literal notranslate"><span class="pre">v</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -963,6 +970,19 @@ promote to the promoted type of <code class="docutils literal notranslate"><span
 <dd class="field-odd"><p><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a></p>
 </dd>
 </dl>
+<p class="rubric">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">B</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">N_q</span> <span class="o">=</span> <span class="n">N_kv</span> <span class="o">=</span> <span class="mi">32</span>
+<span class="n">T_q</span> <span class="o">=</span> <span class="n">T_kv</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">D</span> <span class="o">=</span> <span class="mi">128</span>
+
+<span class="n">q</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">N_q</span><span class="p">,</span> <span class="n">T_q</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>
+<span class="n">k</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">N_kv</span><span class="p">,</span> <span class="n">T_kv</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">N_kv</span><span class="p">,</span> <span class="n">T_kv</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>
+<span class="n">scale</span> <span class="o">=</span> <span class="n">D</span> <span class="o">**</span> <span class="o">-</span><span class="mf">0.5</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">fast</span><span class="o">.</span><span class="n">scaled_dot_product_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="s2">&quot;causal&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 </dd></dl>
 
 </section>
