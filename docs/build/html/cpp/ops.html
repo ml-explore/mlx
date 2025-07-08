@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Operations &#8212; MLX 0.26.2 documentation</title>
+    <title>Operations &#8212; MLX 0.26.3 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=20507f52"></script>
+    <script src="../_static/documentation_options.js?v=9bacfd4f"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.2 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.2 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.3 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.3 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -1187,6 +1187,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45addmm5array5array5arrayRKfRKf14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">addmm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv415block_masked_mm5array5arrayiNSt8optionalI5arrayEENSt8optionalI5arrayEENSt8optionalI5arrayEE14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">block_masked_mm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv49gather_mm5array5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEEb14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">gather_mm()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv412segmented_mm5array5array5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">segmented_mm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48diagonalRK5arrayiii14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">diagonal()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44diagRK5arrayi14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">diag()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45traceRK5arrayiii5Dtype14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">trace()</span></code></a></li>
@@ -2895,6 +2896,12 @@ document.write(`
 </dd></dl>
 
 <dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv412segmented_mm5array5array5array14StreamOrDevice">
+<span id="_CPPv312segmented_mm5array5array5array14StreamOrDevice"></span><span id="_CPPv212segmented_mm5array5array5array14StreamOrDevice"></span><span id="segmented_mm__array.array.array.StreamOrDevice"></span><span class="target" id="group__ops_1gae0d05a8be56f65be40cfefdf7aea67d6"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">segmented_mm</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">a</span></span>, <span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">b</span></span>, <span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">segments</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv412segmented_mm5array5array5array14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
+<dd><p>Compute a matrix product but segment the inner dimension and write the result separately for each segment. </p>
+</dd></dl>
+
+<dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv48diagonalRK5arrayiii14StreamOrDevice">
 <span id="_CPPv38diagonalRK5arrayiii14StreamOrDevice"></span><span id="_CPPv28diagonalRK5arrayiii14StreamOrDevice"></span><span id="diagonal__arrayCR.i.i.i.StreamOrDevice"></span><span class="target" id="group__ops_1ga9236b085a88ead3128ed8079d009cac6"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">diagonal</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">offset</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">axis1</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">axis2</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv48diagonalRK5arrayiii14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
 <dd><p>Extract a diagonal or construct a diagonal array. </p>
@@ -3418,6 +3425,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45addmm5array5array5arrayRKfRKf14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">addmm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv415block_masked_mm5array5arrayiNSt8optionalI5arrayEENSt8optionalI5arrayEENSt8optionalI5arrayEE14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">block_masked_mm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv49gather_mm5array5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEEb14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">gather_mm()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv412segmented_mm5array5array5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">segmented_mm()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48diagonalRK5arrayiii14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">diagonal()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv44diagRK5arrayi14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">diag()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45traceRK5arrayiii5Dtype14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">trace()</span></code></a></li>
