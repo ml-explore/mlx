@@ -4676,6 +4676,11 @@ array segmented_mm(
     throw std::invalid_argument(msg.str());
   }
 
+  if (!issubdtype(segments.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[segmented_mm] Got segments with invalid dtype. Segments must be integral.");
+  }
+
   a = astype(a, out_type, s);
   b = astype(b, out_type, s);
   segments = astype(segments, uint32, s);
