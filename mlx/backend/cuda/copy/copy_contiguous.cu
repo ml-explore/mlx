@@ -13,7 +13,7 @@ namespace cg = cooperative_groups;
 template <typename In, typename Out, typename IdxT, int N_READS>
 __global__ void copy_s(const In* in, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -37,7 +37,7 @@ __global__ void copy_s(const In* in, Out* out, IdxT size) {
 template <typename In, typename Out, typename IdxT, int N_READS>
 __global__ void copy_v(const In* in, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }

@@ -21,7 +21,7 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_ss(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -52,7 +52,7 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_sv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -85,7 +85,7 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_vs(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -118,7 +118,7 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_vv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }

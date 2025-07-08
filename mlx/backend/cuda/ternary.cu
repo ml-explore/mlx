@@ -19,7 +19,7 @@ template <typename Op, typename T, typename IdxT, int N_READS>
 __global__ void
 ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }

@@ -20,7 +20,7 @@ namespace cg = cooperative_groups;
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -44,7 +44,7 @@ __global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -70,7 +70,7 @@ __global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
@@ -96,7 +96,7 @@ __global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_vv(const In* a, const In* b, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  int remaining = size - index * N_READS;
+  IdxT remaining = size - index * N_READS;
   if (remaining <= 0) {
     return;
   }
