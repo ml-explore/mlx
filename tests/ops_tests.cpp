@@ -1024,6 +1024,10 @@ TEST_CASE("test reduction ops") {
     x = array({true, true, true, false, true, false}, {2, 3});
     CHECK(array_equal(min(x, 1), array({true, false})).item<bool>());
     CHECK(array_equal(min(x, 0), array({false, true, false})).item<bool>());
+
+    x = array({1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
+    CHECK(array_equal(max(x, 0), array({4.0f, NAN, 6.0f}), true).item<bool>());
+    CHECK(array_equal(max(x, 1), array({NAN, 6.0f}), true).item<bool>());
   }
 
   // Test logsumexp

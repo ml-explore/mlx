@@ -192,6 +192,17 @@ void time_reductions() {
 
   auto argmin_along_1 = [&a]() { return mx::argmin(a, 1, false); };
   TIME(argmin_along_1);
+
+  auto indices = mx::array({1});
+  auto updates = mx::reshape(mx::array({NAN}), {1, 1, 1});
+  std::vector<int> axes{0};
+  auto b = scatter(a, {indices}, updates, axes);
+  mx::eval(b);
+
+  auto max_along_0 = [&b]() { return mx::max(b, 0, false); };
+  TIME(max_along_0);
+  auto max_along_1 = [&b]() { return mx::max(b, 1, false); };
+  TIME(max_along_1);
 }
 
 void time_gather_scatter() {

@@ -186,7 +186,15 @@ struct Max {
   DEFINE_SIMD_REDUCE()
 
   template <typename T>
-  T simd_reduce_impl(T val) {
+  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(T val) {
+    return simd_max(val);
+  }
+
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(T val) {
+    if (simd_any(val != val)) {
+      return static_cast<T>(NAN);
+    }
     return simd_max(val);
   }
 
@@ -198,7 +206,35 @@ struct Max {
   }
 
   // Operator
-  U operator()(U a, U b) {
+  template <typename T>
+  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T a, T b) {
     return a > b ? a : b;
+  }
+
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T a, T b) {
+    if (metal::isnan(a) || metal::isnan(b)) {
+      return static_cast<T>(NAN);
+    } else {
+      return a > b ? a : b;
+    }
+  }
+
+  template <>
+  complex64_t operator()(complex64_t a, complex64_t b) {
+    bool real_is_nan = metal::isnan(a.real) || metal::isnan(b.real);
+    bool imag_is_nan = metal::isnan(a.imag) || metal::isnan(b.imag);
+
+    if (!real_is_nan && !imag_is_nan) {
+      return a > b ? a : b;
+    } else if (real_is_nan && !imag_is_nan) {
+      return complex64_t(
+          static_cast<float>(NAN), a.imag > b.imag ? a.imag : b.imag);
+    } else if (!real_is_nan && imag_is_nan) {
+      return complex64_t(
+          a.real > b.real ? a.real : b.real, static_cast<float>(NAN));
+    } else {
+      return complex64_t(static_cast<float>(NAN), static_cast<float>(NAN));
+    }
   }
 };
