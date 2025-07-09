@@ -21,17 +21,12 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_ss(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
       auto out = Op{}(a[0], b[0]);
-      out_a[offset] = out[0];
-      out_b[offset] = out[1];
+      out_a[i] = out[0];
+      out_b[i] = out[1];
     }
   } else {
     AlignedVector<Out, N_READS> out_a_vec;
@@ -52,17 +47,12 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_sv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
-      auto out = Op{}(a[0], b[offset]);
-      out_a[offset] = out[0];
-      out_b[offset] = out[1];
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      auto out = Op{}(a[0], b[i]);
+      out_a[i] = out[0];
+      out_b[i] = out[1];
     }
   } else {
     auto b_vec = load_vector<N_READS>(b, index);
@@ -85,17 +75,12 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_vs(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
-      auto out = Op{}(a[offset], b[0]);
-      out_a[offset] = out[0];
-      out_b[offset] = out[1];
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      auto out = Op{}(a[i], b[0]);
+      out_a[i] = out[0];
+      out_b[i] = out[1];
     }
   } else {
     auto a_vec = load_vector<N_READS>(a, index);
@@ -118,17 +103,12 @@ template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void
 binary_two_vv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
-      auto out = Op{}(a[offset], b[offset]);
-      out_a[offset] = out[0];
-      out_b[offset] = out[1];
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      auto out = Op{}(a[i], b[i]);
+      out_a[i] = out[0];
+      out_b[i] = out[1];
     }
   } else {
     auto a_vec = load_vector<N_READS>(a, index);
@@ -290,7 +270,7 @@ void binary_two_op_gpu_inplace(
               });
         } else {
           dispatch_bool(out_a.data_size() > INT32_MAX, [&](auto large) {
-            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+            using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
             auto kernel = cu::binary_two_ss<Op, InType, OutType, IdxT, N_READS>;

@@ -19,15 +19,10 @@ template <typename Op, typename T, typename IdxT, int N_READS>
 __global__ void
 ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
-      out[offset] = Op{}(a[offset], b[offset], c[offset]);
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      out[i] = Op{}(a[i], b[i], c[i]);
     }
   } else {
     auto a_vec = load_vector<N_READS>(a, index);
@@ -170,7 +165,7 @@ void ternary_op_gpu_inplace(
           });
     } else {
       dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
-        using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+        using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
         // TODO: Choose optimized value based on type size.
         constexpr int N_READS = 4;
         auto kernel = cu::ternary_v<Op, DType, IdxT, N_READS>;

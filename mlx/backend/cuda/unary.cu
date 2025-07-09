@@ -21,15 +21,10 @@ namespace cg = cooperative_groups;
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void unary_v(const In* in, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  IdxT remaining = size - index * N_READS;
-  if (remaining <= 0) {
-    return;
-  }
 
-  if (remaining < N_READS) {
-    for (int i = 0; i < remaining; ++i) {
-      IdxT offset = index * N_READS + i;
-      out[offset] = Op{}(in[offset]);
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      out[i] = Op{}(in[i]);
     }
   } else {
     auto in_vec = load_vector<N_READS>(in, index);
@@ -130,10 +125,9 @@ void unary_op_gpu_inplace(
       using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
       if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
         dispatch_bool(large, [&](auto large) {
-          using IdxT = std::conditional_t<large(), int64_t, int32_t>;
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+          using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
           if (contig) {
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
