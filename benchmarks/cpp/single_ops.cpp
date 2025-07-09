@@ -203,6 +203,11 @@ void time_reductions() {
   TIME(max_along_0);
   auto max_along_1 = [&b]() { return mx::max(b, 1, false); };
   TIME(max_along_1);
+
+  auto min_along_0 = [&b]() { return mx::min(b, 0, false); };
+  TIME(min_along_0);
+  auto min_along_1 = [&b]() { return mx::min(b, 1, false); };
+  TIME(min_along_1);
 }
 
 void time_gather_scatter() {
