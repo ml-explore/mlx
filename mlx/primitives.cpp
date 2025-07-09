@@ -620,10 +620,11 @@ std::vector<array> ArgReduce::vjp(
 }
 
 std::vector<array> ArgReduce::jvp(
+    const std::vector<array>& primals,
     const std::vector<array>&,
-    const std::vector<array>& tangents,
     const std::vector<int>&) {
-  return {zeros_like(tangents[0], stream())};
+  auto shape = output_shapes(primals)[0];
+  return {zeros(shape, uint32, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
@@ -645,6 +646,21 @@ std::vector<Shape> ArgReduce::output_shapes(const std::vector<array>& inputs) {
 bool ArgSort::is_equivalent(const Primitive& other) const {
   const ArgSort& r_other = static_cast<const ArgSort&>(other);
   return axis_ == r_other.axis_;
+}
+
+std::vector<array> ArgSort::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {zeros_like(primals[0], stream())};
+}
+
+std::vector<array> ArgSort::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  return {zeros(primals[0].shape(), uint32, stream())};
 }
 
 std::vector<array> AsType::vjp(
