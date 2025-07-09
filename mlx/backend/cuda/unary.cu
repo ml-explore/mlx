@@ -127,8 +127,8 @@ void unary_op_gpu_inplace(
         dispatch_bool(large, [&](auto large) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
           if (contig) {
+            using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
             auto kernel = cu::unary_v<Op, InType, OutType, IdxT, N_READS>;
@@ -147,6 +147,7 @@ void unary_op_gpu_inplace(
                 out.data<OutType>(),
                 out.data_size());
           } else {
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
             auto [shape, strides] = collapse_contiguous_dims(in);
             auto kernel = cu::unary_g<Op, InType, OutType, IdxT>;
             auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);

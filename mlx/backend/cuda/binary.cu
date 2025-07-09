@@ -247,7 +247,7 @@ void binary_op_gpu_inplace(
                 }
               });
         } else {
-          dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
+          dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
             using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
