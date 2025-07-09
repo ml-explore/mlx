@@ -13,11 +13,6 @@ cuda_skip = {
     "TestBlas.test_gather_mm_sorted",
     # Segmented matmul NYI
     "TestBlas.test_segmented_mm",
-    # Scan NYI
-    "TestArray.test_api",
-    "TestAutograd.test_cumprod_grad",
-    "TestOps.test_scans",
-    "TestOps.test_logcumsumexp",
     # Hadamard NYI
     "TestOps.test_hadamard",
     "TestOps.test_hadamard_grad_vmap",
