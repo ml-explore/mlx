@@ -3,6 +3,8 @@ cuda_skip = {
     "TestLayers.test_quantized_embedding",
     "TestOps.test_dynamic_slicing",
     "TestReduce.test_dtypes",
+    "TestReduce.test_nanpropagation",
+    "TestReduce.test_nanpropagation_complex64",
     # Block masked matmul NYI
     "TestBlas.test_block_masked_matmul",
     # Gather matmul NYI

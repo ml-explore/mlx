@@ -170,7 +170,7 @@ class TestReduce(mlx_tests.MLXTestCase):
                 x = (mx.random.normal((4, 4)) * 10).astype(getattr(mx, dtype))
                 indices = mx.random.randint(0, 4, shape=(6,)).reshape(3, 2)
                 for idx in indices:
-                    x[*idx] = mx.nan
+                    x[idx[0], idx[1]] = mx.nan
                 x_np = np.array(x)
 
                 for op in ["max"]:
