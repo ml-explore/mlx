@@ -359,21 +359,4 @@ struct LoopedElemToLoc<1, false, OffsetT> {
   }
 };
 
-inline __device__ cuComplex log1p(cuComplex in) {
-  float x = cuCrealf(in);
-  float y = cuCimagf(in);
-  float zabs = sqrt(x * x + y * y);
-  float theta = atan2f(y, x + 1);
-  if (zabs < 0.5f) {
-    float r = x * (2 + x) + y * y;
-    if (r == 0) { // handle underflow
-      return {x, theta};
-    }
-    return {0.5f * log1pf(r), theta};
-  } else {
-    auto z0 = sqrt((x + 1) * (x + 1) + y * y);
-    return {log(z0), theta};
-  }
-}
-
 } // namespace mlx::core::cu
