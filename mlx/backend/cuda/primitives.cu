@@ -92,7 +92,6 @@ NO_GPU_MULTI(Eigh)
 
 namespace fast {
 NO_GPU(ScaledDotProductAttention)
-NO_GPU_MULTI(AffineQuantize)
 NO_GPU_MULTI(CustomKernel)
 } // namespace fast
 
