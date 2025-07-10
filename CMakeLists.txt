@@ -35,6 +35,7 @@ option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_BUILD_CUDA "Build cuda backend" OFF)
+option(MLX_BUILD_ROCM "Build ROCm backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
@@ -86,6 +87,10 @@ endif()
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
+endif()
+
+if(MLX_BUILD_ROCM)
+  enable_language(HIP)
 endif()
 
 if(MLX_BUILD_METAL AND NOT METAL_LIB)
