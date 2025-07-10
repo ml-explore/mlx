@@ -1,10 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/device/cucomplex_math.cuh"
-#include "mlx/backend/cuda/device/fp16_math.cuh"
-#include "mlx/backend/cuda/device/utils.cuh"
+#include "mlx/backend/cuda/device/unary_ops.cuh"
 
-#include <cuComplex.h>
 #include <cuda/std/array>
 
 namespace mlx::core::cu {
@@ -114,36 +111,38 @@ struct LessEqual {
 struct LogAddExp {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    if (isnan(x) || isnan(y)) {
-      return cuda::std::numeric_limits<T>::quiet_NaN();
+    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      if (isnan(cuCrealf(x)) || isnan(cuCimagf(x)) || isnan(cuCrealf(y)) ||
+          isnan(cuCimagf(y))) {
+        return {
+            cuda::std::numeric_limits<float>::quiet_NaN(),
+            cuda::std::numeric_limits<float>::quiet_NaN()};
+      }
+      auto max = cuCrealf(x) > cuCrealf(y) ? x : y;
+      auto min = cuCrealf(x) < cuCrealf(y) ? x : y;
+      auto min_real = cuCrealf(min);
+      auto max_real = cuCrealf(max);
+      if (!isfinite(min_real) && (min_real == max_real)) {
+        if (min_real < 0) {
+          return min;
+        } else {
+          return Log{}(Exp{}(min) + Exp{}(max));
+        }
+      } else {
+        return Log1p{}(Exp{}(min - max)) + max;
+      }
+    } else {
+      if (isnan(x) || isnan(y)) {
+        return cuda::std::numeric_limits<T>::quiet_NaN();
+      }
+      T maxval = max(x, y);
+      T minval = min(x, y);
+      return (minval == -cuda::std::numeric_limits<T>::infinity() ||
+              maxval == cuda::std::numeric_limits<T>::infinity())
+          ? maxval
+          : T(float(maxval) + log1p(expf(minval - maxval)));
     }
-    T maxval = max(x, y);
-    T minval = min(x, y);
-    return (minval == -cuda::std::numeric_limits<T>::infinity() ||
-            maxval == cuda::std::numeric_limits<T>::infinity())
-        ? maxval
-        : T(float(maxval) + log1p(expf(minval - maxval)));
   };
-
-  __device__ cuComplex operator()(cuComplex x, cuComplex y) {
-    if (isnan(cuCrealf(x)) || isnan(cuCimagf(x)) || isnan(cuCrealf(y)) ||
-        isnan(cuCimagf(y))) {
-      return {
-          cuda::std::numeric_limits<float>::quiet_NaN(),
-          cuda::std::numeric_limits<float>::quiet_NaN()};
-    }
-    float inf = cuda::std::numeric_limits<float>::infinity();
-    auto maxval = x > y ? x : y;
-    auto minval = x < y ? x : y;
-    if (cuCrealf(minval) == -inf || cuCrealf(maxval) == inf)
-      return maxval;
-    float m = exp(cuCrealf(minval) - cuCrealf(maxval));
-    cuComplex dexp{
-        m * cos(cuCimagf(minval) - cuCimagf(maxval)),
-        m * sin(cuCimagf(minval) - cuCimagf(maxval)),
-    };
-    return maxval + log1p(dexp);
-  }
 };
 
 struct Maximum {

@@ -4,6 +4,7 @@
 
 #include <numeric>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
