@@ -350,7 +350,15 @@ struct MinReduce {
   };
 
   template <int N, typename T>
-  T operator()(simd::Simd<T, N> x) {
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    return simd::min(x);
+  };
+
+  template <int N, typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    if (simd::any(x != x)) {
+      return static_cast<T>(NAN);
+    }
     return simd::min(x);
   };
 };

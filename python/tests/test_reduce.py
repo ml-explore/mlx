@@ -173,7 +173,7 @@ class TestReduce(mlx_tests.MLXTestCase):
                     x[idx[0], idx[1]] = mx.nan
                 x_np = np.array(x)
 
-                for op in ["max"]:
+                for op in ["max", "min"]:
                     for axis in [0, 1]:
                         out = getattr(mx, op)(x, axis=axis)
                         ref = getattr(np, op)(x_np, axis=axis)
@@ -205,7 +205,7 @@ class TestReduce(mlx_tests.MLXTestCase):
             np_arrays,
         ):
             for axis in [0, 1]:
-                for op in ["max"]:
+                for op in ["max", "min"]:
                     out = getattr(mx, op)(mx_arr, axis=axis)
                     ref = getattr(np, op)(np_arr, axis=axis)
                     self.assertTrue(np.array_equal(out, ref, equal_nan=True))
