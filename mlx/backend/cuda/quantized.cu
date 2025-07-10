@@ -1,9 +1,6 @@
-// Copyright © 2023-2024 Apple Inc.
-
-#include <cassert>
+// Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/device/binary_ops.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
@@ -30,12 +27,8 @@ inline constexpr __device__ short get_bytes_per_pack() {
 }
 
 template <typename T, int group_size, int bits>
-__global__ void affine_quantize(
-    const T* w,
-    uint8_t* out,
-    T* scales,
-    T* biases,
-    size_t size) {
+__global__ void
+affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -139,9 +132,9 @@ __global__ void affine_quantize(
     }
   } else {
     if constexpr (writes_per_reduce > 0) {
-       if (out_index % writes_per_reduce == 0) {
+      if (out_index % writes_per_reduce == 0) {
         out[out_index / writes_per_reduce] = output;
-       }
+      }
     }
   }
 }
@@ -153,7 +146,6 @@ __global__ void affine_dequantize(
     const T* biases,
     T* out,
     size_t size) {
-
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -224,8 +216,10 @@ __global__ void affine_dequantize(
 } // namespace cu
 namespace {
 
-inline array
-ensure_row_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+inline array ensure_row_contiguous(
+    const array& x,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
   if (!x.flags().row_contiguous) {
     array x_copy(x.shape(), x.dtype(), nullptr, {});
     copy_gpu(x, x_copy, CopyType::General, s);
