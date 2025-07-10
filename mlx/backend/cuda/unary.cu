@@ -18,11 +18,24 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void unary_v(const In* in, Out* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(in[index]);
+
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      out[i] = Op{}(in[i]);
+    }
+  } else {
+    auto in_vec = load_vector<N_READS>(in, index);
+
+    AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec.val[i] = Op{}(in_vec.val[i]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
@@ -112,14 +125,20 @@ void unary_op_gpu_inplace(
       using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
       if constexpr (cu::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
         dispatch_bool(large, [&](auto large) {
-          using IdxT = std::conditional_t<large(), int64_t, int32_t>;
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          using IdxT = std::conditional_t<large(), int64_t, int32_t>;
           if (contig) {
-            auto kernel = cu::unary_v<Op, InType, OutType, IdxT>;
+            using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+            // TODO: Choose optimized value based on type size.
+            constexpr int N_READS = 4;
+            auto kernel = cu::unary_v<Op, InType, OutType, IdxT, N_READS>;
             auto [num_blocks, block_dims] = get_launch_args(
-                kernel, out.data_size(), out.shape(), out.strides(), large);
+                kernel,
+                out.data_size(),
+                out.shape(),
+                out.strides(),
+                large,
+                N_READS);
             encoder.add_kernel_node(
                 kernel,
                 num_blocks,
@@ -128,6 +147,7 @@ void unary_op_gpu_inplace(
                 out.data<OutType>(),
                 out.data_size());
           } else {
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
             auto [shape, strides] = collapse_contiguous_dims(in);
             auto kernel = cu::unary_g<Op, InType, OutType, IdxT>;
             auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
