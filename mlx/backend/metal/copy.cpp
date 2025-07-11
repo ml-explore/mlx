@@ -86,7 +86,7 @@ void copy_gpu_inplace(
     }
   } else {
     work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
-    if (work_per_thread > 1) {
+    if (!large && work_per_thread > 1) {
       kernel_name += "n";
     }
   }
