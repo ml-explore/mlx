@@ -218,9 +218,10 @@ if __name__ == "__main__":
         ]
     }
 
+    test = "-awni-test"
     if not is_release or build_macos:
         _setup(
-            name="mlx",
+            name="mlx" + test,
             include_package_data=True,
             packages=packages,
             extras_require=extras,
@@ -229,18 +230,18 @@ if __name__ == "__main__":
             cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
         )
     elif build_common:
-        extras["cpu"] = [f"mlx-cpu=={version}"]
-        extras["cuda"] = [f"mlx-cuda=={version}"]
+        extras["cpu"] = [f"mlx-cpu{test}=={version}"]
+        extras["cuda"] = [f"mlx-cuda{test}=={version}"]
         _setup(
-            name="mlx",
-            include_package_data=False,
+            name="mlx" + test,
             packages=["mlx"],
             extras_require=extras,
             entry_points=entry_points,
+            exclude_package_data=package_data,
         )
     else:
         _setup(
-            name="mlx-cuda" if build_cuda else "mlx-cpu",
+            name="mlx-cuda" if build_cuda else "mlx-cpu" + test,
             include_package_data=True,
             packages=packages,
             extras_require=extras,
