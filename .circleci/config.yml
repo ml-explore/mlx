@@ -329,21 +329,28 @@ jobs:
             << parameters.build_env >> MLX_BUILD_COMMON=1 \
               python -m build --wheel --outdir wheelhouse
       - when:
+          condition:
+            equal: ["3.9", << parameters.python_version >>]
+          steps:
+            - run:
+                name: Build common package
+                command: |
+                  source env/bin/activate
+                  << parameters.build_env >> MLX_BUILD_COMMON=1 \
+                    python -m build --wheel --outdir wheelhouse
+      - when:
           condition: << parameters.build_env >>
           steps:
             - run:
                 name: Upload packages
                 command: |
                   source env/bin/activate
-                  twine upload wheelhouse/*
+                  twine upload wheelhouse/*.whl
       - store_artifacts:
           path: wheelhouse/
 
   build_cuda_release:
     parameters:
-      python_version:
-        type: string
-        default: "3.9"
       build_env:
         type: string
         default: ""
@@ -364,10 +371,6 @@ jobs:
             pip install patchelf
             pip install build
             pip install twine
-            << parameters.build_env >> \
-              CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
-              pip install ".[dev]" -v
-            python setup.py generate_stubs
             << parameters.build_env >> \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               python -m build --wheel
