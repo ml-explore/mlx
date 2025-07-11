@@ -125,3 +125,7 @@ target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
                                    --diag_suppress=997>)
+
+# Install CCCL headers for JIT.
+install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)

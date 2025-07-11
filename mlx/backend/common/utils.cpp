@@ -1,5 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <dlfcn.h>
+
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 
@@ -9,6 +11,17 @@ std::string get_primitive_string(Primitive* primitive) {
   std::ostringstream op_t;
   primitive->print(op_t);
   return op_t.str();
+}
+
+std::filesystem::path current_binary_dir() {
+  static std::filesystem::path binary_dir = []() {
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
+      throw std::runtime_error("Unable to get current binary dir.");
+    }
+    return std::filesystem::path(info.dli_fname).parent_path();
+  }();
+  return binary_dir;
 }
 
 std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(

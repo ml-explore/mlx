@@ -3,8 +3,6 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
-#include <dlfcn.h>
-#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -15,21 +13,7 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 
-namespace fs = std::filesystem;
-
 namespace mlx::core::metal {
-
-// Note, this function must be left inline in a header so that it is not
-// dynamically linked.
-inline std::string get_binary_directory() {
-  Dl_info info;
-  std::string directory;
-  int success = dladdr((void*)get_binary_directory, &info);
-  if (success) {
-    directory = fs::path(info.dli_fname).remove_filename().c_str();
-  }
-  return directory;
-}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
