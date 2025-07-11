@@ -7,18 +7,6 @@ parameters:
   nightly_build:
     type: boolean
     default: false
-  weekly_build:
-    type: boolean
-    default: false
-  test_release:
-    type: boolean
-    default: false
-  linux_release:
-    type: boolean
-    default: false
-  cuda_release:
-    type: boolean
-    default: false
 
 jobs:
   build_documentation:
@@ -301,9 +289,9 @@ jobs:
       python_version:
         type: string
         default: "3.9"
-      extra_env:
+      build_env:
         type: string
-        default: "DEV_RELEASE=1"
+        default: ""
     docker:
       - image: ubuntu:20.04
     steps:
@@ -332,19 +320,22 @@ jobs:
             pip install patchelf
             pip install build
             pip install twine
-            << parameters.extra_env >> pip install . -v
+            << parameters.build_env >> pip install . -v
             pip install typing_extensions
             python setup.py generate_stubs
-            << parameters.extra_env >> python -m build --wheel
+            << parameters.build_env >> python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
-            << parameters.extra_env >> MLX_BUILD_COMMON=1 \
+            << parameters.build_env >> MLX_BUILD_COMMON=1 \
               python -m build --wheel --outdir wheelhouse
-      - run:
-          name: Upload packages
-          command: |
-            source env/bin/activate
-            twine upload wheelhouse/*
+      - when:
+          condition: << parameters.build_env >>
+          steps:
+            - run:
+                name: Upload packages
+                command: |
+                  source env/bin/activate
+                  twine upload wheelhouse/*
       - store_artifacts:
           path: wheelhouse/
 
@@ -353,9 +344,9 @@ jobs:
       python_version:
         type: string
         default: "3.9"
-      extra_env:
+      build_env:
         type: string
-        default: "DEV_RELEASE=1"
+        default: ""
     machine:
       image: linux-cuda-12:default
       resource_class: gpu.nvidia.small.gen2
@@ -366,25 +357,29 @@ jobs:
           command: |
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get install zip
             python -m venv env
             source env/bin/activate
             pip install auditwheel
             pip install patchelf
             pip install build
             pip install twine
-            << parameters.extra_env >> \
+            << parameters.build_env >> \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               pip install ".[dev]" -v
             python setup.py generate_stubs
-            << parameters.extra_env >> \
+            << parameters.build_env >> \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               python -m build --wheel
             bash python/scripts/repair_cuda.sh
-      - run:
-          name: Upload package
-          command: |
-            source env/bin/activate
-            twine upload wheelhouse/*.whl
+      - when:
+          condition: << parameters.build_env >>
+          steps:
+            - run:
+                name: Upload package
+                command: |
+                  source env/bin/activate
+                  twine upload wheelhouse/*.whl
       - store_artifacts:
           path: wheelhouse/
 
@@ -396,8 +391,6 @@ workflows:
             pattern: "^(?!pull/)[-\\w]+$"
             value: << pipeline.git.branch >>
         - not: << pipeline.parameters.nightly_build >>
-        - not: << pipeline.parameters.weekly_build >>
-        - not: << pipeline.parameters.test_release >>
     jobs:
       - mac_build_and_test:
           matrix:
@@ -411,8 +404,6 @@ workflows:
     when:
       and:
         - not: << pipeline.parameters.nightly_build >>
-        - not: << pipeline.parameters.weekly_build >>
-        - not: << pipeline.parameters.test_release >>
     jobs:
       - build_release:
           filters:
@@ -503,7 +494,17 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              extra_env: ["PYPI_RELEASE=1"]
+              build_env: ["PYPI_RELEASE=1"]
+      - build_cuda_release:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              build_env: ["PYPI_RELEASE=1"]
 
   prb:
     when:
@@ -582,99 +583,21 @@ workflows:
               - macosx_deployment_target: "15.0"
                 xcode_version: "15.0.0"
                 python_version: "3.13"
-  weekly_build:
-    when:
-      and:
-        - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.weekly_build >>
-    jobs:
-      - build_release:
-          matrix:
-            parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              macosx_deployment_target: ["13.5", "14.0", "15.0"]
-              build_env: ["DEV_RELEASE=1"]
-              xcode_version: ["16.2.0", "15.0.0"]
-            exclude:
-              - macosx_deployment_target: "13.5"
-                xcode_version: "16.2.0"
-                python_version: "3.9"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "13.5"
-                xcode_version: "16.2.0"
-                python_version: "3.10"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "13.5"
-                xcode_version: "16.2.0"
-                python_version: "3.11"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "13.5"
-                xcode_version: "16.2.0"
-                python_version: "3.12"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "13.5"
-                xcode_version: "16.2.0"
-                python_version: "3.13"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "14.0"
-                xcode_version: "15.0.0"
-                python_version: "3.9"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "14.0"
-                xcode_version: "15.0.0"
-                python_version: "3.10"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "14.0"
-                xcode_version: "15.0.0"
-                python_version: "3.11"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "14.0"
-                xcode_version: "15.0.0"
-                python_version: "3.12"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "14.0"
-                xcode_version: "15.0.0"
-                python_version: "3.13"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "15.0"
-                xcode_version: "15.0.0"
-                python_version: "3.9"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "15.0"
-                xcode_version: "15.0.0"
-                python_version: "3.10"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "15.0"
-                xcode_version: "15.0.0"
-                python_version: "3.11"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "15.0"
-                xcode_version: "15.0.0"
-                python_version: "3.12"
-                build_env: "DEV_RELEASE=1"
-              - macosx_deployment_target: "15.0"
-                xcode_version: "15.0.0"
-                python_version: "3.13"
-                build_env: "DEV_RELEASE=1"
-  linux_test_release:
-    when:
-      and:
-        - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.linux_release >>
-    jobs:
       - build_linux_release:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              extra_env: ["PYPI_RELEASE=1"]
-  cuda_test_release:
-    when:
-      and:
-        - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.cuda_release >>
-    jobs:
       - build_cuda_release:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
           matrix:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-              extra_env: ["PYPI_RELEASE=1"]
