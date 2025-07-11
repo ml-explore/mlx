@@ -4,6 +4,7 @@ import unittest
 
 import mlx.core as mx
 import mlx_distributed_tests
+import mlx_tests
 
 
 class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
@@ -150,4 +151,4 @@ class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()
