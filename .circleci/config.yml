@@ -336,9 +336,10 @@ jobs:
             pip install typing_extensions
             python setup.py generate_stubs
             << parameters.extra_env >> python -m build --wheel
-            << parameters.extra_env >> MLX_BUILD_COMMON=1 python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
+            << parameters.extra_env >> MLX_BUILD_COMMON=1 \
+              python -m build --wheel --outdir wheelhouse
       - run:
           name: Upload packages
           command: |
