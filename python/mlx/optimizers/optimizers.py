@@ -705,6 +705,164 @@ class Lion(Optimizer):
         return parameter - lr * mx.sign(c)
 
 
+class Muon(Optimizer):
+    r"""The Muon optimizer for hidden layers in neural networks.
+
+    Muon (MomentUm Orthogonalized by Newton-schulz) combines momentum-based SGD
+    with orthogonalization of parameter updates via Newton-Schulz iterations.
+    This optimizer is specifically designed for 2D weight matrices (linear layers)
+    and should only be used for hidden weight layers.
+
+    The algorithm performs SGD with momentum and then orthogonalizes the update
+    using Newton-Schulz iterations:
+
+    .. math::
+
+        m_{t+1} &= \beta m_t + (1 - \beta) g_t \\
+        u_t &= \text{nesterov} ? g_t \cdot (1-\beta) + m_{t+1} \cdot \beta : m_{t+1} \\
+        u_t &= \text{NewtonSchulz}(u_t) \\
+        w_{t+1} &= w_t - \lambda \cdot \sqrt{\max(1, \frac{d_{out}}{d_{in}})} \cdot u_t
+
+    Args:
+        learning_rate (float or callable): The learning rate :math:`\lambda`.
+        momentum (float, optional): The momentum coefficient :math:`\beta`. Default: ``0.95``
+        weight_decay (float, optional): The weight decay. Default: ``0.0``
+        ns_steps (int, optional): Number of Newton-Schulz iteration steps. Default: ``5``
+        nesterov (bool, optional): Whether to use Nesterov momentum. Default: ``True``
+    """
+
+    def __init__(
+        self,
+        learning_rate: Union[float, Callable[[mx.array], mx.array]],
+        momentum: float = 0.95,
+        weight_decay: float = 0.0,
+        ns_steps: int = 5,
+        nesterov: bool = True,
+    ):
+        super().__init__()
+        
+        self._maybe_schedule("learning_rate", learning_rate)
+        self.momentum = momentum
+        self.weight_decay = weight_decay
+        self.ns_steps = ns_steps
+        self.nesterov = nesterov
+
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["momentum_buffer"] = mx.zeros_like(parameter)
+
+    def _zeropower_via_newtonschulz5(self, G: mx.array, steps: int = 5) -> mx.array:
+        """
+        Newton-Schulz iteration for matrix orthogonalization.
+        
+        Applies the Newton-Schulz iteration to approximate the orthogonal matrix
+        closest to the input matrix G. Uses optimized coefficients from the
+        Muon paper.
+        
+        Args:
+            G: Input gradient matrix
+            steps: Number of Newton-Schulz iteration steps
+            
+        Returns:
+            Orthogonalized matrix
+        """
+        # Coefficients from Keller Jordan's implementation
+        # Optimized via gradient descent in the record by @YouJiacheng
+        a, b, c = (3.4445, -4.7750, 2.0315)
+        
+        X = G.astype(mx.bfloat16)
+        transpose_flag = False
+        
+        # Ensure we work with tall matrices (rows >= cols) for stability
+        if G.shape[-2] > G.shape[-1]:
+            X = mx.transpose(X, axes=(-2, -1))
+            transpose_flag = True
+
+        # Ensure spectral norm is at most 1
+        norm = mx.linalg.norm(X, ord='fro', axis=(-2, -1), keepdims=True)
+        X = X / (norm + 1e-7)
+        
+        # Perform the Newton-Schulz iterations
+        for _ in range(steps):
+            A = X @ mx.transpose(X, axes=(-2, -1))
+            B = b * A + c * (A @ A)  # quintic computation strategy
+            X = a * X + B @ X
+        
+        # Transpose back if needed
+        if transpose_flag:
+            X = mx.transpose(X, axes=(-2, -1))
+            
+        return X.astype(G.dtype)
+
+    def _muon_update(self, grad: mx.array, momentum_buffer: mx.array) -> mx.array:
+        """
+        Perform the Muon update: momentum + Newton-Schulz orthogonalization.
+        
+        Args:
+            grad: Current gradient
+            momentum_buffer: Momentum buffer from state
+            
+        Returns:
+            Orthogonalized update
+        """
+        # Update momentum buffer
+        momentum_buffer = self.momentum * momentum_buffer + (1 - self.momentum) * grad
+        
+        # Choose update based on Nesterov momentum
+        if self.nesterov:
+            update = grad * (1 - self.momentum) + momentum_buffer * self.momentum
+        else:
+            update = momentum_buffer
+            
+        # Handle convolution filters by reshaping to 2D
+        original_shape = update.shape
+        if update.ndim == 4:  # Conv filters: (out_channels, in_channels, h, w)
+            update = update.reshape(update.shape[0], -1)
+        elif update.ndim > 2:
+            # Reshape higher-dimensional tensors to 2D
+            update = update.reshape(update.shape[0], -1)
+            
+        # Apply Newton-Schulz orthogonalization
+        if update.ndim == 2:
+            update = self._zeropower_via_newtonschulz5(update, self.ns_steps)
+            
+            # Apply dimensional scaling factor
+            scaling = mx.sqrt(max(1.0, update.shape[-2] / update.shape[-1]))
+            update = update * scaling
+            
+        # Reshape back to original shape
+        if len(original_shape) > 2:
+            update = update.reshape(original_shape)
+            
+        return update, momentum_buffer
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
+        """Performs the Muon parameter update."""
+        lr = self.learning_rate.astype(gradient.dtype)
+        
+        # Apply weight decay
+        if self.weight_decay > 0:
+            parameter = parameter * (1 - lr * self.weight_decay)
+            
+        # Only apply Muon to 2D+ parameters (weight matrices)
+        if gradient.ndim >= 2:
+            update, new_momentum = self._muon_update(gradient, state["momentum_buffer"])
+            state["momentum_buffer"] = new_momentum
+            return parameter - lr * update
+        else:
+            # For 1D parameters (biases, gains), use standard momentum SGD
+            momentum_buffer = state["momentum_buffer"]
+            momentum_buffer = self.momentum * momentum_buffer + (1 - self.momentum) * gradient
+            state["momentum_buffer"] = momentum_buffer
+            
+            if self.nesterov:
+                update = gradient * (1 - self.momentum) + momentum_buffer * self.momentum
+            else:
+                update = momentum_buffer
+                
+            return parameter - lr * update
+
+
 class Adafactor(Optimizer):
     r"""The Adafactor optimizer.
 

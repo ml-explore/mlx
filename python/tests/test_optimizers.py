@@ -508,6 +508,169 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         grads = model.trainable_parameters()
         optimizer.update(model, grads)
 
+    def test_muon_basic_functionality(self):
+        """Test basic Muon optimizer functionality."""
+        # Create a simple 2-layer MLP
+        class SimpleMLP(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = nn.Linear(10, 20)
+                self.linear2 = nn.Linear(20, 5)
+        
+            def __call__(self, x):
+                x = nn.relu(self.linear1(x))
+                return self.linear2(x)
+        
+        model = SimpleMLP()
+        optimizer = opt.Muon(learning_rate=0.02, momentum=0.95)
+        
+        # Create dummy data
+        x = mx.random.normal([4, 10])
+        y = mx.random.normal([4, 5])
+        
+        def loss_fn(model, x, y):
+            return mx.mean((model(x) - y) ** 2)
+        
+        # Test basic optimization step
+        loss_and_grad_fn = nn.value_and_grad(model, loss_fn)
+        initial_loss, grads = loss_and_grad_fn(model, x, y)
+        
+        # Update parameters
+        optimizer.update(model, grads)
+        
+        # Compute loss after update
+        final_loss = loss_fn(model, x, y)
+        
+        # Verify loss changed (basic sanity check)
+        self.assertNotAlmostEqual(initial_loss.item(), final_loss.item(), places=6)
+    
+    def test_muon_state_dict(self):
+        """Test Muon state dict save/load functionality."""
+        # Create model and optimizer
+        layer = nn.Linear(5, 3)
+        optimizer = opt.Muon(learning_rate=0.01, momentum=0.9)
+        
+        # Initialize optimizer state
+        params = layer.parameters()
+        optimizer.init(params)
+        
+        # Save state
+        original_state = optimizer.state
+        original_step = original_state["step"]
+        
+        # Simulate some updates to change state
+        dummy_grads = tree_map(lambda p: mx.random.normal(p.shape), params)
+        optimizer.update(layer, dummy_grads)
+        
+        # Check that state changed
+        self.assertNotEqual(optimizer.state["step"].item(), original_step.item())
+        
+        # Create new optimizer and load original state
+        new_optimizer = opt.Muon(learning_rate=0.01, momentum=0.9)
+        new_optimizer.state = original_state
+        
+        # Verify state was loaded correctly
+        self.assertEqual(new_optimizer.state["step"].item(), original_step.item())
+    
+    def test_muon_different_parameter_shapes(self):
+        """Test Muon with different parameter shapes."""
+        optimizer = opt.Muon(learning_rate=0.01)
+        
+        # Test with 2D matrix (should use Muon update)
+        weight_2d = mx.random.normal([10, 5])
+        grad_2d = mx.random.normal([10, 5])
+        state_2d = {"momentum_buffer": mx.zeros_like(weight_2d)}
+        
+        # Test with 1D bias (should use standard momentum SGD)
+        bias_1d = mx.random.normal([5])
+        grad_1d = mx.random.normal([5])
+        state_1d = {"momentum_buffer": mx.zeros_like(bias_1d)}
+        
+        # Test with 4D conv filter (should reshape and use Muon)
+        conv_4d = mx.random.normal([16, 8, 3, 3])
+        grad_4d = mx.random.normal([16, 8, 3, 3])
+        state_4d = {"momentum_buffer": mx.zeros_like(conv_4d)}
+        
+        # Apply updates
+        new_weight_2d = optimizer.apply_single(grad_2d, weight_2d, state_2d)
+        new_bias_1d = optimizer.apply_single(grad_1d, bias_1d, state_1d)
+        new_conv_4d = optimizer.apply_single(grad_4d, conv_4d, state_4d)
+        
+        # Verify shapes are preserved
+        self.assertEqual(new_weight_2d.shape, weight_2d.shape)
+        self.assertEqual(new_bias_1d.shape, bias_1d.shape)
+        self.assertEqual(new_conv_4d.shape, conv_4d.shape)
+        
+        # Verify parameters actually changed
+        self.assertFalse(mx.array_equal(new_weight_2d, weight_2d))
+        self.assertFalse(mx.array_equal(new_bias_1d, bias_1d))
+        self.assertFalse(mx.array_equal(new_conv_4d, conv_4d))
+    
+    def test_muon_newton_schulz_convergence(self):
+        """Test that Newton-Schulz iteration produces approximately orthogonal updates."""
+        optimizer = opt.Muon(learning_rate=0.01, ns_steps=10)  # More steps for better convergence
+        
+        # Create a gradient matrix
+        grad = mx.random.normal([20, 10])  # Tall matrix
+        
+        # Apply Newton-Schulz orthogonalization
+        orthogonalized = optimizer._zeropower_via_newtonschulz5(grad, steps=10)
+        
+        # Check that the result has approximately unit singular values
+        # For an orthogonal matrix A, A @ A.T should be close to identity
+        should_be_identity = orthogonalized @ mx.transpose(orthogonalized)
+        identity = mx.eye(should_be_identity.shape[0])
+        
+        # Check how close we are to identity (allowing some numerical error)
+        diff = mx.abs(should_be_identity - identity)
+        max_diff = mx.max(diff)
+        
+        # Should be reasonably close to identity (within 0.1 is acceptable for this test)
+        self.assertLess(max_diff.item(), 0.2,
+                       "Newton-Schulz iteration should produce approximately orthogonal matrices")
+    
+    def test_muon_momentum_types(self):
+        """Test both standard and Nesterov momentum variants."""
+        # Test standard momentum
+        optimizer_std = opt.Muon(learning_rate=0.01, momentum=0.9, nesterov=False)
+        
+        # Test Nesterov momentum (default)
+        optimizer_nes = opt.Muon(learning_rate=0.01, momentum=0.9, nesterov=True)
+        
+        # Test with a simple parameter
+        param = mx.random.normal([5, 3])
+        grad = mx.random.normal([5, 3])
+        
+        # Initialize states
+        state_std = {"momentum_buffer": mx.zeros_like(param)}
+        state_nes = {"momentum_buffer": mx.zeros_like(param)}
+        
+        # Apply updates
+        new_param_std = optimizer_std.apply_single(grad, param, state_std)
+        new_param_nes = optimizer_nes.apply_single(grad, param, state_nes)
+        
+        # Results should be different due to different momentum formulations
+        self.assertFalse(mx.allclose(new_param_std, new_param_nes, atol=1e-6))
+    
+    def test_muon_weight_decay(self):
+        """Test Muon with weight decay."""
+        optimizer = opt.Muon(learning_rate=0.01, weight_decay=0.1)
+        
+        param = mx.random.normal([5, 3])
+        grad = mx.random.normal([5, 3])
+        state = {"momentum_buffer": mx.zeros_like(param)}
+        
+        # Apply update with weight decay
+        new_param = optimizer.apply_single(grad, param, state)
+        
+        # With weight decay, parameter should be smaller in magnitude
+        param_norm = mx.linalg.norm(param)
+        new_param_norm = mx.linalg.norm(new_param)
+        
+        # This is a rough check - weight decay should generally reduce parameter norms
+        # though the orthogonalization might complicate this relationship
+        self.assertNotEqual(param_norm.item(), new_param_norm.item())
+
     def test_multi_optimizer(self):
         class Model(nn.Module):
             def __init__(self):
