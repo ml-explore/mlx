@@ -64,10 +64,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
   endif()
-
 else()
   set(MLX_BUILD_METAL OFF)
-  message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
 endif()
 
 # ----------------------------- Lib -----------------------------
