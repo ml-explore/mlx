@@ -38,8 +38,16 @@ and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:
 
 .. code-block:: shell
 
-    pip install mlx-cuda
+    pip install "mlx[cuda]"
 
+CPU only (Linux)
+^^^^^^^^^^^^^^^^
+
+For a CPU-only version of MLX that runs on Linux use:
+
+.. code-block:: shell
+
+    pip install "mlx[cpu]"
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
