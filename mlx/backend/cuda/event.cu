@@ -90,8 +90,6 @@ bool CudaEvent::completed() const {
 // SharedEvent implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace {
-
 __host__ __device__ void event_wait(SharedEvent::Atomic* ac, uint64_t value) {
   uint64_t current;
   while ((current = ac->load()) < value) {
@@ -111,8 +109,6 @@ __global__ void event_wait_kernel(SharedEvent::Atomic* ac, uint64_t value) {
 __global__ void event_signal_kernel(SharedEvent::Atomic* ac, uint64_t value) {
   event_signal(ac, value);
 }
-
-} // namespace
 
 SharedEvent::SharedEvent() {
   // Allocate cuda::atomic on managed memory.
