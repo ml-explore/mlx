@@ -2,12 +2,12 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/device/cexpf.cuh"
 #include "mlx/backend/cuda/device/cucomplex_math.cuh"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <math_constants.h>
+#include <cuda/std/complex>
 
 namespace mlx::core::cu {
 
@@ -152,7 +152,8 @@ struct Exp {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return detail::cexpf(x);
+      auto r = exp(cuda::std::complex<float>{cuCrealf(x), cuCimagf(x)});
+      return cuComplex{r.real(), r.imag()};
     } else {
       return exp(x);
     }

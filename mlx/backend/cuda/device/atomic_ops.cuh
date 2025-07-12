@@ -58,12 +58,7 @@ inline __device__ void atomic_add(cuComplex* out, cuComplex val) {
 
 inline __device__ void atomic_add(__nv_bfloat16* out, __nv_bfloat16 val) {
 #if __CUDA_ARCH__ < 800
-#if CCCL_VERSION >= 2008000
   atomic_add_general(out, val);
-#else
-  bool cccl_version_too_old_for_bfloat16_atomic_add = false;
-  assert(cccl_version_too_old_for_bfloat16_atomic_add);
-#endif
 #else
   atomicAdd(out, val);
 #endif
