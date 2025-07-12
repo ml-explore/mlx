@@ -42,6 +42,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
