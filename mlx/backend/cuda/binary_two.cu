@@ -184,7 +184,7 @@ template <typename Op>
 void binary_two_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    std::string_view op,
+    Primitive* primitive,
     const Stream& s) {
   assert(inputs.size() > 1);
   const auto& a = inputs[0];
@@ -302,7 +302,7 @@ void binary_two_op_gpu_inplace(
       } else {
         throw std::runtime_error(fmt::format(
             "Can not do binary op {} on inputs of {} with result of {}.",
-            op,
+            get_primitive_string(primitive),
             dtype_to_string(a.dtype()),
             dtype_to_string(out_a.dtype())));
       }
@@ -314,14 +314,14 @@ template <typename Op>
 void binary_two_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    std::string_view op,
+    Primitive* primitive,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, outputs[0], bopt);
   set_binary_op_output_data(a, b, outputs[1], bopt);
-  binary_two_op_gpu_inplace<Op>(inputs, outputs, op, s);
+  binary_two_op_gpu_inplace<Op>(inputs, outputs, primitive, s);
 }
 
 void DivMod::eval_gpu(
@@ -329,7 +329,7 @@ void DivMod::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("DivMod::eval_gpu");
   auto& s = outputs[0].primitive().stream();
-  binary_two_op_gpu<cu::DivMod>(inputs, outputs, get_primitive_string(this), s);
+  binary_two_op_gpu<cu::DivMod>(inputs, outputs, this, s);
 }
 
 } // namespace mlx::core
