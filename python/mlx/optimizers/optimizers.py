@@ -729,6 +729,9 @@ class Muon(Optimizer):
         weight_decay (float, optional): The weight decay. Default: ``0.0``
         ns_steps (int, optional): Number of Newton-Schulz iteration steps. Default: ``5``
         nesterov (bool, optional): Whether to use Nesterov momentum. Default: ``True``
+        method (str, optional): Newton-Schulz method. One of ``"auto"``, ``"cubic"``, ``"quintic"``. 
+            ``"auto"`` tries quintic first, falls back to cubic if convergence poor. Default: ``"auto"``
+        tol (float, optional): Orthogonality tolerance for auto fallback. Default: ``0.05``
     """
 
     def __init__(
@@ -736,8 +739,10 @@ class Muon(Optimizer):
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
         momentum: float = 0.95,
         weight_decay: float = 0.0,
-        ns_steps: int = 8,
+        ns_steps: int = 5,
         nesterov: bool = True,
+        method: str = "auto",
+        tol: float = 0.05,
     ):
         super().__init__()
 
@@ -746,6 +751,8 @@ class Muon(Optimizer):
         self.weight_decay = weight_decay
         self.ns_steps = ns_steps
         self.nesterov = nesterov
+        self.method = method
+        self.tol = tol
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -755,9 +762,8 @@ class Muon(Optimizer):
         """
         Newton-Schulz iteration for matrix orthogonalization.
 
-        Applies the Newton-Schulz iteration to approximate the orthogonal matrix
-        closest to the input matrix G. Uses optimized coefficients from the
-        Muon paper.
+        DEPRECATED: Use _orthogonalize() instead. This method is kept for backward compatibility.
+        Always uses quintic method regardless of self.method setting.
 
         Args:
             G: Input gradient matrix
@@ -766,10 +772,23 @@ class Muon(Optimizer):
         Returns:
             Orthogonalized matrix
         """
-        # Coefficients from Keller Jordan's implementation
-        # Optimized via gradient descent in the record by @YouJiacheng
-        a, b, c = (3.4445, -4.7750, 2.0315)
+        # Temporarily override method to force quintic for backward compatibility
+        original_method = self.method
+        original_ns_steps = self.ns_steps
 
+        self.method = "quintic"
+        self.ns_steps = steps
+
+        result = self._orthogonalize(G)
+
+        # Restore original settings
+        self.method = original_method
+        self.ns_steps = original_ns_steps
+
+        return result
+
+    def _scale_matrix(self, G: mx.array) -> tuple[mx.array, bool]:
+        """Scale and optionally transpose matrix for Newton-Schulz iteration."""
         X = G.astype(mx.bfloat16)
         transpose_flag = False
 
@@ -784,11 +803,68 @@ class Muon(Optimizer):
         norm = mx.linalg.norm(X, ord="fro")
         X = X / mx.maximum(norm, mx.array(1e-6).astype(X.dtype))
 
-        # Perform the Newton-Schulz iterations
-        for _ in range(steps):
-            A = X @ mx.transpose(X, axes=(-1, -2))
-            B = b * A + c * (A @ A)  # quintic computation strategy
-            X = a * X + B @ X
+        return X, transpose_flag
+
+    def _quintic_update(self, X: mx.array) -> mx.array:
+        """Single quintic Newton-Schulz update step."""
+        # Coefficients from Keller Jordan's implementation
+        # Optimized via gradient descent in the record by @YouJiacheng
+        a, b, c = (3.4445, -4.7750, 2.0315)
+
+        A = X @ mx.transpose(X, axes=(-1, -2))
+        B = b * A + c * (A @ A)  # quintic computation strategy
+        return a * X + B @ X
+
+    def _cubic_update(self, X: mx.array) -> mx.array:
+        """Single cubic Newton-Schulz update step."""
+        # For wide matrices (cols >= rows), use X @ X.T form
+        X_XT = X @ X.T
+        I = mx.eye(X_XT.shape[0], dtype=X.dtype)
+        return 0.5 * (3 * I - X_XT) @ X
+
+    def _orthogonalize(self, G: mx.array) -> mx.array:
+        """
+        Orthogonalize matrix using Newton-Schulz iteration.
+
+        Uses method specified in constructor:
+        - "cubic": Always use stable cubic method
+        - "quintic": Always use fast quintic method
+        - "auto": Try quintic first, fallback to cubic if convergence poor
+        """
+        X, transpose_flag = self._scale_matrix(G)
+
+        if self.method == "cubic":
+            # Always use cubic method
+            for _ in range(self.ns_steps):
+                X = self._cubic_update(X)
+
+        elif self.method == "quintic":
+            # Always use quintic method
+            for _ in range(self.ns_steps):
+                X = self._quintic_update(X)
+
+        else:  # method == "auto"
+            # Try quintic first, fallback to cubic if needed
+            Xq = X
+            for _ in range(self.ns_steps):
+                Xq = self._quintic_update(Xq)
+
+            # Check convergence
+            err = mx.max(mx.abs(Xq @ Xq.T - mx.eye(Xq.shape[0], dtype=Xq.dtype)))
+
+            if err < self.tol:
+                X = Xq  # Quintic worked fine
+            else:
+                # Fallback to cubic
+                Xc = X
+                for _ in range(self.ns_steps * 2):  # Usually 8-10 steps total
+                    Xc = self._cubic_update(Xc)
+                    err_c = mx.max(
+                        mx.abs(Xc @ Xc.T - mx.eye(Xc.shape[0], dtype=Xc.dtype))
+                    )
+                    if err_c < self.tol:
+                        break
+                X = Xc
 
         # Transpose back if needed
         if transpose_flag:
@@ -826,7 +902,7 @@ class Muon(Optimizer):
 
         # Apply Newton-Schulz orthogonalization
         if update.ndim == 2:
-            update = self._zeropower_via_newtonschulz5(update, self.ns_steps)
+            update = self._orthogonalize(update)
 
             # Apply dimensional scaling factor
             scaling = mx.sqrt(max(1.0, update.shape[-2] / update.shape[-1])).astype(

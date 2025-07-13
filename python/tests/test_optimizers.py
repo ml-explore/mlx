@@ -679,6 +679,31 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         # though the orthogonalization might complicate this relationship
         self.assertNotEqual(param_norm.item(), new_param_norm.item())
 
+    def test_muon_cubic_method_convergence(self):
+        """Test that cubic Newton-Schulz method achieves tight orthogonality."""
+        optimizer = opt.Muon(learning_rate=0.01, ns_steps=15, method="cubic", tol=0.05)
+
+        # Test with a well-conditioned matrix that should converge easily
+        grad = mx.random.normal([10, 20])  # Wide matrix
+
+        # Apply Newton-Schulz orthogonalization
+        orthogonalized = optimizer._orthogonalize(grad)
+
+        # Check that the result is approximately orthogonal
+        should_be_identity = orthogonalized @ orthogonalized.T
+        identity = mx.eye(should_be_identity.shape[0])
+
+        # Check how close we are to identity
+        diff = mx.abs(should_be_identity - identity)
+        max_diff = mx.max(diff)
+
+        # Cubic method should achieve tight convergence
+        self.assertLess(
+            max_diff.item(),
+            0.05,
+            "Cubic Newton-Schulz method should produce tightly orthogonal matrices",
+        )
+
     def test_multi_optimizer(self):
         class Model(nn.Module):
             def __init__(self):
