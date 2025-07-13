@@ -736,7 +736,7 @@ class Muon(Optimizer):
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
         momentum: float = 0.95,
         weight_decay: float = 0.0,
-        ns_steps: int = 5,
+        ns_steps: int = 8,
         nesterov: bool = True,
     ):
         super().__init__()
@@ -779,8 +779,10 @@ class Muon(Optimizer):
             transpose_flag = True
 
         # Ensure spectral norm is at most 1
-        norm = mx.linalg.norm(X, ord="fro", axis=(-2, -1), keepdims=True)
-        X = X / (norm + 1e-7)
+        # Use Frobenius norm as a conservative upper bound for spectral norm
+        # For most matrices, ||A||_2 <= ||A||_F, so this provides stable scaling
+        norm = mx.linalg.norm(X, ord="fro")
+        X = X / mx.maximum(norm, mx.array(1e-6).astype(X.dtype))
 
         # Perform the Newton-Schulz iterations
         for _ in range(steps):
@@ -827,7 +829,9 @@ class Muon(Optimizer):
             update = self._zeropower_via_newtonschulz5(update, self.ns_steps)
 
             # Apply dimensional scaling factor
-            scaling = mx.sqrt(max(1.0, update.shape[-2] / update.shape[-1]))
+            scaling = mx.sqrt(max(1.0, update.shape[-2] / update.shape[-1])).astype(
+                update.dtype
+            )
             update = update * scaling
 
         # Reshape back to original shape
