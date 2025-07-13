@@ -18,7 +18,7 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -27,7 +27,7 @@ MTL::ComputePipelineState* get_binary_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -36,7 +36,7 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -44,7 +44,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 

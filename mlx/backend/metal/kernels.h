@@ -19,27 +19,27 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_binary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_binary_two_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_ternary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_copy_kernel(
     metal::Device& d,
@@ -257,8 +257,10 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
 
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
-std::string
-get_template_definition(std::string name, std::string func, Args... args) {
+std::string get_template_definition(
+    std::string_view name,
+    std::string_view func,
+    Args... args) {
   std::ostringstream s;
   s << func << "<";
   bool first = true;

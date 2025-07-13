@@ -102,7 +102,7 @@ template <typename Op>
 void unary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   auto& in = inputs[0];
   if (in.size() == 0) {
@@ -178,17 +178,17 @@ template <typename Op>
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   set_unary_output_data(inputs[0], out);
   unary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
-#define UNARY_GPU(func)                                                 \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {   \
-    nvtx3::scoped_range r(#func "::eval_gpu");                          \
-    auto& s = out.primitive().stream();                                 \
-    unary_op_gpu<cu::func>(inputs, out, get_primitive_string(this), s); \
+#define UNARY_GPU(func)                                               \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    nvtx3::scoped_range r(#func "::eval_gpu");                        \
+    auto& s = out.primitive().stream();                               \
+    unary_op_gpu<cu::func>(inputs, out, name(), s);                   \
   }
 
 UNARY_GPU(Abs)
@@ -224,16 +224,15 @@ UNARY_GPU(Tanh)
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Log::eval_gpu");
   auto& s = out.primitive().stream();
-  auto op = get_primitive_string(this);
   switch (base_) {
     case Base::e:
-      unary_op_gpu<cu::Log>(inputs, out, op, s);
+      unary_op_gpu<cu::Log>(inputs, out, name(), s);
       break;
     case Base::two:
-      unary_op_gpu<cu::Log2>(inputs, out, op, s);
+      unary_op_gpu<cu::Log2>(inputs, out, name(), s);
       break;
     case Base::ten:
-      unary_op_gpu<cu::Log10>(inputs, out, op, s);
+      unary_op_gpu<cu::Log10>(inputs, out, name(), s);
       break;
   }
 }
@@ -244,7 +243,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   auto& s = out.primitive().stream();
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu<cu::Round>(inputs, out, get_primitive_string(this), s);
+    unary_op_gpu<cu::Round>(inputs, out, name(), s);
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);

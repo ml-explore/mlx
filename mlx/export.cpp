@@ -354,9 +354,7 @@ struct PrimitiveFactory {
 
   void save(Writer& os, const std::shared_ptr<Primitive>& p) {
     serialize(os, p->stream());
-    std::ostringstream pout;
-    p->print(pout);
-    auto name = pout.str();
+    std::string name = p->name();
     name = name.substr(0, name.find(' '));
     if (auto it = name_remap.find(name); it != name_remap.end()) {
       name = it->second;
