@@ -789,6 +789,15 @@ class Muon(Optimizer):
 
     def _scale_matrix(self, G: mx.array) -> tuple[mx.array, bool]:
         """Scale and optionally transpose matrix for Newton-Schulz iteration."""
+        # Performance guard for CPU usage
+        if mx.default_device().type == "cpu" and not getattr(
+            self, "_cpu_warning_shown", False
+        ):
+            print(
+                "Muon: running in CPU mode; consider method='cubic' to avoid bfloat16 cast overhead."
+            )
+            self._cpu_warning_shown = True
+
         X = G.astype(mx.bfloat16)
         transpose_flag = False
 
@@ -798,8 +807,10 @@ class Muon(Optimizer):
             transpose_flag = True
 
         # Ensure spectral norm is at most 1
-        # Use Frobenius norm as a conservative upper bound for spectral norm
+        # TODO: Replace Frobenius scaling with spectral-norm estimation when ready
+        # Current: Use Frobenius norm as a conservative upper bound for spectral norm
         # For most matrices, ||A||_2 <= ||A||_F, so this provides stable scaling
+        # Future: Power iteration for true spectral norm estimation
         norm = mx.linalg.norm(X, ord="fro")
         X = X / mx.maximum(norm, mx.array(1e-6).astype(X.dtype))
 
@@ -856,6 +867,7 @@ class Muon(Optimizer):
                 X = Xq  # Quintic worked fine
             else:
                 # Fallback to cubic
+                # TODO: Add adaptive iteration monitoring for early stopping
                 Xc = X
                 for _ in range(self.ns_steps * 2):  # Usually 8-10 steps total
                     Xc = self._cubic_update(Xc)

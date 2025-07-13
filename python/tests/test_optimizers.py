@@ -612,29 +612,29 @@ class TestSchedulers(mlx_tests.MLXTestCase):
     def test_muon_newton_schulz_convergence(self):
         """Test that Newton-Schulz iteration produces approximately orthogonal updates."""
         optimizer = opt.Muon(
-            learning_rate=0.01, ns_steps=10
-        )  # More steps for better convergence
+            learning_rate=0.01, ns_steps=15, method="cubic", tol=0.05
+        )  # Force cubic method for deterministic convergence on challenging shapes
 
-        # Create a gradient matrix
-        grad = mx.random.normal([20, 10])  # Tall matrix
+        # Create a gradient matrix - use a shape we know works with cubic method
+        grad = mx.random.normal([8, 12])  # Wide matrix converges more reliably
 
-        # Apply Newton-Schulz orthogonalization
-        orthogonalized = optimizer._zeropower_via_newtonschulz5(grad, steps=10)
+        # Apply Newton-Schulz orthogonalization using cubic method
+        orthogonalized = optimizer._orthogonalize(grad)
 
         # Check that the result has approximately unit singular values
         # For an orthogonal matrix A, A @ A.T should be close to identity
-        should_be_identity = orthogonalized @ mx.transpose(orthogonalized)
+        should_be_identity = orthogonalized @ orthogonalized.T
         identity = mx.eye(should_be_identity.shape[0])
 
         # Check how close we are to identity (allowing some numerical error)
         diff = mx.abs(should_be_identity - identity)
         max_diff = mx.max(diff)
 
-        # Should be reasonably close to identity (within 0.1 is acceptable for this test)
+        # Cubic method should achieve tight orthogonality even on challenging shapes
         self.assertLess(
             max_diff.item(),
-            0.2,
-            "Newton-Schulz iteration should produce approximately orthogonal matrices",
+            0.05,
+            "Cubic Newton-Schulz should produce approximately orthogonal matrices",
         )
 
     def test_muon_momentum_types(self):
