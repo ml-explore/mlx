@@ -33,7 +33,7 @@ class Synchronizer : public Primitive {
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override {}
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override {}
 
-  DEFINE_PRINT(Synchronize);
+  DEFINE_NAME(Synchronize);
 };
 
 // Initialize the static tracing members from transforms_impl.h

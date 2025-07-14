@@ -8,12 +8,6 @@ using namespace fmt::literals;
 
 namespace mlx::core {
 
-std::string op_name(const array& arr) {
-  std::ostringstream op_t;
-  arr.primitive().print(op_t);
-  return op_t.str();
-}
-
 MTL::ComputePipelineState* get_arange_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -33,7 +27,7 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op) {
+    const char* op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
     auto in_t = get_type_string(in_type);
@@ -58,10 +52,10 @@ MTL::ComputePipelineState* get_unary_kernel(
 }
 
 void append_binary_kernels(
-    const std::string lib_name,
+    const std::string& lib_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op,
+    const char* op,
     std::string& kernel_source) {
   const std::array<std::pair<std::string, std::string>, 7> kernel_types = {{
       {"ss", "binary_ss"},
@@ -112,7 +106,7 @@ MTL::ComputePipelineState* get_binary_kernel(
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op) {
+    const char* op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
@@ -129,7 +123,7 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op) {
+    const char* op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source = metal::utils();
@@ -144,7 +138,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype type,
-    const std::string op) {
+    const char* op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
     auto t_str = get_type_string(type);

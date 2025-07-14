@@ -181,7 +181,7 @@ std::vector<array> Primitive::jvp(
     const std::vector<int>&) {
   std::ostringstream msg;
   msg << "[Primitive::jvp] Not implemented for ";
-  print(msg);
+  msg << name();
   msg << ".";
   throw std::invalid_argument(msg.str());
 }
@@ -193,7 +193,7 @@ std::vector<array> Primitive::vjp(
     const std::vector<array>&) {
   std::ostringstream msg;
   msg << "[Primitive::vjp] Not implemented for ";
-  print(msg);
+  msg << name();
   msg << ".";
   throw std::invalid_argument(msg.str());
 }
@@ -203,7 +203,7 @@ std::pair<std::vector<array>, std::vector<int>> Primitive::vmap(
     const std::vector<int>&) {
   std::ostringstream msg;
   msg << "[Primitive::vmap] Not implemented for ";
-  print(msg);
+  msg << name();
   msg << ".";
   throw std::invalid_argument(msg.str());
 }
@@ -211,7 +211,7 @@ std::pair<std::vector<array>, std::vector<int>> Primitive::vmap(
 std::vector<Shape> Primitive::output_shapes(const std::vector<array>&) {
   std::ostringstream msg;
   msg << "[Primitive::output_shapes] ";
-  this->print(msg);
+  msg << name();
   msg << " cannot infer output shapes.";
   throw std::invalid_argument(msg.str());
 }
@@ -741,26 +741,6 @@ bool AsStrided::is_equivalent(const Primitive& other) const {
 bool BitwiseBinary::is_equivalent(const Primitive& other) const {
   const BitwiseBinary& a_other = static_cast<const BitwiseBinary&>(other);
   return op_ == a_other.op_;
-}
-
-void BitwiseBinary::print(std::ostream& os) {
-  switch (op_) {
-    case BitwiseBinary::And:
-      os << "BitwiseAnd";
-      break;
-    case BitwiseBinary::Or:
-      os << "BitwiseOr";
-      break;
-    case BitwiseBinary::Xor:
-      os << "BitwiseXor";
-      break;
-    case BitwiseBinary::LeftShift:
-      os << "LeftShift";
-      break;
-    case BitwiseBinary::RightShift:
-      os << "RightShift";
-      break;
-  }
 }
 
 std::pair<std::vector<array>, std::vector<int>> BitwiseBinary::vmap(
@@ -5375,8 +5355,13 @@ std::pair<std::vector<array>, std::vector<int>> View::vmap(
   return {{view(inputs[0], dtype_, stream())}, axes};
 }
 
-void View::print(std::ostream& os) {
-  os << "View " << dtype_;
+const char* View::name() const {
+  if (name_.empty()) {
+    std::ostringstream os;
+    os << "View " << dtype_;
+    name_ = os.str();
+  }
+  return name_.c_str();
 }
 
 bool View::is_equivalent(const Primitive& other) const {

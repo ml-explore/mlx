@@ -138,13 +138,13 @@ more concrete:
         * representing the vectorized computation and the axis which
         * corresponds to the output vectorized dimension.
         */
-        virtual std::pair<std::vector<array>, std::vector<int>> vmap(
+        std::pair<std::vector<array>, std::vector<int>> vmap(
             const std::vector<array>& inputs,
             const std::vector<int>& axes) override;
 
-        /** Print the primitive. */
-        void print(std::ostream& os) override {
-            os << "Axpby";
+        /** The name of primitive. */
+        const char* name() const override {
+          return "Axpby";
         }
 
         /** Equivalence check **/

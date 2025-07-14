@@ -500,7 +500,7 @@ array cross(
 void validate_eig(
     const array& a,
     const StreamOrDevice& stream,
-    const std::string fname) {
+    const std::string& fname) {
   check_cpu_stream(stream, fname);
   check_float_or_complex(a.dtype(), fname);
 

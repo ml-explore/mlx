@@ -10,8 +10,6 @@
 
 namespace mlx::core {
 
-std::string get_primitive_string(Primitive* primitive);
-
 // Return the directory that contains current shared library.
 std::filesystem::path current_binary_dir();
 

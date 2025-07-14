@@ -184,7 +184,7 @@ template <typename Op>
 void binary_two_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    std::string_view op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() > 1);
   const auto& a = inputs[0];
@@ -314,7 +314,7 @@ template <typename Op>
 void binary_two_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    std::string_view op,
+    const char* op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -329,7 +329,7 @@ void DivMod::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("DivMod::eval_gpu");
   auto& s = outputs[0].primitive().stream();
-  binary_two_op_gpu<cu::DivMod>(inputs, outputs, get_primitive_string(this), s);
+  binary_two_op_gpu<cu::DivMod>(inputs, outputs, name(), s);
 }
 
 } // namespace mlx::core

@@ -177,7 +177,7 @@ template <typename Op>
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    std::string_view op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() > 1);
   const auto& a = inputs[0];
@@ -291,7 +291,7 @@ template <typename Op>
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    std::string_view op,
+    const char* op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -300,11 +300,11 @@ void binary_op_gpu(
   binary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
-#define BINARY_GPU(func)                                                 \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {    \
-    nvtx3::scoped_range r(#func "::eval_gpu");                           \
-    auto& s = out.primitive().stream();                                  \
-    binary_op_gpu<cu::func>(inputs, out, get_primitive_string(this), s); \
+#define BINARY_GPU(func)                                              \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    nvtx3::scoped_range r(#func "::eval_gpu");                        \
+    auto& s = out.primitive().stream();                               \
+    binary_op_gpu<cu::func>(inputs, out, name(), s);                  \
   }
 
 BINARY_GPU(Add)
@@ -328,33 +328,31 @@ BINARY_GPU(Subtract)
 void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Equal::eval_gpu");
   auto& s = out.primitive().stream();
-  auto op = get_primitive_string(this);
   if (equal_nan_) {
-    binary_op_gpu<cu::NaNEqual>(inputs, out, op, s);
+    binary_op_gpu<cu::NaNEqual>(inputs, out, name(), s);
   } else {
-    binary_op_gpu<cu::Equal>(inputs, out, op, s);
+    binary_op_gpu<cu::Equal>(inputs, out, name(), s);
   }
 }
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("BitwiseBinary::eval_gpu");
   auto& s = out.primitive().stream();
-  auto op = get_primitive_string(this);
   switch (op_) {
     case BitwiseBinary::And:
-      binary_op_gpu<cu::BitwiseAnd>(inputs, out, op, s);
+      binary_op_gpu<cu::BitwiseAnd>(inputs, out, name(), s);
       break;
     case BitwiseBinary::Or:
-      binary_op_gpu<cu::BitwiseOr>(inputs, out, op, s);
+      binary_op_gpu<cu::BitwiseOr>(inputs, out, name(), s);
       break;
     case BitwiseBinary::Xor:
-      binary_op_gpu<cu::BitwiseXor>(inputs, out, op, s);
+      binary_op_gpu<cu::BitwiseXor>(inputs, out, name(), s);
       break;
     case BitwiseBinary::LeftShift:
-      binary_op_gpu<cu::LeftShift>(inputs, out, op, s);
+      binary_op_gpu<cu::LeftShift>(inputs, out, name(), s);
       break;
     case BitwiseBinary::RightShift:
-      binary_op_gpu<cu::RightShift>(inputs, out, op, s);
+      binary_op_gpu<cu::RightShift>(inputs, out, name(), s);
       break;
   }
 }

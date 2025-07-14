@@ -106,9 +106,7 @@ struct FusedKernelBuilder {
         value = fmt::format(
             "static_cast<{}>(tmp_{})", type, namer.get_name(x.inputs()[0]));
       } else {
-        std::ostringstream ss;
-        x.primitive().print(ss);
-        value = ss.str();
+        value = x.primitive().name();
         value += "{}(";
         for (size_t i = 0; i < x.inputs().size() - 1; ++i) {
           value += fmt::format("tmp_{}, ", namer.get_name(x.inputs()[i]));

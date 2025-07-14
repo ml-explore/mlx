@@ -58,7 +58,7 @@ class RMSNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RMSNorm)
+  DEFINE_NAME(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
 
@@ -85,7 +85,7 @@ class RMSNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(RMSNormVJP)
+  DEFINE_NAME(RMSNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
@@ -118,7 +118,7 @@ class LayerNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(LayerNorm)
+  DEFINE_NAME(LayerNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -144,7 +144,7 @@ class LayerNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(LayerNormVJP)
+  DEFINE_NAME(LayerNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
@@ -186,7 +186,7 @@ class RoPE : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RoPE)
+  DEFINE_NAME(RoPE)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -233,7 +233,7 @@ class ScaledDotProductAttention : public Custom {
   void eval_gpu(const std::vector<array>& inputs, array& out);
   bool is_equivalent(const Primitive& other) const override;
 
-  DEFINE_PRINT(ScaledDotProductAttention);
+  DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(nullptr, scale_, do_causal_);
@@ -263,7 +263,7 @@ class AffineQuantize : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(AffineQuantize);
+  DEFINE_NAME(AffineQuantize);
 
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
@@ -311,7 +311,7 @@ class CustomKernel : public Primitive {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(CustomKernel);
+  DEFINE_NAME(CustomKernel);
 
  private:
   std::string source_;

@@ -231,7 +231,7 @@ inline void build_kernel(
       os << "static_cast<" << get_type_string(x.dtype()) << ">(tmp_"
          << namer.get_name(x.inputs()[0]) << ");" << std::endl;
     } else {
-      x.primitive().print(os);
+      os << x.primitive().name();
       os << "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
         os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
