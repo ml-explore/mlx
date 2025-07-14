@@ -606,7 +606,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
         dfdx = mx.grad(fun)(x)
-        self.assertTrue(mx.allclose(dfdx, -2j * mx.ones_like(x)))
+        self.assertTrue(mx.allclose(dfdx, 2j * mx.ones_like(x)))
 
     def test_flatten_unflatten_vjps(self):
         def fun(x):
