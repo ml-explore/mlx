@@ -71,7 +71,7 @@ struct FusedKernelBuilder {
     // Index. For non contiguous kernels we create a separate index
     // variable per variable otherwise everyone uses `index`.
     os +=
-        "  IdxT index = cg::this_grid().thread_rank() * W;\n"
+        "  IdxT index = cg::this_grid().thread_rank() * work_per_thread;\n"
         "  if (index >= size) {\n"
         "    return;\n"
         "  }\n";
