@@ -73,9 +73,9 @@ jobs:
                  git push -f origin gh-pages
 
   linux_build_and_test:
-    docker:
-      - image: cimg/python:3.9
-
+    machine:
+      image: ubuntu-2204:current
+      resource_class: large
     steps:
       - checkout
       - run:
@@ -87,19 +87,17 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            pip install --upgrade cmake
-            pip install nanobind==2.4.0
-            pip install numpy
+            export DEBIAN_FRONTEND=noninteractive
+            export NEEDRESTART_MODE=a
             sudo apt-get update
-            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get upgrade -y
+            pip install --upgrade cmake
+            sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
       - run:
           name: Install Python package
           command: |
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
-              python3 setup.py build_ext --inplace
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
-              python3 setup.py develop
+            pip install -e ".[dev]"
       - run:
           name: Generate package stubs
           command: |
@@ -109,13 +107,13 @@ jobs:
       - run:
           name: Run Python tests
           command: |
-            python3 -m unittest discover python/tests -v
+            python -m unittest discover python/tests -v
             mpirun --bind-to none -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
             mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py
       - run:
           name: Build CPP only
           command: |
-            mkdir -p build && cd build 
+            mkdir -p build && cd build
             cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
             make -j `nproc`
       - run:
