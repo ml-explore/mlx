@@ -2,7 +2,6 @@
 
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/device/cucomplex_math.cuh"
 #include "mlx/backend/cuda/device/unary_ops.cuh"
 #include "mlx/backend/cuda/iterators/general_iterator.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
@@ -71,10 +70,10 @@ constexpr bool supports_unary_op() {
         !std::is_same_v<In, bool>;
   }
   if (std::is_same_v<Op, Ceil> || std::is_same_v<Op, Floor>) {
-    return std::is_same_v<In, Out> && !std::is_same_v<In, complex64_t>;
+    return std::is_same_v<In, Out> && !mlx::core::is_complex_v<In>;
   }
   if (std::is_same_v<Op, Conjugate>) {
-    return std::is_same_v<In, Out> && std::is_same_v<In, complex64_t>;
+    return std::is_same_v<In, Out> && mlx::core::is_complex_v<In>;
   }
   if (std::is_same_v<Op, ArcCos> || std::is_same_v<Op, ArcSin> ||
       std::is_same_v<Op, ArcTan> || std::is_same_v<Op, Cos> ||
@@ -88,7 +87,7 @@ constexpr bool supports_unary_op() {
     return std::is_same_v<In, Out> && is_inexact_v<In>;
   }
   if (std::is_same_v<Op, Imag> || std::is_same_v<Op, Real>) {
-    return std::is_same_v<In, complex64_t> && std::is_same_v<Out, float>;
+    return mlx::core::is_complex_v<In> && std::is_same_v<Out, float>;
   }
   if (std::is_same_v<Op, LogicalNot>) {
     return std::is_same_v<In, Out> && std::is_same_v<In, bool>;

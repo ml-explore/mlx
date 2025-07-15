@@ -61,7 +61,7 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
     case float64:
       return "double";
     case complex64:
-      return "cuComplex";
+      return "complex64_t";
     default:
       return "unknown";
   }

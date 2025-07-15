@@ -3,7 +3,6 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/binary_ops.cuh"
-#include "mlx/backend/cuda/device/cucomplex_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
