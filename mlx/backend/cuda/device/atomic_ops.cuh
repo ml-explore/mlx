@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/device/cucomplex_math.cuh"
+#include "mlx/backend/cuda/device/complex.cuh"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 
 #include <cuda/atomic>
@@ -48,7 +48,7 @@ inline __device__ void atomic_add(__half* out, __half val) {
   atomicAdd(out, val);
 }
 
-inline __device__ void atomic_add(cuComplex* out, cuComplex val) {
+inline __device__ void atomic_add(complex64_t* out, complex64_t val) {
 #if __CUDA_ARCH__ < 900
   atomic_add_general(out, val);
 #else

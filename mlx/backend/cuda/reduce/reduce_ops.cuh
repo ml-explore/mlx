@@ -151,7 +151,7 @@ struct ReduceInit<Or, T> {
 template <typename T>
 struct ReduceInit<Sum, T> {
   static constexpr __host__ __device__ auto value() {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    if constexpr (is_complex_v<T>) {
       return T{0, 0};
     } else {
       return cast_to<typename ReduceResult<Sum, T>::type>(0);
@@ -162,7 +162,7 @@ struct ReduceInit<Sum, T> {
 template <typename T>
 struct ReduceInit<Prod, T> {
   static constexpr __host__ __device__ auto value() {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    if constexpr (is_complex_v<T>) {
       return T{1, 0};
     } else {
       return cast_to<typename ReduceResult<Prod, T>::type>(1);

@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/device/complex.cuh"
 #include "mlx/backend/cuda/device/config.h"
 
-#include <cuComplex.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda/std/array>
@@ -127,13 +127,13 @@ struct Limits<bool> {
   }
 };
 
-template <>
-struct Limits<cuComplex> {
-  static constexpr __host__ __device__ cuComplex max() {
-    return {Limits<float>::max(), Limits<float>::max()};
+template <typename T>
+struct Limits<complex_t<T>> {
+  static constexpr __host__ __device__ complex_t<T> max() {
+    return {Limits<T>::max(), Limits<T>::max()};
   }
-  static constexpr __host__ __device__ cuComplex min() {
-    return {Limits<float>::min(), Limits<float>::min()};
+  static constexpr __host__ __device__ complex_t<T> min() {
+    return {Limits<T>::min(), Limits<T>::min()};
   }
 };
 
