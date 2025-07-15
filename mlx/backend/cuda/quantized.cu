@@ -36,7 +36,8 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim = cg::this_grid().dim_threads();
+  auto grid_dim_x =
+      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
   constexpr float eps = 1e-7;
   constexpr int simd_size = WARP_SIZE;
   constexpr float n_bins = (1 << bits) - 1;
@@ -48,7 +49,7 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
       writes_per_reduce > 1 ? 1 : values_per_reduce / pack_factor;
   constexpr int power_of_2_bits = (bits & (bits - 1)) == 0;
 
-  size_t offset = tidx + grid_dim.x * size_t(tidy);
+  size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t in_index = offset * values_per_reduce;
   if (in_index >= size) {
     return;
@@ -153,12 +154,13 @@ __global__ void affine_dequantize(
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim = cg::this_grid().dim_threads();
+  auto grid_dim_x =
+      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
 
   constexpr int pack_factor = get_pack_factor<bits, 8>();
   constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
 
-  size_t offset = tidx + grid_dim.x * size_t(tidy);
+  size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t oindex = offset * pack_factor;
 
   if (oindex >= size) {
@@ -349,7 +351,8 @@ void fast::AffineQuantize::eval_gpu(
       dispatch_bits(bits_, [&](auto bits) {
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if (dequantize_) {
-          auto kernel = cu::affine_dequantize<DataType, group_size(), bits()>;
+          auto kernel =
+              cu::affine_dequantize<DataType, group_size.value, bits.value>;
           auto [num_blocks, block_dims] =
               get_launch_args(kernel, size, grid_shape, w.strides(), large);
           enc.add_kernel_node(
@@ -362,7 +365,8 @@ void fast::AffineQuantize::eval_gpu(
               out.data<DataType>(),
               out.size());
         } else {
-          auto kernel = cu::affine_quantize<DataType, group_size(), bits()>;
+          auto kernel =
+              cu::affine_quantize<DataType, group_size.value, bits.value>;
           auto [num_blocks, block_dims] =
               get_launch_args(kernel, size, grid_shape, w.strides(), large);
           enc.add_kernel_node(
