@@ -5,10 +5,12 @@ import os
 import platform
 import re
 import subprocess
+from functools import partial
 from pathlib import Path
 from subprocess import run
 
-from setuptools import Command, Extension, find_namespace_packages, setup
+from setuptools import Command, Extension, setup
+from setuptools.command.bdist_wheel import bdist_wheel
 from setuptools.command.build_ext import build_ext
 
 
@@ -41,6 +43,9 @@ def get_version():
     return version
 
 
+build_stage = int(os.environ.get("MLX_BUILD_STAGE", 0))
+
+
 # A CMakeExtension needs a sourcedir instead of a file list.
 # The name must be the _single_ output extension from the CMake build.
 # If you need multiple extensions, see scikit-build.
@@ -59,13 +64,22 @@ class CMakeBuild(build_ext):
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
-        # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
-        # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
-        # from Python.
+        build_temp = Path(self.build_temp) / ext.name
+        if not build_temp.exists():
+            build_temp.mkdir(parents=True)
+
+        build_python = "ON"
+        install_prefix = f"{extdir}{os.sep}"
+        if build_stage == 1:
+            # Don't include MLX libraries in the wheel
+            install_prefix = f"{build_temp}"
+        elif build_stage == 2:
+            # Don't include Python bindings in the wheel
+            build_python = "OFF"
         cmake_args = [
-            f"-DCMAKE_INSTALL_PREFIX={extdir}{os.sep}",
+            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
-            "-DMLX_BUILD_PYTHON_BINDINGS=ON",
+            f"-DMLX_BUILD_PYTHON_BINDINGS={build_python}",
             "-DMLX_BUILD_TESTS=OFF",
             "-DMLX_BUILD_BENCHMARKS=OFF",
             "-DMLX_BUILD_EXAMPLES=OFF",
@@ -98,10 +112,6 @@ class CMakeBuild(build_ext):
         # across all generators.
         if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ:
             build_args += [f"-j{os.cpu_count()}"]
-
-        build_temp = Path(self.build_temp) / ext.name
-        if not build_temp.exists():
-            build_temp.mkdir(parents=True)
 
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
@@ -158,26 +168,40 @@ class GenerateStubs(Command):
         subprocess.run(stub_cmd + ["-o", f"{out_path}/__init__.pyi"])
 
 
+class MLXBdistWheel(bdist_wheel):
+    def get_tag(self) -> tuple[str, str, str]:
+        impl, abi, plat_name = super().get_tag()
+        if build_stage == 2:
+            impl = self.python_tag
+            abi = "none"
+        return (impl, abi, plat_name)
+
+
 # Read the content of README.md
 with open(Path(__file__).parent / "README.md", encoding="utf-8") as f:
     long_description = f.read()
 
-# The information here can also be placed in setup.cfg - better separation of
-# logic and declaration, and simpler if you include description/version in a file.
+
 if __name__ == "__main__":
-    packages = find_namespace_packages(
-        where="python", exclude=["src", "tests", "tests.*"]
-    )
     package_dir = {"": "python"}
-    package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
-    install_requires = []
+    packages = [
+        "mlx",
+        "mlx.nn",
+        "mlx.nn.layers",
+        "mlx.optimizers",
+    ]
+
+    build_macos = platform.system() == "Darwin"
     build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
+
+    install_requires = []
     if build_cuda:
         install_requires = ["nvidia-cublas-cu12", "nvidia-cuda-nvrtc-cu12"]
+    version = get_version()
 
-    setup(
-        name="mlx-cuda" if build_cuda else "mlx",
-        version=get_version(),
+    _setup = partial(
+        setup,
+        version=version,
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
@@ -185,29 +209,77 @@ if __name__ == "__main__":
         long_description_content_type="text/markdown",
         license="MIT",
         url="https://github.com/ml-explore/mlx",
-        packages=packages,
-        package_dir=package_dir,
-        package_data=package_data,
         include_package_data=True,
-        install_requires=install_requires,
-        extras_require={
-            "dev": [
-                "nanobind==2.4.0",
-                "numpy",
-                "pre-commit",
-                "setuptools>=42",
-                "torch",
-                "typing_extensions",
-            ],
-        },
-        entry_points={
-            "console_scripts": [
-                "mlx.launch = mlx.distributed_run:main",
-                "mlx.distributed_config = mlx.distributed_run:distributed_config",
-            ]
-        },
-        ext_modules=[CMakeExtension("mlx.core")],
-        cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
+        package_dir=package_dir,
         zip_safe=False,
         python_requires=">=3.9",
+        ext_modules=[CMakeExtension("mlx.core")],
+        cmdclass={
+            "build_ext": CMakeBuild,
+            "generate_stubs": GenerateStubs,
+            "bdist_wheel": MLXBdistWheel,
+        },
     )
+
+    package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
+
+    extras = {
+        "dev": [
+            "nanobind==2.4.0",
+            "numpy",
+            "pre-commit",
+            "setuptools>=80",
+            "torch",
+            "typing_extensions",
+        ],
+    }
+    entry_points = {
+        "console_scripts": [
+            "mlx.launch = mlx.distributed_run:main",
+            "mlx.distributed_config = mlx.distributed_run:distributed_config",
+        ]
+    }
+
+    # Release builds for PyPi are in two stages.
+    # Each stage should be run from a clean build:
+    #   python setup.py clean --all
+    #
+    # Stage 1:
+    #  - Triggered with `MLX_BUILD_STAGE=1`
+    #  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
+    #  - Wheel has Python ABI and platform tags
+    #  - Wheel should be built for the cross-product of python version and platforms
+    #  - Package name is mlx and it depends on subpackage in stage 2 (e.g. mlx-metal)
+    # Stage 2:
+    #  - Triggered with `MLX_BUILD_STAGE=2`
+    #  - Includes only backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
+    #  - Wheel has only platform tags
+    #  - Wheel should be built only for different platforms
+    #  - Package name is back-end specific, e.g mlx-metal
+    if build_stage != 2:
+        if build_stage == 1:
+            if build_macos:
+                install_requires += [f"mlx-metal=={version}"]
+            else:
+                extras["cuda"] = [f"mlx-cuda=={version}"]
+                extras["cpu"] = [f"mlx-cpu=={version}"]
+
+        _setup(
+            name="mlx",
+            packages=packages,
+            extras_require=extras,
+            entry_points=entry_points,
+            install_requires=install_requires,
+            package_data=package_data,
+        )
+    else:
+        if build_macos:
+            name = "mlx-metal"
+        elif build_cuda:
+            name = "mlx-cuda"
+        else:
+            name = "mlx-cpu"
+        _setup(
+            name=name,
+            packages=["mlx"],
+        )
