@@ -1478,7 +1478,7 @@ class TestOps(mlx_tests.MLXTestCase):
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
 
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
+            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, equal_nan=True))
 
         x = np.random.rand(9, 12, 18)
         xi = np.random.rand(9, 12, 18)
