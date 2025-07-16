@@ -529,7 +529,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
       return arr;
     } else {
       temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy(arr, temps.back(), CopyType::General, s);
+      copy_cpu(arr, temps.back(), CopyType::General, s);
       return temps.back();
     }
   };
@@ -579,7 +579,7 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       return arr;
     } else {
       temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy(arr, temps.back(), CopyType::General, s);
+      copy_cpu(arr, temps.back(), CopyType::General, s);
       return temps.back();
     }
   };
@@ -713,7 +713,7 @@ void fast::AffineQuantize::eval_cpu(
       return std::make_pair(arr, false);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General, s);
+      copy_cpu(arr, arr_copy, CopyType::General, s);
       return std::make_pair(arr_copy, true);
     }
   };

@@ -97,7 +97,8 @@ jobs:
           command: |
             python -m unittest discover python/tests -v
             mpirun --bind-to none -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
-            mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py
+            mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+            if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
       - run:
           name: Build CPP only
           command: |
@@ -156,7 +157,8 @@ jobs:
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
             mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
-            mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py
+            mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+            if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
       - run:
           name: Build example extension
           command: |

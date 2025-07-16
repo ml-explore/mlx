@@ -26,7 +26,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   strides[in.ndim() - 2] = 1;
   strides[in.ndim() - 1] = M;
   in.set_data(allocator::malloc(in.nbytes()), in.nbytes(), strides, flags);
-  copy_inplace(a, in, CopyType::GeneralGeneral, stream);
+  copy_cpu_inplace(a, in, CopyType::GeneralGeneral, stream);
   auto& encoder = cpu::get_command_encoder(stream);
   q.set_data(allocator::malloc(q.nbytes()));
   r.set_data(allocator::malloc(r.nbytes()));
