@@ -4,6 +4,7 @@ import unittest
 
 import mlx.core as mx
 import mlx_distributed_tests
+import mlx_tests
 
 
 class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
