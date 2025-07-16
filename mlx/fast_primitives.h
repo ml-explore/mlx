@@ -43,6 +43,8 @@ class RMSNorm : public Custom {
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
 
+  static bool use_fallback(Stream stream);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
     throw std::runtime_error("NYI");
@@ -56,7 +58,7 @@ class RMSNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RMSNorm)
+  DEFINE_NAME(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
 
@@ -65,7 +67,6 @@ class RMSNorm : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -84,14 +85,13 @@ class RMSNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(RMSNormVJP)
+  DEFINE_NAME(RMSNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -102,6 +102,8 @@ class LayerNorm : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
+
+  static bool use_fallback(Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -116,7 +118,7 @@ class LayerNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(LayerNorm)
+  DEFINE_NAME(LayerNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -124,7 +126,6 @@ class LayerNorm : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -143,14 +144,13 @@ class LayerNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(LayerNormVJP)
+  DEFINE_NAME(LayerNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float eps_;
 };
 
@@ -171,6 +171,8 @@ class RoPE : public Custom {
         scale_(scale),
         forward_(forward) {}
 
+  static bool use_fallback(Stream s);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
     throw std::runtime_error("NYI");
@@ -184,7 +186,7 @@ class RoPE : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RoPE)
+  DEFINE_NAME(RoPE)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -193,7 +195,6 @@ class RoPE : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   int dims_;
   bool traditional_;
   float base_;
@@ -210,6 +211,15 @@ class ScaledDotProductAttention : public Custom {
       const bool do_causal)
       : Custom(stream, fallback), scale_(scale), do_causal_(do_causal) {}
 
+  static bool use_fallback(
+      const array& q,
+      const array& k,
+      const array& v,
+      bool has_mask,
+      bool has_arr_mask,
+      bool do_causal,
+      Stream s);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
     throw std::runtime_error("NYI");
@@ -223,14 +233,13 @@ class ScaledDotProductAttention : public Custom {
   void eval_gpu(const std::vector<array>& inputs, array& out);
   bool is_equivalent(const Primitive& other) const override;
 
-  DEFINE_PRINT(ScaledDotProductAttention);
+  DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(nullptr, scale_, do_causal_);
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
   bool do_causal_;
 };
@@ -254,7 +263,7 @@ class AffineQuantize : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(AffineQuantize);
+  DEFINE_NAME(AffineQuantize);
 
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
@@ -263,7 +272,6 @@ class AffineQuantize : public Custom {
   }
 
  private:
-  std::function<std::vector<array>(std::vector<array>)> fallback_;
   int group_size_;
   int bits_;
   bool dequantize_;
@@ -303,7 +311,7 @@ class CustomKernel : public Primitive {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(CustomKernel);
+  DEFINE_NAME(CustomKernel);
 
  private:
   std::string source_;

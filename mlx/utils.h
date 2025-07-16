@@ -65,6 +65,7 @@ struct finfo {
   Dtype dtype;
   double min;
   double max;
+  double eps;
 };
 
 /** Holds information about integral types. */
@@ -146,6 +147,11 @@ inline int max_mb_per_buffer(int default_value) {
 inline bool metal_fast_synch() {
   static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
   return metal_fast_synch;
+}
+
+inline bool enable_tf32() {
+  static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 1);
+  return enable_tf32_;
 }
 
 } // namespace env

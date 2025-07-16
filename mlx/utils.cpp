@@ -69,7 +69,12 @@ inline void PrintFormatter::print(std::ostream& os, double val) {
   os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
-  os << val;
+  os << val.real();
+  if (val.imag() >= 0 || std::isnan(val.imag())) {
+    os << "+" << val.imag() << "j";
+  } else {
+    os << "-" << -val.imag() << "j";
+  }
 }
 
 PrintFormatter& get_global_formatter() {
@@ -248,7 +253,9 @@ std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k) {
 
 std::ostream& operator<<(std::ostream& os, array a) {
   a.eval();
-  MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE, print_array<CTYPE>(os, a));
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    print_array<MLX_GET_TYPE(type_tag)>(os, a);
+  });
   return os;
 }
 
@@ -283,9 +290,10 @@ int get_var(const char* name, int default_value) {
 } // namespace env
 
 template <typename T>
-void set_finfo_limits(double& min, double& max) {
+void set_finfo_limits(double& min, double& max, double& eps) {
   min = numeric_limits<T>::lowest();
   max = numeric_limits<T>::max();
+  eps = numeric_limits<T>::epsilon();
 }
 
 finfo::finfo(Dtype dtype) : dtype(dtype) {
@@ -295,16 +303,16 @@ finfo::finfo(Dtype dtype) : dtype(dtype) {
     throw std::invalid_argument(msg.str());
   }
   if (dtype == float32) {
-    set_finfo_limits<float>(min, max);
+    set_finfo_limits<float>(min, max, eps);
   } else if (dtype == float16) {
-    set_finfo_limits<float16_t>(min, max);
+    set_finfo_limits<float16_t>(min, max, eps);
   } else if (dtype == bfloat16) {
-    set_finfo_limits<bfloat16_t>(min, max);
+    set_finfo_limits<bfloat16_t>(min, max, eps);
   } else if (dtype == float64) {
-    set_finfo_limits<double>(min, max);
+    set_finfo_limits<double>(min, max, eps);
   } else if (dtype == complex64) {
     this->dtype = float32;
-    set_finfo_limits<float>(min, max);
+    set_finfo_limits<float>(min, max, eps);
   }
 }
 
@@ -315,8 +323,9 @@ void set_iinfo_limits(int64_t& min, uint64_t& max) {
 }
 
 iinfo::iinfo(Dtype dtype) : dtype(dtype) {
-  MLX_SWITCH_INT_TYPES_CHECKED(
-      dtype, "[iinfo]", CTYPE, set_iinfo_limits<CTYPE>(min, max));
+  dispatch_int_types(dtype, "[iinfo]", [&](auto type_tag) {
+    set_iinfo_limits<MLX_GET_TYPE(type_tag)>(min, max);
+  });
 }
 
 } // namespace mlx::core

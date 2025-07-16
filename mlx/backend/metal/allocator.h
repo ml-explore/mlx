@@ -7,49 +7,13 @@
 #include <vector>
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/buffer_cache.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/resident.h"
 
 namespace mlx::core::metal {
 
 using allocator::Buffer;
-
-namespace {
-
-class BufferCache {
- public:
-  BufferCache(ResidencySet& residency_set);
-  ~BufferCache();
-
-  MTL::Buffer* reuse_from_cache(size_t size);
-  void recycle_to_cache(MTL::Buffer* buf);
-  int release_cached_buffers(size_t min_bytes_to_free);
-  size_t cache_size() {
-    return pool_size_;
-  }
-  int clear();
-
- private:
-  struct BufferHolder {
-   public:
-    BufferHolder(MTL::Buffer* buf_) : buf(buf_), prev(nullptr), next(nullptr) {}
-
-    BufferHolder* prev;
-    BufferHolder* next;
-    MTL::Buffer* buf;
-  };
-
-  void add_at_head(BufferHolder* to_add);
-  void remove_from_list(BufferHolder* to_remove);
-
-  std::multimap<size_t, BufferHolder*> buffer_pool_;
-  BufferHolder* head_;
-  BufferHolder* tail_;
-  size_t pool_size_;
-  ResidencySet& residency_set_;
-};
-
-} // namespace
 
 class MetalAllocator : public allocator::Allocator {
   /** Allocator for Metal GPUs. */
@@ -90,7 +54,7 @@ class MetalAllocator : public allocator::Allocator {
   friend MetalAllocator& allocator();
 
   // Caching allocator
-  BufferCache buffer_cache_;
+  BufferCache<MTL::Buffer> buffer_cache_;
 
   ResidencySet residency_set_;
 

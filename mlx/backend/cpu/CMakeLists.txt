@@ -40,11 +40,13 @@ add_dependencies(mlx cpu_compiled_preamble)
 
 target_sources(
   mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/available.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/eig.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eigh.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/encoder.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp

@@ -8,7 +8,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 import numpy as np
-from mlx.utils import tree_flatten, tree_map
+from mlx.utils import tree_flatten, tree_map, tree_reduce
 
 
 class TestBase(mlx_tests.MLXTestCase):
@@ -198,6 +198,13 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
 
+    def test_quantize_freeze(self):
+        lin = nn.Linear(512, 512)
+        qlin = lin.to_quantized()
+        qlin.unfreeze(keys=["scales"])
+        size = tree_reduce(lambda acc, p: acc + p.size, qlin.trainable_parameters(), 0)
+        self.assertTrue(size > 0)
+
     def test_grad_of_module(self):
         class Model(nn.Module):
             def __init__(self):
@@ -211,6 +218,66 @@ class TestBase(mlx_tests.MLXTestCase):
 
         x = mx.zeros((3,))
         mx.grad(loss_fn)(model)
+
+    def test_update(self):
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+
+        # Updating non-existent parameters
+        with self.assertRaises(ValueError):
+            updates = {"layers": [{"value": 0}]}
+            m.update(updates)
+
+        with self.assertRaises(ValueError):
+            updates = {"layers": ["hello"]}
+            m.update(updates)
+
+        # Wronge type
+        with self.assertRaises(ValueError):
+            updates = {"layers": [{"weight": "hi"}]}
+            m.update(updates)
+
+    def test_update_modules(self):
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+
+        # Updating non-existent modules should not be allowed by default
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"values": [0, 1]})
+
+        # Update wrong types
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"layers": [0, 1]})
+
+        class MyModule(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.test = mx.array(1.0)
+                self.list = [mx.array(1.0), mx.array(2.0)]
+
+        m = MyModule()
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"test": "hi"})
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"list": ["hi"]})
+
+        # Allow updating a strict subset
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules({"layers": [{}, nn.Linear(3, 4)]})
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
+        # Using leaf_modules in the update should always work
+        class MyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stuff = [nn.Linear(2, 2), 0, nn.Linear(2, 2)]
+                self.more_stuff = {"hi": nn.Linear(2, 2), "bye": 0}
+
+        m = MyModel()
+        m.update_modules(m.leaf_modules())
+
+    def test_parameter_deletion(self):
+        m = nn.Linear(32, 32)
+        del m.weight
+        self.assertFalse(hasattr(m, "weight"))
 
 
 class TestLayers(mlx_tests.MLXTestCase):
@@ -1860,4 +1927,4 @@ class TestLayers(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

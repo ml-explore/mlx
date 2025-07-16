@@ -103,10 +103,12 @@ class TestDtypes(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.finfo(mx.float32).min, np.finfo(np.float32).min)
         self.assertEqual(mx.finfo(mx.float32).max, np.finfo(np.float32).max)
+        self.assertEqual(mx.finfo(mx.float32).eps, np.finfo(np.float32).eps)
         self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
 
         self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
+        self.assertEqual(mx.finfo(mx.float16).eps, np.finfo(np.float16).eps)
         self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
 
     def test_iinfo(self):
@@ -196,7 +198,7 @@ class TestInequality(mlx_tests.MLXTestCase):
     def test_dlx_device_type(self):
         a = mx.array([1, 2, 3])
         device_type, device_id = a.__dlpack_device__()
-        self.assertIn(device_type, [1, 8])
+        self.assertIn(device_type, [1, 8, 13])
         self.assertEqual(device_id, 0)
 
         if device_type == 8:
@@ -1185,7 +1187,7 @@ class TestArray(mlx_tests.MLXTestCase):
         check_slices(np.zeros((3, 2)), np.array([[3, 3], [4, 4]]), np.array([0, 1]))
         check_slices(np.zeros((3, 2)), np.array([[3, 3], [4, 4]]), np.array([0, 1]))
         check_slices(
-            np.zeros((3, 2)), np.array([[3, 3], [4, 4], [5, 5]]), np.array([0, 0, 1])
+            np.zeros((3, 2)), np.array([[3, 3], [4, 4], [5, 5]]), np.array([0, 2, 1])
         )
 
         # Multiple slices
@@ -2020,6 +2022,15 @@ class TestArray(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.add(y, x)
 
+    def test_real_imag(self):
+        x = mx.array([1.0])
+        self.assertEqual(x.real.item(), 1.0)
+        self.assertEqual(x.imag.item(), 0.0)
+
+        x = mx.array([1.0 + 1.0j])
+        self.assertEqual(x.imag.item(), 1.0)
+        self.assertEqual(x.real.item(), 1.0)
+
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

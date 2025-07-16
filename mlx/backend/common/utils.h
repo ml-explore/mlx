@@ -2,11 +2,16 @@
 
 #pragma once
 
+#include <filesystem>
+#include <tuple>
 #include <vector>
 
 #include "mlx/array.h"
 
 namespace mlx::core {
+
+// Return the directory that contains current shared library.
+std::filesystem::path current_binary_dir();
 
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
@@ -69,6 +74,31 @@ std::pair<Shape, Strides> collapse_contiguous_dims(
 std::pair<Shape, Strides> collapse_contiguous_dims(
     const array& a,
     int64_t size_cap = std::numeric_limits<int32_t>::max());
+
+// Compute the thread block dimensions which fit the given
+// input dimensions.
+// - The thread block dimensions will be powers of two
+// - The thread block size will be less than 2^pow2
+using Dims = std::tuple<uint32_t, uint32_t, uint32_t>;
+Dims get_block_dims_common(int dim0, int dim1, int dim2, int pow2 = 10);
+
+// Computes a 2D grid where each element is < UINT_MAX
+// Assumes:
+// - overall size (product of non-broadcasted dimensions) is < UINT_MAX^2
+// - shape and strides correspond to a contiguous (no holes) but
+//   possibly broadcasted array
+Dims get_2d_grid_dims_common(const Shape& shape, const Strides& strides);
+
+// Same as above but we do an implicit division with divisor.
+// Basically, equivalent to factorizing
+//    Prod(s \forall s in shape if strides[s] > 0) / divisor.
+Dims get_2d_grid_dims_common(
+    const Shape& shape,
+    const Strides& strides,
+    size_t divisor);
+
+// Get both the block and a grid of blocks that covers dim0, dim1 and dim2.
+std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2);
 
 struct ContiguousIterator {
   inline void step() {
@@ -165,4 +195,11 @@ void shared_buffer_reshape(
     const array& in,
     const Strides& out_strides,
     array& out);
+
+template <typename T>
+inline std::vector<T> remove_index(std::vector<T> vec, size_t index) {
+  vec.erase(std::next(vec.begin(), index));
+  return vec;
+}
+
 } // namespace mlx::core

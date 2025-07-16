@@ -18,7 +18,7 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -27,7 +27,7 @@ MTL::ComputePipelineState* get_binary_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -36,7 +36,7 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     const std::string& kernel_name,
     Dtype,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -44,7 +44,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype,
-    const std::string) {
+    const char*) {
   return d.get_kernel(kernel_name);
 }
 
@@ -146,7 +146,7 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
     int,
     int,
     int) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
@@ -207,7 +207,23 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int,
     int,
     bool) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_gemm_segmented_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    bool,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_gemv_masked_kernel(
@@ -244,13 +260,15 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
     const array&,
     int,
     int,
     int,
     int,
     int) {
-  return d.get_kernel(kernel_name);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_fft_kernel(
@@ -259,7 +277,7 @@ MTL::ComputePipelineState* get_fft_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
     const std::string&) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_quantized_kernel(
@@ -283,7 +301,7 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     int,
     int,
     bool) {
-  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 } // namespace mlx::core

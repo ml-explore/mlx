@@ -391,13 +391,15 @@ class TestLoad(mlx_tests.MLXTestCase):
         scale = mx.array(2.0)
         y = mx.load(save_file)
         mx.eval(y)
+        mx.synchronize()
         load_only = mx.get_peak_memory()
         y = mx.load(save_file) * scale
         mx.eval(y)
+        mx.synchronize()
         load_with_binary = mx.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

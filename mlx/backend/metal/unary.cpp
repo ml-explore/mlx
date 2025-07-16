@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
-#include "mlx/backend/common/utils.h"
+
+#include "mlx/backend/common/unary.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
@@ -7,7 +8,7 @@
 
 #define UNARY_GPU(func)                                               \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    unary_op_gpu(inputs, out, get_primitive_string(this));            \
+    unary_op_gpu(inputs, out, name());                                \
   }
 
 namespace mlx::core {
@@ -15,7 +16,7 @@ namespace mlx::core {
 void unary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   auto& in = inputs[0];
   bool contig = in.flags().contiguous;
@@ -34,18 +35,19 @@ void unary_op_gpu_inplace(
   };
   auto [shape, strides] = maybe_collapse();
   int ndim = shape.size();
-  size_t nthreads = contig ? in.data_size() : in.size();
   bool large;
   if (!contig) {
     large = in.data_size() > INT32_MAX || out.size() > INT32_MAX;
   } else {
     large = in.data_size() > UINT32_MAX;
   }
-  int work_per_thread = !contig && large ? 4 : 1;
+  int work_per_thread;
   std::string kernel_name;
   if (contig) {
-    kernel_name = (large ? "v2" : "v");
+    work_per_thread = get_work_per_thread(in.dtype(), in.data_size());
+    kernel_name = (large ? "v2" : (work_per_thread > 1 ? "vn" : "v"));
   } else {
+    work_per_thread = large ? 4 : 1;
     kernel_name = "gn" + std::to_string(work_per_thread);
     if (large) {
       kernel_name += "large";
@@ -75,12 +77,20 @@ void unary_op_gpu_inplace(
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
+    size_t nthreads = ceildiv(in.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
+
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                                : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims;
+    if (large) {
+      compute_encoder.set_bytes<int64_t>(in.data_size(), 2);
+      grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+    } else {
+      compute_encoder.set_bytes<int>(in.data_size(), 2);
+      grid_dims = MTL::Size(nthreads, 1, 1);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
@@ -88,30 +98,16 @@ void unary_op_gpu_inplace(
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
-  auto& in = inputs[0];
-  bool contig = in.flags().contiguous;
-  if (contig) {
-    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
-      out.copy_shared_buffer(in);
-    } else {
-      out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
-          in.data_size(),
-          in.strides(),
-          in.flags());
-    }
-  } else {
-    out.set_data(allocator::malloc(out.nbytes()));
-  }
+  set_unary_output_data(inputs[0], out);
   unary_op_gpu_inplace(inputs, out, op, s);
 }
 
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op) {
+    const char* op) {
   auto& s = out.primitive().stream();
   unary_op_gpu(inputs, out, op, s);
 }
@@ -150,13 +146,13 @@ UNARY_GPU(Tanh)
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (base_) {
     case Base::e:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
     case Base::two:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
     case Base::ten:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
   }
 }
@@ -165,7 +161,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu(inputs, out, get_primitive_string(this));
+    unary_op_gpu(inputs, out, name());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);

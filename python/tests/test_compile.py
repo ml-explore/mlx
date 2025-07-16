@@ -2,8 +2,10 @@
 
 import gc
 import io
+import math
 import unittest
 from functools import partial
+from io import StringIO
 
 import mlx.core as mx
 import mlx_tests
@@ -979,6 +981,39 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mem_pre, mem_post)
 
+    def test_double_constant(self):
+        with mx.stream(mx.cpu):
+            x = mx.array(1.0, dtype=mx.float64)
+
+            def fun(x):
+                return (x + math.pi) * 2.0
+
+            y = fun(x).item()
+            y_compiled = mx.compile(fun)(x).item()
+            self.assertEqual(y, y_compiled)
+
+    def test_shared_broadcast(self):
+        def fun(x, y, z):
+            yy = mx.broadcast_to(y, z.shape)
+            return (x + yy * z), yy.sum()
+
+        a = mx.random.normal((10, 10))
+        b = mx.array(0.1)
+        c = mx.random.normal((10, 10))
+        mx.eval(a, b, c)
+        fc = mx.compile(fun)
+        d = fc(a, b, c)
+
+        s = StringIO()
+        mx.export_to_dot(s, a=a, b=b, c=c, d1=d[0], d2=d[1])
+        s.seek(0)
+        s = s.read()
+
+        self.assertTrue("CompiledBroadcastMultiplyAdd" in s)
+        d_hat = fun(a, b, c)
+        self.assertTrue(mx.allclose(d[0], d_hat[0]))
+        self.assertTrue(mx.allclose(d[1], d_hat[1]))
+
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

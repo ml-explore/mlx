@@ -472,9 +472,24 @@ array hadamard_transform(
     const array& a,
     std::optional<float> scale_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
+  if (a.size() == 0) {
+    throw std::invalid_argument(
+        "[hadamard_transform] Does not support empty arrays.");
+  }
   // Default to an orthonormal Hadamard matrix scaled by 1/sqrt(N)
-  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(a.shape(-1));
+  int n = a.ndim() > 0 ? a.shape(-1) : 1;
+  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(n);
   auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
+
+  // Nothing to do for a scalar
+  if (n == 1) {
+    if (scale == 1) {
+      return a;
+    }
+
+    return multiply(a, array(scale, dtype), s);
+  }
+
   return array(
       a.shape(),
       dtype,
@@ -2832,6 +2847,27 @@ array matmul(
         "[matmul] Got 0 dimension input. Inputs must "
         "have at least one dimension.");
   }
+
+  // complex matmul using Karatsuba's Algorithm
+  if (a.dtype() == complex64 || b.dtype() == complex64) {
+    // Extract real and imaginary parts
+    auto a_real = real(a, s);
+    auto a_imag = imag(a, s);
+    auto b_real = real(b, s);
+    auto b_imag = imag(b, s);
+
+    // Compute real and imaginary components of the result
+    auto m1 = matmul(a_real, b_real, s);
+    auto m2 = matmul(a_imag, b_imag, s);
+    auto m3 = matmul(add(a_real, a_imag, s), add(b_real, b_imag, s), s);
+
+    auto c_real = subtract(m1, m2, s);
+    auto c_imag = subtract(m3, add(m1, m2, s), s);
+
+    return add(
+        c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
+  }
+
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
     a = expand_dims(a, 0, s);
@@ -2847,20 +2883,9 @@ array matmul(
         << " second input with shape " << b.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
+
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
-  // Complex matmul in terms of real matmuls
-  if (out_type == complex64) {
-    auto a_real = real(a, s);
-    auto b_real = real(b, s);
-    auto a_imag = imag(a, s);
-    auto b_imag = imag(b, s);
-    auto c_real =
-        subtract(matmul(a_real, b_real, s), matmul(a_imag, b_imag, s), s);
-    auto c_imag = add(matmul(a_real, b_imag, s), matmul(a_imag, b_real, s), s);
-    return add(
-        c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
-  }
 
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
@@ -3158,6 +3183,10 @@ array scatter_axis(
     msg << prefix << " Indices of dimension " << indices.ndim()
         << " does not match array of dimension " << a.ndim() << ".";
     throw std::invalid_argument(msg.str());
+  }
+
+  if (a.size() == 0) {
+    return a;
   }
 
   auto upd = astype(values, a.dtype(), s);
@@ -3565,21 +3594,21 @@ Shape conv_out_shape(
 
   if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << "for "
+    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (kernel_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid kernel dilation " << kernel_dilation << "for "
+    msg << "[conv] Invalid kernel dilation " << kernel_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
   if (input_dilation.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid input dilation " << input_dilation << "for "
+    msg << "[conv] Invalid input dilation " << input_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
@@ -3769,6 +3798,7 @@ array conv_transpose_general(
     std::vector<int> stride,
     std::vector<int> padding,
     std::vector<int> dilation,
+    std::vector<int> output_padding,
     int groups,
     StreamOrDevice s) {
   std::vector<int> padding_lo(padding.size());
@@ -3782,7 +3812,8 @@ array conv_transpose_general(
 
     int in_size = 1 + (conv_output_shape - 1);
     int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
-    padding_hi[i] = in_size - out_size + padding[i];
+    padding_hi[i] = in_size - out_size + padding[i] +
+        output_padding[i]; // Adjust with output_padding
   }
 
   return conv_general(
@@ -3805,10 +3836,11 @@ array conv_transpose1d(
     int stride /* = 1 */,
     int padding /* = 0 */,
     int dilation /* = 1 */,
+    int output_padding /* = 0 */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
-      in_, wt_, {stride}, {padding}, {dilation}, groups, s);
+      in_, wt_, {stride}, {padding}, {dilation}, {output_padding}, groups, s);
 }
 
 /** 2D transposed convolution with a filter */
@@ -3818,6 +3850,7 @@ array conv_transpose2d(
     const std::pair<int, int>& stride /* = {1, 1} */,
     const std::pair<int, int>& padding /* = {0, 0} */,
     const std::pair<int, int>& dilation /* = {1, 1} */,
+    const std::pair<int, int>& output_padding /* = {0, 0} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
@@ -3826,6 +3859,7 @@ array conv_transpose2d(
       {stride.first, stride.second},
       {padding.first, padding.second},
       {dilation.first, dilation.second},
+      {output_padding.first, output_padding.second},
       groups,
       s);
 }
@@ -3837,6 +3871,7 @@ array conv_transpose3d(
     const std::tuple<int, int, int>& stride /* = {1, 1, 1} */,
     const std::tuple<int, int, int>& padding /* = {0, 0, 0} */,
     const std::tuple<int, int, int>& dilation /* = {1, 1, 1} */,
+    const std::tuple<int, int, int>& output_padding /* = {0, 0, 0} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   return conv_transpose_general(
@@ -3845,6 +3880,9 @@ array conv_transpose3d(
       {std::get<0>(stride), std::get<1>(stride), std::get<2>(stride)},
       {std::get<0>(padding), std::get<1>(padding), std::get<2>(padding)},
       {std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)},
+      {std::get<0>(output_padding),
+       std::get<1>(output_padding),
+       std::get<2>(output_padding)},
       groups,
       s);
 }
@@ -3954,6 +3992,7 @@ array conv_general(
           to_stream(s),
           stride,
           padding_lo,
+          padding_hi,
           kernel_dilation,
           input_dilation,
           groups,
@@ -4202,6 +4241,16 @@ array addmm(
         "have at least one dimension.");
   }
 
+  // Type promotion
+  auto out_type = result_type(a, b, c);
+
+  if (out_type == complex64) {
+    return add(
+        multiply(matmul(a, b, s), array(alpha), s),
+        multiply(array(beta), c, s),
+        s);
+  }
+
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
     a = expand_dims(a, 0, s);
@@ -4217,16 +4266,6 @@ array addmm(
         << " must match second to last dimension of"
         << " second input with shape " << b.shape() << ".";
     throw std::invalid_argument(msg.str());
-  }
-
-  // Type promotion
-  auto out_type = result_type(a, b, c);
-
-  if (out_type == complex64) {
-    return add(
-        multiply(matmul(a, b, s), array(alpha), s),
-        multiply(array(beta), c, s),
-        s);
   }
 
   if (!issubdtype(out_type, floating)) {
@@ -4304,6 +4343,10 @@ array addmm(
     }
 
     c = reshape(c, c_reshape, s);
+  }
+  if (c.shape() != out_shape) {
+    throw std::invalid_argument(
+        "[addmm] input c must broadcast to the output shape");
   }
 
   auto out = array(
@@ -4606,6 +4649,54 @@ array gather_mm(
   return axes.empty() ? out : squeeze(out, axes, s);
 }
 
+array segmented_mm(
+    array a,
+    array b,
+    array segments,
+    StreamOrDevice s /* = {} */) {
+  if (a.ndim() != 2 || b.ndim() != 2) {
+    throw std::invalid_argument("[segmented_mm] Batched matmul not supported");
+  }
+
+  if (segments.ndim() < 1 || segments.shape().back() != 2) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] The segments should have shape (..., 2) but "
+        << segments.shape() << " was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type(a, b);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (!issubdtype(segments.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[segmented_mm] Got segments with invalid dtype. Segments must be integral.");
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  segments = astype(segments, uint32, s);
+
+  Shape out_shape = segments.shape();
+  out_shape.pop_back();
+  out_shape.push_back(a.shape(0));
+  out_shape.push_back(b.shape(1));
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<SegmentedMM>(to_stream(s)),
+      {std::move(a), std::move(b), std::move(segments)});
+}
+
 array diagonal(
     const array& a,
     int offset /* = 0 */,
@@ -4873,8 +4964,9 @@ array bitwise_impl(
     const array& b,
     BitwiseBinary::Op op,
     const std::string& op_name,
-    const StreamOrDevice& s) {
-  auto out_type = promote_types(a.dtype(), b.dtype());
+    const StreamOrDevice& s,
+    std::optional<Dtype> out_type_ = std::nullopt) {
+  auto out_type = out_type_ ? *out_type_ : promote_types(a.dtype(), b.dtype());
   if (!(issubdtype(out_type, integer) || out_type == bool_)) {
     std::ostringstream msg;
     msg << "[" << op_name
@@ -4919,12 +5011,7 @@ array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (t == bool_) {
     t = uint8;
   }
-  return bitwise_impl(
-      astype(a, t, s),
-      astype(b, t, s),
-      BitwiseBinary::Op::LeftShift,
-      "left_shift",
-      s);
+  return bitwise_impl(a, b, BitwiseBinary::Op::LeftShift, "left_shift", s, t);
 }
 array operator<<(const array& a, const array& b) {
   return left_shift(a, b);
@@ -4940,7 +5027,8 @@ array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       astype(b, t, s),
       BitwiseBinary::Op::RightShift,
       "right_shift",
-      s);
+      s,
+      t);
 }
 array operator>>(const array& a, const array& b) {
   return right_shift(a, b);
@@ -5019,8 +5107,11 @@ array roll(
     }
 
     auto sh = shift[i];
-    auto split_index =
-        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+    auto size = a.shape(ax);
+    if (size == 0) {
+      continue; // skip rolling this axis if it has size 0
+    }
+    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);

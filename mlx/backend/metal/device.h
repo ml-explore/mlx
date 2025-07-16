@@ -3,8 +3,6 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
-#include <dlfcn.h>
-#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -15,25 +13,7 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 
-namespace fs = std::filesystem;
-
 namespace mlx::core::metal {
-
-// Note, this function must be left inline in a header so that it is not
-// dynamically linked.
-inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
-  Dl_info info;
-  std::string mtllib_path;
-  std::string lib_ext = lib_name + ".metallib";
-
-  int success = dladdr((void*)get_colocated_mtllib_path, &info);
-  if (success) {
-    auto mtllib = fs::path(info.dli_fname).remove_filename() / lib_ext;
-    mtllib_path = mtllib.c_str();
-  }
-
-  return mtllib_path;
-}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
@@ -97,6 +77,10 @@ struct CommandEncoder {
   template <typename T>
   void set_bytes(const T& v, int idx) {
     return enc_->setBytes(&v, sizeof(T), idx);
+  }
+
+  void set_threadgroup_memory_length(size_t length, int idx) {
+    enc_->setThreadgroupMemoryLength(length, idx);
   }
 
   ConcurrentContext start_concurrent() {
@@ -177,6 +161,10 @@ class Device {
     return arch_;
   }
 
+  int get_architecture_gen() const {
+    return arch_gen_;
+  }
+
   void new_queue(int index);
 
   MTL::CommandQueue* get_queue(Stream stream);
@@ -187,13 +175,15 @@ class Device {
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
 
-  void register_library(
-      const std::string& lib_name,
-      const std::string& lib_path = "");
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::string& path = "");
 
   MTL::Library* get_library(
       const std::string& name,
       const std::function<std::string(void)>& builder);
+
+  void clear_library(const std::string& name);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
@@ -204,7 +194,6 @@ class Device {
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
-      const std::string& lib_name = "mlx",
       const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
@@ -258,16 +247,22 @@ class Device {
   std::unordered_map<int32_t, DeviceStream> stream_map_;
 
   std::shared_mutex kernel_mtx_;
-  std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
-
   std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
+  MTL::Library* default_library_;
+  std::unordered_map<
+      MTL::Library*,
+      std::unordered_map<std::string, MTL::ComputePipelineState*>>
+      library_kernels_;
   const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
+  int arch_gen_;
   int max_ops_per_buffer_;
   int max_mb_per_buffer_;
 };
 
 Device& device(mlx::core::Device);
+
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
 } // namespace mlx::core::metal

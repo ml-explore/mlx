@@ -381,6 +381,7 @@ struct Conv2DWeightBlockLoader {
   const constant MLXConvParams<2>* params;
 
   int weight_hw;
+  int weight_step;
 
   const int read_n;
   const bool do_read;
@@ -402,6 +403,7 @@ struct Conv2DWeightBlockLoader {
         src(src_ + bi * src_ld + bj),
         params(params_),
         weight_hw(0),
+        weight_step(params->C / params->groups),
         read_n(offsets.y + bi),
         do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
@@ -435,13 +437,13 @@ struct Conv2DWeightBlockLoader {
   /* Iteration helper */
   METAL_FUNC void next() {
     if (++weight_hw < (params->wS[1] * params->wS[0])) {
-      src += params->wt_strides[2];
+      src += weight_step;
       return;
     }
 
     weight_hw = 0;
 
-    src += BK - (params->wS[1] * params->wS[0] - 1) * params->wt_strides[2];
+    src += BK - (params->wS[1] * params->wS[0] - 1) * weight_step;
   }
 };
 

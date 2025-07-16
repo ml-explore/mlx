@@ -8,14 +8,11 @@
 #include "mlx/array.h"
 #include "mlx/stream.h"
 
-namespace mlx::core::metal {
+namespace mlx::core::gpu {
 
 void new_stream(Stream stream);
-
-std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
-
 void eval(array& arr);
 void finalize(Stream s);
 void synchronize(Stream s);
 
-} // namespace mlx::core::metal
+} // namespace mlx::core::gpu

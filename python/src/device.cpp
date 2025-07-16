@@ -58,4 +58,9 @@ void init_device(nb::module_& m) {
       &mx::set_default_device,
       "device"_a,
       R"pbdoc(Set the default device.)pbdoc");
+  m.def(
+      "is_available",
+      &mx::is_available,
+      "device"_a,
+      R"pbdoc(Check if a back-end is available for the given device.)pbdoc");
 }

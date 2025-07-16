@@ -1,16 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
 #include <map>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/compiled.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -82,7 +86,54 @@ Compiled::Compiled(
       inputs_(std::move(inputs)),
       outputs_(std::move(outputs)),
       tape_(std::move(tape)),
-      constant_ids_(std::move(constant_ids)) {}
+      constant_ids_(std::move(constant_ids)),
+      is_constant_([this](size_t i) {
+        return constant_ids_.find(inputs_[i].id()) != constant_ids_.end();
+      }) {
+  // Build the kernel name.
+  NodeNamer namer;
+  std::ostringstream os;
+  std::ostringstream constant_hasher;
+
+  // Fill the input names. This is not really necessary, I just like having A,
+  // B, C, ... as the inputs.
+  for (const auto& x : inputs_) {
+    namer.get_name(x);
+  }
+
+  // The primitives describing the tape. For unary and binary primitives this
+  // must be enough to describe the full computation.
+  for (const auto& a : tape_) {
+    // name and type of output
+    os << namer.get_name(a) << kindof(a.dtype()) << a.itemsize();
+    // computation performed
+    os << a.primitive().name();
+    // name of inputs to the function
+    for (auto& inp : a.inputs()) {
+      os << namer.get_name(inp);
+    }
+  }
+  os << "_";
+
+  for (const auto& x : inputs_) {
+    if (constant_ids_.find(x.id()) != constant_ids_.end()) {
+      os << "C";
+      print_constant(constant_hasher, x);
+    } else {
+      os << (is_scalar(x) ? "S" : "V");
+    }
+  }
+  os << "_";
+  for (const auto& x : inputs) {
+    if (constant_ids.find(x.id()) != constant_ids.end()) {
+      continue;
+    }
+    os << kindof(x.dtype()) << x.itemsize();
+  }
+  os << "_" << std::hash<std::string>{}(constant_hasher.str());
+
+  kernel_lib_ = os.str();
+}
 
 std::vector<array> Compiled::vjp(
     const std::vector<array>&,
@@ -119,11 +170,16 @@ bool Compiled::is_equivalent(const Primitive& other) const {
       });
 }
 
-void Compiled::print(std::ostream& os) {
-  os << "Compiled";
-  for (auto& a : tape_) {
-    a.primitive().print(os);
+const char* Compiled::name() const {
+  if (name_.empty()) {
+    std::ostringstream os;
+    os << "Compiled";
+    for (auto& a : tape_) {
+      os << a.primitive().name();
+    }
+    name_ = os.str();
   }
+  return name_.c_str();
 }
 
 std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
@@ -168,6 +224,15 @@ void merge_one(array& dst, array& src, ParentsMap& parents_map) {
     parent.first.inputs()[parent.second] = dst;
     pairs.push_back(parent);
   }
+
+  // If src is a parent of dst, remove it from dst's parents
+  for (auto it = pairs.begin(); it != pairs.end();) {
+    if (it->first.id() == src.id()) {
+      it = pairs.erase(it);
+    } else {
+      it++;
+    }
+  }
   // Remove the source from the map to avoid fusing with it again
   parents_map.erase(src_parents);
 }
@@ -183,6 +248,30 @@ void merge(array& dst, array& src, ParentsMap& parents_map) {
   for (int i = 0; i < sources.size(); ++i) {
     merge_one(dests[i], sources[i], parents_map);
   }
+}
+
+// Any parent in the divider will continue to refer to `x` but any parent not
+// in the divider will refer to a copy of the operation.
+array split_one(
+    const array& x,
+    ParentsMap& parents_map,
+    const std::unordered_set<uintptr_t>& divider) {
+  array y(x.shape(), x.dtype(), x.primitive_ptr(), x.inputs());
+
+  auto& x_parents = parents_map[x.id()];
+  auto& y_parents = parents_map[y.id()];
+
+  for (auto it = x_parents.begin(); it != x_parents.end();) {
+    if (divider.find(it->first.id()) != divider.end()) {
+      it->first.inputs()[it->second] = y;
+      y_parents.emplace_back(std::move(*it));
+      it = x_parents.erase(it);
+    } else {
+      it++;
+    }
+  }
+
+  return std::move(y);
 }
 
 template <typename T, typename... U>
@@ -609,10 +698,16 @@ void compile_fuse(
       }
 
       // Arrays with a mix of parents outside the compilable section
-      // are not fusable
+      // are not fusable except for broadcast which we can split to avoid
+      // stopping fusion
       if (!all_parents_in) {
-        // Possible input
-        input_set.insert(a.id());
+        if (a.has_primitive() && is_broadcast(a.primitive())) {
+          array b = split_one(a, parents_map, cache);
+          recurse(b, depth, s, shape);
+        } else {
+          // Possible input
+          input_set.insert(a.id());
+        }
         return;
       }
 

@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <numeric>
 #include <set>
 
@@ -109,7 +108,7 @@ array fft_impl(
   for (auto ax : axes) {
     n.push_back(a.shape(ax));
   }
-  if (real && inverse) {
+  if (real && inverse && a.ndim() > 0) {
     n.back() = (n.back() - 1) * 2;
   }
   return fft_impl(a, n, axes, real, inverse, s);
@@ -185,8 +184,79 @@ array irfftn(
     StreamOrDevice s /* = {} */) {
   return fft_impl(a, axes, true, true, s);
 }
+
 array irfftn(const array& a, StreamOrDevice s /* = {} */) {
   return fft_impl(a, true, true, s);
+}
+
+array fftshift(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
+
+  Shape shifts;
+  for (int ax : axes) {
+    // Convert negative axes to positive
+    int axis = ax < 0 ? ax + a.ndim() : ax;
+    if (axis < 0 || axis >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[fftshift] Invalid axis " << ax << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    // Match NumPy's implementation
+    shifts.push_back(a.shape(axis) / 2);
+  }
+
+  return roll(a, shifts, axes, s);
+}
+
+array ifftshift(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
+
+  Shape shifts;
+  for (int ax : axes) {
+    // Convert negative axes to positive
+    int axis = ax < 0 ? ax + a.ndim() : ax;
+    if (axis < 0 || axis >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[ifftshift] Invalid axis " << ax << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    // Match NumPy's implementation
+    int size = a.shape(axis);
+    shifts.push_back(-(size / 2));
+  }
+
+  return roll(a, shifts, axes, s);
+}
+
+// Default versions that operate on all axes
+array fftshift(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() < 1) {
+    return a;
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return fftshift(a, axes, s);
+}
+
+array ifftshift(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() < 1) {
+    return a;
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return ifftshift(a, axes, s);
 }
 
 } // namespace mlx::core::fft

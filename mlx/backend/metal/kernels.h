@@ -19,27 +19,27 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_binary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_binary_two_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype in_type,
     Dtype out_type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_ternary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype type,
-    const std::string op);
+    const char* op);
 
 MTL::ComputePipelineState* get_copy_kernel(
     metal::Device& d,
@@ -175,6 +175,20 @@ MTL::ComputePipelineState* get_steel_gemm_gather_kernel(
     int wn,
     bool rhs);
 
+MTL::ComputePipelineState* get_steel_gemm_segmented_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn);
+
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -205,6 +219,8 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
     const array& out,
     int bm,
     int bn,
@@ -241,8 +257,10 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
 
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
-std::string
-get_template_definition(std::string name, std::string func, Args... args) {
+std::string get_template_definition(
+    std::string_view name,
+    std::string_view func,
+    Args... args) {
   std::ostringstream s;
   s << func << "<";
   bool first = true;

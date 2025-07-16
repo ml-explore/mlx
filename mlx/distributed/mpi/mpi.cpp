@@ -225,6 +225,8 @@ struct MPIWrapper {
         return mpi_bfloat16_;
       case float64:
         return mpi_double_;
+      default:
+        throw std::runtime_error("Invalid type");
     }
   }
 

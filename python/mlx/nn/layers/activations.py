@@ -546,7 +546,7 @@ class GELU(Module):
 
     See :func:`gelu`, :func:`gelu_approx` and :func:`gelu_fast_approx` for the
     functional equivalents and information regarding error bounds.
-    
+
 
     Args:
         approx ('none' | 'precise' | 'fast'): Which approximation to gelu to use if any.
@@ -554,20 +554,19 @@ class GELU(Module):
 
     def __init__(self, approx="none"):
         super().__init__()
-
-        if approx == "none":
-            self._act = gelu
-        elif approx == "precise" or approx == "tanh":
-            self._act = gelu_approx
-        elif approx == "fast":
-            self._act = gelu_fast_approx
-        else:
+        self._approx = approx
+        allowed = ["none", "precise", "tanh", "fast"]
+        if approx not in allowed:
             raise ValueError(
-                f"The approximation should be in ['none', 'precise', 'tanh', 'fast'] but '{approx}' was given"
+                f"The approximation should be in {allowed} but '{approx}' was given"
             )
 
     def __call__(self, x):
-        return self._act(x)
+        if self._approx == "none":
+            return gelu(x)
+        elif self._approx in ["precise", "tanh"]:
+            return gelu_approx(x)
+        return gelu_fast_approx(x)
 
 
 @_make_activation_module(tanh)

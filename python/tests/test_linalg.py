@@ -232,6 +232,11 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, M_plus in zip(AB, pinvs):
             self.assertTrue(mx.allclose(M @ M_plus @ M, M, rtol=0, atol=1e-3))
 
+        # Test singular matrix
+        A = mx.array([[4.0, 1.0], [4.0, 1.0]])
+        A_plus = mx.linalg.pinv(A, stream=mx.cpu)
+        self.assertTrue(mx.allclose(A @ A_plus @ A, A))
+
     def test_cholesky_inv(self):
         mx.random.seed(7)
 
@@ -307,6 +312,53 @@ class TestLinalg(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.linalg.cross(a, b)
 
+    def test_eig(self):
+        tols = {"atol": 1e-5, "rtol": 1e-5}
+
+        def check_eigs_and_vecs(A_np, kwargs={}):
+            A = mx.array(A_np)
+            eig_vals, eig_vecs = mx.linalg.eig(A, stream=mx.cpu, **kwargs)
+            self.assertTrue(
+                mx.allclose(A @ eig_vecs, eig_vals[..., None, :] * eig_vecs, **tols)
+            )
+            eig_vals_only = mx.linalg.eigvals(A, stream=mx.cpu, **kwargs)
+            self.assertTrue(mx.allclose(eig_vals, eig_vals_only, **tols))
+
+        # Test a simple 2x2 matrix
+        A_np = np.array([[1.0, 1.0], [3.0, 4.0]], dtype=np.float32)
+        check_eigs_and_vecs(A_np)
+
+        # Test complex eigenvalues
+        A_np = np.array([[1.0, -1.0], [1.0, 1.0]], dtype=np.float32)
+        check_eigs_and_vecs(A_np)
+
+        # Test a larger random symmetric matrix
+        n = 5
+        np.random.seed(1)
+        A_np = np.random.randn(n, n).astype(np.float32)
+        check_eigs_and_vecs(A_np)
+
+        # Test with batched input
+        A_np = np.random.randn(3, n, n).astype(np.float32)
+        check_eigs_and_vecs(A_np)
+
+        # Test error cases
+        with self.assertRaises(ValueError):
+            mx.linalg.eig(mx.array([1.0, 2.0]))  # 1D array
+
+        with self.assertRaises(ValueError):
+            mx.linalg.eig(
+                mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+            )  # Non-square matrix
+
+        with self.assertRaises(ValueError):
+            mx.linalg.eigvals(mx.array([1.0, 2.0]))  # 1D array
+
+        with self.assertRaises(ValueError):
+            mx.linalg.eigvals(
+                mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+            )  # Non-square matrix
+
     def test_eigh(self):
         tols = {"atol": 1e-5, "rtol": 1e-5}
 
@@ -339,6 +391,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Test with batched input
         A_np = np.random.randn(3, n, n).astype(np.float32)
         A_np = (A_np + np.transpose(A_np, (0, 2, 1))) / 2
+        check_eigs_and_vecs(A_np)
+
+        # Test with complex inputs
+        A_np = (
+            np.random.randn(8, 8, 2).astype(np.float32).view(np.complex64).squeeze(-1)
+        )
+        A_np = A_np + A_np.T.conj()
         check_eigs_and_vecs(A_np)
 
         # Test error cases
@@ -486,4 +545,4 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

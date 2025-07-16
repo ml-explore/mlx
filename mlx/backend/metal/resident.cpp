@@ -1,7 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/resident.h"
-#include "mlx/backend/metal/metal_impl.h"
 
 namespace mlx::core::metal {
 

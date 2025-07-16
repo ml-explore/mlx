@@ -1024,6 +1024,10 @@ TEST_CASE("test reduction ops") {
     x = array({true, true, true, false, true, false}, {2, 3});
     CHECK(array_equal(min(x, 1), array({true, false})).item<bool>());
     CHECK(array_equal(min(x, 0), array({false, true, false})).item<bool>());
+
+    x = array({1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
+    CHECK(array_equal(max(x, 0), array({4.0f, NAN, 6.0f}), true).item<bool>());
+    CHECK(array_equal(max(x, 1), array({NAN, 6.0f}), true).item<bool>());
   }
 
   // Test logsumexp
@@ -1034,6 +1038,9 @@ TEST_CASE("test reduction ops") {
     constexpr float inf = std::numeric_limits<float>::infinity();
 
     x = array({-inf, -inf});
+    CHECK_EQ(logsumexp(x).item<float>(), -inf);
+
+    x = repeat(array(-inf), 5000);
     CHECK_EQ(logsumexp(x).item<float>(), -inf);
 
     x = array({0.0f, -inf});
@@ -1343,6 +1350,11 @@ TEST_CASE("test arithmetic unary ops") {
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::exp(0.0f), std::exp(2.0f)}, {2, 1});
     CHECK(allclose(exp(x), expected).item<bool>());
+
+    // Complex of -inf
+    constexpr float inf = std::numeric_limits<float>::infinity();
+    x = array(complex64_t{-inf, -inf});
+    CHECK_EQ(exp(x).item<complex64_t>(), complex64_t{0, 0});
   }
 
   // Test expm1
@@ -1823,6 +1835,10 @@ TEST_CASE("test arithmetic binary ops") {
   x = array(-inf);
   y = array(inf);
   CHECK_EQ(logaddexp(x, y).item<float>(), inf);
+
+  x = array(complex64_t{1, 1});
+  y = array(complex64_t{-inf, -inf});
+  CHECK_EQ(logaddexp(x, y).item<complex64_t>(), complex64_t{1, 1});
 }
 
 TEST_CASE("test broadcast") {
@@ -3859,6 +3875,9 @@ TEST_CASE("test roll") {
   y = roll(x, {1, 2}, {0, 1});
   CHECK(array_equal(y, array({8, 9, 5, 6, 7, 3, 4, 0, 1, 2}, {2, 5}))
             .item<bool>());
+
+  y = roll(array({}), 0, 0);
+  CHECK(array_equal(y, array({})).item<bool>());
 }
 
 TEST_CASE("test contiguous") {
@@ -3911,4 +3930,70 @@ TEST_CASE("test bitwise shift operations") {
 
   CHECK_EQ(right_shift_bool_result.dtype(), uint8);
   CHECK(array_equal(right_shift_bool_result, full({4}, 0, uint8)).item<bool>());
+}
+
+TEST_CASE("test conv_transpose1d with output_padding") {
+  auto in = array({1.0, 2.0, 3.0}, {1, 1, 3});
+  auto wt = array({1.0, 1.0, 1.0}, {1, 1, 3});
+  int stride = 2;
+  int padding = 0;
+  int dilation = 1;
+  int output_padding = 1;
+  int groups = 1;
+
+  auto out = conv_transpose1d(
+      in, wt, stride, padding, dilation, output_padding, groups);
+  auto expected = array({6.0, 0.0}, {1, 2, 1});
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test conv_transpose2d with output_padding") {
+  auto in = array({1.0, 2.0, 3.0, 4.0}, {1, 1, 2, 2});
+  auto wt = array({1.0, 1.0, 1.0, 1.0}, {2, 1, 1, 2});
+  std::pair<int, int> stride{2, 2};
+  std::pair<int, int> padding{0, 0};
+  std::pair<int, int> output_padding{1, 1};
+  std::pair<int, int> dilation{1, 1};
+  int groups = 1;
+
+  auto out = conv_transpose2d(
+      in, wt, stride, padding, dilation, output_padding, groups);
+  auto expected = array(
+      {3.0,
+       3.0,
+       0.0,
+       0.0,
+       7.0,
+       7.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0},
+      {1, 2, 4, 2});
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test conv_transpose3d with output_padding") {
+  auto in = array({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0}, {1, 1, 2, 2, 2});
+  auto wt = array({1.0, 1.0}, {1, 1, 1, 1, 2});
+  std::tuple<int, int, int> stride{2, 2, 2};
+  std::tuple<int, int, int> padding{0, 0, 0};
+  std::tuple<int, int, int> output_padding{1, 1, 1};
+  std::tuple<int, int, int> dilation{1, 1, 1};
+  int groups = 1;
+
+  auto out = conv_transpose3d(
+      in, wt, stride, padding, dilation, output_padding, groups);
+  auto expected = array(
+      {3.0, 0.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 11.0, 0.0, 15.0,
+       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0, 0.0,
+       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0},
+      {1, 2, 4, 4, 1});
+  CHECK(array_equal(out, expected).item<bool>());
 }

@@ -13,9 +13,18 @@ namespace mlx::core {
 
 namespace {
 
+inline constexpr short get_pack_factor(int bits, int wsize = 8) {
+  return (bits == 3 || bits == 5) ? 8 : (bits == 6 ? 4 : wsize / bits);
+}
+
+inline constexpr short get_bytes_per_pack(int bits, int wsize = 8) {
+  auto power_of_2_bits = (bits & (bits - 1)) == 0;
+  return power_of_2_bits ? (wsize / 8) : (bits == 5 ? 5 : 3);
+}
+
 template <typename T, int bits>
 void extract_bits(const uint8_t* w_in, T* w_out) {
-  assert(bits == 3 || bits == 6);
+  static_assert(bits == 3 || bits == 5 || bits == 6);
   if (bits == 3) {
     w_out[0] = static_cast<T>(w_in[0] & 0x7);
     w_out[1] = static_cast<T>((w_in[0] & 0x38) >> 3);
@@ -25,6 +34,16 @@ void extract_bits(const uint8_t* w_in, T* w_out) {
     w_out[5] = static_cast<T>(((w_in[1] & 0x80) >> 7) + ((w_in[2] & 0x3) << 1));
     w_out[6] = static_cast<T>((w_in[2] & 0x1c) >> 2);
     w_out[7] = static_cast<T>((w_in[2] & 0xe0) >> 5);
+  } else if (bits == 5) {
+    w_out[0] = static_cast<T>(w_in[0] & 0x1f);
+    w_out[1] = static_cast<T>(((w_in[0] & 0xe0) >> 5) + ((w_in[1] & 0x3) << 3));
+    w_out[2] = static_cast<T>((w_in[1] & 0x7c) >> 2);
+    w_out[3] = static_cast<T>(((w_in[1] & 0x80) >> 7) + ((w_in[2] & 0xf) << 1));
+    w_out[4] = static_cast<T>(((w_in[2] & 0xf0) >> 4) + ((w_in[3] & 0x1) << 4));
+    w_out[5] = static_cast<T>((w_in[3] & 0x3e) >> 1);
+    w_out[6] = static_cast<T>(((w_in[3] & 0xc0) >> 6) + ((w_in[4] & 0x7) << 2));
+    w_out[7] = static_cast<T>((w_in[4] & 0xf8) >> 3);
+
   } else if (bits == 6) {
     w_out[0] = static_cast<T>(w_in[0] & 0x3f);
     w_out[1] =
@@ -46,8 +65,8 @@ void _qmm(
     int N,
     int K) {
   constexpr int bitmask = (1 << bits) - 1;
-  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+  constexpr int pack_factor = get_pack_factor(bits, 8);
+  constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -65,7 +84,7 @@ void _qmm(
         T scale = *scales_local++;
         T bias = *biases_local++;
         for (int ng = 0; ng < packs_in_group; ng++) {
-          if (bits == 3 || bits == 6) {
+          if constexpr (bits == 3 || bits == 5 || bits == 6) {
             T wl[pack_factor];
             extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)
@@ -104,8 +123,9 @@ void _qmm_t(
     int N,
     int K) {
   constexpr int bitmask = (1 << bits) - 1;
-  constexpr int pack_factor = bits == 3 ? 8 : bits == 6 ? 4 : 8 / bits;
-  constexpr int bytes_per_pack = (bits == 3 || bits == 6) ? 3 : 1;
+
+  constexpr int pack_factor = get_pack_factor(bits, 8);
+  constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -121,7 +141,7 @@ void _qmm_t(
         T bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw++) {
-          if (bits == 3 || bits == 6) {
+          if constexpr (bits == 3 || bits == 5 || bits == 6) {
             T wl[pack_factor];
             extract_bits<T, bits>(w_local, wl);
 #pragma clang loop unroll(full)
@@ -302,6 +322,10 @@ void _qmm_dispatch_typed(
       break;
     case 4:
       _qmm_dispatch_group<T, 4>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
+    case 5:
+      _qmm_dispatch_group<T, 5>(
           result, x, w, scales, biases, M, N, K, group_size, transposed_w);
       break;
     case 6:
@@ -613,9 +637,8 @@ void quantize(
   float eps = 1e-7;
 
   bool power_of_2_bits = is_power_of_2(bits);
-  int el_per_int = bits == 3 ? 8 : bits == 6 ? 4 : 32 / bits;
-  // For 3/6 bits we read 3 uint8s at a time instead of 1 uint32
-  int bytes_per_pack = power_of_2_bits ? 1 : 3;
+  int el_per_int = get_pack_factor(bits, 32);
+  int bytes_per_pack = get_bytes_per_pack(bits);
   int int_per_group = group_size * bytes_per_pack / el_per_int;
   size_t n_groups = w_size / group_size;
 
@@ -640,15 +663,21 @@ void quantize(
     }
     size_t out_idx = i * int_per_group;
     for (int j = 0; j < int_per_group / bytes_per_pack; ++j) {
-      uint32_t out_el = 0;
+      uint64_t out_el = 0;
       for (int k = 0; k < el_per_int; ++k) {
         float w_el = w[w_idx + j * el_per_int + k];
         w_el = std::rint((w_el - bias) / scale);
         w_el = std::min(std::max(w_el, 0.0f), n_bins);
-        out_el |= static_cast<uint32_t>(w_el) << (k * bits);
+        out_el |= static_cast<uint64_t>(w_el) << (k * bits);
       }
       if (power_of_2_bits) {
         out[out_idx + j] = out_el;
+      } else if (bits == 5) {
+        out[out_idx + bytes_per_pack * j] = out_el & 0xff;
+        out[out_idx + bytes_per_pack * j + 1] = (out_el & 0xff00) >> 8;
+        out[out_idx + bytes_per_pack * j + 2] = (out_el & 0xff0000) >> 16;
+        out[out_idx + bytes_per_pack * j + 3] = (out_el & 0xff000000) >> 24;
+        out[out_idx + bytes_per_pack * j + 4] = (out_el & 0xff00000000) >> 32;
       } else {
         out[out_idx + bytes_per_pack * j] = out_el & 0xff;
         out[out_idx + bytes_per_pack * j + 1] = (out_el & 0xff00) >> 8;

@@ -114,6 +114,12 @@ class Module(dict):
             super(Module, self).__setattr__(key, val)
             self.pop(key, None)
 
+    def __delattr__(self, name):
+        if (val := self.get(name, None)) is not None:
+            del self[name]
+        else:
+            super().__delattr__(name)
+
     def load_weights(
         self,
         file_or_weights: Union[str, List[Tuple[str, mx.array]]],
@@ -174,11 +180,15 @@ class Module(dict):
             new_weights = dict(weights)
             curr_weights = dict(tree_flatten(self.parameters()))
             if extras := (new_weights.keys() - curr_weights.keys()):
-                extras = " ".join(extras)
-                raise ValueError(f"Received parameters not in model: {extras}.")
+                num_extra = len(extras)
+                extras = ",\n".join(sorted(extras))
+                raise ValueError(
+                    f"Received {num_extra} parameters not in model: \n{extras}."
+                )
             if missing := (curr_weights.keys() - new_weights.keys()):
-                missing = " ".join(missing)
-                raise ValueError(f"Missing parameters: {missing}.")
+                num_missing = len(missing)
+                missing = ",\n".join(sorted(missing))
+                raise ValueError(f"Missing {num_missing} parameters: \n{missing}.")
             for k, v in curr_weights.items():
                 v_new = new_weights[k]
                 if not isinstance(v_new, mx.array):
@@ -193,7 +203,7 @@ class Module(dict):
                     )
 
         if len(weights) != 0:
-            self.update(tree_unflatten(weights))
+            self.update(tree_unflatten(weights), strict=False)
         return self
 
     def save_weights(self, file: str):
@@ -291,7 +301,7 @@ class Module(dict):
 
         return self.filter_and_map(self.valid_child_filter, is_leaf_fn=_is_leaf_module)
 
-    def update(self, parameters: dict) -> Module:
+    def update(self, parameters: dict, strict: bool = True) -> Module:
         """Replace the parameters of this Module with the provided ones in the
         dict of dicts and lists.
 
@@ -305,7 +315,9 @@ class Module(dict):
 
         Args:
             parameters (dict): A complete or partial dictionary of the modules
-                               parameters.
+                parameters.
+            strict (bool): If ``True`` checks that ``parameters`` is a
+                subset of the module's parameters. Default: ``True``.
         Returns:
             The module instance after updating the parameters.
         """
@@ -317,21 +329,29 @@ class Module(dict):
                         current_value = dst[k]
                         new_value = parameters[k]
                         if isinstance(current_value, mx.array):
+                            if strict and not isinstance(new_value, mx.array):
+                                raise ValueError(
+                                    f"Received invalid type: {type(new_value).__name__}."
+                                )
                             dst[k] = new_value
-                        elif isinstance(current_value, Module):
-                            current_value.update(new_value)
-                        elif isinstance(current_value, (dict, list)):
+                        else:
                             apply(current_value, new_value)
+                    elif strict:
+                        raise ValueError(f'Module does not have parameter named "{k}".')
             elif isinstance(parameters, list):
                 for i in range(len(parameters)):
                     current_value = dst[i]
                     new_value = parameters[i]
                     if isinstance(current_value, mx.array):
+                        if strict and not isinstance(new_value, mx.array):
+                            raise ValueError(
+                                f"Received invalid type: {type(new_value).__name__}."
+                            )
                         dst[i] = new_value
-                    elif isinstance(current_value, Module):
-                        current_value.update(new_value)
-                    elif isinstance(current_value, (dict, list)):
+                    else:
                         apply(current_value, new_value)
+            elif strict:
+                raise ValueError(f"Received invalid type: {type(parameters).__name__}.")
 
         apply(self, parameters)
         return self
@@ -359,7 +379,7 @@ class Module(dict):
         self.update(self.filter_and_map(filter_fn, map_fn))
         return self
 
-    def update_modules(self, modules: dict) -> Module:
+    def update_modules(self, modules: dict, strict: bool = True) -> Module:
         """Replace the child modules of this :class:`Module` instance with the
         provided ones in the dict of dicts and lists.
 
@@ -368,12 +388,14 @@ class Module(dict):
         programmatically swapping layers.
 
         The passed in parameters dictionary need not be a full dictionary
-        similar to :meth:`parameters`. Only the provided locations will be
+        similar to :meth:`modules`. Only the provided locations will be
         updated.
 
         Args:
-            modules (dict): A complete or partial dictionary of the modules
+            modules (dict): A complete or partial dictionary of the module's
                 submodules.
+            strict (bool): If ``True`` checks that ``modules`` is a
+                subset of the child modules of this instance. Default: ``True``.
         Returns:
             The module instance after updating the submodules.
         """
@@ -388,14 +410,28 @@ class Module(dict):
                             dst[k] = new_value
                         elif isinstance(current_value, (dict, list)):
                             apply(current_value, new_value)
+                        elif strict and new_value != {}:
+                            raise ValueError(
+                                f"Received invalid type: {type(new_value).__name__}."
+                            )
+                    elif strict:
+                        raise ValueError(
+                            f'Module does not have sub-module named "{k}".'
+                        )
             elif isinstance(modules, list):
-                for i in range(len(dst)):
+                for i in range(len(modules)):
                     current_value = dst[i]
                     new_value = modules[i]
                     if self.is_module(current_value) and self.is_module(new_value):
                         dst[i] = new_value
                     elif isinstance(current_value, (dict, list)):
                         apply(current_value, new_value)
+                    elif strict and new_value != {}:
+                        raise ValueError(
+                            f"Received invalid type: {type(new_value).__name__}."
+                        )
+            elif strict:
+                raise ValueError(f"Received invalid type: {type(modules).__name__}.")
 
         apply(self, modules)
         return self

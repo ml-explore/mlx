@@ -11,7 +11,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_quantize_dequantize(self):
         w = mx.random.normal(shape=(128, 512))
         for gs in [32, 64, 128]:
-            for b in [2, 3, 6, 4, 8]:
+            for b in [2, 3, 5, 6, 4, 8]:
                 with self.subTest(gs=gs, b=b):
                     w_q, scales, biases = mx.quantize(w, group_size=gs, bits=b)
                     w_hat = mx.dequantize(w_q, scales, biases, gs, b)
@@ -22,7 +22,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))
         for gs in [32, 64, 128]:
-            for b in [2, 3, 4, 6, 8]:
+            for b in [2, 3, 4, 5, 6, 8]:
                 w_q, scales, biases = mx.quantize(a, gs, b)
                 a_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 self.assertTrue(mx.all(a_hat == 0))
@@ -146,7 +146,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [128, 64, 32],  # group_size
-            [2, 3, 4, 6, 8],  # bits
+            [2, 3, 4, 5, 6, 8],  # bits
             [256, 512, 67],  # M
             [64, 128],  # N
             [0, 1, 3, 8],  # B
@@ -173,7 +173,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [128, 64, 32],  # group_size
-            [2, 3, 4, 6, 8],  # bits
+            [2, 3, 4, 5, 6, 8],  # bits
             [32, 128, 256],  # M
             [128, 256, 67],  # N
             [0, 1, 3, 8],  # B
@@ -549,6 +549,74 @@ class TestQuantized(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(y1, y3, atol=1e-5))
             self.assertTrue(mx.allclose(y1, y4, atol=1e-5))
 
+    def test_gather_qmm_grad(self):
+        def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
+            if lhs is not None:
+                x = x[lhs]
+            if rhs is not None:
+                w = w[rhs]
+                s = s[rhs]
+                b = b[rhs]
+            return mx.quantized_matmul(x, w, s, b, transpose=trans)
+
+        def gather_qmm(x, w, s, b, lhs, rhs, trans, sort):
+            return mx.gather_qmm(
+                x,
+                w,
+                s,
+                b,
+                transpose=trans,
+                lhs_indices=lhs,
+                rhs_indices=rhs,
+                sorted_indices=sort,
+            )
+
+        x = mx.random.normal((16, 1, 256))
+        w, s, b = mx.quantize(mx.random.normal((4, 256, 256)))
+        indices = mx.sort(mx.random.randint(0, 4, shape=(16,)))
+        cotan = mx.random.normal((16, 1, 256))
+
+        (o1,), (dx1, ds1, db1) = mx.vjp(
+            lambda x, s, b: gather_qmm_ref(x, w, s, b, None, indices, True, True),
+            [x, s, b],
+            [cotan],
+        )
+        (o2,), (dx2, ds2, db2) = mx.vjp(
+            lambda x, s, b: gather_qmm(x, w, s, b, None, indices, True, True),
+            [x, s, b],
+            [cotan],
+        )
+
+        self.assertTrue(mx.allclose(o1, o2, atol=1e-4))
+        self.assertTrue(mx.allclose(dx1, dx2, atol=1e-4))
+        self.assertTrue(mx.allclose(ds1, ds2, atol=1e-3))
+        self.assertTrue(mx.allclose(db1, db2, atol=1e-3))
+
+    def test_vjp_scales_biases(self):
+        mx.random.seed(0)
+        x = mx.random.normal(shape=(2, 2, 512))
+        w = mx.random.normal(shape=(512, 512))
+        wq, s, b = mx.quantize(w, bits=4, group_size=64)
+
+        def mm(sb, x, wq):
+            return mx.quantized_matmul(x, wq, *sb, bits=4, group_size=64).sum()
+
+        params = (s, b)
+        dparams = mx.grad(mm)((s, b), x, wq)
+
+        eps = 8e-3
+        # numerical grad check with a few indices
+        indices = [(0, 0), (11, 4), (22, 7)]
+        for idx in indices:
+            for p in [0, 1]:
+                params[p][idx] += eps
+                out_up = mm(params, x, wq)
+                params[p][idx] -= 2 * eps
+                out_down = mm(params, x, wq)
+                params[p][idx] += eps
+                num_ds = (out_up - out_down) / (2 * eps)
+                self.assertAlmostEqual(dparams[p][idx], num_ds, delta=2e-2)
+
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

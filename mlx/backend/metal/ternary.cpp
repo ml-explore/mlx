@@ -11,7 +11,7 @@ namespace mlx::core {
 void ternary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() == 3);
   auto& a = inputs[0];
@@ -45,7 +45,7 @@ void ternary_op_gpu_inplace(
     work_per_thread = large ? 4 : 2;
   } else {
     large = out.data_size() > INT32_MAX;
-    work_per_thread = 1;
+    work_per_thread = get_work_per_thread(b.dtype(), out.data_size());
   }
   std::string kernel_name;
   if (topt == TernaryOpType::General) {
@@ -60,6 +60,8 @@ void ternary_op_gpu_inplace(
     }
   } else if (large) {
     kernel_name = "v2";
+  } else if (work_per_thread > 1) {
+    kernel_name = "vn";
   } else {
     kernel_name = "v";
   }
@@ -106,13 +108,19 @@ void ternary_op_gpu_inplace(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     // Launch a 1D or 2D grid of threads
-    size_t nthreads = out.data_size();
+    size_t nthreads = ceildiv(out.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                                : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims;
+    if (large) {
+      compute_encoder.set_bytes<int64_t>(out.data_size(), 4);
+      grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+    } else {
+      compute_encoder.set_bytes<int>(out.data_size(), 4);
+      grid_dims = MTL::Size(nthreads, 1, 1);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
@@ -120,7 +128,7 @@ void ternary_op_gpu_inplace(
 void ternary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -133,13 +141,13 @@ void ternary_op_gpu(
 void ternary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op) {
+    const char* op) {
   auto& s = out.primitive().stream();
   ternary_op_gpu(inputs, out, op, s);
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  ternary_op_gpu(inputs, out, get_primitive_string(this));
+  ternary_op_gpu(inputs, out, name());
 }
 
 } // namespace mlx::core

@@ -63,6 +63,7 @@ if(MLX_METAL_JIT)
   make_jit_source(steel/gemm/kernels/steel_gemm_masked kernels/steel/defines.h)
   make_jit_source(steel/gemm/kernels/steel_gemm_gather)
   make_jit_source(steel/gemm/kernels/steel_gemm_splitk)
+  make_jit_source(steel/gemm/kernels/steel_gemm_segmented)
   make_jit_source(
     steel/conv/conv
     kernels/steel/utils.h
@@ -93,6 +94,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp

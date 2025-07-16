@@ -93,7 +93,7 @@ void print_graph(
   os << "\n";
 
   for (auto& arr : tape) {
-    arr.primitive().print(os);
+    os << arr.primitive().name();
     os << " ";
     print_arrs(arr.inputs());
     os << " -> ";
@@ -143,7 +143,7 @@ void export_to_dot(
           os << "{ ";
           os << x.primitive_id();
           os << " [label =\"";
-          x.primitive().print(os);
+          os << x.primitive().name();
           os << "\", shape=rectangle]";
           os << "; }" << std::endl;
           // Arrows to primitive's inputs

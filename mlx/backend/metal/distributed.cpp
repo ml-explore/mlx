@@ -4,7 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/distributed/ops.h"

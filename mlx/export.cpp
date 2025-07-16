@@ -266,6 +266,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Floor),
       SERIALIZE_PRIMITIVE(Full),
       SERIALIZE_PRIMITIVE(Gather),
+      SERIALIZE_PRIMITIVE(GatherAxis),
       SERIALIZE_PRIMITIVE(GatherMM),
       SERIALIZE_PRIMITIVE(Greater),
       SERIALIZE_PRIMITIVE(GreaterEqual),
@@ -307,6 +308,7 @@ struct PrimitiveFactory {
           "CumMax",
           "CumLogaddexp"),
       SERIALIZE_PRIMITIVE(Scatter),
+      SERIALIZE_PRIMITIVE(ScatterAxis),
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),
       SERIALIZE_PRIMITIVE(Sign),
@@ -331,6 +333,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(SVD),
       SERIALIZE_PRIMITIVE(Inverse),
       SERIALIZE_PRIMITIVE(Cholesky),
+      SERIALIZE_PRIMITIVE(Eig),
       SERIALIZE_PRIMITIVE(Eigh),
       SERIALIZE_PRIMITIVE(AffineQuantize),
       SERIALIZE_PRIMITIVE(RMSNorm),
@@ -351,9 +354,7 @@ struct PrimitiveFactory {
 
   void save(Writer& os, const std::shared_ptr<Primitive>& p) {
     serialize(os, p->stream());
-    std::ostringstream pout;
-    p->print(pout);
-    auto name = pout.str();
+    std::string name = p->name();
     name = name.substr(0, name.find(' '));
     if (auto it = name_remap.find(name); it != name_remap.end()) {
       name = it->second;
@@ -468,6 +469,9 @@ bool FunctionTable::match(
   auto match_inputs = [shapeless = this->shapeless](
                           const array& x, const array& y) {
     if (x.dtype() != y.dtype()) {
+      return false;
+    }
+    if (x.ndim() != y.ndim()) {
       return false;
     }
     if (!shapeless && x.shape() != y.shape()) {

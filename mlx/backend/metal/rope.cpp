@@ -1,11 +1,15 @@
 // Copyright © 2023-2024 Apple Inc.
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 
 namespace mlx::core::fast {
 
 constexpr int n_per_thread = 4;
+
+bool RoPE::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
 
 void RoPE::eval_gpu(
     const std::vector<array>& inputs,

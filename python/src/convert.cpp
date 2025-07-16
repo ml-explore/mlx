@@ -205,6 +205,8 @@ nb::object to_scalar(mx::array& a) {
       return nb::cast(static_cast<float>(a.item<mx::bfloat16_t>()));
     case mx::complex64:
       return nb::cast(a.item<std::complex<float>>());
+    case mx::float64:
+      return nb::cast(a.item<double>());
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }

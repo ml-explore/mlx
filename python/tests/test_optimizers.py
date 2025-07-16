@@ -196,6 +196,13 @@ class TestOptimizers(mlx_tests.MLXTestCase):
                 )
             )
 
+        # Test for correct gradient type propagation
+        params = tree_map(lambda x: x.astype(mx.float16), params)
+        grads = tree_map(lambda x: x.astype(mx.float16), grads)
+        optim = opt.Adam(1e-2, bias_correction=True)
+        new_params = optim.apply_gradients(grads, params)
+        self.assertTrue(tree_equal(lambda p: p.dtype == mx.float16, new_params))
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_adamw_matches_pytorch(self):
         mx.random.seed(0)
@@ -353,7 +360,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 3.0)))
 
 
-class TestSchedulers(unittest.TestCase):
+class TestSchedulers(mlx_tests.MLXTestCase):
     def test_decay_lr(self):
         for optim_class in optimizers_dict.values():
             lr_schedule = opt.step_decay(1e-1, 0.9, 1)
@@ -527,4 +534,4 @@ class TestSchedulers(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

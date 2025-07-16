@@ -10,6 +10,47 @@ import mlx_tests
 import numpy as np
 
 
+def np_wrap_between(x, a):
+    """Wraps `x` between `[-a, a]`."""
+    two_a = 2 * a
+    zero = 0
+    rem = np.remainder(np.add(x, a), two_a)
+    if isinstance(rem, np.ndarray):
+        rem = np.select(rem < zero, np.add(rem, two_a), rem)
+    else:
+        rem = np.add(rem, two_a) if rem < zero else rem
+    return np.subtract(rem, a)
+
+
+def np_logaddexp(x1: np.ndarray, x2: np.ndarray):
+    amax = np.maximum(x1, x2)
+    if np.issubdtype(x1.dtype, np.floating):
+        delta = np.subtract(x1, x2)
+        if isinstance(delta, np.ndarray):
+            return np.select(
+                np.isnan(delta),
+                np.add(x1, x2),
+                np.add(amax, np.log1p(np.exp(np.negative(np.abs(delta))))),
+            )
+        else:
+            return (
+                np.add(x1, x2)
+                if np.isnan(delta)
+                else np.add(amax, np.log1p(np.exp(np.negative(np.abs(delta)))))
+            )
+    else:
+        delta = np.subtract(np.add(x1, x2), np.multiply(amax, 2))
+        out = np.add(amax, np.log1p(np.exp(delta)))
+        return np.real(out) + 1j * np_wrap_between(np.imag(out), np.pi)
+
+
+def np_cumlogaddexp(x1: np.ndarray, axis: int = -1):
+    out = x1.copy()
+    for i in range(1, out.shape[axis]):
+        out[i] = np_logaddexp(out[i], out[i - 1])
+    return out
+
+
 class TestOps(mlx_tests.MLXTestCase):
     def test_full_ones_zeros(self):
         x = mx.full(2, 3.0)
@@ -853,6 +894,16 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        # Complex test
+
+        a = mx.array([0, 1, 2, 9.0]) + 1j
+        b = mx.array([1, 0, 4, 2.5]) + 1j
+
+        result = mx.logaddexp(a, b)
+        expected = np_logaddexp(np.array(a), np.array(b))
+
+        self.assertTrue(np.allclose(result, expected))
+
         a = mx.array([float("nan")])
         b = mx.array([0.0])
         self.assertTrue(math.isnan(mx.logaddexp(a, b).item()))
@@ -974,6 +1025,13 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.array([1, 0.5, 10, 100])
         result = mx.log1p(a)
         expected = np.log1p(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
+        # Complex test
+        a = mx.array([1, 0.5, 10, 100]) + 1j
+        result = mx.log1p(a)
+        expected = np.log1p(a, dtype=np.complex64)
 
         self.assertTrue(np.allclose(result, expected))
 
@@ -1197,6 +1255,12 @@ class TestOps(mlx_tests.MLXTestCase):
         np.put_along_axis(out_np, np.array(indices), np.array(update), axis=-2)
         self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
 
+        a = mx.array([], mx.float32)
+        b = mx.put_along_axis(a, a, a, axis=None)
+        mx.eval(b)
+        self.assertEqual(b.size, 0)
+        self.assertEqual(b.shape, a.shape)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
@@ -1414,7 +1478,7 @@ class TestOps(mlx_tests.MLXTestCase):
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
 
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
+            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, equal_nan=True))
 
         x = np.random.rand(9, 12, 18)
         xi = np.random.rand(9, 12, 18)
@@ -1881,8 +1945,29 @@ class TestOps(mlx_tests.MLXTestCase):
             c_mlx = mxop(a_mlx, axis=0)
             self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+        # Complex tests
+
+        a_npy = np.array([1, 2, 3]).astype(np.float32) + 1j
+        a_mlx = mx.array(a_npy)
+        c_npy = np_cumlogaddexp(a_npy, axis=-1)
+        c_mlx = mxop(a_mlx, axis=-1)
+        self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
+        a_mlx = mx.array(a_npy)
+
+        for op in ["cumsum", "cumprod"]:
+            npop = getattr(np, op)
+            mxop = getattr(mx, op)
+            for axis in (None, 0, 1, 2):
+                c_npy = npop(a_npy, axis=axis)
+                c_mlx = mxop(a_mlx, axis=axis)
+                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
+
+        # Complex test
+
+        a_npy = np.random.randn(32, 32, 32).astype(np.float32) + 0.5j
         a_mlx = mx.array(a_npy)
 
         for op in ["cumsum", "cumprod"]:
@@ -2501,17 +2586,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(result, mx.array(expected))
 
     def test_atleast_1d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2529,23 +2603,11 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_1d(mx.array(array))
             np_res = np.atleast_1d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_atleast_2d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2563,23 +2625,11 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_2d(mx.array(array))
             np_res = np.atleast_2d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_atleast_3d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2597,10 +2647,9 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_3d(mx.array(array))
             np_res = np.atleast_3d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_issubdtype(self):
         self.assertTrue(mx.issubdtype(mx.bfloat16, mx.inexact))
@@ -2751,6 +2800,9 @@ class TestOps(mlx_tests.MLXTestCase):
         return H
 
     def test_hadamard(self):
+        with self.assertRaises(ValueError):
+            mx.hadamard_transform(mx.array([]))
+
         h28_str = """
         +------++----++-+--+-+--++--
         -+-----+++-----+-+--+-+--++-
@@ -2789,11 +2841,33 @@ class TestOps(mlx_tests.MLXTestCase):
 
         h28 = parse_h_string(h28_str)
 
+        x = mx.array(5)
+        y = mx.hadamard_transform(x)
+        self.assertEqual(y.item(), 5)
+
+        x = mx.array(5)
+        y = mx.hadamard_transform(x, scale=0.2)
+        self.assertEqual(y.item(), 1)
+
+        x = mx.random.normal((8, 8, 1))
+        y = mx.hadamard_transform(x)
+        self.assertTrue(mx.all(y == x).item())
+
+        # Too slow to compare to numpy so let's compare CPU to GPU
+        if mx.default_device() == mx.gpu:
+            rk = mx.random.key(42)
+            for k in range(14, 17):
+                for m in [1, 3, 5, 7]:
+                    x = mx.random.normal((4, m * 2**k), key=rk)
+                    y1 = mx.hadamard_transform(x, stream=mx.cpu)
+                    y2 = mx.hadamard_transform(x, stream=mx.gpu)
+                    self.assertLess(mx.abs(y1 - y2).max().item(), 5e-6)
+
         np.random.seed(7)
-        tests = product([np.float32, np.float16, np.int32], [1, 28], range(1, 15))
+        tests = product([np.float32, np.float16, np.int32], [1, 28], range(1, 14))
         for dtype, m, k in tests:
             # skip large m=28 cases because they're very slow in NumPy
-            if (m > 1 and k > 8) or (dtype != np.float16 and k == 14):
+            if m > 1 and k > 8:
                 continue
             with self.subTest(dtype=dtype, m=m, k=k):
                 n = m * 2**k
@@ -2882,6 +2956,11 @@ class TestOps(mlx_tests.MLXTestCase):
             y2 = mx.roll(x, s, a)
             self.assertTrue(mx.array_equal(y1, y2).item())
 
+    def test_roll_errors(self):
+        x = mx.array([])
+        result = mx.roll(x, [0], [0])
+        self.assertTrue(mx.array_equal(result, x))
+
     def test_real_imag(self):
         x = mx.random.uniform(shape=(4, 4))
         out = mx.real(x)
@@ -2934,6 +3013,82 @@ class TestOps(mlx_tests.MLXTestCase):
         out = a[::-1]
         self.assertTrue(mx.array_equal(out[-1, :], a[0, :]))
 
+    def test_complex_ops(self):
+        x = mx.array(
+            [
+                3.0 + 4.0j,
+                -5.0 + 12.0j,
+                -8.0 + 0.0j,
+                0.0 + 9.0j,
+                0.0 + 0.0j,
+            ]
+        )
+
+        ops = ["arccos", "arcsin", "arctan", "square", "sqrt"]
+        for op in ops:
+            with self.subTest(op=op):
+                np_op = getattr(np, op)
+                mx_op = getattr(mx, op)
+                self.assertTrue(np.allclose(mx_op(x), np_op(x)))
+
+        x = mx.array(
+            [
+                3.0 + 4.0j,
+                -5.0 + 12.0j,
+                -8.0 + 0.0j,
+                0.0 + 9.0j,
+                9.0 + 1.0j,
+            ]
+        )
+        self.assertTrue(np.allclose(mx.rsqrt(x), 1.0 / np.sqrt(x)))
+
+    def test_complex_power(self):
+        out = mx.power(mx.array(0j), 2)
+        self.assertEqual(out.item(), 0j)
+
+        out = mx.power(mx.array(0j), float("nan"))
+        self.assertTrue(mx.isnan(out))
+
+
+class TestBroadcast(mlx_tests.MLXTestCase):
+    def test_broadcast_shapes(self):
+        # Basic broadcasting
+        self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))
+        self.assertEqual(mx.broadcast_shapes((4, 1, 6), (5, 6)), (4, 5, 6))
+        self.assertEqual(mx.broadcast_shapes((5, 1, 4), (1, 3, 4)), (5, 3, 4))
+
+        # Multiple arguments
+        self.assertEqual(mx.broadcast_shapes((1, 1), (1, 8), (7, 1)), (7, 8))
+        self.assertEqual(
+            mx.broadcast_shapes((6, 1, 5), (1, 7, 1), (6, 7, 5)), (6, 7, 5)
+        )
+
+        # Same shapes
+        self.assertEqual(mx.broadcast_shapes((3, 4, 5), (3, 4, 5)), (3, 4, 5))
+
+        # Single argument
+        self.assertEqual(mx.broadcast_shapes((2, 3)), (2, 3))
+
+        # Empty shapes
+        self.assertEqual(mx.broadcast_shapes((), ()), ())
+        self.assertEqual(mx.broadcast_shapes((), (1,)), (1,))
+        self.assertEqual(mx.broadcast_shapes((1,), ()), (1,))
+
+        # Broadcasting with zeroes
+        self.assertEqual(mx.broadcast_shapes((0,), (0,)), (0,))
+        self.assertEqual(mx.broadcast_shapes((1, 0, 5), (3, 1, 5)), (3, 0, 5))
+        self.assertEqual(mx.broadcast_shapes((5, 0), (0, 5, 0)), (0, 5, 0))
+
+        # Error cases
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes((3, 4), (4, 3))
+
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes((2, 3, 4), (2, 5, 4))
+
+        with self.assertRaises(ValueError):
+            mx.broadcast_shapes()
+
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

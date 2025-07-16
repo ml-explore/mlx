@@ -172,9 +172,12 @@ void binary_float(
       case bfloat16:
         binary_op<bfloat16_t, Op>(a, b, out, bopt);
         break;
+      case complex64:
+        binary_op<complex64_t, Op>(a, b, out, bopt);
+        break;
       default:
         throw std::runtime_error(
-            "[binary_float] Only supports non-complex floating point types.");
+            "[binary_float] Only supports floating point types.");
     }
   });
 }

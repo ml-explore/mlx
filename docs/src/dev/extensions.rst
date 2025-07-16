@@ -138,13 +138,13 @@ more concrete:
         * representing the vectorized computation and the axis which
         * corresponds to the output vectorized dimension.
         */
-        virtual std::pair<std::vector<array>, std::vector<int>> vmap(
+        std::pair<std::vector<array>, std::vector<int>> vmap(
             const std::vector<array>& inputs,
             const std::vector<int>& axes) override;
 
-        /** Print the primitive. */
-        void print(std::ostream& os) override {
-            os << "Axpby";
+        /** The name of primitive. */
+        const char* name() const override {
+          return "Axpby";
         }
 
         /** Equivalence check **/
@@ -397,11 +397,11 @@ below.
         std::ostringstream kname;
         kname << "axpby_" << "general_" << type_to_name(out);
 
-        // Make sure the metal library is available
-        d.register_library("mlx_ext");
+        // Load the metal library
+        auto lib = d.get_library("mlx_ext");
 
         // Make a kernel from this metal library
-        auto kernel = d.get_kernel(kname.str(), "mlx_ext");
+        auto kernel = d.get_kernel(kname.str(), lib);
 
         // Prepare to encode kernel
         auto& compute_encoder = d.get_command_encoder(s.index);

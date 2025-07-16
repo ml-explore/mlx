@@ -224,6 +224,10 @@ class array {
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
+    Data(Data&& o) : buffer(o.buffer), d(o.d) {
+      o.buffer = allocator::Buffer(nullptr);
+      o.d = [](allocator::Buffer) {};
+    }
     ~Data() {
       d(buffer);
     }
@@ -356,7 +360,7 @@ class array {
   }
 
   enum Status {
-    // The ouptut of a computation which has not been scheduled.
+    // The output of a computation which has not been scheduled.
     // For example, the status of `x` in `auto x = a + b`.
     unscheduled,
 

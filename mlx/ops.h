@@ -569,7 +569,7 @@ inline array std(const array& a, StreamOrDevice s = {}) {
   return std(a, false, 0, to_stream(s));
 }
 
-/** Computes the standard deviatoin of the elements of an array along the given
+/** Computes the standard deviation of the elements of an array along the given
  * axes */
 array std(
     const array& a,
@@ -1291,6 +1291,7 @@ array conv_transpose1d(
     int stride = 1,
     int padding = 0,
     int dilation = 1,
+    int output_padding = 0,
     int groups = 1,
     StreamOrDevice s = {});
 
@@ -1301,6 +1302,7 @@ array conv_transpose2d(
     const std::pair<int, int>& stride = {1, 1},
     const std::pair<int, int>& padding = {0, 0},
     const std::pair<int, int>& dilation = {1, 1},
+    const std::pair<int, int>& output_padding = {0, 0},
     int groups = 1,
     StreamOrDevice s = {});
 
@@ -1311,6 +1313,7 @@ array conv_transpose3d(
     const std::tuple<int, int, int>& stride = {1, 1, 1},
     const std::tuple<int, int, int>& padding = {0, 0, 0},
     const std::tuple<int, int, int>& dilation = {1, 1, 1},
+    const std::tuple<int, int, int>& output_padding = {0, 0, 0},
     int groups = 1,
     StreamOrDevice s = {});
 
@@ -1402,6 +1405,12 @@ array gather_mm(
     std::optional<array> rhs_indices = std::nullopt,
     bool sorted_indices = false,
     StreamOrDevice s = {});
+
+/**
+ * Compute a matrix product but segment the inner dimension and write the
+ * result separately for each segment.
+ */
+array segmented_mm(array a, array b, array segments, StreamOrDevice s = {});
 
 /** Extract a diagonal or construct a diagonal array */
 array diagonal(

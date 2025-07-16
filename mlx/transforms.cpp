@@ -10,7 +10,7 @@
 #include <unordered_set>
 
 #include "mlx/backend/cpu/eval.h"
-#include "mlx/backend/metal/metal_impl.h"
+#include "mlx/backend/gpu/eval.h"
 #include "mlx/fence.h"
 #include "mlx/memory.h"
 #include "mlx/ops.h"
@@ -33,7 +33,7 @@ class Synchronizer : public Primitive {
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override {}
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override {}
 
-  DEFINE_PRINT(Synchronize);
+  DEFINE_NAME(Synchronize);
 };
 
 // Initialize the static tracing members from transforms_impl.h
@@ -42,7 +42,10 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
 // evaluation.
-std::vector<std::pair<char, char>> detail::InTracing::trace_stack{};
+std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
+  static std::vector<std::pair<char, char>> trace_stack_;
+  return trace_stack_;
+}
 int detail::InTracing::grad_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
@@ -215,7 +218,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     if (arr.primitive().device() == Device::gpu) {
-      metal::eval(arr);
+      gpu::eval(arr);
     } else {
       cpu::eval(arr);
     }
@@ -226,7 +229,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
       // Commit any open streams
       for (auto& [_, e] : events) {
         if (e.stream().device == Device::gpu) {
-          metal::finalize(e.stream());
+          gpu::finalize(e.stream());
         }
       }
       scheduler::wait_for_one();
@@ -264,7 +267,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     auto s = e.stream();
     e.signal(s);
     if (s.device == Device::gpu) {
-      metal::finalize(s);
+      gpu::finalize(s);
     }
   }
 

@@ -1,25 +1,44 @@
 // Copyright © 2024 Apple Inc.
 
-template <typename T, typename Op>
+template <typename T, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void ternary_v(
     device const bool* a,
     device const T* b,
     device const T* c,
     device T* d,
+    constant uint& size,
     uint index [[thread_position_in_grid]]) {
-  d[index] = Op()(a[index], b[index], c[index]);
+  index *= N;
+  if (N > 1 && index + N > size) {
+    for (int i = 0; index + i < size; ++i) {
+      d[index + i] = Op()(a[index + i], b[index + i], c[index + i]);
+    }
+  } else {
+    for (int i = 0; i < N; ++i) {
+      d[index + i] = Op()(a[index + i], b[index + i], c[index + i]);
+    }
+  }
 }
 
-template <typename T, typename Op>
+template <typename T, typename Op, int N = WorkPerThread<T>::n>
 [[kernel]] void ternary_v2(
     device const bool* a,
     device const T* b,
     device const T* c,
     device T* d,
+    constant int64_t& size,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
-  auto offset = index.x + grid_dim.x * int64_t(index.y);
-  d[offset] = Op()(a[offset], b[offset], c[offset]);
+  int64_t offset = N * (index.x + grid_dim.x * int64_t(index.y));
+  if (N > 1 && offset + N > size) {
+    for (int i = 0; offset + i < size; ++i) {
+      d[offset + i] = Op()(a[offset + i], b[offset + i], c[offset + i]);
+    }
+  } else {
+    for (int i = 0; i < N; ++i) {
+      d[offset + i] = Op()(a[offset + i], b[offset + i], c[offset + i]);
+    }
+  }
 }
 
 template <typename T, typename Op, typename IdxT = int64_t>

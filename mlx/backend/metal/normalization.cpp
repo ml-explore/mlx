@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #include <algorithm>
 
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/reduce.h"
@@ -9,6 +9,10 @@
 #include "mlx/fast_primitives.h"
 
 namespace mlx::core::fast {
+
+bool RMSNorm::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
 
 void RMSNorm::eval_gpu(
     const std::vector<array>& inputs,
@@ -22,7 +26,7 @@ void RMSNorm::eval_gpu(
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back());
+      no_copy &= (s == 0 || s == x.shape().back() || x.shape(-2) == 1);
     }
     if (no_copy) {
       if (x.is_donatable()) {
@@ -168,7 +172,7 @@ void RMSNormVJP::eval_gpu(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
-    auto kernel = d.get_kernel(op_name, "mlx", hash_name, func_consts);
+    auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {
@@ -207,6 +211,10 @@ void RMSNormVJP::eval_gpu(
   }
 }
 
+bool LayerNorm::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
+
 void LayerNorm::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -219,7 +227,7 @@ void LayerNorm::eval_gpu(
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back());
+      no_copy &= (s == 0 || s == x.shape().back() || x.shape(-2) == 1);
     }
     if (no_copy) {
       if (x.is_donatable()) {
@@ -247,12 +255,13 @@ void LayerNorm::eval_gpu(
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 6656;
   std::string op_name = "layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(out);
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -264,7 +273,13 @@ void LayerNorm::eval_gpu(
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
-      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
+        std::ostringstream msg;
+        msg << "[layer_norm] Threadgroup size " << threadgroup_size
+            << " is larger than the maximum allowed threadgroup size "
+            << kernel->maxTotalThreadsPerThreadgroup();
+        throw std::runtime_error(msg.str());
+      }
       size_t n_threads = n_rows * threadgroup_size;
       grid_dims = MTL::Size(n_threads, 1, 1);
       group_dims = MTL::Size(threadgroup_size, 1, 1);
@@ -364,12 +379,13 @@ void LayerNormVJP::eval_gpu(
         g, gb, "sum", plan, {0}, compute_encoder, d, s);
   }
 
-  const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
-  const int looped_limit = RMS_LOOPED_LIMIT;
+  int simd_size = 32;
+  int n_reads = 8;
+  int looped_limit = 8192;
   std::string op_name = "vjp_layer_norm";
   if (axis_size > looped_limit) {
     op_name += "_looped";
+    n_reads = 4;
   }
   op_name += type_to_name(gx);
 
@@ -379,14 +395,20 @@ void LayerNormVJP::eval_gpu(
   };
 
   {
-    auto kernel = d.get_kernel(op_name, "mlx", hash_name, func_consts);
+    auto kernel = d.get_kernel(op_name, hash_name, func_consts);
 
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
-      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      if (threadgroup_size > kernel->maxTotalThreadsPerThreadgroup()) {
+        std::ostringstream msg;
+        msg << "[vjp_layer_norm] Threadgroup size " << threadgroup_size
+            << " is larger than the maximum allowed threadgroup size "
+            << kernel->maxTotalThreadsPerThreadgroup();
+        throw std::runtime_error(msg.str());
+      }
       size_t n_threads = n_rows * threadgroup_size;
       grid_dims = MTL::Size(n_threads, 1, 1);
       group_dims = MTL::Size(threadgroup_size, 1, 1);

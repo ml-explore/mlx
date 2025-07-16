@@ -56,9 +56,9 @@ template <typename T, int D, int V = D>
   const int head_idx = tid.x;
   const int q_seq_idx = tid.y;
   const int kv_head_idx = head_idx / gqa_factor;
-  const int o_offset = tpg.x * q_seq_idx + head_idx;
+  const int o_offset = head_idx * tpg.y + q_seq_idx;
   const int q_offset =
-      query_transposed ? o_offset : head_idx * tpg.y + q_seq_idx;
+      query_transposed ? tpg.x * q_seq_idx + head_idx : o_offset;
   queries += q_offset * D + simd_lid * qk_per_thread;
   keys += kv_head_idx * k_head_stride + simd_gid * k_seq_stride +
       simd_lid * qk_per_thread;
@@ -213,9 +213,9 @@ template <typename T, int D, int V = D>
   const int block_idx = tid.z;
   const int head_idx = tid.x;
   const int q_seq_idx = tid.y;
-  const int o_offset = tpg.x * q_seq_idx + head_idx;
+  const int o_offset = head_idx * tpg.y + q_seq_idx;
   const int q_offset =
-      query_transposed ? o_offset : head_idx * tpg.y + q_seq_idx;
+      query_transposed ? tpg.x * q_seq_idx + head_idx : o_offset;
   const int kv_head_idx = head_idx / gqa_factor;
 
   queries += q_offset * D + simd_lid * qk_per_thread;
@@ -358,8 +358,8 @@ template <typename T, int D>
   // Adjust positions
   const int head_idx = tid.x;
   const int q_seq_idx = tid.y;
-  const int n_heads = tpg.x;
-  const int q_offset = n_heads * q_seq_idx + head_idx;
+  const int q_offset = head_idx * tpg.y + q_seq_idx;
+  ;
   partials += q_offset * blocks * D + simd_gid * D + simd_lid * elem_per_thread;
   sums += q_offset * blocks;
   maxs += q_offset * blocks;

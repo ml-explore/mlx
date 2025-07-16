@@ -294,4 +294,4 @@ class TestDouble(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()
