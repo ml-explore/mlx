@@ -42,7 +42,9 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
@@ -130,3 +132,12 @@ target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
 # Install CCCL headers for JIT.
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+
+# Make Thunderkittens available
+FetchContent_Declare(
+  kittens
+  GIT_REPOSITORY https://github.com/HazyResearch/ThunderKittens.git
+  GIT_TAG aaab847f430ed313ed466e64b25b9177babd1db8
+  GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(kittens)
+target_include_directories(mlx BEFORE PRIVATE "${kittens_SOURCE_DIR}/include")
