@@ -517,7 +517,7 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype, stream());
+  copy_cpu(src, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   std::vector<array> inds;
@@ -686,7 +686,7 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype, stream());
+  copy_cpu(src, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(idx);

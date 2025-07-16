@@ -31,7 +31,7 @@ void luf_impl(
   strides[ndim - 1] = M;
   strides[ndim - 2] = 1;
   lu.set_data(allocator::malloc(lu.nbytes()), lu.nbytes(), strides, flags);
-  copy_inplace(
+  copy_cpu_inplace(
       a,
       lu,
       a.shape(),
