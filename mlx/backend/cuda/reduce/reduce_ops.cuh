@@ -69,6 +69,18 @@ struct Prod {
 struct Min {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(a.real()) || isnan(a.imag())) {
+        return a;
+      }
+      if (isnan(b.real()) || isnan(b.imag())) {
+        return b;
+      }
+    } else if constexpr (!cuda::std::is_integral_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return cuda::std::numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a < b ? a : b;
   }
 
@@ -81,6 +93,18 @@ struct Min {
 struct Max {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(a.real()) || isnan(a.imag())) {
+        return a;
+      }
+      if (isnan(b.real()) || isnan(b.imag())) {
+        return b;
+      }
+    } else if constexpr (!cuda::std::is_integral_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return cuda::std::numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a > b ? a : b;
   }
 

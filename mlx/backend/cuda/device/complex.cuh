@@ -38,14 +38,13 @@ inline __host__ __device__ complex_t<T> operator%(
 }
 
 template <typename T>
-inline __host__ __device__ bool operator<(complex_t<T> a, complex_t<T> b) {
-  return (a.real() * a.real() + a.imag() * a.imag()) <
-      (b.real() * b.real() + b.imag() * b.imag());
+inline __host__ __device__ bool operator>(complex_t<T> a, complex_t<T> b) {
+  return (a.real() > b.real()) || (a.real() == b.real() && a.imag() > b.imag());
 }
 
 template <typename T>
-inline __host__ __device__ bool operator>(complex_t<T> a, complex_t<T> b) {
-  return b < a;
+inline __host__ __device__ bool operator<(complex_t<T> a, complex_t<T> b) {
+  return operator>(b, a);
 }
 
 template <typename T>
