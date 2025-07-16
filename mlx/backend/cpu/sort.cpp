@@ -334,7 +334,9 @@ void Sort::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Copy input to output
-  CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
+  CopyType ctype = (in.flags().contiguous && in.strides()[axis_] != 0)
+      ? CopyType::Vector
+      : CopyType::General;
   copy_cpu(in, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
@@ -426,7 +428,9 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Copy input to output
-  CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
+  CopyType ctype = (in.flags().contiguous && in.strides()[axis_] != 0)
+      ? CopyType::Vector
+      : CopyType::General;
   copy_cpu(in, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
