@@ -72,8 +72,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
   bool is_segmented_sort = in.flags().contiguous && in.strides()[axis] == 1;
   if (!is_segmented_sort) {
     array trans = swapaxes_in_eval(in, axis, last_dim);
-    in = array(trans.shape(), trans.dtype(), nullptr, {});
-    copy_gpu(trans, in, CopyType::General, s);
+    in = contiguous_copy_gpu(trans, s);
     encoder.add_temporary(in);
     out = array(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
     encoder.add_temporary(out);

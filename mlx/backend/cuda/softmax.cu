@@ -125,8 +125,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }

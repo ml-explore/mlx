@@ -297,8 +297,7 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
   } else if (stx == 1 && sty == arr.shape(-2)) {
     return std::make_tuple(true, sty, arr);
   } else {
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy_gpu(arr, arr_copy, CopyType::General, s);
+    array arr_copy = contiguous_copy_gpu(arr, s);
     enc.add_temporary(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }

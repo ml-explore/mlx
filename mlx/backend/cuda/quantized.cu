@@ -247,8 +247,7 @@ inline array ensure_row_contiguous(
     cu::CommandEncoder& enc,
     const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     enc.add_temporary(x_copy);
     return x_copy;
   } else {

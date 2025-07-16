@@ -379,9 +379,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
           in.flags());
     }
   } else {
-    array arr_copy(in.shape(), in.dtype(), nullptr, {});
-    copy_gpu(in, arr_copy, CopyType::General, s);
-    in = std::move(arr_copy);
+    in = contiguous_copy_gpu(in, s);
     out.copy_shared_buffer(in);
   }
 
