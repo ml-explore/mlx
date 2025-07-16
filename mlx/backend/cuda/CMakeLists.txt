@@ -46,7 +46,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
