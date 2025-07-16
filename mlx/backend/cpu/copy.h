@@ -10,10 +10,14 @@
 
 namespace mlx::core {
 
-void copy(const array& src, array& dst, CopyType ctype, Stream stream);
-void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream);
+void copy_cpu(const array& src, array& dst, CopyType ctype, Stream stream);
+void copy_cpu_inplace(
+    const array& src,
+    array& dst,
+    CopyType ctype,
+    Stream stream);
 
-void copy_inplace(
+void copy_cpu_inplace(
     const array& src,
     array& dst,
     const Shape& data_shape,

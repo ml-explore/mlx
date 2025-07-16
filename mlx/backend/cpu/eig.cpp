@@ -135,7 +135,7 @@ void Eig::eval_cpu(
       : array(a.shape(), complex64, nullptr, {});
 
   auto a_copy = array(a.shape(), a.dtype(), nullptr, {});
-  copy(
+  copy_cpu(
       a,
       a_copy,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,

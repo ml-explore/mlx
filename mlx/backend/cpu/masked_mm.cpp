@@ -124,20 +124,20 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
         if (!expand_all && stx == arr.shape(-1) && sty == 1) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector, s);
+            copy_cpu(arr, arr_copy, CopyType::Vector, s);
             return std::make_tuple(false, stx, arr_copy, true);
           }
           return std::make_tuple(false, stx, arr, false);
         } else if (!expand_all && stx == 1 && sty == arr.shape(-2)) {
           if (do_copy) {
             array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-            copy(arr, arr_copy, CopyType::Vector, s);
+            copy_cpu(arr, arr_copy, CopyType::Vector, s);
             return std::make_tuple(true, sty, arr_copy, true);
           }
           return std::make_tuple(true, sty, arr, false);
         } else {
           array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-          copy(arr, arr_copy, CopyType::General, s);
+          copy_cpu(arr, arr_copy, CopyType::General, s);
           int64_t stx = arr.shape(-1);
           return std::make_tuple(false, stx, arr_copy, true);
         }
@@ -386,7 +386,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       return std::make_tuple(true, sty, arr);
     } else {
       temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy(arr, temps.back(), CopyType::General, s);
+      copy_cpu(arr, temps.back(), CopyType::General, s);
       int64_t stx = arr.shape(-1);
       return std::make_tuple(false, stx, temps.back());
     }
@@ -504,7 +504,7 @@ void SegmentedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       return std::make_tuple(true, sty, x);
     } else {
       array xc(x.shape(), x.dtype(), nullptr, {});
-      copy(x, xc, CopyType::General, s);
+      copy_cpu(x, xc, CopyType::General, s);
       encoder.add_temporary(xc);
       int64_t stx = x.shape(-1);
       return std::make_tuple(false, stx, xc);

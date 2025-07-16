@@ -295,7 +295,11 @@ inline void copy_inplace_dispatch(
 
 } // namespace
 
-void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream) {
+void copy_cpu_inplace(
+    const array& src,
+    array& dst,
+    CopyType ctype,
+    Stream stream) {
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(src);
   encoder.set_output_array(dst);
@@ -305,7 +309,7 @@ void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream) {
        ctype]() mutable { copy_inplace_dispatch(src, dst, ctype); });
 }
 
-void copy(const array& src, array& dst, CopyType ctype, Stream stream) {
+void copy_cpu(const array& src, array& dst, CopyType ctype, Stream stream) {
   bool donated = set_copy_output_data(src, dst, ctype);
   if (donated && src.dtype() == dst.dtype()) {
     // If the output has the same type as the input then there is nothing to
@@ -315,10 +319,10 @@ void copy(const array& src, array& dst, CopyType ctype, Stream stream) {
   if (ctype == CopyType::GeneralGeneral) {
     ctype = CopyType::General;
   }
-  copy_inplace(src, dst, ctype, stream);
+  copy_cpu_inplace(src, dst, ctype, stream);
 }
 
-void copy_inplace(
+void copy_cpu_inplace(
     const array& src,
     array& dst,
     const Shape& data_shape,

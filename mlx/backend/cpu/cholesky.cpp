@@ -20,7 +20,7 @@ void cholesky_impl(const array& a, array& factor, bool upper, Stream stream) {
 
   // The decomposition is computed in place, so just copy the input to the
   // output.
-  copy(
+  copy_cpu(
       a,
       factor,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
