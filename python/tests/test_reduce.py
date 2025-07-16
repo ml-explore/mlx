@@ -153,7 +153,7 @@ class TestReduce(mlx_tests.MLXTestCase):
         x = x.transpose(1, 0, 2, 3, 4, 5, 6, 7, 8, 9)
         check(x, (1, 3, 5, 7, 9))
 
-    def test_nanpropagation(self):
+    def test_nan_propagation(self):
         dtypes = [
             "uint8",
             "uint16",
@@ -179,7 +179,7 @@ class TestReduce(mlx_tests.MLXTestCase):
                         ref = getattr(np, op)(x_np, axis=axis)
                         self.assertTrue(np.array_equal(out, ref, equal_nan=True))
 
-    def test_nanpropagation_complex64(self):
+    def test_nan_propagation_complex64(self):
         complex_array_1 = mx.array(
             [1 + 1j, 2 + 2j, 3 + 3j, mx.nan + 4j], dtype=mx.complex64
         ).reshape(2, 2)
