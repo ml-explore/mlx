@@ -14,29 +14,16 @@
 #include <cassert>
 #include <numeric>
 
-// cudnn_frontend.h redefines this macro.
-#undef CHECK_CUDNN_ERROR
-#undef CHECK_CUDNN_FRONTEND_ERROR
-
 namespace mlx::core {
 
 namespace cu {
 
 using namespace cudnn_frontend;
 
-#define CHECK_CUDNN_FRONTEND_ERROR(cmd)                        \
+#define CHECK_CUDNN_FE_ERROR(cmd)                              \
   if (cmd.is_bad()) {                                          \
     throw std::runtime_error(fmt::format("{} failed.", #cmd)); \
   }
-
-#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
-
-void check_cudnn_error(const char* name, cudnnStatus_t err) {
-  if (err != CUDNN_STATUS_SUCCESS) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
-  }
-}
 
 auto swapaxes(const array& in, int axis1, int axis2) {
   std::vector<int> axes(in.ndim());
@@ -63,7 +50,8 @@ class Convolution {
       const std::vector<int64_t>& output_shape,
       const std::vector<int64_t>& output_strides,
       const std::vector<int64_t>& stride,
-      const std::vector<int64_t>& padding,
+      const std::vector<int64_t>& padding_lo,
+      const std::vector<int64_t>& padding_hi,
       const std::vector<int64_t>& dilation,
       int groups)
       : handle_(device.cudnn_handle()) {
@@ -73,119 +61,31 @@ class Convolution {
     graph_.set_io_data_type(cudnn_type)
         .set_compute_data_type(is_half ? DataType_t::FLOAT : cudnn_type);
     input_attr_ = graph_.tensor(graph::Tensor_attributes()
+                                    .set_name("input")
                                     .set_dim(input_shape)
                                     .set_stride(input_strides));
     filter_attr_ = graph_.tensor(graph::Tensor_attributes()
+                                     .set_name("filter")
                                      .set_dim(filter_shape)
                                      .set_stride(filter_strides));
 
     auto conv_options = graph::Conv_fprop_attributes()
-                            .set_padding(padding)
+                            .set_pre_padding(padding_lo)
+                            .set_post_padding(padding_hi)
                             .set_stride(stride)
                             .set_dilation(dilation);
     output_attr_ = graph_.conv_fprop(input_attr_, filter_attr_, conv_options);
     output_attr_->set_output(true);
+    output_attr_->set_data_type(cudnn_type);
+    output_attr_->set_dim(output_shape);
+    output_attr_->set_stride(output_strides);
 
-    CHECK_CUDNN_FRONTEND_ERROR(graph_.validate());
-    CHECK_CUDNN_FRONTEND_ERROR(graph_.build_operation_graph(handle_));
-    CHECK_CUDNN_FRONTEND_ERROR(graph_.create_execution_plans({HeurMode_t::A}));
-    CHECK_CUDNN_FRONTEND_ERROR(graph_.check_support(handle_));
-    CHECK_CUDNN_FRONTEND_ERROR(graph_.build_plans(handle_));
-
-#if 0
-    int ndim = input_shape.size();
-    CHECK_CUDNN_ERROR(cudnnCreateTensorDescriptor(&input_desc_));
-    CHECK_CUDNN_ERROR(cudnnSetTensorNdDescriptor(
-        input_desc_,
-        cudnn_type,
-        ndim,
-        input_shape.data(),
-        input_strides.data()));
-
-    CHECK_CUDNN_ERROR(cudnnCreateFilterDescriptor(&filter_desc_));
-    CHECK_CUDNN_ERROR(cudnnSetFilterNdDescriptor(
-        filter_desc_,
-        cudnn_type,
-        CUDNN_TENSOR_NCHW,
-        ndim,
-        filter_shape.data()));
-
-    CHECK_CUDNN_ERROR(cudnnCreateTensorDescriptor(&output_desc_));
-    CHECK_CUDNN_ERROR(cudnnSetTensorNdDescriptor(
-        output_desc_,
-        cudnn_type,
-        ndim,
-        output_shape.data(),
-        output_strides.data()));
-
-    CHECK_CUDNN_ERROR(cudnnCreateConvolutionDescriptor(&conv_desc_));
-    CHECK_CUDNN_ERROR(cudnnSetConvolutionGroupCount(conv_desc_, groups));
-    CHECK_CUDNN_ERROR(cudnnSetConvolutionNdDescriptor(
-        conv_desc_,
-        ndim - 2,
-        padding.data(),
-        stride.data(),
-        dilation.data(),
-        CUDNN_CROSS_CORRELATION,
-        is_half ? CUDNN_DATA_FLOAT : cudnn_type));
-    if (is_half) {
-      CHECK_CUDNN_ERROR(
-          cudnnSetConvolutionMathType(conv_desc_, CUDNN_TENSOR_OP_MATH));
-    } else if (dtype == float32) {
-      CHECK_CUDNN_ERROR(
-          cudnnSetConvolutionMathType(conv_desc_, CUDNN_FMA_MATH));
-    } else {
-      CHECK_CUDNN_ERROR(
-          cudnnSetConvolutionMathType(conv_desc_, CUDNN_DEFAULT_MATH));
-    }
-
-    std::vector<int> expected_output_shape(ndim);
-    CHECK_CUDNN_ERROR(cudnnGetConvolutionNdForwardOutputDim(
-        conv_desc_,
-        input_desc_,
-        filter_desc_,
-        ndim,
-        expected_output_shape.data()));
-    std::cout << "expected_output_shape: " << expected_output_shape
-              << std::endl;
-
-    cudnnConvolutionFwdAlgoPerf_t results[CUDNN_CONVOLUTION_FWD_ALGO_COUNT];
-    int count;
-    CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardAlgorithm_v7(
-        handle_,
-        input_desc_,
-        filter_desc_,
-        conv_desc_,
-        output_desc_,
-        std::size(results),
-        &count,
-        results));
-    for (int i = 0; i < count; ++i) {
-      if (results[i].status == CUDNN_STATUS_SUCCESS) {
-        algo_ = results[i].algo;
-        std::cout << "Found algorithm" << std::endl;
-        break;
-      }
-    }
-
-    CHECK_CUDNN_ERROR(cudnnGetConvolutionForwardWorkspaceSize(
-        handle_,
-        input_desc_,
-        filter_desc_,
-        conv_desc_,
-        output_desc_,
-        algo_,
-        &workspace_size_));
-#endif
-  }
-
-  ~Convolution() {
-#if 0
-    cudnnDestroyTensorDescriptor(input_desc_);
-    cudnnDestroyFilterDescriptor(filter_desc_);
-    cudnnDestroyTensorDescriptor(output_desc_);
-    cudnnDestroyConvolutionDescriptor(conv_desc_);
-#endif
+    CHECK_CUDNN_FE_ERROR(graph_.validate());
+    CHECK_CUDNN_FE_ERROR(graph_.build_operation_graph(handle_));
+    CHECK_CUDNN_FE_ERROR(graph_.create_execution_plans({HeurMode_t::A}));
+    CHECK_CUDNN_FE_ERROR(graph_.check_support(handle_));
+    CHECK_CUDNN_FE_ERROR(graph_.build_plans(handle_));
+    CHECK_CUDNN_FE_ERROR(graph_.get_workspace_size(workspace_size_));
   }
 
   void run(
@@ -208,25 +108,8 @@ class Convolution {
         {output_attr_->get_uid(), output}};
 
     auto capture = encoder.capture_context();
-    CHECK_CUDNN_ERROR(cudnnSetStream(handle_, encoder.stream()));
-    CHECK_CUDNN_FRONTEND_ERROR(
+    CHECK_CUDNN_FE_ERROR(
         graph_.execute(handle_, ptr_map, workspace.data<void>()));
-#if 0
-    CHECK_CUDNN_ERROR(cudnnConvolutionForward(
-        handle_,
-        &alpha,
-        input_desc_,
-        input,
-        filter_desc_,
-        filter,
-        conv_desc_,
-        algo_,
-        workspace.data<void>(),
-        workspace_size_,
-        &beta,
-        output_desc_,
-        output));
-#endif
   }
 
  private:
@@ -264,7 +147,7 @@ class Convolution {
   std::shared_ptr<graph::Tensor_attributes> input_attr_;
   std::shared_ptr<graph::Tensor_attributes> filter_attr_;
   std::shared_ptr<graph::Tensor_attributes> output_attr_;
-  size_t workspace_size_{0};
+  int64_t workspace_size_{0};
 };
 
 } // namespace cu
@@ -295,6 +178,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
       output_strides,
       std::vector<int64_t>(kernel_strides_.begin(), kernel_strides_.end()),
       std::vector<int64_t>(padding_lo_.begin(), padding_lo_.end()),
+      std::vector<int64_t>(padding_hi_.begin(), padding_hi_.end()),
       std::vector<int64_t>(kernel_dilation_.begin(), kernel_dilation_.end()),
       groups_);
   conv.run(encoder, in.data<void>(), wt.data<void>(), out.data<void>());
