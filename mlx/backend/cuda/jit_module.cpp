@@ -52,13 +52,29 @@ const std::string& cuda_home() {
 }
 
 // Return the location of CCCL headers shipped with the distribution.
-bool get_cccl_include(std::string* out) {
-  auto cccl_headers = current_binary_dir().parent_path() / "include" / "cccl";
-  if (!std::filesystem::exists(cccl_headers)) {
-    return false;
-  }
-  *out = fmt::format("--include-path={}", cccl_headers.string());
-  return true;
+const std::string& cccl_dir() {
+  static std::string dir = []() {
+    std::filesystem::path path;
+#if defined(MLX_CCCL_DIR)
+    // First search the install dir if defined.
+    path = MLX_CCCL_DIR;
+    if (std::filesystem::exists(path)) {
+      return path.string();
+    }
+#endif
+    // Then search dynamically from the dir of libmlx.so file.
+    path = current_binary_dir().parent_path() / "include" / "cccl";
+    if (std::filesystem::exists(path)) {
+      return path.string();
+    }
+    // Finally check the environment variable.
+    path = std::getenv("MLX_CCCL_DIR");
+    if (!path.empty() && std::filesystem::exists(path)) {
+      return path.string();
+    }
+    return std::string();
+  }();
+  return dir;
 }
 
 // Get the cache directory for storing compiled results.
@@ -238,8 +254,9 @@ JitModule::JitModule(
         device.compute_capability_major(),
         device.compute_capability_minor());
     args.push_back(compute.c_str());
-    std::string cccl_include;
-    if (get_cccl_include(&cccl_include)) {
+    std::string cccl_include = cccl_dir();
+    if (!cccl_include.empty()) {
+      cccl_include = fmt::format("--include-path={}", cccl_include);
       args.push_back(cccl_include.c_str());
     }
     std::string cuda_include =
