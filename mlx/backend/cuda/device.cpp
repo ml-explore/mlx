@@ -66,7 +66,6 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
 }
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
-  CHECK_CUDA_ERROR(cudaGraphCreate(&graph, 0));
   CHECK_CUDA_ERROR(
       cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeGlobal));
 }
