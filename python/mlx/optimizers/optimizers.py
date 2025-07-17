@@ -894,7 +894,9 @@ class Muon(Optimizer):
         state["v"] = mx.zeros_like(parameter)
 
     def _zeropower_via_newtonschulz5(self, G, steps: int):
-        assert G.ndim == 2, f"Expected a 2D matrix for Newton-Schulz iteration, got shape {G.shape} instead."
+        assert (
+            G.ndim == 2
+        ), f"Expected a 2D matrix for Newton-Schulz iteration, got shape {G.shape} instead."
         a, b, c = (3.4445, -4.7750, 2.0315)
         X = G.astype(G.dtype)
         transpose_needed = G.shape[-2] > G.shape[-1]
