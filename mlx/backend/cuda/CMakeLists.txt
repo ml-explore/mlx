@@ -132,8 +132,7 @@ target_link_libraries(mlx PRIVATE CUDA::cublasLt)
 # Use NVRTC and driver APIs.
 target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 
-# Download cuDNN-frontend, which is used to find cuDNN. We are not using the
-# frontend APIs for now, link with "cudnn_frontend" if needed.
+# Use the frontend APIs of cuDNN.
 FetchContent_Declare(
   cudnn
   GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
@@ -145,6 +144,7 @@ set(CUDNN_FRONTEND_BUILD_SAMPLES OFF)
 set(CUDNN_FRONTEND_BUILD_TESTS OFF)
 set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF)
 FetchContent_MakeAvailable(cudnn)
+target_link_libraries(mlx PRIVATE cudnn_frontend)
 # Link with the actual cuDNN libraries.
 include(${cudnn_frontend_SOURCE_DIR}/cmake/cuDNN.cmake)
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
