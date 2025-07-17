@@ -8,6 +8,7 @@
 
 #include <cublasLt.h>
 #include <cuda.h>
+#include <cudnn.h>
 #include <thrust/execution_policy.h>
 
 #include <unordered_map>
@@ -137,12 +138,16 @@ class Device {
   cublasLtHandle_t lt_handle() const {
     return lt_;
   }
+  cudnnHandle_t cudnn_handle() const {
+    return cudnn_;
+  }
 
  private:
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
   cublasLtHandle_t lt_;
+  cudnnHandle_t cudnn_;
   std::unordered_map<int, CommandEncoder> encoders_;
 };
 
