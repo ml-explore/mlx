@@ -41,9 +41,12 @@ Device::Device(int device) : device_(device) {
   // The cublasLt handle is used by matmul.
   make_current();
   cublasLtCreate(&lt_);
+  // The cudnn handle is used by Convolution.
+  cudnnCreate(&cudnn_);
 }
 
 Device::~Device() {
+  cudnnDestroy(cudnn_);
   cublasLtDestroy(lt_);
 }
 
