@@ -212,7 +212,7 @@ jobs:
           name: Install Python package
           command: |
             sudo apt-get update
-            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev cudnn9-cuda-12
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
             python3 -m venv env
             source env/bin/activate
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \

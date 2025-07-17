@@ -9,11 +9,22 @@
 #include <future>
 #include <unordered_set>
 
-namespace mlx::core {
+namespace mlx::core::cu {
+
+namespace {
 
 // Can be tuned with MLX_MAX_OPS_PER_BUFFER
 // This should be less than 255
 constexpr int default_max_nodes_per_graph = 20;
+
+#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
+
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
+  }
+}
 
 int cuda_graph_cache_size() {
   static int cache_size = []() {
@@ -22,7 +33,7 @@ int cuda_graph_cache_size() {
   return cache_size;
 }
 
-namespace cu {
+} // namespace
 
 Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
@@ -42,11 +53,11 @@ Device::Device(int device) : device_(device) {
   make_current();
   cublasLtCreate(&lt_);
   // The cudnn handle is used by Convolution.
-  cudnnCreate(&cudnn_);
+  CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_));
 }
 
 Device::~Device() {
-  cudnnDestroy(cudnn_);
+  CHECK_CUDNN_ERROR(cudnnDestroy(cudnn_));
   cublasLtDestroy(lt_);
 }
 
@@ -180,6 +191,7 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
 
 CommandEncoder::CommandEncoder(Device& d) : device_(d), stream_(d) {
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
+  CHECK_CUDNN_ERROR(cudnnSetStream(d.cudnn_handle(), stream()));
 }
 
 void clear_graphs(std::unordered_map<std::string, cudaGraphExec_t>& graphs) {
@@ -334,6 +346,4 @@ CommandEncoder& get_command_encoder(Stream s) {
   return device(s.device).get_command_encoder(s);
 }
 
-} // namespace cu
-
-} // namespace mlx::core
+} // namespace mlx::core::cu
