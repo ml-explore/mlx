@@ -289,6 +289,7 @@ if __name__ == "__main__":
             install_requires += [
                 "nvidia-cublas-cu12==12.9.*",
                 "nvidia-cuda-nvrtc-cu12==12.9.*",
+                "nvidia-cudnn-cu12==12.9.*",
             ]
         else:
             name = "mlx-cpu"
