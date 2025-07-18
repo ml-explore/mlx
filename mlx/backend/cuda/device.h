@@ -66,6 +66,11 @@ class CommandEncoder {
   void
   add_kernel_node(void* func, dim3 grid_dim, dim3 block_dim, void** params);
 
+  // Low-level graph helpers.
+  void add_kernel_node(const cudaKernelNodeParams& params);
+  void add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params);
+  void add_graph_node(cudaGraph_t child);
+
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
   }
