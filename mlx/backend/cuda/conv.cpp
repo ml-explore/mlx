@@ -151,13 +151,6 @@ class Convolution {
   }
 
   cudnnHandle_t handle_;
-  cudnnTensorDescriptor_t input_desc_{nullptr};
-  cudnnFilterDescriptor_t filter_desc_{nullptr};
-  cudnnTensorDescriptor_t output_desc_{nullptr};
-  cudnnConvolutionDescriptor_t conv_desc_{nullptr};
-  cudnnConvolutionFwdAlgo_t algo_{
-      CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM};
-
   graph::Graph graph_;
   std::shared_ptr<graph::Tensor_attributes> input_attr_;
   std::shared_ptr<graph::Tensor_attributes> filter_attr_;
