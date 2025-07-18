@@ -272,6 +272,7 @@ jobs:
           name: Build Python package
           command: |
             source env/bin/activate
+            python setup.py clean --all
             << parameters.build_env >> MLX_BUILD_STAGE=1 python -m build -w
       - when:
           condition:
@@ -333,6 +334,7 @@ jobs:
             << parameters.build_env >> pip install ".[dev]" -v
             pip install typing_extensions
             python setup.py generate_stubs
+            python setup.py clean --all
             MLX_BUILD_STAGE=1 << parameters.build_env >> python -m build -w
             bash python/scripts/repair_linux.sh
       - when:
