@@ -196,7 +196,11 @@ if __name__ == "__main__":
 
     install_requires = []
     if build_cuda:
-        install_requires = ["nvidia-cublas-cu12", "nvidia-cuda-nvrtc-cu12"]
+        install_requires = [
+            "nvidia-cublas-cu12",
+            "nvidia-cuda-nvrtc-cu12",
+            "nvidia-cudnn-cu12",
+        ]
     version = get_version()
 
     _setup = partial(
