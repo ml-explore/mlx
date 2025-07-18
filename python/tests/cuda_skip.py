@@ -16,7 +16,6 @@ cuda_skip = {
     # Convolutions NYI
     "TestConv.test_1d_conv_with_2d",
     "TestConv.test_asymmetric_padding",
-    "TestConv.test_basic_grad_shapes",
     "TestConv.test_conv2d_unaligned_channels",
     "TestConv.test_conv_1d_groups_flipped",
     "TestConv.test_conv_general_flip_grad",
