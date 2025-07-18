@@ -20,6 +20,10 @@ namespace cu {
 
 using namespace cudnn_frontend;
 
+// The populate_cuda_graph API is supposed to integrate cuDNN with CUDA graph
+// but it does not seems to support convolution yet.
+#define CUDNN_CONV_SUPPORTS_CUDA_GRAPH_NATIVE_API 0
+
 #define CHECK_CUDNN_FE_ERROR(cmd)                              \
   if (cmd.is_bad()) {                                          \
     throw std::runtime_error(fmt::format("{} failed.", #cmd)); \
@@ -29,7 +33,7 @@ auto swapaxes(const array& in, int axis1, int axis2) {
   std::vector<int> axes(in.ndim());
   std::iota(axes.begin(), axes.end(), 0);
   std::swap(axes[axis1], axes[axis2]);
-  std::vector<int64_t> shape(axes.size());
+  std::vector<int64_t> shape(in.ndim());
   std::vector<int64_t> strides(in.ndim());
   for (size_t ax = 0; ax < axes.size(); ++ax) {
     shape[ax] = in.shape()[axes[ax]];
@@ -59,13 +63,18 @@ class Convolution {
     bool is_half = dtype == float16 || dtype == bfloat16;
 
     graph_.set_io_data_type(cudnn_type)
+        .set_intermediate_data_type(cudnn_type)
         .set_compute_data_type(is_half ? DataType_t::FLOAT : cudnn_type);
+#if CUDNN_CONV_SUPPORTS_CUDA_GRAPH_NATIVE_API
+    graph_.select_behavior_notes(
+        {BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
+#endif
     input_attr_ = graph_.tensor(graph::Tensor_attributes()
-                                    .set_name("input")
+                                    .set_data_type(cudnn_type)
                                     .set_dim(input_shape)
                                     .set_stride(input_strides));
     filter_attr_ = graph_.tensor(graph::Tensor_attributes()
-                                     .set_name("filter")
+                                     .set_data_type(cudnn_type)
                                      .set_dim(filter_shape)
                                      .set_stride(filter_strides));
 
@@ -75,10 +84,10 @@ class Convolution {
                             .set_stride(stride)
                             .set_dilation(dilation);
     output_attr_ = graph_.conv_fprop(input_attr_, filter_attr_, conv_options);
-    output_attr_->set_output(true);
-    output_attr_->set_data_type(cudnn_type);
-    output_attr_->set_dim(output_shape);
-    output_attr_->set_stride(output_strides);
+    output_attr_->set_output(true)
+        .set_data_type(cudnn_type)
+        .set_dim(output_shape)
+        .set_stride(output_strides);
 
     CHECK_CUDNN_FE_ERROR(graph_.validate());
     CHECK_CUDNN_FE_ERROR(graph_.build_operation_graph(handle_));
@@ -93,23 +102,29 @@ class Convolution {
       const void* input,
       const void* filter,
       void* output) {
-    float alpha = 1;
-    float beta = 0;
-
     array workspace(
         allocator::malloc(workspace_size_),
         {static_cast<int>(workspace_size_)},
         int8);
     encoder.add_temporary(workspace);
 
-    std::unordered_map<int64_t, void*> ptr_map{
+    std::unordered_map<int64_t, void*> variant_pack{
         {input_attr_->get_uid(), const_cast<void*>(input)},
         {filter_attr_->get_uid(), const_cast<void*>(filter)},
         {output_attr_->get_uid(), output}};
 
+#if CUDNN_CONV_SUPPORTS_CUDA_GRAPH_NATIVE_API
+    cudaGraph_t cudnn_cuda_graph;
+    cudaGraphCreate(&cudnn_cuda_graph, 0);
+    CHECK_CUDNN_FE_ERROR(graph_.populate_cuda_graph(
+        handle_, variant_pack, workspace.data<void>(), cudnn_cuda_graph));
+    encoder.add_graph_node(cudnn_cuda_graph);
+    cudaGraphDestroy(cudnn_cuda_graph);
+#else
     auto capture = encoder.capture_context();
     CHECK_CUDNN_FE_ERROR(
-        graph_.execute(handle_, ptr_map, workspace.data<void>()));
+        graph_.execute(handle_, variant_pack, workspace.data<void>()));
+#endif
   }
 
  private:
@@ -158,18 +173,19 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
 
   assert(inputs.size() == 2);
-  const auto& in = inputs[0];
-  const auto& wt = inputs[1];
+  const array& input = inputs[0];
+  const array& filter = inputs[1];
   out.set_data(allocator::malloc(out.nbytes()));
 
-  int ndim = in.ndim();
-  auto [input_shape, input_strides] = cu::swapaxes(in, 1, ndim - 1);
-  auto [filter_shape, filter_strides] = cu::swapaxes(wt, 1, ndim - 1);
+  // cuDNN requires dims to be passed as NCHW.
+  int ndim = input.ndim();
+  auto [input_shape, input_strides] = cu::swapaxes(input, 1, ndim - 1);
+  auto [filter_shape, filter_strides] = cu::swapaxes(filter, 1, ndim - 1);
   auto [output_shape, output_strides] = cu::swapaxes(out, 1, ndim - 1);
 
   cu::Convolution conv(
       cu::device(s.device),
-      in.dtype(),
+      input.dtype(),
       input_shape,
       input_strides,
       filter_shape,
@@ -181,7 +197,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
       std::vector<int64_t>(padding_hi_.begin(), padding_hi_.end()),
       std::vector<int64_t>(kernel_dilation_.begin(), kernel_dilation_.end()),
       groups_);
-  conv.run(encoder, in.data<void>(), wt.data<void>(), out.data<void>());
+  conv.run(encoder, input.data<void>(), filter.data<void>(), out.data<void>());
 }
 
 } // namespace mlx::core
