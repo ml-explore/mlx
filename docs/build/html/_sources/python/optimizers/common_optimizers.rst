@@ -19,3 +19,4 @@ Common Optimizers
    Adamax
    Lion
    MultiOptimizer
+   Muon
