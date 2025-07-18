@@ -209,7 +209,7 @@ jobs:
           name: Install Python package
           command: |
             sudo apt-get update
-            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev libcudnn9-dev-cuda-12
             python3 -m venv env
             source env/bin/activate
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
@@ -374,7 +374,7 @@ jobs:
           name: Build wheel
           command: |
             sudo apt-get update
-            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev libcudnn9-dev-cuda-12
             sudo apt-get install zip
             python -m venv env
             source env/bin/activate
