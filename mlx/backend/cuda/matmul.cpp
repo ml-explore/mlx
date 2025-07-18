@@ -119,7 +119,6 @@ class MatMul {
       uint64_t b_rows,
       uint64_t b_cols,
       int64_t ldb,
-      bool c_transposed,
       int64_t ldc,
       int32_t batch_count,
       int64_t a_batch_stride,
@@ -141,7 +140,7 @@ class MatMul {
             b_batch_stride) {
     auto type = dtype_to_cuda_type(dtype);
     c_desc_ = create_matrix_layout(
-        type, a_rows, b_cols, c_transposed, ldc, batch_count, c_batch_stride);
+        type, a_rows, b_cols, false, ldc, batch_count, c_batch_stride);
   }
 
   ~MatMul() {
@@ -403,9 +402,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 3);
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
-  auto& c_pre = inputs[2];
-
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto c = inputs[2];
 
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
@@ -418,7 +415,24 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // the arrays
   auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
   auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
-  auto [c_transposed, ldc, c] = check_transpose(encoder, s, c_pre);
+
+  int64_t ldc;
+  {
+    auto stx = c.strides()[c.ndim() - 2];
+    auto sty = c.strides()[c.ndim() - 1];
+    if (sty == 1 && stx == c.shape(-1)) {
+      ldc = stx;
+      out.set_data(allocator::malloc(out.nbytes()));
+    } else if (sty == 1 && stx == 0) {
+      ldc = 0;
+      out.set_data(allocator::malloc(out.nbytes()));
+    } else {
+      // Copy C into out and set C to out
+      ldc = c.shape(-1);
+      copy_gpu(c, out, CopyType::General, s);
+      c = out;
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -456,7 +470,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       K,
       N,
       ldb,
-      c_transposed,
       ldc,
       batch_shape.back(),
       a_batch_strides.back(),
