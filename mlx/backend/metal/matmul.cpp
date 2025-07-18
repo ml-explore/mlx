@@ -33,8 +33,7 @@ std::tuple<bool, int64_t, array> check_transpose(
   } else if (stx == 1 && (!is_vector || sty == arr.shape(-2))) {
     return std::make_tuple(true, sty, arr);
   } else {
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy_gpu(arr, arr_copy, CopyType::General, s);
+    array arr_copy = contiguous_copy_gpu(arr, s);
     copies.push_back(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
   }
@@ -43,8 +42,7 @@ std::tuple<bool, int64_t, array> check_transpose(
 inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     d.add_temporary(x_copy, s.index);
     return x_copy;
   } else {
@@ -75,8 +73,7 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
     }
   }
 
-  array x_copy(x.shape(), x.dtype(), nullptr, {});
-  copy_gpu(x, x_copy, CopyType::General, s);
+  array x_copy = contiguous_copy_gpu(x, s);
   d.add_temporary(x_copy, s.index);
   return std::make_tuple(false, x_copy.strides()[x_copy.ndim() - 2], x_copy);
 }
@@ -1894,8 +1891,7 @@ void segmented_mm(
       return std::make_tuple(false, x);
     }
 
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     d.add_temporary(x_copy, s.index);
     return std::make_tuple(true, x_copy);
   };

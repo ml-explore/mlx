@@ -237,8 +237,7 @@ void LayerNorm::eval_gpu(
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -295,9 +294,7 @@ void LayerNormVJP::eval_gpu(
       return x;
     }
     copied = true;
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
-    return x_copy;
+    return contiguous_copy_gpu(x, s);
   };
   bool donate_x = inputs[0].is_donatable();
   bool donate_g = inputs[3].is_donatable();

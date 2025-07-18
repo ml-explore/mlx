@@ -47,8 +47,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
   if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
-    array in_copy(in.shape(), in.dtype(), nullptr, {});
-    copy_gpu(in, in_copy, CopyType::General, s);
+    array in_copy = contiguous_copy_gpu(in, s);
     encoder.add_temporary(in_copy);
     in = in_copy;
     plan = get_reduction_plan(in, axes_);

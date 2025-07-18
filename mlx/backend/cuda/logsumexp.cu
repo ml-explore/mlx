@@ -108,8 +108,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       encoder.add_temporary(x_copy);
       return x_copy;
     }

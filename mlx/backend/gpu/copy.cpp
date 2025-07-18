@@ -46,4 +46,10 @@ void copy_gpu_inplace(
       in, out, in.shape(), i_strides, out.strides(), i_offset, 0, ctype, s);
 }
 
+array contiguous_copy_gpu(const array& arr, const Stream& s) {
+  array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+  copy_gpu(arr, arr_copy, CopyType::General, s);
+  return arr_copy;
+}
+
 } // namespace mlx::core

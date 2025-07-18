@@ -989,8 +989,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     //       input for the axes with stride smaller than the minimum reduction
     //       stride.
     if (plan.type == GeneralReduce) {
-      array in_copy(in.shape(), in.dtype(), nullptr, {});
-      copy_gpu(in, in_copy, CopyType::General, s);
+      array in_copy = contiguous_copy_gpu(in, s);
       d.add_temporary(in_copy, s.index);
       in = in_copy;
       plan = get_reduction_plan(in, axes_);

@@ -398,8 +398,7 @@ void ScaledDotProductAttention::eval_gpu(
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy_gpu(arr, arr_copy, CopyType::General, s);
+      array arr_copy = contiguous_copy_gpu(arr, s);
       copies.push_back(std::move(arr_copy));
       return copies.back();
     } else {
