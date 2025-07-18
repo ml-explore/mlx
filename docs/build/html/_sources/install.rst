@@ -23,13 +23,6 @@ To install from PyPI you must meet the following requirements:
     MLX is only available on devices running macOS >= 13.5
     It is highly recommended to use macOS 14 (Sonoma)
 
-
-MLX is also available on conda-forge. To install MLX with conda do:
-
-.. code-block:: shell
-
-   conda install conda-forge::mlx
-
 CUDA
 ^^^^
 
@@ -38,8 +31,16 @@ and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:
 
 .. code-block:: shell
 
-    pip install mlx-cuda
+    pip install "mlx[cuda]"
 
+CPU-only (Linux)
+^^^^^^^^^^^^^^^^
+
+For a CPU-only version of MLX that runs on Linux use:
+
+.. code-block:: shell
+
+    pip install "mlx[cpu]"
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
