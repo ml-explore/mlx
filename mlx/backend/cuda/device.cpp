@@ -306,7 +306,6 @@ void CommandEncoder::commit() {
   }
 
   // Put completion handlers in a batch.
-  worker_.end_batch();
   worker_.commit(stream_);
 }
 

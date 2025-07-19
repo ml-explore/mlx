@@ -30,6 +30,9 @@ SmallSizePool::SmallSizePool() {
       reinterpret_cast<char*>(buffer_) + small_pool_size);
   next_free_ = reinterpret_cast<Block*>(buffer_);
 
+  CHECK_CUDA_ERROR(
+      cudaMemAdvise(buffer_, small_pool_size, cudaMemAdviseSetReadMostly, 0));
+
   auto num_blocks = small_pool_size / small_block_size;
   auto curr = next_free_;
   for (size_t i = 0; i < num_blocks - 1; ++i) {

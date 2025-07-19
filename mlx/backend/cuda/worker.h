@@ -5,12 +5,15 @@
 #include "mlx/backend/cuda/event.h"
 #include "mlx/backend/cuda/utils.h"
 
+#include <condition_variable>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <thread>
 
 namespace mlx::core::cu {
+
+void signal_worker(void* data);
 
 // Run tasks in worker thread, synchronized with cuda stream.
 class Worker {
@@ -24,32 +27,25 @@ class Worker {
   // Add a pending |task| that will run when consumed or commited.
   void add_task(std::function<void()> task);
 
-  // Put pending tasks in a batch.
-  void end_batch();
-
   // Inform worker thread to run current batches after kernels in |stream|
   // finish running.
   void commit(cudaStream_t stream);
 
-  // Return how many batches have been added but not committed yet.
-  size_t uncommited_batches() const {
-    return uncommited_batches_;
-  }
-
  private:
-  void thread_fn();
+  friend void signal_worker(void*);
 
-  uint64_t batch_{0};
-  size_t uncommited_batches_{0};
+  void signal_();
+  void thread_fn();
+  std::mutex mtx_;
+  std::condition_variable cond_;
+
+  uint64_t committed_batch_{0};
+  uint64_t signaled_batch_{0};
 
   // Cuda stream and event for signaling kernel completion.
   CudaStream signal_stream_;
   CudaEvent signal_event_;
 
-  // Worker thread.
-  SharedEvent worker_event_;
-  std::thread worker_;
-  std::mutex worker_mutex_;
   bool stop_{false};
 
   // Tasks are put in |pending_tasks_| first, and then moved to
@@ -57,6 +53,7 @@ class Worker {
   using Tasks = std::vector<std::function<void()>>;
   Tasks pending_tasks_;
   std::map<uint64_t, Tasks> worker_tasks_;
+  std::thread worker_;
 };
 
 } // namespace mlx::core::cu
