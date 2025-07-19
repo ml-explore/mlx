@@ -25,8 +25,7 @@ constexpr int small_block_size = 8;
 constexpr int small_pool_size = 4 * page_size;
 
 SmallSizePool::SmallSizePool() {
-  CHECK_CUDA_ERROR(
-      cudaMallocManaged(&buffer_, small_block_size * small_pool_size));
+  CHECK_CUDA_ERROR(cudaMallocManaged(&buffer_, small_pool_size));
   end_ = reinterpret_cast<void*>(
       reinterpret_cast<char*>(buffer_) + small_pool_size);
   next_free_ = reinterpret_cast<Block*>(buffer_);
