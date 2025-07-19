@@ -22,6 +22,28 @@ struct CudaBuffer {
   size_t size;
 };
 
+class SmallSizePool {
+ private:
+  struct Block {
+    Block* next;
+  };
+
+  void* buffer_{nullptr};
+  Block* next_free_{nullptr};
+  void* end_{nullptr};
+
+ public:
+  SmallSizePool();
+  ~SmallSizePool();
+
+  SmallSizePool(const SmallSizePool&) = delete;
+  SmallSizePool& operator=(const SmallSizePool&) = delete;
+
+  void* malloc();
+  void free(void* p);
+  bool in_pool(void* p);
+};
+
 class CudaAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
@@ -60,6 +82,7 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
+  SmallSizePool scalar_pool_;
 };
 
 CudaAllocator& allocator();
