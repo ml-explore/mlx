@@ -80,6 +80,7 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
 }
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
+  enc.device().make_current();
   CHECK_CUDA_ERROR(
       cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeGlobal));
 }
@@ -88,6 +89,9 @@ CommandEncoder::CaptureContext::~CaptureContext() {
   CHECK_CUDA_ERROR(cudaStreamEndCapture(enc.stream(), &graph));
   std::unique_ptr<cudaGraph_t, void (*)(cudaGraph_t*)> graph_freer(
       &graph, [](cudaGraph_t* p) { CHECK_CUDA_ERROR(cudaGraphDestroy(*p)); });
+  if (discard) {
+    return;
+  }
 
   // Extract and add as single kernel node when possible.
   size_t num_nodes;

@@ -22,6 +22,7 @@ class CommandEncoder {
     ~CaptureContext();
     cudaGraph_t graph;
     CommandEncoder& enc;
+    bool discard{false};
   };
   struct ConcurrentContext {
     ConcurrentContext(CommandEncoder& enc);
@@ -78,6 +79,10 @@ class CommandEncoder {
   void add_completed_handler(std::function<void()> task);
   void maybe_commit();
   void commit();
+
+  Device& device() {
+    return device_;
+  }
 
   CudaStream& stream() {
     return stream_;
