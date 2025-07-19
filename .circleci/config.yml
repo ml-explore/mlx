@@ -366,7 +366,7 @@ jobs:
         type: string
         default: ""
     machine:
-      image: linux-cuda-12:default
+      image: linux-cuda-12:2024.11.1
       resource_class: gpu.nvidia.small.gen2
     steps:
       - checkout

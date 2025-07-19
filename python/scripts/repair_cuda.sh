@@ -1,7 +1,7 @@
 #!/bin/bash
 
 auditwheel repair dist/* \
-  --plat manylinux_2_39_x86_64 \
+  --plat manylinux_2_35_x86_64 \
   --exclude libcublas* \
   --exclude libnvrtc* \
   -w wheel_tmp
