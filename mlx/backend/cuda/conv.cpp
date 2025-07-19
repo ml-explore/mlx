@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -168,12 +169,24 @@ auto nhwc_to_nchw(const array& in) {
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Convolution::eval_gpu");
   assert(inputs.size() == 2);
-  const array& in = inputs[0];
-  const array& wt = inputs[1];
+  array in = inputs[0];
+  array wt = inputs[1];
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+
+  // While cuDNN supports passing arbitrary strides, it would fail to build a
+  // plan with non-contiguous input.
+  if (!in.flags().row_contiguous) {
+    in = contiguous_copy_gpu(in, s);
+    encoder.add_temporary(in);
+  }
+  if (!wt.flags().row_contiguous) {
+    wt = contiguous_copy_gpu(wt, s);
+    encoder.add_temporary(wt);
+  }
+
   encoder.set_input_array(in);
   encoder.set_input_array(wt);
   encoder.set_output_array(out);
