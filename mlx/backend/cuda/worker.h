@@ -24,14 +24,8 @@ class Worker {
   // Add a pending |task| that will run when consumed or commited.
   void add_task(std::function<void()> task);
 
-  // Run pending tasks immediately in current thread.
-  void consume_in_this_thread();
-
   // Put pending tasks in a batch.
   void end_batch();
-
-  // Inform worker thread to run current batches now.
-  void commit();
 
   // Inform worker thread to run current batches after kernels in |stream|
   // finish running.

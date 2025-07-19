@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/worker.h"
-#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 
 namespace mlx::core::cu {
@@ -23,13 +22,6 @@ void Worker::add_task(std::function<void()> task) {
   pending_tasks_.push_back(std::move(task));
 }
 
-void Worker::consume_in_this_thread() {
-  for (auto& task : pending_tasks_) {
-    task();
-  }
-  pending_tasks_.clear();
-}
-
 void Worker::end_batch() {
   batch_++;
   {
@@ -37,14 +29,6 @@ void Worker::end_batch() {
     worker_tasks_[batch_] = std::move(pending_tasks_);
   }
   uncommited_batches_++;
-}
-
-void Worker::commit() {
-  if (uncommited_batches_ == 0) {
-    return;
-  }
-  uncommited_batches_ = 0;
-  worker_event_.signal(batch_);
 }
 
 void Worker::commit(cudaStream_t stream) {
@@ -60,9 +44,6 @@ void Worker::commit(cudaStream_t stream) {
 }
 
 void Worker::thread_fn() {
-  // The worker thread is safe to free buffers.
-  allocator().register_this_thread();
-
   while (!stop_) {
     uint64_t batch = worker_event_.value();
     Tasks tasks;

@@ -94,18 +94,21 @@ Buffer CudaAllocator::malloc(size_t size) {
   if (!buf) {
     // If we have a lot of memory pressure or are over the maximum cache size,
     // try to reclaim memory from the cache.
-    size_t mem_required = get_active_memory() + get_cache_memory() + size;
-    if (mem_required >= memory_limit_) {
-      buffer_cache_.release_cached_buffers(mem_required - memory_limit_);
+    int64_t mem_to_free =
+        get_active_memory() + get_cache_memory() + size - memory_limit_;
+    mem_to_free = std::max(
+        static_cast<int64_t>(get_cache_memory() - max_pool_size_), mem_to_free);
+    if (mem_to_free > 0) {
+      buffer_cache_.release_cached_buffers(mem_to_free);
     }
 
-    lock.unlock();
     buf = new CudaBuffer{nullptr, size};
 
     // Try the scalar pool first
     if (size <= small_block_size) {
       buf->data = scalar_pool_.malloc();
     }
+    lock.unlock();
     if (!buf->data) {
       cudaError_t err = cudaMallocManaged(&buf->data, size);
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
@@ -113,7 +116,6 @@ Buffer CudaAllocator::malloc(size_t size) {
             "cudaMallocManaged failed: {}.", cudaGetErrorString(err)));
       }
     }
-
     lock.lock();
   }
   active_memory_ += size;
@@ -123,7 +125,6 @@ Buffer CudaAllocator::malloc(size_t size) {
   if (get_cache_memory() > max_pool_size_) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
-
   return Buffer{buf};
 }
 
@@ -135,13 +136,7 @@ void CudaAllocator::free(Buffer buffer) {
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
-  if (get_cache_memory() < max_pool_size_) {
-    buffer_cache_.recycle_to_cache(buf);
-  } else {
-    lock.unlock();
-    cuda_free(buf->data);
-    delete buf;
-  }
+  buffer_cache_.recycle_to_cache(buf);
 }
 
 size_t CudaAllocator::size(Buffer buffer) const {
@@ -152,26 +147,8 @@ size_t CudaAllocator::size(Buffer buffer) const {
   return buf->size;
 }
 
-void CudaAllocator::register_this_thread() {
-  std::lock_guard lock(worker_mutex_);
-  allowed_threads_.insert(std::this_thread::get_id());
-}
-
+// This must be called with mutex_ aquired
 void CudaAllocator::cuda_free(void* buf) {
-  // If cuda_free() is called from a unregistered thread, reschedule the call to
-  // worker.
-  {
-    std::lock_guard lock(worker_mutex_);
-    if (allowed_threads_.count(std::this_thread::get_id()) == 0) {
-      if (!worker_) {
-        worker_.reset(new Worker);
-      }
-      worker_->add_task([this, buf]() { this->cuda_free(buf); });
-      worker_->end_batch();
-      worker_->commit();
-      return;
-    }
-  }
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
