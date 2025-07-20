@@ -147,6 +147,7 @@ bool execute_plan(
     return false;
   }
 
+  encoder.add_completed_handler([plan = std::move(plan)]() {});
   encoder.add_temporary(workspace);
   return true;
 }
