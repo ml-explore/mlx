@@ -184,25 +184,25 @@ bool execute_plan(
                          .setUids(3, uids)
                          .build();
 
+  auto handle = encoder.device().cudnn_handle();
+  cudnnSetStream(handle, encoder.stream());
+
 #if CUDNN_VERSION >= 90500 && MLX_USE_CUDNN_NATIVE_CUDA_GRAPH_API
   cudaGraph_t graph;
   cudaGraphCreate(&graph, 0);
   std::unique_ptr<cudaGraph_t, void (*)(cudaGraph_t*)> graph_freer(
       &graph, [](cudaGraph_t* p) { cudaGraphDestroy(*p); });
   if (cudnnBackendPopulateCudaGraph(
-          encoder.device().cudnn_handle(),
-          plan.get_raw_desc(),
-          variantPack.get_raw_desc(),
-          graph) != CUDNN_STATUS_SUCCESS) {
+          handle, plan.get_raw_desc(), variantPack.get_raw_desc(), graph) !=
+      CUDNN_STATUS_SUCCESS) {
     return false;
   }
   encoder.add_graph_node(graph);
 #else
   auto capture = encoder.capture_context();
   if (cudnnBackendExecute(
-          encoder.device().cudnn_handle(),
-          plan.get_raw_desc(),
-          variantPack.get_raw_desc()) != CUDNN_STATUS_SUCCESS) {
+          handle, plan.get_raw_desc(), variantPack.get_raw_desc()) !=
+      CUDNN_STATUS_SUCCESS) {
     // Discard the captured graph when failed.
     capture.discard = true;
     return false;

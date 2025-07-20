@@ -32,9 +32,6 @@ cuda_skip = {
     "TestConvTranspose.test_torch_conv_transpose_3D",
     "TestConvTranspose.test_torch_conv_transpose_3D_grad",
     "TestConvTranspose.test_torch_conv_transpose_3d_output_padding",
-    "TestLayers.test_conv1d",
-    "TestLayers.test_conv2d",
-    "TestVmap.test_vmap_conv",
     # FFTs NYI
     "TestFFT.test_fft",
     "TestFFT.test_fft_big_powers_of_two",

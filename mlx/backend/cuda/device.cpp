@@ -198,7 +198,6 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
 
 CommandEncoder::CommandEncoder(Device& d) : device_(d), stream_(d) {
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
-  CHECK_CUDNN_ERROR(cudnnSetStream(d.cudnn_handle(), stream()));
 }
 
 void clear_graphs(std::unordered_map<std::string, cudaGraphExec_t>& graphs) {
