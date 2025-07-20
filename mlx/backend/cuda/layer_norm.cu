@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/iterators/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
 #include "mlx/backend/gpu/copy.h"
@@ -105,8 +104,8 @@ __global__ void layer_norm(
     T wn[N_READS];
     T bn[N_READS];
     cub::LoadDirectBlocked(index, x, xn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(b, b_stride), bn, axis_size);
+    cub::LoadDirectBlocked(index, StridedIterator(w, w_stride), wn, axis_size);
+    cub::LoadDirectBlocked(index, StridedIterator(b, b_stride), bn, axis_size);
     for (int i = 0; i < N_READS; ++i) {
       float norm = (static_cast<float>(xn[i]) - mean) * normalizer;
       xn[i] = wn[i] * static_cast<T>(norm) + bn[i];
@@ -162,7 +161,7 @@ __global__ void layer_norm_vjp(
     auto index = r * BLOCK_DIM + block.thread_rank();
     cub::LoadDirectBlocked(index, x, xn, axis_size, mean);
     cub::LoadDirectBlocked(index, g, gn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
+    cub::LoadDirectBlocked(index, StridedIterator(w, w_stride), wn, axis_size);
     for (int i = 0; i < N_READS; i++) {
       float t = static_cast<float>(xn[i]) - mean;
       float wi = wn[i];
@@ -185,7 +184,7 @@ __global__ void layer_norm_vjp(
     T gn[N_READS];
     cub::LoadDirectBlocked(index, x, xn, axis_size);
     cub::LoadDirectBlocked(index, g, gn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
+    cub::LoadDirectBlocked(index, StridedIterator(w, w_stride), wn, axis_size);
     for (int i = 0; i < N_READS; i++) {
       float xi = (static_cast<float>(xn[i]) - mean) * normalizer;
       float wi = wn[i];
