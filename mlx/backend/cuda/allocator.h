@@ -21,13 +21,14 @@ struct CudaBuffer {
 
 class SmallSizePool {
  private:
-  struct Block {
+  union Block {
     Block* next;
+    CudaBuffer buf;
   };
 
-  void* buffer_{nullptr};
+  Block* buffer_{nullptr};
+  void* data_{nullptr};
   Block* next_free_{nullptr};
-  void* end_{nullptr};
 
  public:
   SmallSizePool();
@@ -36,9 +37,9 @@ class SmallSizePool {
   SmallSizePool(const SmallSizePool&) = delete;
   SmallSizePool& operator=(const SmallSizePool&) = delete;
 
-  void* malloc();
-  void free(void* p);
-  bool in_pool(void* p);
+  CudaBuffer* malloc();
+  void free(CudaBuffer* buf);
+  bool in_pool(CudaBuffer* buf);
 };
 
 class CudaAllocator : public allocator::Allocator {
@@ -57,7 +58,7 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
-  void cuda_free(void* buf);
+  void cuda_free(CudaBuffer* buf);
 
   CudaAllocator();
   friend CudaAllocator& allocator();
