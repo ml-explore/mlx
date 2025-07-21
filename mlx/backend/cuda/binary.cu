@@ -128,7 +128,7 @@ __global__ void binary_g(
     int ndim) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto [a_idx, b_idx] = elem_to_loc_4d(
+    auto [a_idx, b_idx] = elem_to_loc(
         index, shape.data(), a_strides.data(), b_strides.data(), ndim);
     out[index] = Op{}(a[a_idx], b[b_idx]);
   }

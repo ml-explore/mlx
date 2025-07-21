@@ -47,7 +47,7 @@ __global__ void unary_g(
     int ndim) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto idx = elem_to_loc_4d(index, shape.data(), strides.data(), ndim);
+    auto idx = elem_to_loc(index, shape.data(), strides.data(), ndim);
     out[index] = Op{}(in[idx]);
   }
 }

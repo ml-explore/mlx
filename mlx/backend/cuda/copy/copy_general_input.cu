@@ -34,7 +34,7 @@ __global__ void copy_g(
     int ndim) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    IdxT idx_in = elem_to_loc_4d(index, shape.data(), strides_in.data(), ndim);
+    IdxT idx_in = elem_to_loc(index, shape.data(), strides_in.data(), ndim);
     out[index] = CastOp<In, Out>{}(in[idx_in]);
   }
 }

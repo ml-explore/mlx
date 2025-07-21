@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/gemv.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -351,6 +352,22 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     a_batch_strides = {0};
     b_batch_strides = {0};
     batch_shape = {1};
+  }
+
+  if (cu::can_use_gemv(M, N, K, a_transposed, b_transposed)) {
+    cu::gemv(
+        a,
+        b,
+        out,
+        M,
+        N,
+        K,
+        batch_count,
+        batch_shape,
+        a_batch_strides,
+        b_batch_strides,
+        encoder);
+    return;
   }
 
   /////////////////////////////////////////////////////////////////////////////

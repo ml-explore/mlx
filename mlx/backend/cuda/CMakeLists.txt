@@ -20,6 +20,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
