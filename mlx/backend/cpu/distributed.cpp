@@ -13,9 +13,7 @@ std::pair<array, bool> ensure_row_contiguous(const array& arr, Stream stream) {
   if (arr.flags().row_contiguous) {
     return {arr, false};
   } else {
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy_cpu(arr, arr_copy, CopyType::General, stream);
-    return {arr_copy, true};
+    return {contiguous_copy_cpu(arr, stream), true};
   }
 };
 
@@ -34,8 +32,7 @@ void AllReduce::eval_cpu(
       }
       return in;
     } else {
-      array arr_copy(in.shape(), in.dtype(), nullptr, {});
-      copy_cpu(in, arr_copy, CopyType::General, s);
+      array arr_copy = contiguous_copy_cpu(in, s);
       out.copy_shared_buffer(arr_copy);
       return arr_copy;
     }

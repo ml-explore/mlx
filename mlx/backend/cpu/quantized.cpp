@@ -712,9 +712,7 @@ void fast::AffineQuantize::eval_cpu(
     if (arr.flags().row_contiguous) {
       return std::make_pair(arr, false);
     } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy_cpu(arr, arr_copy, CopyType::General, s);
-      return std::make_pair(arr_copy, true);
+      return std::make_pair(contiguous_copy_cpu(arr, s), true);
     }
   };
 

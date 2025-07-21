@@ -377,4 +377,10 @@ void copy_cpu_inplace(
       });
 }
 
+array contiguous_copy_cpu(const array& arr, Stream stream) {
+  array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+  copy_cpu(arr, arr_copy, CopyType::General, stream);
+  return arr_copy;
+}
+
 } // namespace mlx::core

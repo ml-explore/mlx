@@ -131,8 +131,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
       }
       return x;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy_cpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_cpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
