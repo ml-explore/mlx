@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from subprocess import run
 
-from setuptools import Command, Extension, setup
+from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.bdist_wheel import bdist_wheel
 from setuptools.command.build_ext import build_ext
 
@@ -184,12 +184,19 @@ with open(Path(__file__).parent / "README.md", encoding="utf-8") as f:
 
 if __name__ == "__main__":
     package_dir = {"": "python"}
-    packages = [
-        "mlx",
-        "mlx.nn",
-        "mlx.nn.layers",
-        "mlx.optimizers",
-    ]
+    packages = find_namespace_packages(
+        where="python",
+        exclude=[
+            "src",
+            "tests",
+            "scripts",
+            "mlx.lib",
+            "mlx.include",
+            "mlx.share",
+            "mlx.share.**",
+            "mlx.include.**",
+        ],
+    )
 
     build_macos = platform.system() == "Darwin"
     build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
@@ -221,7 +228,7 @@ if __name__ == "__main__":
         },
     )
 
-    package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
+    package_data = {"mlx.core": ["*.pyi"]}
 
     extras = {
         "dev": [
