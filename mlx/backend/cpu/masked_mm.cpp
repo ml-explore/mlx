@@ -136,9 +136,8 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
           }
           return std::make_tuple(true, sty, arr, false);
         } else {
-          array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-          copy_cpu(arr, arr_copy, CopyType::General, s);
           int64_t stx = arr.shape(-1);
+          array arr_copy = contiguous_copy_cpu(arr, s);
           return std::make_tuple(false, stx, arr_copy, true);
         }
       };

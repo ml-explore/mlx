@@ -87,8 +87,7 @@ void LogSumExp::eval_cpu(const std::vector<array>& inputs, array& out) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_cpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_cpu(x, s);
       encoder.add_temporary(x_copy);
       return x_copy;
     }

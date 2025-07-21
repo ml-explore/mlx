@@ -30,4 +30,7 @@ void copy_cpu_inplace(
     const std::optional<array>& dynamic_i_offset = std::nullopt,
     const std::optional<array>& dynamic_o_offset = std::nullopt);
 
+// Return a contiguous array with same shape that copies the data of |arr|.
+array contiguous_copy_cpu(const array& arr, Stream stream);
+
 } // namespace mlx::core

@@ -250,10 +250,8 @@ void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Ensure contiguity
   auto in = inputs[0];
   if (!in.flags().row_contiguous) {
-    array arr_copy(in.shape(), in.dtype(), nullptr, {});
-    copy_cpu(in, arr_copy, CopyType::General, stream());
-    in = arr_copy;
-    encoder.add_temporary(arr_copy);
+    in = contiguous_copy_cpu(in, stream());
+    encoder.add_temporary(in);
   }
   out.set_data(allocator::malloc(out.nbytes()));
 
