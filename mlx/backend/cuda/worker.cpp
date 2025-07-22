@@ -31,7 +31,6 @@ void Worker::signal(void* data) {
   w->cond_.notify_one();
 }
 
-
 void Worker::commit(cudaStream_t stream) {
   // Move pending tasks into tasks
   if (pending_tasks_.empty()) {
