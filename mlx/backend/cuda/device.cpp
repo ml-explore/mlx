@@ -306,7 +306,6 @@ void CommandEncoder::commit() {
   }
 
   // Put completion handlers in a batch.
-  worker_.end_batch();
   worker_.commit(stream_);
 }
 
@@ -315,7 +314,6 @@ void CommandEncoder::synchronize() {
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });
-  worker_.end_batch();
   commit();
   f.wait();
 }

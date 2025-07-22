@@ -110,24 +110,26 @@ __global__ void event_signal_kernel(SharedEvent::Atomic* ac, uint64_t value) {
   event_signal(ac, value);
 }
 
+SharedEvent::Atomic* to_atomic(std::shared_ptr<Buffer> buf) {
+  return static_cast<SharedEvent::Atomic*>(buf->raw_ptr());
+}
+
 SharedEvent::SharedEvent() {
-  // Allocate cuda::atomic on managed memory.
-  Atomic* ac;
-  CHECK_CUDA_ERROR(cudaMallocManaged(&ac, sizeof(Atomic)));
-  new (ac) Atomic(0);
-  ac_ = std::shared_ptr<Atomic>(ac, [](Atomic* ptr) {
-    ptr->~Atomic();
-    allocator().cuda_free(ptr);
-  });
+  buf_ = std::shared_ptr<Buffer>(
+      new Buffer{allocator().malloc(sizeof(Atomic))}, [](Buffer* ptr) {
+        allocator().free(*ptr);
+        delete ptr;
+      });
+  *static_cast<uint64_t*>(buf_->raw_ptr()) = 0;
 }
 
 void SharedEvent::wait(uint64_t value) {
   nvtx3::scoped_range r("cu::SharedEvent::wait");
-  event_wait(ac_.get(), value);
+  event_wait(to_atomic(buf_), value);
 }
 
 void SharedEvent::wait(cudaStream_t stream, uint64_t value) {
-  event_wait_kernel<<<1, 1, 0, stream>>>(ac_.get(), value);
+  event_wait_kernel<<<1, 1, 0, stream>>>(to_atomic(buf_), value);
 }
 
 void SharedEvent::wait(Stream s, uint64_t value) {
@@ -138,17 +140,17 @@ void SharedEvent::wait(Stream s, uint64_t value) {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
     wait(encoder.stream(), value);
-    encoder.add_completed_handler([ac = ac_]() {});
+    encoder.add_completed_handler([buf = buf_]() {});
   }
 }
 
 void SharedEvent::signal(uint64_t value) {
   nvtx3::scoped_range r("cu::SharedEvent::signal");
-  event_signal(ac_.get(), value);
+  event_signal(to_atomic(buf_), value);
 }
 
 void SharedEvent::signal(cudaStream_t stream, uint64_t value) {
-  event_signal_kernel<<<1, 1, 0, stream>>>(ac_.get(), value);
+  event_signal_kernel<<<1, 1, 0, stream>>>(to_atomic(buf_), value);
 }
 
 void SharedEvent::signal(Stream s, uint64_t value) {
@@ -162,18 +164,18 @@ void SharedEvent::signal(Stream s, uint64_t value) {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
     signal(encoder.stream(), value);
-    encoder.add_completed_handler([ac = ac_]() {});
+    encoder.add_completed_handler([buf = buf_]() {});
   }
 }
 
 bool SharedEvent::is_signaled(uint64_t value) const {
   nvtx3::scoped_range r("cu::SharedEvent::is_signaled");
-  return ac_->load() >= value;
+  return to_atomic(buf_)->load() >= value;
 }
 
 uint64_t SharedEvent::value() const {
   nvtx3::scoped_range r("cu::SharedEvent::value");
-  return ac_->load();
+  return to_atomic(buf_)->load();
 }
 
 } // namespace cu

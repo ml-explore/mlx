@@ -2,7 +2,6 @@
 
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/utils.h"
-#include "mlx/backend/cuda/worker.h"
 #include "mlx/utils.h"
 
 #include <cuda_runtime.h>
@@ -25,52 +24,58 @@ constexpr int small_block_size = 8;
 constexpr int small_pool_size = 4 * page_size;
 
 SmallSizePool::SmallSizePool() {
-  CHECK_CUDA_ERROR(cudaMallocManaged(&buffer_, small_pool_size));
-  end_ = reinterpret_cast<void*>(
-      reinterpret_cast<char*>(buffer_) + small_pool_size);
-  next_free_ = reinterpret_cast<Block*>(buffer_);
-
   auto num_blocks = small_pool_size / small_block_size;
+  buffer_ = new Block[num_blocks];
+
+  next_free_ = buffer_;
+
+  CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
+  CHECK_CUDA_ERROR(
+      cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetReadMostly, 0));
+
   auto curr = next_free_;
-  for (size_t i = 0; i < num_blocks - 1; ++i) {
-    curr->next = reinterpret_cast<Block*>(
-        reinterpret_cast<char*>(buffer_) + (i + 1) * small_block_size);
+  for (size_t i = 1; i < num_blocks; ++i) {
+    curr->next = buffer_ + i;
     curr = curr->next;
   }
   curr->next = nullptr;
 }
 
 SmallSizePool::~SmallSizePool() {
-  CHECK_CUDA_ERROR(cudaFree(buffer_));
+  CHECK_CUDA_ERROR(cudaFree(data_));
+  delete[] buffer_;
 }
 
-void* SmallSizePool::malloc() {
+CudaBuffer* SmallSizePool::malloc() {
   if (next_free_ == nullptr) {
     return nullptr;
   }
   Block* b = next_free_;
+  uint64_t i = next_free_ - buffer_;
   next_free_ = next_free_->next;
-  return static_cast<void*>(b);
+  b->buf.data = static_cast<char*>(data_) + i * small_block_size;
+  b->buf.size = small_block_size;
+  return &b->buf;
 }
 
-void SmallSizePool::free(void* p) {
-  auto b = static_cast<Block*>(p);
+void SmallSizePool::free(CudaBuffer* buf) {
+  auto b = reinterpret_cast<Block*>(buf);
   b->next = next_free_;
   next_free_ = b;
 }
 
-bool SmallSizePool::in_pool(void* p) {
-  return (p >= buffer_) && (p < end_);
+bool SmallSizePool::in_pool(CudaBuffer* buf) {
+  constexpr int num_blocks = (small_pool_size / small_block_size);
+  auto b = reinterpret_cast<Block*>(buf);
+  int64_t block_num = b - buffer_;
+  return block_num >= 0 && block_num < num_blocks;
 }
 
 CudaAllocator::CudaAllocator()
     : buffer_cache_(
           page_size,
           [](CudaBuffer* buf) { return buf->size; },
-          [this](CudaBuffer* buf) {
-            cuda_free(buf->data);
-            delete buf;
-          }) {
+          [this](CudaBuffer* buf) { cuda_free(buf); }) {
   // TODO: Set memory limit for multi-device.
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
@@ -92,28 +97,26 @@ Buffer CudaAllocator::malloc(size_t size) {
 
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
-    // If we have a lot of memory pressure or are over the maximum cache size,
-    // try to reclaim memory from the cache.
-    size_t mem_required = get_active_memory() + get_cache_memory() + size;
-    if (mem_required >= memory_limit_) {
-      buffer_cache_.release_cached_buffers(mem_required - memory_limit_);
+    // If we have a lot of memory pressure try to reclaim memory from the cache.
+    int64_t mem_to_free =
+        get_active_memory() + get_cache_memory() + size - memory_limit_;
+    if (mem_to_free > 0) {
+      buffer_cache_.release_cached_buffers(mem_to_free);
     }
-
-    lock.unlock();
-    buf = new CudaBuffer{nullptr, size};
 
     // Try the scalar pool first
     if (size <= small_block_size) {
-      buf->data = scalar_pool_.malloc();
+      buf = scalar_pool_.malloc();
     }
-    if (!buf->data) {
+    lock.unlock();
+    if (!buf) {
+      buf = new CudaBuffer{nullptr, size};
       cudaError_t err = cudaMallocManaged(&buf->data, size);
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
         throw std::runtime_error(fmt::format(
             "cudaMallocManaged failed: {}.", cudaGetErrorString(err)));
       }
     }
-
     lock.lock();
   }
   active_memory_ += size;
@@ -123,7 +126,6 @@ Buffer CudaAllocator::malloc(size_t size) {
   if (get_cache_memory() > max_pool_size_) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
-
   return Buffer{buf};
 }
 
@@ -138,9 +140,7 @@ void CudaAllocator::free(Buffer buffer) {
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
-    lock.unlock();
-    cuda_free(buf->data);
-    delete buf;
+    cuda_free(buf);
   }
 }
 
@@ -152,30 +152,13 @@ size_t CudaAllocator::size(Buffer buffer) const {
   return buf->size;
 }
 
-void CudaAllocator::register_this_thread() {
-  std::lock_guard lock(worker_mutex_);
-  allowed_threads_.insert(std::this_thread::get_id());
-}
-
-void CudaAllocator::cuda_free(void* buf) {
-  // If cuda_free() is called from a unregistered thread, reschedule the call to
-  // worker.
-  {
-    std::lock_guard lock(worker_mutex_);
-    if (allowed_threads_.count(std::this_thread::get_id()) == 0) {
-      if (!worker_) {
-        worker_.reset(new Worker);
-      }
-      worker_->add_task([this, buf]() { this->cuda_free(buf); });
-      worker_->end_batch();
-      worker_->commit();
-      return;
-    }
-  }
+// This must be called with mutex_ aquired
+void CudaAllocator::cuda_free(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    cudaFree(buf);
+    cudaFree(buf->data);
+    delete buf;
   }
 }
 

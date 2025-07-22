@@ -19,8 +19,6 @@ void new_stream(Stream s) {
   cudaFree(nullptr);
   // Ensure the static stream objects get created.
   cu::get_command_encoder(s);
-  // The main thread is safe to free buffers.
-  cu::allocator().register_this_thread();
 }
 
 void eval(array& arr) {
