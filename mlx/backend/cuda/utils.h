@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -33,10 +34,12 @@ class CudaStream {
 };
 
 // Throw exception if the cuda API does not succeed.
+void check_cublas_error(const char* name, cublasStatus_t err);
 void check_cuda_error(const char* name, cudaError_t err);
 void check_cuda_error(const char* name, CUresult err);
 
 // The macro version that prints the command that failed.
+#define CHECK_CUBLAS_ERROR(cmd) check_cublas_error(#cmd, (cmd))
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
 
 // Convert Dtype to CUDA C++ types.
