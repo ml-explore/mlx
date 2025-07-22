@@ -398,6 +398,18 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    def test_fully_masked(self):
+        Lkv = 8
+        mask = mx.array(False)
+        for D in [4, 128]:
+            for Lq in [1, 8]:
+                q = mx.random.normal(shape=(1, 4, Lq, D))
+                k = mx.random.normal(shape=(1, 4, Lkv, D))
+                v = mx.random.normal(shape=(1, 4, Lkv, D))
+
+                out = mx.fast.scaled_dot_product_attention(q, k, v, mask=mask, scale=1)
+                self.assertTrue(mx.all(mx.isnan(out)))
+
     def test_fast_sdpa_few_query(self):
         D = 64
         L = 43
