@@ -87,6 +87,11 @@ endif()
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
 
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.4.0)
+  target_compile_options(
+    mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--compress-mode=size>")
+endif()
+
 # Compute capability 7 is required for synchronization between CPU/GPU with
 # managed memory. TODO: Add more architectures for potential performance gain.
 set(MLX_CUDA_ARCHITECTURES
