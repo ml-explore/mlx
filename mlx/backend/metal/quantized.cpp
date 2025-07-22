@@ -244,6 +244,59 @@ void qmv(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void qmv_no_parallel_m(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  int bn = 128;
+  // int bk = 32;
+  MTL::Size group_dims(2, 1, 1);
+  MTL::Size grid_dims((N + bn - 1) / bn, 1, B);
+
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  // bool fast = N % bn == 0 && K % 512 == 0;
+  concatenate(
+      kname,
+      "qmv_no_parallel_m_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      B > 1 ? "_batch_1" : "_batch_0");
+  auto template_def = get_template_definition(
+      kname, "qmv_no_parallel_m", type_string, group_size, bits, B > 1);
+
+  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_input_array(x, 3);
+  compute_encoder.set_output_array(out, 4);
+  compute_encoder.set_bytes(M, 5);
+  compute_encoder.set_bytes(K, 6);
+  compute_encoder.set_bytes(N, 7);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, 8);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void qvm_split_k(
     const array& x,
     const array& w,
@@ -818,7 +871,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Run of the mill qmv
   if (transpose_) {
-    qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
+    qmv_no_parallel_m(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s);
     return;
   }
 
