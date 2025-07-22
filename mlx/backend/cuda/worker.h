@@ -13,8 +13,6 @@
 
 namespace mlx::core::cu {
 
-void signal_worker(void* data);
-
 // Run tasks in worker thread, synchronized with cuda stream.
 class Worker {
  public:
@@ -32,9 +30,8 @@ class Worker {
   void commit(cudaStream_t stream);
 
  private:
-  friend void signal_worker(void*);
+  static void signal(void*);
 
-  void signal_();
   void thread_fn();
   std::mutex mtx_;
   std::condition_variable cond_;

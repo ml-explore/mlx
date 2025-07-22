@@ -22,18 +22,15 @@ void Worker::add_task(std::function<void()> task) {
   pending_tasks_.push_back(std::move(task));
 }
 
-void signal_worker(void* data) {
+void Worker::signal(void* data) {
   auto w = static_cast<Worker*>(data);
-  w->signal_();
+  {
+    std::lock_guard lock(w->mtx_);
+    w->signaled_batch_++;
+  }
+  w->cond_.notify_one();
 }
 
-void Worker::signal_() {
-  {
-    std::lock_guard lock(mtx_);
-    signaled_batch_++;
-  }
-  cond_.notify_one();
-}
 
 void Worker::commit(cudaStream_t stream) {
   // Move pending tasks into tasks
@@ -47,7 +44,7 @@ void Worker::commit(cudaStream_t stream) {
   }
   signal_event_.record(stream);
   signal_event_.wait(signal_stream_);
-  cudaLaunchHostFunc(signal_stream_, signal_worker, this);
+  cudaLaunchHostFunc(signal_stream_, signal, this);
 }
 
 void Worker::thread_fn() {
