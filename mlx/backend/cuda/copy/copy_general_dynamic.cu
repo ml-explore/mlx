@@ -41,7 +41,7 @@ __global__ void copy_gg_dynamic(
     const int64_t* offset_out) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto [idx_in, idx_out] = elem_to_loc_4d(
+    auto [idx_in, idx_out] = elem_to_loc(
         index, shape.data(), strides_in.data(), strides_out.data(), ndim);
     out[idx_out + *offset_out] = CastOp<In, Out>{}(in[idx_in + *offset_in]);
   }
