@@ -58,7 +58,7 @@ inline std::array<T, MAX_NDIM> fixed_vector(const std::vector<T>& vec) {
     throw std::runtime_error(
         fmt::format("ndim can not be larger than {}.", MAX_NDIM));
   }
-  std::array<T, MAX_NDIM> result;
+  std::array<T, MAX_NDIM> result = {};
   std::copy_n(vec.begin(), vec.size(), result.begin());
   return result;
 }
