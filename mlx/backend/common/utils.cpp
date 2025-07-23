@@ -228,4 +228,31 @@ std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2) {
       std::make_tuple(gx, gy, gz), std::make_tuple(bx, by, bz));
 }
 
+array swapaxes_in_eval(const array& x, int axis1, int axis2) {
+  int ndim = x.ndim();
+  if (axis1 < 0) {
+    axis1 += ndim;
+  }
+  if (axis2 < 0) {
+    axis2 += ndim;
+  }
+
+  auto shape = x.shape();
+  std::swap(shape[axis1], shape[axis2]);
+  auto strides = x.strides();
+  std::swap(strides[axis1], strides[axis2]);
+
+  auto [data_size, row_contiguous, col_contiguous] =
+      check_contiguity(shape, strides);
+  bool contiguous = data_size == x.data_size();
+
+  array out(std::move(shape), x.dtype(), nullptr, {});
+  out.copy_shared_buffer(
+      x,
+      std::move(strides),
+      {contiguous, row_contiguous, col_contiguous},
+      x.data_size());
+  return out;
+}
+
 } // namespace mlx::core
