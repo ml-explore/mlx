@@ -205,9 +205,6 @@ if __name__ == "__main__":
     build_macos = platform.system() == "Darwin"
     build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
 
-    install_requires = []
-    if build_cuda:
-        install_requires = ["nvidia-cublas-cu12", "nvidia-cuda-nvrtc-cu12"]
     version = get_version()
 
     _setup = partial(
@@ -250,6 +247,7 @@ if __name__ == "__main__":
             "mlx.distributed_config = mlx.distributed_run:distributed_config",
         ]
     }
+    install_requires = []
 
     # Release builds for PyPi are in two stages.
     # Each stage should be run from a clean build:
@@ -269,11 +267,11 @@ if __name__ == "__main__":
     #  - Package name is back-end specific, e.g mlx-metal
     if build_stage != 2:
         if build_stage == 1:
-            if build_macos:
-                install_requires += [f"mlx-metal=={version}"]
-            else:
-                extras["cuda"] = [f"mlx-cuda=={version}"]
-                extras["cpu"] = [f"mlx-cpu=={version}"]
+            install_requires.append(
+                f'mlx-metal=={version}; platform_system == "Darwin"'
+            )
+            extras["cuda"] = [f'mlx-cuda=={version}; platform_system == "Linux"']
+            extras["cpu"] = [f'mlx-cpu=={version}; platform_system == "Linux"']
 
         _setup(
             name="mlx",
@@ -288,9 +286,14 @@ if __name__ == "__main__":
             name = "mlx-metal"
         elif build_cuda:
             name = "mlx-cuda"
+            install_requires += [
+                "nvidia-cublas-cu12==12.9.*",
+                "nvidia-cuda-nvrtc-cu12==12.9.*",
+            ]
         else:
             name = "mlx-cpu"
         _setup(
             name=name,
             packages=["mlx"],
+            install_requires=install_requires,
         )

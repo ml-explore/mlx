@@ -7,6 +7,9 @@ parameters:
   nightly_build:
     type: boolean
     default: false
+  test_release:
+    type: boolean
+    default: false
 
 jobs:
   build_documentation:
@@ -366,22 +369,27 @@ jobs:
         type: string
         default: ""
     machine:
-      image: linux-cuda-12:2024.11.1
-      resource_class: gpu.nvidia.small.gen2
+      image: ubuntu-2204:current
+      resource_class: large
     steps:
       - checkout
       - run:
           name: Build wheel
           command: |
+            export DEBIAN_FRONTEND=noninteractive
+            export NEEDRESTART_MODE=a
+            wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+            sudo dpkg -i cuda-keyring_1.1-1_all.deb
             sudo apt-get update
+            sudo apt install cuda-toolkit-12-9
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install zip
-            python -m venv env
-            source env/bin/activate
             pip install auditwheel
             pip install patchelf
             pip install build
             pip install twine
+            export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}
+            export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
             << parameters.build_env >> MLX_BUILD_STAGE=2 \
               CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               python -m build -w
@@ -392,7 +400,6 @@ jobs:
             - run:
                 name: Upload package
                 command: |
-                  source env/bin/activate
                   twine upload wheelhouse/*.whl
       - store_artifacts:
           path: wheelhouse/
@@ -405,6 +412,7 @@ workflows:
             pattern: "^(?!pull/)[-\\w]+$"
             value: << pipeline.git.branch >>
         - not: << pipeline.parameters.nightly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
       - mac_build_and_test:
           matrix:
@@ -418,6 +426,7 @@ workflows:
     when:
       and:
         - not: << pipeline.parameters.nightly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
       - build_release:
           filters:
@@ -601,3 +610,87 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       - build_cuda_release
+
+  build_dev_release:
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.test_release >>
+    jobs:
+      - build_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              macosx_deployment_target: ["13.5", "14.0", "15.0"]
+              build_env: ["DEV_RELEASE=1"]
+              xcode_version: ["16.2.0", "15.0.0"]
+            exclude:
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+      - build_linux_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              build_env: ["DEV_RELEASE=1"]
+      - build_cuda_release:
+          matrix:
+            parameters:
+              build_env: ["DEV_RELEASE=1"]

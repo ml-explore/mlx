@@ -4,6 +4,7 @@ auditwheel repair dist/* \
   --plat manylinux_2_35_x86_64 \
   --exclude libcublas* \
   --exclude libnvrtc* \
+  --exclude libcuda* \
   -w wheel_tmp
 
 
