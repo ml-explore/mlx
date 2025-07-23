@@ -295,5 +295,5 @@ if __name__ == "__main__":
         _setup(
             name=name,
             packages=["mlx"],
-            install_requires=install_requries,
+            install_requires=install_requires,
         )
