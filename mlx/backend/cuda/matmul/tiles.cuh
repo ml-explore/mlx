@@ -2,6 +2,8 @@
 
 #pragma once
 
+#define MLX_UNROLL _Pragma("unroll")
+
 namespace mlx::core::cu {
 
 // Map types to their vector of 2 type float -> float2, double -> double2 etc
@@ -41,9 +43,10 @@ struct Tile16x16 {
 
   T2 values[4];
 
-  __device__ inline void clear() {
+  __device__ inline void fill(T v) {
+    T2 v2 = {v, v};
     for (int i = 0; i < 4; i++) {
-      values[i] = static_cast<T2>(0);
+      values[i] = v2;
     }
   }
 
@@ -117,6 +120,57 @@ struct Tile16x16 {
           __floats2bfloat162_rn(values[1].x, values[1].y);
       x2[(row + 8) * (N / 2) + col + 4] =
           __floats2bfloat162_rn(values[3].x, values[3].y);
+    }
+  }
+};
+
+/**
+ * A simple container of multiple Tile16x16.
+ *
+ * Provides utility functions for loading and manipulating collections of basic
+ * tiles.
+ */
+template <typename T, int ROWS_, int COLS_>
+struct RegisterTile {
+  static constexpr int ROWS = ROWS_;
+  static constexpr int COLS = COLS_;
+  static constexpr int TILES_X = COLS / 16;
+  static constexpr int TILES_Y = ROWS / 16;
+
+  Tile16x16<T> data[TILES_X * TILES_Y];
+
+  __device__ inline void fill(T v) {
+    MLX_UNROLL
+    for (int i = 0; i < TILES_Y; i++) {
+      MLX_UNROLL
+      for (int j = 0; j < TILES_X; j++) {
+        data[i * TILES_X + j].fill(v);
+      }
+    }
+  }
+
+  template <typename Tile>
+  __device__ inline void
+  load(Tile& tile, uint32_t base_address, int row, int col) {
+    MLX_UNROLL
+    for (int i = 0; i < TILES_Y; i++) {
+      MLX_UNROLL
+      for (int j = 0; j < TILES_X; j++) {
+        data[i * TILES_X + j].load(
+            tile.loc(base_address, row + i * 16, col + j * 16));
+      }
+    }
+  }
+
+  template <typename U>
+  __device__ inline void store_global(U* x, int N, int row, int col) {
+    MLX_UNROLL
+    for (int i = 0; i < TILES_Y; i++) {
+      MLX_UNROLL
+      for (int j = 0; j < TILES_X; j++) {
+        data[i * TILES_X + j].store_global(
+            x + (row + i * 16) * N + col + j * 16, N);
+      }
     }
   }
 };
@@ -198,7 +252,7 @@ struct SharedTile {
     } else if constexpr (sizeof(T) * N == 16) {
       store(*(reinterpret_cast<float4*>(&v[0])), row, col);
     } else {
-#pragma unroll
+      MLX_UNROLL
       for (int i = 0; i < N; i++) {
         *ptr(data, row, col + i) = v[i];
       }
@@ -206,6 +260,10 @@ struct SharedTile {
   }
 };
 
+/**
+ * Load the tile from global memory by loading 16 bytes at a time and storing
+ * them immediately.
+ */
 template <int NUM_WARPS, typename T, typename Tile>
 __device__ inline void load(Tile& tile, const T* x, int N) {
   constexpr int NUM_THREADS = NUM_WARPS * 32;
@@ -220,11 +278,77 @@ __device__ inline void load(Tile& tile, const T* x, int N) {
 
   x += row * N + col * ELEMENTS_PER_LOAD;
 
-#pragma unroll
+  MLX_UNROLL
   for (int i = 0; i < NUM_LOADS_PER_THREAD; i++) {
     float4 tmp;
     tmp = *(reinterpret_cast<const float4*>(&x[i * STEP_ROWS * N]));
     tile.store(tmp, row + i * STEP_ROWS, col * ELEMENTS_PER_LOAD);
+  }
+}
+
+/**
+ * Copy 16 bytes from the globale memory address pointed to by x to the smem
+ * address pointed to by row_address.
+ *
+ * A simple wrapper over the PTX.
+ */
+template <typename T>
+__device__ inline void cp_async_16(uint32_t row_address, const T* x) {
+  asm volatile(
+      "cp.async.ca.shared::cta.global [%0], [%1], 16;\n" ::"r"(row_address),
+      "l"(reinterpret_cast<const int4*>(x)));
+}
+
+/**
+ * Submit all the previous async copies to be executed.
+ */
+__device__ inline void cp_async_commit() {
+  asm volatile("cp.async.commit_group;\n" ::);
+}
+
+/**
+ * Wait for all the async copies to finish.
+ */
+__device__ inline void cp_async_wait_all() {
+  asm volatile("cp.async.wait_all;\n" ::);
+}
+
+/**
+ * The asynchronous equivalent of load.
+ *
+ * Loads the tile from global memory by submitting a bunch of async copy
+ * instructions. The copy won't start until commit is called and we don't have
+ * a guarantee it will finish until wait is called.
+ *
+ * It should be used as follows
+ *
+ *    load(...)
+ *    load(...)
+ *    cp_async_commit()
+ *    do_other_stuff()
+ *    cp_async_wait_all()
+ *    do_stuff_with_shmem()
+ */
+template <int NUM_WARPS, typename T, typename Tile>
+__device__ inline void
+load_async(Tile& tile, uint32_t base_address, const T* x, int N) {
+  constexpr int NUM_THREADS = NUM_WARPS * 32;
+  constexpr int ELEMENTS_PER_LOAD = sizeof(float4) / sizeof(T);
+  constexpr int NUM_LOADS = Tile::NUMEL / ELEMENTS_PER_LOAD;
+  constexpr int NUM_LOADS_PER_THREAD = NUM_LOADS / NUM_THREADS;
+  constexpr int NUM_LOADS_PER_ROW = Tile::COLS / ELEMENTS_PER_LOAD;
+  constexpr int STEP_ROWS = NUM_THREADS / NUM_LOADS_PER_ROW;
+
+  const int row = threadIdx.x / NUM_LOADS_PER_ROW;
+  const int col = threadIdx.x % NUM_LOADS_PER_ROW;
+
+  x += row * N + col * ELEMENTS_PER_LOAD;
+
+  MLX_UNROLL
+  for (int i = 0; i < NUM_LOADS_PER_THREAD; i++) {
+    cp_async_16(
+        tile.loc(base_address, row + i * STEP_ROWS, col * ELEMENTS_PER_LOAD),
+        x + i * STEP_ROWS * N);
   }
 }
 

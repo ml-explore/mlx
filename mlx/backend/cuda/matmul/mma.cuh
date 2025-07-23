@@ -6,8 +6,9 @@
 
 namespace mlx::core::cu {
 
-template <typename TileAccum, typename Tile>
-__device__ inline void mma(TileAccum& C, Tile& A, Tile& B) {}
+template <typename U, typename T>
+__device__ inline void
+mma_t(Tile16x16<U>& C, Tile16x16<T>& A, Tile16x16<T>& B) {}
 
 /**
  * Multiply the 16x16 bfloat16 tiles and accumulate the result in one 16x16
@@ -15,7 +16,7 @@ __device__ inline void mma(TileAccum& C, Tile& A, Tile& B) {}
  *
  * We actually perform C += A @ B.T
  */
-__device__ inline void mma(
+__device__ inline void mma_t(
     Tile16x16<float>& C,
     Tile16x16<__nv_bfloat16>& A,
     Tile16x16<__nv_bfloat16>& B) {
@@ -75,6 +76,33 @@ __device__ inline void mma(
         "f"(C.values[2].y),
         "f"(C.values[3].x),
         "f"(C.values[3].y));
+}
+
+/**
+ * Multiply larger register tiles by delegating to mma_t.
+ */
+template <typename U, typename T, int M, int N, int K>
+__device__ inline void mma_t(
+    RegisterTile<U, M, N>& C,
+    RegisterTile<T, M, K>& A,
+    RegisterTile<T, N, K>& B) {
+  constexpr int TILES_M = RegisterTile<T, M, K>::TILES_Y;
+  constexpr int TILES_K = RegisterTile<T, M, K>::TILES_X;
+  constexpr int TILES_N = RegisterTile<T, N, K>::TILES_Y;
+
+  MLX_UNROLL
+  for (int k = 0; k < TILES_K; k++) {
+    MLX_UNROLL
+    for (int m = 0; m < TILES_M; m++) {
+      MLX_UNROLL
+      for (int n = 0; n < TILES_N; n++) {
+        mma_t(
+            C.data[m * TILES_N + n],
+            A.data[m * TILES_K + k],
+            B.data[n * TILES_K + k]);
+      }
+    }
+  }
 }
 
 } // namespace mlx::core::cu

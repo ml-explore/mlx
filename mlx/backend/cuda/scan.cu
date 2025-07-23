@@ -414,6 +414,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   kernel,
                   in.data_size() / axis_size,
                   block_dim,
+                  0,
                   in.data<T>(),
                   out.data<U>(),
                   axis_size);
@@ -443,6 +444,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   kernel,
                   num_blocks,
                   block_dim,
+                  0,
                   in.data<T>(),
                   out.data<U>(),
                   axis_size,

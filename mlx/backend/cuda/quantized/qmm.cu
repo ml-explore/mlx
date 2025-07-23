@@ -36,13 +36,13 @@ __device__ inline void load_quantized(
   scales += row * Ng + col * ELEMENTS_PER_LOAD / group_size;
   biases += row * Ng + col * ELEMENTS_PER_LOAD / group_size;
 
-#pragma unroll
+  MLX_UNROLL
   for (int i = 0; i < NUM_LOADS_PER_THREAD; i++) {
     T vs[ELEMENTS_PER_LOAD];
     uint32_t w = *reinterpret_cast<const uint32_t*>(x + i * STEP_ROWS * Nx);
     T s = scales[i * STEP_ROWS * Ng];
     T b = biases[i * STEP_ROWS * Ng];
-#pragma unroll
+    MLX_UNROLL
     for (int j = 0; j < ELEMENTS_PER_LOAD; j++) {
       vs[j] = static_cast<T>((w >> (j * bits)) & MASK) * s + b;
     }
@@ -51,7 +51,7 @@ __device__ inline void load_quantized(
 }
 
 template <typename T, int BM, int BN, int BK, int group_size, int bits>
-__global__ void qmm(
+__global__ void qmm_t_aligned(
     const T* x,
     const uint8_t* w,
     const T* scales,
@@ -60,24 +60,27 @@ __global__ void qmm(
     int M,
     int N,
     int K) {
-  constexpr int NUM_WARPS = 4;
-  constexpr int WARP_M = (BM / 16) / (NUM_WARPS / 2);
-  constexpr int WARP_N = (BN / 16) / (NUM_WARPS / 2);
-  constexpr int WARP_K = BK / 16;
-  constexpr int WARP_STEP_M = WARP_M * 16;
-  constexpr int WARP_STEP_N = WARP_N * 16;
+  constexpr int WARPS_M = 2;
+  constexpr int WARPS_N = 4;
+  constexpr int NUM_WARPS = WARPS_M * WARPS_N;
+  constexpr int WARP_STEP_M = BM / WARPS_M;
+  constexpr int WARP_STEP_N = BN / WARPS_N;
 
   const int warpid = threadIdx.x / 32;
   const int laneid = threadIdx.x % 32;
-  const int offset_m = (warpid / 2) * WARP_STEP_M;
-  const int offset_n = (warpid % 2) * WARP_STEP_N;
+  const int wm = warpid / WARPS_N;
+  const int wn = warpid % WARPS_N;
+  const int offset_m = wm * WARP_STEP_M;
+  const int offset_n = wn * WARP_STEP_N;
 
-  __shared__ SharedTile<T, BM, BK> xs;
-  __shared__ SharedTile<T, BN, BK> ws;
+  extern __shared__ char shmem[];
+  SharedTile<T, BM, BK>(&xs)[1] = *(SharedTile<T, BM, BK>(*)[1])(&shmem[0]);
+  SharedTile<T, BN, BK>(&ws)[1] =
+      *(SharedTile<T, BN, BK>(*)[1])(&shmem[1 * sizeof(T) * BM * BK]);
 
-  Tile16x16<float> C[WARP_M * WARP_N];
-  Tile16x16<T> A[WARP_M];
-  Tile16x16<T> B[WARP_N];
+  RegisterTile<float, BM / WARPS_M, BN / WARPS_N> C;
+  RegisterTile<T, BM / WARPS_M, 16> A;
+  RegisterTile<T, BN / WARPS_N, 16> B;
 
   x += blockIdx.y * BM * K;
   w += blockIdx.x * BN * K / get_pack_factor<bits>();
@@ -85,59 +88,43 @@ __global__ void qmm(
   biases += blockIdx.x * BN * K / group_size;
   y += blockIdx.y * BM * N + blockIdx.x * BN;
 
-#pragma unroll
-  for (int i = 0; i < WARP_M * WARP_N; i++) {
-    C[i].clear();
-  }
+  C.fill(0);
 
-  uint32_t base_addr_xs = __cvta_generic_to_shared(&xs.data[0]);
-  uint32_t base_addr_ws = __cvta_generic_to_shared(&ws.data[0]);
+  int tic = 0;
+  uint32_t base_addr_xs[1], base_addr_ws[1];
+  base_addr_xs[0] = __cvta_generic_to_shared(&xs[0].data[0]);
+  base_addr_ws[0] = __cvta_generic_to_shared(&ws[0].data[0]);
 
   for (int k_block = 0; k_block < K; k_block += BK) {
-    load<NUM_WARPS>(xs, x + k_block, K);
+    load_async<NUM_WARPS>(xs[tic], base_addr_xs[tic], x + k_block, K);
+    cp_async_commit();
+    // load<NUM_WARPS>(xs[tic], x + k_block, K);
     load_quantized<NUM_WARPS, group_size, bits>(
-        ws,
+        ws[tic],
         w + k_block / get_pack_factor<bits>(),
         scales + k_block / group_size,
         biases + k_block / group_size,
         K);
+    cp_async_wait_all();
     __syncthreads();
 
-#pragma unroll
-    for (int k = 0; k < WARP_K; k++) {
-#pragma unroll
-      for (int i = 0; i < WARP_M; i++) {
-        A[i].load(xs.loc(
-            base_addr_xs,
-            offset_m + i * 16 + laneid % 16,
-            k * 16 + laneid / 16 * 8));
-      }
-#pragma unroll
-      for (int i = 0; i < WARP_N; i++) {
-        B[i].load(ws.loc(
-            base_addr_ws,
-            offset_n + i * 16 + laneid % 16,
-            k * 16 + laneid / 16 * 8));
-      }
-
-#pragma unroll
-      for (int i = 0; i < WARP_M; i++) {
-#pragma unroll
-        for (int j = 0; j < WARP_N; j++) {
-          mma(C[i * WARP_N + j], A[i], B[j]);
-        }
-      }
+    MLX_UNROLL
+    for (int k = 0; k < BK / 16; k++) {
+      A.load(
+          xs[tic],
+          base_addr_xs[tic],
+          offset_m + laneid % 16,
+          k * 16 + laneid / 16 * 8);
+      B.load(
+          ws[tic],
+          base_addr_ws[tic],
+          offset_n + laneid % 16,
+          k * 16 + laneid / 16 * 8);
+      mma_t(C, A, B);
     }
   }
 
-#pragma unroll
-  for (int i = 0; i < WARP_M; i++) {
-#pragma unroll
-    for (int j = 0; j < WARP_N; j++) {
-      C[i * WARP_N + j].store_global(
-          y + (offset_m + i * 16) * N + offset_n + j * 16, N);
-    }
-  }
+  C.store_global(y, N, offset_m, offset_n);
 }
 
 } // namespace cu
@@ -160,18 +147,19 @@ void qmm(
     dispatch_groups(group_size_, [&](auto group_size) {
       dispatch_bits(bits_, [&](auto bits) {
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        constexpr int BM = 64;
-        constexpr int BN = 64;
+        constexpr int BM = 128;
+        constexpr int BN = 128;
         constexpr int BK = 32;
-        auto kernel =
-            cu::qmm<DataType, BM, BN, BK, group_size.value, bits.value>;
+        auto kernel = cu::
+            qmm_t_aligned<DataType, BM, BN, BK, group_size.value, bits.value>;
 
         dim3 grid(N / BN, M / BM);
 
         enc.add_kernel_node(
             kernel,
             grid,
-            128,
+            2 * 4 * 32,
+            1 * sizeof(DataType) * (BM * BK + BN * BK),
             x.data<DataType>(),
             w.data<uint8_t>(),
             scales.data<DataType>(),

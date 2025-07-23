@@ -142,6 +142,7 @@ void unary_op_gpu_inplace(
                 kernel,
                 num_blocks,
                 block_dims,
+                0,
                 in.data<InType>(),
                 out.data<OutType>(),
                 out.data_size());
@@ -154,6 +155,7 @@ void unary_op_gpu_inplace(
                 kernel,
                 num_blocks,
                 block_dims,
+                0,
                 in.data<InType>(),
                 out.data<OutType>(),
                 out.data_size(),
