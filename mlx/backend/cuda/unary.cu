@@ -135,6 +135,7 @@ void unary_op_gpu_inplace(
                 cu::unary_v<Op, InType, OutType, IdxT, N_READS>,
                 num_blocks,
                 block_dims,
+                0,
                 in.data<InType>(),
                 out.data<OutType>(),
                 out.data_size());
@@ -146,6 +147,7 @@ void unary_op_gpu_inplace(
                 cu::unary_g<Op, InType, OutType, IdxT>,
                 num_blocks,
                 block_dims,
+                0,
                 in.data<InType>(),
                 out.data<OutType>(),
                 out.data_size(),

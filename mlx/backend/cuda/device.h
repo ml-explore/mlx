@@ -47,25 +47,34 @@ class CommandEncoder {
   void set_output_array(const array& arr);
 
   template <typename F, typename... Params>
-  void
-  add_kernel_node(F* func, dim3 grid_dim, dim3 block_dim, Params&&... params) {
+  void add_kernel_node(
+      F* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      Params&&... params) {
     constexpr size_t num = sizeof...(Params);
     void* ptrs[num];
     size_t i = 0;
     ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
          std::forward<Params>(params)),
      ...);
-    add_kernel_node((void*)func, grid_dim, block_dim, ptrs);
+    add_kernel_node((void*)func, grid_dim, block_dim, smem_bytes, ptrs);
   }
 
   void add_kernel_node(
       CUfunction func,
       dim3 grid_dim,
       dim3 block_dim,
+      uint32_t smem_bytes,
       void** params);
 
-  void
-  add_kernel_node(void* func, dim3 grid_dim, dim3 block_dim, void** params);
+  void add_kernel_node(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      void** params);
 
   // Low-level graph helpers.
   void add_kernel_node(const cudaKernelNodeParams& params);
