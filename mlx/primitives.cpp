@@ -1147,6 +1147,7 @@ bool Contiguous::is_equivalent(const Primitive& other) const {
   return allow_col_major_ == c_other.allow_col_major_;
 }
 
+#if !defined(MLX_USE_CUDA)
 array conv_weight_backward_patches(
     const array& in,
     const array& wt,
@@ -1361,6 +1362,7 @@ std::vector<array> Convolution::vjp(
 
   return grads;
 }
+#endif
 
 std::pair<std::vector<array>, std::vector<int>> Convolution::vmap(
     const std::vector<array>& inputs,

@@ -30,14 +30,14 @@ struct ConvCacheKey {
   cudnnBackendDescriptorType_t backend_type;
   cudnnDataType_t cudnn_type;
   std::array<int, MAX_NDIM> input_shape;
-  std::array<int, MAX_NDIM> filter_shape;
+  std::array<int, MAX_NDIM> weight_shape;
   std::array<int, MAX_NDIM> padding_lo;
   std::array<int, MAX_NDIM> padding_hi;
   std::array<int, MAX_NDIM> stride;
   std::array<int, MAX_NDIM> dilation;
   int groups;
   uint8_t input_alignment;
-  uint8_t filter_alignment;
+  uint8_t weight_alignment;
   uint8_t output_alignment;
 };
 
@@ -162,17 +162,17 @@ cudnn_frontend::EngineConfigList get_engine_configs(
 bool execute_plan(
     cu::CommandEncoder& encoder,
     cudnn_frontend::ExecutionPlan& plan,
-    const array& in,
-    const array& wt,
-    array& out) {
+    array& x,
+    array& w,
+    array& y) {
   int workspace_size = plan.getWorkspaceSize();
   array workspace(allocator::malloc(workspace_size), {workspace_size}, uint8);
 
   int64_t uids[3] = {'x', 'w', 'y'};
   void* data_ptrs[3] = {
-      const_cast<void*>(in.data<void>()),
-      const_cast<void*>(wt.data<void>()),
-      out.data<void>(),
+      x.data<void>(),
+      w.data<void>(),
+      y.data<void>(),
   };
 
   auto variantPack = cudnn_frontend::VariantPackBuilder()
@@ -215,16 +215,16 @@ bool try_engines(
     cudnn_frontend::EngineConfigList& configs,
     const ConvCacheKey& cache_key,
     const std::string& op_graph_tag,
-    const array& in,
-    const array& wt,
-    array& out) {
+    array& x,
+    array& w,
+    array& y) {
   for (auto& config : configs) {
     try {
       auto plan = cudnn_frontend::ExecutionPlanBuilder()
                       .setHandle(encoder.device().cudnn_handle())
                       .setEngineConfig(config, op_graph_tag)
                       .build();
-      if (execute_plan(encoder, plan, in, wt, out)) {
+      if (execute_plan(encoder, plan, x, w, y)) {
         conv_cache().emplace(cache_key, std::move(plan));
         return true;
       }
@@ -241,10 +241,6 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
     return;
   }
-
-  assert(inputs.size() == 2);
-  array in = inputs[0];
-  array wt = inputs[1];
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto& s = stream();
@@ -252,48 +248,75 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // cuDNN requires contiguous input.
   // TODO: Handle NCHW format specially.
-  if (!in.flags().row_contiguous) {
-    in = contiguous_copy_gpu(in, s);
-    encoder.add_temporary(in);
+  assert(inputs.size() == 2);
+  array input_0 = inputs[0];
+  array input_1 = inputs[1];
+  if (!input_0.flags().row_contiguous) {
+    input_0 = contiguous_copy_gpu(input_0, s);
+    encoder.add_temporary(input_0);
   }
-  if (!wt.flags().row_contiguous) {
-    wt = contiguous_copy_gpu(wt, s);
-    encoder.add_temporary(wt);
+  if (!input_1.flags().row_contiguous) {
+    input_1 = contiguous_copy_gpu(input_1, s);
+    encoder.add_temporary(input_1);
   }
 
-  encoder.set_input_array(in);
-  encoder.set_input_array(wt);
+  encoder.set_input_array(input_0);
+  encoder.set_input_array(input_1);
   encoder.set_output_array(out);
 
-  auto backend_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
-  auto cudnn_type = dtype_to_cudnn_type(in.dtype());
+  // Get args based on backend type.
+  std::tuple<array*, array*, array*> xwy;
+  cudnnBackendDescriptorType_t backend_type;
+  switch (backend_type_) {
+    case Forward:
+      xwy = {&input_0, &input_1, &out};
+      backend_type = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
+      break;
+    case BackwardInput:
+      xwy = {&out, &input_0, &input_1};
+      backend_type =
+          CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR;
+      break;
+    case BackwardWeight:
+      xwy = {&input_0, &out, &input_1};
+      backend_type =
+          CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR;
+      break;
+    default:
+      throw std::runtime_error("Unsupported convolution backend.");
+  }
+  array& x = *std::get<0>(xwy);
+  array& w = *std::get<1>(xwy);
+  array& y = *std::get<2>(xwy);
+
+  auto dtype = out.dtype();
+  auto cudnn_type = dtype_to_cudnn_type(dtype);
 
   // Search cache.
   ConvCacheKey cache_key{
       encoder.device().cuda_device(),
       backend_type,
       cudnn_type,
-      fixed_vector(in.shape()),
-      fixed_vector(wt.shape()),
+      fixed_vector(x.shape()),
+      fixed_vector(w.shape()),
       fixed_vector(padding_lo_),
       fixed_vector(padding_hi_),
       fixed_vector(kernel_strides_),
       fixed_vector(kernel_dilation_),
       groups_,
-      get_alignment(in),
-      get_alignment(wt),
-      get_alignment(out)};
+      get_alignment(x),
+      get_alignment(w),
+      get_alignment(y)};
   if (auto it = conv_cache().find(cache_key); it != conv_cache().end()) {
-    if (!execute_plan(encoder, it->second, in, wt, out)) {
+    if (!execute_plan(encoder, it->second, x, w, y)) {
       throw std::runtime_error("Cached convolution plan failed to execute.");
     }
     return;
   }
 
   // Build operation graph.
-  auto compute_data_type = (in.dtype() == float16 || in.dtype() == bfloat16)
-      ? CUDNN_DATA_FLOAT
-      : cudnn_type;
+  auto compute_data_type =
+      (dtype == float16 || dtype == bfloat16) ? CUDNN_DATA_FLOAT : cudnn_type;
 
   auto stride = convert_vector<int64_t>(kernel_strides_);
   auto padding_lo = convert_vector<int64_t>(padding_lo_);
@@ -311,9 +334,9 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
                        .build();
 
   auto op = cudnn_frontend::OperationBuilder(backend_type)
-                .setxDesc(build_tensor('x', in))
-                .setwDesc(build_tensor('w', wt))
-                .setyDesc(build_tensor('y', out))
+                .setxDesc(build_tensor('x', x))
+                .setwDesc(build_tensor('w', w))
+                .setyDesc(build_tensor('y', y))
                 .setcDesc(conv_desc)
                 .build();
 
@@ -324,17 +347,65 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
                       .build();
 
   // Try to run plans based on heuristics.
-  auto configs = get_engine_configs(backend_type, in.dtype(), op_graph);
+  auto configs = get_engine_configs(backend_type, dtype, op_graph);
   auto op_graph_tag = op_graph.getTag();
-  if (try_engines(encoder, configs, cache_key, op_graph_tag, in, wt, out)) {
+  if (try_engines(encoder, configs, cache_key, op_graph_tag, x, w, y)) {
     return;
   }
   // Then try fallback plans.
-  configs = get_engine_configs(backend_type, in.dtype(), op_graph);
-  if (try_engines(encoder, configs, cache_key, op_graph_tag, in, wt, out)) {
+  configs = get_engine_configs(backend_type, dtype, op_graph);
+  if (try_engines(encoder, configs, cache_key, op_graph_tag, x, w, y)) {
     return;
   }
   throw std::runtime_error("Unable to find an engine for convolution.");
+}
+
+std::vector<array> Convolution::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 2);
+  assert(cotan.size() == 1);
+  const array& in = primals[0];
+  const array& wt = primals[1];
+  const array& cotan = cotangents[0];
+
+  std::vector<array> grads;
+  for (int a : argnums) {
+    if (a == 0) { // grads for input
+      grads.push_back(array(
+          in.shape(),
+          in.dtype(),
+          std::make_shared<Convolution>(
+              stream(),
+              kernel_strides_,
+              padding_lo_,
+              padding_hi_,
+              kernel_dilation_,
+              input_dilation_,
+              groups_,
+              flip_,
+              BackendType::BackwardInput),
+          {wt, cotan}));
+    } else if (a == 1) { // grads for weight
+      grads.push_back(array(
+          wt.shape(),
+          wt.dtype(),
+          std::make_shared<Convolution>(
+              stream(),
+              kernel_strides_,
+              padding_lo_,
+              padding_hi_,
+              kernel_dilation_,
+              input_dilation_,
+              groups_,
+              flip_,
+              BackendType::BackwardWeight),
+          {in, cotan}));
+    }
+  }
+  return grads;
 }
 
 } // namespace mlx::core

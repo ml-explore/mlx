@@ -715,6 +715,8 @@ class Contiguous : public UnaryPrimitive {
 
 class Convolution : public UnaryPrimitive {
  public:
+  enum BackendType { Forward, BackwardInput, BackwardWeight };
+
   explicit Convolution(
       Stream stream,
       const std::vector<int>& kernel_strides,
@@ -722,8 +724,9 @@ class Convolution : public UnaryPrimitive {
       const std::vector<int>& padding_hi,
       const std::vector<int>& kernel_dilation,
       const std::vector<int>& input_dilation,
-      const int groups = 1,
-      const bool flip = false)
+      int groups = 1,
+      bool flip = false,
+      BackendType backend_type = Forward)
       : UnaryPrimitive(stream),
         padding_lo_(padding_lo),
         padding_hi_(padding_hi),
@@ -731,7 +734,8 @@ class Convolution : public UnaryPrimitive {
         kernel_dilation_(kernel_dilation),
         input_dilation_(input_dilation),
         groups_(groups),
-        flip_(flip) {}
+        flip_(flip),
+        backend_type_(backend_type) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -764,6 +768,7 @@ class Convolution : public UnaryPrimitive {
   std::vector<int> input_dilation_;
   int groups_;
   bool flip_;
+  BackendType backend_type_;
 };
 
 class Copy : public UnaryPrimitive {

@@ -1232,8 +1232,8 @@ array conv_general(
 
 /** General convolution with a filter */
 inline array conv_general(
-    const array& input,
-    const array& weight,
+    array input,
+    array weight,
     std::vector<int> stride = {},
     std::vector<int> padding = {},
     std::vector<int> kernel_dilation = {},
@@ -1242,13 +1242,13 @@ inline array conv_general(
     bool flip = false,
     StreamOrDevice s = {}) {
   return conv_general(
-      /* const array& input = */ input,
-      /* const array& weight = */ weight,
-      /* std::vector<int> stride = */ stride,
-      /* std::vector<int> padding_lo = */ padding,
-      /* std::vector<int> padding_hi = */ padding,
-      /* std::vector<int> kernel_dilation = */ kernel_dilation,
-      /* std::vector<int> input_dilation = */ input_dilation,
+      /* array input = */ std::move(input),
+      /* array weight = */ std::move(weight),
+      /* std::vector<int> stride = */ std::move(stride),
+      /* std::vector<int> padding_lo = */ std::move(padding),
+      /* std::vector<int> padding_hi = */ std::move(padding),
+      /* std::vector<int> kernel_dilation = */ std::move(kernel_dilation),
+      /* std::vector<int> input_dilation = */ std::move(input_dilation),
       /* int groups = */ groups,
       /* bool flip = */ flip,
       /* StreamOrDevice s = */ s);
