@@ -204,7 +204,7 @@ jobs:
 
   cuda_build_and_test:
     machine:
-      image: linux-cuda-12:2023.11.1
+      image: linux-cuda-12:2025.05.1
       resource_class: gpu.nvidia.small.gen2
     steps:
       - checkout
