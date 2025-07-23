@@ -276,7 +276,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
   // Signal the event in its stream
   for (auto i : open_streams) {
     auto s = get_stream(i);
-    if (auto e = events.find(stream.index); e != events.end()) {
+    if (auto e = events.find(i); e != events.end()) {
       e->second.signal(s);
     }
     if (s.device == Device::gpu) {
