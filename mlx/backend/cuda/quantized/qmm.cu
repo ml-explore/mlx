@@ -50,8 +50,15 @@ __device__ inline void load_quantized(
   }
 }
 
-template <typename T, int BM, int BN, int BK, int group_size, int bits>
-__global__ void qmm_t_aligned(
+template <
+    typename T,
+    int BM,
+    int BN,
+    int BK,
+    int group_size,
+    int bits,
+    bool aligned_M>
+__global__ void qmm_t(
     const T* x,
     const uint8_t* w,
     const T* scales,
@@ -82,6 +89,8 @@ __global__ void qmm_t_aligned(
   RegisterTile<T, BM / WARPS_M, 16> A;
   RegisterTile<T, BN / WARPS_N, 16> B;
 
+  const int max_rows = M - blockIdx.y * BM;
+
   x += blockIdx.y * BM * K;
   w += blockIdx.x * BN * K / get_pack_factor<bits>();
   scales += blockIdx.x * BN * K / group_size;
@@ -95,36 +104,66 @@ __global__ void qmm_t_aligned(
   base_addr_xs[0] = __cvta_generic_to_shared(&xs[0].data[0]);
   base_addr_ws[0] = __cvta_generic_to_shared(&ws[0].data[0]);
 
-  for (int k_block = 0; k_block < K; k_block += BK) {
-    load_async<NUM_WARPS>(xs[tic], base_addr_xs[tic], x + k_block, K);
-    cp_async_commit();
-    // load<NUM_WARPS>(xs[tic], x + k_block, K);
-    load_quantized<NUM_WARPS, group_size, bits>(
-        ws[tic],
-        w + k_block / get_pack_factor<bits>(),
-        scales + k_block / group_size,
-        biases + k_block / group_size,
-        K);
-    cp_async_wait_all();
-    __syncthreads();
-
-    MLX_UNROLL
-    for (int k = 0; k < BK / 16; k++) {
-      A.load(
-          xs[tic],
-          base_addr_xs[tic],
-          offset_m + laneid % 16,
-          k * 16 + laneid / 16 * 8);
-      B.load(
+  if (aligned_M || max_rows >= BM) {
+    for (int k_block = 0; k_block < K; k_block += BK) {
+      load_async<NUM_WARPS>(xs[tic], base_addr_xs[tic], x + k_block, K);
+      cp_async_commit();
+      load_quantized<NUM_WARPS, group_size, bits>(
           ws[tic],
-          base_addr_ws[tic],
-          offset_n + laneid % 16,
-          k * 16 + laneid / 16 * 8);
-      mma_t(C, A, B);
-    }
-  }
+          w + k_block / get_pack_factor<bits>(),
+          scales + k_block / group_size,
+          biases + k_block / group_size,
+          K);
+      cp_async_wait_all();
+      __syncthreads();
 
-  C.store_global(y, N, offset_m, offset_n);
+      MLX_UNROLL
+      for (int k = 0; k < BK / 16; k++) {
+        A.load(
+            xs[tic],
+            base_addr_xs[tic],
+            offset_m + laneid % 16,
+            k * 16 + laneid / 16 * 8);
+        B.load(
+            ws[tic],
+            base_addr_ws[tic],
+            offset_n + laneid % 16,
+            k * 16 + laneid / 16 * 8);
+        mma_t(C, A, B);
+      }
+    }
+    C.store_global(y, N, offset_m, offset_n);
+  } else {
+    for (int k_block = 0; k_block < K; k_block += BK) {
+      load_async_safe<NUM_WARPS>(
+          xs[tic], base_addr_xs[tic], x + k_block, K, max_rows);
+      cp_async_commit();
+      load_quantized<NUM_WARPS, group_size, bits>(
+          ws[tic],
+          w + k_block / get_pack_factor<bits>(),
+          scales + k_block / group_size,
+          biases + k_block / group_size,
+          K);
+      cp_async_wait_all();
+      __syncthreads();
+
+      MLX_UNROLL
+      for (int k = 0; k < BK / 16; k++) {
+        A.load(
+            xs[tic],
+            base_addr_xs[tic],
+            offset_m + laneid % 16,
+            k * 16 + laneid / 16 * 8);
+        B.load(
+            ws[tic],
+            base_addr_ws[tic],
+            offset_n + laneid % 16,
+            k * 16 + laneid / 16 * 8);
+        mma_t(C, A, B);
+      }
+    }
+    C.store_global_safe(y, N, offset_m, offset_n, max_rows);
+  }
 }
 
 } // namespace cu
@@ -143,17 +182,30 @@ void qmm(
     int K,
     cu::CommandEncoder& enc,
     const Stream& s) {
+  if (x.dtype() != bfloat16) {
+    throw std::invalid_argument("[qmm] Only bfloat16 is supported for now");
+  }
+  if (!transpose_) {
+    throw std::invalid_argument(
+        "[qmm] Only transposed matmul is supported for now");
+  }
+
   dispatch_float_types(x.dtype(), "qmm", [&](auto type_tag) {
     dispatch_groups(group_size_, [&](auto group_size) {
       dispatch_bits(bits_, [&](auto bits) {
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+
         constexpr int BM = 128;
         constexpr int BN = 128;
         constexpr int BK = 32;
-        auto kernel = cu::
-            qmm_t_aligned<DataType, BM, BN, BK, group_size.value, bits.value>;
+        auto kernel =
+            cu::qmm_t<DataType, BM, BN, BK, group_size.value, bits.value, true>;
+        if (M % BM != 0) {
+          kernel = cu::
+              qmm_t<DataType, BM, BN, BK, group_size.value, bits.value, false>;
+        }
 
-        dim3 grid(N / BN, M / BM);
+        dim3 grid((N + BN - 1) / BN, (M + BM - 1) / BM);
 
         enc.add_kernel_node(
             kernel,

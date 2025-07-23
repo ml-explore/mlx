@@ -122,6 +122,25 @@ struct Tile16x16 {
           __floats2bfloat162_rn(values[3].x, values[3].y);
     }
   }
+
+  template <typename U>
+  __device__ inline void store_global_safe(U* x, int N, int max_rows) {
+    const int laneid = threadIdx.x % 32;
+    const int row = laneid / 4;
+    const int col = laneid % 4;
+    if (row < max_rows) {
+      x[(row + 0) * N + 2 * col + 0] = static_cast<U>(values[0].x);
+      x[(row + 0) * N + 2 * col + 1] = static_cast<U>(values[0].y);
+      x[(row + 0) * N + 2 * col + 8] = static_cast<U>(values[2].x);
+      x[(row + 0) * N + 2 * col + 9] = static_cast<U>(values[2].y);
+    }
+    if (row + 8 < max_rows) {
+      x[(row + 8) * N + 2 * col + 0] = static_cast<U>(values[1].x);
+      x[(row + 8) * N + 2 * col + 1] = static_cast<U>(values[1].y);
+      x[(row + 8) * N + 2 * col + 8] = static_cast<U>(values[3].x);
+      x[(row + 8) * N + 2 * col + 9] = static_cast<U>(values[3].y);
+    }
+  }
 };
 
 /**
@@ -170,6 +189,19 @@ struct RegisterTile {
       for (int j = 0; j < TILES_X; j++) {
         data[i * TILES_X + j].store_global(
             x + (row + i * 16) * N + col + j * 16, N);
+      }
+    }
+  }
+
+  template <typename U>
+  __device__ inline void
+  store_global_safe(U* x, int N, int row, int col, int max_rows) {
+    MLX_UNROLL
+    for (int i = 0; i < TILES_Y; i++) {
+      MLX_UNROLL
+      for (int j = 0; j < TILES_X; j++) {
+        data[i * TILES_X + j].store_global_safe(
+            x + (row + i * 16) * N + col + j * 16, N, max_rows - row - i * 16);
       }
     }
   }
@@ -349,6 +381,38 @@ load_async(Tile& tile, uint32_t base_address, const T* x, int N) {
     cp_async_16(
         tile.loc(base_address, row + i * STEP_ROWS, col * ELEMENTS_PER_LOAD),
         x + i * STEP_ROWS * N);
+  }
+}
+
+template <int NUM_WARPS, typename T, typename Tile>
+__device__ inline void load_async_safe(
+    Tile& tile,
+    uint32_t base_address,
+    const T* x,
+    int N,
+    int max_rows) {
+  constexpr int NUM_THREADS = NUM_WARPS * 32;
+  constexpr int ELEMENTS_PER_LOAD = sizeof(float4) / sizeof(T);
+  constexpr int NUM_LOADS = Tile::NUMEL / ELEMENTS_PER_LOAD;
+  constexpr int NUM_LOADS_PER_THREAD = NUM_LOADS / NUM_THREADS;
+  constexpr int NUM_LOADS_PER_ROW = Tile::COLS / ELEMENTS_PER_LOAD;
+  constexpr int STEP_ROWS = NUM_THREADS / NUM_LOADS_PER_ROW;
+
+  const int row = threadIdx.x / NUM_LOADS_PER_ROW;
+  const int col = threadIdx.x % NUM_LOADS_PER_ROW;
+
+  x += row * N + col * ELEMENTS_PER_LOAD;
+
+  MLX_UNROLL
+  for (int i = 0; i < NUM_LOADS_PER_THREAD; i++) {
+    if (row + i * STEP_ROWS < max_rows) {
+      cp_async_16(
+          tile.loc(base_address, row + i * STEP_ROWS, col * ELEMENTS_PER_LOAD),
+          x + i * STEP_ROWS * N);
+    } else {
+      float4 tmp = {0, 0, 0, 0};
+      tile.store(tmp, row + i * STEP_ROWS, col * ELEMENTS_PER_LOAD);
+    }
   }
 }
 
