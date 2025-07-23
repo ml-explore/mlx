@@ -72,7 +72,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
   // Stream events for synchronization after eval
   std::unordered_map<uint32_t, Event> events;
-  events.emplace(stream.index, Event{stream});
+  {
+    auto e = Event{stream};
+    e.set_value(1);
+    synchronizer.attach_event(e);
+    events.emplace(stream.index, std::move(e));
+  }
 
   {
     // Record the degree of each input
@@ -190,15 +195,17 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
     auto stream = arr.primitive().stream();
 
-    // Lookup corresponding event
-    auto e = events.find(stream.index);
-    if (e == events.end()) {
-      e = events.emplace(stream.index, Event{stream}).first;
-    }
-    e->second.set_value(1);
-    arr.attach_event(e->second);
-    for (auto& s : arr.siblings()) {
-      s.attach_event(e->second);
+    if (async) {
+      // Lookup corresponding event
+      auto e = events.find(stream.index);
+      if (e == events.end()) {
+        e = events.emplace(stream.index, Event{stream}).first;
+      }
+      e->second.set_value(1);
+      arr.attach_event(e->second);
+      for (auto& s : arr.siblings()) {
+        s.attach_event(e->second);
+      }
     }
 
     for (auto& in : arr.inputs()) {
@@ -302,7 +309,7 @@ void eval(std::vector<array> outputs) {
     return;
   }
 
-  eval_impl(std::move(outputs), false).event().wait();
+  eval_impl(std::move(outputs), false).wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(
