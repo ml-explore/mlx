@@ -7,6 +7,9 @@ parameters:
   nightly_build:
     type: boolean
     default: false
+  test_release:
+    type: boolean
+    default: false
 
 jobs:
   build_documentation:
@@ -405,6 +408,7 @@ workflows:
             pattern: "^(?!pull/)[-\\w]+$"
             value: << pipeline.git.branch >>
         - not: << pipeline.parameters.nightly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
       - mac_build_and_test:
           matrix:
@@ -418,6 +422,7 @@ workflows:
     when:
       and:
         - not: << pipeline.parameters.nightly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
       - build_release:
           filters:
@@ -601,3 +606,87 @@ workflows:
             parameters:
               python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       - build_cuda_release
+
+  build_dev_release:
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.test_release >>
+    jobs:
+      - build_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              macosx_deployment_target: ["13.5", "14.0", "15.0"]
+              build_env: ["DEV_RELEASE=1"]
+              xcode_version: ["16.2.0", "15.0.0"]
+            exclude:
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "13.5"
+                xcode_version: "16.2.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "14.0"
+                xcode_version: "15.0.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.9"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.10"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.11"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.12"
+                build_env: "DEV_RELEASE=1"
+              - macosx_deployment_target: "15.0"
+                xcode_version: "15.0.0"
+                python_version: "3.13"
+                build_env: "DEV_RELEASE=1"
+      - build_linux_release:
+          matrix:
+            parameters:
+              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              build_env: ["DEV_RELEASE=1"]
+      - build_cuda_release:
+          matrix:
+            parameters:
+              build_env: ["DEV_RELEASE=1"]
