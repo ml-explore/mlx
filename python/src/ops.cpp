@@ -4258,7 +4258,7 @@ void init_ops(nb::module_& m) {
 
         .. math::
 
-          w_i = s \hat{w_i} - \beta
+          w_i = s \hat{w_i} + \beta
 
         Args:
           w (array): Matrix to be quantized
