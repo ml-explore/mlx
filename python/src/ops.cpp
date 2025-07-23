@@ -4022,8 +4022,9 @@ void init_ops(nb::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
-            be saved. metadata (dict(str, str), optional): The dictionary of
-            metadata to be saved.
+              be saved.
+            metadata (dict(str, str), optional): The dictionary of
+              metadata to be saved.
       )pbdoc");
   m.def(
       "save_gguf",
