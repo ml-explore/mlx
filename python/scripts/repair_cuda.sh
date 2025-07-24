@@ -16,7 +16,7 @@ rm "${repaired_wheel}"
 mlx_so="mlx/lib/libmlx.so"
 rpath=$(patchelf --print-rpath "${mlx_so}")
 base="\$ORIGIN/../../nvidia"
-rpath=$rpath:${base}/cublas/lib:${base}/cuda_nvrtc/lib
+rpath=$rpath:${base}/cublas/lib:${base}/cuda_nvrtc/lib:${base}/cudnn/lib
 patchelf --force-rpath --set-rpath "$rpath" "$mlx_so"
 python ../python/scripts/repair_record.py ${mlx_so}
 

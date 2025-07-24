@@ -71,7 +71,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
   }
 
 NO_GPU(BlockMaskedMM)
-NO_GPU(Convolution)
 NO_GPU(DynamicSlice)
 NO_GPU(DynamicSliceUpdate)
 NO_GPU(FFT)

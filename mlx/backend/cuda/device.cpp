@@ -9,11 +9,22 @@
 #include <future>
 #include <unordered_set>
 
-namespace mlx::core {
+namespace mlx::core::cu {
+
+namespace {
 
 // Can be tuned with MLX_MAX_OPS_PER_BUFFER
 // This should be less than 255
 constexpr int default_max_nodes_per_graph = 20;
+
+#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
+
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
+  }
+}
 
 int cuda_graph_cache_size() {
   static int cache_size = []() {
@@ -22,7 +33,7 @@ int cuda_graph_cache_size() {
   return cache_size;
 }
 
-namespace cu {
+} // namespace
 
 Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
@@ -40,11 +51,14 @@ Device::Device(int device) : device_(device) {
   }
   // The cublasLt handle is used by matmul.
   make_current();
-  cublasLtCreate(&lt_);
+  CHECK_CUBLAS_ERROR(cublasLtCreate(&lt_));
+  // The cudnn handle is used by Convolution.
+  CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_));
 }
 
 Device::~Device() {
-  cublasLtDestroy(lt_);
+  CHECK_CUDNN_ERROR(cudnnDestroy(cudnn_));
+  CHECK_CUBLAS_ERROR(cublasLtDestroy(lt_));
 }
 
 void Device::make_current() {
@@ -66,29 +80,36 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
 }
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
+  enc.device().make_current();
   CHECK_CUDA_ERROR(
       cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeGlobal));
 }
 
 CommandEncoder::CaptureContext::~CaptureContext() {
   CHECK_CUDA_ERROR(cudaStreamEndCapture(enc.stream(), &graph));
+  std::unique_ptr<cudaGraph_t, void (*)(cudaGraph_t*)> graph_freer(
+      &graph, [](cudaGraph_t* p) { CHECK_CUDA_ERROR(cudaGraphDestroy(*p)); });
+  if (discard) {
+    return;
+  }
+
+  // Extract and add as single kernel node when possible.
   size_t num_nodes;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, NULL, &num_nodes));
   if (num_nodes == 1) {
     cudaGraphNode_t captured_node;
     CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, &captured_node, &num_nodes));
-    CUDA_KERNEL_NODE_PARAMS params;
-    CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
-    cudaGraphNode_t node;
-    CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, enc.graph_, NULL, 0, &params));
-    enc.insert_graph_dependencies(GraphNode{node, 'K'});
-  } else {
-    cudaGraphNode_t node;
-    CHECK_CUDA_ERROR(
-        cudaGraphAddChildGraphNode(&node, enc.graph_, NULL, 0, graph));
-    enc.insert_graph_dependencies(GraphNode{node, 'G'});
+    cudaGraphNodeType type;
+    CHECK_CUDA_ERROR(cudaGraphNodeGetType(captured_node, &type));
+    if (type == cudaGraphNodeTypeKernel) {
+      CUDA_KERNEL_NODE_PARAMS params;
+      CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
+      enc.add_kernel_node(params);
+      return;
+    }
   }
-  CHECK_CUDA_ERROR(cudaGraphDestroy(graph));
+  // Otherwise add the captured graph as subgraph.
+  enc.add_graph_node(graph);
 }
 
 CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc)
@@ -221,10 +242,7 @@ void CommandEncoder::add_kernel_node(
   kernel_params.gridDim = grid_dim;
   kernel_params.blockDim = block_dim;
   kernel_params.kernelParams = params;
-  cudaGraphNode_t node;
-  CHECK_CUDA_ERROR(
-      cudaGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
-  insert_graph_dependencies(GraphNode{node, 'K'});
+  add_kernel_node(kernel_params);
 }
 
 void CommandEncoder::add_kernel_node(
@@ -241,10 +259,25 @@ void CommandEncoder::add_kernel_node(
   kernel_params.blockDimY = block_dim.y;
   kernel_params.blockDimZ = block_dim.z;
   kernel_params.kernelParams = params;
-  CUgraphNode node;
-  CHECK_CUDA_ERROR(
-      cuGraphAddKernelNode(&node, graph_, NULL, 0, &kernel_params));
+  add_kernel_node(kernel_params);
+}
+
+void CommandEncoder::add_kernel_node(const cudaKernelNodeParams& params) {
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(cudaGraphAddKernelNode(&node, graph_, NULL, 0, &params));
   insert_graph_dependencies(GraphNode{node, 'K'});
+}
+
+void CommandEncoder::add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params) {
+  CUgraphNode node;
+  CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, graph_, NULL, 0, &params));
+  insert_graph_dependencies(GraphNode{node, 'K'});
+}
+
+void CommandEncoder::add_graph_node(cudaGraph_t child) {
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
+  insert_graph_dependencies(GraphNode{node, 'G'});
 }
 
 void CommandEncoder::commit() {
@@ -331,6 +364,4 @@ CommandEncoder& get_command_encoder(Stream s) {
   return device(s.device).get_command_encoder(s);
 }
 
-} // namespace cu
-
-} // namespace mlx::core
+} // namespace mlx::core::cu

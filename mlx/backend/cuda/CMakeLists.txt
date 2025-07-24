@@ -15,6 +15,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_dynamic.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
@@ -130,6 +131,23 @@ target_link_libraries(mlx PRIVATE CUDA::cublasLt)
 
 # Use NVRTC and driver APIs.
 target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
+
+# Use the frontend APIs of cuDNN.
+FetchContent_Declare(
+  cudnn
+  GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
+  GIT_TAG v1.12.1
+  GIT_SHALLOW TRUE
+  EXCLUDE_FROM_ALL)
+set(CUDNN_FRONTEND_SKIP_JSON_LIB ON)
+set(CUDNN_FRONTEND_BUILD_SAMPLES OFF)
+set(CUDNN_FRONTEND_BUILD_TESTS OFF)
+set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF)
+FetchContent_MakeAvailable(cudnn)
+target_link_libraries(mlx PRIVATE cudnn_frontend)
+# Link with the actual cuDNN libraries.
+include(${cudnn_frontend_SOURCE_DIR}/cmake/cuDNN.cmake)
+target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe

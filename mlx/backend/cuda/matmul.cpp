@@ -8,7 +8,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#include <cublasLt.h>
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
 
@@ -17,16 +16,6 @@
 namespace mlx::core {
 
 namespace cu {
-
-#define CHECK_CUBLAS_ERROR(cmd) check_cublas_error(#cmd, (cmd))
-
-void check_cublas_error(const char* name, cublasStatus_t err) {
-  if (err != CUBLAS_STATUS_SUCCESS) {
-    // TODO: Use cublasGetStatusString when it is widely available.
-    throw std::runtime_error(
-        fmt::format("{} failed with code: {}.", name, static_cast<int>(err)));
-  }
-}
 
 struct CublasPreference {
   CublasPreference(Device& device) {
