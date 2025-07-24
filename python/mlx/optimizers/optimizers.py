@@ -477,7 +477,7 @@ class Adam(Optimizer):
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
+        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon}
 
     Args:
         learning_rate (float or callable): The learning rate :math:`\lambda`.
@@ -546,7 +546,7 @@ class AdamW(Adam):
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}} + \lambda w_t)
+        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1}} + \epsilon} + \lambda w_t)
 
     Args:
         learning_rate (float or callable): The learning rate :math:`\alpha`.
