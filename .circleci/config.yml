@@ -214,7 +214,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - mlx-v1-cuda-{{ arch }}-
+            - cuda-<< parameters.image_date >>-{{ arch }}-
       - run:
           name: Install dependencies
           command: |
@@ -245,7 +245,7 @@ jobs:
             ccache --max-size 400MB
             ccache --cleanup
       - save_cache:
-          key: mlx-v1-cuda-{{ arch }}-{{ epoch }}
+          key: cuda-<< parameters.image_date >>-{{ arch }}-{{ epoch }}
           paths:
             - /home/circleci/.cache/ccache
 
