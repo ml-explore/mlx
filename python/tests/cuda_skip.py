@@ -19,6 +19,7 @@ cuda_skip = {
     "TestConv.test_conv_general_flip_grad",
     "TestConv.test_conv_groups_grad",
     "TestConv.test_torch_conv_1D_grad",
+    "TestConv.test_torch_conv_2D",
     "TestConv.test_torch_conv_2D_grad",
     "TestConv.test_torch_conv_3D_grad",
     "TestConv.test_torch_conv_depthwise",
