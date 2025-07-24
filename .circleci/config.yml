@@ -203,8 +203,12 @@ jobs:
               python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
 
   cuda_build_and_test:
+    parameters:
+      image_date:
+        type: string
+        default: "2023.11.1"
     machine:
-      image: linux-cuda-12:2023.11.1
+      image: "linux-cuda-12:<< parameters.image_date >>"
       resource_class: gpu.nvidia.small.gen2
     steps:
       - checkout
@@ -419,7 +423,10 @@ workflows:
             parameters:
               macosx_deployment_target: ["13.5", "14.0"]
       - linux_build_and_test
-      - cuda_build_and_test 
+      - cuda_build_and_test:
+          matrix:
+            parameters:
+              image_date: ["2023.11.1", "2025.05.1"]
       - build_documentation 
 
   build_pypi_release:
