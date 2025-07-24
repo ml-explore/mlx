@@ -575,6 +575,9 @@ workflows:
           requires: [ hold ]
       - cuda_build_and_test:
           requires: [ hold ]
+          matrix:
+            parameters:
+              image_date: ["2023.11.1", "2025.05.1"]
   nightly_build:
     when:
       and:
