@@ -5,6 +5,7 @@ auditwheel repair dist/* \
   --exclude libcublas* \
   --exclude libnvrtc* \
   --exclude libcuda* \
+  --exclude libcudnn* \
   -w wheel_tmp
 
 
