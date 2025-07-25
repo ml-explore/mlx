@@ -42,17 +42,6 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
-bool fast::ScaledDotProductAttention::use_fallback(
-    const array& q,
-    const array& k,
-    const array& v,
-    bool has_mask,
-    bool has_arr_mask,
-    bool do_causal,
-    Stream s) {
-  return true;
-}
-
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
@@ -89,7 +78,6 @@ NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
 namespace fast {
-NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(CustomKernel)
 } // namespace fast
 
