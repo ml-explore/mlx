@@ -13,7 +13,7 @@ silicon computer is
 
     pip install mlx
 
-To install from PyPI you must meet the following requirements:
+To install from PyPI your system must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
 - Using a native Python >= 3.9
@@ -26,12 +26,21 @@ To install from PyPI you must meet the following requirements:
 CUDA
 ^^^^
 
-MLX has a CUDA backend which you can use on any Linux platform with CUDA 12
-and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:
+MLX has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
     pip install "mlx[cuda]"
+
+To install the CUDA package from PyPi your system must meet the following
+requirements:
+
+- Nvidia architecture >= SM 7.0 (Volta)
+- Nvidia driver >= 550.54.14
+- CUDA toolkit >= 12.0
+- Linux distribution with glibc >= 2.35
+- Python >= 3.9
+
 
 CPU-only (Linux)
 ^^^^^^^^^^^^^^^^
@@ -41,6 +50,13 @@ For a CPU-only version of MLX that runs on Linux use:
 .. code-block:: shell
 
     pip install "mlx[cpu]"
+
+To install the CPU-only package from PyPi your system must meet the following
+requirements:
+
+- Linux distribution with glibc >= 2.35
+- Python >= 3.9
+
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
