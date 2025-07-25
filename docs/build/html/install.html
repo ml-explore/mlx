@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Build and Install &#8212; MLX 0.26.5 documentation</title>
+    <title>Build and Install &#8212; MLX 0.27.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="_static/documentation_options.js?v=b545fd83"></script>
+    <script src="_static/documentation_options.js?v=700248c5"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.26.5 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.26.5 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.27.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.27.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -948,7 +948,7 @@ silicon computer is</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx
 </pre></div>
 </div>
-<p>To install from PyPI you must meet the following requirements:</p>
+<p>To install from PyPI your system must meet the following requirements:</p>
 <ul class="simple">
 <li><p>Using an M series chip (Apple silicon)</p></li>
 <li><p>Using a native Python &gt;= 3.9</p></li>
@@ -961,11 +961,19 @@ It is highly recommended to use macOS 14 (Sonoma)</p>
 </div>
 <section id="cuda">
 <h3>CUDA<a class="headerlink" href="#cuda" title="Link to this heading">#</a></h3>
-<p>MLX has a CUDA backend which you can use on any Linux platform with CUDA 12
-and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:</p>
+<p>MLX has a CUDA backend which you can install with:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mlx[cuda]&quot;</span>
 </pre></div>
 </div>
+<p>To install the CUDA package from PyPi your system must meet the following
+requirements:</p>
+<ul class="simple">
+<li><p>Nvidia architecture &gt;= SM 7.0 (Volta)</p></li>
+<li><p>Nvidia driver &gt;= 550.54.14</p></li>
+<li><p>CUDA toolkit &gt;= 12.0</p></li>
+<li><p>Linux distribution with glibc &gt;= 2.35</p></li>
+<li><p>Python &gt;= 3.9</p></li>
+</ul>
 </section>
 <section id="cpu-only-linux">
 <h3>CPU-only (Linux)<a class="headerlink" href="#cpu-only-linux" title="Link to this heading">#</a></h3>
@@ -973,6 +981,12 @@ and SM 7.0 (Volta) and up. To install MLX with CUDA support, run:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;mlx[cpu]&quot;</span>
 </pre></div>
 </div>
+<p>To install the CPU-only package from PyPi your system must meet the following
+requirements:</p>
+<ul class="simple">
+<li><p>Linux distribution with glibc &gt;= 2.35</p></li>
+<li><p>Python &gt;= 3.9</p></li>
+</ul>
 </section>
 <section id="troubleshooting">
 <h3>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">#</a></h3>
