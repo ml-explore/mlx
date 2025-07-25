@@ -2,6 +2,7 @@
 
 auditwheel repair dist/* \
   --plat manylinux_2_35_x86_64 \
+  --only-plat \
   --exclude libmlx* \
   -w wheel_tmp
 
