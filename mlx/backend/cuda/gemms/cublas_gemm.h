@@ -7,10 +7,6 @@
 #include <cublasLt.h>
 #include <optional>
 
-void check_cublas_error(const char* name, cublasStatus_t err);
-
-#define CHECK_CUBLAS_ERROR(cmd) check_cublas_error(#cmd, (cmd))
-
 namespace mlx::core::cu {
 class Matmul {
  public:
