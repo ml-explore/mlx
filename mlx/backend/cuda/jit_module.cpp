@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <unordered_map>
 
 #include <fmt/format.h>
 #include <nvrtc.h>
@@ -330,11 +329,16 @@ CUfunction JitModule::get_kernel(const std::string& kernel_name) {
   return it->second;
 }
 
+std::unordered_map<std::string, JitModule>& get_jit_module_cache() {
+  static std::unordered_map<std::string, JitModule> map;
+  return map;
+}
+
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
     const KernelBuilder& builder) {
-  static std::unordered_map<std::string, JitModule> map;
+  auto& map = get_jit_module_cache();
   auto it = map.find(name);
   if (it == map.end()) {
     it = map.try_emplace(name, cu::device(device), name, builder).first;

@@ -99,6 +99,8 @@ class JitModule {
   std::unordered_map<std::string, CUfunction> kernels_;
 };
 
+std::unordered_map<std::string, JitModule>& get_jit_module_cache();
+
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,

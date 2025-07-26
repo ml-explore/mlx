@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/utils.h"
 
@@ -54,6 +55,9 @@ Device::Device(int device) : device_(device) {
   CHECK_CUBLAS_ERROR(cublasLtCreate(&lt_));
   // The cudnn handle is used by Convolution.
   CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_));
+
+  // Ensure the jit module cache is initialized
+  get_jit_module_cache();
 }
 
 Device::~Device() {
