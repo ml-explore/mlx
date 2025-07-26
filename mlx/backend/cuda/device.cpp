@@ -236,12 +236,14 @@ void CommandEncoder::add_kernel_node(
     void* func,
     dim3 grid_dim,
     dim3 block_dim,
+    unsigned int smem_bytes,
     void** params) {
   cudaKernelNodeParams kernel_params = {0};
   kernel_params.func = func;
   kernel_params.gridDim = grid_dim;
   kernel_params.blockDim = block_dim;
   kernel_params.kernelParams = params;
+  kernel_params.sharedMemBytes = smem_bytes;
   add_kernel_node(kernel_params);
 }
 
@@ -249,6 +251,7 @@ void CommandEncoder::add_kernel_node(
     CUfunction func,
     dim3 grid_dim,
     dim3 block_dim,
+    unsigned int smem_bytes,
     void** params) {
   CUDA_KERNEL_NODE_PARAMS kernel_params = {0};
   kernel_params.func = func;
@@ -259,6 +262,7 @@ void CommandEncoder::add_kernel_node(
   kernel_params.blockDimY = block_dim.y;
   kernel_params.blockDimZ = block_dim.z;
   kernel_params.kernelParams = params;
+  kernel_params.sharedMemBytes = smem_bytes;
   add_kernel_node(kernel_params);
 }
 

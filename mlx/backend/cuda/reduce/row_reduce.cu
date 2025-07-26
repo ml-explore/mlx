@@ -269,7 +269,7 @@ void row_reduce_simple(
 
       int size = plan.shape.back();
       encoder.add_kernel_node(
-          kernel, grid, block, indata, out.data<U>(), out.size(), size);
+          kernel, grid, block, 0, indata, out.data<U>(), out.size(), size);
     });
   });
 }
@@ -322,7 +322,7 @@ void row_reduce_looped(
       });
 
       encoder.add_kernel_node(
-          kernel, grid, block, indata, out.data<U>(), out.size(), args);
+          kernel, grid, block, 0, indata, out.data<U>(), out.size(), args);
     });
   });
 }

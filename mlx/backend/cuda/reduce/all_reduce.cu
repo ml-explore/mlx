@@ -119,6 +119,7 @@ void all_reduce(
         encoder.add_kernel_node(
             kernel,
             blocks,
+            0,
             threads,
             static_cast<T*>(indata),
             intermediate.data<U>(),
@@ -145,6 +146,7 @@ void all_reduce(
       encoder.add_kernel_node(
           kernel,
           blocks,
+          0,
           threads,
           static_cast<T*>(indata),
           out.data<U>(),
