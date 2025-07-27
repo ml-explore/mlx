@@ -49,11 +49,7 @@ inline __device__ void atomic_add(__half* out, __half val) {
 }
 
 inline __device__ void atomic_add(complex64_t* out, complex64_t val) {
-#if __CUDA_ARCH__ < 900
   atomic_add_general(out, val);
-#else
-  atomicAdd(out, val);
-#endif
 }
 
 inline __device__ void atomic_add(__nv_bfloat16* out, __nv_bfloat16 val) {
