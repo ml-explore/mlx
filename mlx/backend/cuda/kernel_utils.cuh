@@ -120,20 +120,6 @@ dim3 get_2d_grid_dims(
     size_t divisor);
 std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2);
 
-// Return a block size that achieves maximum potential occupancy for kernel.
-template <typename T>
-inline uint max_occupancy_block_dim(T kernel) {
-  int _, block_dim;
-  if constexpr (std::is_same_v<T, CUfunction>) {
-    CHECK_CUDA_ERROR(
-        cuOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel, 0, 0, 0));
-  } else {
-    CHECK_CUDA_ERROR(
-        cudaOccupancyMaxPotentialBlockSize(&_, &block_dim, kernel));
-  }
-  return block_dim;
-}
-
 // Get the num_blocks and block_dims that maximize occupancy for |kernel|,
 // assuming each thread handles |work_per_thread| elements of |arr|.
 template <typename T>
@@ -145,7 +131,7 @@ inline std::tuple<dim3, uint> get_launch_args(
     bool large,
     int work_per_thread = 1) {
   size_t nthreads = cuda::ceil_div(size, work_per_thread);
-  uint block_dim = max_occupancy_block_dim(kernel);
+  uint block_dim = 1024;
   if (block_dim > nthreads) {
     block_dim = nthreads;
   }
