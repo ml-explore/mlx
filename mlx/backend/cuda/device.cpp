@@ -97,23 +97,6 @@ CommandEncoder::CaptureContext::~CaptureContext() {
   if (discard) {
     return;
   }
-
-  // Extract and add as single kernel node when possible.
-  size_t num_nodes;
-  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, NULL, &num_nodes));
-  if (num_nodes == 1) {
-    cudaGraphNode_t captured_node;
-    CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, &captured_node, &num_nodes));
-    cudaGraphNodeType type;
-    CHECK_CUDA_ERROR(cudaGraphNodeGetType(captured_node, &type));
-    if (type == cudaGraphNodeTypeKernel) {
-      CUDA_KERNEL_NODE_PARAMS params;
-      CHECK_CUDA_ERROR(cuGraphKernelNodeGetParams(captured_node, &params));
-      enc.add_kernel_node(params);
-      return;
-    }
-  }
-  // Otherwise add the captured graph as subgraph.
   enc.add_graph_node(graph);
 }
 
