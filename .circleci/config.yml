@@ -212,22 +212,42 @@ jobs:
       resource_class: gpu.nvidia.small.gen2
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - cuda-<< parameters.image_date >>-{{ arch }}-
       - run:
-          name: Install Python package
+          name: Install dependencies
           command: |
             sudo apt-get update
             sudo apt-get install libcudnn9-dev-cuda-12
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
+            curl -sL https://github.com/ccache/ccache/releases/download/v4.11.3/ccache-4.11.3-linux-x86_64.tar.xz | tar xJf -
+            sudo mv ccache-4.11.3-linux-x86_64/ccache /usr/bin/ccache
+            rm -rf ccache-4.11.3-linux-x86_64
+      - run:
+          name: Install Python package
+          command: |
             python3 -m venv env
             source env/bin/activate
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
-              pip install -e ".[dev]"
+              pip install -e ".[dev]" -v
       - run:
           name: Run Python tests
           command: |
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
             LOW_MEMORY=1 DEVICE=gpu python -m tests discover python/tests -v
+      - run:
+          name: CCache report
+          command: |
+            ccache --show-stats
+            ccache --zero-stats
+            ccache --max-size 400MB
+            ccache --cleanup
+      - save_cache:
+          key: cuda-<< parameters.image_date >>-{{ arch }}-{{ epoch }}
+          paths:
+            - /home/circleci/.cache/ccache
 
   build_release:
     parameters:
@@ -555,6 +575,9 @@ workflows:
           requires: [ hold ]
       - cuda_build_and_test:
           requires: [ hold ]
+          matrix:
+            parameters:
+              image_date: ["2023.11.1", "2025.05.1"]
   nightly_build:
     when:
       and:

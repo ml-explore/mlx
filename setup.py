@@ -120,6 +120,9 @@ class CMakeBuild(build_ext):
         if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ:
             build_args += [f"-j{os.cpu_count()}"]
 
+        # Avoid cache miss when building from temporary dirs.
+        os.environ["CCACHE_BASEDIR"] = os.path.abspath(self.build_temp)
+
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
         )

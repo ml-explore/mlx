@@ -41,6 +41,7 @@ option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 # --------------------- Processor tests -------------------------
@@ -66,6 +67,15 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   endif()
 else()
   set(MLX_BUILD_METAL OFF)
+endif()
+
+if(MLX_USE_CCACHE)
+  find_program(CCACHE_PROGRAM ccache)
+  if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  endif()
 endif()
 
 # ----------------------------- Lib -----------------------------
