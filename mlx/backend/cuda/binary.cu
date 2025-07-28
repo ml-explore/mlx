@@ -28,7 +28,7 @@ __global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
     AlignedVector<Out, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = Op{}(a[0], b[0]);
+      out_vec[i] = Op{}(a[0], b[0]);
     }
 
     store_vector<N_READS>(out, index, out_vec);
@@ -49,7 +49,7 @@ __global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
     AlignedVector<Out, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = Op{}(a[0], b_vec.val[i]);
+      out_vec[i] = Op{}(a[0], b_vec[i]);
     }
 
     store_vector<N_READS>(out, index, out_vec);
@@ -70,7 +70,7 @@ __global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
     AlignedVector<Out, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = Op{}(a_vec.val[i], b[0]);
+      out_vec[i] = Op{}(a_vec[i], b[0]);
     }
 
     store_vector<N_READS>(out, index, out_vec);
@@ -92,7 +92,7 @@ __global__ void binary_vv(const In* a, const In* b, Out* out, IdxT size) {
     AlignedVector<Out, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = Op{}(a_vec.val[i], b_vec.val[i]);
+      out_vec[i] = Op{}(a_vec[i], b_vec[i]);
     }
 
     store_vector<N_READS>(out, index, out_vec);
@@ -248,8 +248,7 @@ void binary_op_gpu_inplace(
         } else {
           dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
             using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
-            // TODO: Choose optimized value based on type size.
-            constexpr int N_READS = 4;
+            constexpr int N_READS = 16 / sizeof(InType);
             auto kernel = cu::binary_ss<Op, InType, OutType, IdxT, N_READS>;
             if (bopt == BinaryOpType::ScalarVector) {
               kernel = cu::binary_sv<Op, InType, OutType, IdxT, N_READS>;

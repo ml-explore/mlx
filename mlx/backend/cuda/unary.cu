@@ -30,7 +30,7 @@ __global__ void unary_v(const In* in, Out* out, IdxT size) {
     AlignedVector<Out, N_READS> out_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      out_vec.val[i] = Op{}(in_vec.val[i]);
+      out_vec[i] = Op{}(in_vec[i]);
     }
 
     store_vector<N_READS>(out, index, out_vec);
