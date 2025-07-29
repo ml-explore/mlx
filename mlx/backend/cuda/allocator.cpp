@@ -30,8 +30,11 @@ SmallSizePool::SmallSizePool() {
   next_free_ = buffer_;
 
   CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
-  CHECK_CUDA_ERROR(
-      cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetReadMostly, 0));
+  auto status =
+      cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetReadMostly, 0);
+  if (status != cudaSuccess && status != cudaErrorInvalidValue) {
+    throw std::runtime_error("Unable to initialize small allocator pool");
+  }
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {
