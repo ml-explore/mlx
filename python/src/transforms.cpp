@@ -1503,6 +1503,8 @@ void init_transforms(nb::module_& m) {
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
   atexit.attr("register")(nb::cpp_function([]() {
+    nb::gil_scoped_acquire gil;
+
     tree_cache().clear();
     mx::detail::compile_clear_cache();
   }));
