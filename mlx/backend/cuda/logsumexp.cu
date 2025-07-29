@@ -54,7 +54,7 @@ __global__ void logsumexp(const T* in, T* out, int axis_size) {
     // https://github.com/NVIDIA/online-softmax
     normalizer = normalizer * softmax_exp(prevmax - maxval);
     for (int i = 0; i < N_READS; i++) {
-      normalizer = normalizer + softmax_exp(vals[i] - maxval);
+      normalizer = normalizer + softmax_exp(static_cast<AccT>(vals[i]) - maxval);
     }
   }
 
