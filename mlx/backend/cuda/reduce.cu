@@ -5,8 +5,6 @@
 #include "mlx/backend/gpu/copy.h"
 
 #include <nvtx3/nvtx3.hpp>
-#include <thrust/device_ptr.h>
-#include <thrust/fill.h>
 
 #include <cassert>
 

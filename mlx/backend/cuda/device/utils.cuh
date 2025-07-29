@@ -32,21 +32,103 @@ using Strides = cuda::std::array<int64_t, MAX_NDIM>;
 template <typename T, int N>
 struct alignas(sizeof(T) * N) AlignedVector {
   T val[N];
+
+  __device__ T& operator[](int i) {
+    return val[i];
+  }
+
+  __device__ T operator[](int i) const {
+    return val[i];
+  }
 };
+
+template <int N, typename T>
+inline __device__ bool is_aligned(T* x) {
+  return (reinterpret_cast<uintptr_t>(x) % (N * sizeof(T))) == 0;
+}
 
 template <int N, typename T>
 inline __device__ AlignedVector<T, N> load_vector(
     const T* ptr,
     uint32_t offset) {
-  auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
-  return from[offset];
+  if (is_aligned<N>(ptr)) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] = ptr[offset * N + i];
+    }
+    return v;
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ AlignedVector<T, N>
+load_vector(const T* ptr, uint32_t offset, SizeT size, T fallback) {
+  if (is_aligned<N>(ptr) && (offset + 1) * N <= size) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] = (N * offset + i) < size ? ptr[offset * N + i] : fallback;
+    }
+    return v;
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ AlignedVector<T, N> load_vector(
+    const T* ptr,
+    uint32_t offset,
+    SizeT size,
+    int64_t stride,
+    T fallback) {
+  if (is_aligned<N>(ptr) && stride == 1 && (offset + 1) * N <= size) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] =
+          (N * offset + i) < size ? ptr[stride * (offset * N + i)] : fallback;
+    }
+    return v;
+  }
 }
 
 template <int N, typename T>
 inline __device__ void
 store_vector(T* ptr, uint32_t offset, const AlignedVector<T, N>& vec) {
-  auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
-  to[offset] = vec;
+  if (is_aligned<N>(ptr)) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      ptr[offset * N + i] = vec[i];
+    }
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ void store_vector(
+    T* ptr,
+    uint32_t offset,
+    const AlignedVector<T, N>& vec,
+    SizeT size) {
+  if (is_aligned<N>(ptr) && (offset + 1) * N <= size) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+    for (int i = 0; (offset * N + i) < size && i < N; ++i) {
+      ptr[offset * N + i] = vec[i];
+    }
+  }
 }
 
 // Helper for accessing strided data.

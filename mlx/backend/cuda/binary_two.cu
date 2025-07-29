@@ -33,8 +33,8 @@ binary_two_ss(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
       auto out = Op{}(a[0], b[0]);
-      out_a_vec.val[i] = out[0];
-      out_b_vec.val[i] = out[1];
+      out_a_vec[i] = out[0];
+      out_b_vec[i] = out[1];
     }
 
     store_vector<N_READS>(out_a, index, out_a_vec);
@@ -60,9 +60,9 @@ binary_two_sv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
     AlignedVector<Out, N_READS> out_b_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      auto out = Op{}(a[0], b_vec.val[i]);
-      out_a_vec.val[i] = out[0];
-      out_b_vec.val[i] = out[1];
+      auto out = Op{}(a[0], b_vec[i]);
+      out_a_vec[i] = out[0];
+      out_b_vec[i] = out[1];
     }
 
     store_vector<N_READS>(out_a, index, out_a_vec);
@@ -88,9 +88,9 @@ binary_two_vs(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
     AlignedVector<Out, N_READS> out_b_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      auto out = Op{}(a_vec.val[i], b[0]);
-      out_a_vec.val[i] = out[0];
-      out_b_vec.val[i] = out[1];
+      auto out = Op{}(a_vec[i], b[0]);
+      out_a_vec[i] = out[0];
+      out_b_vec[i] = out[1];
     }
 
     store_vector<N_READS>(out_a, index, out_a_vec);
@@ -117,9 +117,9 @@ binary_two_vv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
     AlignedVector<Out, N_READS> out_b_vec;
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      auto out = Op{}(a_vec.val[i], b_vec.val[i]);
-      out_a_vec.val[i] = out[0];
-      out_b_vec.val[i] = out[1];
+      auto out = Op{}(a_vec[i], b_vec[i]);
+      out_a_vec[i] = out[0];
+      out_b_vec[i] = out[1];
     }
 
     store_vector<N_READS>(out_a, index, out_a_vec);
@@ -270,8 +270,7 @@ void binary_two_op_gpu_inplace(
         } else {
           dispatch_bool(out_a.data_size() > UINT32_MAX, [&](auto large) {
             using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
-            // TODO: Choose optimized value based on type size.
-            constexpr int N_READS = 4;
+            constexpr int N_READS = 16 / sizeof(InType);
             auto kernel = cu::binary_two_ss<Op, InType, OutType, IdxT, N_READS>;
             if (bopt == BinaryOpType::ScalarVector) {
               kernel = cu::binary_two_sv<Op, InType, OutType, IdxT, N_READS>;
