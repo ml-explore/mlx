@@ -72,7 +72,9 @@ jobs:
       - run:
           name: Run style checks
           command: |
-            uvx pre-commit run --all
+            uv venv
+            uv pip install pre-commit
+            uv run --no-project pre-commit run --all
             if ! git diff --quiet; then echo 'Style checks failed, please install pre-commit and run pre-commit run --all and push the change'; exit 1; fi
       - run:
           name: Install dependencies
@@ -85,7 +87,6 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            uv venv
             uv pip install cmake
             uv pip install -e ".[dev]"
       - run:
