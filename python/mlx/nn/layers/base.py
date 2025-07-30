@@ -399,41 +399,7 @@ class Module(dict):
         Returns:
             The module instance after updating the submodules.
         """
-
-        def apply(dst, modules):
-            if isinstance(modules, dict):
-                for k in modules:
-                    if k in dst:
-                        current_value = dst[k]
-                        new_value = modules[k]
-                        if self.is_module(current_value) and self.is_module(new_value):
-                            dst[k] = new_value
-                        elif isinstance(current_value, (dict, list)):
-                            apply(current_value, new_value)
-                        elif strict and new_value != {}:
-                            raise ValueError(
-                                f"Received invalid type: {type(new_value).__name__}."
-                            )
-                    elif strict:
-                        raise ValueError(
-                            f'Module does not have sub-module named "{k}".'
-                        )
-            elif isinstance(modules, list):
-                for i in range(len(modules)):
-                    current_value = dst[i]
-                    new_value = modules[i]
-                    if self.is_module(current_value) and self.is_module(new_value):
-                        dst[i] = new_value
-                    elif isinstance(current_value, (dict, list)):
-                        apply(current_value, new_value)
-                    elif strict and new_value != {}:
-                        raise ValueError(
-                            f"Received invalid type: {type(new_value).__name__}."
-                        )
-            elif strict:
-                raise ValueError(f"Received invalid type: {type(modules).__name__}.")
-
-        apply(self, modules)
+        _update_modules(self, modules, strict)
         return self
 
     def apply_to_modules(self, apply_fn: Callable[[str, Module], Any]) -> Module:
@@ -637,6 +603,36 @@ class Module(dict):
             predicate = lambda _: True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
+
+
+def _update_modules(dst, modules, strict):
+    if isinstance(modules, dict):
+        for k in modules:
+            if k in dst:
+                current_value = dst[k]
+                new_value = modules[k]
+                if Module.is_module(current_value) and Module.is_module(new_value):
+                    dst[k] = new_value
+                elif isinstance(current_value, (dict, list)):
+                    _update_modules(current_value, new_value, strict)
+                elif strict and new_value != {}:
+                    raise ValueError(
+                        f"Received invalid type: {type(new_value).__name__}."
+                    )
+            elif strict:
+                raise ValueError(f'Module does not have sub-module named "{k}".')
+    elif isinstance(modules, list):
+        for i in range(len(modules)):
+            current_value = dst[i]
+            new_value = modules[i]
+            if Module.is_module(current_value) and Module.is_module(new_value):
+                dst[i] = new_value
+            elif isinstance(current_value, (dict, list)):
+                _update_modules(current_value, new_value, strict)
+            elif strict and new_value != {}:
+                raise ValueError(f"Received invalid type: {type(new_value).__name__}.")
+    elif strict:
+        raise ValueError(f"Received invalid type: {type(modules).__name__}.")
 
 
 def _unwrap(model, value_key, value, filter_fn, map_fn, is_leaf_fn):
