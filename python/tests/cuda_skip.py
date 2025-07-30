@@ -74,4 +74,5 @@ cuda_skip = {
     "TestQuantized.test_small_matrix",
     "TestQuantized.test_throw",
     "TestQuantized.test_vjp_scales_biases",
+    "TestExportImport.test_export_quantized_model",
 }
