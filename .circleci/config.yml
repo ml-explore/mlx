@@ -84,19 +84,21 @@ jobs:
             pip install --upgrade cmake
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
-            pip install -e ".[dev]"
+            uv venv
+            uv pip install -e ".[dev]"
       - run:
           name: Generate package stubs
           command: |
-            echo "stubs"
-            pip install typing_extensions
-            python setup.py generate_stubs
+            uv pip install typing_extensions
+            uv run --no-project setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
+            source .venv/bin/activate
             python -m unittest discover python/tests -v
             mpirun --bind-to none -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
             mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
