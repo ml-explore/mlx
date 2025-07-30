@@ -89,7 +89,7 @@ jobs:
           command: |
             uv venv
             uv pip install cmake
-            uv pip install -e ".[dev]"
+            uv pip install -e ".[dev]" -v
       - run:
           name: Generate package stubs
           command: |
@@ -146,7 +146,7 @@ jobs:
           name: Install Python package
           command: |
             DEBUG=1 CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
-              uv pip install -e .
+              uv pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
@@ -229,7 +229,7 @@ jobs:
           command: |
             uv venv
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
-              uv pip install -e ".[dev]"
+              uv pip install -e ".[dev]" -v
       - run:
           name: Run Python tests
           command: |
