@@ -72,6 +72,7 @@ jobs:
       - run:
           name: Run style checks
           command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
             uv venv
             uv pip install pre-commit
             uv run --no-project pre-commit run --all
@@ -131,7 +132,8 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install openmpi uv
+            HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
+              brew install openmpi uv
             uv venv --python 3.9
             uv pip install \
               nanobind==2.4.0 \
@@ -221,6 +223,7 @@ jobs:
             curl -sL https://github.com/ccache/ccache/releases/download/v4.11.3/ccache-4.11.3-linux-x86_64.tar.xz | tar xJf -
             sudo mv ccache-4.11.3-linux-x86_64/ccache /usr/bin/ccache
             rm -rf ccache-4.11.3-linux-x86_64
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
