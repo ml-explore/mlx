@@ -44,8 +44,11 @@ struct ArgMin {
   }
 
   template <int N>
-  __device__ IndexValPair<T>
-  reduce_many(IndexValPair<T> best, T (&vals)[N], uint32_t offset) {
+  __device__ IndexValPair<T> reduce_many(
+      IndexValPair<T> best,
+      const AlignedVector<T, N>& vals,
+      uint32_t offset) {
+#pragma unroll
     for (int i = 0; i < N; i++) {
       if (vals[i] < best.val) {
         best.val = vals[i];
@@ -74,8 +77,11 @@ struct ArgMax {
   }
 
   template <int N>
-  __device__ IndexValPair<T>
-  reduce_many(IndexValPair<T> best, T (&vals)[N], uint32_t offset) {
+  __device__ IndexValPair<T> reduce_many(
+      IndexValPair<T> best,
+      const AlignedVector<T, N>& vals,
+      uint32_t offset) {
+#pragma unroll
     for (int i = 0; i < N; i++) {
       if (vals[i] > best.val) {
         best.val = vals[i];
@@ -106,16 +112,15 @@ __global__ void arg_reduce_general(
 
   int64_t in_idx = elem_to_loc(index, shape.data(), in_strides.data(), ndim);
   int64_t out_idx = elem_to_loc(index, shape.data(), out_strides.data(), ndim);
+  in += in_idx;
 
   Op op;
   T init = op.init();
   IndexValPair<T> best{0, init};
 
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
-    T vals[N_READS];
     auto tid = r * BLOCK_DIM + block.thread_index().x;
-    cub::LoadDirectBlocked(
-        tid, StridedIterator(in + in_idx, axis_stride), vals, axis_size, init);
+    auto vals = load_vector<N_READS>(in, tid, axis_size, axis_stride, init);
     best = op.reduce_many(best, vals, tid * N_READS);
   }
 

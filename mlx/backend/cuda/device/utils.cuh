@@ -131,20 +131,6 @@ inline __device__ void store_vector(
   }
 }
 
-// Helper for accessing strided data.
-template <typename T>
-struct StridedIterator {
-  T it;
-  int64_t stride;
-
-  __host__ __device__ StridedIterator(T it, int64_t stride)
-      : it(it), stride(stride) {}
-
-  __host__ __device__ auto operator[](int i) const {
-    return it[i * stride];
-  }
-};
-
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
 ///////////////////////////////////////////////////////////////////////////////
