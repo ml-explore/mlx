@@ -75,8 +75,8 @@ jobs:
       - run:
           name: Run style checks
           command: |
-            pip install pre-commit
-            pre-commit run --all
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            uvx pre-commit run --all
             if ! git diff --quiet; then echo 'Style checks failed, please install pre-commit and run pre-commit run --all and push the change'; exit 1; fi
       - run:
           name: Install dependencies
@@ -87,7 +87,6 @@ jobs:
             pip install --upgrade cmake
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
-            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
@@ -138,33 +137,30 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            brew install python@3.9
             brew install openmpi
-            python3.9 -m venv env
-            source env/bin/activate
-            pip install --upgrade pip
-            pip install --upgrade cmake
-            pip install nanobind==2.4.0
-            pip install numpy
-            pip install torch
-            pip install tensorflow
-            pip install unittest-xml-reporting
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            uv venv --python 3.9
+            uv pip install \
+              nanobind==2.4.0 \
+              cmake \
+              numpy \
+              torch \
+              tensorflow \
+              unittest-xml-reporting
       - run:
           name: Install Python package
           command: |
-            source env/bin/activate
             DEBUG=1 CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
-              pip install -e . -v
+              uv pip install -e .
       - run:
           name: Generate package stubs
           command: |
-            source env/bin/activate
-            pip install typing_extensions
-            python setup.py generate_stubs
+            uv pip install typing_extensions
+            uv run --no-project setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
             mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
@@ -173,16 +169,15 @@ jobs:
       - run:
           name: Build example extension
           command: |
-            source env/bin/activate
             cd examples/extensions
-            pip install -r requirements.txt
-            python setup.py build_ext -j8
+            uv pip install -r requirements.txt
+            uv run --no-project setup.py build_ext -j8
       - store_test_results:
           path: test-results
       - run:
           name: Build CPP only
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             mkdir -p build && cd build && cmake .. && make -j `sysctl -n hw.ncpu`
       - run:
           name: Run CPP tests
