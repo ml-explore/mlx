@@ -164,9 +164,11 @@ jobs:
       - run:
           name: Build example extension
           command: |
+            source .venv/bin/activate
             cd examples/extensions
             uv pip install -r requirements.txt
-            uv run --no-project setup.py build_ext -j8
+            uv run --no-project setup.py build_ext --inplace
+            uv run --no-project python test.py
       - store_test_results:
           path: test-results
       - run:
