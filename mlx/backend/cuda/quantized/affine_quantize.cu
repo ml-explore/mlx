@@ -256,7 +256,7 @@ void affine_quantize(
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         auto kernel = cu::affine_quantize<T, group_size.value, bits.value>;
         auto [num_blocks, block_dims] =
-            get_launch_args(kernel, size, grid_shape, w.strides(), large);
+            get_launch_args(size, grid_shape, w.strides(), large);
         enc.add_kernel_node(
             kernel,
             num_blocks,
@@ -311,7 +311,7 @@ void affine_dequantize(
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         auto kernel = cu::affine_dequantize<T, group_size.value, bits.value>;
         auto [num_blocks, block_dims] =
-            get_launch_args(kernel, size, grid_shape, w.strides(), large);
+            get_launch_args(size, grid_shape, w.strides(), large);
         enc.add_kernel_node(
             kernel,
             num_blocks,
