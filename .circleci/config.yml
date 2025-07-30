@@ -225,17 +225,17 @@ jobs:
             curl -sL https://github.com/ccache/ccache/releases/download/v4.11.3/ccache-4.11.3-linux-x86_64.tar.xz | tar xJf -
             sudo mv ccache-4.11.3-linux-x86_64/ccache /usr/bin/ccache
             rm -rf ccache-4.11.3-linux-x86_64
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
-            python3 -m venv env
-            source env/bin/activate
+            uv venv
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
-              pip install -e ".[dev]" -v
+              uv pip install -e ".[dev]"
       - run:
           name: Run Python tests
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
             LOW_MEMORY=1 DEVICE=gpu python -m tests discover python/tests -v
       - run:
