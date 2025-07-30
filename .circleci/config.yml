@@ -72,10 +72,8 @@ jobs:
       - run:
           name: Run style checks
           command: |
-            curl -LsSf https://astral.sh/uv/install.sh | sh
-            uv venv
-            uv pip install pre-commit
-            uv run --no-project pre-commit run --all
+            pip install pre-commit
+            pre-commit run --all
             if ! git diff --quiet; then echo 'Style checks failed, please install pre-commit and run pre-commit run --all and push the change'; exit 1; fi
       - run:
           name: Install dependencies
@@ -85,9 +83,11 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
+            uv venv
             uv pip install cmake
             uv pip install -e ".[dev]"
       - run:
