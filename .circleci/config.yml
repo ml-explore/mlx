@@ -69,6 +69,9 @@ jobs:
       resource_class: large
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - cpu-{{ arch }}-
       - run:
           name: Run style checks
           command: |
@@ -112,6 +115,10 @@ jobs:
       - run:
           name: Run CPP tests
           command: ./build/tests/tests
+      - save_cache:
+          key: cpu-{{ arch }}-{{ epoch }}
+          paths:
+            - /home/circleci/.cache/uv
 
   mac_build_and_test:
     parameters:
@@ -249,6 +256,7 @@ jobs:
           key: cuda-<< parameters.image_date >>-{{ arch }}-{{ epoch }}
           paths:
             - /home/circleci/.cache/ccache
+            - /home/circleci/.cache/uv
 
   build_release:
     parameters:
