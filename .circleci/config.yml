@@ -75,7 +75,6 @@ jobs:
       - run:
           name: Run style checks
           command: |
-            curl -LsSf https://astral.sh/uv/install.sh | sh
             uvx pre-commit run --all
             if ! git diff --quiet; then echo 'Style checks failed, please install pre-commit and run pre-commit run --all and push the change'; exit 1; fi
       - run:
@@ -84,13 +83,13 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             export NEEDRESTART_MODE=a
             sudo apt-get update
-            pip install --upgrade cmake
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
       - run:
           name: Install Python package
           command: |
             uv venv
+            uv pip install cmake
             uv pip install -e ".[dev]"
       - run:
           name: Generate package stubs
@@ -108,6 +107,7 @@ jobs:
       - run:
           name: Build CPP only
           command: |
+            source .venv/bin/activate
             mkdir -p build && cd build
             cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
             make -j `nproc`
@@ -137,8 +137,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            brew install openmpi
-            curl -LsSf https://astral.sh/uv/install.sh | sh
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install openmpi uv
             uv venv --python 3.9
             uv pip install \
               nanobind==2.4.0 \
@@ -186,7 +185,7 @@ jobs:
       - run:
           name: Build small binary
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             cd build/
             cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
               -DBUILD_SHARED_LIBS=ON \
@@ -198,12 +197,13 @@ jobs:
       - run:
           name: Run Python tests with JIT
           command: |
-            source env/bin/activate
             CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-              pip install -e . -v
+              uv pip install -e .
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
               METAL_DEBUG_ERROR_MODE=0 \
-              python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
+              uv run --no-project python -m xmlrunner discover \
+                -v python/tests \
+                -o test-results/gpu_jit
 
   cuda_build_and_test:
     parameters:
@@ -227,7 +227,6 @@ jobs:
             curl -sL https://github.com/ccache/ccache/releases/download/v4.11.3/ccache-4.11.3-linux-x86_64.tar.xz | tar xJf -
             sudo mv ccache-4.11.3-linux-x86_64/ccache /usr/bin/ccache
             rm -rf ccache-4.11.3-linux-x86_64
-            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
