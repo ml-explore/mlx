@@ -211,12 +211,15 @@ void binary_op_gpu_inplace(
                 int ndim = shape.size();
                 if (ndim <= 3) {
                   dispatch_1_2_3(ndim, [&](auto dims_constant) {
-                    auto kernel = cu::
-                        binary_g_nd<Op, InType, OutType, IdxT, dims_constant()>;
                     auto [num_blocks, block_dims] =
-                        get_launch_args(kernel, out, large());
+                        get_launch_args(out, large());
                     encoder.add_kernel_node(
-                        kernel,
+                        cu::binary_g_nd<
+                            Op,
+                            InType,
+                            OutType,
+                            IdxT,
+                            dims_constant()>,
                         num_blocks,
                         block_dims,
                         a.data<InType>(),
@@ -228,11 +231,9 @@ void binary_op_gpu_inplace(
                         const_param<dims_constant()>(b_strides));
                   });
                 } else {
-                  auto kernel = cu::binary_g<Op, InType, OutType, IdxT>;
-                  auto [num_blocks, block_dims] =
-                      get_launch_args(kernel, out, large());
+                  auto [num_blocks, block_dims] = get_launch_args(out, large());
                   encoder.add_kernel_node(
-                      kernel,
+                      cu::binary_g<Op, InType, OutType, IdxT>,
                       num_blocks,
                       block_dims,
                       a.data<InType>(),
@@ -258,12 +259,7 @@ void binary_op_gpu_inplace(
               kernel = cu::binary_vv<Op, InType, OutType, IdxT, N_READS>;
             }
             auto [num_blocks, block_dims] = get_launch_args(
-                kernel,
-                out.data_size(),
-                out.shape(),
-                out.strides(),
-                large(),
-                N_READS);
+                out.data_size(), out.shape(), out.strides(), large(), N_READS);
             encoder.add_kernel_node(
                 kernel,
                 num_blocks,
