@@ -6,6 +6,7 @@
 target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/arange.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary_two.cu
@@ -29,7 +30,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/random.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/all_reduce.cu
