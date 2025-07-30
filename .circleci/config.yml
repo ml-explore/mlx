@@ -81,23 +81,24 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             export NEEDRESTART_MODE=a
             sudo apt-get update
-            sudo apt-get upgrade -y
-            pip install --upgrade cmake
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install openmpi-bin openmpi-common libopenmpi-dev
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
-            pip install -e ".[dev]"
+            uv venv
+            uv pip install cmake
+            uv pip install -e ".[dev]" -v
       - run:
           name: Generate package stubs
           command: |
-            echo "stubs"
-            pip install typing_extensions
-            python setup.py generate_stubs
+            uv pip install typing_extensions
+            uv run --no-project setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
+            source .venv/bin/activate
             python -m unittest discover python/tests -v
             mpirun --bind-to none -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
             mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
@@ -105,6 +106,7 @@ jobs:
       - run:
           name: Build CPP only
           command: |
+            source .venv/bin/activate
             mkdir -p build && cd build
             cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
             make -j `nproc`
@@ -130,33 +132,30 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            brew install python@3.9
-            brew install openmpi
-            python3.9 -m venv env
-            source env/bin/activate
-            pip install --upgrade pip
-            pip install --upgrade cmake
-            pip install nanobind==2.4.0
-            pip install numpy
-            pip install torch
-            pip install tensorflow
-            pip install unittest-xml-reporting
+            HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
+              brew install openmpi uv
       - run:
           name: Install Python package
           command: |
-            source env/bin/activate
+            uv venv --python 3.9
+            uv pip install \
+              nanobind==2.4.0 \
+              cmake \
+              numpy \
+              torch \
+              tensorflow \
+              unittest-xml-reporting
             DEBUG=1 CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
-              pip install -e . -v
+              uv pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
-            source env/bin/activate
-            pip install typing_extensions
-            python setup.py generate_stubs
+            uv pip install typing_extensions
+            uv run --no-project setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
             mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
@@ -165,16 +164,15 @@ jobs:
       - run:
           name: Build example extension
           command: |
-            source env/bin/activate
             cd examples/extensions
-            pip install -r requirements.txt
-            python setup.py build_ext -j8
+            uv pip install -r requirements.txt
+            uv run --no-project setup.py build_ext -j8
       - store_test_results:
           path: test-results
       - run:
           name: Build CPP only
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             mkdir -p build && cd build && cmake .. && make -j `sysctl -n hw.ncpu`
       - run:
           name: Run CPP tests
@@ -183,7 +181,7 @@ jobs:
       - run:
           name: Build small binary
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             cd build/
             cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
               -DBUILD_SHARED_LIBS=ON \
@@ -195,12 +193,13 @@ jobs:
       - run:
           name: Run Python tests with JIT
           command: |
-            source env/bin/activate
             CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-              pip install -e . -v
+              uv pip install -e .
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
               METAL_DEBUG_ERROR_MODE=0 \
-              python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
+              uv run --no-project python -m xmlrunner discover \
+                -v python/tests \
+                -o test-results/gpu_jit
 
   cuda_build_and_test:
     parameters:
@@ -224,17 +223,17 @@ jobs:
             curl -sL https://github.com/ccache/ccache/releases/download/v4.11.3/ccache-4.11.3-linux-x86_64.tar.xz | tar xJf -
             sudo mv ccache-4.11.3-linux-x86_64/ccache /usr/bin/ccache
             rm -rf ccache-4.11.3-linux-x86_64
+            curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
           name: Install Python package
           command: |
-            python3 -m venv env
-            source env/bin/activate
+            uv venv
             CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
-              pip install -e ".[dev]" -v
+              uv pip install -e ".[dev]" -v
       - run:
           name: Run Python tests
           command: |
-            source env/bin/activate
+            source .venv/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
             LOW_MEMORY=1 DEVICE=gpu python -m tests discover python/tests -v
       - run:
@@ -343,14 +342,10 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             export NEEDRESTART_MODE=a
             sudo apt-get update
-            sudo apt-get upgrade -y
             TZ=Etc/UTC sudo apt-get -y install tzdata
-            sudo apt-get install -y apt-utils
-            sudo apt-get install -y software-properties-common
             sudo add-apt-repository -y ppa:deadsnakes/ppa
             sudo apt-get install -y $PYTHON $PYTHON-dev $PYTHON-full
             sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev
-            sudo apt-get install -y build-essential git
             $PYTHON -m venv env
             source env/bin/activate
             pip install --upgrade pip
