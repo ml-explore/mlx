@@ -134,6 +134,9 @@ jobs:
           command: |
             HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
               brew install openmpi uv
+      - run:
+          name: Install Python package
+          command: |
             uv venv --python 3.9
             uv pip install \
               nanobind==2.4.0 \
@@ -142,9 +145,6 @@ jobs:
               torch \
               tensorflow \
               unittest-xml-reporting
-      - run:
-          name: Install Python package
-          command: |
             DEBUG=1 CMAKE_ARGS="-DCMAKE_COMPILE_WARNING_AS_ERROR=ON" \
               uv pip install -e . -v
       - run:
