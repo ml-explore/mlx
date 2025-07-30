@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
+#include "mlx/backend/cuda/gemms/simple_gemm.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
@@ -11,6 +12,7 @@
 #include <numeric>
 
 namespace mlx::core {
+
 namespace {
 
 std::tuple<bool, int64_t, array>
@@ -92,6 +94,13 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         a_batch_strides,
         b_batch_strides,
         encoder);
+    return;
+  }
+
+  if (M % 512 == 0 && N % 512 == 0 && K % 512 == 0 && !a_transposed &&
+      b_transposed && batch_count == 1 &&
+      env::get_var("MLX_ENABLE_TEST_GEMM", 0) == 1) {
+    cu::simple_gemm(a, b, out, M, N, K, encoder);
     return;
   }
 
