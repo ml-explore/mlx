@@ -350,12 +350,10 @@ void fast::AffineQuantize::eval_gpu(
       dispatch_bits(bits_, [&](auto bits) {
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if (dequantize_) {
-          auto kernel =
-              cu::affine_dequantize<DataType, group_size.value, bits.value>;
           auto [num_blocks, block_dims] =
-              get_launch_args(kernel, size, grid_shape, w.strides(), large);
+              get_launch_args(size, grid_shape, w.strides(), large);
           enc.add_kernel_node(
-              kernel,
+              cu::affine_dequantize<DataType, group_size.value, bits.value>,
               num_blocks,
               block_dims,
               w.data<uint8_t>(),
@@ -364,12 +362,10 @@ void fast::AffineQuantize::eval_gpu(
               out.data<DataType>(),
               out.size());
         } else {
-          auto kernel =
-              cu::affine_quantize<DataType, group_size.value, bits.value>;
           auto [num_blocks, block_dims] =
-              get_launch_args(kernel, size, grid_shape, w.strides(), large);
+              get_launch_args(size, grid_shape, w.strides(), large);
           enc.add_kernel_node(
-              kernel,
+              cu::affine_quantize<DataType, group_size.value, bits.value>,
               num_blocks,
               block_dims,
               w.data<DataType>(),

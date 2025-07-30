@@ -125,12 +125,9 @@ void ternary_op_gpu_inplace(
             int ndim = shape.size();
             if (ndim <= 3) {
               dispatch_1_2_3(ndim, [&](auto dims_constant) {
-                auto kernel =
-                    cu::ternary_g_nd<Op, DType, IdxT, dims_constant()>;
-                auto [num_blocks, block_dims] =
-                    get_launch_args(kernel, out, large());
+                auto [num_blocks, block_dims] = get_launch_args(out, large());
                 encoder.add_kernel_node(
-                    kernel,
+                    cu::ternary_g_nd<Op, DType, IdxT, dims_constant()>,
                     num_blocks,
                     block_dims,
                     a.data<bool>(),
@@ -144,11 +141,9 @@ void ternary_op_gpu_inplace(
                     const_param<dims_constant()>(c_strides));
               });
             } else {
-              auto kernel = cu::ternary_g<Op, DType, IdxT>;
-              auto [num_blocks, block_dims] =
-                  get_launch_args(kernel, out, large());
+              auto [num_blocks, block_dims] = get_launch_args(out, large());
               encoder.add_kernel_node(
-                  kernel,
+                  cu::ternary_g<Op, DType, IdxT>,
                   num_blocks,
                   block_dims,
                   a.data<bool>(),
@@ -167,16 +162,10 @@ void ternary_op_gpu_inplace(
       dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
         using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
         constexpr int N_READS = 16 / sizeof(DType);
-        auto kernel = cu::ternary_v<Op, DType, IdxT, N_READS>;
         auto [num_blocks, block_dims] = get_launch_args(
-            kernel,
-            out.data_size(),
-            out.shape(),
-            out.strides(),
-            large(),
-            N_READS);
+            out.data_size(), out.shape(), out.strides(), large(), N_READS);
         encoder.add_kernel_node(
-            kernel,
+            cu::ternary_v<Op, DType, IdxT, N_READS>,
             num_blocks,
             block_dims,
             a.data<bool>(),

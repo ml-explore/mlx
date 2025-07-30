@@ -129,16 +129,10 @@ void unary_op_gpu_inplace(
             using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
             // TODO: Choose optimized value based on type size.
             constexpr int N_READS = 4;
-            auto kernel = cu::unary_v<Op, InType, OutType, IdxT, N_READS>;
             auto [num_blocks, block_dims] = get_launch_args(
-                kernel,
-                out.data_size(),
-                out.shape(),
-                out.strides(),
-                large,
-                N_READS);
+                out.data_size(), out.shape(), out.strides(), large, N_READS);
             encoder.add_kernel_node(
-                kernel,
+                cu::unary_v<Op, InType, OutType, IdxT, N_READS>,
                 num_blocks,
                 block_dims,
                 in.data<InType>(),
@@ -147,10 +141,9 @@ void unary_op_gpu_inplace(
           } else {
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
             auto [shape, strides] = collapse_contiguous_dims(in);
-            auto kernel = cu::unary_g<Op, InType, OutType, IdxT>;
-            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
+            auto [num_blocks, block_dims] = get_launch_args(out, large);
             encoder.add_kernel_node(
-                kernel,
+                cu::unary_g<Op, InType, OutType, IdxT>,
                 num_blocks,
                 block_dims,
                 in.data<InType>(),

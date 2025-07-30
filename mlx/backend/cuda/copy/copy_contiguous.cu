@@ -71,12 +71,7 @@ void copy_contiguous(
           kernel = cu::copy_v<InType, OutType, IdxT, N_READS>;
         }
         auto [num_blocks, block_dims] = get_launch_args(
-            kernel,
-            out.data_size(),
-            out.shape(),
-            out.strides(),
-            large(),
-            N_READS);
+            out.data_size(), out.shape(), out.strides(), large(), N_READS);
         encoder.add_kernel_node(
             kernel,
             num_blocks,
