@@ -318,6 +318,7 @@ void CommandEncoder::commit() {
     // Reset state
     node_count_ = 0;
     graph_node_count_ = 0;
+    empty_node_count_ = 0;
     from_nodes_.clear();
     to_nodes_.clear();
     graph_key_.clear();
