@@ -192,7 +192,7 @@ void ternary_op_gpu(
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("select::eval_gpu");
+  nvtx3::scoped_range r("Select::eval_gpu");
   auto& s = out.primitive().stream();
   ternary_op_gpu<cu::Select>(inputs, out, s);
 }
