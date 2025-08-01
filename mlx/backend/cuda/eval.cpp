@@ -43,9 +43,7 @@ void eval(array& arr) {
     }
   }
   for (auto& s : arr.siblings()) {
-    if (s.data_shared_ptr() != arr.data_shared_ptr()) {
-      encoder.add_temporary(s);
-    }
+    encoder.add_temporary(s);
   }
   encoder.maybe_commit();
 }
