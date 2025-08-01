@@ -32,7 +32,6 @@ class CommandEncoder {
   };
 
   explicit CommandEncoder(Device& d);
-  ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;

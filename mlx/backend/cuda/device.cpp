@@ -189,8 +189,6 @@ CommandEncoder::CommandEncoder(Device& d)
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
 }
 
-CommandEncoder::~CommandEncoder() = default;
-
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
 }
