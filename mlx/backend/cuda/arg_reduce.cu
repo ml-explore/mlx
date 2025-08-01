@@ -171,6 +171,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           kernel,
           num_blocks,
           block_dim(),
+          0,
           in.data<T>(),
           out.data<uint32_t>(),
           out.size(),

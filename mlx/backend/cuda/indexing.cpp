@@ -129,7 +129,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(out, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -230,7 +230,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(upd, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -318,7 +318,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(idx, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -422,7 +422,7 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(idx, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 } // namespace mlx::core

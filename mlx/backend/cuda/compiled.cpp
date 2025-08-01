@@ -334,7 +334,7 @@ void Compiled::eval_gpu(
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] =
       get_launch_args(outputs[0], large, work_per_thread);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, args.args());
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 } // namespace mlx::core

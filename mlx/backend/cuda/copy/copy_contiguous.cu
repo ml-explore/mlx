@@ -76,6 +76,7 @@ void copy_contiguous(
             kernel,
             num_blocks,
             block_dims,
+            0,
             in.data<InType>() + in_offset,
             out.data<OutType>() + out_offset,
             out.data_size());

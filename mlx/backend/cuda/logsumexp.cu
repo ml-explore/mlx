@@ -150,6 +150,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
           kernel,
           n_rows,
           block_dim(),
+          0,
           in.data<DataType>(),
           out.data<DataType>(),
           axis_size);
