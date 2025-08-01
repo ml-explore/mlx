@@ -20,6 +20,7 @@
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 #include "python/src/mlx_func.h"
+#include "python/src/small_vector.h"
 #include "python/src/trees.h"
 
 namespace mx = mlx::core;

@@ -32,15 +32,20 @@ inline array ensure_row_contiguous_matrix(
     const array& x,
     metal::Device& d,
     const Stream& s) {
-  auto stride_0 = x.strides()[x.ndim() - 2];
-  auto stride_1 = x.strides()[x.ndim() - 1];
-  if (stride_0 == x.shape(-1) && stride_1 == 1) {
-    return x;
+  if (x.ndim() < 2) {
+    if (x.strides()[0] == 1) {
+      return x;
+    }
   } else {
-    array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
-    return x_copy;
+    auto stride_0 = x.strides()[x.ndim() - 2];
+    auto stride_1 = x.strides()[x.ndim() - 1];
+    if (stride_0 == x.shape(-1) && stride_1 == 1) {
+      return x;
+    }
   }
+  array x_copy = contiguous_copy_gpu(x, s);
+  d.add_temporary(x_copy, s.index);
+  return x_copy;
 }
 
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {

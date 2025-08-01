@@ -9,6 +9,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/linalg.h"
+#include "python/src/small_vector.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;

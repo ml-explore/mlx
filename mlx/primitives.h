@@ -592,7 +592,7 @@ class Broadcast : public UnaryPrimitive {
   static Shape output_shape(const std::vector<array>& inputs);
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   bool is_equivalent(const Primitive& other) const override;
-  std::vector<int> state() const {
+  Shape state() const {
     return shape_;
   };
 
@@ -1146,7 +1146,7 @@ class Gather : public UnaryPrimitive {
   DEFINE_NAME(Gather)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
-  std::pair<std::vector<int>, std::vector<int>> state() const {
+  std::pair<std::vector<int>, Shape> state() const {
     return {axes_, slice_sizes_};
   }
 
@@ -1668,7 +1668,7 @@ class RandomBits : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_NAME(RandomBits)
   bool is_equivalent(const Primitive& other) const override;
-  std::pair<std::vector<int>, int> state() const {
+  std::pair<Shape, int> state() const {
     return {shape_, width_};
   };
 
@@ -1703,7 +1703,7 @@ class Reshape : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(Reshape)
   bool is_equivalent(const Primitive& other) const override;
-  std::vector<int> state() const {
+  Shape state() const {
     return shape_;
   };
   static Shape output_shape(const array& input, Shape shape);
@@ -2121,7 +2121,7 @@ class Split : public Primitive {
   DEFINE_GRADS()
   DEFINE_NAME(Split)
   bool is_equivalent(const Primitive& other) const override;
-  std::pair<std::vector<int>, int> state() const {
+  std::pair<Shape, int> state() const {
     return {indices_, axis_};
   };
 

@@ -10,6 +10,7 @@
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
 #include "mlx/event.h"
+#include "mlx/small_vector.h"
 
 namespace mlx::core {
 
@@ -18,8 +19,8 @@ class Primitive;
 
 using Deleter = std::function<void(allocator::Buffer)>;
 using ShapeElem = int32_t;
-using Shape = std::vector<ShapeElem>;
-using Strides = std::vector<int64_t>;
+using Shape = SmallVector<ShapeElem>;
+using Strides = SmallVector<int64_t>;
 
 class array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc

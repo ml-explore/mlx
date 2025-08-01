@@ -55,13 +55,13 @@ auto& conv_cache() {
   return cache;
 }
 
-template <typename T, typename U>
-inline std::vector<T> convert_vector(const std::vector<U>& vec) {
-  return std::vector<T>(vec.begin(), vec.end());
+template <typename T, typename Vec>
+inline SmallVector<T> convert_vector(const Vec& vec) {
+  return SmallVector<T>(vec.begin(), vec.end());
 }
 
-template <typename T>
-inline std::array<T, MAX_NDIM> fixed_vector(const std::vector<T>& vec) {
+template <typename T, template <typename U> class Vec>
+inline std::array<T, MAX_NDIM> fixed_vector(const Vec<T>& vec) {
   if (vec.size() > MAX_NDIM) {
     throw std::runtime_error(
         fmt::format("ndim can not be larger than {}.", MAX_NDIM));
@@ -78,7 +78,7 @@ auto nhwc_to_nchw(const array& x) {
   auto strides = convert_vector<int64_t>(x.strides());
   strides.insert(strides.begin() + 1, strides.back());
   strides.erase(strides.end() - 1);
-  return std::make_tuple(shape, strides);
+  return std::make_tuple(std::move(shape), std::move(strides));
 }
 
 inline cudnnDataType_t dtype_to_cudnn_type(Dtype dtype) {
@@ -298,10 +298,10 @@ std::optional<cudnn_frontend::OperationGraph> build_op_graph(
     array& x,
     array& w,
     array& y,
-    const std::vector<int64_t>& stride,
-    const std::vector<int64_t>& padding_lo,
-    const std::vector<int64_t>& padding_hi,
-    const std::vector<int64_t>& dilation) {
+    const SmallVector<int64_t>& stride,
+    const SmallVector<int64_t>& padding_lo,
+    const SmallVector<int64_t>& padding_hi,
+    const SmallVector<int64_t>& dilation) {
   try {
     auto compute_dtype = (dtype == float16 || dtype == bfloat16)
         ? CUDNN_DATA_FLOAT
@@ -468,7 +468,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
 
   // There is no reliable way to deduce the proper cuDNN backend for the
   // convolution, so we make a best guess and then try.
-  std::vector<cudnnBackendDescriptorType_t> try_backends;
+  SmallVector<cudnnBackendDescriptorType_t, 2> try_backends;
   if (flip_) {
     // When weight is flipped, we assume it is backward input convolution.
     try_backends.push_back(CONV_BACKWARD_INPUT);
