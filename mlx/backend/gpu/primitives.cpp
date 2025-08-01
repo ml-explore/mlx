@@ -133,6 +133,7 @@ void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
+  MLX_PROFILER_RANGE("Pad::eval_gpu");
   // Inputs must be base input array and scalar val array
   assert(inputs.size() == 2);
   auto& in = inputs[0];

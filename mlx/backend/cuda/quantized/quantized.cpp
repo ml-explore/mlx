@@ -5,6 +5,8 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/fast_primitives.h"
 
+#include <nvtx3/nvtx3.hpp>
+
 namespace mlx::core {
 
 namespace {
@@ -42,6 +44,7 @@ inline array ensure_row_contiguous_matrix(
 void fast::AffineQuantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  nvtx3::scoped_range r("AffineQuantize::eval_gpu");
   auto& s = stream();
   auto& d = cu::device(s.device);
   auto& enc = d.get_command_encoder(s);

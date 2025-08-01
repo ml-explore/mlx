@@ -269,6 +269,7 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
 }
 
 void CommandEncoder::commit() {
+  nvtx3::scoped_range r("CommandEncoder::commit");
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
