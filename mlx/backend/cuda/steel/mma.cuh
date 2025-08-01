@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/steel/defines.cuh"
 #include "mlx/backend/cuda/steel/tiles.cuh"
 
 namespace mlx::core::cu {
@@ -26,6 +27,7 @@ __device__ __forceinline__ void mma_t(
     Tile16x16<float>& C,
     Tile16x16<__nv_bfloat16>& A,
     Tile16x16<__nv_bfloat16>& B) {
+#if defined(MLX_CUDA_SM_80_ENABLED)
   asm volatile(
       "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "
       "{%0, %1, %2, %3}, "
@@ -82,6 +84,7 @@ __device__ __forceinline__ void mma_t(
         "f"(C.values[2].y),
         "f"(C.values[3].x),
         "f"(C.values[3].y));
+#endif
 }
 
 /**
