@@ -7,17 +7,17 @@ Exporting Functions
 
 MLX has an API to export and import functions to and from a file. This lets you
 run computations written in one MLX front-end (e.g. Python) in another MLX
-front-end (e.g. C++). 
+front-end (e.g. C++).
 
 This guide walks through the basics of the MLX export API with some examples.
 To see the full list of functions check-out the :ref:`API documentation
 <export>`.
 
-Basics of Exporting 
+Basics of Exporting
 -------------------
 
 Let's start with a simple example:
- 
+
 .. code-block:: python
 
   def fun(x, y):
@@ -67,7 +67,7 @@ specified as variable positional arguments or as a tuple of arrays:
 
   x = mx.array(1.0)
   y = mx.array(1.0)
-   
+
   # Both arguments to fun are positional
   mx.export_function("add.mlxfn", fun, x, y)
 
@@ -133,7 +133,7 @@ parameters are also saved to the ``model.mlxfn`` file.
    For enclosed arrays inside an exported function, be extra careful to ensure
    they are evaluated. The computation graph that gets exported will include
    the computation that produces enclosed inputs.
-  
+
    If the above example was missing ``mx.eval(model.parameters()``, the
    exported function would include the random initialization of the
    :obj:`mlx.nn.Module` parameters.
@@ -150,8 +150,8 @@ parameters, pass them as inputs to the ``call`` wrapper:
      # Set the model's parameters to the input parameters
      model.update(tree_unflatten(list(params.items())))
      return model(x)
- 
-   params = dict(tree_flatten(model.parameters()))
+
+   params = tree_flatten(model.parameters(), destination={})
    mx.export_function("model.mlxfn", call, (mx.zeros(4),), params)
 
 
@@ -169,8 +169,8 @@ to export a function which can be used for inputs with variable shapes:
 
   # Ok
   out, = imported_abs(mx.array(-1.0))
-  
-  # Also ok 
+
+  # Also ok
   out, = imported_abs(mx.array([-1.0, -2.0]))
 
 With ``shapeless=False`` (which is the default), the second call to
@@ -197,7 +197,7 @@ a single file by creating an exporting context manager with :func:`exporter`:
   def fun(x, y=None):
       constant = mx.array(3.0)
       if y is not None:
-        x += y 
+        x += y
       return x + constant
 
   with mx.exporter("fun.mlxfn", fun) as exporter:
@@ -215,7 +215,7 @@ a single file by creating an exporting context manager with :func:`exporter`:
   print(out)
 
 In the above example the function constant data, (i.e. ``constant``), is only
-saved once. 
+saved once.
 
 Transformations with Imported Functions
 ---------------------------------------
@@ -238,7 +238,7 @@ on imported functions just like regular Python functions:
   # Prints: array(1, dtype=float32)
   print(dfdx(x))
 
-  # Compile the imported function 
+  # Compile the imported function
   mx.compile(imported_fun)
   # Prints: array(0, dtype=float32)
   print(compiled_fun(x)[0])
@@ -275,7 +275,7 @@ Import and run the function in C++ with only a few lines of code:
   // Prints: array(2, dtype=float32)
   std::cout << outputs[0] << std::endl;
 
-Imported functions can be transformed in C++ just like in Python. Use 
+Imported functions can be transformed in C++ just like in Python. Use
 ``std::vector<mx::array>`` for positional arguments and ``std::map<std::string,
 mx::array>`` for keyword arguments when calling imported functions in C++.
 

@@ -178,7 +178,7 @@ class Module(dict):
 
         if strict:
             new_weights = dict(weights)
-            curr_weights = dict(tree_flatten(self.parameters()))
+            curr_weights = tree_flatten(self.parameters(), destination={})
             if extras := (new_weights.keys() - curr_weights.keys()):
                 num_extra = len(extras)
                 extras = ",\n".join(sorted(extras))
@@ -212,7 +212,7 @@ class Module(dict):
         - ``.npz`` will use :func:`mx.savez`
         - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
-        params_dict = dict(tree_flatten(self.parameters()))
+        params_dict = tree_flatten(self.parameters(), destination={})
 
         if file.endswith(".npz"):
             mx.savez(file, **params_dict)
