@@ -259,6 +259,25 @@ std::ostream& operator<<(std::ostream& os, array a) {
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, const SmallVector<int>& v) {
+  os << "(";
+  for (int i = 0; i < v.size(); ++i) {
+    os << v[i] << ((i == v.size() - 1) ? "" : ",");
+  }
+  os << ")";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const SmallVector<int64_t>& v) {
+  os << "(";
+  for (int i = 0; i < v.size(); ++i) {
+    os << v[i] << ((i == v.size() - 1) ? "" : ",");
+  }
+  os << ")";
+  return os;
+}
+
+// TODO: Code is duplicated but they should be deleted soon.
 std::ostream& operator<<(std::ostream& os, const std::vector<int>& v) {
   os << "(";
   for (int i = 0; i < v.size(); ++i) {

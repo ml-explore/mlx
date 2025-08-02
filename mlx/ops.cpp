@@ -3027,9 +3027,9 @@ array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   }
 
   int ndim = std::max(a.ndim(), b.ndim());
-  std::vector<int> a_shape(2 * ndim, 1);
-  std::vector<int> b_shape(2 * ndim, 1);
-  std::vector<int> out_shape(ndim, 1);
+  Shape a_shape(2 * ndim, 1);
+  Shape b_shape(2 * ndim, 1);
+  Shape out_shape(ndim, 1);
 
   for (int i = ndim - 1, j = a.ndim() - 1; j >= 0; j--, i--) {
     a_shape[2 * i] = a.shape(j);

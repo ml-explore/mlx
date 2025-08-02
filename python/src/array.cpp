@@ -15,6 +15,7 @@
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
+#include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 #include "mlx/mlx.h"

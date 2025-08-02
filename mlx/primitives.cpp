@@ -1205,8 +1205,8 @@ array conv_weight_backward_patches(
   auto in_padded =
       pad(in,
           padded_axes,
-          Shape(padding_lo),
-          Shape(padding_hi),
+          Shape(padding_lo.begin(), padding_lo.end()),
+          Shape(padding_hi.begin(), padding_hi.end()),
           array(0, in.dtype()),
           "constant",
           s);

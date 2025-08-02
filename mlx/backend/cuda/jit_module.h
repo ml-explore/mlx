@@ -40,19 +40,14 @@ struct KernelArgs {
   }
 
   template <typename T>
-  void append(std::vector<T> vec) {
-    if (vec.empty()) {
-      // The nullptr can not be used as arg, pass something not null.
-      append(std::monostate{});
-    } else {
-      append_ptr(vec.data());
-      storage_.emplace_back(std::move(vec));
-    }
+  void append(SmallVector<T> vec) {
+    storage_.emplace_back(std::move(vec));
+    append_ptr(std::get<SmallVector<T>>(storage_.back()).data());
   }
 
   // Make sure the arg is copied to an array with size of NDIM.
   template <size_t NDIM = MAX_NDIM, typename T>
-  void append_ndim(std::vector<T> vec) {
+  void append_ndim(SmallVector<T> vec) {
     if (vec.size() > NDIM) {
       throw std::runtime_error(
           fmt::format("ndim can not be larger than {}.", NDIM));
@@ -76,9 +71,9 @@ struct KernelArgs {
       int32_t,
       uint32_t,
       int64_t,
-      std::vector<const void*>,
-      std::vector<int32_t>,
-      std::vector<int64_t>>;
+      SmallVector<const void*>,
+      SmallVector<int32_t>,
+      SmallVector<int64_t>>;
   std::deque<Arg> storage_;
 };
 

@@ -61,6 +61,16 @@ struct CommandEncoder {
   }
 
   template <typename T>
+  void set_vector_bytes(const SmallVector<T>& vec, size_t nelems, int idx) {
+    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
+  }
+  template <typename T>
+  void set_vector_bytes(const SmallVector<T>& vec, int idx) {
+    return set_vector_bytes(vec, vec.size(), idx);
+  }
+
+  // TODO: Code is duplicated but they should be deleted soon.
+  template <typename T>
   void set_vector_bytes(const std::vector<T>& vec, size_t nelems, int idx) {
     enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
   }

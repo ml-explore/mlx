@@ -8,10 +8,10 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "python/src/utils.h"
-
 #include "mlx/fast.h"
 #include "mlx/ops.h"
+#include "python/src/small_vector.h"
+#include "python/src/utils.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;

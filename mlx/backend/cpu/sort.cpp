@@ -8,7 +8,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
-
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -333,47 +333,24 @@ void Sort::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
 
+  int axis = axis_;
+  if (axis < 0) {
+    axis += in.ndim();
+  }
+
   // Copy input to output
-  CopyType ctype = (in.flags().contiguous && in.strides()[axis_] != 0)
+  CopyType ctype = (in.flags().contiguous && in.strides()[axis] != 0)
       ? CopyType::Vector
       : CopyType::General;
   copy_cpu(in, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_output_array(out);
-  encoder.dispatch(
-      [out = array::unsafe_weak_copy(out), axis_ = axis_]() mutable {
-        switch (out.dtype()) {
-          case bool_:
-            return sort<bool>(out, axis_);
-          case uint8:
-            return sort<uint8_t>(out, axis_);
-          case uint16:
-            return sort<uint16_t>(out, axis_);
-          case uint32:
-            return sort<uint32_t>(out, axis_);
-          case uint64:
-            return sort<uint64_t>(out, axis_);
-          case int8:
-            return sort<int8_t>(out, axis_);
-          case int16:
-            return sort<int16_t>(out, axis_);
-          case int32:
-            return sort<int32_t>(out, axis_);
-          case int64:
-            return sort<int64_t>(out, axis_);
-          case float32:
-            return sort<float>(out, axis_);
-          case float64:
-            return sort<double>(out, axis_);
-          case float16:
-            return sort<float16_t>(out, axis_);
-          case bfloat16:
-            return sort<bfloat16_t>(out, axis_);
-          case complex64:
-            return sort<complex64_t>(out, axis_);
-        }
-      });
+  encoder.dispatch([out = array::unsafe_weak_copy(out), axis]() mutable {
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      sort<MLX_GET_TYPE(type_tag)>(out, axis);
+    });
+  });
 }
 
 void ArgPartition::eval_cpu(const std::vector<array>& inputs, array& out) {

@@ -10,6 +10,7 @@
 #include "mlx/array.h"
 #include "mlx/export.h"
 #include "mlx/graph_utils.h"
+#include "python/src/small_vector.h"
 #include "python/src/trees.h"
 
 namespace mx = mlx::core;

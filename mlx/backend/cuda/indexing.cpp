@@ -29,12 +29,12 @@ void append_indices_arg(
     const std::vector<array>& inputs,
     int nidx,
     int idx_ndim) {
-  std::vector<const void*> indices(nidx);
+  SmallVector<const void*> indices(nidx);
   for (int i = 0; i < nidx; ++i) {
     indices[i] = inputs[i + 1].data<void>();
   }
   args.append(std::move(indices));
-  std::vector<int32_t> indices_shape(nidx * idx_ndim);
+  SmallVector<int32_t> indices_shape(nidx * idx_ndim);
   for (int i = 0; i < nidx; ++i) {
     std::copy_n(
         inputs[i + 1].shape().begin(),
@@ -42,7 +42,7 @@ void append_indices_arg(
         indices_shape.data() + i * idx_ndim);
   }
   args.append(std::move(indices_shape));
-  std::vector<int64_t> indices_strides(nidx * idx_ndim);
+  SmallVector<int64_t> indices_strides(nidx * idx_ndim);
   for (int i = 0; i < nidx; ++i) {
     std::copy_n(
         inputs[i + 1].strides().begin(),
@@ -110,7 +110,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   args.append<int32_t>(src.ndim());
   args.append_ndim(slice_sizes_);
   args.append(slice_size);
-  args.append(axes_);
+  args.append(SmallVector<int32_t>(axes_.begin(), axes_.end()));
   append_indices_arg(args, inputs, nidx, idx_ndim);
 
   std::string kernel_name = fmt::format(
@@ -211,7 +211,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   args.append_ndim(out.shape());
   args.append_ndim(out.strides());
   args.append<int32_t>(out.ndim());
-  args.append(axes_);
+  args.append(SmallVector<int32_t>(axes_.begin(), axes_.end()));
   append_indices_arg(args, inputs, nidx, idx_ndim);
 
   std::string kernel_name = fmt::format(
