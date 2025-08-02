@@ -17,6 +17,27 @@ CudaStream::~CudaStream() {
   CHECK_CUDA_ERROR(cudaStreamDestroy(stream_));
 }
 
+CudaGraphExec::CudaGraphExec(cudaGraphExec_t handle) : handle_(handle) {}
+
+CudaGraphExec::CudaGraphExec(CudaGraphExec&& other) : handle_(other.handle_) {
+  other.handle_ = nullptr;
+};
+
+CudaGraphExec::~CudaGraphExec() {
+  reset();
+}
+
+void CudaGraphExec::instantiate(cudaGraph_t graph) {
+  CHECK_CUDA_ERROR(cudaGraphInstantiate(&handle_, graph, nullptr, nullptr, 0));
+}
+
+void CudaGraphExec::reset() {
+  if (handle_ != nullptr) {
+    CHECK_CUDA_ERROR(cudaGraphExecDestroy(handle_));
+    handle_ = nullptr;
+  }
+}
+
 void check_cublas_error(const char* name, cublasStatus_t err) {
   if (err != CUBLAS_STATUS_SUCCESS) {
     // TODO: Use cublasGetStatusString when it is widely available.

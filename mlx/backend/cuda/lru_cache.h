@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <list>
 #include <unordered_map>
 #include <utility>
@@ -20,7 +21,11 @@ class LRUCache {
   using const_iterator = typename list_type::const_iterator;
   using map_type = M<K, iterator>;
 
-  explicit LRUCache(size_t capacity) : capacity_(capacity) {}
+  explicit LRUCache(size_t capacity) : capacity_(capacity) {
+    if (capacity == 0) {
+      throw std::runtime_error("LRUCache requires capacity > 0.");
+    }
+  }
 
   size_t size() const {
     return map_.size();
@@ -82,6 +87,14 @@ class LRUCache {
   iterator erase(iterator pos) {
     map_.erase(pos->first);
     return vlist_.erase(pos);
+  }
+
+  V& operator[](const K& key) {
+    auto it = find(key);
+    if (it == end()) {
+      it = emplace(key, V{}).first;
+    }
+    return it->second;
   }
 
  private:

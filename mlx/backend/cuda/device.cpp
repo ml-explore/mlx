@@ -184,19 +184,9 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
   }
 }
 
-CommandEncoder::CommandEncoder(Device& d) : device_(d), stream_(d) {
+CommandEncoder::CommandEncoder(Device& d)
+    : device_(d), stream_(d), graph_cache_(cuda_graph_cache_size()) {
   CHECK_CUDA_ERROR(cudaGraphCreate(&graph_, 0));
-}
-
-void clear_graphs(std::unordered_map<std::string, cudaGraphExec_t>& graphs) {
-  for (auto& [_, graph_exec] : graphs) {
-    CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
-  }
-  graphs.clear();
-}
-
-CommandEncoder::~CommandEncoder() {
-  clear_graphs(graph_cache_);
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
@@ -290,7 +280,7 @@ void CommandEncoder::commit() {
     graph_key_ += ".";
     graph_key_ += std::to_string(empty_node_count_);
 
-    cudaGraphExec_t& graph_exec = graph_cache_[graph_key_];
+    CudaGraphExec& graph_exec = graph_cache_[graph_key_];
 
     if (graph_exec != nullptr) {
       cudaGraphExecUpdateResult update_result;
@@ -304,21 +294,14 @@ void CommandEncoder::commit() {
 #endif // CUDART_VERSION >= 12000
       if (update_result != cudaGraphExecUpdateSuccess) {
         cudaGetLastError(); // reset error
-        CHECK_CUDA_ERROR(cudaGraphExecDestroy(graph_exec));
-        graph_exec = nullptr;
+        graph_exec.reset();
       }
     }
     if (graph_exec == nullptr) {
-      CHECK_CUDA_ERROR(
-          cudaGraphInstantiate(&graph_exec, graph_, NULL, NULL, 0));
+      graph_exec.instantiate(graph_);
     }
     device_.make_current();
     CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
-
-    // TODO smarter cache policy
-    if (graph_cache_.size() > cuda_graph_cache_size()) {
-      clear_graphs(graph_cache_);
-    }
 
     // Reset state
     node_count_ = 0;
