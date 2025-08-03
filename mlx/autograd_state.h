@@ -14,8 +14,12 @@ struct AutogradState {
 
   AutogradState(bool grad_mode = true) : grad_mode_(grad_mode) {}
 
-  void set_grad_mode(bool enabled) { grad_mode_ = enabled; }
-  bool get_grad_mode() const { return grad_mode_; }
+  void set_grad_mode(bool enabled) {
+    grad_mode_ = enabled;
+  }
+  bool get_grad_mode() const {
+    return grad_mode_;
+  }
 
  private:
   bool grad_mode_;
@@ -41,7 +45,9 @@ struct AutoGradMode {
   AutoGradMode(AutoGradMode&&) = delete;
   AutoGradMode& operator=(const AutoGradMode&) = delete;
   AutoGradMode& operator=(AutoGradMode&&) = delete;
-  ~AutoGradMode() { GradMode::set_enabled(prev_mode); }
+  ~AutoGradMode() {
+    GradMode::set_enabled(prev_mode);
+  }
   bool prev_mode;
 };
 

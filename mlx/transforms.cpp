@@ -326,7 +326,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::vector<int>& argnums) {
   // Check if gradients are enabled
   if (!GradMode::is_enabled()) {
-    // If gradients are disabled, run function normally and return zero gradients
+    // If gradients are disabled, run function normally and return zero
+    // gradients
     auto outputs = fun(primals);
     std::vector<array> vjps;
     for (int argnum : argnums) {

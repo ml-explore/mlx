@@ -1358,13 +1358,13 @@ TEST_CASE("test grad dynamic slices") {
 TEST_CASE("test gradient mode control") {
   // Test basic gradient mode functions
   CHECK(GradMode::is_enabled() == true); // Default should be enabled
-  
+
   GradMode::set_enabled(false);
   CHECK(GradMode::is_enabled() == false);
-  
+
   GradMode::set_enabled(true);
   CHECK(GradMode::is_enabled() == true);
-  
+
   // Test NoGradGuard
   {
     CHECK(GradMode::is_enabled() == true);
@@ -1374,7 +1374,7 @@ TEST_CASE("test gradient mode control") {
     }
     CHECK(GradMode::is_enabled() == true);
   }
-  
+
   // Test EnableGradGuard
   {
     GradMode::set_enabled(false);
@@ -1386,7 +1386,7 @@ TEST_CASE("test gradient mode control") {
     CHECK(GradMode::is_enabled() == false);
     GradMode::set_enabled(true); // Reset for other tests
   }
-  
+
   // Test AutoGradMode
   {
     CHECK(GradMode::is_enabled() == true);
@@ -1401,14 +1401,14 @@ TEST_CASE("test gradient mode control") {
 TEST_CASE("test no_grad with transforms") {
   auto x = array(2.0);
   auto fun = [](array input) { return multiply(input, input); };
-  
+
   // Test with gradients enabled (default)
   {
     auto [output, grad] = vjp(fun, x, array(1.0));
     CHECK(array_equal(output, array(4.0)).item<bool>());
     CHECK(array_equal(grad, array(4.0)).item<bool>());
   }
-  
+
   // Test with gradients disabled
   {
     NoGradGuard no_grad;
@@ -1416,7 +1416,7 @@ TEST_CASE("test no_grad with transforms") {
     CHECK(array_equal(output, array(4.0)).item<bool>());
     CHECK(array_equal(grad, array(0.0)).item<bool>());
   }
-  
+
   // Test JVP with no_grad
   {
     NoGradGuard no_grad;
@@ -1424,7 +1424,7 @@ TEST_CASE("test no_grad with transforms") {
     CHECK(array_equal(output, array(4.0)).item<bool>());
     CHECK(array_equal(jvp_result, array(0.0)).item<bool>());
   }
-  
+
   // Test nested gradient contexts
   {
     CHECK(GradMode::is_enabled() == true);

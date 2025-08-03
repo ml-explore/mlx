@@ -3,6 +3,7 @@
 """Gradient computation control utilities for MLX."""
 
 from typing import Any, Callable, TypeVar
+
 import mlx.core as mx
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -13,7 +14,7 @@ set_grad_enabled = mx.set_grad_enabled
 
 __all__ = [
     "no_grad",
-    "enable_grad", 
+    "enable_grad",
     "set_grad_enabled",
     "is_grad_enabled",
 ]
@@ -21,12 +22,14 @@ __all__ = [
 
 class _NoParamDecoratorContextManager:
     """Base class for context managers that can also be used as decorators."""
-    
+
     def __call__(self, func: F) -> F:
         """Decorator usage."""
+
         def wrapper(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)
+
         return wrapper
 
 
@@ -142,9 +145,11 @@ class set_grad_enabled:
     def __call__(self, func: F) -> F:
         """Decorator usage."""
         mx.set_grad_enabled(self.prev)
+
         def wrapper(*args, **kwargs):
             with set_grad_enabled(self.mode):
                 return func(*args, **kwargs)
+
         return wrapper
 
     def __enter__(self) -> None:

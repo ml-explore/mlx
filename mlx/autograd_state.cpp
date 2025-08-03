@@ -5,7 +5,8 @@
 namespace mlx::core {
 
 AutogradState& AutogradState::get_tls_state() {
-  thread_local static AutogradState tls_state{true}; // gradients enabled by default
+  thread_local static AutogradState tls_state{
+      true}; // gradients enabled by default
   return tls_state;
 }
 
