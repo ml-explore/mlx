@@ -797,6 +797,194 @@ class TestAutograd(mlx_tests.MLXTestCase):
         grad_fn(model)
         self.assertEqual(model[1].item(), 2.0)
 
+    def test_gradient_mode_control(self):
+        """Test gradient mode control functions."""
+        # Test default state
+        self.assertTrue(mx.is_grad_enabled())
+        
+        # Test set_grad_enabled
+        mx.set_grad_enabled(False)
+        self.assertFalse(mx.is_grad_enabled())
+        
+        mx.set_grad_enabled(True)
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_no_grad_context_manager(self):
+        """Test no_grad context manager."""
+        from mlx.autograd import no_grad
+        
+        x = mx.array(2.0)
+        fun = lambda x: x * x
+        
+        # Test with gradients enabled (default)
+        out, grad = mx.vjp(fun, x, mx.array(1.0))
+        self.assertEqual(out.item(), 4.0)
+        self.assertEqual(grad.item(), 4.0)
+        
+        # Test with no_grad context manager
+        with no_grad():
+            self.assertFalse(mx.is_grad_enabled())
+            out, grad = mx.vjp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(grad.item(), 0.0)
+        
+        # Check that gradient mode is restored
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_no_grad_decorator(self):
+        """Test no_grad as a decorator."""
+        from mlx.autograd import no_grad
+        
+        x = mx.array(2.0)
+        
+        @no_grad()
+        def square_no_grad(x):
+            return x * x
+        
+        # Function should run without gradients
+        out, grad = mx.vjp(square_no_grad, x, mx.array(1.0))
+        self.assertEqual(out.item(), 4.0)
+        self.assertEqual(grad.item(), 0.0)
+        
+        # Gradient mode should be restored after function
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_enable_grad_context_manager(self):
+        """Test enable_grad context manager."""
+        from mlx.autograd import enable_grad, no_grad
+        
+        x = mx.array(2.0)
+        fun = lambda x: x * x
+        
+        with no_grad():
+            self.assertFalse(mx.is_grad_enabled())
+            
+            # Test enable_grad within no_grad
+            with enable_grad():
+                self.assertTrue(mx.is_grad_enabled())
+                out, grad = mx.vjp(fun, x, mx.array(1.0))
+                self.assertEqual(out.item(), 4.0)
+                self.assertEqual(grad.item(), 4.0)
+            
+            # Should be back to no_grad
+            self.assertFalse(mx.is_grad_enabled())
+            out, grad = mx.vjp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(grad.item(), 0.0)
+        
+        # Should be back to enabled
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_set_grad_enabled_context_manager(self):
+        """Test set_grad_enabled as context manager."""
+        from mlx.autograd import set_grad_enabled
+        
+        x = mx.array(2.0)
+        fun = lambda x: x * x
+        
+        # Test conditional gradient disabling
+        is_train = False
+        with set_grad_enabled(is_train):
+            self.assertFalse(mx.is_grad_enabled())
+            out, grad = mx.vjp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(grad.item(), 0.0)
+        
+        # Test conditional gradient enabling
+        is_train = True
+        with set_grad_enabled(is_train):
+            self.assertTrue(mx.is_grad_enabled())
+            out, grad = mx.vjp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(grad.item(), 4.0)
+        
+        # Gradient mode should be restored
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_set_grad_enabled_decorator(self):
+        """Test set_grad_enabled as decorator."""
+        from mlx.autograd import set_grad_enabled
+        
+        x = mx.array(2.0)
+        
+        @set_grad_enabled(False)
+        def square_no_grad(x):
+            return x * x
+        
+        # Function should run without gradients
+        out, grad = mx.vjp(square_no_grad, x, mx.array(1.0))
+        self.assertEqual(out.item(), 4.0)
+        self.assertEqual(grad.item(), 0.0)
+        
+        # Gradient mode should be restored
+        self.assertTrue(mx.is_grad_enabled())
+
+    def test_jvp_with_no_grad(self):
+        """Test JVP with gradient mode disabled."""
+        from mlx.autograd import no_grad
+        
+        x = mx.array(2.0)
+        fun = lambda x: x * x
+        
+        # Test with gradients enabled
+        out, jvp_result = mx.jvp(fun, x, mx.array(1.0))
+        self.assertEqual(out.item(), 4.0)
+        self.assertEqual(jvp_result.item(), 4.0)
+        
+        # Test with gradients disabled
+        with no_grad():
+            out, jvp_result = mx.jvp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(jvp_result.item(), 0.0)
+
+    def test_value_and_grad_with_no_grad(self):
+        """Test value_and_grad with gradient mode disabled."""
+        from mlx.autograd import no_grad
+        
+        fun = lambda x: mx.sum(x * x)
+        x = mx.array([1.0, 2.0, 3.0])
+        
+        # Test with gradients enabled
+        value, grad = mx.value_and_grad(fun)(x)
+        self.assertEqual(value.item(), 14.0)  # 1 + 4 + 9
+        self.assertTrue(mx.allclose(grad, mx.array([2.0, 4.0, 6.0])).item())
+        
+        # Test with gradients disabled
+        with no_grad():
+            value, grad = mx.value_and_grad(fun)(x)
+            self.assertEqual(value.item(), 14.0)
+            self.assertTrue(mx.allclose(grad, mx.zeros_like(x)).item())
+
+    def test_nested_gradient_contexts(self):
+        """Test complex nesting of gradient contexts."""
+        from mlx.autograd import no_grad, enable_grad, set_grad_enabled
+        
+        x = mx.array(2.0)
+        fun = lambda x: x * x
+        
+        self.assertTrue(mx.is_grad_enabled())
+        
+        with no_grad():
+            self.assertFalse(mx.is_grad_enabled())
+            
+            with enable_grad():
+                self.assertTrue(mx.is_grad_enabled())
+                
+                with set_grad_enabled(False):
+                    self.assertFalse(mx.is_grad_enabled())
+                    out, grad = mx.vjp(fun, x, mx.array(1.0))
+                    self.assertEqual(out.item(), 4.0)
+                    self.assertEqual(grad.item(), 0.0)
+                
+                self.assertTrue(mx.is_grad_enabled())
+                out, grad = mx.vjp(fun, x, mx.array(1.0))
+                self.assertEqual(out.item(), 4.0)
+                self.assertEqual(grad.item(), 4.0)
+            
+            self.assertFalse(mx.is_grad_enabled())
+        
+        self.assertTrue(mx.is_grad_enabled())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

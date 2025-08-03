@@ -10,6 +10,7 @@
 #include <vector>
 #include "doctest/doctest.h"
 
+#include "mlx/autograd_state.h"
 #include "mlx/graph_utils.h"
 #include "mlx/mlx.h"
 
@@ -1351,5 +1352,97 @@ TEST_CASE("test grad dynamic slices") {
     auto outs = vjp(fn, {x, update}, {ones({2, 2})}).second;
     CHECK(allclose(outs[0], array({0.f, 0.f, 1.f, 1.f}, {2, 2})).item<bool>());
     CHECK(allclose(outs[1], ones({1, 2})).item<bool>());
+  }
+}
+
+TEST_CASE("test gradient mode control") {
+  // Test basic gradient mode functions
+  CHECK(GradMode::is_enabled() == true); // Default should be enabled
+  
+  GradMode::set_enabled(false);
+  CHECK(GradMode::is_enabled() == false);
+  
+  GradMode::set_enabled(true);
+  CHECK(GradMode::is_enabled() == true);
+  
+  // Test NoGradGuard
+  {
+    CHECK(GradMode::is_enabled() == true);
+    {
+      NoGradGuard no_grad;
+      CHECK(GradMode::is_enabled() == false);
+    }
+    CHECK(GradMode::is_enabled() == true);
+  }
+  
+  // Test EnableGradGuard
+  {
+    GradMode::set_enabled(false);
+    CHECK(GradMode::is_enabled() == false);
+    {
+      EnableGradGuard enable_grad;
+      CHECK(GradMode::is_enabled() == true);
+    }
+    CHECK(GradMode::is_enabled() == false);
+    GradMode::set_enabled(true); // Reset for other tests
+  }
+  
+  // Test AutoGradMode
+  {
+    CHECK(GradMode::is_enabled() == true);
+    {
+      AutoGradMode auto_grad(false);
+      CHECK(GradMode::is_enabled() == false);
+    }
+    CHECK(GradMode::is_enabled() == true);
+  }
+}
+
+TEST_CASE("test no_grad with transforms") {
+  auto x = array(2.0);
+  auto fun = [](array input) { return multiply(input, input); };
+  
+  // Test with gradients enabled (default)
+  {
+    auto [output, grad] = vjp(fun, x, array(1.0));
+    CHECK(array_equal(output, array(4.0)).item<bool>());
+    CHECK(array_equal(grad, array(4.0)).item<bool>());
+  }
+  
+  // Test with gradients disabled
+  {
+    NoGradGuard no_grad;
+    auto [output, grad] = vjp(fun, x, array(1.0));
+    CHECK(array_equal(output, array(4.0)).item<bool>());
+    CHECK(array_equal(grad, array(0.0)).item<bool>());
+  }
+  
+  // Test JVP with no_grad
+  {
+    NoGradGuard no_grad;
+    auto [output, jvp_result] = jvp(fun, x, array(1.0));
+    CHECK(array_equal(output, array(4.0)).item<bool>());
+    CHECK(array_equal(jvp_result, array(0.0)).item<bool>());
+  }
+  
+  // Test nested gradient contexts
+  {
+    CHECK(GradMode::is_enabled() == true);
+    {
+      NoGradGuard no_grad;
+      CHECK(GradMode::is_enabled() == false);
+      {
+        EnableGradGuard enable_grad;
+        CHECK(GradMode::is_enabled() == true);
+        auto [output, grad] = vjp(fun, x, array(1.0));
+        CHECK(array_equal(output, array(4.0)).item<bool>());
+        CHECK(array_equal(grad, array(4.0)).item<bool>());
+      }
+      CHECK(GradMode::is_enabled() == false);
+      auto [output, grad] = vjp(fun, x, array(1.0));
+      CHECK(array_equal(output, array(4.0)).item<bool>());
+      CHECK(array_equal(grad, array(0.0)).item<bool>());
+    }
+    CHECK(GradMode::is_enabled() == true);
   }
 }

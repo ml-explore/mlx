@@ -14,6 +14,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/array.h"
+#include "mlx/autograd_state.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
 #include "mlx/transforms.h"
@@ -1499,6 +1500,27 @@ void init_transforms(nb::module_& m) {
       "checkpoint",
       [](nb::callable fun) { return mlx_func(PyCheckpointedFun{fun}, fun); },
       "fun"_a);
+
+  // Gradient control functions
+  m.def(
+      "is_grad_enabled",
+      &mx::GradMode::is_enabled,
+      R"pbdoc(
+        Returns True if gradient computation is currently enabled globally.
+
+        Returns:
+            bool: True if gradient computation is enabled, False otherwise.
+      )pbdoc");
+  m.def(
+      "set_grad_enabled",
+      &mx::GradMode::set_enabled,
+      "enabled"_a,
+      R"pbdoc(
+        Enables or disables gradient computation globally.
+
+        Args:
+            enabled (bool): Whether to enable gradient computation.
+      )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");

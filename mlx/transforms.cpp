@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "mlx/autograd_state.h"
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/fence.h"
@@ -323,6 +324,17 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotans,
     const std::vector<int>& argnums) {
+  // Check if gradients are enabled
+  if (!GradMode::is_enabled()) {
+    // If gradients are disabled, run function normally and return zero gradients
+    auto outputs = fun(primals);
+    std::vector<array> vjps;
+    for (int argnum : argnums) {
+      vjps.push_back(zeros_like(primals[argnum]));
+    }
+    return {outputs, vjps};
+  }
+
   // Set the global tracing flag.
   detail::InTracing in_tracing{false, true};
 
@@ -521,6 +533,17 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& tangents) {
+  // Check if gradients are enabled
+  if (!GradMode::is_enabled()) {
+    // If gradients are disabled, run function normally and return zero tangents
+    auto outputs = fun(primals);
+    std::vector<array> jvps;
+    for (const auto& output : outputs) {
+      jvps.push_back(zeros_like(output));
+    }
+    return {outputs, jvps};
+  }
+
   // Set the global tracing flag.
   detail::InTracing in_tracing{false, true};
 
