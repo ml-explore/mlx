@@ -831,6 +831,13 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # Check that gradient mode is restored
         self.assertTrue(mx.is_grad_enabled())
 
+        # Test that mx.no_grad() also works (top-level import)
+        with mx.no_grad():
+            self.assertFalse(mx.is_grad_enabled())
+            out, grad = mx.vjp(fun, x, mx.array(1.0))
+            self.assertEqual(out.item(), 4.0)
+            self.assertEqual(grad.item(), 0.0)
+
     def test_no_grad_decorator(self):
         """Test no_grad as a decorator."""
         from mlx.autograd import no_grad

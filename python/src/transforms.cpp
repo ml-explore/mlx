@@ -1528,4 +1528,16 @@ void init_transforms(nb::module_& m) {
     tree_cache().clear();
     mx::detail::compile_clear_cache();
   }));
+
+  // Import gradient control context managers from mlx.autograd
+  // This allows mx.no_grad() instead of requiring mlx.autograd.no_grad()
+  try {
+    auto autograd = nb::module_::import_("mlx.autograd");
+    m.attr("no_grad") = autograd.attr("no_grad");
+    m.attr("enable_grad") = autograd.attr("enable_grad");
+    // Note: set_grad_enabled is already exposed as a function above
+  } catch (...) {
+    // If import fails, these functions won't be available at top level
+    // but the module will still load successfully
+  }
 }
