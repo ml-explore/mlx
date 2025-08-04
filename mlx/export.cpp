@@ -3,6 +3,7 @@
 #include <map>
 #include "mlx/compile_impl.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 #include "mlx/version.h"
@@ -196,6 +197,32 @@ void serialize_primitive(Writer& os, const Primitive& p) {
   if constexpr (has_state<T>) {
     serialize(os, static_cast<const T&>(p).state());
   }
+}
+
+// Possible types for a Primitive's state
+using StateT = std::variant<int, float, std::vector<int>>;
+
+template <typename T>
+void extract_state(T v, std::vector<StateT>& state) {
+  if constexpr (std::is_arithmetic_v<T>) {
+    state.push_back(v);
+  } else if constexpr (std::is_enum_v<T>) {
+    state.push_back(static_cast<int>(v));
+  }
+  //  } else if constexpr (is_iterable<T>) {
+  //    state.push_back(v);
+  //  } else if constexpr (is_pair<T> || is_tuple<T>) {
+  //    std::apply([&os](auto&... x) { (..., extract_state(os, state)); }, v);
+  //  }
+}
+
+template <typename T>
+std::vector<StateT> extract_state(const Primitive& p) {
+  std::vector<StateT> state;
+  if constexpr (has_state<T>) {
+    extract_state(static_cast<const T&>(p).state(), state);
+  }
+  return state;
 }
 
 template <typename T>
@@ -545,9 +572,65 @@ FunctionExporter::FunctionExporter(
   write_header(os, count, shapeless);
 }
 
+FunctionExporter::FunctionExporter(
+    const ExportCallback& callback,
+    std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
+    bool shapeless)
+    : callback(callback),
+      fun(std::move(fun)),
+      ftable(std::make_shared<FunctionTable>(shapeless)) {}
+
 void FunctionExporter::close() {
   closed = true;
 };
+
+void FunctionExporter::export_with_callback(
+    const std::vector<array>& inputs,
+    const std::vector<array>& outputs,
+    const std::vector<array>& tape) {
+  NodeNamer namer{};
+  auto to_vector_data = [&namer](const auto& arrays) {
+    std::vector<std::tuple<std::string, Shape, Dtype>> data;
+    for (auto& a : arrays) {
+      data.emplace_back(namer.get_name(a), a.shape(), a.dtype());
+    }
+    return data;
+  };
+
+  // Callback on the inputs
+  callback({{"inputs", to_vector_data(inputs)}});
+
+  // Callback on the outputs
+  callback({{"outputs", to_vector_data(outputs)}});
+
+  // Callback on the constants
+  {
+    std::unordered_set<std::uintptr_t> input_set;
+    for (auto& in : inputs) {
+      input_set.insert(in.id());
+    }
+    std::vector<std::pair<std::string, array>> constants;
+    for (auto& arr : tape) {
+      if (arr.has_primitive() || input_set.find(arr.id()) != input_set.end()) {
+        continue;
+      }
+      constants.emplace_back(namer.get_name(arr), arr);
+    }
+    callback({{"constants", constants}});
+  }
+
+  for (auto& arr : tape) {
+    if (!arr.has_primitive()) {
+      continue;
+    }
+    callback({
+        {"inputs", to_vector_data(arr.inputs())},
+        {"outputs", to_vector_data(arr.outputs())},
+        {"name", arr.primitive().name()}
+        //////         {"state": []});
+    });
+  }
+}
 
 void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   if (closed) {
@@ -592,10 +675,18 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
 
   detail::compile_simplify(tape, parents_map, trace_outputs, /* passes */ 3);
 
-  // Update header
+  // Update the table entry
+  fentry.kwarg_keys = std::move(kwarg_keys);
+  fentry.inputs = trace_inputs;
+
   count++;
 
-  // Overwrite the header
+  if (callback) {
+    export_with_callback(trace_inputs, trace_outputs, tape);
+    return;
+  }
+
+  // Update the header
   auto pos = os.tell();
   os.seek(0);
   write_header(os, count, ftable->shapeless);
@@ -615,10 +706,6 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   serialize(os, trace_input_ids);
   serialize(os, trace_inputs);
   serialize(os, arrays_to_ids(trace_outputs));
-
-  // Update the table entry
-  fentry.kwarg_keys = std::move(kwarg_keys);
-  fentry.inputs = std::move(trace_inputs);
 
   std::unordered_set<std::uintptr_t> input_set(
       trace_input_ids.begin(), trace_input_ids.end());
@@ -728,6 +815,58 @@ void export_function(
     const Kwargs& kwargs,
     bool shapeless /* = false */) {
   exporter(file, fun, shapeless)(args, kwargs);
+}
+
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    bool shapeless /* = false */) {
+  return FunctionExporter{
+      callback,
+      [fun](const Args& args, const Kwargs&) { return fun(args); },
+      shapeless};
+}
+
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    bool shapeless /* = false */) {
+  return exporter(
+      callback,
+      [fun](const Args&, const Kwargs kwargs) { return fun(kwargs); },
+      shapeless);
+}
+
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    bool shapeless /* = false */) {
+  return FunctionExporter{callback, fun, shapeless};
+}
+
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    const Args& args,
+    bool shapeless /* = false */) {
+  exporter(callback, fun, shapeless)(args);
+}
+
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    const Kwargs& kwargs,
+    bool shapeless /* = false */) {
+  exporter(callback, fun, shapeless)(kwargs);
+}
+
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    const Args& args,
+    const Kwargs& kwargs,
+    bool shapeless /* = false */) {
+  exporter(callback, fun, shapeless)(args, kwargs);
 }
 
 std::vector<array> ImportedFunction::operator()(const Kwargs& kwargs) const {

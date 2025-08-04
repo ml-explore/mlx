@@ -108,6 +108,7 @@ class ParallelFileReader : public Reader {
 
 class FileWriter : public Writer {
  public:
+  explicit FileWriter() {}
   explicit FileWriter(std::string file_path)
       : fd_(open(
             file_path.c_str(),

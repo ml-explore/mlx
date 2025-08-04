@@ -10,6 +10,13 @@ namespace mlx::core {
 
 using Args = std::vector<array>;
 using Kwargs = std::unordered_map<std::string, array>;
+using ExportCallbackInput = std::unordered_map<
+    std::string,
+    std::variant<
+        std::vector<std::tuple<std::string, Shape, Dtype>>,
+        std::vector<std::pair<std::string, array>>,
+        std::string>>;
+using ExportCallback = std::function<void(const ExportCallbackInput&)>;
 
 struct FunctionExporter;
 
@@ -60,6 +67,47 @@ struct ImportedFunction;
  * Import a function from a file.
  */
 ImportedFunction import_function(const std::string& file);
+
+/**
+ * Make an exporter to export multiple traces of a given function with the same
+ * callback.
+ */
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    bool shapeless = false);
+
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    bool shapeless = false);
+
+FunctionExporter exporter(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    bool shapeless = false);
+
+/**
+ * Export a function with a callback.
+ */
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&)>& fun,
+    const Args& args,
+    bool shapeless = false);
+
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Kwargs&)>& fun,
+    const Kwargs& kwargs,
+    bool shapeless = false);
+
+void export_function(
+    const ExportCallback& callback,
+    const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
+    const Args& args,
+    const Kwargs& kwargs,
+    bool shapeless = false);
 
 } // namespace mlx::core
 
