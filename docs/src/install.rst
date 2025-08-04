@@ -30,7 +30,7 @@ MLX has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
-    pip install "mlx[cuda]"
+    pip install mlx
 
 To install the CUDA package from PyPi your system must meet the following
 requirements:
@@ -49,7 +49,7 @@ For a CPU-only version of MLX that runs on Linux use:
 
 .. code-block:: shell
 
-    pip install "mlx[cpu]"
+    pip install mlx[cpu]
 
 To install the CPU-only package from PyPi your system must meet the following
 requirements:
