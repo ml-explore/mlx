@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cpu/jit_compiler.h"
 
+#include <algorithm>
 #include <sstream>
 #include <vector>
 
