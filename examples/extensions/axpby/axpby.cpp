@@ -1,5 +1,6 @@
 // Copyright © 2023-2025 Apple Inc.
 
+#include <dlfcn.h>
 #include <iostream>
 #include <sstream>
 
@@ -15,6 +16,19 @@
 #endif
 
 namespace my_ext {
+
+// A helper function to find the location of the current binary on disk.
+// The Metal library ("mlx_ext.mtllib"), should be in the same directory.
+std::string current_binary_dir() {
+  static std::string binary_dir = []() {
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
+      throw std::runtime_error("Unable to get current binary dir.");
+    }
+    return std::filesystem::path(info.dli_fname).parent_path().string();
+  }();
+  return binary_dir;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Operation Implementation
@@ -167,16 +181,15 @@ void Axpby::eval_gpu(
   }
 
   // Resolve name of kernel (corresponds to axpby.metal)
-  std::ostringstream kname;
-  kname << "axpby_";
-  kname << (contiguous_kernel ? "contiguous_" : "general_");
-  kname << type_to_name(out);
+  std::string kname = "axpby_";
+  kname += (contiguous_kernel ? "contiguous_" : "general_");
+  kname += type_to_name(out);
 
   // Load the metal library
-  auto lib = d.get_library("mlx_ext");
+  auto lib = d.get_library("mlx_ext", current_binary_dir());
 
   // Make a kernel from this metal library
-  auto kernel = d.get_kernel(kname.str(), lib);
+  auto kernel = d.get_kernel(kname, lib);
 
   // Prepare to encode kernel
   auto& compute_encoder = d.get_command_encoder(s.index);

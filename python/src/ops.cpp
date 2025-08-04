@@ -3076,7 +3076,7 @@ void init_ops(nb::module_& m) {
              std::tuple<int>,
              std::pair<int, int>,
              std::vector<std::pair<int, int>>>& pad_width,
-         const std::string mode,
+         const std::string& mode,
          const ScalarOrArray& constant_value,
          mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&pad_width); pv) {
@@ -4022,8 +4022,9 @@ void init_ops(nb::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
-            be saved. metadata (dict(str, str), optional): The dictionary of
-            metadata to be saved.
+              be saved.
+            metadata (dict(str, str), optional): The dictionary of
+              metadata to be saved.
       )pbdoc");
   m.def(
       "save_gguf",
@@ -4258,7 +4259,7 @@ void init_ops(nb::module_& m) {
 
         .. math::
 
-          w_i = s \hat{w_i} - \beta
+          w_i = s \hat{w_i} + \beta
 
         Args:
           w (array): Matrix to be quantized
@@ -4320,6 +4321,28 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The result of the multiplication of ``x`` with ``w``
               after gathering using ``lhs_indices`` and ``rhs_indices``.
+      )pbdoc");
+  m.def(
+      "segmented_mm",
+      &mx::segmented_mm,
+      nb::arg(),
+      nb::arg(),
+      "segments"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def segmented_mm(a: array, b: array, /, segments: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform a matrix multiplication but segment the inner dimension and
+        save the result for each segment separately.
+
+        Args:
+          a (array): Input array of shape ``MxK``.
+          b (array): Input array of shape ``KxN``.
+          segments (array): The offsets into the inner dimension for each segment.
+
+        Returns:
+          array: The result per segment of shape ``MxN``.
       )pbdoc");
   m.def(
       "tensordot",

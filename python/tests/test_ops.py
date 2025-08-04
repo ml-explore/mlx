@@ -1478,7 +1478,7 @@ class TestOps(mlx_tests.MLXTestCase):
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
 
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
+            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, equal_nan=True))
 
         x = np.random.rand(9, 12, 18)
         xi = np.random.rand(9, 12, 18)
@@ -2586,17 +2586,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(result, mx.array(expected))
 
     def test_atleast_1d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2614,23 +2603,11 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_1d(mx.array(array))
             np_res = np.atleast_1d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_atleast_2d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2648,23 +2625,11 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_2d(mx.array(array))
             np_res = np.atleast_2d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_atleast_3d(self):
-        def compare_nested_lists(x, y):
-            if isinstance(x, list) and isinstance(y, list):
-                if len(x) != len(y):
-                    return False
-                for i in range(len(x)):
-                    if not compare_nested_lists(x[i], y[i]):
-                        return False
-                return True
-            else:
-                return x == y
-
         # Test 1D input
         arrays = [
             [1],
@@ -2682,10 +2647,9 @@ class TestOps(mlx_tests.MLXTestCase):
         for i, array in enumerate(arrays):
             mx_res = mx.atleast_3d(mx.array(array))
             np_res = np.atleast_3d(np.array(array))
-            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
-            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+            self.assertTrue(mx.array_equal(mx_res, atleast_arrays[i]))
 
     def test_issubdtype(self):
         self.assertTrue(mx.issubdtype(mx.bfloat16, mx.inexact))
@@ -3084,6 +3048,25 @@ class TestOps(mlx_tests.MLXTestCase):
 
         out = mx.power(mx.array(0j), float("nan"))
         self.assertTrue(mx.isnan(out))
+
+    def test_irregular_alignments(self):
+        # Unaligned unary op
+        a = mx.ones((64, 1))
+        b = -a[1:]
+        self.assertTrue(mx.all(b == -1.0))
+
+        # Unaligned binary op
+        a = mx.ones((64, 1))
+        b = a[1:]
+        c = b + b
+        self.assertTrue(mx.all(c == 2.0))
+
+        # Unaligned ternary op
+        a = mx.ones((64, 1))
+        b = mx.zeros((63, 1))
+        c = mx.ones((63, 1)).astype(mx.bool_)
+        d = mx.where(c, a[1:], b)
+        self.assertTrue(mx.all(d == 1.0))
 
 
 class TestBroadcast(mlx_tests.MLXTestCase):

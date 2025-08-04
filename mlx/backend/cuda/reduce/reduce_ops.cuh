@@ -2,48 +2,115 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/device/atomic_ops.cuh"
+#include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
+#include "mlx/backend/cuda/reduce/reduce_utils.cuh"
 
 namespace mlx::core::cu {
 
 // Reduce ops.
 struct And {
-  __device__ bool operator()(bool a, bool b) {
+  __device__ __forceinline__ bool operator()(bool a, bool b) {
     return a && b;
+  }
+
+  __device__ void atomic_update(bool* x, bool y) {
+    atomic_reduce<bool, And>(x, y);
   }
 };
 
 struct Or {
-  __device__ bool operator()(bool a, bool b) {
+  __device__ __forceinline__ bool operator()(bool a, bool b) {
     return a || b;
+  }
+
+  __device__ void atomic_update(bool* x, bool y) {
+    atomic_reduce<bool, Or>(x, y);
   }
 };
 
 struct Sum {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a + b;
+  }
+
+  template <typename T>
+  __device__ void atomic_update(T* x, T y) {
+    atomic_reduce<T, Sum>(x, y);
+  }
+
+  __device__ void atomic_update(__nv_bfloat16* x, __nv_bfloat16 y) {
+    atomic_add(x, y);
+  }
+
+  __device__ void atomic_update(int* x, int y) {
+    atomic_add(x, y);
+  }
+
+  __device__ void atomic_update(float* x, float y) {
+    atomic_add(x, y);
   }
 };
 
 struct Prod {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
     return a * b;
+  }
+
+  template <typename T>
+  __device__ void atomic_update(T* x, T y) {
+    atomic_reduce<T, Prod>(x, y);
   }
 };
 
 struct Min {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(a.real()) || isnan(a.imag())) {
+        return a;
+      }
+      if (isnan(b.real()) || isnan(b.imag())) {
+        return b;
+      }
+    } else if constexpr (!cuda::std::is_integral_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return cuda::std::numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a < b ? a : b;
+  }
+
+  template <typename T>
+  __device__ void atomic_update(T* x, T y) {
+    atomic_reduce<T, Min>(x, y);
   }
 };
 
 struct Max {
   template <typename T>
-  __device__ T operator()(T a, T b) {
+  __device__ __forceinline__ T operator()(T a, T b) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(a.real()) || isnan(a.imag())) {
+        return a;
+      }
+      if (isnan(b.real()) || isnan(b.imag())) {
+        return b;
+      }
+    } else if constexpr (!cuda::std::is_integral_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return cuda::std::numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a > b ? a : b;
+  }
+
+  template <typename T>
+  __device__ void atomic_update(T* x, T y) {
+    atomic_reduce<T, Max>(x, y);
   }
 };
 
@@ -108,10 +175,10 @@ struct ReduceInit<Or, T> {
 template <typename T>
 struct ReduceInit<Sum, T> {
   static constexpr __host__ __device__ auto value() {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    if constexpr (is_complex_v<T>) {
       return T{0, 0};
     } else {
-      return typename ReduceResult<Sum, T>::type{0};
+      return cast_to<typename ReduceResult<Sum, T>::type>(0);
     }
   }
 };
@@ -119,10 +186,10 @@ struct ReduceInit<Sum, T> {
 template <typename T>
 struct ReduceInit<Prod, T> {
   static constexpr __host__ __device__ auto value() {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return T{1, 1};
+    if constexpr (is_complex_v<T>) {
+      return T{1, 0};
     } else {
-      return typename ReduceResult<Prod, T>::type{1};
+      return cast_to<typename ReduceResult<Prod, T>::type>(1);
     }
   }
 };

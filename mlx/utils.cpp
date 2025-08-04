@@ -253,7 +253,9 @@ std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k) {
 
 std::ostream& operator<<(std::ostream& os, array a) {
   a.eval();
-  MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE, print_array<CTYPE>(os, a));
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    print_array<MLX_GET_TYPE(type_tag)>(os, a);
+  });
   return os;
 }
 
@@ -321,8 +323,9 @@ void set_iinfo_limits(int64_t& min, uint64_t& max) {
 }
 
 iinfo::iinfo(Dtype dtype) : dtype(dtype) {
-  MLX_SWITCH_INT_TYPES_CHECKED(
-      dtype, "[iinfo]", CTYPE, set_iinfo_limits<CTYPE>(min, max));
+  dispatch_int_types(dtype, "[iinfo]", [&](auto type_tag) {
+    set_iinfo_limits<MLX_GET_TYPE(type_tag)>(min, max);
+  });
 }
 
 } // namespace mlx::core

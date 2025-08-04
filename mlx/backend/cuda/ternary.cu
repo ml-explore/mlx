@@ -15,12 +15,27 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-template <typename Op, typename T, typename IdxT>
+template <typename Op, typename T, typename IdxT, int N_READS>
 __global__ void
 ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    out[index] = Op{}(a[index], b[index], c[index]);
+
+  if ((index + 1) * N_READS > size) {
+    for (IdxT i = index * N_READS; i < size; ++i) {
+      out[i] = Op{}(a[i], b[i], c[i]);
+    }
+  } else {
+    auto a_vec = load_vector<N_READS>(a, index);
+    auto b_vec = load_vector<N_READS>(b, index);
+    auto c_vec = load_vector<N_READS>(c, index);
+
+    AlignedVector<T, N_READS> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      out_vec[i] = Op{}(a_vec[i], b_vec[i], c_vec[i]);
+    }
+
+    store_vector<N_READS>(out, index, out_vec);
   }
 }
 
@@ -61,7 +76,7 @@ __global__ void ternary_g(
     int ndim) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto [a_idx, b_idx, c_idx] = elem_to_loc_4d(
+    auto [a_idx, b_idx, c_idx] = elem_to_loc(
         index,
         shape.data(),
         a_strides.data(),
@@ -91,67 +106,78 @@ void ternary_op_gpu_inplace(
   encoder.set_input_array(b);
   encoder.set_input_array(c);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE, {
-      using DType = cuda_type_t<CTYPE>;
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using DType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
-      auto topt = get_ternary_op_type(a, b, c);
-      if (topt == TernaryOpType::General) {
-        auto [shape, strides] = collapse_contiguous_dims(a, b, c, out);
-        auto& a_strides = strides[0];
-        auto& b_strides = strides[1];
-        auto& c_strides = strides[2];
-        bool large = a.data_size() > UINT32_MAX || b.data_size() > UINT32_MAX ||
-            c.data_size() > UINT32_MAX || out.data_size() > UINT32_MAX;
-        MLX_SWITCH_BOOL(large, LARGE, {
-          using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
-          int ndim = shape.size();
-          if (ndim <= 3) {
-            MLX_SWITCH_1_2_3(ndim, NDIM, {
-              auto kernel = cu::ternary_g_nd<Op, DType, IdxT, NDIM>;
-              auto [num_blocks, block_dims] =
-                  get_launch_args(kernel, out, large);
-              kernel<<<num_blocks, block_dims, 0, stream>>>(
+    auto topt = get_ternary_op_type(a, b, c);
+    if (topt == TernaryOpType::General) {
+      dispatch_bool(
+          a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
+              c.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
+          [&](auto large) {
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+            Shape shape;
+            std::vector<Strides> strides;
+            std::tie(shape, strides) = collapse_contiguous_dims(a, b, c, out);
+            auto& a_strides = strides[0];
+            auto& b_strides = strides[1];
+            auto& c_strides = strides[2];
+            int ndim = shape.size();
+            if (ndim <= 3) {
+              dispatch_1_2_3(ndim, [&](auto dims_constant) {
+                auto [num_blocks, block_dims] = get_launch_args(out, large());
+                encoder.add_kernel_node(
+                    cu::ternary_g_nd<Op, DType, IdxT, dims_constant()>,
+                    num_blocks,
+                    block_dims,
+                    0,
+                    a.data<bool>(),
+                    b.data<DType>(),
+                    c.data<DType>(),
+                    out.data<DType>(),
+                    out.size(),
+                    const_param<dims_constant()>(shape),
+                    const_param<dims_constant()>(a_strides),
+                    const_param<dims_constant()>(b_strides),
+                    const_param<dims_constant()>(c_strides));
+              });
+            } else {
+              auto [num_blocks, block_dims] = get_launch_args(out, large());
+              encoder.add_kernel_node(
+                  cu::ternary_g<Op, DType, IdxT>,
+                  num_blocks,
+                  block_dims,
+                  0,
                   a.data<bool>(),
                   b.data<DType>(),
                   c.data<DType>(),
                   out.data<DType>(),
                   out.data_size(),
-                  const_param<NDIM>(shape),
-                  const_param<NDIM>(a_strides),
-                  const_param<NDIM>(b_strides),
-                  const_param<NDIM>(c_strides));
-            });
-          } else {
-            auto kernel = cu::ternary_g<Op, DType, IdxT>;
-            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-            kernel<<<num_blocks, block_dims, 0, stream>>>(
-                a.data<bool>(),
-                b.data<DType>(),
-                c.data<DType>(),
-                out.data<DType>(),
-                out.data_size(),
-                const_param(shape),
-                const_param(a_strides),
-                const_param(b_strides),
-                const_param(c_strides),
-                ndim);
-          }
-        });
-      } else {
-        MLX_SWITCH_BOOL(out.data_size() > UINT32_MAX, LARGE, {
-          using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
-          auto kernel = cu::ternary_v<Op, DType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(kernel, out, LARGE);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
-              a.data<bool>(),
-              b.data<DType>(),
-              c.data<DType>(),
-              out.data<DType>(),
-              out.data_size());
-        });
-      }
-    });
+                  const_param(shape),
+                  const_param(a_strides),
+                  const_param(b_strides),
+                  const_param(c_strides),
+                  ndim);
+            }
+          });
+    } else {
+      dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
+        using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
+        constexpr int N_READS = 16 / sizeof(DType);
+        auto [num_blocks, block_dims] = get_launch_args(
+            out.data_size(), out.shape(), out.strides(), large(), N_READS);
+        encoder.add_kernel_node(
+            cu::ternary_v<Op, DType, IdxT, N_READS>,
+            num_blocks,
+            block_dims,
+            0,
+            a.data<bool>(),
+            b.data<DType>(),
+            c.data<DType>(),
+            out.data<DType>(),
+            out.data_size());
+      });
+    }
   });
 }
 
@@ -169,7 +195,7 @@ void ternary_op_gpu(
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("select::eval_gpu");
+  nvtx3::scoped_range r("Select::eval_gpu");
   auto& s = out.primitive().stream();
   ternary_op_gpu<cu::Select>(inputs, out, s);
 }

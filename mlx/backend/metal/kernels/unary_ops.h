@@ -5,6 +5,7 @@
 #include <metal_integer>
 #include <metal_math>
 
+#include "mlx/backend/metal/kernels/cexpf.h"
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
 
@@ -178,8 +179,7 @@ struct Exp {
     return metal::precise::exp(x);
   };
   complex64_t operator()(complex64_t x) {
-    auto m = metal::precise::exp(x.real);
-    return {m * metal::precise::cos(x.imag), m * metal::precise::sin(x.imag)};
+    return cexpf(x);
   }
 };
 

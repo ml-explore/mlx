@@ -10,22 +10,6 @@
 
 namespace mlx::core {
 
-#define MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, ...)    \
-  MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {                  \
-    MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {              \
-      using InType = cuda_type_t<CTYPE_IN>;                     \
-      using OutType = cuda_type_t<CTYPE_OUT>;                   \
-      if constexpr (cu::CastOp<InType, OutType>::is_castable) { \
-        __VA_ARGS__;                                            \
-      } else {                                                  \
-        throw std::runtime_error(fmt::format(                   \
-            "Can not copy data from dtype {} to {}.",           \
-            dtype_to_string(out.dtype()),                       \
-            dtype_to_string(in.dtype())));                      \
-      }                                                         \
-    });                                                         \
-  })
-
 void copy_contiguous(
     cu::CommandEncoder& encoder,
     CopyType ctype,

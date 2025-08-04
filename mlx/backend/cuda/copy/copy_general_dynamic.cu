@@ -41,7 +41,7 @@ __global__ void copy_gg_dynamic(
     const int64_t* offset_out) {
   IdxT index = cg::this_grid().thread_rank();
   if (index < size) {
-    auto [idx_in, idx_out] = elem_to_loc_4d(
+    auto [idx_in, idx_out] = elem_to_loc(
         index, shape.data(), strides_in.data(), strides_out.data(), ndim);
     out[idx_out + *offset_out] = CastOp<In, Out>{}(in[idx_in + *offset_in]);
   }
@@ -61,43 +61,56 @@ void copy_general_dynamic(
     const Strides& strides_out,
     const array& dynamic_offset_in,
     const array& dynamic_offset_out) {
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_COPY_TYPES(in, out, InType, OutType, {
-      const InType* in_ptr = in.data<InType>() + offset_in;
-      OutType* out_ptr = out.data<OutType>() + offset_out;
-      bool large = in.data_size() > UINT32_MAX || out.data_size() > UINT32_MAX;
-      MLX_SWITCH_BOOL(large, LARGE, {
-        using IdxT = std::conditional_t<LARGE, int64_t, uint32_t>;
-        int ndim = shape.size();
-        if (ndim <= 3) {
-          MLX_SWITCH_1_2_3(ndim, NDIM, {
-            auto kernel = cu::copy_gg_dynamic_nd<InType, OutType, IdxT, NDIM>;
-            auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-            kernel<<<num_blocks, block_dims, 0, stream>>>(
-                in_ptr,
-                out_ptr,
-                out.data_size(),
-                const_param<NDIM>(shape),
-                const_param<NDIM>(strides_in),
-                const_param<NDIM>(strides_out),
-                dynamic_offset_in.data<int64_t>(),
-                dynamic_offset_out.data<int64_t>());
+  dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
+    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      dispatch_bool(
+          in.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
+          [&](auto large) {
+            using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
+            using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
+            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+            const InType* in_ptr = in.data<InType>() + offset_in;
+            OutType* out_ptr = out.data<OutType>() + offset_out;
+            int ndim = shape.size();
+            if (ndim <= 3) {
+              dispatch_1_2_3(ndim, [&](auto dims_constant) {
+                auto [num_blocks, block_dims] = get_launch_args(out, large());
+                encoder.add_kernel_node(
+                    cu::copy_gg_dynamic_nd<
+                        InType,
+                        OutType,
+                        IdxT,
+                        dims_constant()>,
+                    num_blocks,
+                    block_dims,
+                    0,
+                    in_ptr,
+                    out_ptr,
+                    out.size(),
+                    const_param<dims_constant()>(shape),
+                    const_param<dims_constant()>(strides_in),
+                    const_param<dims_constant()>(strides_out),
+                    dynamic_offset_in.data<int64_t>(),
+                    dynamic_offset_out.data<int64_t>());
+              });
+            } else { // ndim >= 4
+              auto [num_blocks, block_dims] = get_launch_args(out, large());
+              encoder.add_kernel_node(
+                  cu::copy_gg_dynamic<InType, OutType, IdxT>,
+                  num_blocks,
+                  block_dims,
+                  0,
+                  in_ptr,
+                  out_ptr,
+                  out.size(),
+                  const_param(shape),
+                  const_param(strides_in),
+                  const_param(strides_out),
+                  ndim,
+                  dynamic_offset_in.data<int64_t>(),
+                  dynamic_offset_out.data<int64_t>());
+            }
           });
-        } else { // ndim >= 4
-          auto kernel = cu::copy_gg_dynamic<InType, OutType, IdxT>;
-          auto [num_blocks, block_dims] = get_launch_args(kernel, out, large);
-          kernel<<<num_blocks, block_dims, 0, stream>>>(
-              in_ptr,
-              out_ptr,
-              out.data_size(),
-              const_param(shape),
-              const_param(strides_in),
-              const_param(strides_out),
-              ndim,
-              dynamic_offset_in.data<int64_t>(),
-              dynamic_offset_out.data<int64_t>());
-        }
-      });
     });
   });
 }

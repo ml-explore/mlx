@@ -11,7 +11,7 @@ namespace mlx::core {
 void ternary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() == 3);
   auto& a = inputs[0];
@@ -128,7 +128,7 @@ void ternary_op_gpu_inplace(
 void ternary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -141,13 +141,13 @@ void ternary_op_gpu(
 void ternary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op) {
+    const char* op) {
   auto& s = out.primitive().stream();
   ternary_op_gpu(inputs, out, op, s);
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  ternary_op_gpu(inputs, out, get_primitive_string(this));
+  ternary_op_gpu(inputs, out, name());
 }
 
 } // namespace mlx::core

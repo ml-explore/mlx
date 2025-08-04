@@ -7,12 +7,9 @@
 
 #include <mutex>
 #include <set>
-#include <thread>
 #include <utility>
 
 namespace mlx::core::cu {
-
-class Worker;
 
 using allocator::Buffer;
 
@@ -22,20 +19,34 @@ struct CudaBuffer {
   size_t size;
 };
 
+class SmallSizePool {
+ private:
+  union Block {
+    Block* next;
+    CudaBuffer buf;
+  };
+
+  Block* buffer_{nullptr};
+  void* data_{nullptr};
+  Block* next_free_{nullptr};
+
+ public:
+  SmallSizePool();
+  ~SmallSizePool();
+
+  SmallSizePool(const SmallSizePool&) = delete;
+  SmallSizePool& operator=(const SmallSizePool&) = delete;
+
+  CudaBuffer* malloc();
+  void free(CudaBuffer* buf);
+  bool in_pool(CudaBuffer* buf);
+};
+
 class CudaAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
-
-  // Register current thread as safe to free buffers.
-  // In cuda freeing a buffer implicitly synchronizes stream, and for threads
-  // that may be waited by gpu stream (for example cpu stream threads), freeing
-  // buffers there would result in dead lock.
-  void register_this_thread();
-
-  // Call cudaFree in the safe thread.
-  void cuda_free(void* buf);
 
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
@@ -47,12 +58,10 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
+  void cuda_free(CudaBuffer* buf);
+
   CudaAllocator();
   friend CudaAllocator& allocator();
-
-  std::mutex worker_mutex_;
-  std::unique_ptr<Worker> worker_;
-  std::set<std::thread::id> allowed_threads_;
 
   std::mutex mutex_;
   size_t memory_limit_;
@@ -60,6 +69,7 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
+  SmallSizePool scalar_pool_;
 };
 
 CudaAllocator& allocator();

@@ -1,14 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <dlfcn.h>
+
 #include "mlx/backend/common/utils.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
-std::string get_primitive_string(Primitive* primitive) {
-  std::ostringstream op_t;
-  primitive->print(op_t);
-  return op_t.str();
+std::filesystem::path current_binary_dir() {
+  static std::filesystem::path binary_dir = []() {
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
+      throw std::runtime_error("Unable to get current binary dir.");
+    }
+    return std::filesystem::path(info.dli_fname).parent_path();
+  }();
+  return binary_dir;
 }
 
 std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
@@ -199,11 +205,14 @@ Dims get_2d_grid_dims_common(
       }
     }
   }
-  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX || divisor > 1) {
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
     throw std::runtime_error("Unable to safely factor shape.");
   }
   if (grid_y > grid_x) {
     std::swap(grid_x, grid_y);
+  }
+  if (divisor > 1) {
+    grid_x = ((grid_x + divisor - 1) / divisor) * divisor;
   }
   return std::make_tuple(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
@@ -217,6 +226,33 @@ std::pair<Dims, Dims> get_grid_and_block_common(int dim0, int dim1, int dim2) {
 
   return std::make_pair(
       std::make_tuple(gx, gy, gz), std::make_tuple(bx, by, bz));
+}
+
+array swapaxes_in_eval(const array& x, int axis1, int axis2) {
+  int ndim = x.ndim();
+  if (axis1 < 0) {
+    axis1 += ndim;
+  }
+  if (axis2 < 0) {
+    axis2 += ndim;
+  }
+
+  auto shape = x.shape();
+  std::swap(shape[axis1], shape[axis2]);
+  auto strides = x.strides();
+  std::swap(strides[axis1], strides[axis2]);
+
+  auto [data_size, row_contiguous, col_contiguous] =
+      check_contiguity(shape, strides);
+  bool contiguous = data_size == x.data_size();
+
+  array out(std::move(shape), x.dtype(), nullptr, {});
+  out.copy_shared_buffer(
+      x,
+      std::move(strides),
+      {contiguous, row_contiguous, col_contiguous},
+      x.data_size());
+  return out;
 }
 
 } // namespace mlx::core

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/allocator.h"
 #include "mlx/stream.h"
 
 #include <cuda_runtime.h>
@@ -55,12 +56,8 @@ class SharedEvent {
   bool is_signaled(uint64_t value) const;
   uint64_t value() const;
 
-  const std::shared_ptr<Atomic>& atomic() const {
-    return ac_;
-  }
-
  private:
-  std::shared_ptr<Atomic> ac_;
+  std::shared_ptr<mlx::core::allocator::Buffer> buf_;
 };
 
 } // namespace mlx::core::cu

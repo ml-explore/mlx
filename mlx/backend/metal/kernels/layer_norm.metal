@@ -31,6 +31,7 @@ inline void threadgroup_sum(
   for (int i = 0; i < N; i++) {
     x[i] = simd_sum(x[i]);
   }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
   if (simd_lane_id == 0) {
     for (int i = 0; i < N; i++) {
       xs[N * simd_group_id + i] = x[i];

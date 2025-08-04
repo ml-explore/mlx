@@ -14,7 +14,7 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-bool DEPRECATE(const std::string& old_fn, const std::string new_fn) {
+bool DEPRECATE(const char* old_fn, const char* new_fn) {
   std::cerr << old_fn << " is deprecated and will be removed in a future "
             << "version. Use " << new_fn << " instead." << std::endl;
   return true;

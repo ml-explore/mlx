@@ -514,7 +514,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "eigh",
-      [](const mx::array& a, const std::string UPLO, mx::StreamOrDevice s) {
+      [](const mx::array& a, const std::string& UPLO, mx::StreamOrDevice s) {
         auto result = mx::linalg::eigh(a, UPLO, s);
         return nb::make_tuple(result.first, result.second);
       },

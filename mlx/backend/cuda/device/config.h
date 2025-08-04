@@ -5,7 +5,7 @@
 #pragma once
 
 // The maximum dimensions of shape/strides passed as kernel parameters.
-#define MAX_NDIM 8
+#define MAX_NDIM 10
 
 // All existing NVIDIA hardware has a fixed 32 warp size. Though a built-in
 // warpSize variable exists, using it would prevent compile-time optimizations.

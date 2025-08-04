@@ -500,7 +500,7 @@ array cross(
 void validate_eig(
     const array& a,
     const StreamOrDevice& stream,
-    const std::string fname) {
+    const std::string& fname) {
   check_cpu_stream(stream, fname);
   check_float_or_complex(a.dtype(), fname);
 
@@ -688,7 +688,7 @@ array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
     perm = expand_dims(perm, -1, s);
     take_axis -= 1;
   }
-  auto pb = take_along_axis(b, perm, take_axis);
+  auto pb = take_along_axis(b, perm, take_axis, s);
   auto y = solve_triangular(luf[1], pb, /* upper = */ false, s);
   return solve_triangular(luf[2], y, /* upper = */ true, s);
 }

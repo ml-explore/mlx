@@ -11,10 +11,10 @@ brought to you by Apple machine learning research.
 
 Some key features of MLX include:
 
- - **Familiar APIs**: MLX has a Python API that closely follows NumPy.  MLX
+ - **Familiar APIs**: MLX has a Python API that closely follows NumPy. MLX
    also has fully featured C++, [C](https://github.com/ml-explore/mlx-c), and
    [Swift](https://github.com/ml-explore/mlx-swift/) APIs, which closely mirror
-   the Python API.  MLX has higher-level packages like `mlx.nn` and
+   the Python API. MLX has higher-level packages like `mlx.nn` and
    `mlx.optimizers` with APIs that closely follow PyTorch to simplify building
    more complex models.
 
@@ -68,18 +68,23 @@ in the documentation.
 
 ## Installation
 
-MLX is available on [PyPI](https://pypi.org/project/mlx/). To install the Python API, run:
+MLX is available on [PyPI](https://pypi.org/project/mlx/). To install MLX on
+macOS, run:
 
-**With `pip`**:
-
-```
+```bash
 pip install mlx
 ```
 
-**With `conda`**:
+To install the CUDA backend on Linux, run:
 
+```bash
+pip install "mlx[cuda]"
 ```
-conda install -c conda-forge mlx
+
+To install a CPU-only Linux package, run:
+
+```bash
+pip install "mlx[cpu]"
 ```
 
 Checkout the

@@ -31,7 +31,7 @@ void svd_impl(
 
   // lapack clobbers the input, so we have to make a copy.
   array in(a.shape(), a.dtype(), nullptr, {});
-  copy(
+  copy_cpu(
       a,
       in,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,

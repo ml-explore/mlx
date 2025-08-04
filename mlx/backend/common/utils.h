@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <tuple>
 #include <vector>
 
@@ -9,7 +10,8 @@
 
 namespace mlx::core {
 
-std::string get_primitive_string(Primitive* primitive);
+// Return the directory that contains current shared library.
+std::filesystem::path current_binary_dir();
 
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
@@ -193,6 +195,9 @@ void shared_buffer_reshape(
     const array& in,
     const Strides& out_strides,
     array& out);
+
+// Like the swapaxes op but safe to call in eval_gpu.
+array swapaxes_in_eval(const array& x, int axis1, int axis2);
 
 template <typename T>
 inline std::vector<T> remove_index(std::vector<T> vec, size_t index) {

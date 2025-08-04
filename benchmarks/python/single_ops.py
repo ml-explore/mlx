@@ -51,6 +51,20 @@ def time_maximum():
     time_fn(mx.maximum, a, b)
 
 
+def time_max():
+    a = mx.random.uniform(shape=(32, 1024, 1024))
+    a[1, 1] = mx.nan
+    mx.eval(a)
+    time_fn(mx.max, a, 0)
+
+
+def time_min():
+    a = mx.random.uniform(shape=(32, 1024, 1024))
+    a[1, 1] = mx.nan
+    mx.eval(a)
+    time_fn(mx.min, a, 0)
+
+
 def time_negative():
     a = mx.random.uniform(shape=(10000, 1000))
     mx.eval(a)
@@ -108,6 +122,8 @@ if __name__ == "__main__":
 
     time_add()
     time_matmul()
+    time_min()
+    time_max()
     time_maximum()
     time_exp()
     time_negative()

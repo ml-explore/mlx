@@ -74,9 +74,9 @@ class Axpby : public mx::Primitive {
       const std::vector<mx::array>& inputs,
       const std::vector<int>& axes) override;
 
-  /** Print the primitive. */
-  void print(std::ostream& os) override {
-    os << "Axpby";
+  /** The name of primitive. */
+  const char* name() const override {
+    return "Axpby";
   }
 
   /** Equivalence check **/

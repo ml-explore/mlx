@@ -128,8 +128,7 @@ Buffer MetalAllocator::malloc(size_t size) {
 
     auto pool = metal::new_scoped_memory_pool();
 
-    // If we have a lot of memory pressure or are over the maximum cache size,
-    // try to reclaim memory from the cache
+    // If we have a lot of memory pressure try to reclaim memory from the cache
     if (mem_required >= gc_limit_ || num_resources_ >= resource_limit_) {
       num_resources_ -=
           buffer_cache_.release_cached_buffers(mem_required - gc_limit_);

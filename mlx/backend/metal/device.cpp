@@ -1,19 +1,17 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cstdlib>
-#include <filesystem>
 #include <sstream>
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
-
-namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
@@ -80,12 +78,7 @@ MTL::Library* try_load_bundle(
 std::pair<MTL::Library*, NS::Error*> load_colocated_library(
     MTL::Device* device,
     const std::string& relative_path) {
-  std::string binary_dir = get_binary_directory();
-  if (binary_dir.size() == 0) {
-    return {nullptr, nullptr};
-  }
-
-  auto path = fs::path(binary_dir) / relative_path;
+  auto path = current_binary_dir() / relative_path;
   if (!path.has_extension()) {
     path.replace_extension(".metallib");
   }
@@ -197,7 +190,7 @@ MTL::Library* load_library(
 
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
-      << "We attempted to load it from <" << get_binary_directory() << "/"
+      << "We attempted to load it from <" << current_binary_dir() << "/"
       << lib_name << ".metallib" << ">";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";

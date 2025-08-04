@@ -196,7 +196,7 @@ void Eigh::eval_cpu(
 
   values.set_data(allocator::malloc(values.nbytes()));
 
-  copy(
+  copy_cpu(
       a,
       vectors,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,

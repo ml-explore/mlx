@@ -5,6 +5,8 @@
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
+#include <math_constants.h>
+
 namespace mlx::core::cu {
 
 struct Abs {
@@ -12,8 +14,6 @@ struct Abs {
   __device__ T operator()(T x) {
     if constexpr (cuda::std::is_unsigned_v<T>) {
       return x;
-    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {sqrt(cuCrealf(x) * cuCrealf(x) + cuCimagf(x) * cuCimagf(x)), 0};
     } else {
       return abs(x);
     }
@@ -74,6 +74,8 @@ struct Ceil {
   __device__ T operator()(T x) {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x;
+    } else if constexpr (is_complex_v<T>) {
+      return T{ceil(x.real()), ceil(x.imag())};
     } else {
       return ceil(x);
     }
@@ -81,34 +83,23 @@ struct Ceil {
 };
 
 struct Conjugate {
-  __device__ cuComplex operator()(cuComplex x) {
-    return {cuCrealf(x), -cuCimagf(x)};
+  template <typename T>
+  __device__ complex_t<T> operator()(complex_t<T> x) {
+    return conj(x);
   }
 };
 
 struct Cos {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {
-          cos(cuCrealf(x)) * cosh(cuCimagf(x)),
-          -sin(cuCrealf(x)) * sinh(cuCimagf(x))};
-    } else {
-      return cos(x);
-    }
+    return cos(x);
   }
 };
 
 struct Cosh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {
-          cosh(cuCrealf(x)) * cos(cuCimagf(x)),
-          sinh(cuCrealf(x)) * sin(cuCimagf(x))};
-    } else {
-      return cosh(x);
-    }
+    return cosh(x);
   }
 };
 
@@ -141,12 +132,7 @@ struct ErfInv {
 struct Exp {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      auto m = exp(cuCrealf(x));
-      return {m * cos(cuCimagf(x)), m * sinh(cuCimagf(x))};
-    } else {
-      return exp(x);
-    }
+    return exp(x);
   }
 };
 
@@ -168,6 +154,8 @@ struct Floor {
   __device__ T operator()(T x) {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x;
+    } else if constexpr (is_complex_v<T>) {
+      return T{floor(x.real()), floor(x.imag())};
     } else {
       return floor(x);
     }
@@ -175,8 +163,9 @@ struct Floor {
 };
 
 struct Imag {
-  __device__ float operator()(cuComplex x) {
-    return cuCimagf(x);
+  template <typename T>
+  __device__ auto operator()(complex_t<T> x) {
+    return x.imag();
   }
 };
 
@@ -190,7 +179,12 @@ struct Log {
 struct Log2 {
   template <typename T>
   __device__ T operator()(T x) {
-    return log2(x);
+    if constexpr (is_complex_v<T>) {
+      auto y = Log{}(x);
+      return {y.real() / CUDART_LN2_F, y.imag() / CUDART_LN2_F};
+    } else {
+      return log2(x);
+    }
   }
 };
 
@@ -203,8 +197,25 @@ struct Log10 {
 
 struct Log1p {
   template <typename T>
-  __device__ T operator()(T x) {
-    return log1p(x);
+  __device__ T operator()(T z) {
+    if constexpr (is_complex_v<T>) {
+      float x = z.real();
+      float y = z.imag();
+      float zabs = Abs{}(z).real();
+      float theta = atan2f(y, x + 1);
+      if (zabs < 0.5f) {
+        float r = x * (2 + x) + y * y;
+        if (r == 0) { // handle underflow
+          return {x, theta};
+        }
+        return {0.5f * log1pf(r), theta};
+      } else {
+        float z0 = hypotf(x + 1, y);
+        return {logf(z0), theta};
+      }
+    } else {
+      return log1p(z);
+    }
   }
 };
 
@@ -217,8 +228,8 @@ struct LogicalNot {
 struct Negative {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return 0 - x;
+    if constexpr (is_complex_v<T>) {
+      return T{0, 0} - x;
     } else {
       return -x;
     }
@@ -226,26 +237,20 @@ struct Negative {
 };
 
 struct Real {
-  __device__ float operator()(cuComplex x) {
-    return cuCrealf(x);
+  template <typename T>
+  __device__ auto operator()(complex_t<T> x) {
+    return x.real();
   }
 };
 
 struct Round {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {rint(cuCrealf(x)), rint(cuCimagf(x))};
+    if constexpr (is_complex_v<T>) {
+      return {rint(x.real()), rint(x.imag())};
     } else {
       return rint(x);
     }
-  }
-};
-
-struct Rsqrt {
-  template <typename T>
-  __device__ T operator()(T x) {
-    return rsqrt(x);
   }
 };
 
@@ -262,8 +267,8 @@ struct Sign {
   __device__ T operator()(T x) {
     if constexpr (cuda::std::is_unsigned_v<T>) {
       return x != 0;
-    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      if (cuCrealf(x) == 0 && cuCimagf(x) == 0) {
+    } else if constexpr (is_complex_v<T>) {
+      if (x.real() == 0 && x.imag() == 0) {
         return x;
       } else {
         return x / Abs()(x);
@@ -279,26 +284,14 @@ struct Sign {
 struct Sin {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {
-          sin(cuCrealf(x)) * cosh(cuCimagf(x)),
-          cos(cuCrealf(x)) * sinh(cuCimagf(x))};
-    } else {
-      return sin(x);
-    }
+    return sin(x);
   }
 };
 
 struct Sinh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      return {
-          sinh(cuCrealf(x)) * cos(cuCimagf(x)),
-          cosh(cuCrealf(x)) * sin(cuCimagf(x))};
-    } else {
-      return sinh(x);
-    }
+    return sinh(x);
   }
 };
 
@@ -316,33 +309,28 @@ struct Sqrt {
   }
 };
 
+struct Rsqrt {
+  template <typename T>
+  __device__ T operator()(T x) {
+    if constexpr (is_complex_v<T>) {
+      return 1.0f / Sqrt{}(x);
+    } else {
+      return rsqrt(x);
+    }
+  }
+};
+
 struct Tan {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      float tan_a = tan(cuCrealf(x));
-      float tanh_b = tanh(cuCimagf(x));
-      float t1 = tan_a * tanh_b;
-      float denom = 1. + t1 * t1;
-      return {(tan_a - tanh_b * t1) / denom, (tanh_b + tan_a * t1) / denom};
-    } else {
-      return tan(x);
-    }
+    return tan(x);
   }
 };
 
 struct Tanh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, cuComplex>) {
-      float tanh_a = tanh(cuCrealf(x));
-      float tan_b = tan(cuCimagf(x));
-      float t1 = tanh_a * tan_b;
-      float denom = 1. + t1 * t1;
-      return {(tanh_a + tan_b * t1) / denom, (tan_b - tanh_a * t1) / denom};
-    } else {
-      return tanh(x);
-    }
+    return tanh(x);
   }
 };
 

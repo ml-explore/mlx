@@ -20,8 +20,7 @@ namespace {
 inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     d.add_temporary(x_copy, s.index);
     return x_copy;
   } else {
@@ -38,8 +37,7 @@ inline array ensure_row_contiguous_matrix(
   if (stride_0 == x.shape(-1) && stride_1 == 1) {
     return x;
   } else {
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     d.add_temporary(x_copy, s.index);
     return x_copy;
   }
@@ -267,9 +265,15 @@ void qvm_split_k(
   MTL::Size group_dims = MTL::Size(bk, 2, 1);
   MTL::Size grid_dims = MTL::Size(M, N / bn, B);
 
-  int x_batch_ndims = x.ndim() - 2;
   auto x_shape = x.shape();
   auto x_strides = x.strides();
+  if (x_shape.size() == 1) {
+    x_shape.insert(x_shape.begin(), 1);
+    x_strides.insert(x_strides.begin(), 0);
+  }
+
+  int x_ndim = x_shape.size();
+  int x_batch_ndims = x_ndim - 2;
   int w_batch_ndims = w.ndim() - 2;
   auto w_shape = w.shape();
   auto w_strides = w.strides();
@@ -280,7 +284,7 @@ void qvm_split_k(
   x_shape.insert(x_shape.end() - 2, split_k);
   x_shape.back() /= split_k;
   x_strides.insert(x_strides.end() - 2, split_D);
-  x_strides[x.ndim() - 1] = split_D;
+  x_strides[x_ndim - 1] = split_D;
   x_batch_ndims += 1;
 
   w_shape.insert(w_shape.end() - 2, split_k);
@@ -293,6 +297,9 @@ void qvm_split_k(
   int final_block_size = K - (split_k - 1) * split_D;
 
   auto temp_shape = out.shape();
+  if (temp_shape.size() == 1) {
+    temp_shape.insert(temp_shape.begin(), 1);
+  }
   temp_shape.insert(temp_shape.end() - 2, split_k);
   array intermediate(temp_shape, x.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
