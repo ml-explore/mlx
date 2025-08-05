@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 
+#include <iostream>
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
@@ -81,7 +82,7 @@ class EmptyGroup : public GroupImpl {
 } // namespace detail
 
 bool is_available() {
-  return mpi::is_available() || ring::is_available();
+  return mpi::is_available() || ring::is_available() || nccl::is_available();
 }
 
 int Group::rank() const {

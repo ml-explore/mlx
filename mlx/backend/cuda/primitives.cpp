@@ -17,28 +17,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
-namespace distributed {
-void AllReduce::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
-  // Here I assume for now that in is donatable and contiguous.
-  // TODO
-
-  auto& input = inputs[0];
-  auto& output = outputs[0];
-
-  output.copy_shared_buffer(input);
-  auto& s = stream();
-  switch (reduce_type_) {
-    case Sum:
-      distributed::detail::all_sum(group(), input, output, s);
-      break;
-    default:
-      throw std::runtime_error("Only all reduce sum is supported for now");
-  }
-}
-} // namespace distributed
-
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
@@ -79,10 +57,11 @@ NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(CustomKernel)
 } // namespace fast
 
-namespace distributed {
-NO_GPU_MULTI(AllGather)
-NO_GPU_MULTI(Send)
-NO_GPU_MULTI(Recv)
-} // namespace distributed
+// namespace distributed {
+// NO_GPU_MULTI(AllReduce)
+// NO_GPU_MULTI(AllGather)
+// NO_GPU_MULTI(Send)
+// NO_GPU_MULTI(Recv)
+// } // namespace distributed
 
 } // namespace mlx::core

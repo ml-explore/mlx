@@ -1,15 +1,5 @@
-# Find the nccl libraries
-#
-# The following variables are optionally searched for defaults NCCL_ROOT_DIR:
-# Base directory where all NCCL components are found NCCL_INCLUDE_DIR: Directory
-# where NCCL header is found NCCL_LIB_DIR: Directory where NCCL library is found
-#
-# The following are set after configuration is done: NCCL_FOUND
-# NCCL_INCLUDE_DIRS NCCL_LIBRARIES
-#
-# The path hints include CUDA_TOOLKIT_ROOT_DIR seeing as some folks install NCCL
-# in the same location as the CUDA toolkit. See
-# https://github.com/caffe2/caffe2/issues/1601
+# FindNCCL.cmake
+# This module finds the NVIDIA NCCL library and its include directories.
 
 set(NCCL_ROOT_DIR
     $ENV{NCCL_ROOT_DIR}

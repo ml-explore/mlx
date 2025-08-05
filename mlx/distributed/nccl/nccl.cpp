@@ -271,7 +271,12 @@ class NCCLGroup : public GroupImpl {
   void all_sum(const array& input, array& output, Stream stream) override {
     detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
       using T = typename decltype(type_tag)::type;
-      detail::all_reduce_impl<T>(input, output, stream, dt, ncclSum);
+      all_reduce_impl<T>(
+          input, 
+          output, 
+          stream, 
+          dt, 
+          ncclSum);
     });
   }
 
@@ -281,6 +286,8 @@ class NCCLGroup : public GroupImpl {
 
   void all_gather(const array& input, array& output, Stream stream) override {
     detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      auto& encoder = cu::get_command_encoder(stream);
+
       using T = typename decltype(type_tag)::type;
       CHECK_NCCL(ncclAllGather(
           input.data<T>(),
@@ -288,12 +295,14 @@ class NCCLGroup : public GroupImpl {
           input.size(),
           dt,
           comm_,
-          cu::get_stream(stream).last_cuda_stream()));
+          encoder.stream()));
     });
   }
 
   void send(const array& input, int dst, Stream stream) override {
     detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      auto& encoder = cu::get_command_encoder(stream);
+
       using T = typename decltype(type_tag)::type;
       CHECK_NCCL(ncclSend(
           input.data<T>(),
@@ -301,20 +310,22 @@ class NCCLGroup : public GroupImpl {
           dt,
           dst,
           comm_,
-          cu::get_stream(stream).last_cuda_stream()));
+          encoder.stream()));
     });
   }
 
   void recv(array& output, int src, Stream stream) override {
     detail::dispatch_dtype(output, [&](auto type_tag, ncclDataType_t dt) {
       using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+
       CHECK_NCCL(ncclRecv(
           output.data<T>(),
           output.size(),
           dt,
           src,
           comm_,
-          cu::get_stream(stream).last_cuda_stream()));
+          encoder.stream()));
     });
   }
 
@@ -339,6 +350,9 @@ class NCCLGroup : public GroupImpl {
       Stream stream,
       ncclDataType_t dt,
       ncclRedOp_t op) {
+    
+    auto& encoder = cu::get_command_encoder(stream);
+
     CHECK_NCCL(ncclAllReduce(
         input.data<T>(),
         output.data<T>(),
@@ -346,7 +360,9 @@ class NCCLGroup : public GroupImpl {
         dt,
         op,
         comm_,
-        cu::get_stream(stream).last_cuda_stream()));
+        encoder.stream()
+    ));
+
   }
 
   int rank_, size_;
