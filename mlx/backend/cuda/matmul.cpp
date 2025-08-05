@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 #include <nvtx3/nvtx3.hpp>
 #include <numeric>
