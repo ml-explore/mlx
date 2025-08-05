@@ -30,16 +30,15 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertEqual(len(flat_children), 3)
 
         leaves = tree_flatten(m.leaf_modules(), is_leaf=nn.Module.is_module)
-        if isinstance(leaves, list):
-            self.assertEqual(len(leaves), 4)
-            self.assertEqual(leaves[0][0], "layers.0.layers.0")
-            self.assertEqual(leaves[1][0], "layers.1.layers.0")
-            self.assertEqual(leaves[2][0], "layers.1.layers.1")
-            self.assertEqual(leaves[3][0], "layers.2")
-            self.assertTrue(leaves[0][1] is m.layers[0].layers[0])
-            self.assertTrue(leaves[1][1] is m.layers[1].layers[0])
-            self.assertTrue(leaves[2][1] is m.layers[1].layers[1])
-            self.assertTrue(leaves[3][1] is m.layers[2])
+        self.assertEqual(len(leaves), 4)
+        self.assertEqual(leaves[0][0], "layers.0.layers.0")
+        self.assertEqual(leaves[1][0], "layers.1.layers.0")
+        self.assertEqual(leaves[2][0], "layers.1.layers.1")
+        self.assertEqual(leaves[3][0], "layers.2")
+        self.assertTrue(leaves[0][1] is m.layers[0].layers[0])
+        self.assertTrue(leaves[1][1] is m.layers[1].layers[0])
+        self.assertTrue(leaves[2][1] is m.layers[1].layers[1])
+        self.assertTrue(leaves[3][1] is m.layers[2])
 
         m.eval()
 
