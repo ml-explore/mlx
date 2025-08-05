@@ -78,13 +78,13 @@ pip install mlx
 To install the CUDA backend on Linux, run:
 
 ```bash
-pip install "mlx[cuda]"
+pip install mlx[cuda]
 ```
 
 To install a CPU-only Linux package, run:
 
 ```bash
-pip install "mlx[cpu]"
+pip install mlx[cpu]
 ```
 
 Checkout the
