@@ -200,7 +200,7 @@ void shared_buffer_reshape(
 array swapaxes_in_eval(const array& x, int axis1, int axis2);
 
 template <typename T>
-inline std::vector<T> remove_index(std::vector<T> vec, size_t index) {
+inline SmallVector<T> remove_index(SmallVector<T> vec, size_t index) {
   vec.erase(std::next(vec.begin(), index));
   return vec;
 }

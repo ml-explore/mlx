@@ -15,6 +15,7 @@
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
+#include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 #include "mlx/mlx.h"
@@ -303,7 +304,7 @@ void init_array(nb::module_& m) {
           R"pbdoc(The number of bytes in the array.)pbdoc")
       .def_prop_ro(
           "shape",
-          [](const mx::array& a) { return nb::tuple(nb::cast(a.shape())); },
+          [](const mx::array& a) { return nb::cast(a.shape()); },
           R"pbdoc(
           The shape of the array as a Python tuple.
 

@@ -9,7 +9,7 @@
 
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/ops.h"
-
+#include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 namespace mx = mlx::core;

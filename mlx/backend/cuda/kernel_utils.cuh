@@ -101,7 +101,7 @@ inline constexpr bool is_inexact_v = is_floating_v<T> || is_complex_v<T>;
 
 // Utility to copy data from vector to array in host.
 template <int NDIM = MAX_NDIM, typename T = int32_t>
-inline cuda::std::array<T, NDIM> const_param(const std::vector<T>& vec) {
+inline cuda::std::array<T, NDIM> const_param(const SmallVector<T>& vec) {
   if (vec.size() > NDIM) {
     throw std::runtime_error(
         fmt::format("ndim can not be larger than {}.", NDIM));

@@ -16,6 +16,7 @@
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
+#include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 namespace mx = mlx::core;

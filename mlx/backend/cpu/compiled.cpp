@@ -288,6 +288,14 @@ void Compiled::eval_cpu(
   auto [contiguous, shape, strides] =
       compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
+  // Force allocating shape/strides on heap so we can take their data() first
+  // and then std::move them.
+  // TODO: Refactor code to avoid heap allocation.
+  shape.grow();
+  for (auto& s : strides) {
+    s.grow();
+  }
+
   // Collect function input arguments.
   std::vector<void*> args;
   int strides_index = 1;
