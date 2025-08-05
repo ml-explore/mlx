@@ -274,13 +274,11 @@ if __name__ == "__main__":
     #  - Package name is back-end specific, e.g mlx-metal
     if build_stage != 2:
         if build_stage == 1:
-            install_requires += [
-                f'mlx-metal=={version}; platform_system == "Darwin"',
-                f'mlx-cuda=={version}; extra != "cpu" and platform_system == "Linux"',
-            ]
-            extras["cpu"] = [
-                f'mlx-cpu=={version}; extra == "cpu" and platform_system == "Linux"'
-            ]
+            install_requires.append(
+                f'mlx-metal=={version}; platform_system == "Darwin"'
+            )
+            extras["cuda"] = [f'mlx-cuda=={version}; platform_system == "Linux"']
+            extras["cpu"] = [f'mlx-cpu=={version}; platform_system == "Linux"']
 
         _setup(
             name="mlx",
