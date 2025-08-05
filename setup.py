@@ -276,10 +276,10 @@ if __name__ == "__main__":
         if build_stage == 1:
             install_requires += [
                 f'mlx-metal=={version}; platform_system == "Darwin"',
-                f'mlx-cuda=={version}; extra != "cpu" and platform_system == "linux"',
+                f'mlx-cuda=={version}; extra != "cpu" and platform_system == "Linux"',
             ]
             extras["cpu"] = [
-                f'mlx-cpu=={version}; extra == "cpu" and platform_system == "linux"'
+                f'mlx-cpu=={version}; extra == "cpu" and platform_system == "Linux"'
             ]
 
         _setup(
