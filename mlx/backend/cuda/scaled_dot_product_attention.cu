@@ -1068,8 +1068,7 @@ void ScaledDotProductAttention::eval_gpu(
           flags);
     }
 
-    // return sdpa_vector_fallback(s, encoder, q, k, v, scale_, o, do_causal_);
-    return sdpa_cudnn(s, encoder, q, k, v, scale_, o, do_causal_);
+    return sdpa_vector_fallback(s, encoder, q, k, v, scale_, o, do_causal_);
   }
 
   // Full attention mode
