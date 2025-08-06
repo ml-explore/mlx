@@ -104,7 +104,7 @@ struct CommandEncoder {
   };
 
   // Outputs of all kernels in the encoder including temporaries
-  std::unordered_set<const void*> outputs() {
+  std::unordered_set<const void*>& outputs() {
     return all_outputs_;
   };
 
