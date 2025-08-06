@@ -4,6 +4,8 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 
+namespace mlx::core {
+
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
