@@ -75,8 +75,13 @@ macOS, run:
 pip install mlx
 ```
 
-On Linux, the same command (``pip install mlx``) will install the CUDA backend
-by default. To install a CPU-only Linux package, run:
+To install the CUDA backend on Linux, run:
+
+```bash
+pip install mlx[cuda]
+```
+
+To install a CPU-only Linux package, run:
 
 ```bash
 pip install mlx[cpu]
