@@ -394,14 +394,14 @@ below.
         out.set_data(allocator::malloc(out.nbytes()));
 
         // Resolve name of kernel
-        std::ostringstream kname;
-        kname << "axpby_" << "general_" << type_to_name(out);
+        std::stream kname;
+        kname = "axpby_general_" + type_to_name(out);
 
         // Load the metal library
-        auto lib = d.get_library("mlx_ext");
+        auto lib = d.get_library("mlx_ext", current_binary_dir());
 
         // Make a kernel from this metal library
-        auto kernel = d.get_kernel(kname.str(), lib);
+        auto kernel = d.get_kernel(kname, lib);
 
         // Prepare to encode kernel
         auto& compute_encoder = d.get_command_encoder(s.index);
