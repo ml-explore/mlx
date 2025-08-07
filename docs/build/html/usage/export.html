@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Exporting Functions &#8212; MLX 0.27.1 documentation</title>
+    <title>Exporting Functions &#8212; MLX 0.28.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=cbfecad8"></script>
+    <script src="../_static/documentation_options.js?v=60827de6"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -137,8 +137,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.27.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.27.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.28.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.28.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -1050,7 +1050,7 @@ parameters, pass them as inputs to the <code class="docutils literal notranslate
   <span class="n">model</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">tree_unflatten</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">())))</span>
   <span class="k">return</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
-<span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">tree_flatten</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">()))</span>
+<span class="n">params</span> <span class="o">=</span> <span class="n">tree_flatten</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">destination</span><span class="o">=</span><span class="p">{})</span>
 <span class="n">mx</span><span class="o">.</span><span class="n">export_function</span><span class="p">(</span><span class="s2">&quot;model.mlxfn&quot;</span><span class="p">,</span> <span class="n">call</span><span class="p">,</span> <span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">4</span><span class="p">),),</span> <span class="n">params</span><span class="p">)</span>
 </pre></div>
 </div>
