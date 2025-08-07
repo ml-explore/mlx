@@ -223,57 +223,6 @@ struct RegisterTile {
   }
 };
 
-/**
- * A simple container of multiple Tile16x16.
- *
- * Provides utility functions for loading and manipulating collections of basic
- * tiles.
- */
-template <typename T, int ROWS_, int COLS_>
-struct RegisterTile {
-  static constexpr int ROWS = ROWS_;
-  static constexpr int COLS = COLS_;
-  static constexpr int TILES_X = COLS / 16;
-  static constexpr int TILES_Y = ROWS / 16;
-
-  Tile16x16<T> data[TILES_X * TILES_Y];
-
-  __device__ inline void fill(T v) {
-    MLX_UNROLL
-    for (int i = 0; i < TILES_Y; i++) {
-      MLX_UNROLL
-      for (int j = 0; j < TILES_X; j++) {
-        data[i * TILES_X + j].fill(v);
-      }
-    }
-  }
-
-  template <typename Tile>
-  __device__ inline void
-  load(Tile& tile, uint32_t base_address, int row, int col) {
-    MLX_UNROLL
-    for (int i = 0; i < TILES_Y; i++) {
-      MLX_UNROLL
-      for (int j = 0; j < TILES_X; j++) {
-        data[i * TILES_X + j].load(
-            tile.loc(base_address, row + i * 16, col + j * 16));
-      }
-    }
-  }
-
-  template <typename U>
-  __device__ inline void store_global(U* x, int N, int row, int col) {
-    MLX_UNROLL
-    for (int i = 0; i < TILES_Y; i++) {
-      MLX_UNROLL
-      for (int j = 0; j < TILES_X; j++) {
-        data[i * TILES_X + j].store_global(
-            x + (row + i * 16) * N + col + j * 16, N);
-      }
-    }
-  }
-};
-
 template <typename T, int ROWS_, int COLS_>
 struct SharedTile {
   static constexpr int ROWS = ROWS_;
