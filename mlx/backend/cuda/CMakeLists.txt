@@ -39,6 +39,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/rope.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/scan.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
