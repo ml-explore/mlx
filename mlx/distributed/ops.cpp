@@ -31,8 +31,7 @@ array all_sum(
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(
-          to_stream(s, Device::cpu), group, AllReduce::Sum),
+      std::make_shared<AllReduce>(to_stream(s), group, AllReduce::Sum),
       {x});
 }
 

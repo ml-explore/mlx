@@ -31,6 +31,10 @@ void init_distributed(nb::module_& parent_module) {
           "rank", &mx::distributed::Group::rank, "Get the rank of this process")
       .def("size", &mx::distributed::Group::size, "Get the size of the group")
       .def(
+          "backend",
+          &mx::distributed::Group::backend,
+          "Get the backend used for communication")
+      .def(
           "split",
           &mx::distributed::Group::split,
           "color"_a,
@@ -79,7 +83,7 @@ void init_distributed(nb::module_& parent_module) {
             in case ``mx.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
           backend (str, optional): Which distributed backend to initialize.
-            Possible values ``mpi``, ``ring``, ``any``. If set to ``any`` all
+            Possible values ``mpi``, ``ring``, ``nccl``, ``any``. If set to ``any`` all
             available backends are tried and the first one that succeeds
             becomes the global group which will be returned in subsequent
             calls. Default: ``any``
