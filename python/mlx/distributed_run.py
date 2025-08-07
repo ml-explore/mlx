@@ -418,7 +418,7 @@ def launch_mpi(parser, hosts, args, command):
 def launch_nccl(parser, hosts, args, command):
     master_host = hosts[0].ips[0]
     master_port = args.nccl_port
-    world_size = args.nproc_per_node * args.nnodes
+    world_size = args.repeat_hosts * len(hosts)
 
     base_env = os.environ.copy()
     base_env.update(
@@ -813,19 +813,6 @@ def main():
         type=int,
         default=12345,
         help="The port to use for the NCCL communication (only for nccl backend)",
-    )
-    parser.add_argument(
-        "--nproc-per-node",
-        default=8,
-        type=int,
-        help="The number of processes to launch on each node (only for nccl backend)",
-    )
-    # TODO: Add support for multiple nodes
-    parser.add_argument(
-        "--nnodes",
-        default=1,
-        type=int,
-        help="The number of nodes to launch (only for nccl backend)",
     )
 
     args, rest = parser.parse_known_args()
