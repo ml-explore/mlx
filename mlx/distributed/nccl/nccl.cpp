@@ -285,7 +285,7 @@ class NCCLGroup : public GroupImpl {
   }
 
   void send(const array& input, int dst, Stream stream) override {
-    trhow std::runtime_error("[nccl] Send not supported in NCCL backend.");
+    throw std::runtime_error("[nccl] Send not supported in NCCL backend.");
   }
 
   void recv(array& output, int src, Stream stream) override {
