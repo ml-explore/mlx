@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Optimizers &#8212; MLX 0.27.1 documentation</title>
+    <title>Optimizers &#8212; MLX 0.28.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=cbfecad8"></script>
+    <script src="../_static/documentation_options.js?v=60827de6"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -138,8 +138,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.27.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.27.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.28.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.28.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -963,14 +963,14 @@ the saved state. Here’s a simple example:</p>
 <span class="n">optimizer</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
 
 <span class="c1"># Save the state</span>
-<span class="n">state</span> <span class="o">=</span> <span class="n">tree_flatten</span><span class="p">(</span><span class="n">optimizer</span><span class="o">.</span><span class="n">state</span><span class="p">)</span>
-<span class="n">mx</span><span class="o">.</span><span class="n">save_safetensors</span><span class="p">(</span><span class="s2">&quot;optimizer.safetensors&quot;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">tree_flatten</span><span class="p">(</span><span class="n">optimizer</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">destination</span><span class="o">=</span><span class="p">{})</span>
+<span class="n">mx</span><span class="o">.</span><span class="n">save_safetensors</span><span class="p">(</span><span class="s2">&quot;optimizer.safetensors&quot;</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
 
 <span class="c1"># Later on, for example when loading from a checkpoint,</span>
 <span class="c1"># recreate the optimizer and load the state</span>
 <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">)</span>
 
-<span class="n">state</span> <span class="o">=</span> <span class="n">tree_unflatten</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;optimizer.safetensors&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">tree_unflatten</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s2">&quot;optimizer.safetensors&quot;</span><span class="p">))</span>
 <span class="n">optimizer</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">state</span>
 </pre></div>
 </div>
