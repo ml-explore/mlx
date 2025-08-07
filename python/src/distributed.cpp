@@ -31,10 +31,6 @@ void init_distributed(nb::module_& parent_module) {
           "rank", &mx::distributed::Group::rank, "Get the rank of this process")
       .def("size", &mx::distributed::Group::size, "Get the size of the group")
       .def(
-          "backend",
-          &mx::distributed::Group::backend,
-          "Get the backend used for communication")
-      .def(
           "split",
           &mx::distributed::Group::split,
           "color"_a,
