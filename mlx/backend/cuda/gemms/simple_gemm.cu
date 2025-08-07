@@ -26,15 +26,13 @@ void simple_gemm(
 
     auto kernel = ab_t_aligned<DataType, BM, BN, BK>;
     cudaFuncSetAttribute(
-        kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 98304);
-    cudaFuncSetAttribute(
-        kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+        kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
 
     dim3 grid(N / BN, M / BM);
     enc.add_kernel_node(
         kernel,
         grid,
-        4 * WARP_SIZE,
+        8 * WARP_SIZE,
         2 * sizeof(DataType) * (BM * BK + BN * BK),
         a.data<DataType>(),
         b.data<DataType>(),
