@@ -51,14 +51,14 @@ the saved state. Here's a simple example:
    optimizer.update(model, grads)
 
    # Save the state
-   state = tree_flatten(optimizer.state)
-   mx.save_safetensors("optimizer.safetensors", dict(state))
+   state = tree_flatten(optimizer.state, destination={})
+   mx.save_safetensors("optimizer.safetensors", state)
 
    # Later on, for example when loading from a checkpoint,
    # recreate the optimizer and load the state
    optimizer = optim.Adam(learning_rate=1e-2)
 
-   state = tree_unflatten(list(mx.load("optimizer.safetensors").items()))
+   state = tree_unflatten(mx.load("optimizer.safetensors"))
    optimizer.state = state
 
 Note, not every optimizer configuation parameter is saved in the state. For
