@@ -491,19 +491,27 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
         switch (in.dtype()) {
           case bool_:
           case uint8:
+            reduce_dispatch_sum_prod<uint8_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint16:
+            reduce_dispatch_sum_prod<uint16_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint32:
+            reduce_dispatch_sum_prod<uint32_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint64:
+            reduce_dispatch_sum_prod<uint64_t>(in, out, reduce_type_, axes_);
+            break;
           case int8:
             reduce_dispatch_sum_prod<int8_t>(in, out, reduce_type_, axes_);
             break;
           case int16:
-          case uint16:
             reduce_dispatch_sum_prod<int16_t>(in, out, reduce_type_, axes_);
             break;
           case int32:
-          case uint32:
             reduce_dispatch_sum_prod<int32_t>(in, out, reduce_type_, axes_);
             break;
           case int64:
-          case uint64:
             reduce_dispatch_sum_prod<int64_t>(in, out, reduce_type_, axes_);
             break;
           case float16:

@@ -915,6 +915,23 @@ TEST_CASE("test reduction ops") {
     CHECK(array_equal(sum(x, 1), array({3.0f, 6.0f}, {2})).item<bool>());
   }
 
+  // Test unsigned sum
+  {
+    const int num_elems = 1000;
+
+    auto x = astype(full({num_elems}, 255), uint8);
+    CHECK_EQ(sum(x, Device::cpu).item<uint32_t>(), 255 * num_elems);
+
+    x = astype(full({num_elems}, 65535), uint16);
+    CHECK_EQ(sum(x, Device::cpu).item<uint32_t>(), 65535 * num_elems);
+
+    x = full({3, 3, 3}, 10000, uint32);
+    CHECK_EQ(sum(x, Device::cpu).item<uint32_t>(), 270000);
+
+    x = full({3, 3, 3}, 10000, uint64);
+    CHECK_EQ(sum(x, Device::cpu).item<uint64_t>(), 270000);
+  }
+
   // Test prod
   {
     auto x = array({});
@@ -945,6 +962,21 @@ TEST_CASE("test reduction ops") {
     x = array({true, true, true, false, true, false}, {2, 3});
     CHECK(array_equal(prod(x, 0), array({false, true, false})).item<bool>());
     CHECK(array_equal(prod(x, 1), array({true, false})).item<bool>());
+  }
+
+  // Test unsigned prod
+  {
+    auto x = array({255, 255}, {2}, uint8);
+    CHECK_EQ(prod(x, Device::cpu).item<uint32_t>(), 65025);
+
+    x = array({65535, 2}, {2}, uint16);
+    CHECK_EQ(prod(x, Device::cpu).item<uint32_t>(), 131070);
+
+    x = array({100000, 2}, {2}, uint32);
+    CHECK_EQ(prod(x, Device::cpu).item<uint32_t>(), 200000);
+
+    x = array({100000, 2}, {2}, uint64);
+    CHECK_EQ(prod(x, Device::cpu).item<uint64_t>(), 200000);
   }
 
   // Test all
