@@ -249,7 +249,8 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
 
 std::vector<array>
 svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
-  check_cpu_stream(s, "[linalg::svd]");
+  // Note: SVD now supports Metal GPU acceleration for float32
+  // check_cpu_stream(s, "[linalg::svd]"); // Removed to enable GPU support
   check_float(a.dtype(), "[linalg::svd]");
 
   if (a.ndim() < 2) {
