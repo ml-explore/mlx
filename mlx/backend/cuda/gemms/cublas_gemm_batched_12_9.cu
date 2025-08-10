@@ -6,7 +6,9 @@
 
 #include <cooperative_groups.h>
 
-namespace mlx::core::cu {
+namespace mlx::core {
+
+namespace cu {
 
 namespace cg = cooperative_groups;
 
@@ -128,6 +130,10 @@ __global__ void set_addmm_device_pointers_g(
       out_start + item_size * index * batch_stride;
 }
 
+} // namespace cu
+
+namespace {
+
 void set_pointer_mode(cublasLtMatrixLayout_t desc, int batch_count) {
   auto batch_mode = CUBLASLT_BATCH_MODE_POINTER_ARRAY;
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
@@ -139,14 +145,16 @@ void set_pointer_mode(cublasLtMatrixLayout_t desc, int batch_count) {
       desc, CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &batch_count, sizeof(int32_t)));
 }
 
-void Matmul::run_batched(
+} // namespace
+
+void CublasGemm::run_batched(
     cu::CommandEncoder& encoder,
     array& out,
     const array& a,
     const array& b,
-    const mlx::core::Shape& batch_shape,
-    const mlx::core::Strides& a_batch_strides,
-    const mlx::core::Strides& b_batch_strides) {
+    const Shape& batch_shape,
+    const Strides& a_batch_strides,
+    const Strides& b_batch_strides) {
   int batch_count = out.size() / (M_ * N_);
   set_pointer_mode(a_desc_, batch_count);
   set_pointer_mode(b_desc_, batch_count);
@@ -213,7 +221,7 @@ void Matmul::run_batched(
   auto a_pointers = pointers.data<int8_t*>();
   auto b_pointers = a_pointers + batch_count;
   auto out_pointers = b_pointers + batch_count;
-  run_impl(
+  execute(
       encoder,
       reinterpret_cast<void*>(out_pointers),
       reinterpret_cast<void*>(a_pointers),
@@ -221,16 +229,16 @@ void Matmul::run_batched(
       nullptr);
 }
 
-void Matmul::run_batched(
+void CublasGemm::run_batched(
     cu::CommandEncoder& encoder,
     array& out,
     const array& a,
     const array& b,
     const array& c,
-    const mlx::core::Shape& batch_shape,
-    const mlx::core::Strides& a_batch_strides,
-    const mlx::core::Strides& b_batch_strides,
-    const mlx::core::Strides& c_batch_strides,
+    const Shape& batch_shape,
+    const Strides& a_batch_strides,
+    const Strides& b_batch_strides,
+    const Strides& c_batch_strides,
     float alpha,
     float beta) {
   int batch_count = out.size() / (M_ * N_);
@@ -306,7 +314,7 @@ void Matmul::run_batched(
   auto b_pointers = a_pointers + batch_count;
   auto c_pointers = b_pointers + batch_count;
   auto out_pointers = c_pointers + batch_count;
-  run_impl(
+  execute(
       encoder,
       reinterpret_cast<void*>(out_pointers),
       reinterpret_cast<void*>(a_pointers),
@@ -316,4 +324,4 @@ void Matmul::run_batched(
       beta);
 }
 
-} // namespace mlx::core::cu
+} // namespace mlx::core
