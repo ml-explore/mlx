@@ -41,10 +41,6 @@ NO_GPU(Cholesky)
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
-namespace fast {
-NO_GPU_MULTI(CustomKernel)
-} // namespace fast
-
 namespace distributed {
 NO_GPU_MULTI(AllReduce)
 NO_GPU_MULTI(AllGather)
