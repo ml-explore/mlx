@@ -22,7 +22,7 @@ void simple_gemm(
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     constexpr int BM = 128;
     constexpr int BN = 128;
-    constexpr int BK = 64;
+    constexpr int BK = 32;
 
     auto kernel = ab_t_aligned<DataType, BM, BN, BK>;
     cudaFuncSetAttribute(
@@ -33,7 +33,7 @@ void simple_gemm(
         kernel,
         grid,
         8 * WARP_SIZE,
-        2 * sizeof(DataType) * (BM * BK + BN * BK),
+        4 * sizeof(DataType) * (BM * BK + BN * BK),
         a.data<DataType>(),
         b.data<DataType>(),
         out.data<DataType>(),
