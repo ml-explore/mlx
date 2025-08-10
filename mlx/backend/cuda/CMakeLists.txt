@@ -26,6 +26,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cutlass_gemm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simple_gemm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
@@ -174,3 +175,12 @@ target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
 # Install CCCL headers for JIT.
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+
+# Fetch and make available cutlass
+FetchContent_Declare(
+  cutlass
+  GIT_REPOSITORY https://github.com/NVIDIA/cutlass.git
+  GIT_TAG v4.1.0)
+FetchContent_Populate(cutlass)
+target_include_directories(
+  mlx PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
