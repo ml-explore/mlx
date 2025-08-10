@@ -3,6 +3,7 @@
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
+#include "mlx/backend/cuda/gemms/cutlass_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/cuda/gemms/simple_gemm.h"
 #include "mlx/backend/gpu/copy.h"
@@ -101,6 +102,13 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       b_transposed && batch_count == 1 &&
       env::get_var("MLX_ENABLE_TEST_GEMM", 0) == 1) {
     cu::simple_gemm(a, b, out, M, N, K, encoder);
+    return;
+  }
+
+  if (M % 512 == 0 && N % 512 == 0 && K % 512 == 0 && !a_transposed &&
+      b_transposed && batch_count == 1 &&
+      env::get_var("MLX_ENABLE_TEST_GEMM", 0) == 2) {
+    cu::cutlass_gemm(a, b, out, M, N, K, encoder);
     return;
   }
 
