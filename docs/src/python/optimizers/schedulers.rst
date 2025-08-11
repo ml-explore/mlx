@@ -8,6 +8,7 @@ Schedulers
 .. autosummary::
    :toctree: _autosummary
 
+   cosine_annealing_warm_restarts
    cosine_decay    
    exponential_decay    
    join_schedules
