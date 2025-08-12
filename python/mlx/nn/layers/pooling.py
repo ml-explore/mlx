@@ -409,6 +409,66 @@ class _AdaptivePool(Module):
         return f"output_size={self.output_size}"
 
 
+class AdaptiveAvgPool1d(_AdaptivePool):
+    r"""Applies 1-dimensional adaptive average pooling.
+
+    Spatially downsamples the input by taking the average over pooling regions
+    such that the output size is L, for any input size.
+
+    The parameter can be:
+
+    * a single ``int`` -- the target output size.
+    * ``None`` can be used to keep the input size unchanged.
+
+    Args:
+        output_size (int or None): The target output size L.
+            Can be an ``int``, or ``None`` which means the size
+            will be the same as that of the input.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn.layers as nn
+        >>> x = mx.random.normal(shape=(8, 32, 4))
+        >>> pool = nn.AdaptiveAvgPool1d(7)
+        >>> pool(x)
+        >>> pool = nn.AdaptiveAvgPool1d(None)  # No change
+        >>> pool(x)
+    """
+
+    def __init__(self, output_size: Union[int, None]):
+        super().__init__(output_size)
+
+    def __call__(self, x):
+        output_size = self.output_size
+
+        *batch_dims, L, C = x.shape
+
+        output_L = L if output_size is None else output_size
+
+        if L == output_L:
+            return x
+
+        kernel_L = L // output_L
+
+        if L % output_L == 0:
+            # Efficient path for exact division
+            new_shape = batch_dims + [output_L, kernel_L, C]
+            x_reshaped = x.reshape(new_shape)
+            return mx.mean(x_reshaped, axis=-2)
+        else:
+            # Manual indexing for non-exact division
+            stride_L = (L - kernel_L) // (output_L - 1) if output_L > 1 else 1
+
+            values = []
+            for i in range(output_L):
+                l_start = i * stride_L
+                l_end = min(l_start + kernel_L, L)
+                region = x[..., l_start:l_end, :]
+                values.append(mx.mean(region, axis=-2))
+
+            return mx.stack(values, axis=-2)
+
+
 class AdaptiveAvgPool2d(_AdaptivePool):
     r"""Applies 2-dimensional adaptive average pooling.
 
