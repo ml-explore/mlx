@@ -20,6 +20,7 @@ MLX was developed with contributions from the following individuals:
 - Paul Paczuski: Improved stability of BCE loss calculation
 - Max-Heinrich Laves: Added `conv_transpose1d`, `conv_transpose2d`, and `conv_transpose3d` ops.
 - Gökdeniz Gülmez: Added the `Muon (MomentUm Orthogonalized by Newton-schulz)` optimizer.
+- Vincent Amato: Added adaptive max pooling layers: `AdaptiveMaxPool1d`, `AdaptiveMaxPool2d`, and `AdaptiveMaxPool3d`.
 
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
