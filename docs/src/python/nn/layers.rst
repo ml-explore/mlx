@@ -9,6 +9,9 @@ Layers
    :toctree: _autosummary
    :template: nn-module-template.rst
 
+   AdaptiveMaxPool1d
+   AdaptiveMaxPool2d
+   AdaptiveMaxPool3d
    ALiBi
    AvgPool1d
    AvgPool2d
