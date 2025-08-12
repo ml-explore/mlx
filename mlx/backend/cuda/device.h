@@ -21,7 +21,7 @@ class CommandEncoder {
   struct CaptureContext {
     CaptureContext(CommandEncoder& enc);
     ~CaptureContext();
-    cudaGraph_t graph;
+    CudaGraph graph;
     CommandEncoder& enc;
     bool discard{false};
   };
@@ -115,7 +115,7 @@ class CommandEncoder {
 
   Device& device_;
   CudaStream stream_;
-  cudaGraph_t graph_;
+  CudaGraph graph_;
   Worker worker_;
   char node_count_{0};
   char graph_node_count_{0};
