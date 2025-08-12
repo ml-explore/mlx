@@ -17,6 +17,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
@@ -36,7 +37,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/init_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/rope.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/scan.cu
