@@ -77,6 +77,8 @@ from mlx.nn.layers.normalization import (
     RMSNorm,
 )
 from mlx.nn.layers.pooling import (
+    AdaptiveAvgPool2d,
+    AdaptiveAvgPool3d,
     AvgPool1d,
     AvgPool2d,
     AvgPool3d,
