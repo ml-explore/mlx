@@ -190,10 +190,7 @@ bool execute_plan(
   cudnnSetStream(handle, encoder.stream());
 
 #if CUDNN_VERSION >= 90500 && MLX_USE_CUDNN_NATIVE_CUDA_GRAPH_API
-  cudaGraph_t graph;
-  cudaGraphCreate(&graph, 0);
-  std::unique_ptr<cudaGraph_t, void (*)(cudaGraph_t*)> graph_freer(
-      &graph, [](cudaGraph_t* p) { cudaGraphDestroy(*p); });
+  CudaGraph graph(encoder.device());
   if (cudnnBackendPopulateCudaGraph(
           handle, plan.get_raw_desc(), variantPack.get_raw_desc(), graph) !=
       CUDNN_STATUS_SUCCESS) {
