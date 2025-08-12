@@ -316,7 +316,10 @@ MetalKernelFunction metal_kernel(
             threadgroup,
             shape_infos,
             ensure_row_contiguous,
-            init_value),
+            init_value,
+            std::vector<ScalarArg>{},
+            false,
+            0),
         std::move(inputs));
   };
 }

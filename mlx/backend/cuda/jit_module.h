@@ -68,9 +68,11 @@ struct KernelArgs {
   using Arg = std::variant<
       std::monostate,
       CUdeviceptr,
+      bool,
       int32_t,
       uint32_t,
       int64_t,
+      float,
       SmallVector<const void*>,
       SmallVector<int32_t>,
       SmallVector<int64_t>>;
@@ -83,6 +85,11 @@ class JitModule {
       Device& device,
       const std::string& module_name,
       const KernelBuilder& builder);
+  JitModule(
+      Device& device,
+      const std::string& module_name,
+      const std::string& ptx,
+      const std::vector<std::string>& kernel_names);
   ~JitModule();
 
   JitModule(const JitModule&) = delete;
@@ -100,5 +107,11 @@ JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
     const KernelBuilder& builder);
+
+JitModule& get_jit_module(
+    const mlx::core::Device& device,
+    const std::string& name,
+    const std::string& ptx,
+    const std::vector<std::string>& kernel_names);
 
 } // namespace mlx::core::cu

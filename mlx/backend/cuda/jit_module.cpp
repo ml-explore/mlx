@@ -316,6 +316,31 @@ JitModule::JitModule(
   }
 }
 
+JitModule::JitModule(
+    Device& device,
+    const std::string& module_name,
+    const std::string& ptx,
+    const std::vector<std::string>& kernel_names) {
+  // Load module.
+  char jit_log[4089] = {};
+  CUjit_option options[] = {
+      CU_JIT_ERROR_LOG_BUFFER, CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES};
+  void* values[] = {jit_log, reinterpret_cast<void*>(std::size(jit_log) - 1)};
+  CUresult jit_result = cuModuleLoadDataEx(
+      &module_, ptx.c_str(), std::size(options), options, values);
+  if (jit_result != CUDA_SUCCESS) {
+    throw std::runtime_error(fmt::format(
+        "Failed to load compiled {} kernel: {}.", module_name, jit_log));
+  }
+
+  // Load kernels.
+  for (const auto& name : kernel_names) {
+    CUfunction kernel;
+    CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, name.c_str()));
+    kernels_[name] = kernel;
+  }
+}
+
 JitModule::~JitModule() {
   CHECK_CUDA_ERROR(cuModuleUnload(module_));
 }
@@ -342,6 +367,20 @@ JitModule& get_jit_module(
   auto it = map.find(name);
   if (it == map.end()) {
     it = map.try_emplace(name, cu::device(device), name, builder).first;
+  }
+  return it->second;
+}
+
+JitModule& get_jit_module(
+    const mlx::core::Device& device,
+    const std::string& name,
+    const std::string& ptx,
+    const std::vector<std::string>& kernel_names) {
+  auto& map = get_jit_module_cache();
+  auto it = map.find(name);
+  if (it == map.end()) {
+    it = map.try_emplace(name, cu::device(device), name, ptx, kernel_names)
+             .first;
   }
   return it->second;
 }

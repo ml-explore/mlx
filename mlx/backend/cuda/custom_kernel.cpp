@@ -234,9 +234,45 @@ MetalKernelFunction metal_kernel(
             threadgroup,
             shape_infos,
             ensure_row_contiguous,
-            init_value),
+            init_value,
+            std::vector<ScalarArg>{},
+            false,
+            0),
         std::move(inputs));
   };
+}
+
+std::vector<array> precompiled_custom_kernel(
+    const std::string& name,
+    const std::string& compiled_source,
+    const std::vector<array>& inputs,
+    const std::vector<Shape>& output_shapes,
+    const std::vector<Dtype>& output_dtypes,
+    const std::vector<ScalarArg>& scalars,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    int shared_memory,
+    std::optional<float> init_value,
+    bool ensure_row_contiguous,
+    StreamOrDevice s) {
+  std::vector<CustomKernelShapeInfo> shape_infos(
+      inputs.size(), CustomKernelShapeInfo{false, false, false});
+  return array::make_arrays(
+      output_shapes,
+      output_dtypes,
+      std::make_shared<CustomKernel>(
+          to_stream(s),
+          name,
+          compiled_source,
+          grid,
+          threadgroup,
+          shape_infos,
+          ensure_row_contiguous,
+          init_value,
+          scalars,
+          true,
+          shared_memory),
+      inputs);
 }
 
 void CustomKernel::eval_gpu(
@@ -274,10 +310,19 @@ void CustomKernel::eval_gpu(
   }
 
   // Compile the custom kernel
-  std::string kernel_name = "mlx::core::cu::" + name_;
-  cu::JitModule& mod = cu::get_jit_module(s.device, name_, [&]() {
-    return std::make_pair(source_, std::vector<std::string>{kernel_name});
-  });
+  std::string kernel_name =
+      (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
+  auto get_module = [&]() -> cu::JitModule& {
+    if (is_precompiled_) {
+      return cu::get_jit_module(
+          s.device, name_, source_, std::vector<std::string>{kernel_name});
+    } else {
+      return cu::get_jit_module(s.device, name_, [&]() {
+        return std::make_pair(source_, std::vector<std::string>{kernel_name});
+      });
+    }
+  };
+  cu::JitModule& mod = get_module();
 
   // Make the arguments
   cu::KernelArgs args;
@@ -298,6 +343,15 @@ void CustomKernel::eval_gpu(
   for (auto& out : outputs) {
     args.append(out);
   }
+  for (auto& s : scalar_arguments_) {
+    if (std::holds_alternative<bool>(s)) {
+      args.append(std::get<bool>(s));
+    } else if (std::holds_alternative<int>(s)) {
+      args.append(std::get<int>(s));
+    } else if (std::holds_alternative<float>(s)) {
+      args.append(std::get<float>(s));
+    }
+  }
 
   // Make the grid
   const auto [tx, ty, tz] = threadgroup_;
@@ -313,8 +367,17 @@ void CustomKernel::eval_gpu(
   for (const auto& out : outputs) {
     encoder.set_output_array(out);
   }
+  for (const auto& t : copies) {
+    encoder.add_temporary(t);
+  }
   auto kernel = mod.get_kernel(kernel_name);
-  encoder.add_kernel_node(kernel, grid, block, 0, args.args());
+  if (shared_memory_ > 0 && shared_memory_ > 48000) {
+    cuFuncSetAttribute(
+        kernel,
+        CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+        shared_memory_);
+  }
+  encoder.add_kernel_node(kernel, grid, block, shared_memory_, args.args());
 }
 
 } // namespace mlx::core::fast
