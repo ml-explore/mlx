@@ -97,7 +97,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Invoke cublasLt
-  cu::Matmul matmul(
+  CublasGemm gemm(
       cu::device(s.device),
       a.dtype(),
       a_transposed,
@@ -111,14 +111,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_shape.back(),
       a_batch_strides.back(),
       b_batch_strides.back());
-
-  if ((batch_count / batch_shape.back()) == 1) {
-    matmul.run(encoder, out, a, b);
-    return;
-  }
-
-  matmul.run_batched(
-      encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides);
+  gemm.run(encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides);
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -186,7 +179,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Invoke cublasLt
 
-  cu::Matmul matmul(
+  CublasGemm gemm(
       cu::device(s.device),
       a.dtype(),
       a_transposed,
@@ -202,12 +195,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       a_batch_strides.back(),
       b_batch_strides.back(),
       c_batch_strides.back());
-
-  if ((batch_count / batch_shape.back()) == 1) {
-    matmul.run(encoder, out, a, b, c, alpha_, beta_);
-    return;
-  }
-  matmul.run_batched(
+  gemm.run(
       encoder,
       out,
       a,
