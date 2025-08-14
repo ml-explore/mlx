@@ -4,7 +4,6 @@
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/backend/gpu/reshape.h"
 #include "mlx/backend/gpu/slicing.h"
 
 #if defined(MLX_USE_CUDA)
