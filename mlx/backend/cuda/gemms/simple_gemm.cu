@@ -5,7 +5,28 @@
 #include "mlx/backend/cuda/steel/gemm.cuh"
 #include "mlx/dtype_utils.h"
 
+#include <iostream>
+
 namespace mlx::core::cu {
+
+namespace {
+
+template <typename Kernel>
+static void configure_smem(Kernel kernel, int SM) {
+  static bool done = false;
+  if (done) {
+    return;
+  }
+  std::cout << "configuring" << std::endl;
+  cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SM);
+  cudaFuncSetAttribute(
+      kernel,
+      cudaFuncAttributePreferredSharedMemoryCarveout,
+      cudaSharedmemCarveoutMaxShared);
+  done = true;
+}
+
+} // namespace
 
 void simple_gemm(
     const array& a,
@@ -23,17 +44,20 @@ void simple_gemm(
     constexpr int BM = 128;
     constexpr int BN = 128;
     constexpr int BK = 32;
+    constexpr int PIPE = 3;
+    constexpr int SM = PIPE * sizeof(DataType) * (BM * BK + BN * BK);
+    constexpr int WM = 2;
+    constexpr int WN = 4;
 
-    auto kernel = ab_t_aligned<DataType, BM, BN, BK>;
-    cudaFuncSetAttribute(
-        kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
+    auto kernel = ab_t_aligned<DataType, BM, BN, BK, WM, WN, PIPE>;
+    configure_smem(kernel, SM);
 
     dim3 grid(N / BN, M / BM);
     enc.add_kernel_node(
         kernel,
         grid,
-        8 * WARP_SIZE,
-        4 * sizeof(DataType) * (BM * BK + BN * BK),
+        WM * WN * WARP_SIZE,
+        SM,
         a.data<DataType>(),
         b.data<DataType>(),
         out.data<DataType>(),

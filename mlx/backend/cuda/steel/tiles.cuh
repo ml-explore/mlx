@@ -225,6 +225,8 @@ struct RegisterTile {
 
 template <typename T, int ROWS_, int COLS_>
 struct SharedTile {
+  using value_type = T;
+
   static constexpr int ROWS = ROWS_;
   static constexpr int COLS = COLS_;
   static constexpr int TILES_X = COLS / 16;
@@ -266,21 +268,24 @@ struct SharedTile {
     }
   }
 
-  // Return the location of the element at (row, col) using the swizzle.
-  __device__ static inline uint32_t loc(uint32_t ptr, int row, int col) {
+  __device__ static inline uint32_t offset(int row, int col) {
     if constexpr (swizzle_bytes > 0) {
       static constexpr int swizzle_repeat = swizzle_bytes * 8;
       static constexpr int subtile_cols = swizzle_bytes / sizeof(T);
       const int outer_idx = col / subtile_cols;
-      const uint32_t addr = ptr +
-          sizeof(T) *
-              (outer_idx * ROWS * subtile_cols + row * subtile_cols +
-               col % subtile_cols);
+      const uint32_t addr = sizeof(T) *
+          (outer_idx * ROWS * subtile_cols + row * subtile_cols +
+           col % subtile_cols);
       const int swizzle = ((addr % swizzle_repeat) >> 7) << 4;
       return (addr ^ swizzle);
     } else {
-      return ptr + sizeof(T) * (row * COLS + col);
+      return sizeof(T) * (row * COLS + col);
     }
+  }
+
+  // Return the location of the element at (row, col) using the swizzle.
+  __device__ static inline uint32_t loc(uint32_t ptr, int row, int col) {
+    return ptr + offset(row, col);
   }
 
   // Convenience functions to edit elements going through the swizzle.
@@ -308,6 +313,76 @@ struct SharedTile {
       MLX_UNROLL
       for (int i = 0; i < N; i++) {
         *ptr(data, row, col + i) = v[i];
+      }
+    }
+  }
+};
+
+template <int NUM_WARPS, typename Tile>
+struct SharedTileLoader {
+  using T = typename Tile::value_type;
+
+  static constexpr int NUM_THREADS = NUM_WARPS * 32;
+  static constexpr int ELEMENTS_PER_LOAD = sizeof(float4) / sizeof(T);
+  static constexpr int NUM_LOADS = Tile::NUMEL / ELEMENTS_PER_LOAD;
+  static constexpr int NUM_LOADS_PER_THREAD = NUM_LOADS / NUM_THREADS;
+  static constexpr int NUM_LOADS_PER_ROW = Tile::COLS / ELEMENTS_PER_LOAD;
+  static constexpr int STEP_ROWS = NUM_THREADS / NUM_LOADS_PER_ROW;
+
+  const T* x_;
+  int N_;
+  uint32_t offset_;
+
+  __device__ SharedTileLoader(const T* x, int N) : x_(x), N_(N) {
+    const int row = threadIdx.x / NUM_LOADS_PER_ROW;
+    const int col = threadIdx.x % NUM_LOADS_PER_ROW;
+
+    x_ += row * N + col * ELEMENTS_PER_LOAD;
+    offset_ = Tile::offset(row, col * ELEMENTS_PER_LOAD);
+  }
+
+  __device__ inline void load_async(uint32_t base_address) {
+    MLX_UNROLL
+    for (int i = 0; i < NUM_LOADS_PER_THREAD; i++) {
+      cp_async<16>(
+          base_address + offset_ + i * STEP_ROWS * sizeof(T) * Tile::COLS,
+          x_ + i * STEP_ROWS * N_);
+    }
+  }
+
+  __device__ inline void next() {
+    x_ += Tile::COLS;
+  }
+};
+
+template <typename Tile>
+struct RegisterTileLoader {
+  using T = typename Tile::value_type;
+
+  uint32_t offset_[Tile::COLS / 16];
+
+  __device__ RegisterTileLoader(int offset_row, int laneid) {
+    const int row = offset_row + laneid & 15;
+    const int col = (laneid >> 4) << 3;
+
+    MLX_UNROLL
+    for (int i = 0; i < Tile::COLS / 16; i++) {
+      offset_[i] = Tile::offset(row, col + i * 16);
+    }
+  }
+
+  template <typename T, int ROWS, int COLS>
+  __device__ inline void
+  load(RegisterTile<T, ROWS, COLS>& x, uint32_t base_address, int col) {
+    constexpr int TILES_Y = RegisterTile<T, ROWS, COLS>::TILES_Y;
+    constexpr int TILES_X = RegisterTile<T, ROWS, COLS>::TILES_X;
+
+    MLX_UNROLL
+    for (int i = 0; i < TILES_Y; i++) {
+      MLX_UNROLL
+      for (int j = 0; j < TILES_X; j++) {
+        x.data[i * TILES_X + j].load(
+            base_address + offset_[j + col] + i * 16 * Tile::COLS * sizeof(T));
       }
     }
   }

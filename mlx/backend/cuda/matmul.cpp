@@ -16,6 +16,11 @@ namespace mlx::core {
 
 namespace {
 
+int get_test_gemm() {
+  static int t = env::get_var("MLX_ENABLE_TEST_GEMM", 0);
+  return t;
+}
+
 std::tuple<bool, int64_t, array>
 check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
@@ -99,15 +104,13 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   if (M % 512 == 0 && N % 512 == 0 && K % 512 == 0 && !a_transposed &&
-      b_transposed && batch_count == 1 &&
-      env::get_var("MLX_ENABLE_TEST_GEMM", 0) == 1) {
+      b_transposed && batch_count == 1 && get_test_gemm() == 1) {
     cu::simple_gemm(a, b, out, M, N, K, encoder);
     return;
   }
 
   if (M % 512 == 0 && N % 512 == 0 && K % 512 == 0 && !a_transposed &&
-      b_transposed && batch_count == 1 &&
-      env::get_var("MLX_ENABLE_TEST_GEMM", 0) == 2) {
+      b_transposed && batch_count == 1 && get_test_gemm() == 2) {
     cu::cutlass_gemm(a, b, out, M, N, K, encoder);
     return;
   }
