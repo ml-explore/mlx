@@ -21,15 +21,15 @@ __device__ inline void cp_async(uint32_t row_address, const T* x) {
 #if defined(MLX_CUDA_SM_80_ENABLED)
   if constexpr (N == 16) {
     asm volatile(
-        "cp.async.ca.shared::cta.global [%0], [%1], 16;\n" ::"r"(row_address),
+        "cp.async.cg.shared::cta.global [%0], [%1], 16;\n" ::"r"(row_address),
         "l"(reinterpret_cast<const int4*>(x)));
   } else if constexpr (N == 8) {
     asm volatile(
-        "cp.async.ca.shared::cta.global [%0], [%1], 8;\n" ::"r"(row_address),
+        "cp.async.cg.shared::cta.global [%0], [%1], 8;\n" ::"r"(row_address),
         "l"(reinterpret_cast<const int2*>(x)));
   } else if constexpr (N == 4) {
     asm volatile(
-        "cp.async.ca.shared::cta.global [%0], [%1], 4;\n" ::"r"(row_address),
+        "cp.async.cg.shared::cta.global [%0], [%1], 4;\n" ::"r"(row_address),
         "l"(reinterpret_cast<const int*>(x)));
   }
 #endif

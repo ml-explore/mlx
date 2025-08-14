@@ -90,6 +90,9 @@ target_include_directories(mlx PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen")
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 
+# Keep ptx around for inspection
+target_compile_options(mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--keep>")
+
 # Enable calling host constexpr functions from device. This is needed because
 # the constexpr version of isnan is host only.
 target_compile_options(
