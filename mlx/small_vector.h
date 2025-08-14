@@ -519,6 +519,18 @@ class SmallVector {
       std::is_trivially_destructible<T>::value;
 };
 
+template <typename>
+struct is_vector : std::false_type {};
+
+template <typename T, size_t Size, typename Allocator>
+struct is_vector<SmallVector<T, Size, Allocator>> : std::true_type {};
+
+template <typename T, typename Allocator>
+struct is_vector<std::vector<T, Allocator>> : std::true_type {};
+
+template <typename Vec>
+inline constexpr bool is_vector_v = is_vector<Vec>::value;
+
 #undef MLX_HAS_BUILTIN
 #undef MLX_HAS_ATTRIBUTE
 #undef MLX_LIKELY

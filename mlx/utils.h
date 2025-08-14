@@ -100,10 +100,6 @@ std::ostream& operator<<(std::ostream& os, const Stream& s);
 std::ostream& operator<<(std::ostream& os, const Dtype& d);
 std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k);
 std::ostream& operator<<(std::ostream& os, array a);
-std::ostream& operator<<(std::ostream& os, const SmallVector<int>& v);
-std::ostream& operator<<(std::ostream& os, const SmallVector<int64_t>& v);
-std::ostream& operator<<(std::ostream& os, const std::vector<int>& v);
-std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v);
 inline std::ostream& operator<<(std::ostream& os, const complex64_t& v) {
   return os << v.real() << (v.imag() >= 0 ? "+" : "") << v.imag() << "j";
 }
@@ -112,6 +108,19 @@ inline std::ostream& operator<<(std::ostream& os, const float16_t& v) {
 }
 inline std::ostream& operator<<(std::ostream& os, const bfloat16_t& v) {
   return os << static_cast<float>(v);
+}
+
+template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+inline std::ostream& operator<<(std::ostream& os, const Vec& v) {
+  os << "(";
+  for (auto it = v.begin(); it != v.end(); ++it) {
+    os << *it;
+    if (it != std::prev(v.end())) {
+      os << ",";
+    }
+  }
+  os << ")";
+  return os;
 }
 
 inline bool is_power_of_2(int n) {
