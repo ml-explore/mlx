@@ -196,9 +196,6 @@ void shared_buffer_reshape(
     const Strides& out_strides,
     array& out);
 
-// Like the swapaxes op but safe to call in eval_gpu.
-array swapaxes_in_eval(const array& x, int axis1, int axis2);
-
 template <typename T>
 inline SmallVector<T> remove_index(SmallVector<T> vec, size_t index) {
   vec.erase(std::next(vec.begin(), index));
