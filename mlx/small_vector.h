@@ -440,6 +440,7 @@ class SmallVector {
     end_ = begin_;
   }
 
+ private:
   // Grows the backing store by a factor of two, and at least to {min_capacity}.
   // TODO: Move to private after removing external code using this method.
   MLX_NOINLINE void grow(size_t min_capacity = 0) {
@@ -469,7 +470,6 @@ class SmallVector {
     end_of_storage_ = new_storage + new_capacity;
   }
 
- private:
   MLX_NOINLINE void free_storage() {
     std::destroy_n(begin_, end_ - begin_);
     if (is_big()) {
