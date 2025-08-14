@@ -7,6 +7,8 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
+#include "mlx/backend/cuda/gemms/steel_gemm.h"
+
 #include <nvtx3/nvtx3.hpp>
 #include <numeric>
 
@@ -93,6 +95,24 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         b_batch_strides,
         encoder);
     return;
+  }
+
+  if (out.dtype() == float16 && batch_count == 1 && !a_transposed &&
+      b_transposed) {
+    return dispatch_steel_gemm(
+        /* const Stream& s = */ s,
+        /* cu::CommandEncoder& encoder = */ encoder,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* array& d = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* int ldd = */ N,
+        /* bool a_transposed = */ a_transposed,
+        /* bool b_transposed = */ b_transposed);
   }
 
   /////////////////////////////////////////////////////////////////////////////
