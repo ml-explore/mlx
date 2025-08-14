@@ -1,9 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/reshape.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
