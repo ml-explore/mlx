@@ -127,45 +127,99 @@ binary_two_vv(const In* a, const In* b, Out* out_a, Out* out_b, IdxT size) {
   }
 }
 
-template <typename Op, typename In, typename Out, typename IdxT, int NDIM>
+template <
+    typename Op,
+    typename In,
+    typename Out,
+    typename IdxT,
+    int NDIM,
+    int N_READS>
 __global__ void binary_two_g_nd(
     const In* a,
     const In* b,
     Out* out_a,
     Out* out_b,
-    IdxT size,
+    IdxT size_rest,
     const __grid_constant__ cuda::std::array<int32_t, NDIM> shape,
     const __grid_constant__ cuda::std::array<int64_t, NDIM> a_strides,
     const __grid_constant__ cuda::std::array<int64_t, NDIM> b_strides) {
-  IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    auto [a_idx, b_idx] = elem_to_loc_nd<NDIM>(
-        index, shape.data(), a_strides.data(), b_strides.data());
-    auto out = Op{}(a[a_idx], b[b_idx]);
-    out_a[index] = out[0];
-    out_b[index] = out[1];
+  auto block = cg::this_thread_block();
+  auto grid = cg::this_grid();
+  IdxT index_rest =
+      grid.block_index().y * block.dim_threads().y + block.thread_index().y;
+  if (index_rest >= size_rest) {
+    return;
   }
+
+  auto shape_x = shape[NDIM - 1];
+  auto a_stride_x = a_strides[NDIM - 1];
+  auto b_stride_x = b_strides[NDIM - 1];
+  IdxT index_x =
+      grid.block_index().x * block.dim_threads().x + block.thread_index().x;
+  auto [a_idx, b_idx] = elem_to_loc_nd<NDIM>(
+      index_rest * shape_x, shape.data(), a_strides.data(), b_strides.data());
+  auto a_vec =
+      load_vector<N_READS>(a + a_idx, index_x, shape_x, a_stride_x, In(0));
+  auto b_vec =
+      load_vector<N_READS>(b + b_idx, index_x, shape_x, b_stride_x, In(0));
+
+  AlignedVector<Out, N_READS> out_vec_a;
+  AlignedVector<Out, N_READS> out_vec_b;
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    auto out = Op{}(a_vec[i], b_vec[i]);
+    out_vec_a[i] = out[0];
+    out_vec_b[i] = out[1];
+  }
+  store_vector(out_a + shape_x * index_rest, index_x, out_vec_a, shape_x);
+  store_vector(out_b + shape_x * index_rest, index_x, out_vec_b, shape_x);
 }
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_two_g(
     const In* a,
     const In* b,
     Out* out_a,
     Out* out_b,
-    IdxT size,
+    IdxT size_rest,
     const __grid_constant__ Shape shape,
     const __grid_constant__ Strides a_strides,
     const __grid_constant__ Strides b_strides,
     int ndim) {
-  IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    auto [a_idx, b_idx] = elem_to_loc(
-        index, shape.data(), a_strides.data(), b_strides.data(), ndim);
-    auto out = Op{}(a[a_idx], b[b_idx]);
-    out_a[index] = out[0];
-    out_b[index] = out[1];
+  auto block = cg::this_thread_block();
+  auto grid = cg::this_grid();
+  IdxT index_rest =
+      grid.block_index().y * block.dim_threads().y + block.thread_index().y;
+  if (index_rest >= size_rest) {
+    return;
   }
+
+  auto shape_x = shape[ndim - 1];
+  auto a_stride_x = a_strides[ndim - 1];
+  auto b_stride_x = b_strides[ndim - 1];
+  IdxT index_x =
+      grid.block_index().x * block.dim_threads().x + block.thread_index().x;
+  auto [a_idx, b_idx] = elem_to_loc(
+      index_rest * shape_x,
+      shape.data(),
+      a_strides.data(),
+      b_strides.data(),
+      ndim);
+  auto a_vec =
+      load_vector<N_READS>(a + a_idx, index_x, shape_x, a_stride_x, In(0));
+  auto b_vec =
+      load_vector<N_READS>(b + b_idx, index_x, shape_x, b_stride_x, In(0));
+
+  AlignedVector<Out, N_READS> out_vec_a;
+  AlignedVector<Out, N_READS> out_vec_b;
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    auto out = Op{}(a_vec[i], b_vec[i]);
+    out_vec_a[i] = out[0];
+    out_vec_b[i] = out[1];
+  }
+  store_vector(out_a + shape_x * index_rest, index_x, out_vec_a, shape_x);
+  store_vector(out_b + shape_x * index_rest, index_x, out_vec_b, shape_x);
 }
 
 template <typename Op, typename In, typename Out>
@@ -225,42 +279,64 @@ void binary_two_op_gpu_inplace(
                 auto& a_strides = strides[0];
                 auto& b_strides = strides[1];
                 int ndim = shape.size();
+                int work_per_thread = 1;
+                auto dim0 = ndim > 0 ? shape.back() : 1;
+                auto rest = out_a.size() / dim0;
+                if (dim0 >= 4) {
+                  work_per_thread = 4;
+                }
+                dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+                auto block_dims = get_block_dims(dim0, rest, 1);
+                uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
+                uint32_t num_blocks_y = cuda::ceil_div(rest, block_dims.y);
+
                 if (ndim <= 3) {
                   dispatch_1_2_3(ndim, [&](auto dims_constant) {
-                    auto [num_blocks, block_dims] =
-                        get_launch_args(out_a, large());
+                    auto kernel = cu::binary_two_g_nd<
+                        Op,
+                        InType,
+                        OutType,
+                        IdxT,
+                        dims_constant(),
+                        1>;
+                    if (work_per_thread == 4) {
+                      kernel = cu::binary_two_g_nd<
+                          Op,
+                          InType,
+                          OutType,
+                          IdxT,
+                          dims_constant(),
+                          4>;
+                    }
                     encoder.add_kernel_node(
-                        cu::binary_two_g_nd<
-                            Op,
-                            InType,
-                            OutType,
-                            IdxT,
-                            dims_constant()>,
-                        num_blocks,
+                        kernel,
+                        {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
                         a.data<InType>(),
                         b.data<InType>(),
                         out_a.data<OutType>(),
                         out_b.data<OutType>(),
-                        out_a.size(),
+                        rest,
                         const_param<dims_constant()>(shape),
                         const_param<dims_constant()>(a_strides),
                         const_param<dims_constant()>(b_strides));
                   });
                 } else {
-                  auto [num_blocks, block_dims] =
-                      get_launch_args(out_a, large());
+                  auto kernel = cu::binary_two_g<Op, InType, OutType, IdxT, 1>;
+                  if (work_per_thread == 4) {
+                    kernel = cu::binary_two_g<Op, InType, OutType, IdxT, 4>;
+                  }
                   encoder.add_kernel_node(
-                      cu::binary_two_g<Op, InType, OutType, IdxT>,
-                      num_blocks,
+                      kernel,
+                      {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
                       a.data<InType>(),
                       b.data<InType>(),
                       out_a.data<OutType>(),
                       out_b.data<OutType>(),
-                      out_a.size(),
+                      rest,
                       const_param(shape),
                       const_param(a_strides),
                       const_param(b_strides),
