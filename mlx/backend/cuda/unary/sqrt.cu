@@ -4,7 +4,7 @@
 
 namespace mlx::core {
 void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("Sort::eval_gpu");
+  nvtx3::scoped_range r("Sqrt::eval_gpu");
   auto& s = out.primitive().stream();
   if (recip_) {
     unary_op_gpu<cu::Rsqrt>(inputs, out, "Rsqrt", s);

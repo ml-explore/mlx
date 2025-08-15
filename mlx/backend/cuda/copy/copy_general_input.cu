@@ -121,7 +121,7 @@ void copy_general_input(
                     0,
                     in_ptr,
                     out_ptr,
-                    out.size(),
+                    rest,
                     const_param<dims_constant()>(shape),
                     const_param<dims_constant()>(strides_in));
               });
@@ -137,7 +137,7 @@ void copy_general_input(
                   0,
                   in_ptr,
                   out_ptr,
-                  out.size(),
+                  rest,
                   const_param(shape),
                   const_param(strides_in),
                   ndim);
