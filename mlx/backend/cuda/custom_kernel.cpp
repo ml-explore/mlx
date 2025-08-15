@@ -370,13 +370,13 @@ void CustomKernel::eval_gpu(
   for (const auto& t : copies) {
     encoder.add_temporary(t);
   }
-  auto kernel = mod.get_kernel(kernel_name);
-  if (shared_memory_ > 0 && shared_memory_ > 48000) {
-    cuFuncSetAttribute(
-        kernel,
-        CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
-        shared_memory_);
-  }
+  auto kernel =
+      mod.get_kernel(kernel_name, [smem = shared_memory_](CUfunction kernel) {
+        if (smem > 0 && smem > 48000) {
+          cuFuncSetAttribute(
+              kernel, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, smem);
+        }
+      });
   encoder.add_kernel_node(kernel, grid, block, shared_memory_, args.args());
 }
 

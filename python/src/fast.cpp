@@ -388,7 +388,7 @@ void init_fast(nb::module_& parent_module) {
   m.def(
       "precompiled_custom_kernel",
       [](const std::string& name,
-         const std::string& compiled_source,
+         const nb::bytes compiled_source,
          const std::vector<ScalarOrArray>& inputs_,
          const std::vector<mx::Shape>& output_shapes,
          const std::vector<mx::Dtype>& output_dtypes,
@@ -429,7 +429,9 @@ void init_fast(nb::module_& parent_module) {
 
         return mx::fast::precompiled_custom_kernel(
             name,
-            compiled_source,
+            std::string(
+                static_cast<const char*>(compiled_source.data()),
+                compiled_source.size()),
             inputs,
             output_shapes,
             output_dtypes,

@@ -312,7 +312,7 @@ JitModule::JitModule(
   for (const auto& [name, mangled] : ptx_kernels) {
     CUfunction kernel;
     CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, mangled.c_str()));
-    kernels_[name] = kernel;
+    kernels_[name] = std::make_pair(kernel, false);
   }
 }
 
@@ -327,7 +327,7 @@ JitModule::JitModule(
       CU_JIT_ERROR_LOG_BUFFER, CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES};
   void* values[] = {jit_log, reinterpret_cast<void*>(std::size(jit_log) - 1)};
   CUresult jit_result = cuModuleLoadDataEx(
-      &module_, ptx.c_str(), std::size(options), options, values);
+      &module_, ptx.data(), std::size(options), options, values);
   if (jit_result != CUDA_SUCCESS) {
     throw std::runtime_error(fmt::format(
         "Failed to load compiled {} kernel: {}.", module_name, jit_log));
@@ -337,7 +337,7 @@ JitModule::JitModule(
   for (const auto& name : kernel_names) {
     CUfunction kernel;
     CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, name.c_str()));
-    kernels_[name] = kernel;
+    kernels_[name] = std::make_pair(kernel, false);
   }
 }
 
@@ -345,13 +345,23 @@ JitModule::~JitModule() {
   CHECK_CUDA_ERROR(cuModuleUnload(module_));
 }
 
-CUfunction JitModule::get_kernel(const std::string& kernel_name) {
+CUfunction JitModule::get_kernel(
+    const std::string& kernel_name,
+    std::function<void(CUfunction)> configure_kernel) {
   auto it = kernels_.find(kernel_name);
   if (it == kernels_.end()) {
     throw std::runtime_error(
         fmt::format("There is no kernel named {}.", kernel_name));
   }
-  return it->second;
+
+  // If it is the first time we run this kernel then configure it. Do it only
+  // once!
+  if (!it->second.second) {
+    configure_kernel(it->second.first);
+    it->second.second = true;
+  }
+
+  return it->second.first;
 }
 
 std::unordered_map<std::string, JitModule>& get_jit_module_cache() {

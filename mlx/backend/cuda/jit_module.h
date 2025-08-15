@@ -94,11 +94,16 @@ class JitModule {
 
   JitModule(const JitModule&) = delete;
   JitModule& operator=(const JitModule&) = delete;
-  CUfunction get_kernel(const std::string& kernel_name);
+  CUfunction get_kernel(
+      const std::string& kernel_name,
+      std::function<void(CUfunction)> configure_kernel);
+  CUfunction get_kernel(const std::string& kernel_name) {
+    return get_kernel(kernel_name, [](auto k) {});
+  }
 
  private:
   CUmodule module_{nullptr};
-  std::unordered_map<std::string, CUfunction> kernels_;
+  std::unordered_map<std::string, std::pair<CUfunction, bool>> kernels_;
 };
 
 std::unordered_map<std::string, JitModule>& get_jit_module_cache();
