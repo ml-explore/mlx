@@ -382,40 +382,38 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
     }
   }
 
+  if (op_graph) {
+    // Setup inputs and outputs.
+    register_args(encoder, backend_type, in, wt, out, out_);
+
+    // Find a plan for the graph and execute it.
+    auto plan = find_cudnn_plan_from_op_graph(
+        encoder.device().cudnn_handle(), backend_type, dtype, *op_graph);
+    if (!plan) {
+      throw std::runtime_error("[conv] Unable to find an execution plan.");
+    }
+    auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
+    if (encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
+      conv_cache().emplace(
+          cache_key, std::make_pair(backend_type, std::move(plan)));
+      return;
+    }
+  }
+
   // Use fallback kernel for settings not supported by cuDNN.
-  if (!op_graph) {
-    gemm_conv(
-        encoder,
-        in,
-        wt,
-        out,
-        kernel_strides_,
-        padding_lo_,
-        kernel_dilation_,
-        input_dilation_,
-        groups_,
-        flip_,
-        s);
-    conv_cache().emplace(
-        cache_key, std::make_pair(CONV_FALLBACK, std::nullopt));
-    return;
-  }
-
-  // Setup inputs and outputs.
-  register_args(encoder, backend_type, in, wt, out, out_);
-
-  // Find a plan for the graph and execute it.
-  auto plan = find_cudnn_plan_from_op_graph(
-      encoder.device().cudnn_handle(), backend_type, dtype, *op_graph);
-  if (!plan) {
-    throw std::runtime_error("[conv] Unable to find an execution plan.");
-  }
-  auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
-  if (!encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
-    throw std::runtime_error("[conv] Failed to run execution plan.");
-  }
-  conv_cache().emplace(
-      cache_key, std::make_pair(backend_type, std::move(plan)));
+  gemm_conv(
+      encoder,
+      in,
+      wt,
+      out,
+      kernel_strides_,
+      padding_lo_,
+      kernel_dilation_,
+      input_dilation_,
+      groups_,
+      flip_,
+      s);
+  conv_cache().emplace(cache_key, std::make_pair(CONV_FALLBACK, std::nullopt));
 }
 
 } // namespace mlx::core
