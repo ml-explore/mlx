@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/conv/conv.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
@@ -151,7 +152,8 @@ void gemm_conv_nd(
     const array& in,
     const array& wt,
     array& out,
-    ConvParams<NDIM>& params) {
+    ConvParams<NDIM>& params,
+    Stream s) {
   if (params.groups > 1) {
     throw std::runtime_error(
         "[conv] gemm_conv does not support grouped convolution yet.");
@@ -167,13 +169,16 @@ void gemm_conv_nd(
       unfold_inputs_nd<NDIM>(encoder, in, mat_M, mat_K, mat_N, params);
 
   // Reshape weight for gemm.
-  Strides wt_restride;
   array wt_reshaped({mat_K, mat_N}, wt.dtype(), nullptr, {});
-  wt_reshaped.copy_shared_buffer(
-      wt,
-      {1, mat_K},
-      {false, false, /* col_contiguous */ true},
-      wt.data_size());
+  if (wt.flags().row_contiguous) {
+    wt_reshaped.copy_shared_buffer(
+        wt,
+        {1, mat_K},
+        {false, false, /* col_contiguous */ true},
+        wt.data_size());
+  } else {
+    reshape_gpu(wt, wt_reshaped, s);
+  }
 
 #if 0
   wt_reshaped.set_status(array::evaluated);
@@ -221,7 +226,8 @@ void gemm_conv(
     const std::vector<int>& kernel_dilation,
     const std::vector<int>& input_dilation,
     int groups,
-    bool flip) {
+    bool flip,
+    Stream s) {
   int conv_nd = in.ndim() - 2;
   if (conv_nd == 2) {
     ConvParams<2> params{
@@ -241,7 +247,7 @@ void gemm_conv(
         {wt.strides(0), wt.strides(1), wt.strides(2), wt.strides(3)},
         {out.strides(0), out.strides(1), out.strides(2), out.strides(3)},
     };
-    gemm_conv_nd<2>(encoder, in, wt, out, params);
+    gemm_conv_nd<2>(encoder, in, wt, out, params, s);
     return;
   }
 

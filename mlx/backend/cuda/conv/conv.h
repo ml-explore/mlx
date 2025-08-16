@@ -35,6 +35,7 @@ void gemm_conv(
     const std::vector<int>& kernel_dilation,
     const std::vector<int>& input_dilation,
     int groups,
-    bool flip);
+    bool flip,
+    Stream s);
 
 } // namespace mlx::core

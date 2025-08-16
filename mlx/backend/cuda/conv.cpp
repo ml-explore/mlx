@@ -320,7 +320,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
           kernel_dilation_,
           input_dilation_,
           groups_,
-          flip_);
+          flip_,
+          s);
     }
     return;
   }
@@ -393,7 +394,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
         kernel_dilation_,
         input_dilation_,
         groups_,
-        flip_);
+        flip_,
+        s);
     conv_cache().emplace(
         cache_key, std::make_pair(CONV_FALLBACK, std::nullopt));
     return;
