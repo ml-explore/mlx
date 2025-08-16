@@ -4029,6 +4029,7 @@ array quantized_matmul(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
@@ -4056,7 +4057,7 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, transpose),
+          to_stream(s), group_size, bits, mode, transpose),
       std::move(inputs));
 }
 
@@ -4064,6 +4065,7 @@ std::tuple<array, array, array> quantize(
     const array& w,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   return fast::affine_quantize(w, group_size, bits, s);
 }
@@ -4074,6 +4076,7 @@ array dequantize(
     const array& biases,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   return fast::affine_dequantize(w, scales, biases, group_size, bits, s);
 }
@@ -4088,11 +4091,12 @@ array gather_qmm(
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size, bits, s);
+        x, w, scales, biases, transpose, group_size, bits, mode, s);
   }
 
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
@@ -4132,6 +4136,7 @@ array gather_qmm(
           to_stream(s),
           group_size,
           bits,
+          mode,
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
