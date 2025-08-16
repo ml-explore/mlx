@@ -3,6 +3,7 @@
 import argparse
 
 import mlx.core as mx
+import numpy as np
 from time_utils import time_fn
 
 B = 8
@@ -10,11 +11,10 @@ T = 1024
 D = 512
 
 
-def time_batch_matmul():
-    mx.random.seed(3)
-    a = mx.random.uniform(shape=(B, T, D))
-    b = mx.random.uniform(shape=(D, D))
-    c = mx.random.uniform(shape=(B, T, D))
+def time_batch_matmul(dtype):
+    a = mx.array(np.random.uniform(size=(B * T, D)).astype(dtype))
+    b = mx.array(np.random.uniform(size=(D, D)).astype(dtype))
+    c = mx.array(np.random.uniform(size=(B * T, D)).astype(dtype))
     mx.eval(a, b, c)
 
     time_fn(mx.matmul, a, b)
@@ -30,11 +30,10 @@ def time_batch_matmul():
     time_fn(batch_vjp_second)
 
 
-def time_unbatch_matmul():
-    mx.random.seed(3)
-    a = mx.random.uniform(shape=(B * T, D))
-    b = mx.random.uniform(shape=(D, D))
-    c = mx.random.uniform(shape=(B * T, D))
+def time_unbatch_matmul(dtype):
+    a = mx.array(np.random.uniform(size=(B * T, D)).astype(dtype))
+    b = mx.array(np.random.uniform(size=(D, D)).astype(dtype))
+    c = mx.array(np.random.uniform(size=(B * T, D)).astype(dtype))
     mx.eval(a, b, c)
     time_fn(mx.matmul, a, b)
 
@@ -58,5 +57,6 @@ if __name__ == "__main__":
     else:
         mx.set_default_device(mx.cpu)
 
-    time_batch_matmul()
-    time_unbatch_matmul()
+    for dtype in ("complex64", "float32", "float16"):
+        time_batch_matmul(dtype)
+        time_unbatch_matmul(dtype)

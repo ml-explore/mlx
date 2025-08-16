@@ -108,6 +108,9 @@ void matmul_general(
   } else if (out.dtype() == float64) {
     matmul_dispatch<double>(
         a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
+  } else if (out.dtype() == complex64) {
+    matmul_dispatch<complex64_t>(
+        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
   } else {
     throw std::runtime_error("[Matmul::eval_cpu] Invalid type.");
   }
