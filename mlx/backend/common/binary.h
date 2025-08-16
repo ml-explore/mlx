@@ -43,8 +43,7 @@ inline void set_binary_op_output_data(
   bool a_donatable = is_donatable(a, out);
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
-      out.set_data(
-          allocator::malloc(out.itemsize()), 1, a.strides(), a.flags());
+      out.set_data(allocator::malloc(out.itemsize()));
       break;
     case BinaryOpType::ScalarVector:
       if (b_donatable) {

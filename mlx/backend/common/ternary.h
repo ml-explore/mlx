@@ -47,8 +47,7 @@ inline void set_ternary_op_output_data(
 
   switch (topt) {
     case TernaryOpType::ScalarScalarScalar:
-      out.set_data(
-          allocator::malloc(out.itemsize()), 1, b.strides(), b.flags());
+      out.set_data(allocator::malloc(out.itemsize()));
       break;
     case TernaryOpType::VectorVectorVector:
       if (!(maybe_donate(a) || maybe_donate(b) || maybe_donate(c))) {
