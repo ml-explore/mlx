@@ -3,7 +3,6 @@
 #pragma once
 
 #include <memory>
-
 #include "mlx/array.h"
 
 namespace mlx::core::distributed {
