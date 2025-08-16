@@ -60,22 +60,12 @@ struct CommandEncoder {
     enc_->updateFence(fence);
   }
 
-  template <typename T>
-  void set_vector_bytes(const SmallVector<T>& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
+    enc_->setBytes(vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
-  template <typename T>
-  void set_vector_bytes(const SmallVector<T>& vec, int idx) {
-    return set_vector_bytes(vec, vec.size(), idx);
-  }
-
-  // TODO: Code is duplicated but they should be deleted soon.
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
-  }
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, int idx) {
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, int idx) {
     return set_vector_bytes(vec, vec.size(), idx);
   }
 
