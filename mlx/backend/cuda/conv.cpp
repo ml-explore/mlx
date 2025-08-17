@@ -7,9 +7,6 @@
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
-// cudnn_frontend.h redefines this macro.
-#undef CHECK_CUDA_ERROR
-
 #include <cudnn_frontend.h>
 #include <cudnn_frontend_find_plan.h>
 #include <fmt/format.h>

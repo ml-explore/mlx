@@ -149,7 +149,7 @@ target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 FetchContent_Declare(
   cudnn
   GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
-  GIT_TAG v1.12.1
+  GIT_TAG v1.14.0
   GIT_SHALLOW TRUE
   EXCLUDE_FROM_ALL)
 set(CUDNN_FRONTEND_SKIP_JSON_LIB ON)
