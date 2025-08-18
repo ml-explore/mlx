@@ -1322,7 +1322,7 @@ array quantized_matmul(
     array x,
     array w,
     array scales,
-    array biases,
+    std::optional<array> biases = std::nullopt,
     bool transpose = true,
     int group_size = 64,
     int bits = 4,
@@ -1330,7 +1330,7 @@ array quantized_matmul(
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
-std::tuple<array, array, array> quantize(
+std::vector<array> quantize(
     const array& w,
     int group_size = 64,
     int bits = 4,
@@ -1341,7 +1341,7 @@ std::tuple<array, array, array> quantize(
 array dequantize(
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases = std::nullopt,
     int group_size = 64,
     int bits = 4,
     const std::string& mode = "affine",
@@ -1352,7 +1352,7 @@ array gather_qmm(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases = std::nullopt,
     std::optional<array> lhs_indices = std::nullopt,
     std::optional<array> rhs_indices = std::nullopt,
     bool transpose = true,
