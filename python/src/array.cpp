@@ -28,30 +28,45 @@ class ArrayAt {
  public:
   ArrayAt(mx::array x) : x_(std::move(x)) {}
   ArrayAt& set_indices(nb::object indices) {
+    initialized_ = true;
     indices_ = indices;
     return *this;
   }
+  void check_initialized() {
+    if (!initialized_) {
+      throw std::invalid_argument(
+          "Must give indices to array.at (e.g. `x.at[0].add(4)`).");
+    }
+  }
+
   mx::array add(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_add_item(x_, indices_, v);
   }
   mx::array subtract(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_subtract_item(x_, indices_, v);
   }
   mx::array multiply(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_multiply_item(x_, indices_, v);
   }
   mx::array divide(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_divide_item(x_, indices_, v);
   }
   mx::array maximum(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_maximum_item(x_, indices_, v);
   }
   mx::array minimum(const ScalarOrArray& v) {
+    check_initialized();
     return mlx_minimum_item(x_, indices_, v);
   }
 
  private:
   mx::array x_;
+  bool initialized_{false};
   nb::object indices_;
 };
 
