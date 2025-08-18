@@ -129,7 +129,7 @@ NO_CPU(Inverse)
 NO_CPU(View)
 
 namespace fast {
-NO_CPU_MULTI(AffineQuantize)
+NO_CPU_MULTI(Quantize)
 } // namespace fast
 
 namespace distributed {

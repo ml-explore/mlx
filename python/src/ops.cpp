@@ -4153,7 +4153,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::arg(),
       "scales"_a,
-      "biases"_a,
+      "biases"_a = nb::none(),
       "transpose"_a = true,
       "group_size"_a = 64,
       "bits"_a = 4,
@@ -4161,7 +4161,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4172,7 +4172,8 @@ void init_ops(nb::module_& m) {
           x (array): Input array
           w (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
+          biases (array, optional): The biases to use per ``group_size``
+            elements of ``w``. Default: ``None``.
           transpose (bool, optional): Defines whether to multiply with the
             transposed ``w`` or not, namely whether we are performing
             ``x @ w.T`` or ``x @ w``. Default: ``True``.
@@ -4220,11 +4221,11 @@ void init_ops(nb::module_& m) {
           mode (str, optional): The quantization mode. Default: ``"affine"``.
 
         Returns:
-          tuple: A tuple containing
+          tuple: A tuple with either two or three elements containing:
 
           * w_q (array): The quantized version of ``w``
-          * scales (array): The scale to multiply each element with, namely :math:`s`
-          * biases (array): The biases to add to each element, namely :math:`\beta`
+          * scales (array): The quantization scales
+          * biases (array): The quantization biases (returned for `mode=="affine"`).
 
         Notes:
           The currently supported quantization mode is `"affine"`.
@@ -4256,14 +4257,14 @@ void init_ops(nb::module_& m) {
       &mx::dequantize,
       nb::arg(),
       "scales"_a,
-      "biases"_a,
+      "biases"_a = nb::none(),
       "group_size"_a = 64,
       "bits"_a = 4,
       "mode"_a = "affine",
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def dequantize(w: array, /, scales: array, biases: Optional[array] = = None, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Dequantize the matrix ``w`` using quantization parameters.
 
@@ -4272,7 +4273,8 @@ void init_ops(nb::module_& m) {
         Args:
           w (array): Matrix to be quantized
           scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
+          biases (array, optional): The biases to use per ``group_size``
+             elements of ``w``. Default: ``None``.
           group_size (int, optional): The size of the group in ``w`` that shares a
             scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
@@ -4298,7 +4300,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::arg(),
       "scales"_a,
-      "biases"_a,
+      "biases"_a = nb::none(),
       "lhs_indices"_a = nb::none(),
       "rhs_indices"_a = nb::none(),
       "transpose"_a = true,
@@ -4309,7 +4311,7 @@ void init_ops(nb::module_& m) {
       "sorted_indices"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, mode: str = 'affine', *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4325,7 +4327,8 @@ void init_ops(nb::module_& m) {
             x (array): Input array
             w (array): Quantized matrix packed in unsigned integers
             scales (array): The scales to use per ``group_size`` elements of ``w``
-            biases (array): The biases to use per ``group_size`` elements of ``w``
+            biases (array, optional): The biases to use per ``group_size``
+              elements of ``w``. Default: ``None``.
             lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
             rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
             transpose (bool, optional): Defines whether to multiply with the
