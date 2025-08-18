@@ -2971,7 +2971,7 @@ array gather(
   }
   for (auto& x : indices) {
     if (x.dtype() == bool_) {
-      throw("[Gather] Boolean indices not supported.");
+      throw std::invalid_argument("[Gather] Boolean indices not supported.");
     }
   }
 

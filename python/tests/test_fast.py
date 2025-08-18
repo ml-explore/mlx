@@ -639,12 +639,12 @@ class TestFast(mlx_tests.MLXTestCase):
             ],
             grid=(6, 1, 1),
             threadgroup=(2, 1, 1),
-            output_shapes=[(2, 2), (3, 2)],
+            output_shapes=[(3, 2), (3, 2)],
             output_dtypes=[mx.float32, mx.int32],
             stream=mx.gpu,
         )
 
-        self.assertTrue(mx.allclose(out[0], mx.full((2, 2), 14.0484)))
+        self.assertTrue(mx.allclose(out[0], mx.full((3, 2), 14.0484)))
         self.assertTrue(mx.allclose(out[1], mx.full((3, 2), -2, dtype=mx.int32)))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
