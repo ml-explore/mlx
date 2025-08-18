@@ -1365,6 +1365,9 @@ class TestArray(mlx_tests.MLXTestCase):
 
     def test_array_at(self):
         a = mx.array(1)
+        with self.assertRaises(ValueError):
+            a.at.add(1)
+
         a = a.at[None].add(1)
         self.assertEqual(a.item(), 2)
 
