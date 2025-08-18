@@ -78,9 +78,17 @@ void Depends::eval(
 void ExpandDims::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
+  auto shape = in.shape();
   auto strides = in.strides();
-  for (auto ax : axes_) {
-    strides.insert(strides.begin() + ax, 1);
+  for (int ax : axes_) {
+    int64_t stride;
+    if (ax >= strides.size()) {
+      stride = strides.empty() ? 1 : strides.back();
+    } else {
+      stride = shape[ax] * strides[ax];
+    }
+    shape.insert(shape.begin() + ax, 1);
+    strides.insert(strides.begin() + ax, stride);
   }
   out.copy_shared_buffer(in, strides, in.flags(), in.data_size());
 }

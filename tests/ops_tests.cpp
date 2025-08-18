@@ -206,6 +206,24 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(expand_dims(x, -4));
   CHECK_THROWS(expand_dims(x, {0, 1, 0}));
   CHECK_THROWS(expand_dims(x, {0, 1, -4}));
+
+  x = zeros({2, 2, 2});
+  array y = expand_dims(x, 0);
+  CHECK_EQ(y.shape(), Shape{1, 2, 2, 2});
+  y.eval();
+  CHECK_EQ(y.strides(), Strides{8, 4, 2, 1});
+  y = expand_dims(x, -1);
+  CHECK_EQ(y.shape(), Shape{2, 2, 2, 1});
+  y.eval();
+  CHECK_EQ(y.strides(), Strides{4, 2, 1, 1});
+  y = expand_dims(x, 1);
+  CHECK_EQ(y.shape(), Shape{2, 1, 2, 2});
+  y.eval();
+  CHECK_EQ(y.strides(), Strides{4, 4, 2, 1});
+  y = expand_dims(x, {0, 1, 2, 3});
+  CHECK_EQ(y.shape(), Shape{1, 1, 1, 1, 2, 2, 2});
+  y.eval();
+  CHECK_EQ(y.strides(), Strides{8, 8, 8, 8, 4, 2, 1});
 }
 
 TEST_CASE("test slice") {

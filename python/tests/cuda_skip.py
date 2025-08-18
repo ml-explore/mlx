@@ -14,7 +14,6 @@ cuda_skip = {
     "TestOps.test_hadamard",
     "TestOps.test_hadamard_grad_vmap",
     # Convolutions NYI
-    "TestConv.test_1d_conv_with_2d",
     "TestConv.test_conv_1d_groups_flipped",
     "TestConv.test_conv_general_flip_grad",
     "TestConv.test_torch_conv_2D",
