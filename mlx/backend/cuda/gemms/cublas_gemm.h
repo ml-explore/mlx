@@ -44,6 +44,17 @@ class CublasGemm {
 
   ~CublasGemm();
 
+  // The output's descriptor is inferred from inputs by default, use this method
+  // for unusual output.
+  void set_out(
+      Dtype dtype,
+      bool transposed,
+      uint64_t rows,
+      uint64_t cols,
+      int64_t ld,
+      int32_t batch_count,
+      int64_t batch_stride);
+
   void run(
       cu::CommandEncoder& encoder,
       array& out,

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/gpu/copy.h"
 
 namespace mlx::core {
 
@@ -48,7 +49,32 @@ struct ConvParams {
   }
 };
 
+void gemm_grouped_conv(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    const array& wt,
+    array& out,
+    const std::vector<int>& strides,
+    const std::vector<int>& padding,
+    const std::vector<int>& kernel_dilation,
+    const std::vector<int>& input_dilation,
+    int groups,
+    bool flip,
+    Stream s);
+
 void gemm_conv(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    const array& wt,
+    array& out,
+    const std::vector<int>& strides,
+    const std::vector<int>& padding,
+    const std::vector<int>& kernel_dilation,
+    const std::vector<int>& input_dilation,
+    bool flip,
+    Stream s);
+
+inline void gemm_conv(
     cu::CommandEncoder& encoder,
     array in,
     array wt,
@@ -59,6 +85,42 @@ void gemm_conv(
     const std::vector<int>& input_dilation,
     int groups,
     bool flip,
-    Stream s);
+    Stream s) {
+  if (!in.flags().row_contiguous) {
+    in = contiguous_copy_gpu(in, s);
+    encoder.add_temporary(in);
+  }
+  if (!wt.flags().row_contiguous) {
+    wt = contiguous_copy_gpu(wt, s);
+    encoder.add_temporary(wt);
+  }
+
+  if (groups == 1) {
+    gemm_conv(
+        encoder,
+        in,
+        wt,
+        out,
+        strides,
+        padding,
+        kernel_dilation,
+        input_dilation,
+        flip,
+        s);
+  } else {
+    gemm_grouped_conv(
+        encoder,
+        in,
+        wt,
+        out,
+        strides,
+        padding,
+        kernel_dilation,
+        input_dilation,
+        groups,
+        flip,
+        s);
+  }
+}
 
 } // namespace mlx::core

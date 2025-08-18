@@ -14,7 +14,7 @@ namespace cu {
 namespace cg = cooperative_groups;
 
 template <typename T, int NDIM>
-__global__ void naive_unfold_nd(
+__global__ void naive_grouped_unfold_transpose_nd(
     const T* in,
     T* out,
     int filter_size,
@@ -34,16 +34,18 @@ __global__ void naive_unfold_nd(
   }
 
   in += tid.y; // [0, C)
-  out += tid.z * filter_size + index_wt_spatial * params.C + tid.y;
+  out += tid.z * filter_size + tid.y * (filter_size / params.C);
 
   bool valid = index_batch < params.N;
 
   // Get the coordinates in input.
   int index_in[NDIM] = {};
+  int wt_stride = 1;
 #pragma unroll
   for (int i = NDIM - 1; i >= 0; --i) {
     int index_out = index_out_spatial % params.out_spatial_dims[i];
     int index_wt = index_wt_spatial % params.wt_spatial_dims[i];
+    out += index_wt * wt_stride;
 
     if (params.flip) {
       index_wt = params.wt_spatial_dims[i] - index_wt - 1;
@@ -61,6 +63,7 @@ __global__ void naive_unfold_nd(
 
     index_out_spatial /= params.out_spatial_dims[i];
     index_wt_spatial /= params.wt_spatial_dims[i];
+    wt_stride *= params.wt_spatial_dims[i];
   }
 
   if (valid) {
@@ -78,14 +81,14 @@ __global__ void naive_unfold_nd(
 } // namespace cu
 
 template <int NDIM>
-array unfold_inputs_nd(
+array grouped_unfold_transpose_inputs_nd(
     cu::CommandEncoder& encoder,
     const array& in,
     int mat_M,
     int mat_K,
     int mat_N,
     ConvParams<NDIM>& params) {
-  array unfolded({mat_M, mat_K}, in.dtype(), nullptr, {});
+  array unfolded({mat_M, mat_K * params.groups}, in.dtype(), nullptr, {});
   unfolded.set_data(allocator::malloc(unfolded.nbytes()));
   encoder.add_temporary(unfolded);
 
@@ -101,7 +104,7 @@ array unfold_inputs_nd(
     out_pixels *= params.out_spatial_dims[i];
   }
 
-  int wt_spatial_size = mat_K / params.C;
+  int wt_spatial_size = (mat_K * params.groups) / params.C;
   dim3 block_dims;
   block_dims.x = std::min(std::max(wt_spatial_size, 32), 1024);
   dim3 num_blocks;
@@ -114,7 +117,7 @@ array unfold_inputs_nd(
   dispatch_float_types(in.dtype(), "unfold", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     encoder.add_kernel_node(
-        cu::naive_unfold_nd<DataType, NDIM>,
+        cu::naive_grouped_unfold_transpose_nd<DataType, NDIM>,
         num_blocks,
         block_dims,
         0,
@@ -129,7 +132,7 @@ array unfold_inputs_nd(
 }
 
 template <int NDIM>
-void gemm_conv_nd(
+void gemm_grouped_conv_nd(
     cu::CommandEncoder& encoder,
     const array& in,
     const array& wt,
@@ -137,26 +140,28 @@ void gemm_conv_nd(
     ConvParams<NDIM>& params,
     Stream s) {
   // Get gemm shapes.
+  int C_per_group = params.C / params.groups;
+  int O_per_group = params.O / params.groups;
   int mat_M = out.size() / params.O; // N * H_out * W_out
-  int mat_K = wt.size() / params.O; // C * H_wt * W_wt
-  int mat_N = params.O; // O
+  int mat_K = wt.size() / params.O; // C_per_group * H_wt * W_wt
+  int mat_N = O_per_group; // O_per_group
 
   // Unfold input to (N * H_out * W_out, C * H_wt * W_wt) for gemm.
-  array in_unfolded =
-      unfold_inputs_nd<NDIM>(encoder, in, mat_M, mat_K, mat_N, params);
+  array in_unfolded = grouped_unfold_transpose_inputs_nd<NDIM>(
+      encoder, in, mat_M, mat_K, mat_N, params);
 
-  // Reshape weight to (C * H_wt * W_wt, O) for gemm.
-  array wt_reshaped({mat_K, mat_N}, wt.dtype(), nullptr, {});
-  wt_reshaped.copy_shared_buffer(
-      wt,
-      {1, mat_K},
-      {false, false, /* col_contiguous */ true},
-      wt.data_size());
+  // Reshape weight to (O, C_per_group, H_wt * W_wt) for gemm.
+  int wt_spatial_size = (wt.size() / wt.shape(0)) / wt.shape(-1);
+  array wt_view(
+      {params.O, C_per_group, wt_spatial_size}, wt.dtype(), nullptr, {});
+  wt_view.copy_shared_buffer(
+      wt, {wt.strides(0), 1, C_per_group}, wt.flags(), wt.size());
+  array wt_reshaped = contiguous_copy_gpu(wt_view, s);
 
-  // Single batch.
-  Shape batch_shape{1};
-  Strides a_batch_strides{0};
-  Strides b_batch_strides{0};
+  // Batch with size of groups.
+  Shape batch_shape{params.groups};
+  Strides a_batch_strides{mat_K};
+  Strides b_batch_strides{mat_N * mat_K};
 
   // Run matmul.
   CublasGemm gemm(
@@ -165,7 +170,7 @@ void gemm_conv_nd(
       false, // a_transposed
       mat_M, // a_rows
       mat_K, // a_cols
-      mat_K, // lda
+      mat_K * params.groups, // lda
       true, // b_transposed
       mat_K, // b_rows
       mat_N, // b_cols
@@ -173,6 +178,14 @@ void gemm_conv_nd(
       batch_shape.back(),
       a_batch_strides.back(),
       b_batch_strides.back());
+  gemm.set_out(
+      out.dtype(),
+      false, // out_transposed
+      mat_M, // out_rows
+      mat_N, // out_cols
+      mat_N * params.groups, // out_ld
+      params.groups, // batch_count
+      mat_N); // batch_stride
   gemm.run(
       encoder,
       out,
@@ -183,7 +196,7 @@ void gemm_conv_nd(
       b_batch_strides);
 }
 
-void gemm_conv(
+void gemm_grouped_conv(
     cu::CommandEncoder& encoder,
     const array& in,
     const array& wt,
@@ -192,6 +205,7 @@ void gemm_conv(
     const std::vector<int>& padding,
     const std::vector<int>& kernel_dilation,
     const std::vector<int>& input_dilation,
+    int groups,
     bool flip,
     Stream s) {
   int conv_ndim = in.ndim() - 2;
@@ -208,9 +222,9 @@ void gemm_conv(
         padding,
         kernel_dilation,
         input_dilation,
-        1, // groups
+        groups,
         flip);
-    gemm_conv_nd<ndim_constant()>(encoder, in, wt, out, params, s);
+    gemm_grouped_conv_nd<ndim_constant()>(encoder, in, wt, out, params, s);
   });
 }
 
