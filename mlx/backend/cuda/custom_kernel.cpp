@@ -378,6 +378,7 @@ void CustomKernel::eval_gpu(
         }
       });
   encoder.add_kernel_node(kernel, grid, block, shared_memory_, args.args());
+  encoder.add_completed_handler([args = std::move(args)]() {});
 }
 
 } // namespace mlx::core::fast

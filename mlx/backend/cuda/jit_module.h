@@ -64,7 +64,7 @@ struct KernelArgs {
   std::vector<void*> args_;
 
   // The cuLaunchKernel API requires passing pointers to arguments so store
-  // temporary values untill kernel is launched.
+  // temporary values until the kernel is launched.
   using Arg = std::variant<
       std::monostate,
       CUdeviceptr,
