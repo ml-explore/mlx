@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include <iostream>
-#include <regex>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/cuda/jit_module.h"
