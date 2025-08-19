@@ -24,4 +24,19 @@ device_info() {
 
 } // namespace metal
 
+namespace fast {
+
+CustomKernelFunction metal_kernel(
+    const std::string&,
+    const std::vector<std::string>&,
+    const std::vector<std::string>&,
+    const std::string&,
+    const std::string&,
+    bool,
+    bool) {
+  throw std::runtime_error("[metal_kernel] No Metal back-end.");
+}
+
+} // namespace fast
+
 } // namespace mlx::core

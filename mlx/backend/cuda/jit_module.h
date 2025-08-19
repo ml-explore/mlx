@@ -19,7 +19,8 @@ namespace mlx::core::cu {
 
 class Device;
 
-using KernelBuilderResult = std::pair<
+using KernelBuilderResult = std::tuple<
+    /* precompiled */ bool,
     /* source code */ std::string,
     /* kernel names */ std::vector<std::string>>;
 using KernelBuilder = std::function<KernelBuilderResult()>;
@@ -84,12 +85,8 @@ class JitModule {
   JitModule(
       Device& device,
       const std::string& module_name,
-      const KernelBuilder& builder);
-  JitModule(
-      Device& device,
-      const std::string& module_name,
-      const std::string& ptx,
-      const std::vector<std::string>& kernel_names);
+      const KernelBuilder& builder,
+      bool cache);
   ~JitModule();
 
   JitModule(const JitModule&) = delete;
@@ -111,12 +108,7 @@ std::unordered_map<std::string, JitModule>& get_jit_module_cache();
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
-    const KernelBuilder& builder);
-
-JitModule& get_jit_module(
-    const mlx::core::Device& device,
-    const std::string& name,
-    const std::string& ptx,
-    const std::vector<std::string>& kernel_names);
+    const KernelBuilder& builder,
+    bool cache = true);
 
 } // namespace mlx::core::cu

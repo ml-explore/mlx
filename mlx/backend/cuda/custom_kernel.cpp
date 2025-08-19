@@ -142,17 +142,17 @@ std::string build_kernel(
 
 } // namespace
 
-MetalKernelFunction metal_kernel(
+CustomKernelFunction cuda_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
     const std::string& source,
-    const std::string& header /* = "" */,
-    bool ensure_row_contiguous /* = true */,
-    bool atomic_outputs /* = false */) {
+    const std::string& header,
+    bool ensure_row_contiguous,
+    int shared_memory) {
   if (output_names.empty()) {
     throw std::invalid_argument(
-        "[metal_kernel] Must specify at least one output.");
+        "[custom_kernel] Must specify at least one output.");
   }
 
   std::vector<CustomKernelShapeInfo> shape_infos;
@@ -177,21 +177,21 @@ MetalKernelFunction metal_kernel(
              StreamOrDevice s_ = {}) {
     if (inputs.size() != input_names.size()) {
       std::ostringstream msg;
-      msg << "[metal_kernel] Expected `inputs` to have size "
+      msg << "[custom_kernel] Expected `inputs` to have size "
           << input_names.size() << " but got size " << inputs.size() << "."
           << std::endl;
       throw std::invalid_argument(msg.str());
     }
     if (output_shapes.size() != output_names.size()) {
       std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_shapes` to have size "
+      msg << "[custom_kernel] Expected `output_shapes` to have size "
           << output_names.size() << " but got size " << output_shapes.size()
           << "." << std::endl;
       throw std::invalid_argument(msg.str());
     }
     if (output_dtypes.size() != output_names.size()) {
       std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_dtypes` to have size "
+      msg << "[custom_kernel] Expected `output_dtypes` to have size "
           << output_names.size() << " but got size " << output_dtypes.size()
           << "." << std::endl;
       throw std::invalid_argument(msg.str());
@@ -199,7 +199,7 @@ MetalKernelFunction metal_kernel(
 
     auto s = to_stream(s_);
     if (s.device != Device::gpu) {
-      throw std::invalid_argument("[metal_kernel] Only supports the GPU.");
+      throw std::invalid_argument("[custom_kernel] Only supports the GPU.");
     }
 
     std::string kernel_name =
@@ -237,12 +237,12 @@ MetalKernelFunction metal_kernel(
             init_value,
             std::vector<ScalarArg>{},
             false,
-            0),
+            shared_memory),
         std::move(inputs));
   };
 }
 
-std::vector<array> precompiled_custom_kernel(
+std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,
     const std::vector<array>& inputs,
@@ -312,17 +312,14 @@ void CustomKernel::eval_gpu(
   // Compile the custom kernel
   std::string kernel_name =
       (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
-  auto get_module = [&]() -> cu::JitModule& {
-    if (is_precompiled_) {
-      return cu::get_jit_module(
-          s.device, name_, source_, std::vector<std::string>{kernel_name});
-    } else {
-      return cu::get_jit_module(s.device, name_, [&]() {
-        return std::make_pair(source_, std::vector<std::string>{kernel_name});
-      });
-    }
-  };
-  cu::JitModule& mod = get_module();
+  cu::JitModule& mod = cu::get_jit_module(
+      s.device,
+      name_,
+      [&]() {
+        return std::make_tuple(
+            is_precompiled_, source_, std::vector<std::string>{kernel_name});
+      },
+      false);
 
   // Make the arguments
   cu::KernelArgs args;

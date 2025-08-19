@@ -69,7 +69,7 @@ array affine_dequantize(
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 
-using MetalKernelFunction = std::function<std::vector<array>(
+using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
     const std::vector<Dtype>&,
@@ -80,7 +80,7 @@ using MetalKernelFunction = std::function<std::vector<array>(
     bool,
     StreamOrDevice)>;
 
-MetalKernelFunction metal_kernel(
+CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -89,7 +89,16 @@ MetalKernelFunction metal_kernel(
     bool ensure_row_contiguous = true,
     bool atomic_outputs = false);
 
-std::vector<array> precompiled_custom_kernel(
+CustomKernelFunction cuda_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    int shared_memory = 0);
+
+std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,
     const std::vector<array>& inputs,

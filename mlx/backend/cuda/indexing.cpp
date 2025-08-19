@@ -94,7 +94,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
             large ? "int64_t" : "int32_t"));
       }
     }
-    return std::make_pair(jit_source_gather, std::move(kernel_names));
+    return std::make_tuple(false, jit_source_gather, std::move(kernel_names));
   });
 
   cu::KernelArgs args;
@@ -189,7 +189,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
             large ? "int64_t" : "int32_t"));
       }
     }
-    return std::make_pair(jit_source_scatter, std::move(kernel_names));
+    return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
   });
 
   cu::KernelArgs args;
@@ -268,7 +268,8 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
     }
-    return std::make_pair(jit_source_gather_axis, std::move(kernel_names));
+    return std::make_tuple(
+        false, jit_source_gather_axis, std::move(kernel_names));
   });
 
   size_t idx_size_pre = 1;
@@ -371,7 +372,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
     }
-    return std::make_pair(jit_source_scatter_axis, std::move(kernel_names));
+    return std::make_tuple(
+        false, jit_source_scatter_axis, std::move(kernel_names));
   });
 
   size_t idx_size_pre = 1;

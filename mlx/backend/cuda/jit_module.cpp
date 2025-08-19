@@ -217,85 +217,85 @@ constexpr const char* g_headers[] = {
     jit_source_utils,
 };
 
-} // namespace
-
-JitModule::JitModule(
+void compile(
     Device& device,
     const std::string& module_name,
-    const KernelBuilder& builder) {
-  // Check cache.
-  std::vector<char> ptx;
-  std::vector<std::pair<std::string, std::string>> ptx_kernels;
-  if (!read_cached_ptx(ptx_cache_dir(), module_name, &ptx, &ptx_kernels)) {
-    // Create program.
-    auto [source_code, kernel_names] = builder();
-    nvrtcProgram prog;
-    CHECK_NVRTC_ERROR(nvrtcCreateProgram(
-        &prog,
-        source_code.c_str(),
-        (module_name + ".cu").c_str(),
-        std::size(g_headers),
-        g_headers,
-        g_include_names));
-    std::unique_ptr<nvrtcProgram, void (*)(nvrtcProgram*)> prog_freer(
-        &prog,
-        [](nvrtcProgram* p) { CHECK_NVRTC_ERROR(nvrtcDestroyProgram(p)); });
-    for (const auto& name : kernel_names) {
-      CHECK_NVRTC_ERROR(nvrtcAddNameExpression(prog, name.c_str()));
-    }
-
-    // Compile program.
-    std::vector<const char*> args;
-    bool use_sass = compiler_supports_device_sass(device);
-    std::string compute = fmt::format(
-        "--gpu-architecture={}_{}{}",
-        use_sass ? "sm" : "compute",
-        device.compute_capability_major(),
-        device.compute_capability_minor());
-    args.push_back(compute.c_str());
-    std::string cccl_include = cccl_dir();
-    if (!cccl_include.empty()) {
-      cccl_include = fmt::format("--include-path={}", cccl_include);
-      args.push_back(cccl_include.c_str());
-    }
-    std::string cuda_include =
-        fmt::format("--include-path={}/include", cuda_home());
-    args.push_back(cuda_include.c_str());
-    nvrtcResult compile_result =
-        nvrtcCompileProgram(prog, args.size(), args.data());
-    if (compile_result != NVRTC_SUCCESS) {
-      size_t log_size;
-      CHECK_NVRTC_ERROR(nvrtcGetProgramLogSize(prog, &log_size));
-      std::vector<char> log(log_size + 1, 0);
-      CHECK_NVRTC_ERROR(nvrtcGetProgramLog(prog, log.data()));
-      throw std::runtime_error(
-          fmt::format("Failed to compile kernel: {}.", log.data()));
-    }
-
-    // Get mangled names of kernel names.
-    for (const auto& name : kernel_names) {
-      const char* mangled;
-      CHECK_NVRTC_ERROR(nvrtcGetLoweredName(prog, name.c_str(), &mangled));
-      ptx_kernels.emplace_back(name, mangled);
-    }
-
-    // Get ptx data.
-    size_t ptx_size;
-    if (use_sass) {
-      CHECK_NVRTC_ERROR(nvrtcGetCUBINSize(prog, &ptx_size));
-    } else {
-      CHECK_NVRTC_ERROR(nvrtcGetPTXSize(prog, &ptx_size));
-    }
-    ptx.resize(ptx_size, 0);
-    if (use_sass) {
-      CHECK_NVRTC_ERROR(nvrtcGetCUBIN(prog, ptx.data()));
-    } else {
-      CHECK_NVRTC_ERROR(nvrtcGetPTX(prog, ptx.data()));
-    }
-    write_cached_ptx(
-        ptx_cache_dir(), module_name, ptx, ptx_kernels, source_code);
+    const std::string& source,
+    const std::vector<std::string>& kernel_names,
+    std::vector<char>& ptx,
+    std::vector<std::pair<std::string, std::string>>& ptx_kernels) {
+  // Create the program
+  nvrtcProgram prog;
+  CHECK_NVRTC_ERROR(nvrtcCreateProgram(
+      &prog,
+      source.c_str(),
+      (module_name + ".cu").c_str(),
+      std::size(g_headers),
+      g_headers,
+      g_include_names));
+  std::unique_ptr<nvrtcProgram, void (*)(nvrtcProgram*)> prog_freer(
+      &prog,
+      [](nvrtcProgram* p) { CHECK_NVRTC_ERROR(nvrtcDestroyProgram(p)); });
+  for (const auto& name : kernel_names) {
+    CHECK_NVRTC_ERROR(nvrtcAddNameExpression(prog, name.c_str()));
   }
 
+  // Compile program.
+  std::vector<const char*> args;
+  bool use_sass = compiler_supports_device_sass(device);
+  std::string compute = fmt::format(
+      "--gpu-architecture={}_{}{}",
+      use_sass ? "sm" : "compute",
+      device.compute_capability_major(),
+      device.compute_capability_minor());
+  args.push_back(compute.c_str());
+  std::string cccl_include = cccl_dir();
+  if (!cccl_include.empty()) {
+    cccl_include = fmt::format("--include-path={}", cccl_include);
+    args.push_back(cccl_include.c_str());
+  }
+  std::string cuda_include =
+      fmt::format("--include-path={}/include", cuda_home());
+  args.push_back(cuda_include.c_str());
+  nvrtcResult compile_result =
+      nvrtcCompileProgram(prog, args.size(), args.data());
+  if (compile_result != NVRTC_SUCCESS) {
+    size_t log_size;
+    CHECK_NVRTC_ERROR(nvrtcGetProgramLogSize(prog, &log_size));
+    std::vector<char> log(log_size + 1, 0);
+    CHECK_NVRTC_ERROR(nvrtcGetProgramLog(prog, log.data()));
+    throw std::runtime_error(
+        fmt::format("Failed to compile kernel: {}.", log.data()));
+  }
+
+  // Get mangled names of kernel names.
+  for (const auto& name : kernel_names) {
+    const char* mangled;
+    CHECK_NVRTC_ERROR(nvrtcGetLoweredName(prog, name.c_str(), &mangled));
+    ptx_kernels.emplace_back(name, mangled);
+  }
+
+  // Get ptx data.
+  size_t ptx_size;
+  if (use_sass) {
+    CHECK_NVRTC_ERROR(nvrtcGetCUBINSize(prog, &ptx_size));
+  } else {
+    CHECK_NVRTC_ERROR(nvrtcGetPTXSize(prog, &ptx_size));
+  }
+  ptx.resize(ptx_size, 0);
+  if (use_sass) {
+    CHECK_NVRTC_ERROR(nvrtcGetCUBIN(prog, ptx.data()));
+  } else {
+    CHECK_NVRTC_ERROR(nvrtcGetPTX(prog, ptx.data()));
+  }
+}
+
+void load_module(
+    const std::string& module_name,
+    const std::vector<char>& ptx,
+    const std::vector<std::pair<std::string, std::string>>& ptx_kernels,
+    CUmodule& module_,
+    std::unordered_map<std::string, std::pair<CUfunction, bool>>& kernels) {
   // Load module.
   char jit_log[4089] = {};
   CUjit_option options[] = {
@@ -312,33 +312,44 @@ JitModule::JitModule(
   for (const auto& [name, mangled] : ptx_kernels) {
     CUfunction kernel;
     CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, mangled.c_str()));
-    kernels_[name] = std::make_pair(kernel, false);
+    kernels[name] = std::make_pair(kernel, false);
   }
 }
+
+} // namespace
 
 JitModule::JitModule(
     Device& device,
     const std::string& module_name,
-    const std::string& ptx,
-    const std::vector<std::string>& kernel_names) {
-  // Load module.
-  char jit_log[4089] = {};
-  CUjit_option options[] = {
-      CU_JIT_ERROR_LOG_BUFFER, CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES};
-  void* values[] = {jit_log, reinterpret_cast<void*>(std::size(jit_log) - 1)};
-  CUresult jit_result = cuModuleLoadDataEx(
-      &module_, ptx.data(), std::size(options), options, values);
-  if (jit_result != CUDA_SUCCESS) {
-    throw std::runtime_error(fmt::format(
-        "Failed to load compiled {} kernel: {}.", module_name, jit_log));
+    const KernelBuilder& builder,
+    bool cache) {
+  // Will hold the actual device executable source code and kernel names
+  std::vector<char> ptx;
+  std::vector<std::pair<std::string, std::string>> ptx_kernels;
+
+  // Try to load them from the file cache
+  if (!read_cached_ptx(ptx_cache_dir(), module_name, &ptx, &ptx_kernels)) {
+    auto [precompiled, source_code, kernel_names] = builder();
+
+    // Get the PTX or cubin
+    if (precompiled) {
+      ptx.insert(ptx.begin(), source_code.begin(), source_code.end());
+      for (auto& name : kernel_names) {
+        ptx_kernels.emplace_back(name, name);
+      }
+    } else {
+      compile(device, module_name, source_code, kernel_names, ptx, ptx_kernels);
+    }
+
+    // If requested save them in the file cache for the next launch
+    if (cache) {
+      write_cached_ptx(
+          ptx_cache_dir(), module_name, ptx, ptx_kernels, source_code);
+    }
   }
 
-  // Load kernels.
-  for (const auto& name : kernel_names) {
-    CUfunction kernel;
-    CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, name.c_str()));
-    kernels_[name] = std::make_pair(kernel, false);
-  }
+  // Load the module
+  load_module(module_name, ptx, ptx_kernels, module_, kernels_);
 }
 
 JitModule::~JitModule() {
@@ -372,25 +383,12 @@ std::unordered_map<std::string, JitModule>& get_jit_module_cache() {
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
-    const KernelBuilder& builder) {
+    const KernelBuilder& builder,
+    bool cache) {
   auto& map = get_jit_module_cache();
   auto it = map.find(name);
   if (it == map.end()) {
-    it = map.try_emplace(name, cu::device(device), name, builder).first;
-  }
-  return it->second;
-}
-
-JitModule& get_jit_module(
-    const mlx::core::Device& device,
-    const std::string& name,
-    const std::string& ptx,
-    const std::vector<std::string>& kernel_names) {
-  auto& map = get_jit_module_cache();
-  auto it = map.find(name);
-  if (it == map.end()) {
-    it = map.try_emplace(name, cu::device(device), name, ptx, kernel_names)
-             .first;
+    it = map.try_emplace(name, cu::device(device), name, builder, cache).first;
   }
   return it->second;
 }
