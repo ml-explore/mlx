@@ -4089,7 +4089,7 @@ array quantized_matmul(
     inputs = {
         astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
   } else {
-    throw std::invalid_argument("ERROR!");
+    inputs = {x, w, scales};
   }
 
   if (x.ndim() > 2 && w.ndim() > 2) {
@@ -4568,7 +4568,23 @@ array gather_qmm(
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);
-
+  std::vector<array> inputs;
+  if (mode == "affine") {
+    inputs = {
+        astype(x, out_type, s),
+        std::move(w),
+        astype(scales, out_type, s),
+        astype(*biases, out_type, s),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  } else {
+    inputs = {
+        astype(x, out_type, s),
+        std::move(w),
+        std::move(scales),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  }
   return array(
       std::move(out_shape),
       out_type,
@@ -4580,12 +4596,7 @@ array gather_qmm(
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
-      {astype(x, out_type, s),
-       std::move(w),
-       astype(scales, out_type, s),
-       astype(*biases, out_type, s),
-       std::move(lhs_indices),
-       std::move(rhs_indices)});
+      std::move(inputs));
 }
 
 array tensordot(
