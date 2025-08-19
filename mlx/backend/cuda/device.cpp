@@ -10,8 +10,6 @@
 #include <future>
 #include <unordered_set>
 
-#include <iostream>
-
 namespace mlx::core::cu {
 
 namespace {
