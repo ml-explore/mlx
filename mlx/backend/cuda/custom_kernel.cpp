@@ -334,7 +334,7 @@ void CustomKernel::eval_gpu(
       args.append_ndim(in.strides());
     }
     if (shape_info.ndim) {
-      args.append(in.ndim());
+      args.append<int32_t>(in.ndim());
     }
   }
   for (auto& out : outputs) {
