@@ -109,6 +109,7 @@ if(NOT MLX_METAL_JIT)
     reduction/reduce_col.h
     reduction/reduce_row.h)
   build_kernel(quantized quantized.h ${STEEL_HEADERS})
+  build_kernel(fp4_quantized fp4_quantized.h ${STEEL_HEADERS})
   build_kernel(scan scan.h)
   build_kernel(softmax softmax.h)
   build_kernel(logsumexp logsumexp.h)

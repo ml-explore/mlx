@@ -3243,6 +3243,10 @@ std::vector<array> QuantizedMatmul::vjp(
       throw std::runtime_error(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
+      if (mode_ == "mxfp4") {
+        throw std::runtime_error(
+            "[QuantizedMatmul::vjp] no gradient wrt scales with mxfp4 quantization.");
+      }
       if (!dsb) {
         int ndim = primals[1].ndim();
         auto fc = flatten(cotangents[0], 0, -ndim, stream());
@@ -3372,14 +3376,19 @@ std::vector<array> GatherQMM::vjp(
     // gradient wrt to the indices is undefined
     else if (arg > 3) {
       throw std::runtime_error(
-          "GatherQMM::vjp cannot compute the gradient wrt the indices.");
+          "[GatherQMM::vjp] cannot compute the gradient wrt the indices.");
     }
 
     // gradient wrt to w_q, scales or biases
     else if (arg == 1) {
       throw std::runtime_error(
-          "GatherQMM::vjp no gradient wrt the quantized weights.");
+          "[GatherQMM::vjp] no gradient wrt the quantized weights.");
     } else {
+      if (mode_ == "mxfp4") {
+        throw std::runtime_error(
+            "[GatherQMM::vjp] no gradient wrt scales with mxfp4 quantization.");
+      }
+
       if (!dsb) {
         auto shape = w.shape();
         shape.pop_back();

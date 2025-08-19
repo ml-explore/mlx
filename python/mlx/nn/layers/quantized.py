@@ -98,11 +98,11 @@ class QuantizedEmbedding(Module):
         # Initialize the quantized weight
         scale = math.sqrt(1 / dims)
         weight = mx.random.normal(shape=(num_embeddings, dims), scale=scale)
-        self.weight, scales_biases = mx.quantize(weight, group_size, bits, mode=mode)
+        self.weight, *scales_biases = mx.quantize(weight, group_size, bits, mode=mode)
         if mode == "affine":
             self.scales, self.biases = scales_biases
         else:
-            self.scales = scales_biases
+            (self.scales,) = scales_biases
         self.num_embeddings = num_embeddings
         self.dims = dims
 
@@ -155,12 +155,16 @@ class QuantizedEmbedding(Module):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
         embedding_dims, dims = embedding_layer.weight.shape
         ql = cls(embedding_dims, dims, group_size, bits)
-        ql.weight, ql.scales, ql.biases = mx.quantize(
+        ql.weight, *scales_biases = mx.quantize(
             embedding_layer.weight,
             group_size,
             bits,
             mode=mode,
         )
+        if mode == "affine":
+            ql.scales, ql.biases = scales_biases
+        else:
+            (ql.scales,) = scales_biases
         return ql
 
 
@@ -210,11 +214,11 @@ class QuantizedLinear(Module):
             high=scale,
             shape=(output_dims, input_dims),
         )
-        self.weight, scales_biases = mx.quantize(weight, group_size, bits, mode=mode)
+        self.weight, *scales_biases = mx.quantize(weight, group_size, bits, mode=mode)
         if mode == "affine":
             self.scales, self.biases = scales_biases
         else:
-            self.scales = scales_biases
+            (self.scales,) = scales_biases
 
         # And bias if needed
         if bias:
@@ -257,7 +261,7 @@ class QuantizedLinear(Module):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape
         ql = cls(input_dims, output_dims, False, group_size, bits)
-        ql.weight, scales_biases = mx.quantize(
+        ql.weight, *scales_biases = mx.quantize(
             linear_layer.weight,
             group_size,
             bits,
@@ -266,7 +270,7 @@ class QuantizedLinear(Module):
         if mode == "affine":
             ql.scales, ql.biases = scales_biases
         else:
-            ql.scales = scales_biases
+            (ql.scales,) = scales_biases
 
         if "bias" in linear_layer:
             ql.bias = linear_layer.bias

@@ -407,6 +407,51 @@ void _qmm_dispatch(
   }
 }
 
+// template <typename T>
+// void _qmm_mxfp4_dispatch_typed(
+//     array& out,
+//     const array& x,
+//     const array& w,
+//     const array& scales,
+//     bool transposed_w) {
+//   int K = x.shape(-1);
+//   int M = x.ndim() > 1 ? x.shape(-2) : 1;
+//   int N = out.shape(-1);
+//   int w_els = w.ndim() > 2 ? w.shape(-1) * w.shape(-2) : 0;
+//   int g_els = w.ndim() > 2 ? scales.shape(-1) * scales.shape(-2) : 0;
+//   int batch_size = x.size() / (K * M);
+//
+//   auto out_ptr = out.data<T>();
+//   auto x_ptr = x.data<T>();
+//   auto w_ptr = w.data<uint32_t>();
+//   auto scales_ptr = scales.data<T>();
+//   for (int i = 0; i < batch_size; i++) {
+//     _qmm_mxfp4_dispatch_typed<T>(
+//         out_ptr + i * M * N,
+//         x_ptr + elem_to_loc(i * M * K, x.shape(), x.strides()),
+//         w_ptr + elem_to_loc(i * w_els, w.shape(), w.strides()),
+//         scales_ptr + elem_to_loc(i * g_els, scales.shape(),
+//         scales.strides()), M, N, K, transposed_w);
+//   }
+// }
+//
+//
+// void _qmm_mxfp4_dispatch(
+//     array& out,
+//     const array& x,
+//     const array& w,
+//     const array& scales,
+//     bool transposed_w) {
+//   switch (x.dtype()) {
+//     case bfloat16:
+//       _qmm_mxfp4_dispatch_typed<bfloat16>(out, x, w, scales, transposed_w);
+//       break;
+//     default:
+//       throw std::invalid_argument(
+//           "[quantized_matmul] only bfloat is supported for mxfp4");
+//   }
+// }
+
 template <typename T>
 void _bs_qmm_dispatch_typed(
     array& out,
@@ -521,7 +566,6 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];
-  auto& biases_pre = inputs[3];
 
   std::vector<array> temps;
   auto ensure_row_contiguous = [s = stream(), &temps](const array& arr) {
@@ -537,7 +581,6 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto x = ensure_row_contiguous(x_pre);
   auto w = ensure_row_contiguous(w_pre);
   auto scales = ensure_row_contiguous(scales_pre);
-  auto biases = ensure_row_contiguous(biases_pre);
 
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -546,18 +589,31 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
-  encoder.set_input_array(biases);
   encoder.set_output_array(out);
-  encoder.dispatch([out = array::unsafe_weak_copy(out),
-                    x = array::unsafe_weak_copy(x),
-                    w = array::unsafe_weak_copy(w),
-                    scales = array::unsafe_weak_copy(scales),
-                    biases = array::unsafe_weak_copy(biases),
-                    group_size_ = group_size_,
-                    bits_ = bits_,
-                    transpose_ = transpose_]() mutable {
-    _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
-  });
+  if (mode_ == "affine") {
+    auto biases = ensure_row_contiguous(inputs[3]);
+    encoder.set_input_array(biases);
+    encoder.dispatch([out = array::unsafe_weak_copy(out),
+                      x = array::unsafe_weak_copy(x),
+                      w = array::unsafe_weak_copy(w),
+                      scales = array::unsafe_weak_copy(scales),
+                      biases = array::unsafe_weak_copy(biases),
+                      group_size_ = group_size_,
+                      bits_ = bits_,
+                      transpose_ = transpose_]() mutable {
+      _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
+    });
+  } else {
+    //    encoder.dispatch([out = array::unsafe_weak_copy(out),
+    //                      x = array::unsafe_weak_copy(x),
+    //                      w = array::unsafe_weak_copy(w),
+    //                      scales = array::unsafe_weak_copy(scales),
+    //                      group_size_ = group_size_,
+    //                      bits_ = bits_,
+    //                      transpose_ = transpose_]() mutable {
+    //      _qmm_mxfp4_dispatch(out, x, w, scales, transpose_);
+    //    });
+  }
 }
 
 void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -705,7 +761,7 @@ void dispatch_quantize(
       w_ptr, out_ptr, scales_ptr, biases_ptr, bits, group_size, w.size());
 }
 
-void fast::AffineQuantize::eval_cpu(
+void fast::Quantize::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   auto ensure_row_contiguous = [s = stream()](const array& arr) {
@@ -764,7 +820,7 @@ void fast::AffineQuantize::eval_cpu(
       }
     } else {
       throw std::runtime_error(
-          "[fast::AffineQuantize::eval_cpu] Only supports floating point inputs");
+          "[fast::Quantize::eval_cpu] Only supports floating point inputs");
     }
   });
 }

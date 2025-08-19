@@ -1434,7 +1434,7 @@ METAL_FUNC void adjust_matrix_offsets(
 }
 
 template <typename T, int group_size, int bits, int D, bool batched>
-[[kernel]] void qmv_quad(
+[[kernel]] void affine_qmv_quad(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1486,7 +1486,7 @@ template <typename T, int group_size, int bits, int D, bool batched>
 }
 
 template <typename T, int group_size, int bits, bool batched>
-[[kernel]] void qmv_fast(
+[[kernel]] void affine_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1538,7 +1538,7 @@ template <typename T, int group_size, int bits, bool batched>
 }
 
 template <typename T, const int group_size, const int bits, bool batched>
-[[kernel]] void qmv(
+[[kernel]] void affine_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1590,7 +1590,7 @@ template <typename T, const int group_size, const int bits, bool batched>
 }
 
 template <typename T, const int group_size, const int bits, bool batched>
-[[kernel]] void qvm(
+[[kernel]] void affine_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1642,7 +1642,7 @@ template <typename T, const int group_size, const int bits, bool batched>
 }
 
 template <typename T, const int group_size, const int bits, int split_k = 32>
-[[kernel]] void qvm_split_k(
+[[kernel]] void affine_qvm_split_k(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1706,7 +1706,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void qmm_t(
+[[kernel]] void affine_qmm_t(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1764,7 +1764,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void qmm_n(
+[[kernel]] void affine_qmm_n(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1817,7 +1817,7 @@ template <
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void gather_qmv_fast(
+[[kernel]] void affine_gather_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1879,7 +1879,7 @@ template <typename T, int group_size, int bits>
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void gather_qmv(
+[[kernel]] void affine_gather_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -1941,7 +1941,7 @@ template <typename T, int group_size, int bits>
 }
 
 template <typename T, int group_size, int bits>
-[[kernel]] void gather_qvm(
+[[kernel]] void affine_gather_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -2010,7 +2010,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void gather_qmm_t(
+[[kernel]] void affine_gather_qmm_t(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -2077,7 +2077,7 @@ template <
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
-[[kernel]] void gather_qmm_n(
+[[kernel]] void affine_gather_qmm_n(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -2234,7 +2234,7 @@ template <
     int WM,
     int WN,
     bool transpose>
-[[kernel]] void gather_qmm_rhs(
+[[kernel]] void affine_gather_qmm_rhs(
     const device T* x [[buffer(0)]],
     const device uint32_t* w [[buffer(1)]],
     const device T* scales [[buffer(2)]],

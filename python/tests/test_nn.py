@@ -198,6 +198,12 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
 
+        nn.quantize(m, group_size=32, mode="mxfp4")
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.layers[2].scales, mx.array))
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()
