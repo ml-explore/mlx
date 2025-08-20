@@ -8,7 +8,6 @@ target_sources(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/arange.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/binary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary_two.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
@@ -17,7 +16,10 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_dynamic.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_grouped_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
@@ -46,18 +48,20 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/unary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
+
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
   target_sources(
-    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_batched_gemm_12_9.cu)
+    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm_batched_12_9.cu)
 else()
   target_sources(
-    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_batched_gemm_12_0.cpp)
+    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm_batched_12_0.cpp)
 endif()
 
 target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
@@ -149,7 +153,7 @@ target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 FetchContent_Declare(
   cudnn
   GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
-  GIT_TAG v1.12.1
+  GIT_TAG v1.14.0
   GIT_SHALLOW TRUE
   EXCLUDE_FROM_ALL)
 set(CUDNN_FRONTEND_SKIP_JSON_LIB ON)

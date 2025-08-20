@@ -4,16 +4,16 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 
-namespace mlx::core::cu {
+namespace mlx::core {
 
-void Matmul::run_batched(
+void CublasGemm::run_batched(
     cu::CommandEncoder& encoder,
     array& out,
     const array& a,
     const array& b,
-    const mlx::core::Shape& batch_shape,
-    const mlx::core::Strides& a_batch_strides,
-    const mlx::core::Strides& b_batch_strides) {
+    const Shape& batch_shape,
+    const Strides& a_batch_strides,
+    const Strides& b_batch_strides) {
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_output_array(out);
@@ -22,7 +22,7 @@ void Matmul::run_batched(
   ContiguousIterator b_it(batch_shape, b_batch_strides, batch_shape.size() - 1);
   auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
-    run_impl(
+    execute(
         encoder,
         out.data<int8_t>() + out.itemsize() * i * batch_shape.back() * M_ * N_,
         a.data<int8_t>() + a.itemsize() * a_it.loc,
@@ -33,16 +33,16 @@ void Matmul::run_batched(
   }
 }
 
-void Matmul::run_batched(
+void CublasGemm::run_batched(
     cu::CommandEncoder& encoder,
     array& out,
     const array& a,
     const array& b,
     const array& c,
-    const mlx::core::Shape& batch_shape,
-    const mlx::core::Strides& a_batch_strides,
-    const mlx::core::Strides& b_batch_strides,
-    const mlx::core::Strides& c_batch_strides,
+    const Shape& batch_shape,
+    const Strides& a_batch_strides,
+    const Strides& b_batch_strides,
+    const Strides& c_batch_strides,
     float alpha,
     float beta) {
   encoder.set_input_array(a);
@@ -56,7 +56,7 @@ void Matmul::run_batched(
   ContiguousIterator c_it(batch_shape, c_batch_strides, batch_shape.size() - 1);
   auto concurrent = encoder.concurrent_context();
   for (size_t i = 0; i < nbatch; ++i) {
-    run_impl(
+    execute(
         encoder,
         out.data<int8_t>() + out.itemsize() * i * batch_shape.back() * M_ * N_,
         a.data<int8_t>() + a.itemsize() * a_it.loc,
@@ -70,4 +70,4 @@ void Matmul::run_batched(
   }
 }
 
-} // namespace mlx::core::cu
+} // namespace mlx::core

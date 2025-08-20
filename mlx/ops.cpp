@@ -2381,9 +2381,20 @@ array logsumexp(
     throw std::invalid_argument(
         "[logsumexp] Received non-empty axes for array with 0 dimensions.");
   }
+  bool reduce_last_dim =
+      !axes.empty() && (axes.back() == a.ndim() - 1 || axes.back() == -1);
+  if (reduce_last_dim) {
+    // For more than 2 axes check if axes is [0, 1, ..., NDIM - 1] and shape
+    // is [1, 1, ..., N].
+    for (int i = axes.size() - 2; i >= 0; --i) {
+      if ((axes[i] + 1 != axes[i + 1]) || (a.shape(axes[i]) != 1)) {
+        reduce_last_dim = false;
+        break;
+      }
+    }
+  }
   bool is_complex = issubdtype(a.dtype(), complexfloating);
-  if (!is_complex && axes.size() == 1 &&
-      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+  if (!is_complex && reduce_last_dim) {
     auto dtype = at_least_float(a.dtype());
     auto out_shape = a.shape();
     out_shape.back() = 1;
@@ -2960,7 +2971,7 @@ array gather(
   }
   for (auto& x : indices) {
     if (x.dtype() == bool_) {
-      throw("[Gather] Boolean indices not supported.");
+      throw std::invalid_argument("[Gather] Boolean indices not supported.");
     }
   }
 
@@ -3403,10 +3414,20 @@ array softmax(
     throw std::invalid_argument(
         "[softmax] Received non-empty axes for array with 0 dimensions.");
   }
-
+  bool reduce_last_dim =
+      !axes.empty() && (axes.back() == a.ndim() - 1 || axes.back() == -1);
+  if (reduce_last_dim) {
+    // For more than 2 axes check if axes is [0, 1, ..., NDIM - 1] and shape
+    // is [1, 1, ..., N].
+    for (int i = axes.size() - 2; i >= 0; --i) {
+      if ((axes[i] + 1 != axes[i + 1]) || (a.shape(axes[i]) != 1)) {
+        reduce_last_dim = false;
+        break;
+      }
+    }
+  }
   bool is_complex = issubdtype(a.dtype(), complexfloating);
-  if (!is_complex && axes.size() == 1 &&
-      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+  if (!is_complex && reduce_last_dim) {
     auto dtype = at_least_float(a.dtype());
     return array(
         a.shape(),

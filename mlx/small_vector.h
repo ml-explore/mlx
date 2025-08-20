@@ -440,6 +440,7 @@ class SmallVector {
     end_ = begin_;
   }
 
+ private:
   // Grows the backing store by a factor of two, and at least to {min_capacity}.
   // TODO: Move to private after removing external code using this method.
   MLX_NOINLINE void grow(size_t min_capacity = 0) {
@@ -469,7 +470,6 @@ class SmallVector {
     end_of_storage_ = new_storage + new_capacity;
   }
 
- private:
   MLX_NOINLINE void free_storage() {
     std::destroy_n(begin_, end_ - begin_);
     if (is_big()) {
@@ -518,6 +518,18 @@ class SmallVector {
       std::is_trivially_copyable<T>::value &&
       std::is_trivially_destructible<T>::value;
 };
+
+template <typename>
+struct is_vector : std::false_type {};
+
+template <typename T, size_t Size, typename Allocator>
+struct is_vector<SmallVector<T, Size, Allocator>> : std::true_type {};
+
+template <typename T, typename Allocator>
+struct is_vector<std::vector<T, Allocator>> : std::true_type {};
+
+template <typename Vec>
+inline constexpr bool is_vector_v = is_vector<Vec>::value;
 
 #undef MLX_HAS_BUILTIN
 #undef MLX_HAS_ATTRIBUTE

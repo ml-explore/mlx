@@ -8,36 +8,6 @@
 
 namespace mlx::core {
 
-CudaStream::CudaStream(cu::Device& device) {
-  device.make_current();
-  CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
-}
-
-CudaStream::~CudaStream() {
-  CHECK_CUDA_ERROR(cudaStreamDestroy(stream_));
-}
-
-CudaGraphExec::CudaGraphExec(cudaGraphExec_t handle) : handle_(handle) {}
-
-CudaGraphExec::CudaGraphExec(CudaGraphExec&& other) : handle_(other.handle_) {
-  other.handle_ = nullptr;
-};
-
-CudaGraphExec::~CudaGraphExec() {
-  reset();
-}
-
-void CudaGraphExec::instantiate(cudaGraph_t graph) {
-  CHECK_CUDA_ERROR(cudaGraphInstantiate(&handle_, graph, nullptr, nullptr, 0));
-}
-
-void CudaGraphExec::reset() {
-  if (handle_ != nullptr) {
-    CHECK_CUDA_ERROR(cudaGraphExecDestroy(handle_));
-    handle_ = nullptr;
-  }
-}
-
 void check_cublas_error(const char* name, cublasStatus_t err) {
   if (err != CUBLAS_STATUS_SUCCESS) {
     // TODO: Use cublasGetStatusString when it is widely available.
@@ -94,6 +64,26 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
     default:
       return "unknown";
   }
+}
+
+CudaGraph::CudaGraph(cu::Device& device) {
+  device.make_current();
+  CHECK_CUDA_ERROR(cudaGraphCreate(&handle_, 0));
+}
+
+void CudaGraph::end_capture(cudaStream_t stream) {
+  assert(handle_ == nullptr);
+  CHECK_CUDA_ERROR(cudaStreamEndCapture(stream, &handle_));
+}
+
+void CudaGraphExec::instantiate(cudaGraph_t graph) {
+  assert(handle_ == nullptr);
+  CHECK_CUDA_ERROR(cudaGraphInstantiate(&handle_, graph, nullptr, nullptr, 0));
+}
+
+CudaStream::CudaStream(cu::Device& device) {
+  device.make_current();
+  CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
 }
 
 } // namespace mlx::core

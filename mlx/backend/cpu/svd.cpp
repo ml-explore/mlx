@@ -81,9 +81,7 @@ void svd_impl(
     // Vᵀ of shape N x N. (M x M in lapack).
     const int ldvt = M;
 
-    auto job_u = (u_ptr) ? "V" : "N";
-    auto job_vt = (u_ptr) ? "V" : "N";
-    static constexpr auto range = "A";
+    auto jobz = (u_ptr) ? "A" : "N";
 
     // Will contain the number of singular values after the call has returned.
     int ns = 0;
@@ -91,30 +89,20 @@ void svd_impl(
 
     // Will contain the indices of eigenvectors that failed to converge (not
     // used here but required by lapack).
-    auto iwork = array::Data{allocator::malloc(sizeof(int) * 12 * K)};
+    auto iwork = array::Data{allocator::malloc(sizeof(int) * 8 * K)};
 
     static const int lwork_query = -1;
-
-    static const int ignored_int = 0;
-    static const T ignored_float = 0;
 
     int info;
 
     // Compute workspace size.
-    gesvdx<T>(
-        /* jobu = */ job_u,
-        /* jobvt = */ job_vt,
-        /* range = */ range,
+    gesdd<T>(
+        /* jobz = */ jobz,
         // M and N are swapped since lapack expects column-major.
         /* m = */ &N,
         /* n = */ &M,
         /* a = */ nullptr,
         /* lda = */ &lda,
-        /* vl = */ &ignored_float,
-        /* vu = */ &ignored_float,
-        /* il = */ &ignored_int,
-        /* iu = */ &ignored_int,
-        /* ns = */ &ns,
         /* s = */ nullptr,
         /* u = */ nullptr,
         /* ldu = */ &ldu,
@@ -136,20 +124,13 @@ void svd_impl(
 
     // Loop over matrices.
     for (int i = 0; i < num_matrices; i++) {
-      gesvdx<T>(
-          /* jobu = */ job_u,
-          /* jobvt = */ job_vt,
-          /* range = */ range,
+      gesdd<T>(
+          /* jobz = */ jobz,
           // M and N are swapped since lapack expects column-major.
           /* m = */ &N,
           /* n = */ &M,
           /* a = */ in_ptr + M * N * i,
           /* lda = */ &lda,
-          /* vl = */ &ignored_float,
-          /* vu = */ &ignored_float,
-          /* il = */ &ignored_int,
-          /* iu = */ &ignored_int,
-          /* ns = */ &ns,
           /* s = */ s_ptr + K * i,
           // According to the identity above, lapack will write Vᵀᵀ as U.
           /* u = */ vt_ptr ? vt_ptr + N * N * i : nullptr,
@@ -165,13 +146,6 @@ void svd_impl(
       if (info != 0) {
         std::stringstream ss;
         ss << "svd_impl: sgesvdx_ failed with code " << info;
-        throw std::runtime_error(ss.str());
-      }
-
-      if (ns != K) {
-        std::stringstream ss;
-        ss << "svd_impl: expected " << K << " singular values, but " << ns
-           << " were computed.";
         throw std::runtime_error(ss.str());
       }
     }

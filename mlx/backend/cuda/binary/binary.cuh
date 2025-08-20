@@ -99,39 +99,89 @@ __global__ void binary_vv(const In* a, const In* b, Out* out, IdxT size) {
   }
 }
 
-template <typename Op, typename In, typename Out, typename IdxT, int NDIM>
+template <
+    typename Op,
+    typename In,
+    typename Out,
+    typename IdxT,
+    int NDIM,
+    int N_READS>
 __global__ void binary_g_nd(
     const In* a,
     const In* b,
     Out* out,
-    IdxT size,
+    IdxT size_rest,
     const __grid_constant__ cuda::std::array<int32_t, NDIM> shape,
     const __grid_constant__ cuda::std::array<int64_t, NDIM> a_strides,
     const __grid_constant__ cuda::std::array<int64_t, NDIM> b_strides) {
-  IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    auto [a_idx, b_idx] = elem_to_loc_nd<NDIM>(
-        index, shape.data(), a_strides.data(), b_strides.data());
-    out[index] = Op{}(a[a_idx], b[b_idx]);
+  auto block = cg::this_thread_block();
+  auto grid = cg::this_grid();
+  IdxT index_rest =
+      grid.block_index().y * block.dim_threads().y + block.thread_index().y;
+  if (index_rest >= size_rest) {
+    return;
   }
+
+  auto shape_x = shape[NDIM - 1];
+  auto a_stride_x = a_strides[NDIM - 1];
+  auto b_stride_x = b_strides[NDIM - 1];
+  IdxT index_x =
+      grid.block_index().x * block.dim_threads().x + block.thread_index().x;
+  auto [a_idx, b_idx] = elem_to_loc_nd<NDIM>(
+      index_rest * shape_x, shape.data(), a_strides.data(), b_strides.data());
+  auto a_vec =
+      load_vector<N_READS>(a + a_idx, index_x, shape_x, a_stride_x, In(0));
+  auto b_vec =
+      load_vector<N_READS>(b + b_idx, index_x, shape_x, b_stride_x, In(0));
+
+  AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    out_vec[i] = Op{}(a_vec[i], b_vec[i]);
+  }
+  store_vector(out + shape_x * index_rest, index_x, out_vec, shape_x);
 }
 
-template <typename Op, typename In, typename Out, typename IdxT>
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
 __global__ void binary_g(
     const In* a,
     const In* b,
     Out* out,
-    IdxT size,
+    IdxT size_rest,
     const __grid_constant__ Shape shape,
     const __grid_constant__ Strides a_strides,
     const __grid_constant__ Strides b_strides,
     int ndim) {
-  IdxT index = cg::this_grid().thread_rank();
-  if (index < size) {
-    auto [a_idx, b_idx] = elem_to_loc(
-        index, shape.data(), a_strides.data(), b_strides.data(), ndim);
-    out[index] = Op{}(a[a_idx], b[b_idx]);
+  auto block = cg::this_thread_block();
+  auto grid = cg::this_grid();
+  IdxT index_rest =
+      grid.block_index().y * block.dim_threads().y + block.thread_index().y;
+  if (index_rest >= size_rest) {
+    return;
   }
+
+  auto shape_x = shape[ndim - 1];
+  auto a_stride_x = a_strides[ndim - 1];
+  auto b_stride_x = b_strides[ndim - 1];
+  IdxT index_x =
+      grid.block_index().x * block.dim_threads().x + block.thread_index().x;
+  auto [a_idx, b_idx] = elem_to_loc(
+      index_rest * shape_x,
+      shape.data(),
+      a_strides.data(),
+      b_strides.data(),
+      ndim);
+  auto a_vec =
+      load_vector<N_READS>(a + a_idx, index_x, shape_x, a_stride_x, In(0));
+  auto b_vec =
+      load_vector<N_READS>(b + b_idx, index_x, shape_x, b_stride_x, In(0));
+
+  AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    out_vec[i] = Op{}(a_vec[i], b_vec[i]);
+  }
+  store_vector(out + shape_x * index_rest, index_x, out_vec, shape_x);
 }
 
 template <typename Op, typename In, typename Out>
@@ -209,39 +259,61 @@ void binary_op_gpu_inplace(
                 auto& a_strides = strides[0];
                 auto& b_strides = strides[1];
                 int ndim = shape.size();
+                int work_per_thread = 1;
+                auto dim0 = ndim > 0 ? shape.back() : 1;
+                auto rest = out.size() / dim0;
+                if (dim0 >= 4) {
+                  work_per_thread = 4;
+                }
+                dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+                auto block_dims = get_block_dims(dim0, rest, 1);
+                uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
+                uint32_t num_blocks_y = cuda::ceil_div(rest, block_dims.y);
                 if (ndim <= 3) {
                   dispatch_1_2_3(ndim, [&](auto dims_constant) {
-                    auto [num_blocks, block_dims] =
-                        get_launch_args(out, large());
+                    auto kernel = cu::binary_g_nd<
+                        Op,
+                        InType,
+                        OutType,
+                        IdxT,
+                        dims_constant(),
+                        1>;
+                    if (work_per_thread == 4) {
+                      kernel = cu::binary_g_nd<
+                          Op,
+                          InType,
+                          OutType,
+                          IdxT,
+                          dims_constant(),
+                          4>;
+                    }
                     encoder.add_kernel_node(
-                        cu::binary_g_nd<
-                            Op,
-                            InType,
-                            OutType,
-                            IdxT,
-                            dims_constant()>,
-                        num_blocks,
+                        kernel,
+                        {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
                         a.data<InType>(),
                         b.data<InType>(),
                         out.data<OutType>(),
-                        out.size(),
+                        rest,
                         const_param<dims_constant()>(shape),
                         const_param<dims_constant()>(a_strides),
                         const_param<dims_constant()>(b_strides));
                   });
                 } else {
-                  auto [num_blocks, block_dims] = get_launch_args(out, large());
+                  auto kernel = cu::binary_g<Op, InType, OutType, IdxT, 1>;
+                  if (work_per_thread == 4) {
+                    kernel = cu::binary_g<Op, InType, OutType, IdxT, 4>;
+                  }
                   encoder.add_kernel_node(
-                      cu::binary_g<Op, InType, OutType, IdxT>,
-                      num_blocks,
+                      kernel,
+                      {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
                       a.data<InType>(),
                       b.data<InType>(),
                       out.data<OutType>(),
-                      out.size(),
+                      rest,
                       const_param(shape),
                       const_param(a_strides),
                       const_param(b_strides),
@@ -303,55 +375,5 @@ void binary_op_gpu(
     auto& s = out.primitive().stream();                               \
     binary_op_gpu<cu::func>(inputs, out, name(), s);                  \
   }
-
-BINARY_GPU(Add)
-BINARY_GPU(ArcTan2)
-BINARY_GPU(Divide)
-BINARY_GPU(Remainder)
-BINARY_GPU(Greater)
-BINARY_GPU(GreaterEqual)
-BINARY_GPU(Less)
-BINARY_GPU(LessEqual)
-BINARY_GPU(LogicalAnd)
-BINARY_GPU(LogicalOr)
-BINARY_GPU(LogAddExp)
-BINARY_GPU(Maximum)
-BINARY_GPU(Minimum)
-BINARY_GPU(Multiply)
-BINARY_GPU(NotEqual)
-BINARY_GPU(Power)
-BINARY_GPU(Subtract)
-
-void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("Equal::eval_gpu");
-  auto& s = out.primitive().stream();
-  if (equal_nan_) {
-    binary_op_gpu<cu::NaNEqual>(inputs, out, name(), s);
-  } else {
-    binary_op_gpu<cu::Equal>(inputs, out, name(), s);
-  }
-}
-
-void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("BitwiseBinary::eval_gpu");
-  auto& s = out.primitive().stream();
-  switch (op_) {
-    case BitwiseBinary::And:
-      binary_op_gpu<cu::BitwiseAnd>(inputs, out, name(), s);
-      break;
-    case BitwiseBinary::Or:
-      binary_op_gpu<cu::BitwiseOr>(inputs, out, name(), s);
-      break;
-    case BitwiseBinary::Xor:
-      binary_op_gpu<cu::BitwiseXor>(inputs, out, name(), s);
-      break;
-    case BitwiseBinary::LeftShift:
-      binary_op_gpu<cu::LeftShift>(inputs, out, name(), s);
-      break;
-    case BitwiseBinary::RightShift:
-      binary_op_gpu<cu::RightShift>(inputs, out, name(), s);
-      break;
-  }
-}
 
 } // namespace mlx::core
