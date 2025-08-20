@@ -13,8 +13,6 @@ cuda_skip = {
     # Hadamard NYI
     "TestOps.test_hadamard",
     "TestOps.test_hadamard_grad_vmap",
-    # Convolutions NYI
-    "TestConv.test_1d_conv_with_2d",
     # FFTs NYI
     "TestFFT.test_fft",
     "TestFFT.test_fft_big_powers_of_two",
