@@ -734,6 +734,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
         for L, K, D, E, I, transpose, mode in parameters:
             if mode == "mxfp4":
                 group_size = 32
+            else:
+                group_size = 64
             K, D = (K, D) if transpose else (D, K)
             ishape = (L, I)
             xshape = (L, 1, 1, K)
