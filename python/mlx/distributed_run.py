@@ -417,8 +417,11 @@ def launch_mpi(parser, hosts, args, command):
 
 def launch_nccl(parser, hosts, args, command):
     master_host = hosts[0].ips[0]
+
+    if master_host != "127.0.0.1":
+        raise ValueError("The NCCL backend only supports localhost for now. ")
     master_port = args.nccl_port
-    world_size = args.nproc_per_node * len(hosts)
+    world_size = len(hosts)
 
     base_env = os.environ.copy()
     base_env.update(
@@ -813,12 +816,6 @@ def main():
         type=int,
         default=12345,
         help="The port to use for the NCCL communication (only for nccl backend)",
-    )
-    parser.add_argument(
-        "--nproc-per-node",
-        type=positive_number,
-        default=1,
-        help="How many processes to run per node (only for nccl backend)",
     )
 
     args, rest = parser.parse_known_args()
