@@ -975,6 +975,7 @@ class RingGroup : public GroupImpl {
 
   int rank_;
   int size_;
+
   bool verbose_;
 
   ThreadPool pool_;
