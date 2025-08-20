@@ -64,8 +64,8 @@ struct KernelArgs {
  private:
   std::vector<void*> args_;
 
-  // The cuLaunchKernel API requires passing pointers to arguments so store
-  // temporary values until the kernel is launched.
+  // The cuGraphAddKernelNode API requires passing pointers to arguments so
+  // store temporary values until the node is created.
   using Arg = std::variant<
       std::monostate,
       CUdeviceptr,
@@ -93,10 +93,7 @@ class JitModule {
   JitModule& operator=(const JitModule&) = delete;
   CUfunction get_kernel(
       const std::string& kernel_name,
-      std::function<void(CUfunction)> configure_kernel);
-  CUfunction get_kernel(const std::string& kernel_name) {
-    return get_kernel(kernel_name, [](auto k) {});
-  }
+      std::function<void(CUfunction)> configure_kernel = nullptr);
 
  private:
   CUmodule module_{nullptr};
@@ -109,6 +106,6 @@ JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
     const KernelBuilder& builder,
-    bool cache = true);
+    bool use_disk_cache = true);
 
 } // namespace mlx::core::cu

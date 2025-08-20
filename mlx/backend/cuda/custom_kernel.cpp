@@ -49,7 +49,7 @@ std::string template_arguments_hash(
 }
 
 std::string build_kernel(
-    std::string func_name,
+    const std::string& func_name,
     const std::string& header,
     const std::string& source,
     const std::vector<std::string>& input_names,
@@ -316,7 +316,7 @@ void CustomKernel::eval_gpu(
       name_,
       [&]() {
         return std::make_tuple(
-            is_precompiled_, source_, std::vector<std::string>{kernel_name});
+            is_precompiled_, source_, std::vector{kernel_name});
       },
       false);
 

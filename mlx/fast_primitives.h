@@ -308,7 +308,7 @@ class CustomKernel : public Primitive {
         shape_infos_(std::move(shape_infos)),
         ensure_row_contiguous_(ensure_row_contiguous),
         init_value_(init_value),
-        scalar_arguments_(scalar_arguments),
+        scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
         shared_memory_(shared_memory) {}
 
