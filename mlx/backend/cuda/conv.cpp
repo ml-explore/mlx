@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/cuda/conv/conv.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/lru_cache.h"
@@ -21,6 +22,9 @@ namespace {
 #define CONV_BACKWARD_WEIGHT \
   CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR
 
+// Custom placeholder representing fallback kernel.
+#define CONV_FALLBACK static_cast<cudnnBackendDescriptorType_t>(-1)
+
 struct ConvCacheKey {
   int device_id;
   cudnnDataType_t cudnn_dtype;
@@ -40,7 +44,9 @@ struct ConvCacheKey {
 auto& conv_cache() {
   static LRUBytesKeyCache<
       ConvCacheKey,
-      std::pair<cudnnBackendDescriptorType_t, cudnn_frontend::ExecutionPlan>>
+      std::pair<
+          cudnnBackendDescriptorType_t,
+          std::optional<cudnn_frontend::ExecutionPlan>>>
       cache(/* capacity */ 128);
   return cache;
 }
@@ -292,12 +298,29 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
       get_alignment(out)};
   if (auto it = conv_cache().find(cache_key); it != conv_cache().end()) {
     auto& [backend_type, plan] = it->second;
-    std::tie(in, wt, out) =
-        prepare_args(encoder, backend_type, in, wt, out, groups_, s);
-    register_args(encoder, backend_type, in, wt, out, out_);
-    auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
-    if (!encode_cudnn_plan(encoder, plan, {'x', 'w', 'y'}, x, w, y)) {
-      throw std::runtime_error("[conv] Cached plan failed to execute.");
+    if (plan) {
+      // Run cached plan.
+      std::tie(in, wt, out) =
+          prepare_args(encoder, backend_type, in, wt, out, groups_, s);
+      register_args(encoder, backend_type, in, wt, out, out_);
+      auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
+      if (!encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
+        throw std::runtime_error("[conv] Cached plan failed to execute.");
+      }
+    } else {
+      // Run fallback kernel.
+      gemm_conv(
+          encoder,
+          in,
+          wt,
+          out,
+          kernel_strides_,
+          padding_lo_,
+          kernel_dilation_,
+          input_dilation_,
+          groups_,
+          flip_,
+          s);
     }
     return;
   }
@@ -357,25 +380,39 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
       break;
     }
   }
-  if (!op_graph) {
-    throw std::runtime_error("[conv] Can not build op graph.");
+
+  if (op_graph) {
+    // Setup inputs and outputs.
+    register_args(encoder, backend_type, in, wt, out, out_);
+
+    // Find a plan for the graph and execute it.
+    auto plan = find_cudnn_plan_from_op_graph(
+        encoder.device().cudnn_handle(), backend_type, dtype, *op_graph);
+    if (!plan) {
+      throw std::runtime_error("[conv] Unable to find an execution plan.");
+    }
+    auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
+    if (encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
+      conv_cache().emplace(
+          cache_key, std::make_pair(backend_type, std::move(*plan)));
+      return;
+    }
   }
 
-  // Setup inputs and outputs.
-  register_args(encoder, backend_type, in, wt, out, out_);
-
-  // Find a plan for the graph and execute it.
-  auto plan = find_cudnn_plan_from_op_graph(
-      encoder.device().cudnn_handle(), backend_type, dtype, *op_graph);
-  if (!plan) {
-    throw std::runtime_error("[conv] Unable to find an execution plan.");
-  }
-  auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
-  if (!encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
-    throw std::runtime_error("[conv] Failed to run execution plan.");
-  }
-  conv_cache().emplace(
-      cache_key, std::make_pair(backend_type, std::move(*plan)));
+  // Use fallback kernel for settings not supported by cuDNN.
+  gemm_conv(
+      encoder,
+      in,
+      wt,
+      out,
+      kernel_strides_,
+      padding_lo_,
+      kernel_dilation_,
+      input_dilation_,
+      groups_,
+      flip_,
+      s);
+  conv_cache().emplace(cache_key, std::make_pair(CONV_FALLBACK, std::nullopt));
 }
 
 } // namespace mlx::core

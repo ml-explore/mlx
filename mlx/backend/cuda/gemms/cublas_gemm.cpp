@@ -202,6 +202,25 @@ CublasGemm::~CublasGemm() {
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescDestroy(matmul_desc_));
 }
 
+void CublasGemm::set_out(
+    Dtype dtype,
+    bool transposed,
+    uint64_t rows,
+    uint64_t cols,
+    int64_t ld,
+    int32_t batch_count,
+    int64_t batch_stride) {
+  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(out_desc_));
+  out_desc_ = create_matrix_layout(
+      dtype_to_cublas_type(dtype),
+      rows,
+      cols,
+      transposed,
+      ld,
+      batch_count,
+      batch_stride);
+}
+
 void CublasGemm::run(
     cu::CommandEncoder& encoder,
     array& out,
