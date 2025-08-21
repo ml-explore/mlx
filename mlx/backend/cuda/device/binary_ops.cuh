@@ -204,6 +204,10 @@ struct Power {
   __device__ T operator()(T base, T exp) {
     if constexpr (cuda::std::is_integral_v<T>) {
       T res = 1;
+      // Raising an integer to a negative power is undefined
+      if (exp < 0) {
+        return 0;
+      }
       while (exp) {
         if (exp & 1) {
           res *= base;

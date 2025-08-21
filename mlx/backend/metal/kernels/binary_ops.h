@@ -223,6 +223,11 @@ struct Power {
   template <typename T>
   metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T base, T exp) {
     T res = 1;
+    // Undefined to raise integer to negative power
+    if (exp < 0) {
+      return 0;
+    }
+
     while (exp) {
       if (exp & 1) {
         res *= base;
