@@ -4,17 +4,9 @@
 
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/metal/metal.h"
+#include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
-
-inline mlx::core::Device get_device() {
-  if (mlx::core::metal::is_available()) {
-    return mlx::core::Device::cpu;
-  } else if (mlx::core::cu::is_available()) {
-    return mlx::core::Device::gpu;
-  }
-  throw std::runtime_error("No available device for distributed operations.");
-}
 
 namespace mlx::core::distributed {
 
@@ -35,15 +27,16 @@ array all_sum(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(to_stream(s, dev), group, AllReduce::Sum),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Sum),
       {x});
 }
 
@@ -52,15 +45,16 @@ array all_max(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(to_stream(s, dev), group, AllReduce::Max),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Max),
       {x});
 }
 
@@ -69,15 +63,16 @@ array all_min(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(to_stream(s, dev), group, AllReduce::Min),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Min),
       {x});
 }
 
@@ -86,11 +81,11 @@ array all_gather(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
 
   auto result_shape = x.shape();
   if (result_shape.size() == 0) {
@@ -101,7 +96,7 @@ array all_gather(
   return array(
       std::move(result_shape),
       x.dtype(),
-      std::make_shared<AllGather>(to_stream(s, dev), group),
+      std::make_shared<AllGather>(stream, group),
       {x});
 }
 
@@ -111,11 +106,11 @@ array send(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     throw std::invalid_argument("Cannot send to a singleton group");
   }
+  auto stream = detail::communication_stream(group, s);
 
   if (dst < 0 || dst >= group.size()) {
     std::ostringstream msg;
@@ -125,10 +120,7 @@ array send(
   }
 
   return array(
-      x.shape(),
-      x.dtype(),
-      std::make_shared<Send>(to_stream(s, dev), group, dst),
-      {x});
+      x.shape(), x.dtype(), std::make_shared<Send>(stream, group, dst), {x});
 }
 
 array recv(
@@ -138,11 +130,11 @@ array recv(
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto group = to_group(group_);
-  auto dev = get_device();
 
   if (group.size() == 1) {
     throw std::invalid_argument("Cannot recv from a singleton group");
   }
+  auto stream = detail::communication_stream(group, s);
 
   if (src < 0 || src >= group.size()) {
     std::ostringstream msg;
@@ -153,7 +145,7 @@ array recv(
   return array(
       std::move(shape),
       std::move(dtype),
-      std::make_shared<Recv>(to_stream(s, dev), group, src),
+      std::make_shared<Recv>(stream, group, src),
       std::vector<array>{});
 }
 

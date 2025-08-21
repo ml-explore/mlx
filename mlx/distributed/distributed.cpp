@@ -13,6 +13,10 @@ namespace mlx::core::distributed {
 
 namespace detail {
 
+Stream communication_stream(Group group, StreamOrDevice s /* = {} */) {
+  return group.raw_group()->communication_stream(s);
+}
+
 void all_sum(Group group, const array& input, array& output, Stream stream) {
   group.raw_group()->all_sum(input, output, stream);
 }
@@ -39,6 +43,10 @@ void recv(Group group, array& out, int src, Stream stream) {
 
 class EmptyGroup : public GroupImpl {
  public:
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s);
+  }
+
   int rank() override {
     return 0;
   }

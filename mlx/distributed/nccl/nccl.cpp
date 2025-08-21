@@ -17,6 +17,7 @@
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/dtype_utils.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::distributed::nccl {
 
@@ -253,6 +254,10 @@ class NCCLGroup : public GroupImpl {
     ncclCommDestroy(comm_);
     ncclGroupEnd();
     initialized_ = false;
+  }
+
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s, Device::gpu);
   }
 
   int rank() override {

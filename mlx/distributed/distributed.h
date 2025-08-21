@@ -3,7 +3,9 @@
 #pragma once
 
 #include <memory>
+
 #include "mlx/array.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::distributed {
 
