@@ -438,7 +438,7 @@ void init_fast(nb::module_& parent_module) {
               output_shapes (List[Sequence[int]]): The list of shapes for each output in ``output_names``.
               output_dtypes (List[Dtype]): The list of data types for each output in ``output_names``.
               grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
-                For compatibility with :func:`metal_kernel` the grid is in threads and not in threadblocks.
+                For compatibility with :func:`metal_kernel` the grid is in threads and not in threadgroups.
               threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
               template (List[Tuple[str, Union[bool, int, Dtype]]], optional): Template arguments.
                   These will be added as template arguments to the kernel definition. Default: ``None``.
