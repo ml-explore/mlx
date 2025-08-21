@@ -762,50 +762,6 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_;
 }
 
-array pack_and_quantize(
-    array& packed_w,
-    const array& scales,
-    const array& biases,
-    int bits,
-    const Stream& s) {
-  int el_per_int = 32 / bits;
-  array zero(0, packed_w.dtype());
-  array n_bins((1 << bits) - 1, packed_w.dtype()); // 2**bits - 1
-  packed_w = astype(
-      clip(
-          round(divide(subtract(packed_w, biases, s), scales, s), s),
-          zero,
-          n_bins,
-          s),
-      uint32,
-      s);
-  if (is_power_of_2(bits)) {
-    array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
-    packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-    packed_w = sum(
-        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
-  } else {
-    // This is slow but we have fast GPU/CPU versions of this function so we
-    // shouldn't be here often.
-    packed_w = expand_dims(packed_w, /* axis= */ -1, s);
-    packed_w = bitwise_and(
-        right_shift(packed_w, arange(bits, uint32, s), s),
-        array({1}, uint32),
-        s);
-    auto new_shape = packed_w.shape();
-    new_shape[new_shape.size() - 2] = -1;
-    new_shape.back() = 32;
-    packed_w = reshape(packed_w, new_shape, s);
-    array shifts = arange(32, uint32, s);
-    packed_w =
-        sum(left_shift(packed_w, shifts, s),
-            /* axis= */ -1,
-            /* keepdims= */ false,
-            s);
-  }
-  return packed_w;
-}
-
 bool Quantize::is_equivalent(const Primitive& other) const {
   const Quantize& p_other = static_cast<const Quantize&>(other);
   return (

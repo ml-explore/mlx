@@ -95,10 +95,10 @@ inline U qdot(
   const device uint16_t* ws = (const device uint16_t*)w;
   for (int i = 0; i < (values_per_thread / 4); i++) {
     accum +=
-        (x_thread[4 * i] * lut[ws[i] & 0x000f] +
-         x_thread[4 * i + 1] * lut[(ws[i] >> 4) & 0x000f] +
-         x_thread[4 * i + 2] * lut[(ws[i] >> 8) & 0x000f] +
-         x_thread[4 * i + 3] * lut[(ws[i] >> 12) & 0x000f]);
+        (x_thread[4 * i] * lut[ws[i] & 0xf] +
+         x_thread[4 * i + 1] * lut[(ws[i] >> 4) & 0xf] +
+         x_thread[4 * i + 2] * lut[(ws[i] >> 8) & 0xf] +
+         x_thread[4 * i + 3] * lut[(ws[i] >> 12) & 0xf]);
   }
   return scale * accum;
 }
@@ -115,10 +115,10 @@ inline U qdot_safe(
   const device uint16_t* ws = (const device uint16_t*)w;
   for (int i = 0; i < (N / 4); i++) {
     accum +=
-        (x_thread[4 * i] * lut[ws[i] & 0x000f] +
-         x_thread[4 * i + 1] * lut[(ws[i] & 0x00f0) >> 4] +
-         x_thread[4 * i + 2] * lut[(ws[i] & 0x0f00) >> 8] +
-         x_thread[4 * i + 3] * lut[(ws[i] & 0xf000) >> 12]);
+        (x_thread[4 * i] * lut[ws[i] & 0xf] +
+         x_thread[4 * i + 1] * lut[(ws[i] >> 4) & 0xf] +
+         x_thread[4 * i + 2] * lut[(ws[i] >> 8) & 0xf] +
+         x_thread[4 * i + 3] * lut[(ws[i] >> 12) & 0xf]);
   }
   return scale * accum;
 }
@@ -131,8 +131,8 @@ inline void qouter(
     thread U* result,
     const threadgroup U* lut) {
   for (int i = 0; i < (values_per_thread / 2); i++) {
-    result[2 * i] += x * scale * lut[w[i] & 0x0f];
-    result[2 * i + 1] += x * scale * lut[(w[i] & 0xf0) >> 4];
+    result[2 * i] += x * scale * lut[w[i] & 0xf];
+    result[2 * i + 1] += x * scale * lut[(w[i] >> 4) & 0xf];
   }
 }
 
@@ -143,8 +143,8 @@ inline void dequantize(
     threadgroup U* w_local,
     const threadgroup U* lut) {
   for (int i = 0; i < (N / 2); i++) {
-    w_local[2 * i] = scale * lut[w[i] & 0x0f];
-    w_local[2 * i + 1] = scale * lut[(w[i] & 0xf0) >> 4];
+    w_local[2 * i] = scale * lut[w[i] & 0xf];
+    w_local[2 * i + 1] = scale * lut[(w[i] >> 4) & 0xf];
   }
 }
 
