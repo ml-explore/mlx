@@ -1,7 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <cassert>
-
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
@@ -838,8 +836,6 @@ void mxfp4_bs_qmm_dispatch(
 } // namespace
 
 void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 4);
-
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];
@@ -892,8 +888,6 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 6);
-
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];

@@ -154,7 +154,7 @@ class QuantizedEmbedding(Module):
     ):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
         embedding_dims, dims = embedding_layer.weight.shape
-        ql = cls(embedding_dims, dims, group_size, bits)
+        ql = cls(embedding_dims, dims, group_size, bits, mode=mode)
         ql.weight, *scales_biases = mx.quantize(
             embedding_layer.weight,
             group_size,
@@ -260,7 +260,7 @@ class QuantizedLinear(Module):
     ):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape
-        ql = cls(input_dims, output_dims, False, group_size, bits)
+        ql = cls(input_dims, output_dims, False, group_size, bits, mode=mode)
         ql.weight, *scales_biases = mx.quantize(
             linear_layer.weight,
             group_size,
