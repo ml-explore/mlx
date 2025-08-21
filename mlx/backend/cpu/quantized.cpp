@@ -840,14 +840,15 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];
 
-  std::vector<array> temps;
-  auto ensure_row_contiguous = [s = stream(), &temps](const array& arr) {
+  auto& encoder = cpu::get_command_encoder(stream());
+  auto ensure_row_contiguous = [s = stream(), &encoder](const array& arr) {
     if (arr.flags().row_contiguous) {
       return arr;
     } else {
-      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy_cpu(arr, temps.back(), CopyType::General, s);
-      return temps.back();
+      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
+      copy_cpu(arr, arr_cpy, CopyType::General, s);
+      encoder.add_temporary(arr_cpy);
+      return arr_cpy;
     }
   };
 
@@ -857,8 +858,6 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  auto& encoder = cpu::get_command_encoder(stream());
-  encoder.add_temporaries(std::move(temps));
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
@@ -894,17 +893,18 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& lhs_indices = inputs[inputs.size() - 2];
   auto& rhs_indices = inputs[inputs.size() - 1];
 
-  std::vector<array> temps;
+  auto& encoder = cpu::get_command_encoder(stream());
   auto ensure_row_contiguous_last_dims = [s = stream(),
-                                          &temps](const array& arr) {
+                                          &encoder](const array& arr) {
     auto stride_0 = arr.strides()[arr.ndim() - 2];
     auto stride_1 = arr.strides()[arr.ndim() - 1];
     if (stride_0 == arr.shape(-1) && stride_1 == 1) {
       return arr;
     } else {
-      temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy_cpu(arr, temps.back(), CopyType::General, s);
-      return temps.back();
+      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
+      copy_cpu(arr, arr_cpy, CopyType::General, s);
+      encoder.add_temporary(arr_cpy);
+      return arr_cpy;
     }
   };
 
@@ -914,8 +914,6 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  auto& encoder = cpu::get_command_encoder(stream());
-  encoder.add_temporaries(std::move(temps));
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(scales);

@@ -2996,7 +2996,10 @@ TEST_CASE("test quantize dequantize") {
 
   for (int i = 2; i <= 8; i *= 2) {
     int el_per_int = 32 / i;
-    auto [x_q, scales, biases] = quantize(x, 128, i);
+    auto res = quantize(x, 128, i);
+    auto x_q = res[0];
+    auto scales = res[1];
+    auto biases = res[2];
     CHECK_EQ(x_q.shape(), Shape{128, 512 / el_per_int});
     CHECK_EQ(scales.shape(), Shape{128, 4});
     CHECK_EQ(biases.shape(), Shape{128, 4});

@@ -4210,7 +4210,8 @@ void init_ops(nb::module_& m) {
           ``quantize`` currently only supports 2D inputs with the second
           dimension divisible by ``group_size``
 
-        The supported quantization modes are described in more detail below.
+        The supported quantization modes are ``"affine"`` and ``"mxfp4"``. They
+        are described in more detail below.
 
         Args:
           w (array): Matrix to be quantized
@@ -4225,13 +4226,12 @@ void init_ops(nb::module_& m) {
 
           * w_q (array): The quantized version of ``w``
           * scales (array): The quantization scales
-          * biases (array): The quantization biases (returned for `mode=="affine"`).
+          * biases (array): The quantization biases (returned for ``mode=="affine"``).
 
         Notes:
-          The currently supported quantization mode is `"affine"`.
-          Formally, for a group of :math:`g` consecutive elements :math:`w_1` to
-          :math:`w_g` in a row of ``w`` we compute the quantized representation
-          of each element :math:`\hat{w_i}` as follows
+          The ``affine`` mode quantizes groups of :math:`g` consecutive
+          elements in a row of ``w``. For each group the quantized
+          representation of each element :math:`\hat{w_i}` is computed as follows:
 
           .. math::
 
@@ -4248,9 +4248,16 @@ void init_ops(nb::module_& m) {
           unsigned 32 bit integer where the 1st element occupies the 4 least
           significant bits, the 2nd bits 4-7 etc.
 
-          In order to be able to dequantize the elements of ``w`` we also need to
-          save :math:`s` and :math:`\beta` which are the returned ``scales`` and
-        ``biases`` respectively.
+          To dequantize the elements of ``w``, we also save :math:`s` and
+          :math:`\beta` which are the returned ``scales`` and
+          ``biases`` respectively.
+
+          The ``mxfp4`` mode similarly quantizes groups of :math:`g` elements
+          of ``w``. For ``mxfp4`` the group size must be ``32``. The elements
+          are quantized to 4-bit precision floating-point values (E2M1) with a
+          shared 8-bit scale per group. Unlike ``affine`` quantization,
+          ``mxfp4`` does not have a bias value. More details on the format can
+          be found in the `specification <https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf>`_.
       )pbdoc");
   m.def(
       "dequantize",
@@ -4268,11 +4275,9 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
         Dequantize the matrix ``w`` using quantization parameters.
 
-        The supported quantization modes are described in more detail below.
-
         Args:
-          w (array): Matrix to be quantized
-          scales (array): The scales to use per ``group_size`` elements of ``w``
+          w (array): Matrix to be dequantized
+          scales (array): The scales to use per ``group_size`` elements of ``w``.
           biases (array, optional): The biases to use per ``group_size``
              elements of ``w``. Default: ``None``.
           group_size (int, optional): The size of the group in ``w`` that shares a
@@ -4285,10 +4290,11 @@ void init_ops(nb::module_& m) {
           array: The dequantized version of ``w``
 
         Notes:
-          The currently supported quantization mode is `"affine"`.
-          Formally, given the notation in :func:`quantize`, we compute
-          :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
-          :math:`\beta` as follows
+          The currently supported quantization modes are ``"affine"`` and ``mxfp4``.
+
+          For ``affine`` quantization, given the notation in :func:`quantize`,
+          we compute :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s`
+          and :math:`\beta` as follows
 
           .. math::
 
