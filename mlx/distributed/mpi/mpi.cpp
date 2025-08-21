@@ -349,6 +349,10 @@ class MPIGroup : public GroupImpl {
     }
   }
 
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s, Device::cpu);
+  }
+
   int rank() override {
     if (rank_ < 0) {
       mpi().rank(comm_, &rank_);

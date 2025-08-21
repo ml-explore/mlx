@@ -271,7 +271,7 @@ and the CUDA toolkit. For example on Ubuntu, run the following:
    dpkg -i cuda-keyring_1.1-1_all.deb
    apt-get update -y
    apt-get -y install cuda-toolkit-12-9
-   apt-get install libblas-dev liblapack-dev liblapacke-dev -y
+   apt-get install libblas-dev liblapack-dev liblapacke-dev libcudnn9-dev-cuda-12 -y
 
 
 When building either the Python or C++ APIs make sure to pass the cmake flag

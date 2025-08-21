@@ -76,6 +76,7 @@ def average_gradients(
     group: Optional[mx.distributed.Group] = None,
     all_reduce_size: int = 32 * 1024**2,
     communication_type: Optional[mx.Dtype] = None,
+    stream: mx.Stream = mx.cpu,
 ):
     """Average the gradients across the distributed processes in the passed group.
 
@@ -94,6 +95,7 @@ def average_gradients(
         communication_type (Optional[mlx.core.Dtype]): If provided cast to this
             type before performing the communication. Typically cast to a
             smaller float to reduce the communication size. Default: ``None``.
+        stream (mlx.core.Stream): The stream to use for the reduction. Default: ``mlx.cpu``.
     """
     group = group or mx.distributed.init()
     N = group.size()
@@ -104,7 +106,7 @@ def average_gradients(
     def _average(x):
         dt = x.dtype
         x = x.astype(communication_type) if communication_type is not None else x
-        return mx.distributed.all_sum(x, stream=mx.cpu).astype(dt) / N
+        return mx.distributed.all_sum(x, stream=stream).astype(dt) / N
 
     if all_reduce_size <= 0:
         return tree_map(_average, gradients)
