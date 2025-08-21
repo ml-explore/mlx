@@ -1,7 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <cassert>
-
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
