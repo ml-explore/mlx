@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <optional>
+#include <variant>
 
 #include "mlx/primitives.h"
 
@@ -283,6 +284,8 @@ struct CustomKernelShapeInfo {
   bool ndim = false;
 };
 
+using ScalarArg = std::variant<bool, int, float>;
+
 class CustomKernel : public Primitive {
  public:
   CustomKernel(
@@ -293,7 +296,10 @@ class CustomKernel : public Primitive {
       std::tuple<int, int, int> threadgroup,
       std::vector<CustomKernelShapeInfo> shape_infos,
       bool ensure_row_contiguous,
-      std::optional<float> init_value)
+      std::optional<float> init_value,
+      std::vector<ScalarArg> scalar_arguments,
+      bool is_precompiled,
+      int shared_memory)
       : Primitive(stream),
         source_(std::move(source)),
         name_(std::move(name)),
@@ -301,11 +307,14 @@ class CustomKernel : public Primitive {
         threadgroup_(threadgroup),
         shape_infos_(std::move(shape_infos)),
         ensure_row_contiguous_(ensure_row_contiguous),
-        init_value_(init_value) {}
+        init_value_(init_value),
+        scalar_arguments_(std::move(scalar_arguments)),
+        is_precompiled_(is_precompiled),
+        shared_memory_(shared_memory) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    throw std::runtime_error("Custom Metal kernels only run on GPU.");
+    throw std::runtime_error("Custom kernels only run on GPU.");
   }
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -321,6 +330,9 @@ class CustomKernel : public Primitive {
   std::vector<CustomKernelShapeInfo> shape_infos_;
   bool ensure_row_contiguous_;
   std::optional<float> init_value_;
+  std::vector<ScalarArg> scalar_arguments_;
+  bool is_precompiled_;
+  int shared_memory_;
 };
 
 } // namespace mlx::core::fast

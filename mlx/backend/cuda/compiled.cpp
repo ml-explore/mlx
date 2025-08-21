@@ -267,7 +267,8 @@ void Compiled::eval_gpu(
       }
     }
 
-    return std::make_pair(std::move(builder.os), std::move(kernel_names));
+    return std::make_tuple(
+        false, std::move(builder.os), std::move(kernel_names));
   });
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also

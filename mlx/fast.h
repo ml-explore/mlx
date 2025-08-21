@@ -66,9 +66,10 @@ array affine_dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-typedef std::variant<int, bool, Dtype> TemplateArg;
+using TemplateArg = std::variant<int, bool, Dtype>;
+using ScalarArg = std::variant<bool, int, float>;
 
-typedef std::function<std::vector<array>(
+using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
     const std::vector<Dtype>&,
@@ -77,10 +78,9 @@ typedef std::function<std::vector<array>(
     std::vector<std::pair<std::string, TemplateArg>>,
     std::optional<float>,
     bool,
-    StreamOrDevice)>
-    MetalKernelFunction;
+    StreamOrDevice)>;
 
-MetalKernelFunction metal_kernel(
+CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -88,5 +88,28 @@ MetalKernelFunction metal_kernel(
     const std::string& header = "",
     bool ensure_row_contiguous = true,
     bool atomic_outputs = false);
+
+CustomKernelFunction cuda_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    int shared_memory = 0);
+
+std::vector<array> precompiled_cuda_kernel(
+    const std::string& name,
+    const std::string& compiled_source,
+    const std::vector<array>& inputs,
+    const std::vector<Shape>& output_shapes,
+    const std::vector<Dtype>& output_dtypes,
+    const std::vector<ScalarArg>& scalars,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    int shared_memory = 0,
+    std::optional<float> init_value = std::nullopt,
+    bool ensure_row_contiguous = false,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core::fast
