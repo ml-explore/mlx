@@ -3068,6 +3068,13 @@ class TestOps(mlx_tests.MLXTestCase):
         d = mx.where(c, a[1:], b)
         self.assertTrue(mx.all(d == 1.0))
 
+    def test_integer_power(self):
+        x = mx.power(2, mx.array([8, 8, 8, 8, 8, 8, 8, 8]))
+        self.assertTrue(mx.all(x == 256))
+
+        # Doesn't hang
+        x = mx.power(2, -1)
+
 
 class TestBroadcast(mlx_tests.MLXTestCase):
     def test_broadcast_shapes(self):
