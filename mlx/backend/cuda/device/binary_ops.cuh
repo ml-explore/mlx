@@ -205,8 +205,10 @@ struct Power {
     if constexpr (cuda::std::is_integral_v<T>) {
       T res = 1;
       // Raising an integer to a negative power is undefined
-      if (exp < 0) {
-        return 0;
+      if constexpr (cuda::std::is_signed_v<T>) {
+        if (exp < 0) {
+          return 0;
+        }
       }
       while (exp) {
         if (exp & 1) {
