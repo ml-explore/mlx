@@ -24,6 +24,7 @@ void AllReduce::eval_gpu(
       out.copy_shared_buffer(in);
       return {in, out};
     } else {
+      out.set_data(allocator::malloc(out.nbytes()));
       return {in, out};
     }
   };
