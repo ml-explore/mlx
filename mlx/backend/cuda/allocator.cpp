@@ -30,8 +30,15 @@ SmallSizePool::SmallSizePool() {
   next_free_ = buffer_;
 
   CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
+#if CUDART_VERSION >= 13000
+  cudaMemLocation loc;
+  loc.type = cudaMemLocationTypeDevice;
+  loc.id = 0;
+#else
+  int loc = 0;
+#endif // CUDART_VERSION >= 13000
   CHECK_CUDA_ERROR(
-      cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetReadMostly, 0));
+      cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetReadMostly, loc));
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {

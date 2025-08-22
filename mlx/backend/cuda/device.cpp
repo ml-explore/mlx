@@ -269,7 +269,13 @@ void CommandEncoder::commit() {
   if (node_count_ > 0) {
     if (!from_nodes_.empty()) {
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
-          graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+          graph_,
+          from_nodes_.data(),
+          to_nodes_.data(),
+#if CUDART_VERSION >= 13000
+          nullptr, // edgeData
+#endif // CUDART_VERSION >= 13000
+          from_nodes_.size()));
     }
 
     graph_key_ += ".";

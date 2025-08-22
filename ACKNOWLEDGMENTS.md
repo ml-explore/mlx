@@ -25,6 +25,11 @@ MLX was developed with contributions from the following individuals:
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
 </a>
 
+# Organizations
+
+MLX has received contributions from the following companies:
+- NVIDIA Corporation & Affiliates
+
 # Third-Party Software
 
 MLX leverages several third-party software, listed here together with
