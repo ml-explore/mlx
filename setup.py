@@ -297,6 +297,7 @@ if __name__ == "__main__":
                 "nvidia-cublas-cu12==12.9.*",
                 "nvidia-cuda-nvrtc-cu12==12.9.*",
                 "nvidia-cudnn-cu12==9.*",
+                "nvidia-nccl-cu12",
             ]
         else:
             name = "mlx-cpu"
