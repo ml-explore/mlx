@@ -204,13 +204,17 @@ inline void bootstrap_unique_id(
     int attempt = 0;
     bool connected = false;
 
+    bool do_log = std::getenv("NCCL_DEBUG") == "INFO";
     for (attempt = 0; attempt < max_retries; ++attempt) {
       if (connect(sock, reinterpret_cast<sockaddr*>(&serv), sizeof(serv)) ==
           0) {
         connected = true;
-        std::cout << "[Rank " << rank << "] Connected successfully on attempt "
-                  << attempt + 1 << std::endl;
-        break;
+        if (do_log) {
+          std::cout << "[Rank " << rank
+                    << "] Connected successfully on attempt " << attempt + 1
+                    << std::endl;
+          break;
+        }
       }
       if (errno != ECONNREFUSED) {
         break;
@@ -331,24 +335,33 @@ bool is_available() {
 }
 
 namespace detail {
-static std::string get_env_var_or_throw(const char* env_var_name) {
+std::string get_env_var_or_throw(const char* env_var_name, bool strict) {
   const char* value = std::getenv(env_var_name);
-  if (value == nullptr) {
+  if (value == nullptr && strict) {
     std::ostringstream msg;
     msg << "[nccl] Required environment variable '" << env_var_name
         << "' is not set. "
         << "Please set it before initializing the distributed backend.";
     throw std::runtime_error(msg.str());
   }
+  if (value == nullptr) {
+    return "";
+  }
   return std::string(value);
 }
 } // namespace detail
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
-  std::string host = detail::get_env_var_or_throw("NCCL_HOST_IP");
-  std::string port = detail::get_env_var_or_throw("NCCL_PORT");
-  std::string rank_str = detail::get_env_var_or_throw("MLX_RANK");
-  std::string n_nodes_str = detail::get_env_var_or_throw("MLX_WORLD_SIZE");
+  std::string host = detail::get_env_var_or_throw("NCCL_HOST_IP", strict);
+  std::string port = detail::get_env_var_or_throw("NCCL_PORT", strict);
+  std::string rank_str = detail::get_env_var_or_throw("MLX_RANK", strict);
+  std::string n_nodes_str =
+      detail::get_env_var_or_throw("MLX_WORLD_SIZE", strict);
+  if (!strict &&
+      (host.empty() || port.empty() || rank_str.empty() ||
+       n_nodes_str.empty())) {
+    return nullptr;
+  }
 
   int rank = std::stoi(rank_str);
   int n_nodes = std::stoi(n_nodes_str);

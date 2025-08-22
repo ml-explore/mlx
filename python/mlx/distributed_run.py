@@ -428,7 +428,7 @@ def launch_nccl(parser, hosts, args, command):
     base_env = os.environ.copy()
     base_env.update(
         {
-            "NCCL_DEBUG": "INFO",
+            "NCCL_DEBUG": base_env.get("NCCL_DEBUG", "DEBUG"),
             "NCCL_SOCKET_IFNAME": "lo",  # Use loopback for local communication
             "NCCL_HOST_IP": master_host,
             "NCCL_PORT": str(master_port),
@@ -821,8 +821,6 @@ def main():
     )
 
     args, rest = parser.parse_known_args()
-    if rest[0] == "--":
-        rest.pop(0)
 
     if args.print_python:
         print(sys.executable)
