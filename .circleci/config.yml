@@ -405,6 +405,7 @@ jobs:
             sudo dpkg -i cuda-keyring_1.1-1_all.deb
             sudo apt-get update
             sudo apt-get install cuda-toolkit-12-9 libcudnn9-dev-cuda-12
+            sudo apt-get install libnccl2 libnccl-dev
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
             sudo apt-get install zip
             pip install auditwheel

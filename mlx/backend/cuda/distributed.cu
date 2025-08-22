@@ -2,30 +2,35 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/primitives.h"
 
 #include <cassert>
 
-namespace mlx::core {
-namespace distributed {
+namespace mlx::core::distributed {
 void AllReduce::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto& input = inputs[0];
-  auto& output = outputs[0];
+  auto set_input_output =
+      [s = stream()](const array& in, array& out) -> std::pair<array, array> {
+    if (!in.flags().row_contiguous) {
+      copy_gpu(in, out, CopyType::General, s);
+      return {out, out};
+    } else if (in.is_donatable()) {
+      out.copy_shared_buffer(in);
+      return {in, out};
+    } else {
+      return {in, out};
+    }
+  };
+
+  auto [input, output] = set_input_output(inputs[0], outputs[0]);
 
   auto& encoder = cu::get_command_encoder(stream());
-
-  if (input.is_donatable()) {
-    output.copy_shared_buffer(input);
-  } else {
-    output.set_data(allocator::malloc(output.nbytes()));
-  }
-
   encoder.set_input_array(input);
   encoder.set_output_array(output);
 
@@ -47,5 +52,4 @@ void AllReduce::eval_gpu(
           "Only all reduce sum, max, and min are supported.");
   }
 }
-} // namespace distributed
-} // namespace mlx::core
+} // namespace mlx::core::distributed
