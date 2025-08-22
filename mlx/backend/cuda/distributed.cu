@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/primitives.h"
 
@@ -15,8 +15,8 @@ void AllReduce::eval_gpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-
-  auto set_input_output = [s = stream()](const array& in, array& out) -> std::pair<array, array> {
+  auto set_input_output =
+      [s = stream()](const array& in, array& out) -> std::pair<array, array> {
     if (!in.flags().row_contiguous) {
       copy_gpu(in, out, CopyType::General, s);
       return {out, out};

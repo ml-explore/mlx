@@ -56,7 +56,7 @@ def parse_hardware_ports(ports_string):
 
 
 def get_num_nvidia_gpus():
-    result = run(['nvidia-smi', "-L"], capture_output=True, text=True, check=True)
+    result = run(["nvidia-smi", "-L"], capture_output=True, text=True, check=True)
     return len(result.stdout.strip().split("\n"))
 
 
@@ -433,7 +433,9 @@ def launch_nccl(parser, hosts, args, command):
     base_env = os.environ.copy()
     base_env.update(
         {
-            "NCCL_DEBUG": base_env.get("NCCL_DEBUG", "DEBUG"),
+            "NCCL_DEBUG": base_env.get(
+                "NCCL_DEBUG", "INFO" if args.verbose else "DEBUG"
+            ),
             "NCCL_SOCKET_IFNAME": "lo",  # Use loopback for local communication
             "NCCL_HOST_IP": master_host,
             "NCCL_PORT": str(master_port),
