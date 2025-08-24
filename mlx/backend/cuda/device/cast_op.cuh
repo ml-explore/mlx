@@ -6,7 +6,6 @@
 
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace mlx::core::cu {
 
@@ -114,17 +113,6 @@ struct CastOp<
 template <typename DstT, typename SrcT>
 inline __host__ __device__ auto cast_to(SrcT x) {
   return CastOp<SrcT, DstT>{}(x);
-}
-
-// Return an iterator that cast the value to DstT using CastOp.
-template <typename DstT, typename Iterator>
-inline __host__ __device__ auto make_cast_iterator(Iterator it) {
-  using SrcT = typename cuda::std::iterator_traits<Iterator>::value_type;
-  if constexpr (std::is_same_v<SrcT, DstT>) {
-    return it;
-  } else {
-    return thrust::make_transform_iterator(it, CastOp<SrcT, DstT>{});
-  }
 }
 
 } // namespace mlx::core::cu
