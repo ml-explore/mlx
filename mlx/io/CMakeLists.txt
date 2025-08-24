@@ -11,7 +11,7 @@ if(MLX_BUILD_GGUF)
   FetchContent_Declare(
     gguflib
     GIT_REPOSITORY https://github.com/antirez/gguf-tools/
-    GIT_TAG af7d88d808a7608a33723fba067036202910acb3)
+    GIT_TAG 8fa6eb65236618e28fd7710a0fba565f7faa1848)
   FetchContent_MakeAvailable(gguflib)
   target_include_directories(mlx
                              PRIVATE $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>)
