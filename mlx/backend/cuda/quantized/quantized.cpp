@@ -46,10 +46,10 @@ inline array ensure_row_contiguous_matrix(
 
 } // namespace
 
-void fast::AffineQuantize::eval_gpu(
+void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  nvtx3::scoped_range r("AffineQuantize::eval_gpu");
+  nvtx3::scoped_range r("Quantize::eval_gpu");
   auto& s = stream();
   auto& d = cu::device(s.device);
   auto& enc = d.get_command_encoder(s);

@@ -127,7 +127,7 @@ relying on a copy from ``ensure_row_contiguous``:
       name="myexp_strided",
       input_names=["inp"],
       output_names=["out"],
-      source=source
+      source=source,
       ensure_row_contiguous=False,
   )
 
