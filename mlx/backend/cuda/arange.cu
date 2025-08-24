@@ -6,23 +6,33 @@
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
+#include <cooperative_groups.h>
 #include <nvtx3/nvtx3.hpp>
-#include <thrust/device_ptr.h>
-#include <thrust/transform.h>
 
 namespace mlx::core {
 
 namespace cu {
 
-template <typename T>
-struct Arange {
-  const T start;
-  const T step;
+namespace cg = cooperative_groups;
 
-  __device__ T operator()(uint32_t i) const {
-    return start + i * step;
+template <typename T, typename IdxT, int N_WRITES>
+__global__ void arange(T* out, IdxT size, T start, T step) {
+  IdxT index = cg::this_grid().thread_rank();
+
+  if ((index + 1) * N_WRITES > size) {
+    for (IdxT i = index * N_WRITES; i < size; ++i) {
+      out[i] = start + i * step;
+    }
+  } else {
+    AlignedVector<T, N_WRITES> out_vec;
+#pragma unroll
+    for (int i = 0; i < N_WRITES; ++i) {
+      out_vec[i] = start + (index * N_WRITES + i) * step;
+    }
+
+    store_vector<N_WRITES>(out, index, out_vec);
   }
-};
+}
 
 } // namespace cu
 
@@ -36,19 +46,23 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(stream());
   encoder.set_output_array(out);
 
-  auto capture = encoder.capture_context();
   dispatch_int_float_types(out.dtype(), "Arange", [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
     using OutType = cuda_type_t<CTYPE>;
-    CTYPE step =
-        static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_);
-    thrust::transform(
-        cu::thrust_policy(encoder.stream()),
-        thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(out.data_size()),
-        thrust::device_pointer_cast(out.data<OutType>()),
-        cu::Arange<OutType>{
-            static_cast<OutType>(start_), static_cast<OutType>(step)});
+    constexpr int N_WRITES = 16 / sizeof(OutType);
+    dispatch_bool(out.data_size() > INT32_MAX, [&](auto large) {
+      using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+      auto [num_blocks, block_dims] = get_launch_args(out, large(), N_WRITES);
+      encoder.add_kernel_node(
+          cu::arange<OutType, IdxT, N_WRITES>,
+          num_blocks,
+          block_dims,
+          0,
+          out.data<OutType>(),
+          out.data_size(),
+          static_cast<CTYPE>(start_),
+          static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_));
+    });
   });
 }
 
