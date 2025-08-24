@@ -232,6 +232,7 @@ jobs:
           name: Install Python package
           command: |
             uv venv
+            uv pip install cmake
             DEBUG=1 CMAKE_ARGS="-DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=`which nvcc`" \
               uv pip install -e ".[dev]" -v
       - run:
@@ -240,6 +241,18 @@ jobs:
             source .venv/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m unittest discover python/tests -v
             LOW_MEMORY=1 DEVICE=gpu python -m tests discover python/tests -v
+      - run:
+          name: Build CPP only
+          command: |
+            source .venv/bin/activate
+            cmake . -B build \
+              -DMLX_BUILD_CUDA=ON \
+              -DCMAKE_CUDA_COMPILER=`which nvcc` \
+              -DCMAKE_BUILD_TYPE=DEBUG
+            cmake --build build -j `nproc`
+      - run:
+          name: Run CPP tests
+          command: ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
       - run:
           name: CCache report
           command: |

@@ -67,9 +67,11 @@ const std::string& cccl_dir() {
       return path.string();
     }
     // Finally check the environment variable.
-    path = std::getenv("MLX_CCCL_DIR");
-    if (!path.empty() && std::filesystem::exists(path)) {
-      return path.string();
+    if (const char* env = std::getenv("MLX_CCCL_DIR"); env) {
+      path = env;
+      if (!path.empty() && std::filesystem::exists(path)) {
+        return path.string();
+      }
     }
     return std::string();
   }();
