@@ -140,6 +140,12 @@ elseif(MLX_BUILD_METAL)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # Newer clang/gcc versions usually implicitly link with following libs, but
+  # they need to be explicitly listed when building on old distributions.
+  target_link_libraries(mlx PRIVATE dl pthread)
+endif()
+
 if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
