@@ -27,4 +27,10 @@ void pad_gpu(
     const Shape& low_pad_size,
     const Stream& s);
 
+array compute_dynamic_offset(
+    const array& indices,
+    const Strides& strides,
+    const std::vector<int>& axes,
+    const Stream& s);
+
 } // namespace mlx::core
