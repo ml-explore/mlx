@@ -110,7 +110,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   args.append<int32_t>(src.ndim());
   args.append_ndim(slice_sizes_);
   args.append(slice_size);
-  args.append(SmallVector<int32_t>(axes_.begin(), axes_.end()));
+  args.append(axes_);
   append_indices_arg(args, inputs, nidx, idx_ndim);
 
   std::string kernel_name = fmt::format(
@@ -211,7 +211,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   args.append_ndim(out.shape());
   args.append_ndim(out.strides());
   args.append<int32_t>(out.ndim());
-  args.append(SmallVector<int32_t>(axes_.begin(), axes_.end()));
+  args.append(axes_);
   append_indices_arg(args, inputs, nidx, idx_ndim);
 
   std::string kernel_name = fmt::format(

@@ -1,7 +1,6 @@
 cuda_skip = {
     "TestLoad.test_load_f8_e4m3",
     "TestLayers.test_quantized_embedding",
-    "TestOps.test_dynamic_slicing",
     # Block masked matmul NYI
     "TestBlas.test_block_masked_matmul",
     # Gather matmul NYI

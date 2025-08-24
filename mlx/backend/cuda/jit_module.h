@@ -46,6 +46,11 @@ struct KernelArgs {
     append_ptr(std::get<SmallVector<T>>(storage_.back()).data());
   }
 
+  template <typename T>
+  void append(const std::vector<T>& vec) {
+    append(SmallVector<T>(vec.begin(), vec.end()));
+  }
+
   // Make sure the arg is copied to an array with size of NDIM.
   template <size_t NDIM = MAX_NDIM, typename T>
   void append_ndim(SmallVector<T> vec) {

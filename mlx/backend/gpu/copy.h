@@ -20,8 +20,8 @@ void copy_gpu_inplace(
     int64_t o_offset,
     CopyType ctype,
     const Stream& s,
-    const std::optional<array>& dynamic_i_offset = std::nullopt,
-    const std::optional<array>& dynamic_o_offset = std::nullopt);
+    std::optional<array> dynamic_i_offset = std::nullopt,
+    std::optional<array> dynamic_o_offset = std::nullopt);
 
 void copy_gpu(const array& src, array& out, CopyType ctype, const Stream& s);
 void copy_gpu(const array& src, array& out, CopyType ctype);

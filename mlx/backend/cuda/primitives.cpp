@@ -24,8 +24,6 @@ namespace mlx::core {
   }
 
 NO_GPU(BlockMaskedMM)
-NO_GPU(DynamicSlice)
-NO_GPU(DynamicSliceUpdate)
 NO_GPU(FFT)
 NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
