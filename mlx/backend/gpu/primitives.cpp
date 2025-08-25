@@ -80,6 +80,74 @@ void Depends::eval_gpu(
   eval(inputs, outputs);
 }
 
+void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
+  MLX_PROFILER_RANGE("DynamicSlice::eval_gpu");
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& start = inputs[1];
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto s = stream();
+  auto in_offset = compute_dynamic_offset(start, in.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ in,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ out.shape(),
+      /* const Strides& i_strides = */ in.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* std::optional<array> dynamic_i_offset = */ std::move(in_offset),
+      /* std::optional<array> dynamic_o_offset = */ std::nullopt);
+}
+
+void DynamicSliceUpdate::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  MLX_PROFILER_RANGE("DynamicSliceUpdate::eval_gpu");
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+  auto& start_indices = inputs[2];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  // Copy or donate input to output
+  auto s = stream();
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
+
+  auto out_offset =
+      compute_dynamic_offset(start_indices, out.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ upd.shape(),
+      /* const Strides& i_strides = */ upd.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* std::optional<array> dynamic_i_offset = */ std::nullopt,
+      /* std::optional<array> dynamic_o_offset = */ std::move(out_offset));
+}
+
 void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("ExpandDims::eval_gpu");
   eval(inputs, out);

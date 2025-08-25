@@ -15,8 +15,8 @@ void copy_gpu_inplace(
     int64_t offset_out,
     CopyType ctype,
     const Stream& s,
-    const std::optional<array>& dynamic_offset_in,
-    const std::optional<array>& dynamic_offset_out) {
+    std::optional<array> dynamic_offset_in,
+    std::optional<array> dynamic_offset_out) {
   if (out.size() == 0) {
     return;
   }
@@ -44,6 +44,16 @@ void copy_gpu_inplace(
           strides_vec[0]);
     } else {
       if (dynamic_offset_in || dynamic_offset_out) {
+        if (!dynamic_offset_in) {
+          dynamic_offset_in = array(0, int64);
+          encoder.add_temporary(*dynamic_offset_in);
+        }
+        if (!dynamic_offset_out) {
+          dynamic_offset_out = array(0, int64);
+          encoder.add_temporary(*dynamic_offset_out);
+        }
+        encoder.set_input_array(*dynamic_offset_in);
+        encoder.set_input_array(*dynamic_offset_out);
         copy_general_dynamic(
             encoder,
             ctype,
@@ -54,8 +64,8 @@ void copy_gpu_inplace(
             shape_collapsed,
             strides_vec[0],
             strides_vec[1],
-            dynamic_offset_in ? *dynamic_offset_in : array(0, int64),
-            dynamic_offset_out ? *dynamic_offset_out : array(0, int64));
+            *dynamic_offset_in,
+            *dynamic_offset_out);
       } else {
         copy_general(
             encoder,
