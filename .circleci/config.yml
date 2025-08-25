@@ -394,7 +394,7 @@ jobs:
         default: ""
     machine:
       image: ubuntu-2204:current
-      resource_class: large
+      resource_class: xlarge
     steps:
       - checkout
       - run:
