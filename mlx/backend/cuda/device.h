@@ -76,9 +76,6 @@ class CommandEncoder {
       uint32_t smem_bytes,
       void** params);
 
-  // Low-level graph helpers.
-  void add_kernel_node(const cudaKernelNodeParams& params);
-  void add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params);
   void add_graph_node(cudaGraph_t child);
 
   void add_temporary(const array& arr) {
@@ -101,6 +98,9 @@ class CommandEncoder {
   void synchronize();
 
  private:
+  void add_kernel_node(const cudaKernelNodeParams& params);
+  void add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params);
+
   struct GraphNode {
     cudaGraphNode_t node;
     // K = kernel
