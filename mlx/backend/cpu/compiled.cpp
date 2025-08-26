@@ -15,6 +15,7 @@
 #include "mlx/backend/cpu/jit_compiler.h"
 #include "mlx/device.h"
 #include "mlx/graph_utils.h"
+#include "mlx/version.h"
 
 namespace mlx::core {
 
@@ -94,7 +95,11 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  auto output_dir = std::filesystem::temp_directory_path();
+  auto output_dir =
+      std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
+  if (!std::filesystem::exists(output_dir)) {
+    std::filesystem::create_directories(output_dir);
+  }
 
   std::string shared_lib_name = "lib" + kernel_file_name + ".so";
   auto shared_lib_path = (output_dir / shared_lib_name).string();
