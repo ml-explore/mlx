@@ -252,7 +252,7 @@ class Quantize : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       int group_size,
       int bits,
-      const std::string& mode,
+      QuantizationMode mode,
       bool dequantize)
       : Custom(stream, fallback),
         group_size_(group_size),
@@ -277,7 +277,7 @@ class Quantize : public Custom {
  private:
   int group_size_;
   int bits_;
-  std::string mode_;
+  QuantizationMode mode_;
   bool dequantize_;
 };
 

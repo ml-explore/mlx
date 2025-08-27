@@ -862,7 +862,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
   encoder.set_output_array(out);
-  if (mode_ == "affine") {
+  if (mode_ == QuantizationMode::Affine) {
     auto biases = ensure_row_contiguous(inputs[3]);
     encoder.set_input_array(biases);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
@@ -920,7 +920,7 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(lhs_indices);
   encoder.set_input_array(rhs_indices);
   encoder.set_output_array(out);
-  if (mode_ == "affine") {
+  if (mode_ == QuantizationMode::Affine) {
     auto biases = ensure_row_contiguous_last_dims(inputs[3]);
     encoder.set_input_array(biases);
     encoder.dispatch([out = array::unsafe_weak_copy(out),

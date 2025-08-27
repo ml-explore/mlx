@@ -3208,6 +3208,22 @@ std::pair<std::vector<array>, std::vector<int>> Power::vmap(
   return {{power(a, b, stream())}, {to_ax}};
 }
 
+std::string quantization_mode_to_string(QuantizationMode mode) {
+  if (mode == QuantizationMode::Affine) {
+    return "affine";
+  } else {
+    return "mxfp4";
+  }
+}
+
+QuantizationMode string_to_quantization_mode(const std::string& mode) {
+  if (mode == "affine") {
+    return QuantizationMode::Affine;
+  } else {
+    return QuantizationMode::Mxfp4;
+  }
+}
+
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -3234,7 +3250,7 @@ std::vector<array> QuantizedMatmul::vjp(
           !transpose_,
           group_size_,
           bits_,
-          mode_,
+          quantization_mode_to_string(mode_),
           stream()));
     }
 
@@ -3243,7 +3259,7 @@ std::vector<array> QuantizedMatmul::vjp(
       throw std::runtime_error(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == "mxfp4") {
+      if (mode_ == QuantizationMode::Mxfp4) {
         throw std::runtime_error(
             "[QuantizedMatmul::vjp] no gradient wrt scales with mxfp4 quantization.");
       }
@@ -3267,7 +3283,7 @@ std::vector<array> QuantizedMatmul::vjp(
             zeros_like(primals[3], stream()),
             group_size_,
             bits_,
-            mode_,
+            quantization_mode_to_string(mode_),
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
@@ -3293,7 +3309,7 @@ std::vector<array> QuantizedMatmul::jvp(
       transpose_,
       group_size_,
       bits_,
-      mode_,
+      quantization_mode_to_string(mode_),
       stream())};
 }
 
@@ -3355,7 +3371,7 @@ std::vector<array> GatherQMM::vjp(
           !transpose_,
           group_size_,
           bits_,
-          mode_,
+          quantization_mode_to_string(mode_),
           sorted,
           stream());
       if (sorted && no_broadcast) {
@@ -3384,7 +3400,7 @@ std::vector<array> GatherQMM::vjp(
       throw std::runtime_error(
           "[GatherQMM::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == "mxfp4") {
+      if (mode_ == QuantizationMode::Mxfp4) {
         throw std::runtime_error(
             "[GatherQMM::vjp] no gradient wrt scales with mxfp4 quantization.");
       }
@@ -3419,7 +3435,7 @@ std::vector<array> GatherQMM::vjp(
                             zeros_like(biases, stream()),
                             group_size_,
                             bits_,
-                            mode_,
+                            quantization_mode_to_string(mode_),
                             stream()),
                         -1,
                         {-1, group_size_},

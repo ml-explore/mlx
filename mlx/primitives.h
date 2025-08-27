@@ -151,6 +151,11 @@ class UnaryPrimitive : public Primitive {
   UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
 };
 
+enum class QuantizationMode { Affine, Mxfp4 };
+
+std::string quantization_mode_to_string(QuantizationMode mode);
+QuantizationMode string_to_quantization_mode(const std::string& mode);
+
 class Abs : public UnaryPrimitive {
  public:
   explicit Abs(Stream stream) : UnaryPrimitive(stream) {}
@@ -1597,7 +1602,7 @@ class QuantizedMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      const std::string& mode,
+      QuantizationMode mode,
       bool transpose)
       : UnaryPrimitive(stream),
         group_size_(group_size),
@@ -1620,7 +1625,7 @@ class QuantizedMatmul : public UnaryPrimitive {
  private:
   int group_size_;
   int bits_;
-  std::string mode_;
+  QuantizationMode mode_;
   bool transpose_;
 };
 
@@ -1630,7 +1635,7 @@ class GatherQMM : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      const std::string& mode,
+      QuantizationMode mode,
       bool transpose,
       bool left_sorted = false,
       bool right_sorted = false)
@@ -1657,7 +1662,7 @@ class GatherQMM : public UnaryPrimitive {
  private:
   int group_size_;
   int bits_;
-  std::string mode_;
+  QuantizationMode mode_;
   bool transpose_;
   bool left_sorted_;
   bool right_sorted_;

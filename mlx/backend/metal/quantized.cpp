@@ -857,7 +857,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int N = out.shape(-1);
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
-
+  auto mode = quantization_mode_to_string(mode_);
   // It is a matrix matrix product.
   if (M >= vector_limit) {
     qmm(x,
@@ -873,32 +873,32 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode_);
+        mode);
     return;
   }
 
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
   if (transpose_ && (K == 128 || K == 64) && is_power_of_2(bits_)) {
     qmv_quad(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode_);
+        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 
   // Run of the mill qmv
   if (transpose_) {
-    qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode_);
+    qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 
   // Run of the mill qvm
   if (K < 1024) {
-    qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode_);
+    qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 
   // Qvm with large dimension so route to a split K kernel for more parallelism
   qvm_split_k(
-      x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode_);
+      x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
   return;
 }
 
@@ -924,6 +924,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int B = out.size() / M / N;
   int E = w.size() / w.shape(-1) / w.shape(-2);
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
+  auto mode = quantization_mode_to_string(mode_);
 
   // We are walking x in order and w is also in order so we can batch up the
   // matmuls and reuse reading x and w.
@@ -945,7 +946,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode_);
+        mode);
     return;
   }
 
@@ -967,7 +968,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode_);
+        mode);
     return;
   }
 
@@ -987,7 +988,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode_);
+        mode);
     return;
   }
 
@@ -1006,7 +1007,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       K,
       d,
       s,
-      mode_);
+      mode);
 }
 
 void fast::Quantize::eval_gpu(

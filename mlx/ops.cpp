@@ -4102,7 +4102,11 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, mode, transpose),
+          to_stream(s),
+          group_size,
+          bits,
+          string_to_quantization_mode(mode),
+          transpose),
       std::move(inputs));
 }
 
@@ -4212,7 +4216,7 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
       {std::move(wq_shape), sshape, sshape},
       {uint32, w.dtype(), w.dtype()},
       std::make_shared<fast::Quantize>(
-          s, fallback, group_size, bits, "affine", false),
+          s, fallback, group_size, bits, QuantizationMode::Affine, false),
       {w});
 }
 
@@ -4393,7 +4397,7 @@ array affine_dequantize(
         std::move(out_shape),
         scales.dtype(),
         std::make_shared<fast::Quantize>(
-            s, fallback, group_size, bits, "affine", true),
+            s, fallback, group_size, bits, QuantizationMode::Affine, true),
         {w, scales, biases});
   }
   return fallback({w, scales, biases})[0];
@@ -4592,7 +4596,7 @@ array gather_qmm(
           to_stream(s),
           group_size,
           bits,
-          mode,
+          string_to_quantization_mode(mode),
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
