@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/backend/metal/kernels/indexing.h"
+#include "mlx/backend/metal/kernels/indexing/indexing.h"
 
 template <
     typename T,
