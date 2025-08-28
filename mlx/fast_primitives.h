@@ -245,17 +245,19 @@ class ScaledDotProductAttention : public Custom {
   bool do_causal_;
 };
 
-class AffineQuantize : public Custom {
+class Quantize : public Custom {
  public:
-  explicit AffineQuantize(
+  explicit Quantize(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       int group_size,
       int bits,
+      QuantizationMode mode,
       bool dequantize)
       : Custom(stream, fallback),
         group_size_(group_size),
         bits_(bits),
+        mode_(mode),
         dequantize_(dequantize) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -264,17 +266,18 @@ class AffineQuantize : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_NAME(AffineQuantize);
+  DEFINE_NAME(Quantize);
 
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(nullptr, group_size_, bits_, dequantize_);
+    return std::make_tuple(nullptr, group_size_, bits_, mode_, dequantize_);
   }
 
  private:
   int group_size_;
   int bits_;
+  QuantizationMode mode_;
   bool dequantize_;
 };
 

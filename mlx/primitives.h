@@ -151,6 +151,11 @@ class UnaryPrimitive : public Primitive {
   UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
 };
 
+enum class QuantizationMode { Affine, Mxfp4 };
+
+std::string quantization_mode_to_string(QuantizationMode mode);
+QuantizationMode string_to_quantization_mode(const std::string& mode);
+
 class Abs : public UnaryPrimitive {
  public:
   explicit Abs(Stream stream) : UnaryPrimitive(stream) {}
@@ -1597,10 +1602,12 @@ class QuantizedMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
+      QuantizationMode mode,
       bool transpose)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
+        mode_(mode),
         transpose_(transpose) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
@@ -1612,12 +1619,13 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, transpose_);
+    return std::make_tuple(group_size_, bits_, mode_, transpose_);
   }
 
  private:
   int group_size_;
   int bits_;
+  QuantizationMode mode_;
   bool transpose_;
 };
 
@@ -1627,12 +1635,14 @@ class GatherQMM : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
+      QuantizationMode mode,
       bool transpose,
       bool left_sorted = false,
       bool right_sorted = false)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
+        mode_(mode),
         transpose_(transpose),
         left_sorted_(left_sorted),
         right_sorted_(right_sorted) {}
@@ -1646,12 +1656,13 @@ class GatherQMM : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_tuple(
-        group_size_, bits_, transpose_, left_sorted_, right_sorted_);
+        group_size_, bits_, mode_, transpose_, left_sorted_, right_sorted_);
   }
 
  private:
   int group_size_;
   int bits_;
+  QuantizationMode mode_;
   bool transpose_;
   bool left_sorted_;
   bool right_sorted_;

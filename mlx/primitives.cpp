@@ -3208,6 +3208,22 @@ std::pair<std::vector<array>, std::vector<int>> Power::vmap(
   return {{power(a, b, stream())}, {to_ax}};
 }
 
+std::string quantization_mode_to_string(QuantizationMode mode) {
+  if (mode == QuantizationMode::Affine) {
+    return "affine";
+  } else {
+    return "mxfp4";
+  }
+}
+
+QuantizationMode string_to_quantization_mode(const std::string& mode) {
+  if (mode == "affine") {
+    return QuantizationMode::Affine;
+  } else {
+    return QuantizationMode::Mxfp4;
+  }
+}
+
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -3234,6 +3250,7 @@ std::vector<array> QuantizedMatmul::vjp(
           !transpose_,
           group_size_,
           bits_,
+          quantization_mode_to_string(mode_),
           stream()));
     }
 
@@ -3242,6 +3259,10 @@ std::vector<array> QuantizedMatmul::vjp(
       throw std::runtime_error(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
+      if (mode_ == QuantizationMode::Mxfp4) {
+        throw std::runtime_error(
+            "[QuantizedMatmul::vjp] no gradient wrt scales with mxfp4 quantization.");
+      }
       if (!dsb) {
         int ndim = primals[1].ndim();
         auto fc = flatten(cotangents[0], 0, -ndim, stream());
@@ -3262,6 +3283,7 @@ std::vector<array> QuantizedMatmul::vjp(
             zeros_like(primals[3], stream()),
             group_size_,
             bits_,
+            quantization_mode_to_string(mode_),
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
@@ -3287,13 +3309,14 @@ std::vector<array> QuantizedMatmul::jvp(
       transpose_,
       group_size_,
       bits_,
+      quantization_mode_to_string(mode_),
       stream())};
 }
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
 }
 
 std::vector<Shape> QuantizedMatmul::output_shapes(
@@ -3348,6 +3371,7 @@ std::vector<array> GatherQMM::vjp(
           !transpose_,
           group_size_,
           bits_,
+          quantization_mode_to_string(mode_),
           sorted,
           stream());
       if (sorted && no_broadcast) {
@@ -3368,14 +3392,19 @@ std::vector<array> GatherQMM::vjp(
     // gradient wrt to the indices is undefined
     else if (arg > 3) {
       throw std::runtime_error(
-          "GatherQMM::vjp cannot compute the gradient wrt the indices.");
+          "[GatherQMM::vjp] cannot compute the gradient wrt the indices.");
     }
 
     // gradient wrt to w_q, scales or biases
     else if (arg == 1) {
       throw std::runtime_error(
-          "GatherQMM::vjp no gradient wrt the quantized weights.");
+          "[GatherQMM::vjp] no gradient wrt the quantized weights.");
     } else {
+      if (mode_ == QuantizationMode::Mxfp4) {
+        throw std::runtime_error(
+            "[GatherQMM::vjp] no gradient wrt scales with mxfp4 quantization.");
+      }
+
       if (!dsb) {
         auto shape = w.shape();
         shape.pop_back();
@@ -3406,6 +3435,7 @@ std::vector<array> GatherQMM::vjp(
                             zeros_like(biases, stream()),
                             group_size_,
                             bits_,
+                            quantization_mode_to_string(mode_),
                             stream()),
                         -1,
                         {-1, group_size_},
@@ -3430,7 +3460,7 @@ std::vector<array> GatherQMM::jvp(
 bool GatherQMM::is_equivalent(const Primitive& other) const {
   const GatherQMM& qm_other = static_cast<const GatherQMM&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
 }
 
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
