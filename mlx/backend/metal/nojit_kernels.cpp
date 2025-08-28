@@ -283,6 +283,7 @@ MTL::ComputePipelineState* get_fft_kernel(
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string&,
     const std::string&) {
   return d.get_kernel(kernel_name);
 }
@@ -295,6 +296,7 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const array&,
     int,
     int,
+    const std::string&,
     int,
     int,
     int,
