@@ -25,6 +25,7 @@ jobs:
       - run:
           name: Install
           command: |
+            xcodebuild -downloadComponent MetalToolchain
             brew install python@3.9
             brew install doxygen
             python3.9 -m venv env
@@ -133,6 +134,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
+            xcodebuild -downloadComponent MetalToolchain
             HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 \
               brew install openmpi uv
       - run:
@@ -276,6 +278,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
+            xcodebuild -downloadComponent MetalToolchain
             mkdir -p ~/miniconda3
             curl https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o ~/miniconda3/miniconda.sh
             bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
@@ -444,7 +447,7 @@ workflows:
       - mac_build_and_test:
           matrix:
             parameters:
-              macosx_deployment_target: ["13.5", "14.0", "15.0"]
+              macosx_deployment_target: ["13.5", "15.0"]
       - linux_build_and_test
       - cuda_build_and_test:
           matrix:
@@ -511,7 +514,7 @@ workflows:
           requires: [ hold ]
           matrix:
             parameters:
-              macosx_deployment_target: ["13.5", "14.0"]
+              macosx_deployment_target: ["13.5", "15.0"]
       - linux_build_and_test:
           requires: [ hold ]
       - cuda_build_and_test:
