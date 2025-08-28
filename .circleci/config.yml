@@ -19,7 +19,7 @@ jobs:
         default: false
     macos:
       xcode: "26.0.0"
-    resource_class: m2pro.medium
+    resource_class: m4pro.medium
     steps:
       - checkout
       - run:
@@ -127,7 +127,7 @@ jobs:
       xcode: << parameters.xcode_version >>
     environment:
       MACOSX_DEPLOYMENT_TARGET: << parameters.macosx_deployment_target >>
-    resource_class: m2pro.medium
+    resource_class: m4pro.medium
     steps:
       - checkout
       - run:
@@ -268,7 +268,7 @@ jobs:
         default: ""
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: m2pro.medium
+    resource_class: m4pro.medium
     environment:
       MACOSX_DEPLOYMENT_TARGET: << parameters.macosx_deployment_target >>
     steps:
