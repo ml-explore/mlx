@@ -2191,6 +2191,12 @@ class TestOps(mlx_tests.MLXTestCase):
         y_mx = mx.sort(mx.array(x), axis=-2)
         self.assertTrue(np.array_equal(y_np, y_mx))
 
+        # Test many segments
+        a = mx.random.uniform(shape=(512, 128))
+        y_mx = mx.sort(a, axis=-1)
+        y_np = np.sort(np.array(a), axis=-1)
+        self.assertTrue(np.array_equal(y_np, y_mx))
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
