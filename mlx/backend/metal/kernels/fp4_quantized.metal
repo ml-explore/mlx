@@ -20,8 +20,8 @@
       name,    \
       type,    \
       32,      \
-      batched, \
-      uint8_t)
+      uint8_t, \
+      batched)
 
 #define instantiate_quantized_aligned(name, type, aligned) \
   instantiate_kernel( \
@@ -29,8 +29,8 @@
       name,    \
       type,    \
       32,      \
-      aligned, \
-      uint8_t)
+      uint8_t, \
+      aligned)
 
 #define instantiate_quantized_aligned_batched(name, type, aligned, batched) \
   instantiate_kernel( \
@@ -38,9 +38,9 @@
       name,    \
       type,    \
       32,      \
+      uint8_t, \
       aligned, \
-      batched, \
-      uint8_t)
+      batched)
 
 #define instantiate_quantized_quad(name, type, D, batched) \
   instantiate_kernel( \
@@ -48,9 +48,9 @@
       name,    \
       type,    \
       32,      \
+      uint8_t, \
       D,       \
-      batched, \
-      uint8_t)
+      batched)
 
 #define instantiate_quantized_split_k(name, type, split_k) \
   instantiate_kernel( \
@@ -58,8 +58,8 @@
       name,    \
       type,    \
       32,      \
-      split_k, \
-      uint8_t)
+      uint8_t, \
+      split_k)
 
 #define instantiate_gather_qmm_rhs(func, name, type, bm, bn, bk, wm, wn, transpose) \
   instantiate_kernel( \

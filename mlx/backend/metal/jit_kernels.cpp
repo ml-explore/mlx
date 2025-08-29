@@ -804,13 +804,19 @@ MTL::ComputePipelineState* get_fft_kernel(
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
-    const std::string& template_def) {
+    const std::string& template_def,
+    const std::string& mode) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::gemm() << metal::quantized()
-                  << template_def;
-    return kernel_source.str();
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::gemm(),
+        metal::quantized_utils(),
+        (mode == "affine") ? metal::quantized() : metal::fp4_quantized(),
+        template_def);
+    return kernel_source;
   });
   return d.get_kernel(kernel_name, lib);
 }
@@ -823,6 +829,7 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     const array& x,
     int group_size,
     int bits,
+    const std::string& mode,
     int bm,
     int bn,
     int bk,
@@ -833,22 +840,40 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
     concatenate(
-        kernel_source,
-        metal::utils(),
-        metal::gemm(),
-        metal::quantized(),
-        get_template_definition(
-            lib_name,
-            "gather_qmm_rhs",
-            get_type_string(x.dtype()),
-            group_size,
-            bits,
-            bm,
-            bn,
-            bk,
-            wm,
-            wn,
-            transpose));
+        kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
+    if (mode == "affine") {
+      concatenate(
+          kernel_source,
+          metal::quantized(),
+          get_template_definition(
+              lib_name,
+              mode + "_gather_qmm_rhs",
+              get_type_string(x.dtype()),
+              group_size,
+              bits,
+              bm,
+              bn,
+              bk,
+              wm,
+              wn,
+              transpose));
+    } else {
+      concatenate(
+          kernel_source,
+          metal::fp4_quantized(),
+          get_template_definition(
+              lib_name,
+              mode + "_gather_qmm_rhs",
+              get_type_string(x.dtype()),
+              group_size,
+              "uint8_t",
+              bm,
+              bn,
+              bk,
+              wm,
+              wn,
+              transpose));
+    }
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);

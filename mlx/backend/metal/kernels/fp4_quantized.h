@@ -270,7 +270,7 @@ struct QuantizedBlockLoader {
   }
 };
 
-template <typename T, int group_size, int D, typename S>
+template <typename T, int group_size, typename S, int D>
 METAL_FUNC void mxfp4_qmv_quad_impl(
     const device uint32_t* w,
     const device S* scales,
@@ -633,8 +633,8 @@ METAL_FUNC void mxfp4_qvm_impl(
 template <
     typename T,
     const int group_size,
-    const bool aligned_N,
     typename S,
+    const bool aligned_N,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -976,7 +976,7 @@ METAL_FUNC void adjust_matrix_offsets(
   y += tid.z * output_stride;
 }
 
-template <typename T, int group_size, int D, bool batched, typename S>
+template <typename T, int group_size, typename S, int D, bool batched>
 [[kernel]] void mxfp4_qmv_quad(
     const device uint32_t* w,
     const device S* scales,
@@ -1014,7 +1014,7 @@ template <typename T, int group_size, int D, bool batched, typename S>
         tid);
   }
   threadgroup float lut[16];
-  mxfp4_qmv_quad_impl<T, group_size, D>(
+  mxfp4_qmv_quad_impl<T, group_size, S, D>(
       w,
       scales,
       x,
@@ -1029,7 +1029,7 @@ template <typename T, int group_size, int D, bool batched, typename S>
       lut);
 }
 
-template <typename T, int group_size, bool batched, typename S>
+template <typename T, int group_size, typename S, bool batched>
 [[kernel]] void mxfp4_qmv_fast(
     const device uint32_t* w,
     const device S* scales,
@@ -1069,7 +1069,7 @@ template <typename T, int group_size, bool batched, typename S>
       w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid, lut);
 }
 
-template <typename T, const int group_size, bool batched, typename S>
+template <typename T, const int group_size, typename S, bool batched>
 [[kernel]] void mxfp4_qmv(
     const device uint32_t* w,
     const device S* scales,
@@ -1109,7 +1109,7 @@ template <typename T, const int group_size, bool batched, typename S>
       w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid, lut);
 }
 
-template <typename T, const int group_size, bool batched, typename S>
+template <typename T, const int group_size, typename S, bool batched>
 [[kernel]] void mxfp4_qvm(
     const device uint32_t* w,
     const device S* scales,
@@ -1149,7 +1149,7 @@ template <typename T, const int group_size, bool batched, typename S>
       w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid, lut);
 }
 
-template <typename T, const int group_size, int split_k = 32, typename S>
+template <typename T, const int group_size, typename S, int split_k = 32>
 [[kernel]] void mxfp4_qvm_split_k(
     const device uint32_t* w,
     const device S* scales,
@@ -1205,9 +1205,9 @@ template <typename T, const int group_size, int split_k = 32, typename S>
 template <
     typename T,
     const int group_size,
+    typename S,
     const bool aligned_N,
     const bool batched,
-    typename S,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1254,15 +1254,15 @@ template <
         s_strides,
         tid);
   }
-  mxfp4_qmm_t_impl<T, group_size, aligned_N, S, BM, BK, BN>(
+  mxfp4_qmm_t_impl<T, group_size, S, aligned_N, BM, BK, BN>(
       w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
 }
 
 template <
     typename T,
     const int group_size,
-    const bool batched,
     typename S,
+    const bool batched,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1468,8 +1468,8 @@ template <typename T, int group_size, typename S>
 template <
     typename T,
     const int group_size,
-    const bool aligned_N,
     typename S,
+    const bool aligned_N,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
@@ -1526,7 +1526,7 @@ template <
       w_strides,
       s_strides,
       tid);
-  mxfp4_qmm_t_impl<T, group_size, aligned_N, S, BM, BK, BN>(
+  mxfp4_qmm_t_impl<T, group_size, S, aligned_N, BM, BK, BN>(
       w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
 }
 

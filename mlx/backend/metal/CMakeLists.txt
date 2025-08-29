@@ -77,7 +77,10 @@ if(MLX_METAL_JIT)
   make_jit_source(steel/conv/kernels/steel_conv)
   make_jit_source(steel/conv/kernels/steel_conv_general kernels/steel/defines.h
                   kernels/steel/conv/loaders/loader_general.h)
-  make_jit_source(quantized)
+
+  make_jit_source(quantized_utils)
+  make_jit_source(quantized kernels/quantized_utils.h)
+  make_jit_source(fp4_quantized kernels/quantized_utils.h)
   make_jit_source(gemv_masked)
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)

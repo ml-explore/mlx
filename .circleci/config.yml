@@ -199,7 +199,7 @@ jobs:
           name: Run Python tests with JIT
           command: |
             CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-              uv pip install -e .
+              uv pip install -e . -v
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
               METAL_DEBUG_ERROR_MODE=0 \
               uv run --no-project python -m xmlrunner discover \
@@ -298,7 +298,7 @@ jobs:
             rm ~/miniconda3/miniconda.sh
             source ~/miniconda3/bin/activate
             conda init --all
-            conda create -n env python=<< parameters.python_version >>
+            conda create -n env python=<< parameters.python_version >> -y
             conda activate env
             pip install --upgrade cmake
             pip install nanobind==2.4.0

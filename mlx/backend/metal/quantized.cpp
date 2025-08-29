@@ -15,6 +15,28 @@ namespace mlx::core {
 
 namespace {
 
+template <typename... Args>
+auto get_quantized_kernel_wrapped(
+    metal::Device& d,
+    const std::string& name,
+    const std::string& func,
+    const std::string& mode,
+    const std::string& type,
+    int group_size,
+    int bits,
+    Args... args) {
+  std::string template_def;
+  auto fname = mode + "_" + func;
+  if (mode == "affine") {
+    template_def = get_template_definition(
+        name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  } else {
+    template_def = get_template_definition(
+        name, fname, type, group_size, "uint8_t", std::forward<Args>(args)...);
+  }
+  return get_quantized_kernel(d, name, template_def, mode);
+}
+
 inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
@@ -178,10 +200,8 @@ void qmv_quad(
       "_d_",
       K,
       B > 1 ? "_batch_1" : "_batch_0");
-  auto template_def = get_template_definition(
-      kname, mode + "_qmv_quad", type_string, group_size, bits, K, B > 1);
-
-  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qmv_quad", mode, type_string, group_size, bits, K, B > 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -235,15 +255,16 @@ void qmv(
       "_b_",
       bits,
       B > 1 ? "_batch_1" : "_batch_0");
-  auto template_def = get_template_definition(
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
       kname,
-      mode + (fast ? "_qmv_fast" : "_qmv"),
+      (fast ? "qmv_fast" : "qmv"),
+      mode,
       type_string,
       group_size,
       bits,
       B > 1);
 
-  auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -337,11 +358,11 @@ void qvm_split_k(
       bits,
       "_spk_",
       split_k);
-  auto template_def = get_template_definition(
-      kname, mode + "_qvm_split_k", type_string, group_size, bits, split_k);
 
   // Encode and dispatch kernel
-  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qvm_split_k", mode, type_string, group_size, bits, split_k);
+
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -414,10 +435,8 @@ void qvm(
       "_b_",
       bits,
       B > 1 ? "_batch_1" : "_batch_0");
-  auto template_def = get_template_definition(
-      kname, mode + "_qvm", type_string, group_size, bits, B > 1);
-
-  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qvm", mode, type_string, group_size, bits, B > 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -476,21 +495,22 @@ void qmm(
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
       batched ? "_batch_1" : "_batch_0");
   std::string template_def;
+  MTL::ComputePipelineState* kernel;
   if (transpose) {
-    template_def = get_template_definition(
+    kernel = get_quantized_kernel_wrapped(
+        d,
         kname,
-        mode + "_qmm_t",
+        "qmm_t",
+        mode,
         type_string,
         group_size,
         bits,
         aligned,
         batched);
   } else {
-    template_def = get_template_definition(
-        kname, mode + "_qmm_n", type_string, group_size, bits, batched);
+    kernel = get_quantized_kernel_wrapped(
+        d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
   }
-
-  auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -539,7 +559,6 @@ void gather_qmm(
   std::string kname;
   kname.reserve(64);
   bool aligned = N % 32 == 0;
-  bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
@@ -550,16 +569,15 @@ void gather_qmm(
       "_b_",
       bits,
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "");
-  std::string template_def;
+  MTL::ComputePipelineState* kernel;
   if (transpose) {
-    template_def = get_template_definition(
-        kname, mode + "_gather_qmm_t", type_string, group_size, bits, aligned);
+    kernel = get_quantized_kernel_wrapped(
+        d, kname, "gather_qmm_t", mode, type_string, group_size, bits, aligned);
   } else {
-    template_def = get_template_definition(
-        kname, mode + "_gather_qmm_n", type_string, group_size, bits);
+    kernel = get_quantized_kernel_wrapped(
+        d, kname, "gather_qmm_n", mode, type_string, group_size, bits);
   }
 
-  auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -617,14 +635,16 @@ void gather_qmv(
       group_size,
       "_b_",
       bits);
-  auto template_def = get_template_definition(
+
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
       kname,
-      mode + (fast ? "_gather_qmv_fast" : "_gather_qmv"),
+      (fast ? "gather_qmv_fast" : "gather_qmv"),
+      mode,
       type_string,
       group_size,
       bits);
 
-  auto kernel = get_quantized_kernel(d, kname, template_def);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -680,10 +700,8 @@ void gather_qvm(
       group_size,
       "_b_",
       bits);
-  auto template_def = get_template_definition(
-      kname, mode + "_gather_qvm", type_string, group_size, bits);
-
-  auto kernel = get_quantized_kernel(d, kname, template_def);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "gather_qvm", mode, type_string, group_size, bits);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -806,6 +824,7 @@ void gather_qmm_rhs(
       x,
       group_size,
       bits,
+      mode,
       bm,
       bn,
       bk,
@@ -1039,15 +1058,27 @@ void fast::Quantize::eval_gpu(
     compute_encoder.set_output_array(biases, 3);
   }
 
-  std::ostringstream kname;
   auto type_string = dequantize_ ? get_type_string(out.dtype())
                                  : get_type_string(w_pre.dtype());
-  auto kernel_func = dequantize_ ? "affine_dequantize" : "affine_quantize";
-  kname << kernel_func << "_" << type_string << "_gs_" << group_size_ << "_b_"
-        << bits_;
-  auto template_def = get_template_definition(
-      kname.str(), kernel_func, type_string, group_size_, bits_);
-  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
+  std::string kname;
+  concatenate(
+      kname,
+      dequantize_ ? "affine_dequantize" : "affine_quantize",
+      "_",
+      type_string,
+      "_gs_",
+      group_size_,
+      "_b_",
+      bits_);
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      dequantize_ ? "dequantize" : "quantize",
+      "affine",
+      type_string,
+      group_size_,
+      bits_);
+
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Treat uint32 as uint8 in kernel
