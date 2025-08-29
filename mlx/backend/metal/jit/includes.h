@@ -19,6 +19,7 @@ const char* binary_two();
 const char* copy();
 const char* fft();
 const char* gather_axis();
+const char* gather_front();
 const char* hadamard();
 const char* logsumexp();
 const char* quantized_utils();

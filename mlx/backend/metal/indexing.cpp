@@ -52,8 +52,10 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  size_t ndim = src.ndim();
+  size_t slice_size = 1;
+  for (auto s : slice_sizes_) {
+    slice_size *= s;
+  }
 
   bool large_index = nidx && inputs[1].size() > INT32_MAX;
   bool large_src = src.size() > INT32_MAX;
@@ -61,6 +63,55 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool large = large_index || large_src || large_out;
 
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
+
+  if (src.flags().row_contiguous && nidx == 1 && axes_[0] == 0 &&
+      inputs[1].flags().row_contiguous && slice_size == src.strides()[0]) {
+    int work_per_thread = (slice_size > 8 && src.dtype().size() < 4) ? 2 : 1;
+    auto& indices = inputs[1];
+    std::string kernel_name = fmt::format(
+        "gather_front{0}_{1}_{2}_{3}",
+        type_to_name(out),
+        idx_type_name,
+        large ? "int64_t" : "int",
+        work_per_thread);
+    std::string lib_name = kernel_name;
+
+    auto lib = d.get_library(lib_name, [&]() {
+      std::string kernel_source = metal::utils();
+      kernel_source += metal::gather_front();
+      kernel_source += get_template_definition(
+          kernel_name,
+          "gather_front",
+          get_type_string(out.dtype()),
+          get_type_string(indices.dtype()),
+          large ? "int64_t" : "int",
+          work_per_thread);
+
+      return kernel_source;
+    });
+
+    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kernel_name, lib);
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    size_t dim_x = (slice_size + work_per_thread - 1) / work_per_thread;
+    size_t dim_y = indices.size();
+    auto group_dims = get_block_dims(dim_x, dim_y, 1);
+    MTL::Size grid_dims = MTL::Size(dim_x, dim_y, 1);
+
+    compute_encoder.set_input_array(src, 0);
+    compute_encoder.set_input_array(indices, 1);
+    compute_encoder.set_output_array(out, 2);
+    compute_encoder.set_bytes(slice_size, 3);
+    compute_encoder.set_bytes(src.shape(0), 4);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    return;
+  }
+
+  int idx_ndim = nidx ? inputs[1].ndim() : 0;
+  size_t ndim = src.ndim();
+
   std::string kernel_name = fmt::format(
       "gather{0}{1}_{2}_{3}_{4}",
       type_to_name(out),
@@ -95,11 +146,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
-
-  size_t slice_size = 1;
-  for (auto s : slice_sizes_) {
-    slice_size *= s;
-  }
 
   // Launch 3D grid of threads
   // First two dimensions for the indices, the last one for the slice
