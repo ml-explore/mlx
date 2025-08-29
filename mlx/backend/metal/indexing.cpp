@@ -66,12 +66,14 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   if (src.flags().row_contiguous && nidx == 1 && axes_[0] == 0 &&
       inputs[1].flags().row_contiguous && slice_size == src.strides()[0]) {
+    int work_per_thread = (slice_size > 8 && src.dtype().size() < 4) ? 2 : 1;
     auto& indices = inputs[1];
     std::string kernel_name = fmt::format(
-        "gather_front{0}_{1}_{2}",
+        "gather_front{0}_{1}_{2}_{3}",
         type_to_name(out),
         idx_type_name,
-        large ? "int64_t" : "int");
+        large ? "int64_t" : "int",
+        work_per_thread);
     std::string lib_name = kernel_name;
 
     auto lib = d.get_library(lib_name, [&]() {
@@ -82,7 +84,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
           "gather_front",
           get_type_string(out.dtype()),
           get_type_string(indices.dtype()),
-          large ? "int64_t" : "int");
+          large ? "int64_t" : "int",
+          work_per_thread);
 
       return kernel_source;
     });
@@ -91,7 +94,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto kernel = d.get_kernel(kernel_name, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
 
-    size_t dim_x = slice_size;
+    size_t dim_x = (slice_size + work_per_thread - 1) / work_per_thread;
     size_t dim_y = indices.size();
     auto group_dims = get_block_dims(dim_x, dim_y, 1);
     MTL::Size grid_dims = MTL::Size(dim_x, dim_y, 1);

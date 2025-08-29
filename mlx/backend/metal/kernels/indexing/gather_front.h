@@ -4,7 +4,7 @@
 
 #include "mlx/backend/metal/kernels/indexing/indexing.h"
 
-template <typename T, typename IdxT, typename LocT>
+template <typename T, typename IdxT, typename LocT, int N>
 [[kernel]] void gather_front(
     const device T* src,
     const device IdxT* indices,
@@ -17,5 +17,8 @@ template <typename T, typename IdxT, typename LocT>
   LocT src_idx = static_cast<LocT>(stride) * idx;
   LocT out_idx = static_cast<LocT>(stride) * index.y;
 
-  out[out_idx + index.x] = src[src_idx + index.x];
+  int s_idx = N * index.x;
+  for (int i = 0; i < N && s_idx < stride; ++i, ++s_idx) {
+    out[out_idx + s_idx] = src[src_idx + s_idx];
+  }
 }
