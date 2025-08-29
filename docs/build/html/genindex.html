@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.28.0 documentation</title>
+    <title>Index &#8212; MLX 0.29.0 documentation</title>
   
   
   
@@ -29,15 +29,18 @@
 
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
   <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="_static/documentation_options.js?v=60827de6"></script>
+    <script src="_static/documentation_options.js?v=9c58480a"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'genindex';</script>
     <link rel="icon" href="_static/mlx_logo.png"/>
@@ -136,8 +139,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.28.0 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.28.0 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.29.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.29.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -476,6 +479,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.cuda_kernel.html">mlx.core.fast.cuda_kernel</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/fft.html">FFT</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -520,6 +524,10 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.metal.device_info.html">mlx.core.metal.device_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.metal.start_capture.html">mlx.core.metal.start_capture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.metal.stop_capture.html">mlx.core.metal.stop_capture</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/cuda.html">CUDA</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cuda.is_available.html">mlx.core.cuda.is_available</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/memory_management.html">Memory Management</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -1233,6 +1241,8 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.cross_entropy.html#mlx.nn.losses.cross_entropy">cross_entropy (class in mlx.nn.losses)</a>
 </li>
+      <li><a href="python/_autosummary/mlx.core.fast.cuda_kernel.html#mlx.core.fast.cuda_kernel">cuda_kernel() (in module mlx.core.fast)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv46cummaxRK5arrayibb14StreamOrDevice">cummax (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.array.cummax.html#mlx.core.array.cummax">cummax() (array method)</a>
@@ -1283,7 +1293,7 @@ document.write(`
 </li>
       <li><a href="cpp/ops.html#_CPPv47dependsRKNSt6vectorI5arrayEERKNSt6vectorI5arrayEE">depends (C++ function)</a>
 </li>
-      <li><a href="cpp/ops.html#_CPPv410dequantizeRK5arrayRK5arrayRK5arrayii14StreamOrDevice">dequantize (C++ function)</a>
+      <li><a href="cpp/ops.html#_CPPv410dequantizeRK5arrayRK5arrayRKNSt8optionalI5arrayEEiiRKNSt6stringE14StreamOrDevice">dequantize (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.dequantize.html#mlx.core.dequantize">dequantize() (in module mlx.core)</a>
 </li>
@@ -1459,7 +1469,7 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.gather_mm.html#mlx.core.gather_mm">gather_mm() (in module mlx.core)</a>
 </li>
-      <li><a href="cpp/ops.html#_CPPv410gather_qmmRK5arrayRK5arrayRK5arrayRK5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEEbiib14StreamOrDevice">gather_qmm (C++ function)</a>
+      <li><a href="cpp/ops.html#_CPPv410gather_qmmRK5arrayRK5arrayRK5arrayRKNSt8optionalI5arrayEENSt8optionalI5arrayEENSt8optionalI5arrayEEbiiRKNSt6stringEb14StreamOrDevice">gather_qmm (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.gather_qmm.html#mlx.core.gather_qmm">gather_qmm() (in module mlx.core)</a>
 </li>
@@ -1587,15 +1597,17 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.fft.irfft.html#mlx.core.fft.irfft">irfft() (in module mlx.core.fft)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.fft.irfft2.html#mlx.core.fft.irfft2">irfft2() (in module mlx.core.fft)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.fft.irfftn.html#mlx.core.fft.irfftn">irfftn() (in module mlx.core.fft)</a>
 </li>
-      <li><a href="python/_autosummary/mlx.core.distributed.is_available.html#mlx.core.distributed.is_available">is_available() (in module mlx.core.distributed)</a>
+      <li><a href="python/_autosummary/mlx.core.cuda.is_available.html#mlx.core.cuda.is_available">is_available() (in module mlx.core.cuda)</a>
 
       <ul>
+        <li><a href="python/_autosummary/mlx.core.distributed.is_available.html#mlx.core.distributed.is_available">(in module mlx.core.distributed)</a>
+</li>
         <li><a href="python/_autosummary/mlx.core.metal.is_available.html#mlx.core.metal.is_available">(in module mlx.core.metal)</a>
 </li>
       </ul></li>
@@ -2023,7 +2035,7 @@ document.write(`
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.linalg.qr.html#mlx.core.linalg.qr">qr() (in module mlx.core.linalg)</a>
 </li>
-      <li><a href="cpp/ops.html#_CPPv48quantizeRK5arrayii14StreamOrDevice">quantize (C++ function)</a>
+      <li><a href="cpp/ops.html#_CPPv48quantizeRK5arrayiiRKNSt6stringE14StreamOrDevice">quantize (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.quantize.html#mlx.core.quantize">quantize() (in module mlx.core)</a>
 
@@ -2033,7 +2045,7 @@ document.write(`
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="cpp/ops.html#_CPPv416quantized_matmul5array5array5array5arraybii14StreamOrDevice">quantized_matmul (C++ function)</a>
+      <li><a href="cpp/ops.html#_CPPv416quantized_matmul5array5array5arrayNSt8optionalI5arrayEEbiiRKNSt6stringE14StreamOrDevice">quantized_matmul (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.quantized_matmul.html#mlx.core.quantized_matmul">quantized_matmul() (in module mlx.core)</a>
 </li>
