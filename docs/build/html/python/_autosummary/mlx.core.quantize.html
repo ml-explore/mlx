@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.quantize &#8212; MLX 0.28.0 documentation</title>
+    <title>mlx.core.quantize &#8212; MLX 0.29.0 documentation</title>
   
   
   
@@ -30,15 +30,18 @@
 
     <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=60827de6"></script>
+    <script src="../../_static/documentation_options.js?v=9c58480a"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'python/_autosummary/mlx.core.quantize';</script>
@@ -138,8 +141,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.28.0 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.28.0 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.29.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.29.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -478,6 +481,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.cuda_kernel.html">mlx.core.fast.cuda_kernel</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../fft.html">FFT</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -522,6 +526,10 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.device_info.html">mlx.core.metal.device_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.start_capture.html">mlx.core.metal.start_capture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.stop_capture.html">mlx.core.metal.stop_capture</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../cuda.html">CUDA</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.cuda.is_available.html">mlx.core.cuda.is_available</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../memory_management.html">Memory Management</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -923,7 +931,7 @@ document.write(`
 <h1>mlx.core.quantize<a class="headerlink" href="#mlx-core-quantize" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.quantize">
-<span class="sig-name descname"><span class="pre">quantize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#mlx.core.quantize" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">quantize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'affine'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#mlx.core.quantize" title="Link to this definition">#</a></dt>
 <dd><p>Quantize the matrix <code class="docutils literal notranslate"><span class="pre">w</span></code> using <code class="docutils literal notranslate"><span class="pre">bits</span></code> bits per element.</p>
 <p>Note, every <code class="docutils literal notranslate"><span class="pre">group_size</span></code> elements in a row of <code class="docutils literal notranslate"><span class="pre">w</span></code> are quantized
 together. Hence, number of columns of <code class="docutils literal notranslate"><span class="pre">w</span></code> should be divisible by
@@ -931,11 +939,39 @@ together. Hence, number of columns of <code class="docutils literal notranslate"
 size <code class="docutils literal notranslate"><span class="pre">group_size</span></code> which are quantized together.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p><code class="docutils literal notranslate"><span class="pre">quantize</span></code> currently only supports 2D inputs with dimensions which are multiples of 32</p>
+<p><code class="docutils literal notranslate"><span class="pre">quantize</span></code> currently only supports 2D inputs with the second
+dimension divisible by <code class="docutils literal notranslate"><span class="pre">group_size</span></code></p>
 </div>
-<p>Formally, for a group of <span class="math notranslate nohighlight">\(g\)</span> consecutive elements <span class="math notranslate nohighlight">\(w_1\)</span> to
-<span class="math notranslate nohighlight">\(w_g\)</span> in a row of <code class="docutils literal notranslate"><span class="pre">w</span></code> we compute the quantized representation
-of each element <span class="math notranslate nohighlight">\(\hat{w_i}\)</span> as follows</p>
+<p>The supported quantization modes are <code class="docutils literal notranslate"><span class="pre">&quot;affine&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;mxfp4&quot;</span></code>. They
+are described in more detail below.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Matrix to be quantized</p></li>
+<li><p><strong>group_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>optional</em>) – The size of the group in <code class="docutils literal notranslate"><span class="pre">w</span></code> that shares a
+scale and bias. Default: <code class="docutils literal notranslate"><span class="pre">64</span></code>.</p></li>
+<li><p><strong>bits</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>optional</em>) – The number of bits occupied by each element of
+<code class="docutils literal notranslate"><span class="pre">w</span></code> in the returned quantized matrix. Default: <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><em>optional</em>) – The quantization mode. Default: <code class="docutils literal notranslate"><span class="pre">&quot;affine&quot;</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>A tuple with either two or three elements containing:</p>
+<ul class="simple">
+<li><p>w_q (array): The quantized version of <code class="docutils literal notranslate"><span class="pre">w</span></code></p></li>
+<li><p>scales (array): The quantization scales</p></li>
+<li><p>biases (array): The quantization biases (returned for <code class="docutils literal notranslate"><span class="pre">mode==&quot;affine&quot;</span></code>).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">affine</span></code> mode quantizes groups of <span class="math notranslate nohighlight">\(g\)</span> consecutive
+elements in a row of <code class="docutils literal notranslate"><span class="pre">w</span></code>. For each group the quantized
+representation of each element <span class="math notranslate nohighlight">\(\hat{w_i}\)</span> is computed as follows:</p>
 <div class="math notranslate nohighlight">
 \[\begin{split}\begin{aligned}
   \alpha &amp;= \max_i w_i \\
@@ -948,32 +984,15 @@ and is packed in an unsigned 32-bit integer from the lower to upper
 bits. For instance, for 4-bit quantization we fit 8 elements in an
 unsigned 32 bit integer where the 1st element occupies the 4 least
 significant bits, the 2nd bits 4-7 etc.</p>
-<p>In order to be able to dequantize the elements of <code class="docutils literal notranslate"><span class="pre">w</span></code> we also need to
-save <span class="math notranslate nohighlight">\(s\)</span> and <span class="math notranslate nohighlight">\(\beta\)</span> which are the returned <code class="docutils literal notranslate"><span class="pre">scales</span></code> and
+<p>To dequantize the elements of <code class="docutils literal notranslate"><span class="pre">w</span></code>, we also save <span class="math notranslate nohighlight">\(s\)</span> and
+<span class="math notranslate nohighlight">\(\beta\)</span> which are the returned <code class="docutils literal notranslate"><span class="pre">scales</span></code> and
 <code class="docutils literal notranslate"><span class="pre">biases</span></code> respectively.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>w</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Matrix to be quantized</p></li>
-<li><p><strong>group_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>optional</em>) – The size of the group in <code class="docutils literal notranslate"><span class="pre">w</span></code> that shares a
-scale and bias. Default: <code class="docutils literal notranslate"><span class="pre">64</span></code>.</p></li>
-<li><p><strong>bits</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>, </em><em>optional</em>) – The number of bits occupied by each element of
-<code class="docutils literal notranslate"><span class="pre">w</span></code> in the returned quantized matrix. Default: <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><p>A tuple containing</p>
-<ul class="simple">
-<li><p>w_q (array): The quantized version of <code class="docutils literal notranslate"><span class="pre">w</span></code></p></li>
-<li><p>scales (array): The scale to multiply each element with, namely <span class="math notranslate nohighlight">\(s\)</span></p></li>
-<li><p>biases (array): The biases to add to each element, namely <span class="math notranslate nohighlight">\(\beta\)</span></p></li>
-</ul>
-</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a></p>
-</dd>
-</dl>
+<p>The <code class="docutils literal notranslate"><span class="pre">mxfp4</span></code> mode similarly quantizes groups of <span class="math notranslate nohighlight">\(g\)</span> elements
+of <code class="docutils literal notranslate"><span class="pre">w</span></code>. For <code class="docutils literal notranslate"><span class="pre">mxfp4</span></code> the group size must be <code class="docutils literal notranslate"><span class="pre">32</span></code>. The elements
+are quantized to 4-bit precision floating-point values (E2M1) with a
+shared 8-bit scale per group. Unlike <code class="docutils literal notranslate"><span class="pre">affine</span></code> quantization,
+<code class="docutils literal notranslate"><span class="pre">mxfp4</span></code> does not have a bias value. More details on the format can
+be found in the <a class="reference external" href="https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf">specification</a>.</p>
 </dd></dl>
 
 </section>
