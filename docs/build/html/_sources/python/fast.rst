@@ -13,3 +13,4 @@ Fast
   rope
   scaled_dot_product_attention
   metal_kernel
+  cuda_kernel
