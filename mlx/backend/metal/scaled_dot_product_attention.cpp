@@ -21,8 +21,9 @@ void sdpa_full_self_attention_metal(
     const array& v,
     const float scale,
     array& o,
-    bool do_causal_ = false,
-    const std::optional<array>& mask = std::nullopt) {
+    bool do_causal_,
+    const std::optional<array>& mask,
+    const std::optional<array>& sinks) {
   using namespace mlx::steel;
 
   int wm = 4;
@@ -42,35 +43,49 @@ void sdpa_full_self_attention_metal(
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;
-  const bool has_mask = !!mask;
+  const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
+  const bool has_sinks = sinks.has_value();
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
-      {&do_causal, MTL::DataType::DataTypeBool, 301}};
+      {&do_causal, MTL::DataType::DataTypeBool, 301},
+      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
 
-  std::ostringstream kname;
-  // clang-format off
-  kname << "steel_attention_"
-        << type_to_name(q)
-        << "_bq" << bq
-        << "_bk" << bk
-        << "_bd" << bd
-        << "_wm" << wm
-        << "_wn" << wn
-        << "_mask" << (type_to_name(has_mask ? *mask : q)); // clang-format on
+  std::string base_name;
+  concatenate(
+      base_name,
+      "steel_attention_",
+      type_to_name(q),
+      "_bq",
+      bq,
+      "_bk",
+      bk,
+      "_bd",
+      bd,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      "_mask",
+      type_to_name(has_mask ? *mask : q));
 
-  std::string base_name = kname.str();
-
-  // clang-format off
-  kname << "_align_Q_" << (align_Q ? 't' : 'n')
-        << "_align_K_" << (align_K ? 't' : 'n')
-        << "_has_mask_" << (has_mask ? 't' : 'n')
-        << "_do_causal_" << (do_causal ? 't' : 'n'); // clang-format on
-
-  std::string hash_name = kname.str();
+  std::string hash_name;
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_Q_",
+      (align_Q ? 't' : 'n'),
+      "_align_K_",
+      (align_K ? 't' : 'n'),
+      "_has_mask_",
+      (has_mask ? 't' : 'n'),
+      "_do_causal_",
+      (do_causal ? 't' : 'n'),
+      "_has_sinks_",
+      (has_sinks ? 't' : 'n'));
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(base_name, hash_name, func_consts);
@@ -114,14 +129,17 @@ void sdpa_full_self_attention_metal(
   compute_encoder.set_output_array(o, 3);
   compute_encoder.set_bytes(params, 4);
 
-  if (mask) {
-    auto m = *mask;
+  if (has_mask) {
+    auto& m = *mask;
 
     AttnMaskParams mask_params{/* int64_t M_strides[3] = */ {
         m.strides(0), m.strides(1), m.strides(2)}};
 
     compute_encoder.set_bytes(mask_params, 5);
     compute_encoder.set_input_array(m, 6);
+  }
+  if (has_sinks) {
+    compute_encoder.set_input_array(*sinks, 7);
   }
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
@@ -139,7 +157,8 @@ void sdpa_vector(
     array& out,
     float scale,
     bool do_causal,
-    const std::optional<array>& mask) {
+    const std::optional<array>& mask,
+    const std::optional<array>& sinks) {
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
@@ -153,30 +172,32 @@ void sdpa_vector(
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
-  int B = q.shape(0) * q.shape(1);
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
 
   MTL::Size group_dims(1024, 1, 1);
-  MTL::Size grid_dims(B, q.shape(2), 1);
+  MTL::Size grid_dims(q.shape(0) * q.shape(1), q.shape(2), 1);
 
   bool has_mask = mask.has_value();
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
   bool float_mask = has_mask && !bool_mask;
   bool query_transposed = !q.flags().row_contiguous;
+  bool has_sinks = sinks.has_value();
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
       {&do_causal, MTL::DataType::DataTypeBool, 22},
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
+      {&has_sinks, MTL::DataType::DataTypeBool, 25},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
+  hash_name += has_sinks ? "_sinks" : "_nosinks";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -207,6 +228,10 @@ void sdpa_vector(
     compute_encoder.set_bytes(q_seq_stride, 14);
     compute_encoder.set_bytes(head_stride, 15);
   }
+  if (has_sinks) {
+    compute_encoder.set_input_array(*sinks, 16);
+    compute_encoder.set_bytes(q.shape(1), 17);
+  }
 
   // Launch
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -221,7 +246,8 @@ void sdpa_vector_2pass(
     array& out,
     float scale,
     bool do_causal,
-    const std::optional<array>& mask) {
+    const std::optional<array>& mask,
+    const std::optional<array>& sinks) {
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
@@ -267,17 +293,20 @@ void sdpa_vector_2pass(
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
   bool float_mask = has_mask && !bool_mask;
   bool query_transposed = !q.flags().row_contiguous;
+  bool has_sinks = sinks.has_value();
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
       {&do_causal, MTL::DataType::DataTypeBool, 22},
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
+      {&has_sinks, MTL::DataType::DataTypeBool, 25},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
+  hash_name += has_sinks ? "_sinks" : "_nosinks";
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -309,6 +338,10 @@ void sdpa_vector_2pass(
     compute_encoder.set_bytes(kv_seq_stride, 15);
     compute_encoder.set_bytes(q_seq_stride, 16);
     compute_encoder.set_bytes(head_stride, 17);
+  }
+  if (has_sinks) {
+    compute_encoder.set_input_array(*sinks, 18);
+    compute_encoder.set_bytes(q.shape(1), 19);
   }
 
   // Launch
@@ -394,7 +427,7 @@ void ScaledDotProductAttention::eval_gpu(
 
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
-  copies.reserve(3);
+  copies.reserve(inputs.size());
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
@@ -410,6 +443,12 @@ void ScaledDotProductAttention::eval_gpu(
   auto is_matrix_contiguous = [](const array& arr) {
     return arr.strides(-1) == 1;
   };
+
+  std::optional<array> sinks = std::nullopt;
+  if (has_sinks_) {
+    sinks = copy_unless(is_matrix_contiguous, inputs.back());
+  }
+  bool has_arr_mask = inputs.size() > (3 + has_sinks_);
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) <= 8) {
@@ -462,7 +501,7 @@ void ScaledDotProductAttention::eval_gpu(
           (strides[0] == strides[1] * shape[1]);
     };
 
-    auto mask = inputs.size() > 3
+    auto mask = has_arr_mask
         ? std::optional<array>{copy_unless(mask_copy_unless, inputs[3])}
         : std::nullopt;
 
@@ -473,9 +512,9 @@ void ScaledDotProductAttention::eval_gpu(
     char devc = d.get_architecture().back();
     if ((devc == 'd' && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask);
+      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     } else {
-      sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask);
+      sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     }
   }
 
@@ -503,11 +542,12 @@ void ScaledDotProductAttention::eval_gpu(
         {str_oB, str_oH, str_oL, str_oD},
         flags);
 
-    auto mask = inputs.size() > 3
+    auto mask = has_arr_mask
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
-    sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o, do_causal_, mask);
+    sdpa_full_self_attention_metal(
+        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
   }
 
   d.add_temporaries(std::move(copies), s.index);
