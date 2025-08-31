@@ -2881,9 +2881,9 @@ array matmul(
   if (!issubdtype(out_type, floating) &&
       !issubdtype(out_type, complexfloating)) {
     std::ostringstream msg;
-    msg << "[matmul] Only real floating point types are supported but "
-        << a.dtype() << " and " << b.dtype() << " were provided which results"
-        << " in " << out_type << ", which is not a real floating point type.";
+    msg << "[matmul] Only floating point types are supported but " << a.dtype()
+        << " and " << b.dtype() << " were provided which results"
+        << " in " << out_type << ", which is not a floating point type.";
     throw std::invalid_argument(msg.str());
   }
   if (a.dtype() != out_type) {
