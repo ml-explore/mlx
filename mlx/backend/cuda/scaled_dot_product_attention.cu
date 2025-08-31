@@ -691,7 +691,7 @@ void ScaledDotProductAttention::eval_gpu(
 
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
-  copies.reserve(3);
+  copies.reserve(inputs.size());
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
@@ -740,10 +740,6 @@ void ScaledDotProductAttention::eval_gpu(
     const auto& k = copy_unless(kv_copy_unless, k_pre);
     const auto& v = copy_unless(kv_copy_unless, v_pre);
 
-    for (const auto& cp : copies) {
-      encoder.add_temporary(cp);
-    }
-
     // Donate the query if possible
     if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
       o.copy_shared_buffer(q);
@@ -752,19 +748,22 @@ void ScaledDotProductAttention::eval_gpu(
       int64_t str_oH = o.shape(3);
       int64_t str_oL = o.shape(1) * str_oH;
       int64_t str_oB = o.shape(2) * str_oL;
-      size_t data_size = o.shape(0) * str_oB;
 
       array::Flags flags{
           /* bool contiguous = */ 1,
           /* bool row_contiguous = */ o.shape(2) == 1,
-          /* bool col_contiguous = */ 0,
+          /* bool col_contiguous = */ o.size() == o.shape(3),
       };
 
       o.set_data(
           allocator::malloc(o.nbytes()),
-          data_size,
+          o.size(),
           {str_oB, str_oH, str_oL, str_oD},
           flags);
+    }
+
+    for (const auto& cp : copies) {
+      encoder.add_temporary(cp);
     }
 
     return sdpa_vector_fallback(s, encoder, q, k, v, scale_, o, do_causal_);

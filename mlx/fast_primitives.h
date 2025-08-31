@@ -208,9 +208,13 @@ class ScaledDotProductAttention : public Custom {
   explicit ScaledDotProductAttention(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      const float scale,
-      const bool do_causal)
-      : Custom(stream, fallback), scale_(scale), do_causal_(do_causal) {}
+      float scale,
+      bool do_causal,
+      bool has_sinks)
+      : Custom(stream, fallback),
+        scale_(scale),
+        do_causal_(do_causal),
+        has_sinks_(has_sinks) {}
 
   static bool use_fallback(
       const array& q,
@@ -237,12 +241,13 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_tuple(nullptr, scale_, do_causal_);
+    return std::make_tuple(nullptr, scale_, do_causal_, has_sinks_);
   }
 
  private:
   float scale_;
   bool do_causal_;
+  bool has_sinks_;
 };
 
 class Quantize : public Custom {
