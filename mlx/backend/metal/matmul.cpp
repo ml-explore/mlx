@@ -807,9 +807,9 @@ inline void gemv(
 
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
-  if (!issubdtype(out.dtype(), floating)) {
-    throw std::runtime_error(
-        "[matmul] Does not yet support non-floating point types.");
+  if (!issubdtype(out.dtype(), floating) &&
+      !issubdtype(out.dtype(), complexfloating)) {
+    throw std::runtime_error("[matmul] dtype must be floating or complex.");
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -1338,7 +1338,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_" << (mn_aligned ? "t" : "n")
-        << "aligned" << "_K_" << (k_aligned ? "t" : "n") << "aligned";
+        << "aligned"
+        << "_K_" << (k_aligned ? "t" : "n") << "aligned";
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);

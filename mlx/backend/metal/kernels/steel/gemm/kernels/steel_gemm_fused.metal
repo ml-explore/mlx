@@ -29,4 +29,5 @@ instantiate_gemm_shapes_helper(float16, half, float16, half);
 instantiate_gemm_shapes_helper(bfloat16, bfloat16_t, bfloat16, bfloat16_t);
 
 instantiate_gemm_shapes_helper(float32, float, float32, float);
+instantiate_gemm_shapes_helper(complex64, complex64_t, complex64, complex64_t);
 // clang-format on
