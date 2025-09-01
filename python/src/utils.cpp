@@ -91,7 +91,7 @@ mx::array to_array_with_accessor(nb::object obj) {
     return nb::cast<mx::array>(obj.attr("__mlx_array__")());
   } else {
     std::ostringstream msg;
-    msg << "Invalid type  " << nb::type_name(obj.type()).c_str()
+    msg << "Invalid type " << nb::type_name(obj.type()).c_str()
         << " received in array initialization.";
     throw std::invalid_argument(msg.str());
   }
