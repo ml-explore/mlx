@@ -556,7 +556,7 @@ class AdamW(Adam):
         eps (float, optional): The term :math:`\epsilon` added to the
           denominator to improve numerical stability. Default: ``1e-8``
         weight_decay (float, optional): The weight decay :math:`\lambda`.
-          Default: ``0``.
+          Default: ``0.01``.
         bias_correction (bool, optional): If set to ``True``, bias correction
           is applied. Default: ``False``
     """
