@@ -394,7 +394,7 @@ void ScaledDotProductAttention::eval_gpu(
 
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
-  copies.reserve(3);
+  copies.reserve(inputs.size());
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
