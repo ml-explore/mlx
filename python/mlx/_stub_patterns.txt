@@ -9,6 +9,7 @@ mlx.core.__prefix__:
 mlx.core.__suffix__:
   from typing import Union
   scalar: TypeAlias = Union[int, float, bool]
+  bool_: Dtype = ...
 
 mlx.core.distributed.__prefix__:
   from mlx.core import array, Dtype, Device, Stream, scalar

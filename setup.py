@@ -176,10 +176,6 @@ class GenerateStubs(Command):
         # Run again without recursive to specify output file name
         subprocess.run(["rm", f"{out_path}/mlx.pyi"])
         subprocess.run(stub_cmd + ["-o", f"{out_path}/__init__.pyi"])
-        # mx.bool_ gets filtered by nanobind because of the trailing
-        # underscore, add it manually:
-        with open(f"{out_path}/__init__.pyi", "a") as fid:
-            fid.write("\nbool_: Dtype = ...")
 
 
 class MLXBdistWheel(bdist_wheel):
