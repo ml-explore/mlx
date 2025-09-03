@@ -107,7 +107,8 @@ same array:
   >>> a
   array([1, 2, 0], dtype=int32)
 
-Note that unlike NumPy, mutating a variable bound to a slice creates a copy and does not mutate the original array:
+Note that unlike NumPy, slicing an array creates a copy, not a view. So
+mutating it does not mutate the original array:
 
 .. code-block:: shell
 
