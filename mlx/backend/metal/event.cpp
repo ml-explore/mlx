@@ -2,6 +2,7 @@
 
 #include "mlx/event.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/thread_safey.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core {
@@ -31,6 +32,7 @@ void Event::wait(Stream stream) {
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [*this]() mutable { wait(); });
   } else {
+    std::lock_guard<std::mutex> lock(gpu::metal_operation_mutex);
     auto& d = metal::device(stream.device);
     d.end_encoding(stream.index);
     auto command_buffer = d.get_command_buffer(stream.index);
@@ -45,6 +47,7 @@ void Event::signal(Stream stream) {
       static_cast<MTL::SharedEvent*>(event_.get())->setSignaledValue(value());
     });
   } else {
+    std::lock_guard<std::mutex> lock(gpu::metal_operation_mutex);
     auto& d = metal::device(stream.device);
     d.end_encoding(stream.index);
     auto command_buffer = d.get_command_buffer(stream.index);
