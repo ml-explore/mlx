@@ -320,6 +320,7 @@ void init_array(nb::module_& m) {
       .def_prop_ro(
           "shape",
           [](const mx::array& a) { return nb::cast(a.shape()); },
+          nb::sig("def shape(self) -> tuple[int, ...]"),
           R"pbdoc(
           The shape of the array as a Python tuple.
 
@@ -347,6 +348,7 @@ void init_array(nb::module_& m) {
       .def(
           "item",
           &to_scalar,
+          nb::sig("def item(self) -> scalar"),
           R"pbdoc(
             Access the value of a scalar array.
 
@@ -356,6 +358,7 @@ void init_array(nb::module_& m) {
       .def(
           "tolist",
           &tolist,
+          nb::sig("def tolist(self) -> list_or_scalar"),
           R"pbdoc(
             Convert the array to a Python :class:`list`.
 

@@ -171,7 +171,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def normal(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, loc: Optional[scalar, array] = None, scale: Optional[scalar, array] = None, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def normal(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, loc: Union[scalar, array, None] = None, scale: Union[scalar, array, None] = None, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Generate normally distributed random numbers.
 

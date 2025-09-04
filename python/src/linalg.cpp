@@ -447,6 +447,8 @@ void init_linalg(nb::module_& parent_module) {
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def eig(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a square matrix.
 
@@ -523,6 +525,8 @@ void init_linalg(nb::module_& parent_module) {
       "UPLO"_a = "L",
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def eigh(a: array, UPLO: str = 'L', *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a complex Hermitian or
         real symmetric matrix.
