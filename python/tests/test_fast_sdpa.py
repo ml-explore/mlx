@@ -6,7 +6,7 @@ import mlx_tests
 import numpy as np
 
 
-def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
+def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     q_dtype = q.dtype
     q = q * mx.array(scale, q_dtype)
     n_q_heads = q.shape[-3]
@@ -43,7 +43,18 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None):
         else:
             scores += mask
 
+    if sinks is not None:
+        sinks = mx.expand_dims(sinks, (0, 2, 3))
+        if n_repeats > 1:
+            sinks = mx.unflatten(sinks, 1, (n_kv_heads, n_repeats))
+        score_shape = list(scores.shape)
+        score_shape[-1] = 1
+        sinks = mx.broadcast_to(sinks, score_shape)
+        scores = mx.concatenate([sinks, scores], axis=-1)
+
     scores = mx.softmax(scores, axis=-1, precise=True)
+    if sinks is not None:
+        scores = scores[..., 1:]
 
     out = scores @ v
     if n_repeats > 1:
@@ -158,7 +169,7 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
         Dk = 64
 
-        if self.is_apple_silicon:
+        if self.is_apple_silicon or mx.cuda.is_available():
             dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [63, 129, 400]:
@@ -230,7 +241,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         B = 1
         H = 32
         dtypes = [np.float32]
-        if self.is_apple_silicon:
+        if self.is_apple_silicon or mx.cuda.is_available():
             dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [1, 7, 9, 32, 63, 67, 129, 400, 2000]:
@@ -673,6 +684,54 @@ class TestSDPA(mlx_tests.MLXTestCase):
         expected = mlx_ref_attn(q, k, v, mask=mask, scale=1.0)
         self.assertFalse(mx.isnan(out).any().item())
         self.assertLessEqual(mx.abs(out - expected).max().item(), 1e-4)
+
+    def test_sdpa_attention_sinks(self):
+        B = 2
+        N_q = N_kv = 8
+        T_q = T_kv = 128
+        D = 64  # 128
+
+        q = mx.random.normal(shape=(B, N_q, T_q, D))
+        k = mx.random.normal(shape=(B, N_kv, T_kv, D))
+        v = mx.random.normal(shape=(B, N_kv, T_kv, D))
+        scale = D**-0.5
+
+        # sinks should promote to correct type
+        sinks = mx.random.normal(shape=(N_q,))
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(
+                q.astype(mx.float16),
+                k.astype(mx.float16),
+                v.astype(mx.float16),
+                scale=scale,
+                sinks=sinks,
+            )
+
+        # Wrong shapes
+        sinks = mx.random.normal(shape=(N_q + 1,))
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, sinks=sinks)
+
+        sinks = mx.random.normal(shape=())
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, sinks=sinks)
+
+        for T_q in [128]:  # [1, 128]:
+            for N_kv in [2, 8]:
+                q = mx.random.normal(shape=(B, N_q, T_q, D))
+                k = mx.random.normal(shape=(B, N_kv, T_kv, D))
+                v = mx.random.normal(shape=(B, N_kv, T_kv, D))
+                sinks = 10 * mx.random.normal(shape=(N_q,))
+
+                expected = mlx_ref_attn(q, k, v, scale, sinks=sinks)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, sinks=sinks
+                )
+                print(T_q, N_kv)
+                import pdb
+
+                pdb.set_trace()
+                self.assertTrue(mx.allclose(out, expected, atol=1e-5))
 
 
 if __name__ == "__main__":

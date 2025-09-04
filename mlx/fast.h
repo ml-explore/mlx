@@ -50,6 +50,7 @@ array scaled_dot_product_attention(
     const float scale,
     const std::string& mask_mode = "",
     const std::vector<array>& mask_arrs = {},
+    const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;

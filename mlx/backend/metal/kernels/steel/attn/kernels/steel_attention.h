@@ -11,6 +11,7 @@ constant bool align_K [[function_constant(201)]];
 
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
+constant bool has_sinks [[function_constant(302)]];
 
 template <typename T>
 struct TransformScale {
@@ -82,6 +83,7 @@ template <
     const constant AttnParams* params [[buffer(4)]],
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
+    const device T* sinks [[buffer(7), function_constant(has_sinks)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -230,6 +232,15 @@ template <
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
     max_score[i] = Limits<AccumType>::finite_min;
+  }
+
+  // TODO condition here is wrong
+  if (has_sinks) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      max_score[i] = static_cast<AccumType>(sinks[tidl.y]);
+      sum_score[i] = 1;
+    }
   }
 
   int kb_lim = params->NK;
