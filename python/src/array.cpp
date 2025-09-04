@@ -358,7 +358,7 @@ void init_array(nb::module_& m) {
       .def(
           "tolist",
           &tolist,
-          nb::sig("def tolist(self) -> listscalar"),
+          nb::sig("def tolist(self) -> list_or_scalar"),
           R"pbdoc(
             Convert the array to a Python :class:`list`.
 
