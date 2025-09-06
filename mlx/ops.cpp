@@ -2878,10 +2878,9 @@ array matmul(
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
 
-  if (!issubdtype(out_type, floating) &&
-      !issubdtype(out_type, complexfloating)) {
+  if (!issubdtype(out_type, inexact)) {
     std::ostringstream msg;
-    msg << "[matmul] Only floating point types are supported but " << a.dtype()
+    msg << "[matmul] Only inexact types are supported but " << a.dtype()
         << " and " << b.dtype() << " were provided which results"
         << " in " << out_type << ", which is not a floating point type.";
     throw std::invalid_argument(msg.str());
