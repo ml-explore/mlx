@@ -23,7 +23,8 @@
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 64, 16, 1, 2) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 32, 32, 2, 2) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 64, 16, 1, 2) \
-    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 32, 16, 2, 2)
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 32, 16, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 32,  8, 4, 1)
 
 instantiate_gemm_shapes_helper(float16, half, float16, half);
 instantiate_gemm_shapes_helper(bfloat16, bfloat16_t, bfloat16, bfloat16_t);

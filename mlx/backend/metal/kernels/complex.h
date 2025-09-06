@@ -22,9 +22,9 @@ struct complex64_t {
   float imag;
 
   // Constructors
-  constexpr complex64_t(float real, float imag) : real(real), imag(imag) {};
-  constexpr complex64_t() : real(0), imag(0) {};
-  constexpr complex64_t() threadgroup : real(0), imag(0) {};
+  constexpr complex64_t(float real, float imag) : real(real), imag(imag){};
+  constexpr complex64_t() : real(0), imag(0){};
+  constexpr complex64_t() threadgroup : real(0), imag(0){};
 
   // Conversions to complex64_t
   template <
@@ -104,6 +104,27 @@ constexpr bool operator==(complex64_t a, complex64_t b) {
 constexpr complex64_t operator+(complex64_t a, complex64_t b) {
   return {a.real + b.real, a.imag + b.imag};
 }
+
+constexpr thread complex64_t& operator+=(thread complex64_t& a, complex64_t b) {
+  a.real += b.real;
+  a.imag += b.imag;
+  return a;
+}
+
+constexpr threadgroup complex64_t& operator+=(
+    threadgroup complex64_t& a,
+    complex64_t b) {
+  a.real += b.real;
+  a.imag += b.imag;
+  return a;
+}
+
+constexpr device complex64_t& operator+=(device complex64_t& a, complex64_t b) {
+  a.real += b.real;
+  a.imag += b.imag;
+  return a;
+}
+
 constexpr complex64_t operator+(float a, complex64_t b) {
   return {a + b.real, b.imag};
 }

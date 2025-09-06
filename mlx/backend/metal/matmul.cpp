@@ -87,17 +87,33 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
 #define GEMM_TPARAM_MACRO(devc)                                           \
   if (devc == 'g' || devc == 'p') { /* Small device */                    \
     if (!transpose_a && transpose_b) { /* nt */                           \
-      bm = 64;                                                            \
-      bn = 32;                                                            \
-      bk = 32;                                                            \
-      wm = 2;                                                             \
-      wn = 2;                                                             \
-    } else if (out.dtype() != float32) { /* half and bfloat */            \
-      bm = 64;                                                            \
-      bn = 64;                                                            \
-      bk = 16;                                                            \
-      wm = 1;                                                             \
-      wn = 2;                                                             \
+      if (out.dtype() == complex64) {                                     \
+        bm = 64;                                                          \
+        bn = 32;                                                          \
+        bk = 8;                                                           \
+        wm = 4;                                                           \
+        wn = 1;                                                           \
+      } else {                                                            \
+        bm = 64;                                                          \
+        bn = 32;                                                          \
+        bk = 32;                                                          \
+        wm = 2;                                                           \
+        wn = 2;                                                           \
+      }                                                                   \
+    } else if (out.dtype() != float32) {                                  \
+      if (out.dtype() == complex64) {                                     \
+        bm = 64;                                                          \
+        bn = 32;                                                          \
+        bk = 8;                                                           \
+        wm = 4;                                                           \
+        wn = 1;                                                           \
+      } else { /* half and bfloat */                                      \
+        bm = 64;                                                          \
+        bn = 64;                                                          \
+        bk = 16;                                                          \
+        wm = 1;                                                           \
+        wn = 2;                                                           \
+      }                                                                   \
     }                                                                     \
   } else if (devc == 'd') { /* Large device */                            \
     if ((size_t)batch_size_out * M * N >= 1ul << 20) { /* large matmul */ \
@@ -362,7 +378,11 @@ void steel_gemm_splitk_axpby(
   int gemm_k_iterations = (K / bk) / split_k_partitions;
   int split_k_partition_size = gemm_k_iterations * bk;
 
-  array C_split({split_k_partitions, M, N}, float32, nullptr, {});
+  array C_split(
+      {split_k_partitions, M, N},
+      issubdtype(out.dtype(), complexfloating) ? complex64 : float32,
+      nullptr,
+      {});
   C_split.set_data(allocator::malloc(C_split.nbytes()));
   copies.push_back(C_split);
 
@@ -807,9 +827,8 @@ inline void gemv(
 
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
-  if (!issubdtype(out.dtype(), floating) &&
-      !issubdtype(out.dtype(), complexfloating)) {
-    throw std::runtime_error("[matmul] dtype must be floating or complex.");
+  if (!issubdtype(out.dtype(), inexact)) {
+    throw std::runtime_error("[matmul] dtype must be inexact.");
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
