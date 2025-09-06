@@ -231,6 +231,9 @@ jobs:
             rm -rf ccache-4.11.3-linux-x86_64
             curl -LsSf https://astral.sh/uv/install.sh | sh
       - run:
+          name: Set CCache size
+          command: ccache --max-size 1G
+      - run:
           name: Install Python package
           command: |
             uv venv
@@ -260,7 +263,6 @@ jobs:
           command: |
             ccache --show-stats
             ccache --zero-stats
-            ccache --max-size 400MB
             ccache --cleanup
       - save_cache:
           key: cuda-<< parameters.image_date >>-{{ arch }}-{{ epoch }}
