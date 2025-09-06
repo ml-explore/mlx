@@ -163,7 +163,7 @@ def get_gflop_count(B, M, N, K):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run gemm benchmarks")
 
-    dtypes = ("float32", "float16")
+    dtypes = ("float32", "float16", "complex64")
     transposes = ("nn", "nt", "tn")
     shapes = (
         (16, 234, 768, 3072),
@@ -187,7 +187,7 @@ if __name__ == "__main__":
                 diff = gflops_mx / gflops_pt - 1.0
 
                 print(
-                    f"{B:3d}, {M:4d}, {N:4d}, {K:4d}, {dtype}, {transpose}, {gflops_pt:05.3f}, {gflops_mx:05.3f}, {100. * diff:+5.2f}%"
+                    f"{B:3d}, {M:4d}, {N:4d}, {K:4d}, {dtype}, {transpose}, {gflops_pt:05.3f}, {gflops_mx:05.3f}, {100.0 * diff:+5.2f}%"
                 )
                 if gflops_pt >= 2.0 * gflops_mx:
                     print("ATTENTION ^^^^^^^")
