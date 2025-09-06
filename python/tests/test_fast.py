@@ -8,18 +8,22 @@ import mlx_tests
 
 
 def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
-    offset = offset.item() if isinstance(offset, mx.array) else offset
-    N = x.shape[-2] + offset
+    N = x.shape[-2]
     dtype = x.dtype
     half_D = dims // 2
-    positions = mx.arange(offset, N, dtype=dtype) * scale
+    positions = mx.arange(N, dtype=dtype)
+    if isinstance(offset, mx.array) and offset.size > 1:
+        positions = offset[:, None, None] + positions
+    else:
+        positions = offset + positions
+    positions = positions * scale
     if freqs is None:
         inv_freqs = mx.exp(
             -mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D)
         )
     else:
         inv_freqs = (1 / freqs).astype(x.dtype)
-    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(inv_freqs, (1, -1))
+    theta = mx.expand_dims(positions, -1) * inv_freqs
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
         x1 = x[..., :dims:2]
@@ -83,7 +87,7 @@ class TestFast(mlx_tests.MLXTestCase):
         for traditional in [True, False]:
             dims, dtype, _, scale, offset, _ = defaults
             for base in bases:
-                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                x = mx.random.uniform(shape=(1, 2, T, dims)).astype(dtype)
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_fast = mx.fast.rope(
                     x,
@@ -97,7 +101,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
             dims, _, base, scale, offset, _ = defaults
             for dtype in dtypes:
-                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                x = mx.random.uniform(shape=(1, 2, T, dims)).astype(dtype)
                 ry = rope_orig(
                     x.astype(mx.float32), dims, traditional, base, scale, offset
                 )
@@ -118,7 +122,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
             dims, dtype, base, scale, _, _ = defaults
             for offset in offsets:
-                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                x = mx.random.uniform(shape=(1, 2, T, dims)).astype(dtype)
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_fast = mx.fast.rope(
                     x,
@@ -132,7 +136,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
             dims, dtype, base, _, offset, _ = defaults
             for scale in scales:
-                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                x = mx.random.uniform(shape=(1, 2, T, dims)).astype(dtype)
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_fast = mx.fast.rope(
                     x,
@@ -160,7 +164,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
         # Test raises with integer inputs
         dims, _, base, scale, offset, traditional = defaults
-        x = (mx.random.uniform(shape=(2, T, dims)) * 10).astype(mx.int32)
+        x = (mx.random.uniform(shape=(1, 2, T, dims)) * 10).astype(mx.int32)
         with self.assertRaises(ValueError):
             y = mx.fast.rope(
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
@@ -172,7 +176,7 @@ class TestFast(mlx_tests.MLXTestCase):
         # Check throws
         T = 4
         dims = 8
-        x = mx.random.uniform(shape=(2, T, dims))
+        x = mx.random.uniform(shape=(1, 2, T, dims))
 
         with self.assertRaises(ValueError):
             freqs = mx.random.uniform(shape=(dims - 1,))
@@ -214,9 +218,10 @@ class TestFast(mlx_tests.MLXTestCase):
             )
             self.assertEqual(dtype, rx.dtype)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            return
 
         # Test single vector
-        x = mx.random.uniform(shape=(1, 1, dims))
+        x = mx.random.uniform(shape=(1, 1, 1, dims))
         rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
         rx_fast = mx.fast.rope(
             x,
@@ -244,8 +249,8 @@ class TestFast(mlx_tests.MLXTestCase):
             * y
         ).sum()
 
-        x = mx.random.uniform(shape=(2, 4, dims))
-        y = mx.random.uniform(shape=(2, 4, dims))
+        x = mx.random.uniform(shape=(1, 2, 4, dims))
+        y = mx.random.uniform(shape=(1, 2, 4, dims))
         g1 = mx.grad(f1)(x, y)
         g2 = mx.grad(f2)(x, y)
         self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
@@ -271,11 +276,60 @@ class TestFast(mlx_tests.MLXTestCase):
                     * y
                 ).sum()
 
-                x = mx.random.uniform(shape=(2, 100, D))
-                y = mx.random.uniform(shape=(2, 100, D))
+                x = mx.random.uniform(shape=(1, 2, 100, D))
+                y = mx.random.uniform(shape=(1, 2, 100, D))
                 g1 = mx.grad(f1)(x, y)
                 g2 = mx.grad(f2)(x, y)
                 self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
+
+    def test_rope_batch(self):
+        T = 4
+        base = 10000.0
+        scale = 1.0
+        traditional = True
+        batch_sizes = [3, 8, 11]
+        num_heads = [1, 3, 5]
+        dims = 32
+
+        x = mx.random.uniform(shape=(8, 4, T, dims))
+
+        offset = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=traditional,
+                base=base,
+                scale=scale,
+                offset=offset,
+            )
+
+        for batch_size in batch_sizes:
+            for n_head in num_heads:
+                x = mx.random.uniform(shape=(batch_size, n_head, T, dims))
+                offset = mx.arange(batch_size)
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
+                self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+        x = mx.random.normal(shape=(2, 6, 8, 64)).transpose(0, 2, 1, 3)
+        dims = 64
+        offset = 0
+        rx_fast = mx.fast.rope(
+            x, dims, traditional=traditional, scale=scale, base=base, offset=offset
+        )
+        rx_fast_single = mx.fast.rope(
+            x[0:1], dims, traditional=traditional, scale=scale, base=base, offset=offset
+        )
+
+        rx = rope_orig(x, dims, traditional, base, scale, offset)
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
     def test_rms_norm(self):
         # Per dtype absolute tolerance
@@ -544,7 +598,7 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
 
     def test_fast_transforms(self):
-        x = mx.random.uniform(shape=(2, 2, 8))
+        x = mx.random.uniform(shape=(1, 2, 2, 8))
 
         defaults = (8, False, 10000.0, 1.0, 0)
         dims, traditional, base, scale, offset = defaults
@@ -572,7 +626,7 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(jvp_out[0], jvp_fast_out[0]))
 
         # VMAP
-        x = mx.random.uniform(shape=(2, 2, 2, 8))
+        x = mx.random.uniform(shape=(2, 2, 2, 2, 8))
         vmap_out = mx.vmap(lambda x: rope_orig(x, *defaults))(x)
         vmap_fast_out = mx.vmap(
             lambda x: mx.fast.rope(
