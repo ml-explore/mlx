@@ -466,7 +466,14 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__iter__", [](const mx::array& a) { return ArrayPythonIterator(a); })
-      .def("__getstate__", &mlx_to_np_array)
+      .def(
+          "__getstate__",
+          [](const mx::array& arr) {
+            if (arr.dtype() == mx::bfloat16) {
+              return mlx_to_np_array(mx::astype(arr, mx::float32));
+            }
+            return mlx_to_np_array(arr);
+          })
       .def(
           "__setstate__",
           [](mx::array& arr,
