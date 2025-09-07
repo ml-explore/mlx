@@ -2,9 +2,9 @@
 
 #include <nanobind/nanobind.h>
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
+#include "mlx/version.h"
 
+namespace mx = mlx::core;
 namespace nb = nanobind;
 
 void init_mlx_func(nb::module_&);
@@ -48,5 +48,5 @@ NB_MODULE(core, m) {
   init_distributed(m);
   init_export(m);
 
-  m.attr("__version__") = TOSTRING(_VERSION_);
+  m.attr("__version__") = mx::version();
 }
