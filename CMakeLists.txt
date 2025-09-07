@@ -87,22 +87,21 @@ cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
 
-if(MLX_BUILD_METAL)
-  set(METAL_LIB "-framework Metal")
-  set(FOUNDATION_LIB "-framework Foundation")
-  set(QUARTZ_LIB "-framework QuartzCore")
-endif()
-
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
 endif()
 
-if(MLX_BUILD_METAL AND NOT METAL_LIB)
-  message(STATUS "Metal not found. Unable to build GPU")
-  set(MLX_BUILD_METAL OFF)
-  set(MLX_METAL_DEBUG OFF)
-elseif(MLX_BUILD_METAL)
-  message(STATUS "Building METAL sources")
+if(MLX_BUILD_METAL)
+  find_library(METAL_LIB Metal)
+  find_library(FOUNDATION_LIB Foundation)
+  find_library(QUARTZ_LIB QuartzCore)
+  if(METAL_LIB)
+    message(STATUS "Metal found ${METAL_LIB}")
+  else()
+    message(
+      FATAL_ERROR
+        "Metal not found. Set MLX_BUILD_METAL=OFF to build without GPU")
+  endif()
 
   if(MLX_METAL_DEBUG)
     add_compile_definitions(MLX_METAL_DEBUG)
@@ -111,7 +110,8 @@ elseif(MLX_BUILD_METAL)
   # Throw an error if xcrun not found
   execute_process(
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
-    OUTPUT_VARIABLE MACOS_SDK_VERSION COMMAND_ERROR_IS_FATAL ANY)
+    OUTPUT_VARIABLE MACOS_SDK_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 
   if(${MACOS_SDK_VERSION} LESS 14.0)
     message(
