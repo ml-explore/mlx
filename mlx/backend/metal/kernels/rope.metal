@@ -10,7 +10,7 @@ void rope_single_impl(
     constant const int& offset,
     const float inv_freq,
     constant const float& scale,
-    constant const size_t& stride,
+    constant const int64_t& stride,
     uint2 pos,
     uint2 grid) {
   float L = scale * static_cast<float>(offset);
@@ -52,7 +52,7 @@ template <typename T, bool traditional, bool forward>
     device T* out [[buffer(1)]],
     constant const int& offset,
     constant const float& scale,
-    constant const size_t& stride,
+    constant const int64_t& stride,
     constant const float& base [[buffer(10)]],
     uint2 pos [[thread_position_in_grid]],
     uint2 grid [[threads_per_grid]]) {
@@ -68,9 +68,9 @@ template <typename T, bool traditional, bool forward>
     device T* out [[buffer(1)]],
     constant const int& offset,
     constant const float& scale,
-    constant const size_t& stride,
+    constant const int64_t& stride,
     const device float* freqs [[buffer(10)]],
-    constant const size_t& freq_stride [[buffer(11)]],
+    constant const int64_t& freq_stride [[buffer(11)]],
     uint2 pos [[thread_position_in_grid]],
     uint2 grid [[threads_per_grid]]) {
   float inv_freq = 1.0 / (freqs[freq_stride * pos.x]);
@@ -85,9 +85,9 @@ void rope_impl(
     const device int* offset,
     const float inv_freq,
     constant const float& scale,
-    constant const size_t strides[3],
-    constant const size_t out_strides[3],
-    constant const size_t& offset_stride,
+    constant const int64_t strides[3],
+    constant const int64_t out_strides[3],
+    constant const int64_t& offset_stride,
     constant const int& n_head,
     uint3 pos,
     uint3 grid) {
@@ -148,9 +148,9 @@ template <typename T, bool traditional, bool forward, int N = 4>
     device T* out [[buffer(1)]],
     const device int* offset,
     constant const float& scale,
-    constant const size_t strides[3],
-    constant const size_t out_strides[3],
-    constant const size_t& offset_stride,
+    constant const int64_t strides[3],
+    constant const int64_t out_strides[3],
+    constant const int64_t& offset_stride,
     constant const int& n_head,
     constant const float& base [[buffer(10)]],
     uint3 pos [[thread_position_in_grid]],
@@ -177,12 +177,12 @@ template <typename T, bool traditional, bool forward, int N = 4>
     device T* out [[buffer(1)]],
     const device int* offset,
     constant const float& scale,
-    constant const size_t strides[3],
-    constant const size_t out_strides[3],
-    constant const size_t& offset_stride,
+    constant const int64_t strides[3],
+    constant const int64_t out_strides[3],
+    constant const int64_t& offset_stride,
     constant const int& n_head,
     const device float* freqs [[buffer(10)]],
-    constant const size_t& freq_stride [[buffer(11)]],
+    constant const int64_t& freq_stride [[buffer(11)]],
     uint3 pos [[thread_position_in_grid]],
     uint3 grid [[threads_per_grid]]) {
   float inv_freq = 1.0 / (freqs[freq_stride * pos.x]);
