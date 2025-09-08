@@ -1228,15 +1228,15 @@ array pad(
     if (low_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid low padding size (" << low_pad_size[i]
-          << ") passed to pad"
-          << " for axis " << i << ". Padding sizes must be non-negative";
+          << ") passed to pad for axis " << i
+          << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
     if (high_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid high padding size (" << high_pad_size[i]
-          << ") passed to pad"
-          << " for axis " << i << ". Padding sizes must be non-negative";
+          << ") passed to pad for axis " << i
+          << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
 
@@ -3126,8 +3126,8 @@ array take_along_axis(
     StreamOrDevice s /* = {} */) {
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-    msg << "[take_along_axis] Received invalid axis "
-        << " for array with " << a.ndim() << " dimensions.";
+    msg << "[take_along_axis] Received invalid axis for array with " '
+        << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -3164,8 +3164,8 @@ array scatter_axis(
       (mode == ScatterAxis::None) ? "[put_along_axis]" : "[scatter_add_axis]";
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-    msg << prefix << " Received invalid axis "
-        << " for array with " << a.ndim() << " dimensions.";
+    msg << prefix << " Received invalid axis for array with " << a.ndim()
+        << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -3572,8 +3572,7 @@ run_conv_checks(const array& in, const array& wt, int n_dim, int groups) {
   if (in.ndim() != n_dim + 2) {
     std::ostringstream msg;
     msg << "[conv] Invalid input array with " << in.ndim() << " dimensions for "
-        << n_dim << "D convolution."
-        << " Expected an array with " << n_dim + 2
+        << n_dim << "D convolution. Expected an array with " << n_dim + 2
         << " dimensions following the format [N, ..., C_in].";
     throw std::invalid_argument(msg.str());
   }
