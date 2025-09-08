@@ -1,10 +1,7 @@
-# Doctest works fine with cmake 3.5
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-
 FetchContent_Declare(
   doctest
-  GIT_REPOSITORY "https://github.com/onqtam/doctest"
-  GIT_TAG "ae7a13539fb71f270b87eb2e874fbac80bc8dda2")
+  GIT_REPOSITORY https://github.com/onqtam/doctest.git
+  GIT_TAG v2.4.12)
 FetchContent_MakeAvailable(doctest)
 
 add_executable(tests ${PROJECT_SOURCE_DIR}/tests/tests.cpp)
