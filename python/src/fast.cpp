@@ -170,7 +170,7 @@ void init_fast(nb::module_& parent_module) {
           * ``D`` is the feature dimension.
 
         Args:
-            a (array): A 4-D input array.
+            a (array): The input array.
             dims (int): The feature dimensions to be rotated. If the input feature
               is larger than dims then the rest is left unchanged.
             traditional (bool): If set to ``True`` choose the traditional

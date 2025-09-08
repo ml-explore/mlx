@@ -21,8 +21,8 @@ void RoPE::eval_gpu(
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
-  size_t strides[3];
-  size_t out_strides[3];
+  int64_t strides[3];
+  int64_t out_strides[3];
   bool donated = false;
   int ndim = in.ndim();
   int B = in.shape(0);
@@ -106,7 +106,7 @@ void RoPE::eval_gpu(
   } else {
     compute_encoder.set_bytes(strides, 3, 4);
     compute_encoder.set_bytes(out_strides, 3, 5);
-    size_t offset_stride = 0;
+    int64_t offset_stride = 0;
     if (inputs[1].ndim() > 0) {
       offset_stride = inputs[1].strides()[0];
     }
