@@ -9,7 +9,6 @@
 #include "mlx/backend/metal/kernels/steel/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils/integral_constant.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;
 

@@ -3,9 +3,8 @@
 #include <metal_stdlib>
 
 // clang-format off
-#include "mlx/backend/metal/kernels/steel/gemm/mma.h"
-
 #include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/steel/gemm/mma.h"
 #include "mlx/backend/metal/kernels/steel/conv/conv.h"
 #include "mlx/backend/metal/kernels/steel/conv/params.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
