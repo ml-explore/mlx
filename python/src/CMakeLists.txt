@@ -52,7 +52,6 @@ set_target_properties(
              ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY})
 
 target_link_libraries(core PRIVATE mlx)
-target_compile_definitions(core PRIVATE _VERSION_=${MLX_VERSION})
 
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

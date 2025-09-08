@@ -121,7 +121,8 @@ class CMakeBuild(build_ext):
             build_args += [f"-j{os.cpu_count()}"]
 
         # Avoid cache miss when building from temporary dirs.
-        os.environ["CCACHE_BASEDIR"] = os.path.abspath(self.build_temp)
+        os.environ["CCACHE_BASEDIR"] = os.path.realpath(self.build_temp)
+        os.environ["CCACHE_NOHASHDIR"] = "true"
 
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True

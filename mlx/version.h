@@ -15,6 +15,6 @@ namespace mlx::core {
  *
  * For dev builds, the version will include the suffix ".devYYYYMMDD+hash"
  */
-std::string version();
+const char* version();
 
 } // namespace mlx::core

@@ -1,10 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-#include <string>
-
 namespace mlx::core {
 
-std::string version() {
+const char* version() {
   return MLX_VERSION;
 }
 
