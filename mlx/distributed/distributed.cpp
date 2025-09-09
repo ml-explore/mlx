@@ -5,6 +5,7 @@
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/distributed/ibv/ibv.h"
 #include "mlx/distributed/mpi/mpi.h"
 #include "mlx/distributed/nccl/nccl.h"
 #include "mlx/distributed/ring/ring.h"
@@ -102,7 +103,8 @@ class EmptyGroup : public GroupImpl {
 } // namespace detail
 
 bool is_available() {
-  return mpi::is_available() || ring::is_available() || nccl::is_available();
+  return mpi::is_available() || ring::is_available() || nccl::is_available() ||
+      ibv::is_available();
 }
 
 int Group::rank() const {
@@ -135,6 +137,8 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
     group = ring::init(strict);
   } else if (bk == "nccl") {
     group = nccl::init(strict);
+  } else if (bk == "ibv") {
+    group = ibv::init(strict);
   } else if (bk == "any") {
     if (mlx::core::cu::is_available()) {
       group = nccl::init(false);
@@ -148,13 +152,17 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
       group = mpi::init(false);
       bk_ = "mpi";
     }
+    if (group == nullptr) {
+      group = ibv::init(false);
+      bk_ = "ibv";
+    }
     if (group == nullptr && strict) {
       throw std::runtime_error("[distributed] Couldn't initialize any backend");
     }
   } else {
     std::ostringstream msg;
-    msg << "[distributed] The only valid values for backend are 'any', 'mpi' "
-        << "and 'ring' but '" << bk << "' was provided.";
+    msg << "[distributed] The only valid values for backend are 'any', 'mpi', 'nccl', "
+        << "'ibv' and 'ring' but '" << bk << "' was provided.";
     throw std::invalid_argument(msg.str());
   }
 
