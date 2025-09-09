@@ -18,23 +18,29 @@ void RoPE::eval_gpu(
   auto& in = inputs[0];
   auto& out = outputs[0];
 
-  if (in.ndim() < 3) {
-    throw std::runtime_error("[RoPE] Input must have at least 3 dimensions");
-  }
-
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
-  size_t strides[3];
-  size_t out_strides[3];
+  int64_t strides[3];
+  int64_t out_strides[3];
   bool donated = false;
   int ndim = in.ndim();
-  int dispatch_ndim = in.ndim();
+  int B = in.shape(0);
+  int T = in.shape(-2);
+  int D = in.shape(-1);
+  size_t mat_size = T * D;
+
+  int dispatch_ndim = ndim;
   while (in.shape(-dispatch_ndim) == 1 && dispatch_ndim > 3) {
     dispatch_ndim--;
   }
-  size_t mat_size = in.shape(-2) * in.shape(-1);
-  if (dims_ < in.shape(-1)) {
+
+  int N = 1;
+  for (int i = 1; i < (ndim - 2); ++i) {
+    N *= in.shape(i);
+  }
+
+  if (dims_ < D) {
     donated = true;
     auto ctype =
         (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
@@ -71,8 +77,8 @@ void RoPE::eval_gpu(
   out_strides[1] = out.strides()[ndim - 2];
   out_strides[2] = out.strides()[ndim - 1];
 
-  // Special case for inference (single time step and contiguous)
-  bool single = in.flags().row_contiguous && (mat_size == in.shape(-1));
+  // Special case for inference (single batch, single time step, and contiguous)
+  bool single = in.flags().row_contiguous && B == 1 && T == 1;
 
   bool with_freqs = inputs.size() == 3;
   std::ostringstream kname;
@@ -86,24 +92,29 @@ void RoPE::eval_gpu(
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(donated ? out : in, 0);
   compute_encoder.set_output_array(out, 1);
+
   compute_encoder.set_input_array(inputs[1], 2);
   compute_encoder.set_bytes(scale_, 3);
 
-  size_t n_batch = in.size() / mat_size;
   MTL::Size group_dims;
   MTL::Size grid_dims;
   if (single) {
     compute_encoder.set_bytes(out_strides, 1, 4);
     uint32_t dim0 = dims_ / 2;
-    group_dims = get_block_dims(dim0, n_batch, 1);
-    grid_dims = MTL::Size(dim0, n_batch, 1);
+    group_dims = get_block_dims(dim0, N, 1);
+    grid_dims = MTL::Size(dim0, N, 1);
   } else {
     compute_encoder.set_bytes(strides, 3, 4);
     compute_encoder.set_bytes(out_strides, 3, 5);
-    compute_encoder.set_bytes(n_batch, 6);
+    int64_t offset_stride = 0;
+    if (inputs[1].ndim() > 0) {
+      offset_stride = inputs[1].strides()[0];
+    }
+    compute_encoder.set_bytes(offset_stride, 6);
+    compute_encoder.set_bytes(N, 7);
     uint32_t dim0 = dims_ / 2;
-    uint32_t dim1 = in.shape(-2);
-    uint32_t dim2 = (n_batch + n_per_thread - 1) / n_per_thread;
+    uint32_t dim1 = T;
+    uint32_t dim2 = B * ((N + n_per_thread - 1) / n_per_thread);
     group_dims = get_block_dims(dim0, dim1, dim2);
     grid_dims = MTL::Size(dim0, dim1, dim2);
   }

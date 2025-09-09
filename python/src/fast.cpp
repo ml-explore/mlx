@@ -164,8 +164,13 @@ void init_fast(nb::module_& parent_module) {
       R"pbdoc(
         Apply rotary positional encoding to the input.
 
+        The input is expected to be at least 3D with shape ``(B, *, T, D)`` where:
+          * ``B`` is the batch size.
+          * ``T`` is the sequence length.
+          * ``D`` is the feature dimension.
+
         Args:
-            a (array): Input array.
+            a (array): The input array.
             dims (int): The feature dimensions to be rotated. If the input feature
               is larger than dims then the rest is left unchanged.
             traditional (bool): If set to ``True`` choose the traditional
@@ -174,7 +179,9 @@ void init_fast(nb::module_& parent_module) {
               each dimension in the positional encodings. Exactly one of ``base`` and
               ``freqs`` must be ``None``.
             scale (float): The scale used to scale the positions.
-            offset (int or array): The position offset to start at.
+            offset (int or array): The position offset to start at. If an
+              :obj:`array` is given it can be a scalar or vector of ``B``
+              offsets for each example in the batch.
             freqs (array, optional): Optional frequencies to use with RoPE.
               If set, the ``base`` parameter must be ``None``. Default: ``None``.
 
