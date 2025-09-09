@@ -171,7 +171,7 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  TransformScale<T> ts(static_cast<T>(params->scale * 1.44269504089));
+  TransformScale<T> ts(static_cast<T>(params->scale * M_LOG2E_F));
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
@@ -234,11 +234,10 @@ template <
     max_score[i] = Limits<AccumType>::finite_min;
   }
 
-  // TODO condition here is wrong
   if (has_sinks) {
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < kRowsPT; ++i) {
-      max_score[i] = static_cast<AccumType>(sinks[tidl.y]);
+      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
       sum_score[i] = 1;
     }
   }
@@ -361,7 +360,7 @@ template <
               Stile.frag_at(i, j)[jj] =
                   mfrag[jj] ? Stile.frag_at(i, j)[jj] : neg_inf;
             } else {
-              Stile.frag_at(i, j)[jj] += 1.44269504089 * selem_t(mfrag[jj]);
+              Stile.frag_at(i, j)[jj] += M_LOG2E_F * selem_t(mfrag[jj]);
             }
           }
         }
