@@ -154,7 +154,8 @@ void CublasGemm::run_batched(
     const array& b,
     const Shape& batch_shape,
     const Strides& a_batch_strides,
-    const Strides& b_batch_strides) {
+    const Strides& b_batch_strides,
+    float alpha) {
   int batch_count = out.size() / (M_ * N_);
   set_pointer_mode(a_desc_, batch_count);
   set_pointer_mode(b_desc_, batch_count);
@@ -226,7 +227,8 @@ void CublasGemm::run_batched(
       reinterpret_cast<void*>(out_pointers),
       reinterpret_cast<void*>(a_pointers),
       reinterpret_cast<void*>(b_pointers),
-      nullptr);
+      nullptr,
+      alpha);
 }
 
 void CublasGemm::run_batched(
