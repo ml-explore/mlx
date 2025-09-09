@@ -119,6 +119,10 @@ if(MLX_BUILD_METAL)
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
     OUTPUT_VARIABLE MACOS_SDK_VERSION
     OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(
+    COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-path"
+    OUTPUT_VARIABLE CMAKE_OSX_SYSROOT
+    OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 
   if(${MACOS_SDK_VERSION} LESS 14.0)
     message(
