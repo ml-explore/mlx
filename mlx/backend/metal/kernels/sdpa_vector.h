@@ -263,7 +263,7 @@ template <typename T, int D, int V = D>
 
   U max_score = -INFINITY;
   U sum_exp_score = 0;
-  if (has_sinks && simd_gid == 0) {
+  if (has_sinks && block_idx == 0 && simd_gid == 0) {
     int q_head_idx = q_batch_head_idx % num_q_heads;
     max_score = static_cast<U>(sinks[q_head_idx]);
     sum_exp_score = 1;
