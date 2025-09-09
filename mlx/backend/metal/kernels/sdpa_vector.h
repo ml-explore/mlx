@@ -116,17 +116,15 @@ template <typename T, int D, int V = D>
         score += q[j] * k[j];
       }
       score = simd_sum(score);
-      if (score < Limits<T>::finite_min) {
-        continue;
-      }
       if (float_mask) {
         score += static_cast<U>(fmask[0]);
       }
 
       // Update the accumulators
       U new_max = max(max_score, score);
-      U factor = fast::exp(max_score - new_max);
-      U exp_score = fast::exp(score - new_max);
+      bool is_neg_inf = new_max == -INFINITY;
+      U factor = is_neg_inf ? 1.0 : fast::exp(max_score - new_max);
+      U exp_score = is_neg_inf ? 0.0 : fast::exp(score - new_max);
 
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
