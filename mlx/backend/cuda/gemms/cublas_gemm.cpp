@@ -85,10 +85,10 @@ cublasLtMatrixLayout_t create_matrix_layout(
     int32_t batch_count,
     int64_t batch_stride) {
   cublasLtMatrixLayout_t desc;
-  if (transposed) {
-    std::swap(rows, cols);
-  }
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutCreate(&desc, type, rows, cols, ld));
+  cublasLtOrder_t order = transposed ? CUBLASLT_ORDER_COL : CUBLASLT_ORDER_ROW;
+  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
+      desc, CUBLASLT_MATRIX_LAYOUT_ORDER, &order, sizeof(cublasLtOrder_t)));
   if (batch_count > 1) {
     CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
         desc,
@@ -138,34 +138,25 @@ CublasGemm::CublasGemm(
       CUBLASLT_MATMUL_DESC_POINTER_MODE,
       &pointer_mode,
       sizeof(int32_t)));
-
-  // In cublasLt matrices use column-major layout, while it is possible to use
-  // the CUBLASLT_ORDER_ROW option to switch to row-major layout, the bias
-  // epilogue does not work with the option. So instead we swap A and B to make
-  // cublasLt return the row-major result, which works because:
-  // - the data of a matrix in row-major layout is identical to its transpose in
-  //   column-major layout
-  // - C^T = (A @ B)^T = B^T @ A^T
-  cublasOperation_t a_op = b_transposed ? CUBLAS_OP_T : CUBLAS_OP_N;
+  cublasOperation_t op = CUBLAS_OP_N;
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
       CUBLASLT_MATMUL_DESC_TRANSA,
-      &a_op,
+      &op,
       sizeof(cublasOperation_t)));
-  cublasOperation_t b_op = a_transposed ? CUBLAS_OP_T : CUBLAS_OP_N;
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
       CUBLASLT_MATMUL_DESC_TRANSB,
-      &b_op,
+      &op,
       sizeof(cublasOperation_t)));
 
   auto type = dtype_to_cublas_type(dtype);
   a_desc_ = create_matrix_layout(
-      type, b_cols, b_rows, b_transposed, ldb, batch_count, b_batch_stride);
+      type, a_rows, a_cols, a_transposed, lda, batch_count, a_batch_stride);
   b_desc_ = create_matrix_layout(
-      type, a_cols, a_rows, a_transposed, lda, batch_count, a_batch_stride);
+      type, b_rows, b_cols, b_transposed, ldb, batch_count, b_batch_stride);
   out_desc_ = create_matrix_layout(
-      type, b_cols, a_rows, false, b_cols, batch_count, a_rows * b_cols);
+      type, a_rows, b_cols, false, b_cols, batch_count, a_rows * b_cols);
 }
 
 CublasGemm::CublasGemm(
@@ -200,7 +191,7 @@ CublasGemm::CublasGemm(
           b_batch_stride) {
   auto type = dtype_to_cublas_type(dtype);
   c_desc_ = create_matrix_layout(
-      type, b_cols, a_rows, false, ldc, batch_count, c_batch_stride);
+      type, a_rows, b_cols, false, ldc, batch_count, c_batch_stride);
 }
 
 CublasGemm::~CublasGemm() {
@@ -222,23 +213,12 @@ void CublasGemm::set_out(
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(out_desc_));
   out_desc_ = create_matrix_layout(
       dtype_to_cublas_type(dtype),
-      cols,
       rows,
+      cols,
       transposed,
       ld,
       batch_count,
       batch_stride);
-}
-
-void CublasGemm::set_bias(void* bias) {
-  cublasLtEpilogue_t epilogue = CUBLASLT_EPILOGUE_BIAS;
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_,
-      CUBLASLT_MATMUL_DESC_EPILOGUE,
-      &epilogue,
-      sizeof(epilogue)));
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_, CUBLASLT_MATMUL_DESC_BIAS_POINTER, &bias, sizeof(bias)));
 }
 
 void CublasGemm::run(
@@ -350,9 +330,9 @@ void CublasGemm::execute(
       handle_,
       matmul_desc_,
       &alpha,
-      b, // a and b are swapped
-      a_desc_,
       a,
+      a_desc_,
+      b,
       b_desc_,
       &beta,
       c ? c : out,
