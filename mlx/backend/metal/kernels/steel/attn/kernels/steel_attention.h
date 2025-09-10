@@ -11,6 +11,7 @@ constant bool align_K [[function_constant(201)]];
 
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
+constant bool has_sinks [[function_constant(302)]];
 
 template <typename T>
 struct TransformScale {
@@ -82,6 +83,7 @@ template <
     const constant AttnParams* params [[buffer(4)]],
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
+    const device T* sinks [[buffer(7), function_constant(has_sinks)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -169,7 +171,7 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  TransformScale<T> ts(static_cast<T>(params->scale * 1.44269504089));
+  TransformScale<T> ts(static_cast<T>(params->scale * M_LOG2E_F));
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
@@ -230,6 +232,14 @@ template <
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
     max_score[i] = Limits<AccumType>::finite_min;
+  }
+
+  if (has_sinks) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
+      sum_score[i] = 1;
+    }
   }
 
   int kb_lim = params->NK;
@@ -350,7 +360,7 @@ template <
               Stile.frag_at(i, j)[jj] =
                   mfrag[jj] ? Stile.frag_at(i, j)[jj] : neg_inf;
             } else {
-              Stile.frag_at(i, j)[jj] += 1.44269504089 * selem_t(mfrag[jj]);
+              Stile.frag_at(i, j)[jj] += M_LOG2E_F * selem_t(mfrag[jj]);
             }
           }
         }

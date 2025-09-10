@@ -9,6 +9,7 @@ constant bool query_transposed [[function_constant(21)]];
 constant bool do_causal [[function_constant(22)]];
 constant bool bool_mask [[function_constant(23)]];
 constant bool float_mask [[function_constant(24)]];
+constant bool has_sinks [[function_constant(25)]];
 
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
@@ -31,6 +32,9 @@ template <typename T, int D, int V = D>
     [[buffer(14), function_constant(has_mask)]],
     const constant int& mask_head_stride
     [[buffer(15), function_constant(has_mask)]],
+    const device T* sinks [[buffer(16), function_constant(has_sinks)]],
+    const constant int& num_q_heads
+    [[buffer(17), function_constant(has_sinks)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -53,24 +57,24 @@ template <typename T, int D, int V = D>
   threadgroup U sum_exp_scores[BN];
 
   // Adjust positions
-  const int head_idx = tid.x;
+  const int q_batch_head_idx = tid.x;
   const int q_seq_idx = tid.y;
-  const int kv_head_idx = head_idx / gqa_factor;
-  const int o_offset = head_idx * tpg.y + q_seq_idx;
+  const int kv_head_idx = q_batch_head_idx / gqa_factor;
+  const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
   const int q_offset =
-      query_transposed ? tpg.x * q_seq_idx + head_idx : o_offset;
+      query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
   queries += q_offset * D + simd_lid * qk_per_thread;
   keys += kv_head_idx * k_head_stride + simd_gid * k_seq_stride +
       simd_lid * qk_per_thread;
   values += kv_head_idx * v_head_stride + simd_gid * v_seq_stride +
       simd_lid * v_per_thread;
   if (bool_mask) {
-    bmask += head_idx * mask_head_stride + simd_gid * mask_kv_seq_stride +
-        q_seq_idx * mask_q_seq_stride;
+    bmask += q_batch_head_idx * mask_head_stride +
+        simd_gid * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
   if (float_mask) {
-    fmask += head_idx * mask_head_stride + simd_gid * mask_kv_seq_stride +
-        q_seq_idx * mask_q_seq_stride;
+    fmask += q_batch_head_idx * mask_head_stride +
+        simd_gid * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
 
   out += o_offset * V + simd_gid * v_per_thread;
@@ -85,6 +89,10 @@ template <typename T, int D, int V = D>
 
   U max_score = -INFINITY;
   U sum_exp_score = 0;
+  if (has_sinks && simd_gid == 0) {
+    max_score = static_cast<U>(sinks[q_batch_head_idx % num_q_heads]);
+    sum_exp_score = 1;
+  }
 
   // For each key
   for (int i = simd_gid; i < N; i += BN) {
@@ -93,6 +101,8 @@ template <typename T, int D, int V = D>
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
+    } else if (float_mask) {
+      use_key = (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
       // Read the key
@@ -107,13 +117,14 @@ template <typename T, int D, int V = D>
       }
       score = simd_sum(score);
       if (float_mask) {
-        score += max(Limits<U>::finite_min, static_cast<U>(fmask[0]));
+        score += static_cast<U>(fmask[0]);
       }
 
       // Update the accumulators
       U new_max = max(max_score, score);
-      U factor = fast::exp(max_score - new_max);
-      U exp_score = fast::exp(score - new_max);
+      bool is_neg_inf = new_max == -INFINITY;
+      U factor = is_neg_inf ? 1.0 : fast::exp(max_score - new_max);
+      U exp_score = is_neg_inf ? 0.0 : fast::exp(score - new_max);
 
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
@@ -187,6 +198,9 @@ template <typename T, int D, int V = D>
     [[buffer(16), function_constant(has_mask)]],
     const constant int& mask_head_stride
     [[buffer(17), function_constant(has_mask)]],
+    const device T* sinks [[buffer(18), function_constant(has_sinks)]],
+    const constant int& num_q_heads
+    [[buffer(19), function_constant(has_sinks)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -211,12 +225,12 @@ template <typename T, int D, int V = D>
 
   // Adjust positions
   const int block_idx = tid.z;
-  const int head_idx = tid.x;
+  const int q_batch_head_idx = tid.x;
   const int q_seq_idx = tid.y;
-  const int o_offset = head_idx * tpg.y + q_seq_idx;
+  const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
   const int q_offset =
-      query_transposed ? tpg.x * q_seq_idx + head_idx : o_offset;
-  const int kv_head_idx = head_idx / gqa_factor;
+      query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
+  const int kv_head_idx = q_batch_head_idx / gqa_factor;
 
   queries += q_offset * D + simd_lid * qk_per_thread;
   keys += kv_head_idx * k_head_stride +
@@ -225,12 +239,12 @@ template <typename T, int D, int V = D>
       (block_idx * BN + simd_gid) * v_seq_stride + simd_lid * v_per_thread;
   out += o_offset * blocks * V + block_idx * V + simd_lid * v_per_thread;
   if (bool_mask) {
-    bmask += head_idx * mask_head_stride +
+    bmask += q_batch_head_idx * mask_head_stride +
         (block_idx * BN + simd_gid) * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
   if (float_mask) {
-    fmask += head_idx * mask_head_stride +
+    fmask += q_batch_head_idx * mask_head_stride +
         (block_idx * BN + simd_gid) * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
@@ -245,8 +259,13 @@ template <typename T, int D, int V = D>
     o[i] = 0;
   }
 
-  U max_score = -1e9;
+  U max_score = -INFINITY;
   U sum_exp_score = 0;
+  if (has_sinks && block_idx == 0 && simd_gid == 0) {
+    int q_head_idx = q_batch_head_idx % num_q_heads;
+    max_score = static_cast<U>(sinks[q_head_idx]);
+    sum_exp_score = 1;
+  }
 
   // For each key
   for (int i = block_idx * BN + simd_gid; i < N; i += blocks * BN) {
@@ -255,6 +274,8 @@ template <typename T, int D, int V = D>
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
+    } else if (float_mask) {
+      use_key = (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
       // Read the key
@@ -268,6 +289,10 @@ template <typename T, int D, int V = D>
         score += q[i] * k[i];
       }
       score = simd_sum(score);
+      if (score < Limits<T>::finite_min) {
+        continue;
+      }
+
       if (float_mask) {
         score += fmask[0];
       }
