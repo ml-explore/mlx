@@ -39,7 +39,7 @@ def relu(x):
 def relu2(x):
     r"""Applies the ReLU² activation function.
 
-    Applies :math:`(\max(0, x))^2` element wise.
+    Applies :math:`\max(0, x)^2` element wise.
     """
     return mx.square(mx.maximum(x, 0))
 
