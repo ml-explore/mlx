@@ -35,6 +35,16 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
+# ReLU² activation function
+@partial(mx.compile, shapeless=True)
+def relu2(x):
+    r"""Applies the ReLU² activation function.
+
+    Applies :math:`(\max(0, x))^2` element wise.
+    """
+    return mx.square(relu(x))
+
+
 @partial(mx.compile, shapeless=True)
 def leaky_relu(x, negative_slope=0.01):
     r"""Applies the Leaky Rectified Linear Unit.
@@ -374,6 +384,15 @@ class ReLU(Module):
         Simply ``mx.maximum(x, 0)``.
 
     See :func:`relu` for the functional equivalent.
+    """
+
+
+# ReLU² activation module
+@_make_activation_module(relu2)
+class ReLU2(Module):
+    r"""Applies the ReLU² activation function.
+
+    See :func:`relu2` for the functional equivalent.
     """
 
 
