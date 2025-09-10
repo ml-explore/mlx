@@ -41,7 +41,16 @@ def relu2(x):
 
     Applies :math:`(\max(0, x))^2` element wise.
     """
-    return mx.square(relu(x))
+    return mx.square(mx.maximum(x, 0))
+
+
+@partial(mx.compile, shapeless=True)
+def relu6(x):
+    r"""Applies the Rectified Linear Unit 6.
+
+    Applies :math:`\min(\max(x, 0), 6)` element wise.
+    """
+    return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
 @partial(mx.compile, shapeless=True)
@@ -69,15 +78,6 @@ def elu(x, alpha=1.0):
     Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
     return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
-
-
-@partial(mx.compile, shapeless=True)
-def relu6(x):
-    r"""Applies the Rectified Linear Unit 6.
-
-    Applies :math:`\min(\max(x, 0), 6)` element wise.
-    """
-    return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
 @partial(mx.compile, shapeless=True)
