@@ -394,6 +394,14 @@ class ReLU2(Module):
     """
 
 
+@_make_activation_module(relu6)
+class ReLU6(Module):
+    r"""Applies the Rectified Linear Unit 6.
+
+    See :func:`relu6` for the functional equivalent.
+    """
+
+
 class LeakyReLU(Module):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -427,14 +435,6 @@ class ELU(Module):
 
     def __call__(self, x):
         return elu(x, self._alpha)
-
-
-@_make_activation_module(relu6)
-class ReLU6(Module):
-    r"""Applies the Rectified Linear Unit 6.
-
-    See :func:`relu6` for the functional equivalent.
-    """
 
 
 @_make_activation_module(softmax)
