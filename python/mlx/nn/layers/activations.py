@@ -35,7 +35,6 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
-# ReLU² activation function
 @partial(mx.compile, shapeless=True)
 def relu2(x):
     r"""Applies the ReLU² activation function.
