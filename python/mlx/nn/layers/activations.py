@@ -387,7 +387,6 @@ class ReLU(Module):
     """
 
 
-# ReLU² activation module
 @_make_activation_module(relu2)
 class ReLU2(Module):
     r"""Applies the ReLU² activation function.
