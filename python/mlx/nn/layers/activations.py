@@ -36,6 +36,24 @@ def relu(x):
 
 
 @partial(mx.compile, shapeless=True)
+def relu2(x):
+    r"""Applies the ReLU² activation function.
+
+    Applies :math:`\max(0, x)^2` element wise.
+    """
+    return mx.square(mx.maximum(x, 0))
+
+
+@partial(mx.compile, shapeless=True)
+def relu6(x):
+    r"""Applies the Rectified Linear Unit 6.
+
+    Applies :math:`\min(\max(x, 0), 6)` element wise.
+    """
+    return mx.minimum(mx.maximum(x, 0), 6.0)
+
+
+@partial(mx.compile, shapeless=True)
 def leaky_relu(x, negative_slope=0.01):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -60,15 +78,6 @@ def elu(x, alpha=1.0):
     Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
     return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
-
-
-@partial(mx.compile, shapeless=True)
-def relu6(x):
-    r"""Applies the Rectified Linear Unit 6.
-
-    Applies :math:`\min(\max(x, 0), 6)` element wise.
-    """
-    return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
 @partial(mx.compile, shapeless=True)
@@ -377,6 +386,22 @@ class ReLU(Module):
     """
 
 
+@_make_activation_module(relu2)
+class ReLU2(Module):
+    r"""Applies the ReLU² activation function.
+
+    See :func:`relu2` for the functional equivalent.
+    """
+
+
+@_make_activation_module(relu6)
+class ReLU6(Module):
+    r"""Applies the Rectified Linear Unit 6.
+
+    See :func:`relu6` for the functional equivalent.
+    """
+
+
 class LeakyReLU(Module):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -410,14 +435,6 @@ class ELU(Module):
 
     def __call__(self, x):
         return elu(x, self._alpha)
-
-
-@_make_activation_module(relu6)
-class ReLU6(Module):
-    r"""Applies the Rectified Linear Unit 6.
-
-    See :func:`relu6` for the functional equivalent.
-    """
 
 
 @_make_activation_module(softmax)
