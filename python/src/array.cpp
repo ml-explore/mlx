@@ -466,12 +466,27 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__iter__", [](const mx::array& a) { return ArrayPythonIterator(a); })
-      .def("__getstate__", &mlx_to_np_array)
+      .def(
+          "__getstate__",
+          [](const mx::array& a) {
+            return nb::make_tuple(
+                mlx_to_np_array(a),
+                static_cast<uint8_t>(a.dtype().val()),
+                a.dtype().size());
+          })
       .def(
           "__setstate__",
-          [](mx::array& arr,
-             const nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>& state) {
-            new (&arr) mx::array(nd_array_to_mlx(state, std::nullopt));
+          [](mx::array& arr, const nb::tuple& state) {
+            if (nb::len(state) != 3) {
+              throw std::invalid_argument(
+                  "Invalid pickle state: expected (ndarray, Dtype::Val, size)");
+            }
+            using ND = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+            auto nd = nb::cast<ND>(state[0]);
+            auto val = nb::cast<uint8_t>(state[1]);
+            auto size = nb::cast<uint8_t>(state[2]);
+            mx::Dtype dtype(static_cast<mx::Dtype::Val>(val), size);
+            new (&arr) mx::array(nd_array_to_mlx_as_dtype(nd, dtype));
           })
       .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
       .def(
