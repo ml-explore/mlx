@@ -230,15 +230,20 @@ void CublasGemm::set_out(
       batch_stride);
 }
 
-void CublasGemm::set_bias(void* bias) {
+void CublasGemm::set_bias(cu::CommandEncoder& encoder, const array& bias) {
+  encoder.set_input_array(bias);
   cublasLtEpilogue_t epilogue = CUBLASLT_EPILOGUE_BIAS;
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
       CUBLASLT_MATMUL_DESC_EPILOGUE,
       &epilogue,
       sizeof(epilogue)));
+  auto* bias_ptr = bias.data<void>();
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_, CUBLASLT_MATMUL_DESC_BIAS_POINTER, &bias, sizeof(bias)));
+      matmul_desc_,
+      CUBLASLT_MATMUL_DESC_BIAS_POINTER,
+      &bias_ptr,
+      sizeof(bias_ptr)));
 }
 
 void CublasGemm::run(

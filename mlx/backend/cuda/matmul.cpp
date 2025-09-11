@@ -41,7 +41,7 @@ void gemm_and_bias(
     array& out,
     const array& a,
     const array& b,
-    void* bias = nullptr,
+    const std::optional<array>& bias = std::nullopt,
     float alpha = 1.0f) {
   // Check and collapse batch dimensions
   auto [batch_shape, a_batch_strides, b_batch_strides] = collapse_batches(a, b);
@@ -93,7 +93,7 @@ void gemm_and_bias(
       a_batch_strides.back(),
       b_batch_strides.back());
   if (bias) {
-    gemm.set_bias(bias);
+    gemm.set_bias(encoder, *bias);
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
@@ -171,7 +171,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         out,
         a,
         b,
-        c.data<void>(),
+        c,
         alpha_);
     return;
   }

@@ -55,7 +55,7 @@ class CublasGemm {
       int32_t batch_count,
       int64_t batch_stride);
 
-  void set_bias(void* bias);
+  void set_bias(cu::CommandEncoder& encoder, const array& bias);
 
   void run(
       cu::CommandEncoder& encoder,
