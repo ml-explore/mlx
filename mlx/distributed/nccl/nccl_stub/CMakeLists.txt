@@ -8,6 +8,7 @@ file(
   "${CMAKE_CURRENT_BINARY_DIR}/nccl.h")
 
 add_library(nccl SHARED nccl_stubs.cpp)
+set_target_properties(nccl PROPERTIES SOVERSION 2)
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(nccl PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 target_include_directories(nccl PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
