@@ -50,6 +50,7 @@ Layers
    QuantizedLinear
    RMSNorm
    ReLU
+   ReLU2
    ReLU6
    RNN
    RoPE
