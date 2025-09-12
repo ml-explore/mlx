@@ -12,8 +12,12 @@
 namespace mx = mlx::core;
 namespace nb = nanobind;
 
+namespace nanobind {
+static constexpr dlpack::dtype bfloat16{4, 16, 1};
+}; // namespace nanobind
+
 struct ArrayLike {
-  ArrayLike(nb::object obj) : obj(obj) {};
+  ArrayLike(nb::object obj) : obj(obj){};
   nb::object obj;
 };
 
