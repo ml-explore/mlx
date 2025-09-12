@@ -12,8 +12,12 @@
 namespace mx = mlx::core;
 namespace nb = nanobind;
 
+namespace nanobind {
+static constexpr dlpack::dtype bfloat16{4, 16, 1};
+}; // namespace nanobind
+
 struct ArrayLike {
-  ArrayLike(nb::object obj) : obj(obj) {};
+  ArrayLike(nb::object obj) : obj(obj){};
   nb::object obj;
 };
 
@@ -33,10 +37,6 @@ using ArrayInitType = std::variant<
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
     std::optional<mx::Dtype> dtype);
-
-mx::array nd_array_to_mlx_as_dtype(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
-    mx::Dtype dtype);
 
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
 nb::ndarray<> mlx_to_dlpack(const mx::array& a);

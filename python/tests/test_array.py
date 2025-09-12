@@ -532,7 +532,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(str(x), expected)
 
         x = mx.array([[1, 2], [1, 2], [1, 2]])
-        expected = "array([[1, 2],\n" "       [1, 2],\n" "       [1, 2]], dtype=int32)"
+        expected = "array([[1, 2],\n       [1, 2],\n       [1, 2]], dtype=int32)"
         self.assertEqual(str(x), expected)
 
         x = mx.array([[[1, 2], [1, 2]], [[1, 2], [1, 2]]])

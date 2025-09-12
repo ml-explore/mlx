@@ -469,24 +469,36 @@ void init_array(nb::module_& m) {
       .def(
           "__getstate__",
           [](const mx::array& a) {
-            return nb::make_tuple(
-                mlx_to_np_array(a),
-                static_cast<uint8_t>(a.dtype().val()),
-                a.dtype().size());
+            auto nd = (a.dtype() == mx::bfloat16)
+                ? mlx_to_np_array(mx::view(a, mx::uint16))
+                : mlx_to_np_array(a);
+            return nb::make_tuple(nd, static_cast<uint8_t>(a.dtype().val()));
           })
       .def(
           "__setstate__",
           [](mx::array& arr, const nb::tuple& state) {
-            if (nb::len(state) != 3) {
+            if (nb::len(state) != 2) {
               throw std::invalid_argument(
-                  "Invalid pickle state: expected (ndarray, Dtype::Val, size)");
+                  "Invalid pickle state: expected (ndarray, Dtype::Val)");
             }
             using ND = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
-            auto nd = nb::cast<ND>(state[0]);
-            auto val = nb::cast<uint8_t>(state[1]);
-            auto size = nb::cast<uint8_t>(state[2]);
-            mx::Dtype dtype(static_cast<mx::Dtype::Val>(val), size);
-            new (&arr) mx::array(nd_array_to_mlx_as_dtype(nd, dtype));
+            ND nd = nb::cast<ND>(state[0]);
+            auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
+            if (val == mx::Dtype::Val::bfloat16) {
+              std::vector<size_t> shape;
+              for (size_t i = 0; i < nd.ndim(); ++i)
+                shape.push_back((size_t)nd.shape(i));
+              new (&arr) mx::array(nd_array_to_mlx(
+                  ND(nd.data(),
+                     nd.ndim(),
+                     shape.data(),
+                     {},
+                     nullptr,
+                     nb::bfloat16),
+                  mx::bfloat16));
+            } else {
+              new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
+            }
           })
       .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
       .def(

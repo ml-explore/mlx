@@ -23,8 +23,6 @@ struct ndarray_traits<mx::float16_t> {
   static constexpr bool is_int = false;
   static constexpr bool is_signed = true;
 };
-
-static constexpr dlpack::dtype bfloat16{4, 16, 1};
 }; // namespace nanobind
 
 int check_shape_dim(int64_t dim) {
@@ -51,6 +49,7 @@ mx::array nd_array_to_mlx(
     std::optional<mx::Dtype> dtype) {
   // Compute the shape and size
   mx::Shape shape;
+  shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
@@ -149,7 +148,7 @@ nb::ndarray<NDParams...> mlx_to_nd_array(const mx::array& a) {
     case mx::float16:
       return mlx_to_nd_array_impl<mx::float16_t, NDParams...>(a);
     case mx::bfloat16:
-      return mlx_to_nd_array_impl<uint16_t, NDParams...>(a);
+      throw nb::type_error("bfloat16 arrays cannot be converted to NumPy.");
     case mx::float32:
       return mlx_to_nd_array_impl<float, NDParams...>(a);
     case mx::float64:
@@ -158,49 +157,6 @@ nb::ndarray<NDParams...> mlx_to_nd_array(const mx::array& a) {
       return mlx_to_nd_array_impl<std::complex<float>, NDParams...>(a);
     default:
       throw nb::type_error("type cannot be converted to NumPy.");
-  }
-}
-
-mx::array nd_array_to_mlx_as_dtype(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
-    mx::Dtype dtype) {
-  // Compute the shape
-  mx::Shape shape;
-  for (int i = 0; i < nd_array.ndim(); i++) {
-    shape.push_back(check_shape_dim(nd_array.shape(i)));
-  }
-  switch (dtype) {
-    case mx::bool_:
-      return nd_array_to_mlx_contiguous<bool>(nd_array, shape, dtype);
-    case mx::uint8:
-      return nd_array_to_mlx_contiguous<uint8_t>(nd_array, shape, dtype);
-    case mx::uint16:
-      return nd_array_to_mlx_contiguous<uint16_t>(nd_array, shape, dtype);
-    case mx::uint32:
-      return nd_array_to_mlx_contiguous<uint32_t>(nd_array, shape, dtype);
-    case mx::uint64:
-      return nd_array_to_mlx_contiguous<uint64_t>(nd_array, shape, dtype);
-    case mx::int8:
-      return nd_array_to_mlx_contiguous<int8_t>(nd_array, shape, dtype);
-    case mx::int16:
-      return nd_array_to_mlx_contiguous<int16_t>(nd_array, shape, dtype);
-    case mx::int32:
-      return nd_array_to_mlx_contiguous<int32_t>(nd_array, shape, dtype);
-    case mx::int64:
-      return nd_array_to_mlx_contiguous<int64_t>(nd_array, shape, dtype);
-    case mx::float16:
-      return nd_array_to_mlx_contiguous<mx::float16_t>(nd_array, shape, dtype);
-    case mx::bfloat16:
-      return nd_array_to_mlx_contiguous<mx::bfloat16_t>(nd_array, shape, dtype);
-    case mx::float32:
-      return nd_array_to_mlx_contiguous<float>(nd_array, shape, dtype);
-    case mx::float64:
-      return nd_array_to_mlx_contiguous<double>(nd_array, shape, dtype);
-    case mx::complex64:
-      return nd_array_to_mlx_contiguous<mx::complex64_t>(
-          nd_array, shape, dtype);
-    default:
-      throw nb::type_error("type cannot be converted to MLX with reinterpret.");
   }
 }
 
