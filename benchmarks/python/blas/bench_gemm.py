@@ -142,9 +142,7 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
     t_b = (0, 1, 2) if transpose[1] == "n" else (0, 2, 1)
 
     c_mlx = a_mx.transpose(t_a) @ b_mx.transpose(t_b)
-    c_npy = a_np.transpose(t_a).astype(np.float32) @ b_np.transpose(t_b).astype(
-        np.float32
-    )
+    c_npy = a_np.transpose(t_a).astype(np_dtype) @ b_np.transpose(t_b).astype(np_dtype)
 
     atol = 1e-5 if np_dtype == np.float32 else 1e-4
 
