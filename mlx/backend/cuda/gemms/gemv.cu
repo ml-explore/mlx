@@ -13,6 +13,37 @@ namespace cg = cooperative_groups;
 
 static constexpr int rows_per_block = 8;
 
+// Accumulator type selection per input element type T.
+template <typename T>
+struct GemvAccType {
+  using type = T;
+};
+
+template <>
+struct GemvAccType<__half> {
+  using type = float;
+};
+
+template <>
+struct GemvAccType<__nv_bfloat16> {
+  using type = float;
+};
+
+template <>
+struct GemvAccType<float> {
+  using type = float;
+};
+
+template <>
+struct GemvAccType<double> {
+  using type = double;
+};
+
+template <>
+struct GemvAccType<cu::complex64_t> {
+  using type = cu::complex64_t;
+};
+
 template <typename T, int rows_per_block, int n_per_thread>
 __device__ void
 gemv_impl(const T* mat, const T* vec, T* out, int rows, int cols) {
@@ -24,7 +55,8 @@ gemv_impl(const T* mat, const T* vec, T* out, int rows, int cols) {
   int row = g_idx.x * rows_per_block + t_idx.y;
 
   if (row < rows) {
-    float sum = 0.0f;
+    using Acc = typename GemvAccType<T>::type;
+    Acc sum = Acc(0);
     for (int col = n_per_thread * warp.thread_rank(); col < cols;
          col += (WARP_SIZE * n_per_thread)) {
       auto local_mat =
@@ -32,12 +64,11 @@ gemv_impl(const T* mat, const T* vec, T* out, int rows, int cols) {
       auto local_vec = unsafe_load_vector<n_per_thread>(vec + col, 0);
 #pragma unroll
       for (int j = 0; j < n_per_thread; ++j) {
-        sum +=
-            static_cast<float>(local_mat[j]) * static_cast<float>(local_vec[j]);
+        sum += static_cast<Acc>(local_mat[j]) * static_cast<Acc>(local_vec[j]);
       }
     }
 
-    sum = cg::reduce(warp, sum, cg::plus<float>{});
+    sum = cg::reduce(warp, sum, cg::plus<Acc>{});
     if (warp.thread_rank() == 0) {
       out[row] = static_cast<T>(sum);
     }
@@ -107,7 +138,7 @@ void gemv(
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_output_array(out);
-  dispatch_float_types(out.dtype(), "gemv", [&](auto type_tag) {
+  dispatch_inexact_types(out.dtype(), "gemv", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dim3 block_dims{WARP_SIZE, rows_per_block};
     const DataType* mat;
