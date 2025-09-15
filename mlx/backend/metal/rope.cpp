@@ -29,6 +29,7 @@ void RoPE::eval_gpu(
   int T = in.shape(-2);
   int D = in.shape(-1);
   size_t mat_size = T * D;
+  bool large = in.data_size() > INT32_MAX || in.size() > INT32_MAX;
 
   int dispatch_ndim = ndim;
   while (in.shape(-dispatch_ndim) == 1 && dispatch_ndim > 3) {
@@ -39,6 +40,8 @@ void RoPE::eval_gpu(
   for (int i = 1; i < (ndim - 2); ++i) {
     N *= in.shape(i);
   }
+
+  bool head_seq_transpose = false;
 
   if (dims_ < D) {
     donated = true;
@@ -64,6 +67,17 @@ void RoPE::eval_gpu(
     strides[0] = in.strides()[ndim - 3];
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];
+  } else if (
+      ndim == 4 &&
+      // batch dim is regularly strided
+      in.strides()[0] == T * N * D &&
+      // sequence and head dimensions are transposed
+      in.strides()[1] == D && in.strides()[2] == N * D) {
+    head_seq_transpose = true;
+    out.set_data(allocator::malloc(out.nbytes()));
+    strides[0] = in.strides()[1];
+    strides[1] = in.strides()[2];
+    strides[2] = in.strides()[3];
   } else {
     // Copy non-contiguous > 3D inputs into the output and treat
     // input as donated
@@ -77,15 +91,33 @@ void RoPE::eval_gpu(
   out_strides[1] = out.strides()[ndim - 2];
   out_strides[2] = out.strides()[ndim - 1];
 
-  // Special case for inference (single batch, single time step, and contiguous)
-  bool single = in.flags().row_contiguous && B == 1 && T == 1;
+  // Special case for inference (single time step, contiguous, one offset)
+  auto& offset = inputs[1];
+  bool single = in.flags().row_contiguous && T == 1 && offset.size() == 1;
 
   bool with_freqs = inputs.size() == 3;
-  std::ostringstream kname;
-  kname << "rope_" << (single ? "single_" : "")
-        << ((with_freqs) ? "freqs_" : "") << (forward_ ? "" : "vjp_")
-        << (traditional_ ? "traditional_" : "") << type_to_name(in);
-  auto kernel = d.get_kernel(kname.str());
+  std::string kname;
+  concatenate(
+      kname,
+      "rope_",
+      single ? "single_" : "",
+      (with_freqs) ? "freqs_" : "",
+      large ? "large_" : "",
+      type_to_name(in));
+  std::string hash_name;
+  concatenate(
+      hash_name,
+      kname,
+      "_",
+      forward_ ? "" : "vjp_",
+      traditional_ ? "traditional_" : "",
+      head_seq_transpose ? "transpose" : "");
+  metal::MTLFCList func_consts = {
+      {&forward_, MTL::DataType::DataTypeBool, 1},
+      {&traditional_, MTL::DataType::DataTypeBool, 2},
+      {&head_seq_transpose, MTL::DataType::DataTypeBool, 3}};
+
+  auto kernel = d.get_kernel(kname, hash_name, func_consts);
   auto& compute_encoder = d.get_command_encoder(s.index);
 
   float base = std::log2(base_);
@@ -93,7 +125,7 @@ void RoPE::eval_gpu(
   compute_encoder.set_input_array(donated ? out : in, 0);
   compute_encoder.set_output_array(out, 1);
 
-  compute_encoder.set_input_array(inputs[1], 2);
+  compute_encoder.set_input_array(offset, 2);
   compute_encoder.set_bytes(scale_, 3);
 
   MTL::Size group_dims;
@@ -107,8 +139,8 @@ void RoPE::eval_gpu(
     compute_encoder.set_bytes(strides, 3, 4);
     compute_encoder.set_bytes(out_strides, 3, 5);
     int64_t offset_stride = 0;
-    if (inputs[1].ndim() > 0) {
-      offset_stride = inputs[1].strides()[0];
+    if (offset.ndim() > 0) {
+      offset_stride = offset.strides()[0];
     }
     compute_encoder.set_bytes(offset_stride, 6);
     compute_encoder.set_bytes(N, 7);
