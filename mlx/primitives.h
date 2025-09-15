@@ -750,6 +750,7 @@ class Convolution : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_NAME(Convolution)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(
         kernel_strides_,
@@ -760,6 +761,15 @@ class Convolution : public UnaryPrimitive {
         groups_,
         flip_);
   }
+
+  static Shape conv_out_shape(
+      const Shape& in_shape,
+      const Shape& wt_shape,
+      const std::vector<int>& strides,
+      const std::vector<int>& pads_lo,
+      const std::vector<int>& pads_hi,
+      const std::vector<int>& kernel_dilation,
+      const std::vector<int>& input_dilation);
 
  private:
   std::vector<int> padding_lo_;
