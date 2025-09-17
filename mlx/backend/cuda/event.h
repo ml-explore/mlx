@@ -12,33 +12,6 @@
 
 namespace mlx::core::cu {
 
-class CudaEventHandle;
-
-// Wrapper of native cuda event. It can synchronize between GPU streams, or wait
-// on GPU stream in CPU stream, but can not wait on CPU stream.
-class CudaEvent {
- public:
-  CudaEvent();
-
-  void wait();
-  void wait(cudaStream_t stream);
-  void wait(Stream s);
-  void record(cudaStream_t stream);
-  void record(Stream s);
-
-  // Return whether the recorded kernels have completed. Note that this method
-  // returns true if record() has not been called.
-  bool completed() const;
-
-  bool recorded() const {
-    return recorded_;
-  }
-
- private:
-  bool recorded_{false};
-  std::shared_ptr<CudaEventHandle> event_;
-};
-
 // Event that can synchronize between CPU and GPU. It is much slower than
 // CudaEvent so the latter should always be preferred when possible.
 class SharedEvent {

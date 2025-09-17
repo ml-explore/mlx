@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/event.h"
 #include "mlx/backend/cuda/utils.h"
 
 #include <condition_variable>

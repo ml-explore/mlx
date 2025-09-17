@@ -17,74 +17,58 @@ namespace cu {
 // CudaEvent implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-// Cuda event managed with RAII.
-class CudaEventHandle {
+// Wrapper of native cuda event. It can synchronize between GPU streams, or wait
+// on GPU stream in CPU stream, but can not wait on CPU stream.
+class CudaEventWrapper {
  public:
-  CudaEventHandle() {
-    CHECK_CUDA_ERROR(cudaEventCreateWithFlags(
-        &event_, cudaEventDisableTiming | cudaEventBlockingSync));
+  CudaEventWrapper()
+      : event_(std::make_shared<CudaEvent>(
+            cudaEventDisableTiming | cudaEventBlockingSync)) {}
+
+  void wait() {
+    event_->wait();
   }
 
-  ~CudaEventHandle() {
-    CHECK_CUDA_ERROR(cudaEventDestroy(event_));
+  void wait(Stream s) {
+    if (s.device == mlx::core::Device::cpu) {
+      scheduler::enqueue(s, [*this]() mutable {
+        check_recorded();
+        event_->wait();
+      });
+    } else {
+      check_recorded();
+      auto& encoder = cu::get_command_encoder(s);
+      encoder.commit();
+      event_->wait(encoder.stream());
+    }
   }
 
-  CudaEventHandle(const CudaEventHandle&) = delete;
-  CudaEventHandle& operator=(const CudaEventHandle&) = delete;
+  void record(Stream s) {
+    if (s.device == mlx::core::Device::cpu) {
+      throw std::runtime_error("CudaEvent can not wait on CPU stream.");
+    } else {
+      auto& encoder = cu::get_command_encoder(s);
+      encoder.commit();
+      event_->record(encoder.stream());
+      recorded_ = true;
+    }
+  }
 
-  operator cudaEvent_t() const {
-    return event_;
+  bool is_signaled() const {
+    return recorded_ && event_->completed();
   }
 
  private:
-  cudaEvent_t event_;
+  void check_recorded() const {
+    if (!recorded_) {
+      throw std::runtime_error(
+          "Should not wait on a CudaEvent before recording.");
+    }
+  }
+
+  std::shared_ptr<CudaEvent> event_;
+  bool recorded_{false};
 };
-
-CudaEvent::CudaEvent() : event_(std::make_shared<CudaEventHandle>()) {}
-
-void CudaEvent::wait() {
-  nvtx3::scoped_range r("cu::CudaEvent::wait");
-  if (!recorded_) {
-    throw std::runtime_error("Should not wait on a CudaEvent before record.");
-  }
-  cudaEventSynchronize(*event_);
-}
-
-void CudaEvent::wait(cudaStream_t stream) {
-  if (!recorded_) {
-    throw std::runtime_error("Should not wait on a CudaEvent before record.");
-  }
-  cudaStreamWaitEvent(stream, *event_);
-}
-
-void CudaEvent::wait(Stream s) {
-  if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [*this]() mutable { wait(); });
-  } else {
-    auto& enc = cu::get_command_encoder(s);
-    enc.commit();
-    wait(enc.stream());
-  }
-}
-
-void CudaEvent::record(cudaStream_t stream) {
-  cudaEventRecord(*event_, stream);
-  recorded_ = true;
-}
-
-void CudaEvent::record(Stream s) {
-  if (s.device == mlx::core::Device::cpu) {
-    throw std::runtime_error("CudaEvent can not wait on cpu stream.");
-  } else {
-    auto& enc = cu::get_command_encoder(s);
-    enc.commit();
-    record(enc.stream());
-  }
-}
-
-bool CudaEvent::completed() const {
-  return cudaEventQuery(*event_) == cudaSuccess;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // SharedEvent implementations
@@ -191,7 +175,7 @@ struct EventImpl {
   // to fallback to SharedEvent in following cases:
   // 1. the event is used to wait/signal a cpu stream;
   // 2. signal value other than 1 has been specified.
-  std::unique_ptr<cu::CudaEvent> cuda;
+  std::unique_ptr<cu::CudaEventWrapper> cuda;
   std::unique_ptr<cu::SharedEvent> shared;
 
   bool is_created() const {
@@ -206,7 +190,7 @@ struct EventImpl {
       nvtx3::mark("Using slow SharedEvent");
       shared = std::make_unique<cu::SharedEvent>();
     } else {
-      cuda = std::make_unique<cu::CudaEvent>();
+      cuda = std::make_unique<cu::CudaEventWrapper>();
     }
   }
 };
@@ -258,7 +242,7 @@ bool Event::is_signaled() const {
   }
   if (event->cuda) {
     assert(value() == 1);
-    return event->cuda->recorded() && event->cuda->completed();
+    return event->cuda->is_signaled();
   } else {
     return event->shared->is_signaled(value());
   }
