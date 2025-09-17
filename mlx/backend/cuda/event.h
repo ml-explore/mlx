@@ -6,9 +6,7 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
 
-#include <map>
 #include <memory>
-#include <vector>
 
 #include <cuda_runtime.h>
 #include <cuda/atomic>

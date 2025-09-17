@@ -3,9 +3,11 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/event.h"
-#include "mlx/backend/cuda/utils.h"
 #include "mlx/event.h"
 #include "mlx/scheduler.h"
+
+#include <map>
+#include <vector>
 
 #include <nvtx3/nvtx3.hpp>
 
