@@ -3,6 +3,7 @@
 from typing import Tuple
 
 import mlx.core as mx
+from mlx import nn
 from mlx.nn.layers.base import Module
 
 
@@ -141,6 +142,62 @@ class RMSNorm(Module):
 
     def __call__(self, x):
         return mx.fast.rms_norm(x, self["weight"], self.eps)
+
+
+class GatedRMSNorm(Module):
+    r"""Applies Root Mean Square normalization with a gating mechanism.
+
+    Computes
+
+    ..  math::
+
+        y = \mathrm{RMSNorm}(x \cdot \mathrm{SiLU}(g)) \quad \text{if gate\_before\_norm=True}
+
+        y = \mathrm{RMSNorm}(x) \cdot \mathrm{SiLU}(g) \quad \text{if gate\_before\_norm=False}
+
+    where :math:`g` is a learned per-feature gating parameter, and :math:`\mathrm{SiLU}` is the sigmoid linear unit activation.
+    :math:`\gamma` is the RMSNorm scaling parameter.
+
+    Note the accumulation for the mean is done in 32-bit precision.
+
+    Args:
+        dims (int): The feature dimension of the input to normalize over.
+        eps (float): A small additive constant for numerical stability.
+        gate_before_norm (bool): If True, applies gating before normalization, otherwise after. Default: True.
+
+    Shape:
+      - Input: :math:`(..., C)` where :math:`C` is equal to :attr:`dims`.
+      - Output: Same shape as the input.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> x = mx.random.normal((3, 8))
+        >>> gn = nn.GatedRMSNorm(dims=8)
+        >>> output = gn(x)
+    """
+
+    def __init__(self, dims: int, eps: float = 1e-5, gate_before_norm: bool = True):
+        super().__init__()
+        self.weight = mx.ones((dims,))
+        self.gate = mx.ones((dims,))
+        self.eps = eps
+        self.gate_before_norm = gate_before_norm
+
+    def _extra_repr(self):
+        return (
+            f"{self.weight.shape[0]}, eps={self.eps}, gate_before_norm={self.gate_before_norm}"
+        )
+
+    def __call__(self, x):
+        gate = nn.silu(self["gate"])
+        if self.gate_before_norm:
+            gated_x = x * gate
+            out = mx.fast.rms_norm(gated_x, self["weight"], self.eps)
+        else:
+            normed_x = mx.fast.rms_norm(x, self["weight"], self.eps)
+            out = normed_x * gate
+        return out
 
 
 class GroupNorm(Module):

@@ -77,6 +77,7 @@ from mlx.nn.layers.normalization import (
     InstanceNorm,
     LayerNorm,
     RMSNorm,
+    GatedRMSNorm
 )
 from mlx.nn.layers.pooling import (
     AvgPool1d,
