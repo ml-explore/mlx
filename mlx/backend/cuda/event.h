@@ -3,14 +3,48 @@
 #pragma once
 
 #include "mlx/allocator.h"
+#include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
+
+#include <map>
+#include <memory>
+#include <vector>
 
 #include <cuda_runtime.h>
 #include <cuda/atomic>
 
-#include <memory>
-
 namespace mlx::core::cu {
+
+// RAII-managed move-only wrapper of cudaEvent_t.
+struct RawCudaEvent : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
+  RawCudaEvent(int flags);
+  int flags;
+};
+
+// Wrapper of native cuda event. It can synchronize between GPU streams, or wait
+// on GPU stream in CPU stream, but can not wait on CPU stream.
+class CudaEvent {
+ public:
+  explicit CudaEvent(int flags);
+  ~CudaEvent();
+
+  CudaEvent(CudaEvent&&) = default;
+  CudaEvent& operator=(CudaEvent&&) = default;
+
+  CudaEvent(const CudaEvent&) = delete;
+  CudaEvent& operator=(const CudaEvent&) = delete;
+
+  void wait();
+  void wait(cudaStream_t stream);
+  void record(cudaStream_t stream);
+
+  // Return whether the recorded kernels have completed. Note that this method
+  // returns true if record() has not been called.
+  bool completed() const;
+
+ private:
+  RawCudaEvent event_;
+};
 
 // Event that can synchronize between CPU and GPU. It is much slower than
 // CudaEvent so the latter should always be preferred when possible.
@@ -30,7 +64,11 @@ class SharedEvent {
   uint64_t value() const;
 
  private:
-  std::shared_ptr<mlx::core::allocator::Buffer> buf_;
+  Atomic* atomic() const {
+    return static_cast<SharedEvent::Atomic*>(buf_->raw_ptr());
+  }
+
+  std::shared_ptr<allocator::Buffer> buf_;
 };
 
 } // namespace mlx::core::cu

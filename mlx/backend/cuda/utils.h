@@ -69,17 +69,6 @@ class CudaHandle {
 };
 
 // Wrappers of CUDA resources.
-class CudaEvent : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
- public:
-  explicit CudaEvent(int flags);
-  void wait();
-  void wait(cudaStream_t stream);
-  void record(cudaStream_t stream);
-  // Return whether the recorded kernels have completed. Note that this method
-  // returns true if record() has not been called.
-  bool completed() const;
-};
-
 class CudaGraph : public CudaHandle<cudaGraph_t, cudaGraphDestroy> {
  public:
   using CudaHandle::CudaHandle;
