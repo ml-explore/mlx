@@ -17,8 +17,73 @@ namespace cu {
 // CudaEvent implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-// Wrapper of native cuda event. It can synchronize between GPU streams, or wait
-// on GPU stream in CPU stream, but can not wait on CPU stream.
+namespace {
+
+// Manage cached cudaEvent_t objects.
+struct CudaEventFactory {
+  static RawCudaEvent create(int flags) {
+    auto& cache = cache_for(flags);
+    if (cache.empty()) {
+      return RawCudaEvent(flags);
+    } else {
+      RawCudaEvent ret = std::move(cache.back());
+      cache.pop_back();
+      return ret;
+    }
+  }
+
+  static void release(RawCudaEvent event) {
+    assert(event != nullptr);
+    cache_for(event.flags).push_back(std::move(event));
+  }
+
+  static std::vector<RawCudaEvent>& cache_for(int flags) {
+    static std::map<int, std::vector<RawCudaEvent>> cache;
+    return cache[flags];
+  }
+};
+
+} // namespace
+
+RawCudaEvent::RawCudaEvent(int flags) : flags(flags) {
+  CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
+}
+
+CudaEvent::CudaEvent(int flags) : event_(CudaEventFactory::create(flags)) {
+  assert(event_ != nullptr);
+}
+
+CudaEvent::~CudaEvent() {
+  if (event_) {
+    CudaEventFactory::release(std::move(event_));
+  }
+}
+
+void CudaEvent::wait() {
+  nvtx3::scoped_range r("cu::CudaEvent::wait");
+  assert(event_ != nullptr);
+  cudaEventSynchronize(event_);
+}
+
+void CudaEvent::wait(cudaStream_t stream) {
+  assert(event_ != nullptr);
+  cudaStreamWaitEvent(stream, event_);
+}
+
+void CudaEvent::record(cudaStream_t stream) {
+  assert(event_ != nullptr);
+  cudaEventRecord(event_, stream);
+}
+
+bool CudaEvent::completed() const {
+  assert(event_ != nullptr);
+  return cudaEventQuery(event_) == cudaSuccess;
+}
+
+// Wraps CudaEvent with a few features:
+// 1. The class can be copied.
+// 2. Make wait/record work with CPU streams.
+// 3. Add checks for waiting on un-recorded event.
 class CudaEventWrapper {
  public:
   CudaEventWrapper()
@@ -94,10 +159,6 @@ __global__ void event_signal_kernel(SharedEvent::Atomic* ac, uint64_t value) {
   event_signal(ac, value);
 }
 
-SharedEvent::Atomic* to_atomic(std::shared_ptr<Buffer> buf) {
-  return static_cast<SharedEvent::Atomic*>(buf->raw_ptr());
-}
-
 SharedEvent::SharedEvent() {
   buf_ = std::shared_ptr<Buffer>(
       new Buffer{allocator().malloc(sizeof(Atomic))}, [](Buffer* ptr) {
@@ -109,11 +170,11 @@ SharedEvent::SharedEvent() {
 
 void SharedEvent::wait(uint64_t value) {
   nvtx3::scoped_range r("cu::SharedEvent::wait");
-  event_wait(to_atomic(buf_), value);
+  event_wait(atomic(), value);
 }
 
 void SharedEvent::wait(cudaStream_t stream, uint64_t value) {
-  event_wait_kernel<<<1, 1, 0, stream>>>(to_atomic(buf_), value);
+  event_wait_kernel<<<1, 1, 0, stream>>>(atomic(), value);
 }
 
 void SharedEvent::wait(Stream s, uint64_t value) {
@@ -130,11 +191,11 @@ void SharedEvent::wait(Stream s, uint64_t value) {
 
 void SharedEvent::signal(uint64_t value) {
   nvtx3::scoped_range r("cu::SharedEvent::signal");
-  event_signal(to_atomic(buf_), value);
+  event_signal(atomic(), value);
 }
 
 void SharedEvent::signal(cudaStream_t stream, uint64_t value) {
-  event_signal_kernel<<<1, 1, 0, stream>>>(to_atomic(buf_), value);
+  event_signal_kernel<<<1, 1, 0, stream>>>(atomic(), value);
 }
 
 void SharedEvent::signal(Stream s, uint64_t value) {
@@ -154,12 +215,12 @@ void SharedEvent::signal(Stream s, uint64_t value) {
 
 bool SharedEvent::is_signaled(uint64_t value) const {
   nvtx3::scoped_range r("cu::SharedEvent::is_signaled");
-  return to_atomic(buf_)->load() >= value;
+  return atomic()->load() >= value;
 }
 
 uint64_t SharedEvent::value() const {
   nvtx3::scoped_range r("cu::SharedEvent::value");
-  return to_atomic(buf_)->load();
+  return atomic()->load();
 }
 
 } // namespace cu

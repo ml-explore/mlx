@@ -5,7 +5,6 @@
 #include "mlx/dtype_utils.h"
 
 #include <fmt/format.h>
-#include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
 
@@ -65,27 +64,6 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
     default:
       return "unknown";
   }
-}
-
-CudaEvent::CudaEvent(int flags) {
-  CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
-}
-
-void CudaEvent::wait() {
-  nvtx3::scoped_range r("CudaEvent::wait");
-  cudaEventSynchronize(handle_);
-}
-
-void CudaEvent::wait(cudaStream_t stream) {
-  cudaStreamWaitEvent(stream, handle_);
-}
-
-void CudaEvent::record(cudaStream_t stream) {
-  cudaEventRecord(handle_, stream);
-}
-
-bool CudaEvent::completed() const {
-  return cudaEventQuery(handle_) == cudaSuccess;
 }
 
 CudaGraph::CudaGraph(cu::Device& device) {
