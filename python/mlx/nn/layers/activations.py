@@ -99,6 +99,34 @@ def softplus(x):
 
 
 @partial(mx.compile, shapeless=True)
+def xielu(x, alpha_p, alpha_n, beta, eps):
+    r"""Applies the XieLU activation function.
+
+    This function uses parameterized positive and negative scaling with
+    exponential smoothing.
+
+    .. math::
+        \text{XieLU}(x) = \begin{cases}
+        \alpha_p * x^2 + \beta x & \text{if } x > 0 \\
+        (\exp(\min(x, \epsilon)) - 1 - x) * \alpha_n + \beta x & \text{if } x \leq 0
+        \end{cases}
+
+    Args:
+        alpha_p: Positive scaling parameter (softplus applied).
+        alpha_n: Negative scaling parameter (shifted by beta and softplus applied).
+        beta: Linear scaling factor.
+        eps: Clamping value for stability in the negative region.
+    """
+    alpha_p = mx.logaddexp(alpha_p, 0)
+    alpha_n = beta + mx.logaddexp(alpha_n, 0)
+    return mx.where(
+        x > 0,
+        alpha_p * mx.square(x) + beta * x,
+        (mx.expm1(mx.minimum(x, eps)) - x) * alpha_n + beta * x,
+    )
+
+
+@partial(mx.compile, shapeless=True)
 def softsign(x):
     r"""Applies the Softsign function.
 
@@ -539,6 +567,38 @@ class PReLU(Module):
 
     def __call__(self, x: mx.array):
         return prelu(x, self.weight)
+
+
+class XieLU(Module):
+    r"""Applies the XieLU activation function.
+
+    See :func:`xielu` for the functional equivalent.
+
+    Args:
+        alpha_p_init (float): Initial value for the positive scaling parameter. Default: 0.8
+        alpha_n_init (float): Initial value for the negative scaling parameter. Default: 0.8
+        beta (float): Linear scaling factor. Default: 0.5
+        eps (float): Clamping value for stability in the negative region. Default: -1e-6
+    """
+
+    def __init__(
+        self,
+        alpha_p_init=0.8,
+        alpha_n_init=0.8,
+        beta=0.5,
+        eps=-1e-6,
+    ):
+        super().__init__()
+        alpha_p_tensor = mx.array(alpha_p_init)
+        alpha_n_tensor = mx.array(alpha_n_init - beta)
+        self.alpha_p = mx.log(mx.exp(alpha_p_tensor) - 1)
+        self.alpha_n = mx.log(mx.exp(alpha_n_tensor) - 1)
+
+        self.beta = mx.array(beta)
+        self.eps = mx.array(eps)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return xielu(x, self.alpha_p, self.alpha_n, self.beta, self.eps)
 
 
 class GELU(Module):
