@@ -58,6 +58,7 @@ Layers
    Sequential
    Sigmoid
    SiLU
+   XieLU
    SinusoidalPositionalEncoding
    Softmin
    Softshrink
