@@ -73,11 +73,11 @@ from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Bilinear, Identity, Linear
 from mlx.nn.layers.normalization import (
     BatchNorm,
+    GatedRMSNorm,
     GroupNorm,
     InstanceNorm,
     LayerNorm,
     RMSNorm,
-    GatedRMSNorm,
 )
 from mlx.nn.layers.pooling import (
     AvgPool1d,

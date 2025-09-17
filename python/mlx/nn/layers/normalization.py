@@ -3,8 +3,9 @@
 from typing import Tuple
 
 import mlx.core as mx
-from mlx import nn
 from mlx.nn.layers.base import Module
+
+from mlx import nn
 
 
 class InstanceNorm(Module):
@@ -185,9 +186,7 @@ class GatedRMSNorm(Module):
         self.gate_before_norm = gate_before_norm
 
     def _extra_repr(self):
-        return (
-            f"{self.weight.shape[0]}, eps={self.eps}, gate_before_norm={self.gate_before_norm}"
-        )
+        return f"{self.weight.shape[0]}, eps={self.eps}, gate_before_norm={self.gate_before_norm}"
 
     def __call__(self, x):
         gate = nn.silu(self["gate"])
