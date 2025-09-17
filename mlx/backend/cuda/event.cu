@@ -20,7 +20,7 @@ namespace cu {
 namespace {
 
 // Manage cached cudaEvent_t objects.
-struct CudaEventFactory {
+struct CudaEventPool {
   static RawCudaEvent create(int flags) {
     auto& cache = cache_for(flags);
     if (cache.empty()) {
@@ -49,13 +49,13 @@ RawCudaEvent::RawCudaEvent(int flags) : flags(flags) {
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
 }
 
-CudaEvent::CudaEvent(int flags) : event_(CudaEventFactory::create(flags)) {
+CudaEvent::CudaEvent(int flags) : event_(CudaEventPool::create(flags)) {
   assert(event_ != nullptr);
 }
 
 CudaEvent::~CudaEvent() {
   if (event_) {
-    CudaEventFactory::release(std::move(event_));
+    CudaEventPool::release(std::move(event_));
   }
 }
 
