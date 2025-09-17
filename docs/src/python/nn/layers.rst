@@ -49,6 +49,7 @@ Layers
    QuantizedEmbedding
    QuantizedLinear
    RMSNorm
+   GatedRMSNorm
    ReLU
    ReLU2
    ReLU6
