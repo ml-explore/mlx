@@ -34,7 +34,9 @@ class LRUCache {
   // Initialize with capacity read from |env_name|.
   LRUCache(const char* env_name, int default_capacity)
       : LRUCache(env::get_var(env_name, default_capacity)) {
-    env_name_ = env_name;
+    if (env::get_var("MLX_ENABLE_CACHE_THRASHING_CHECK", 1)) {
+      env_name_ = env_name;
+    }
   }
 
   size_t size() const {
