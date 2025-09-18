@@ -485,14 +485,12 @@ void init_array(nb::module_& m) {
             ND nd = nb::cast<ND>(state[0]);
             auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
             if (val == mx::Dtype::Val::bfloat16) {
-              std::vector<size_t> shape;
-              for (size_t i = 0; i < nd.ndim(); ++i)
-                shape.push_back((size_t)nd.shape(i));
+              auto owner = nb::handle(state[0].ptr());
               new (&arr) mx::array(nd_array_to_mlx(
                   ND(nd.data(),
                      nd.ndim(),
-                     shape.data(),
-                     {},
+                     reinterpret_cast<const size_t*>(nd.shape_ptr()),
+                     owner,
                      nullptr,
                      nb::bfloat16),
                   mx::bfloat16));
