@@ -108,7 +108,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
-  NS::Error* error[4];
+  NS::Error* error[5];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
   std::tie(lib, error[0]) = load_colocated_library(device, "mlx");
@@ -127,12 +127,19 @@ MTL::Library* load_default_library(MTL::Device* device) {
     return lib;
   }
 
+  // Try lo load resources from Framework resources if SwiftPM wrapped as a
+  // dynamic framework.
+  std::tie(lib, error[3]) = load_colocated_library(device, "Resources/default");
+  if (lib) {
+    return lib;
+  }
+
   // Finally try default_mtllib_path
-  std::tie(lib, error[3]) = load_library_from_path(device, default_mtllib_path);
+  std::tie(lib, error[4]) = load_library_from_path(device, default_mtllib_path);
   if (!lib) {
     std::ostringstream msg;
     msg << "Failed to load the default metallib. ";
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       if (error[i] != nullptr) {
         msg << error[i]->localizedDescription()->utf8String() << " ";
       }
