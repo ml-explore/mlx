@@ -1,0 +1,124 @@
+name: 'Build and Test on macOS'
+description: 'Build and test MLX on macOS'
+
+inputs:
+  build-type:
+    description: 'Build type (debug, release)'
+    required: false
+    default: 'debug'
+    type: choice
+    options:
+      - debug
+      - release
+  run-tests:
+    description: 'Whether to run tests'
+    required: false
+    default: 'true'
+  build-jit:
+    description: 'Whether to build with JIT'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install dependencies
+      shell: sh
+      env:
+        DEBUG: 1
+        DEV_RELEASE: 1
+      run: |
+        uv pip install --upgrade pip cmake setuptools
+        uv pip install nanobind==2.4.0 \
+          numpy torch tensorflow unittest-xml-reporting
+        uv pip install -e . -v
+
+    - name: Generate package stubs
+      shell: bash
+      run: |
+        uv pip install typing_extensions
+        uv run --no-project setup.py generate_stubs
+
+    - name: Run Python tests
+      if: inputs.run-tests == 'true'
+      shell: bash
+      env:
+        LOW_MEMORY: 1
+      run: |
+        DEVICE=cpu uv run -m xmlrunner discover -v python/tests -o test-results/cpu
+        DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 uv run -m xmlrunner discover -v python/tests -o test-results/gpu
+        mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
+        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
+    
+    - name: Build example extension
+      if: inputs.run-tests == 'true'
+      shell: bash
+      run: |
+        cd examples/extensions
+        uv pip install -r requirements.txt
+        uv run --no-project setup.py build_ext --inplace
+        uv run --no-project test.py
+    
+    - name: Build CPP only
+      if: inputs.build-type == 'debug'
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        cmake ..
+        make -j $(sysctl -n hw.ncpu)
+    
+    - name: Run CPP tests
+      if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
+      shell: bash
+      env:
+        DEVICE: gpu
+        METAL_DEVICE_WRAPPER_TYPE: 1
+        METAL_DEBUG_ERROR_MODE: 0
+      run: ./build/tests/tests
+    
+    - name: Build small binary with JIT
+      if: inputs.build-jit == 'true'
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
+          -DBUILD_SHARED_LIBS=ON \
+          -DMLX_BUILD_CPU=OFF \
+          -DMLX_BUILD_SAFETENSORS=OFF \
+          -DMLX_BUILD_GGUF=OFF \
+          -DMLX_METAL_JIT=ON
+        make -j $(sysctl -n hw.ncpu)
+    
+    - name: Run Python tests with JIT
+      if: ${{ inputs.build-jit == 'true' && inputs.run-tests == 'true' }}
+      shell: bash
+      env:
+        LOW_MEMORY: 1
+        DEVICE: gpu
+        METAL_DEVICE_WRAPPER_TYPE: 1
+        METAL_DEBUG_ERROR_MODE: 0
+      run: |
+        CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
+          uv pip install -e . -v
+        uv run -m xmlrunner discover \
+            -v python/tests \
+            -o test-results/gpu_jit
+
+    - name: Build macOS 13 package
+      if: inputs.build-type == 'release'
+      uses: ./.github/actions/build-macos-release
+      with:
+        macos-target: 13.0
+    - name: Build macOS 14 package
+      if: inputs.build-type == 'release'
+      uses: ./.github/actions/build-macos-release
+      with:
+        macos-target: 14.0
+    - name: Build macOS 15 package
+      if: inputs.build-type == 'release'
+      uses: ./.github/actions/build-macos-release
+      with:
+        macos-target: 15.0
