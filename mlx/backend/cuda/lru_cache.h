@@ -2,10 +2,14 @@
 
 #pragma once
 
+#include "mlx/utils.h"
+
 #include <cstring>
 #include <list>
 #include <unordered_map>
 #include <utility>
+
+#include <fmt/format.h>
 
 namespace mlx::core {
 
@@ -24,6 +28,14 @@ class LRUCache {
   explicit LRUCache(size_t capacity) : capacity_(capacity) {
     if (capacity == 0) {
       throw std::runtime_error("LRUCache requires capacity > 0.");
+    }
+  }
+
+  // Initialize with capacity read from |env_name|.
+  LRUCache(const char* env_name, int default_capacity)
+      : LRUCache(env::get_var(env_name, default_capacity)) {
+    if (env::get_var("MLX_ENABLE_CACHE_THRASHING_CHECK", 1)) {
+      env_name_ = env_name;
     }
   }
 
@@ -76,6 +88,14 @@ class LRUCache {
       return {it->second, false};
     }
 
+    if (env_name_ && ++cache_misses_ > 2 * capacity_) {
+      throw std::runtime_error(fmt::format(
+          "Cache thrashing is happening, please set the environment variable "
+          "{} to a larger value than {} to fix degraded performance.",
+          env_name_,
+          capacity_));
+    }
+
     vlist_.emplace_front(key, std::forward<U>(value));
     map_[key] = vlist_.begin();
 
@@ -105,6 +125,9 @@ class LRUCache {
       vlist_.pop_back();
     }
   }
+
+  const char* env_name_{nullptr};
+  size_t cache_misses_{0};
 
   list_type vlist_;
   map_type map_;

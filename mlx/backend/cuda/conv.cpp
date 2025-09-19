@@ -47,7 +47,7 @@ auto& conv_cache() {
       std::pair<
           cudnnBackendDescriptorType_t,
           std::optional<cudnn_frontend::ExecutionPlan>>>
-      cache(/* capacity */ 128);
+      cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
   return cache;
 }
 

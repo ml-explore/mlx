@@ -27,13 +27,6 @@ void check_cudnn_error(const char* name, cudnnStatus_t err) {
   }
 }
 
-int cuda_graph_cache_size() {
-  static int cache_size = []() {
-    return env::get_var("MLX_CUDA_GRAPH_CACHE_SIZE", 400);
-  }();
-  return cache_size;
-}
-
 bool use_cuda_graphs() {
   static bool use_graphs = []() {
     return env::get_var("MLX_USE_CUDA_GRAPHS", true);
@@ -203,7 +196,7 @@ CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
-      graph_cache_(cuda_graph_cache_size()) {}
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
