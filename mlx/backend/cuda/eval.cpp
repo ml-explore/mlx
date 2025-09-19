@@ -16,7 +16,7 @@ bool is_available() {
 
 void new_stream(Stream s) {
   // Force initalization of CUDA by creating an event, so the CUDA runtime and
-  // our CUDA event pool get destroyed at last.
+  // our CUDA event pool get destroyed last.
   cu::CudaEvent(cudaEventDefault);
   // Ensure the static stream objects get created.
   cu::get_command_encoder(s);
