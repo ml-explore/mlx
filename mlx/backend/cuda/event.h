@@ -46,11 +46,11 @@ class CudaEvent {
 
 // Event that can synchronize between CPU and GPU. It is much slower than
 // CudaEvent so the latter should always be preferred when possible.
-class SharedEvent {
+class AtomicEvent {
  public:
   using Atomic = cuda::atomic<uint64_t>;
 
-  SharedEvent();
+  AtomicEvent();
 
   void wait(uint64_t value);
   void wait(cudaStream_t stream, uint64_t value);
@@ -63,7 +63,7 @@ class SharedEvent {
 
  private:
   Atomic* atomic() const {
-    return static_cast<SharedEvent::Atomic*>(buf_->raw_ptr());
+    return static_cast<AtomicEvent::Atomic*>(buf_->raw_ptr());
   }
 
   std::shared_ptr<allocator::Buffer> buf_;

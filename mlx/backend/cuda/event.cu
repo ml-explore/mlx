@@ -138,30 +138,30 @@ class CudaEventWrapper {
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// SharedEvent implementations
+// AtomicEvent implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-__host__ __device__ void event_wait(SharedEvent::Atomic* ac, uint64_t value) {
+__host__ __device__ void event_wait(AtomicEvent::Atomic* ac, uint64_t value) {
   uint64_t current;
   while ((current = ac->load()) < value) {
     ac->wait(current);
   }
 }
 
-__host__ __device__ void event_signal(SharedEvent::Atomic* ac, uint64_t value) {
+__host__ __device__ void event_signal(AtomicEvent::Atomic* ac, uint64_t value) {
   ac->store(value);
   ac->notify_all();
 }
 
-__global__ void event_wait_kernel(SharedEvent::Atomic* ac, uint64_t value) {
+__global__ void event_wait_kernel(AtomicEvent::Atomic* ac, uint64_t value) {
   event_wait(ac, value);
 }
 
-__global__ void event_signal_kernel(SharedEvent::Atomic* ac, uint64_t value) {
+__global__ void event_signal_kernel(AtomicEvent::Atomic* ac, uint64_t value) {
   event_signal(ac, value);
 }
 
-SharedEvent::SharedEvent() {
+AtomicEvent::AtomicEvent() {
   buf_ = std::shared_ptr<Buffer>(
       new Buffer{allocator().malloc(sizeof(Atomic))}, [](Buffer* ptr) {
         allocator().free(*ptr);
@@ -170,17 +170,17 @@ SharedEvent::SharedEvent() {
   *static_cast<uint64_t*>(buf_->raw_ptr()) = 0;
 }
 
-void SharedEvent::wait(uint64_t value) {
-  nvtx3::scoped_range r("cu::SharedEvent::wait");
+void AtomicEvent::wait(uint64_t value) {
+  nvtx3::scoped_range r("cu::AtomicEvent::wait");
   event_wait(atomic(), value);
 }
 
-void SharedEvent::wait(cudaStream_t stream, uint64_t value) {
+void AtomicEvent::wait(cudaStream_t stream, uint64_t value) {
   event_wait_kernel<<<1, 1, 0, stream>>>(atomic(), value);
 }
 
-void SharedEvent::wait(Stream s, uint64_t value) {
-  nvtx3::scoped_range r("cu::SharedEvent::wait(s)");
+void AtomicEvent::wait(Stream s, uint64_t value) {
+  nvtx3::scoped_range r("cu::AtomicEvent::wait(s)");
   if (s.device == mlx::core::Device::cpu) {
     scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
   } else {
@@ -191,17 +191,17 @@ void SharedEvent::wait(Stream s, uint64_t value) {
   }
 }
 
-void SharedEvent::signal(uint64_t value) {
-  nvtx3::scoped_range r("cu::SharedEvent::signal");
+void AtomicEvent::signal(uint64_t value) {
+  nvtx3::scoped_range r("cu::AtomicEvent::signal");
   event_signal(atomic(), value);
 }
 
-void SharedEvent::signal(cudaStream_t stream, uint64_t value) {
+void AtomicEvent::signal(cudaStream_t stream, uint64_t value) {
   event_signal_kernel<<<1, 1, 0, stream>>>(atomic(), value);
 }
 
-void SharedEvent::signal(Stream s, uint64_t value) {
-  nvtx3::scoped_range r("cu::SharedEvent::signal(s)");
+void AtomicEvent::signal(Stream s, uint64_t value) {
+  nvtx3::scoped_range r("cu::AtomicEvent::signal(s)");
   if (s.device == mlx::core::Device::cpu) {
     // Signal through a GPU stream so the atomic is updated in GPU - updating
     // the atomic in CPU sometimes does not get GPU notified.
@@ -215,13 +215,13 @@ void SharedEvent::signal(Stream s, uint64_t value) {
   }
 }
 
-bool SharedEvent::is_signaled(uint64_t value) const {
-  nvtx3::scoped_range r("cu::SharedEvent::is_signaled");
+bool AtomicEvent::is_signaled(uint64_t value) const {
+  nvtx3::scoped_range r("cu::AtomicEvent::is_signaled");
   return atomic()->load() >= value;
 }
 
-uint64_t SharedEvent::value() const {
-  nvtx3::scoped_range r("cu::SharedEvent::value");
+uint64_t AtomicEvent::value() const {
+  nvtx3::scoped_range r("cu::AtomicEvent::value");
   return atomic()->load();
 }
 
@@ -235,14 +235,14 @@ namespace {
 
 struct EventImpl {
   // CudaEvent is preferred when possible because it is fast, however we have
-  // to fallback to SharedEvent in following cases:
+  // to fallback to AtomicEvent in following cases:
   // 1. the event is used to wait/signal a cpu stream;
   // 2. signal value other than 1 has been specified.
   std::unique_ptr<cu::CudaEventWrapper> cuda;
-  std::unique_ptr<cu::SharedEvent> shared;
+  std::unique_ptr<cu::AtomicEvent> atomic;
 
   bool is_created() const {
-    return cuda || shared;
+    return cuda || atomic;
   }
 
   void ensure_created(Stream s, uint64_t signal_value) {
@@ -250,8 +250,8 @@ struct EventImpl {
       return;
     }
     if (s.device == mlx::core::Device::cpu || signal_value > 1) {
-      nvtx3::mark("Using slow SharedEvent");
-      shared = std::make_unique<cu::SharedEvent>();
+      nvtx3::mark("Using slow AtomicEvent");
+      atomic = std::make_unique<cu::AtomicEvent>();
     } else {
       cuda = std::make_unique<cu::CudaEventWrapper>();
     }
@@ -272,7 +272,7 @@ void Event::wait() {
     assert(value() == 1);
     event->cuda->wait();
   } else {
-    event->shared->wait(value());
+    event->atomic->wait(value());
   }
 }
 
@@ -283,7 +283,7 @@ void Event::wait(Stream s) {
     assert(value() == 1);
     event->cuda->wait(s);
   } else {
-    event->shared->wait(s, value());
+    event->atomic->wait(s, value());
   }
 }
 
@@ -294,7 +294,7 @@ void Event::signal(Stream s) {
     assert(value() == 1);
     event->cuda->record(s);
   } else {
-    event->shared->signal(s, value());
+    event->atomic->signal(s, value());
   }
 }
 
@@ -307,7 +307,7 @@ bool Event::is_signaled() const {
     assert(value() == 1);
     return event->cuda->is_signaled();
   } else {
-    return event->shared->is_signaled(value());
+    return event->atomic->is_signaled(value());
   }
 }
 

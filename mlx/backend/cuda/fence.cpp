@@ -7,7 +7,7 @@ namespace mlx::core {
 
 struct FenceImpl {
   uint32_t count;
-  cu::SharedEvent event;
+  cu::AtomicEvent event;
 };
 
 Fence::Fence(Stream s) {
