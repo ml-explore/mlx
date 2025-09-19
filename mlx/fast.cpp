@@ -732,10 +732,7 @@ array scaled_dot_product_attention(
       }
       if (mask.dtype() == bool_) {
         scores = where(
-            mask,
-            scores,
-            array(-std::numeric_limits<float>::infinity(), scores.dtype()),
-            s);
+            mask, scores, array(finfo(scores.dtype()).min, scores.dtype()), s);
       } else {
         scores = add(scores, mask, s);
       }
