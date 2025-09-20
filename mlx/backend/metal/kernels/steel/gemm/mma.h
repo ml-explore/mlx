@@ -421,6 +421,16 @@ METAL_FUNC void tile_matmad(
   }
 }
 
+template <typename InT>
+struct TransformNone<complex64_t, InT> {
+  static METAL_FUNC complex64_t apply(complex64_t x) {
+    return x;
+  }
+  static METAL_FUNC complex64_t apply(complex64_t x, complex64_t) {
+    return x;
+  }
+};
+
 template <
     typename T,
     typename U,
@@ -723,6 +733,407 @@ struct BlockMMA {
             if ((j * TN_stride + k) < dst_tile_dims.x) {
               D[offset_d + k] =
                   epilogue_op.apply(accum[k], C[offset_c + k * fdc]);
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
+template <
+    typename U,
+    int BM,
+    int BN,
+    int BK,
+    int WM,
+    int WN,
+    bool transpose_a,
+    bool transpose_b,
+    short lda_tgp,
+    short ldb_tgp,
+    typename AccumType,
+    typename Epilogue>
+struct BlockMMA<
+    complex64_t,
+    U,
+    BM,
+    BN,
+    BK,
+    WM,
+    WN,
+    transpose_a,
+    transpose_b,
+    lda_tgp,
+    ldb_tgp,
+    AccumType,
+    Epilogue> {
+  static_assert(
+      metal::is_same_v<AccumType, float>,
+      "BlockMMA<complex64_t,...> expects float accumulators");
+  static_assert(
+      metal::is_same_v<U, complex64_t>,
+      "For complex BlockMMA, U must be complex64_t; use a different epilogue for projections");
+  // MMAFrag size
+  STEEL_CONST short kFragSize = 8;
+  using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
+
+  // Warp tile simdgroup matrix strides along M
+  STEEL_CONST short TM_stride = kFragSize * WM;
+  // Warp tile simdgroup matrix strides along M
+  STEEL_CONST short TN_stride = kFragSize * WN;
+
+  // Warp tile size along M
+  STEEL_CONST short TM = BM / (kFragSize * WM);
+  // Warp tile size along N
+  STEEL_CONST short TN = BN / (kFragSize * WN);
+
+  // Threadgroup A strides
+  STEEL_CONST short A_str_m = transpose_a ? 1 : lda_tgp; // M
+  STEEL_CONST short A_str_k = transpose_a ? lda_tgp : 1; // K
+
+  // Threadgroup B strides
+  STEEL_CONST short B_str_k = transpose_b ? 1 : ldb_tgp; // K
+  STEEL_CONST short B_str_n = transpose_b ? ldb_tgp : 1; // N
+
+  // Threadgroup strides along K
+  STEEL_CONST short tile_stride_a = kFragSize * A_str_k;
+  STEEL_CONST short tile_stride_b = kFragSize * B_str_k;
+
+  // When indexing complex as float[2]
+  STEEL_CONST short A_str_m_f = A_str_m * 2;
+  STEEL_CONST short A_str_k_f = A_str_k * 2;
+  STEEL_CONST short B_str_k_f = B_str_k * 2;
+  STEEL_CONST short B_str_n_f = B_str_n * 2;
+  STEEL_CONST short tile_stride_a_f = tile_stride_a * 2;
+  STEEL_CONST short tile_stride_b_f = tile_stride_b * 2;
+
+  // Accumulators (real/imag)
+  MMATile<AccumType, TM, TN, MMAFrag_acc_t> Ctile_r;
+  MMATile<AccumType, TM, TN, MMAFrag_acc_t> Ctile_i;
+
+  // Offsets within threadgroup
+  short sm, sn;
+  short As_offset, Bs_offset;
+
+  /* Constructor */
+  METAL_FUNC BlockMMA(
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) {
+    // Determine thread position in simdgroup matrix
+    short tm = kFragSize * (simd_group_id / WN);
+    short tn = kFragSize * (simd_group_id % WN);
+
+    short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
+    sm = simd_coord.y;
+    sn = simd_coord.x;
+
+    // Determine thread and simdgroup offset
+    As_offset = (tm + sm) * A_str_m + (sn)*A_str_k; // (M,K)
+    Bs_offset = (sm)*B_str_k + (tn + sn) * B_str_n; // (K,N)
+
+    sm += tm;
+    sn += tn;
+  }
+
+  /* Karatsuba MMA: 3 real MMAs per K-chunk */
+  METAL_FUNC void mma(
+      const threadgroup complex64_t* As,
+      const threadgroup complex64_t* Bs) {
+    // Adjust for simdgroup and thread location
+    As += As_offset;
+    Bs += Bs_offset;
+    threadgroup const float* As_f =
+        reinterpret_cast<threadgroup const float*>(As);
+    threadgroup const float* Bs_f =
+        reinterpret_cast<threadgroup const float*>(Bs);
+
+    // Iterate over BK in blocks of kFragSize
+    STEEL_PRAGMA_UNROLL
+    for (short kk = 0; kk < BK; kk += kFragSize) {
+      simdgroup_barrier(mem_flags::mem_none);
+
+      MMATile<AccumType, TM, 1, MMAFrag_acc_t> Ar, Ai;
+      Ar.template load<float, WM, 1, A_str_m_f, A_str_k_f>(As_f + 0);
+      Ai.template load<float, WM, 1, A_str_m_f, A_str_k_f>(As_f + 1);
+
+      simdgroup_barrier(mem_flags::mem_none);
+
+      MMATile<AccumType, 1, TN, MMAFrag_acc_t> Br, Bi;
+      Br.template load<float, 1, WN, B_str_k_f, B_str_n_f>(Bs_f + 0);
+      Bi.template load<float, 1, WN, B_str_k_f, B_str_n_f>(Bs_f + 1);
+
+      simdgroup_barrier(mem_flags::mem_none);
+
+      // P = Ar*Br ; Q = Ai*Bi ; R = (Ar+Ai)*(Br+Bi)
+      MMATile<AccumType, TM, TN, MMAFrag_acc_t> P, Q, R;
+
+      tile_matmad(P, Ar, Br, P);
+      tile_matmad(Q, Ai, Bi, Q);
+
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < decltype(Ar)::kElemsPerTile; ++i)
+        Ar.elems()[i] += Ai.elems()[i];
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < decltype(Br)::kElemsPerTile; ++i)
+        Br.elems()[i] += Bi.elems()[i];
+
+      tile_matmad(R, Ar, Br, R);
+
+      // C_r += P - Q ; C_i -= Q
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < decltype(Ctile_r)::kElemsPerTile; ++i) {
+        const auto p = P.elems()[i];
+        const auto q = Q.elems()[i];
+        const auto r = R.elems()[i];
+        Ctile_r.elems()[i] += (p - q);
+        Ctile_i.elems()[i] += (r - p - q);
+      }
+
+      // Progress to next simdgroup tile
+      As_f += tile_stride_a_f;
+      Bs_f += tile_stride_b_f;
+    }
+  }
+
+  /* Store results from simdgroup_matrix results into device memory */
+  METAL_FUNC void store_result(device U* D, const int ldd) {
+    // Adjust for simdgroup and thread location
+    D += sm * ldd + sn;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        thread const auto& r = Ctile_r.frag_at(i, j);
+        thread const auto& im = Ctile_i.frag_at(i, j);
+        int off = (i * TM_stride) * ldd + (j * TN_stride);
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < decltype(Ctile_r)::kElemsPerFrag; k++) {
+          D[off + k] = Epilogue::apply(complex64_t(r[k], im[k]));
+        }
+      }
+    }
+  }
+
+  METAL_FUNC void
+  store_result_slice(device U* D, const int ldd, short2 start, short2 stop) {
+    D += sm * ldd + sn;
+    start -= short2(sn, sm);
+    stop -= short2(sn, sm);
+
+    if (stop.y <= 0 || stop.x <= 0)
+      return;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; ++i) {
+      const int row = i * TM_stride;
+      if (row >= start.y && row < stop.y) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < TN; ++j) {
+          const int off = row * ldd + (j * TN_stride);
+          thread const auto& r = Ctile_r.frag_at(i, j);
+          thread const auto& im = Ctile_i.frag_at(i, j);
+
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < decltype(Ctile_r)::kElemsPerFrag; ++k) {
+            const int col = j * TN_stride + k;
+            if (col >= start.x && col < stop.x) {
+              D[off + k] = Epilogue::apply(complex64_t(r[k], im[k]));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  METAL_FUNC void
+  store_result_safe(device U* D, const int ldd, short2 dst_tile_dims) {
+    D += sm * ldd + sn;
+    dst_tile_dims -= short2(sn, sm);
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      if (i * TM_stride < dst_tile_dims.y) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < TN; j++) {
+          int off = (i * TM_stride) * ldd + (j * TN_stride);
+          thread const auto& r = Ctile_r.frag_at(i, j);
+          thread const auto& im = Ctile_i.frag_at(i, j);
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < decltype(Ctile_r)::kElemsPerFrag; k++) {
+            if ((j * TN_stride + k) < dst_tile_dims.x) {
+              D[off + k] = Epilogue::apply(complex64_t(r[k], im[k]));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* Apply epilogue */
+  template <typename UnaryEpilogue>
+  METAL_FUNC void apply_epilogue(thread const UnaryEpilogue& epilogue_op) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < decltype(Ctile_r)::kElemsPerTile; i++) {
+      complex64_t out = epilogue_op.apply(
+          complex64_t(Ctile_r.elems()[i], Ctile_i.elems()[i]));
+      Ctile_r.elems()[i] = out.real;
+      Ctile_i.elems()[i] = out.imag;
+    }
+  }
+
+  /* Apply epilogue */
+  template <typename BinaryEpilogue>
+  METAL_FUNC void apply_epilogue(
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      thread const BinaryEpilogue& epilogue_op) {
+    // Adjust for simdgroup and thread location
+    C += (sm)*ldc + (sn)*fdc;
+
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in Cr, Ci
+        thread auto& r = Ctile_r.frag_at(i, j);
+        thread auto& im = Ctile_i.frag_at(i, j);
+        int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < decltype(Ctile_r)::kElemsPerFrag; k++) {
+          complex64_t out = epilogue_op.apply(
+              complex64_t(r[k], im[k]), C[offset_c + k * fdc]);
+          r[k] = out.real;
+          im[k] = out.imag;
+        }
+      }
+    }
+  }
+
+  /* Apply epilogue */
+  template <typename BinaryEpilogue>
+  METAL_FUNC void apply_epilogue_safe(
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      short2 dst_tile_dims,
+      thread const BinaryEpilogue& epilogue_op) {
+    // Adjust for simdgroup and thread location
+    C += (sm)*ldc + (sn)*fdc;
+    dst_tile_dims -= short2(sn, sm);
+
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in Cr, Ci
+        thread auto& r = Ctile_r.frag_at(i, j);
+        thread auto& im = Ctile_i.frag_at(i, j);
+        int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+
+        constexpr short kelems = decltype(Ctile_r)::kElemsPerFrag;
+        complex64_t tmp[kelems];
+
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          if ((j * TN_stride + k) < dst_tile_dims.x &&
+              (i * TM_stride) < dst_tile_dims.y) {
+            tmp[k] = C[offset_c + k * fdc];
+          } else {
+            tmp[k] = complex64_t(0.0f, 0.0f);
+          }
+        }
+
+        // Apply epilogue
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          complex64_t out = epilogue_op.apply(complex64_t(r[k], im[k]), tmp[k]);
+          r[k] = out.real;
+          im[k] = out.imag;
+        }
+      }
+    }
+  }
+
+  /* Store results from simdgroup_matrix results into device memory */
+  METAL_FUNC void store_result(
+      device U* D,
+      const int ldd,
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      thread const Epilogue& epilogue_op) const {
+    // Adjust for simdgroup and thread location
+    C += (sm)*ldc + (sn)*fdc;
+    D += (sm)*ldd + sn;
+
+    constexpr short kelems = decltype(Ctile_r)::kElemsPerFrag;
+
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in Cr, Ci
+        thread const auto& r = Ctile_r.frag_at(i, j);
+        thread const auto& im = Ctile_i.frag_at(i, j);
+        int off_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+        int off_d = (i * TM_stride) * ldd + (j * TN_stride);
+
+        // Apply epilogue
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          D[off_d + k] =
+              epilogue_op.apply(complex64_t(r[k], im[k]), C[off_c + k * fdc]);
+        }
+      }
+    }
+  }
+
+  METAL_FUNC void store_result_safe(
+      device U* D,
+      const int ldd,
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      short2 dst_tile_dims,
+      thread const Epilogue& epilogue_op) const {
+    // Adjust for simdgroup and thread location
+    C += (sm)*ldc + (sn)*fdc;
+    D += (sm)*ldd + sn;
+    dst_tile_dims -= short2(sn, sm);
+
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+
+    constexpr short kelems = decltype(Ctile_r)::kElemsPerFrag;
+
+    STEEL_PRAGMA_UNROLL
+    for (int i = 0; i < TM; i++) {
+      if (i * TM_stride < dst_tile_dims.y) {
+        STEEL_PRAGMA_UNROLL
+        for (int j = 0; j < TN; j++) {
+          // Get accumulated result and associated offset in Cr, Ci
+          thread const auto& r = Ctile_r.frag_at(i, j);
+          thread const auto& im = Ctile_i.frag_at(i, j);
+          int off_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+          int off_d = (i * TM_stride) * ldd + (j * TN_stride);
+
+          // Apply epilogue
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < kelems; k++) {
+            if ((j * TN_stride + k) < dst_tile_dims.x) {
+              D[off_d + k] = epilogue_op.apply(
+                  complex64_t(r[k], im[k]), C[off_c + k * fdc]);
             }
           }
         }

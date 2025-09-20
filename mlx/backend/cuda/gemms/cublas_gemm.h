@@ -115,6 +115,7 @@ class CublasGemm {
 
   uint64_t M_;
   uint64_t N_;
+  cudaDataType_t scale_type_;
   cublasLtMatmulPreference_t pref_{nullptr};
   cublasLtHandle_t handle_{nullptr};
   cublasLtMatmulDesc_t matmul_desc_{nullptr};

@@ -196,7 +196,7 @@ def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
 
 
 for transpose in (False, True):
-    for dtype in ("float32", "float16"):
+    for dtype in ("float32", "float16", "complex64"):
         fig, axs = plt.subplots(
             len(in_vec_sizes), 2, figsize=(8.5, 11), layout="constrained"
         )
@@ -215,7 +215,7 @@ for transpose in (False, True):
         fig.suptitle(f"{device_name}: {dtype} {op_name}")
         fig.savefig(
             os.path.join(
-                results_dir, f'{device_name.replace(" ", "_")}_{dtype}_{op_name}.pdf'
+                results_dir, f"{device_name.replace(' ', '_')}_{dtype}_{op_name}.pdf"
             )
         )
         plt.close(fig)
