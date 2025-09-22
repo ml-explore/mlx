@@ -14,8 +14,8 @@
 namespace mlx::core::cu {
 
 // RAII-managed move-only wrapper of cudaEvent_t.
-struct RawCudaEvent : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
-  RawCudaEvent(int flags);
+struct CudaEventHandle : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
+  CudaEventHandle(int flags);
   int flags;
 };
 
@@ -41,7 +41,7 @@ class CudaEvent {
   bool completed() const;
 
  private:
-  RawCudaEvent event_;
+  CudaEventHandle event_;
 };
 
 // Event that can synchronize between CPU and GPU. It is much slower than

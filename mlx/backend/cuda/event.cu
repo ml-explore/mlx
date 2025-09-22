@@ -23,31 +23,31 @@ namespace {
 
 // Manage cached cudaEvent_t objects.
 struct CudaEventPool {
-  static RawCudaEvent create(int flags) {
+  static CudaEventHandle create(int flags) {
     auto& cache = cache_for(flags);
     if (cache.empty()) {
-      return RawCudaEvent(flags);
+      return CudaEventHandle(flags);
     } else {
-      RawCudaEvent ret = std::move(cache.back());
+      CudaEventHandle ret = std::move(cache.back());
       cache.pop_back();
       return ret;
     }
   }
 
-  static void release(RawCudaEvent event) {
+  static void release(CudaEventHandle event) {
     assert(event != nullptr);
     cache_for(event.flags).push_back(std::move(event));
   }
 
-  static std::vector<RawCudaEvent>& cache_for(int flags) {
-    static std::map<int, std::vector<RawCudaEvent>> cache;
+  static std::vector<CudaEventHandle>& cache_for(int flags) {
+    static std::map<int, std::vector<CudaEventHandle>> cache;
     return cache[flags];
   }
 };
 
 } // namespace
 
-RawCudaEvent::RawCudaEvent(int flags) : flags(flags) {
+CudaEventHandle::CudaEventHandle(int flags) : flags(flags) {
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
 }
 
@@ -86,9 +86,9 @@ bool CudaEvent::completed() const {
 // 1. The class can be copied.
 // 2. Make wait/record work with CPU streams.
 // 3. Add checks for waiting on un-recorded event.
-class CudaEventWrapper {
+class CopyableCudaEvent {
  public:
-  CudaEventWrapper()
+  CopyableCudaEvent()
       : event_(std::make_shared<CudaEvent>(
             cudaEventDisableTiming | cudaEventBlockingSync)) {}
 
@@ -238,7 +238,7 @@ struct EventImpl {
   // to fallback to AtomicEvent in following cases:
   // 1. the event is used to wait/signal a cpu stream;
   // 2. signal value other than 1 has been specified.
-  std::unique_ptr<cu::CudaEventWrapper> cuda;
+  std::unique_ptr<cu::CopyableCudaEvent> cuda;
   std::unique_ptr<cu::AtomicEvent> atomic;
 
   bool is_created() const {
@@ -253,7 +253,7 @@ struct EventImpl {
       nvtx3::mark("Using slow AtomicEvent");
       atomic = std::make_unique<cu::AtomicEvent>();
     } else {
-      cuda = std::make_unique<cu::CudaEventWrapper>();
+      cuda = std::make_unique<cu::CopyableCudaEvent>();
     }
   }
 };
