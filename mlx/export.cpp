@@ -14,6 +14,7 @@
     #primitive, {                            \
       serialize_primitive<primitive>,        \
       deserialize_primitive<primitive>,      \
+      primitive_state<primitive>,            \
       {__VA_ARGS__}                          \
     }                                        \
   }
@@ -35,15 +36,20 @@ struct PrimitiveSerializer {
   using Serializer = std::function<void(Writer&, const Primitive&)>;
   using Deserializer =
       std::function<std::shared_ptr<Primitive>(Reader&, Stream s)>;
+  using StateExtractor = std::function<std::vector<StateT>(const Primitive&)>;
+
   PrimitiveSerializer(
       Serializer serialize,
       Deserializer deserialize,
+      StateExtractor extract_state,
       std::vector<std::string> keys = {})
       : serialize(std::move(serialize)),
         deserialize(std::move(deserialize)),
+        extract_state(std::move(extract_state)),
         keys(std::move(keys)) {};
   Serializer serialize;
   Deserializer deserialize;
+  StateExtractor extract_state;
   std::vector<std::string> keys;
 };
 
@@ -199,25 +205,26 @@ void serialize_primitive(Writer& os, const Primitive& p) {
   }
 }
 
-// Possible types for a Primitive's state
-using StateT = std::variant<int, float, std::vector<int>>;
-
 template <typename T>
-void extract_state(T v, std::vector<StateT>& state) {
+void extract_state(const T state, std::vector<StateT>& unpacked_state) {
   if constexpr (std::is_arithmetic_v<T>) {
-    state.push_back(v);
+    unpacked_state.push_back(state);
   } else if constexpr (std::is_enum_v<T>) {
-    state.push_back(static_cast<int>(v));
+    unpacked_state.push_back(static_cast<int>(state));
+  } else if constexpr (is_iterable<T>) {
+    unpacked_state.push_back(state);
+  } else if constexpr (is_pair<T> || is_tuple<T>) {
+    std::apply(
+        [&unpacked_state](auto&... x) {
+          (..., extract_state(x, unpacked_state));
+        },
+        state);
   }
-  //  } else if constexpr (is_iterable<T>) {
-  //    state.push_back(v);
-  //  } else if constexpr (is_pair<T> || is_tuple<T>) {
-  //    std::apply([&os](auto&... x) { (..., extract_state(os, state)); }, v);
-  //  }
 }
 
+// std::vector<StateT> extract_state(const Primitive& p) {
 template <typename T>
-std::vector<StateT> extract_state(const Primitive& p) {
+std::vector<StateT> primitive_state(const Primitive& p) {
   std::vector<StateT> state;
   if constexpr (has_state<T>) {
     extract_state(static_cast<const T&>(p).state(), state);
@@ -408,6 +415,23 @@ struct PrimitiveFactory {
     } else {
       throw std::invalid_argument(
           "[import_function] Unable to deserialize primitive " + name);
+    }
+  };
+
+  std::pair<std::string, std::vector<StateT>> extract_state(
+      const std::shared_ptr<Primitive>& p) {
+    std::string name = p->name();
+    name = name.substr(0, name.find(' '));
+    if (auto it = name_remap.find(name); it != name_remap.end()) {
+      name = it->second;
+    }
+
+    if (auto it = factory.find(name); it != factory.end()) {
+      auto state = it->second.extract_state(*p);
+      return {name, state};
+    } else {
+      throw std::invalid_argument(
+          "[export_function] Unable to get state for primitive " + name);
     }
   };
 };
@@ -609,26 +633,30 @@ void FunctionExporter::export_with_callback(
     for (auto& in : inputs) {
       input_set.insert(in.id());
     }
-    std::vector<std::pair<std::string, array>> constants;
+    std::vector<std::pair<std::string, array>> new_constants;
     for (auto& arr : tape) {
       if (arr.has_primitive() || input_set.find(arr.id()) != input_set.end()) {
         continue;
       }
-      constants.emplace_back(namer.get_name(arr), arr);
+      if (constants.insert(arr.id()).second) {
+        new_constants.emplace_back(namer.get_name(arr), arr);
+      }
     }
-    callback({{"constants", constants}});
+    callback({{"constants", new_constants}});
   }
+  auto factory = PrimitiveFactory();
 
+  // Callback for each primitive in the tape
   for (auto& arr : tape) {
     if (!arr.has_primitive()) {
       continue;
     }
-    callback({
-        {"inputs", to_vector_data(arr.inputs())},
-        {"outputs", to_vector_data(arr.outputs())},
-        {"name", arr.primitive().name()}
-        //////         {"state": []});
-    });
+    auto [name, state] = factory.extract_state(arr.primitive_ptr());
+    callback(
+        {{"inputs", to_vector_data(arr.inputs())},
+         {"outputs", to_vector_data(arr.outputs())},
+         {"primitive", name},
+         {"state", state}});
   }
 }
 
@@ -676,7 +704,7 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   detail::compile_simplify(tape, parents_map, trace_outputs, /* passes */ 3);
 
   // Update the table entry
-  fentry.kwarg_keys = std::move(kwarg_keys);
+  fentry.kwarg_keys = kwarg_keys;
   fentry.inputs = trace_inputs;
 
   count++;

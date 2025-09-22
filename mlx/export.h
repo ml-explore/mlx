@@ -4,17 +4,34 @@
 
 #include <set>
 #include <unordered_map>
+#include <variant>
 #include "mlx/array.h"
 
 namespace mlx::core {
 
 using Args = std::vector<array>;
 using Kwargs = std::unordered_map<std::string, array>;
+
+// Possible types for a Primitive's state
+using StateT = std::variant<
+    bool,
+    int,
+    size_t,
+    float,
+    double,
+    Dtype,
+    Shape,
+    Strides,
+    std::vector<int>,
+    std::vector<size_t>,
+    std::string>;
+
 using ExportCallbackInput = std::unordered_map<
     std::string,
     std::variant<
         std::vector<std::tuple<std::string, Shape, Dtype>>,
         std::vector<std::pair<std::string, array>>,
+        std::vector<StateT>,
         std::string>>;
 using ExportCallback = std::function<void(const ExportCallbackInput&)>;
 
