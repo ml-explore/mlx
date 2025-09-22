@@ -1,12 +1,12 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/allocator.h"
+#include "mlx/backend/cuda/utils.h"
+#include "mlx/utils.h"
+
 #include <cuda_runtime.h>
 #include <fmt/format.h>
 #include <unistd.h>
-#include <iostream>
-#include "mlx/backend/cuda/utils.h"
-#include "mlx/utils.h"
 
 #include <cassert>
 
@@ -86,7 +86,7 @@ CudaAllocator::CudaAllocator()
   // TODO: Set memory limit for multi-device.
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-  memory_limit_ = total * 0.95;
+  memory_limit_ = total * 0.8;
   max_pool_size_ = memory_limit_;
 }
 
@@ -124,7 +124,6 @@ Buffer CudaAllocator::malloc(size_t size) {
 
       lock.unlock();
       buf = new CudaBuffer{nullptr, size};
-      // std::cout << "Allocating new buffer of size " << size << std::endl;
       cudaError_t err = cudaMallocManaged(&buf->data, size);
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
         throw std::runtime_error(fmt::format(
@@ -146,8 +145,9 @@ Buffer CudaAllocator::malloc(size_t size) {
 
 void CudaAllocator::free(Buffer buffer) {
   auto* buf = static_cast<CudaBuffer*>(buffer.ptr());
-  if (!buf)
+  if (!buf) {
     return;
+  }
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
