@@ -5,7 +5,6 @@
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
@@ -96,24 +95,10 @@ void gemm_and_bias(
       b_batch_strides.back());
   if (bias) {
     if (a.dtype() == complex64) {
-      // For complex64, cuBLASLt does not support
-      // bias epilogue; fall back to a separate add kernel.
-      gemm.run(
-          encoder,
-          out,
-          a,
-          b,
-          batch_shape,
-          a_batch_strides,
-          b_batch_strides,
-          alpha);
-
-      array bias_arr = astype(*bias, out.dtype(), s);
-      out = add(out, bias_arr, s);
-      return;
-    } else {
-      gemm.set_bias(encoder, *bias);
+      throw std::runtime_error(
+          "[gemm_and_bias] complex64 bias epilogue isn’t supported in cublasLtMatmul.");
     }
+    gemm.set_bias(encoder, *bias);
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
@@ -177,7 +162,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Dispatch to GEMM with epilogue or AddMM
 
-  if (beta_ == 1 && c.strides(-1) == 1 && c.data_size() == out.shape(-1)) {
+  if (beta_ == 1 && a.dtype() != complex64 && c.strides(-1) == 1 &&
+      c.data_size() == out.shape(-1)) {
     out.set_data(allocator::malloc(out.nbytes()));
     gemm_and_bias(
         encoder,
