@@ -3126,13 +3126,8 @@ array take_along_axis(
     StreamOrDevice s /* = {} */) {
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-<<<<<<< HEAD
-    msg << "[take_along_axis] Received invalid axis for array with " '
-        << a.ndim() << " dimensions.";
-=======
     msg << "[take_along_axis] Received invalid axis for array with " << a.ndim()
         << " dimensions.";
->>>>>>> 61d0af88 (toggle includes)
     throw std::invalid_argument(msg.str());
   }
 
