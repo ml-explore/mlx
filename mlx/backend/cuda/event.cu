@@ -22,9 +22,10 @@ namespace cu {
 namespace {
 
 // Manage cached cudaEvent_t objects.
-struct CudaEventPool {
-  static CudaEventHandle create(Device& d, int flags) {
-    auto& cache = cache_for(d.cuda_device(), flags);
+class CudaEventPool {
+ public:
+  CudaEventHandle create(Device& d, int flags) {
+    auto& cache = cache_for(d, flags);
     if (cache.empty()) {
       return CudaEventHandle(d, flags);
     } else {
@@ -34,47 +35,63 @@ struct CudaEventPool {
     }
   }
 
-  static void release(CudaEventHandle event) {
+  void release(CudaEventHandle event) {
     cache_for(event.device, event.flags).push_back(std::move(event));
   }
 
-  static std::vector<CudaEventHandle>& cache_for(int device, int flags) {
-    static std::map<int, std::map<int, std::vector<CudaEventHandle>>> cache;
-    return cache[device][flags];
+ private:
+  std::vector<CudaEventHandle>& cache_for(Device& d, int flags) {
+    return cache_[d.cuda_device()][flags];
   }
+
+  std::map<int, std::map<int, std::vector<CudaEventHandle>>> cache_;
 };
+
+CudaEventPool& cuda_event_pool() {
+  static CudaEventPool pool;
+  return pool;
+}
 
 } // namespace
 
 CudaEventHandle::CudaEventHandle(Device& d, int flags)
-    : device(d.cuda_device()), flags(flags) {
-  d.make_current();
+    : device(d), flags(flags) {
+  device.make_current();
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
   assert(handle_ != nullptr);
 }
 
 CudaEvent::CudaEvent(Device& d, int flags)
-    : event_(CudaEventPool::create(d, flags)) {}
+    : event_(cuda_event_pool().create(d, flags)) {}
 
 CudaEvent::~CudaEvent() {
-  CudaEventPool::release(std::move(event_));
+  cuda_event_pool().release(std::move(event_));
 }
 
 void CudaEvent::wait() {
   nvtx3::scoped_range r("cu::CudaEvent::wait");
+  event_.device.make_current();
   cudaEventSynchronize(event_);
 }
 
 void CudaEvent::wait(cudaStream_t stream) {
+  event_.device.make_current();
   cudaStreamWaitEvent(stream, event_);
 }
 
 void CudaEvent::record(cudaStream_t stream) {
+  event_.device.make_current();
   cudaEventRecord(event_, stream);
 }
 
 bool CudaEvent::completed() const {
+  // Note: cudaEventQuery can be safely called from any device.
   return cudaEventQuery(event_) == cudaSuccess;
+}
+
+// static
+void CudaEvent::init_pool() {
+  cuda_event_pool();
 }
 
 // Wraps CudaEvent with a few features:

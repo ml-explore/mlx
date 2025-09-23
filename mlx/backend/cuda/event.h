@@ -18,7 +18,7 @@ class Device;
 // RAII-managed move-only wrapper of cudaEvent_t.
 struct CudaEventHandle : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
   CudaEventHandle(Device& d, int flags);
-  int device;
+  Device& device;
   int flags;
 };
 
@@ -42,6 +42,9 @@ class CudaEvent {
   // Return whether the recorded kernels have completed. Note that this method
   // returns true if record() has not been called.
   bool completed() const;
+
+  // Internal: make sure event pool is initialized.
+  static void init_pool();
 
  private:
   CudaEventHandle event_;
