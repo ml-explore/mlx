@@ -13,9 +13,12 @@
 
 namespace mlx::core::cu {
 
+class Device;
+
 // RAII-managed move-only wrapper of cudaEvent_t.
 struct CudaEventHandle : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
-  CudaEventHandle(int flags);
+  CudaEventHandle(Device& d, int flags);
+  int device;
   int flags;
 };
 
@@ -23,7 +26,7 @@ struct CudaEventHandle : public CudaHandle<cudaEvent_t, cudaEventDestroy> {
 // on GPU stream in CPU stream, but can not wait on CPU stream.
 class CudaEvent {
  public:
-  explicit CudaEvent(int flags);
+  CudaEvent(Device& d, int flags);
   ~CudaEvent();
 
   CudaEvent(CudaEvent&&) = default;

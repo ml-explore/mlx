@@ -23,10 +23,10 @@ namespace {
 
 // Manage cached cudaEvent_t objects.
 struct CudaEventPool {
-  static CudaEventHandle create(int flags) {
-    auto& cache = cache_for(flags);
+  static CudaEventHandle create(Device& d, int flags) {
+    auto& cache = cache_for(d.cuda_device(), flags);
     if (cache.empty()) {
-      return CudaEventHandle(flags);
+      return CudaEventHandle(d, flags);
     } else {
       CudaEventHandle ret = std::move(cache.back());
       cache.pop_back();
@@ -35,23 +35,26 @@ struct CudaEventPool {
   }
 
   static void release(CudaEventHandle event) {
-    cache_for(event.flags).push_back(std::move(event));
+    cache_for(event.device, event.flags).push_back(std::move(event));
   }
 
-  static std::vector<CudaEventHandle>& cache_for(int flags) {
-    static std::map<int, std::vector<CudaEventHandle>> cache;
-    return cache[flags];
+  static std::vector<CudaEventHandle>& cache_for(int device, int flags) {
+    static std::map<int, std::map<int, std::vector<CudaEventHandle>>> cache;
+    return cache[device][flags];
   }
 };
 
 } // namespace
 
-CudaEventHandle::CudaEventHandle(int flags) : flags(flags) {
+CudaEventHandle::CudaEventHandle(Device& d, int flags)
+    : device(d.cuda_device()), flags(flags) {
+  d.make_current();
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
   assert(handle_ != nullptr);
 }
 
-CudaEvent::CudaEvent(int flags) : event_(CudaEventPool::create(flags)) {}
+CudaEvent::CudaEvent(Device& d, int flags)
+    : event_(CudaEventPool::create(d, flags)) {}
 
 CudaEvent::~CudaEvent() {
   CudaEventPool::release(std::move(event_));
@@ -80,8 +83,9 @@ bool CudaEvent::completed() const {
 // 3. Add checks for waiting on un-recorded event.
 class CopyableCudaEvent {
  public:
-  CopyableCudaEvent()
+  explicit CopyableCudaEvent(Device& d)
       : event_(std::make_shared<CudaEvent>(
+            d,
             cudaEventDisableTiming | cudaEventBlockingSync)) {}
 
   void wait() {
@@ -245,7 +249,7 @@ struct EventImpl {
       nvtx3::mark("Using slow AtomicEvent");
       atomic = std::make_unique<cu::AtomicEvent>();
     } else {
-      cuda = std::make_unique<cu::CopyableCudaEvent>();
+      cuda = std::make_unique<cu::CopyableCudaEvent>(cu::device(s.device));
     }
   }
 };

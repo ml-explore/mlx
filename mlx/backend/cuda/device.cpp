@@ -196,6 +196,7 @@ CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
+      worker_(d),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {

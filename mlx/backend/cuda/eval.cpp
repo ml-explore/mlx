@@ -15,11 +15,12 @@ bool is_available() {
 }
 
 void new_stream(Stream s) {
-  // Force initalization of CUDA by creating an event, so the CUDA runtime and
-  // our CUDA event pool get destroyed last.
-  cu::CudaEvent(cudaEventDefault);
+  // Initialize CUDA runtime and device before everythig else.
+  auto& d = cu::device(s.device);
+  // Create an event so our CUDA event pool get destroyed last.
+  cu::CudaEvent(d, cudaEventDefault);
   // Ensure the static stream objects get created.
-  cu::get_command_encoder(s);
+  d.get_command_encoder(s);
 }
 
 void eval(array& arr) {
