@@ -348,9 +348,9 @@ void steel_gemm_splitk_axpby(
     float beta = 0.0f) {
   using namespace mlx::steel;
 
-  int _tm = M / 16;
-  int _tn = N / 16;
-  int _tk = K / 16;
+  int _tm = (M + 15) / 16;
+  int _tn = (N + 15) / 16;
+  int _tk = (K + 15) / 16;
 
   int bm = M < 40 ? 16 : 32;
   int bn = N < 40 ? 16 : 32;
@@ -547,9 +547,9 @@ void steel_matmul_axpby(
   /////////////////////////////////////////////////////////////////////////////
   // Split K specialization
 
-  int _tm = M / 16;
-  int _tn = N / 16;
-  int _tk = K / 16;
+  int _tm = (M + 15) / 16;
+  int _tn = (N + 15) / 16;
+  int _tk = (K + 15) / 16;
 
   if (batch_size_out == 1 && (_tm * _tn) <= 32 && _tk >= 8) {
     return steel_gemm_splitk_axpby<CHECK_AB>(
@@ -697,6 +697,12 @@ void gemv_axbpy(
   } else {
     bm = out_vector_len >= 4096 ? 8 : 4;
     sn = 32;
+
+    if (K <= 64) {
+      bm = 1;
+      sm = 8;
+      sn = 4;
+    }
 
     // Specialized kernel for very small outputs
     tm = out_vector_len < tm ? 1 : tm;
