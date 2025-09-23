@@ -35,7 +35,6 @@ struct CudaEventPool {
   }
 
   static void release(CudaEventHandle event) {
-    assert(event != nullptr);
     cache_for(event.flags).push_back(std::move(event));
   }
 
@@ -49,36 +48,29 @@ struct CudaEventPool {
 
 CudaEventHandle::CudaEventHandle(int flags) : flags(flags) {
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
+  assert(handle_ != nullptr);
 }
 
-CudaEvent::CudaEvent(int flags) : event_(CudaEventPool::create(flags)) {
-  assert(event_ != nullptr);
-}
+CudaEvent::CudaEvent(int flags) : event_(CudaEventPool::create(flags)) {}
 
 CudaEvent::~CudaEvent() {
-  if (event_) {
-    CudaEventPool::release(std::move(event_));
-  }
+  CudaEventPool::release(std::move(event_));
 }
 
 void CudaEvent::wait() {
   nvtx3::scoped_range r("cu::CudaEvent::wait");
-  assert(event_ != nullptr);
   cudaEventSynchronize(event_);
 }
 
 void CudaEvent::wait(cudaStream_t stream) {
-  assert(event_ != nullptr);
   cudaStreamWaitEvent(stream, event_);
 }
 
 void CudaEvent::record(cudaStream_t stream) {
-  assert(event_ != nullptr);
   cudaEventRecord(event_, stream);
 }
 
 bool CudaEvent::completed() const {
-  assert(event_ != nullptr);
   return cudaEventQuery(event_) == cudaSuccess;
 }
 
