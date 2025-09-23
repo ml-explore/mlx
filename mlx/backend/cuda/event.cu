@@ -25,6 +25,9 @@ namespace {
 class CudaEventPool {
  public:
   CudaEventHandle create(Device& d, int flags) {
+    if (!on_creation_thread()) {
+      return CudaEventHandle(d, flags);
+    }
     auto& cache = cache_for(d, flags);
     if (cache.empty()) {
       return CudaEventHandle(d, flags);
@@ -36,6 +39,10 @@ class CudaEventPool {
   }
 
   void release(CudaEventHandle event) {
+    if (!on_creation_thread()) {
+      // Event will be destroyed directly instead of getting moved to cache.
+      return;
+    }
     cache_for(event.device, event.flags).push_back(std::move(event));
   }
 
@@ -44,6 +51,17 @@ class CudaEventPool {
     return cache_[d.cuda_device()][flags];
   }
 
+  bool on_creation_thread() {
+    return std::this_thread::get_id() == thread_id_;
+  }
+
+  // The CudaEvent may be created and destroyed on different threads (for
+  // example when waiting on GPU work in CPU stream), we don't want to make
+  // the cache thread-safe as it adds overhead, so we just skip cache when
+  // using events in worker threads.
+  std::thread::id thread_id_{std::this_thread::get_id()};
+
+  // {device: {flags: [events]}}
   std::map<int, std::map<int, std::vector<CudaEventHandle>>> cache_;
 };
 
