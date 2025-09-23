@@ -511,18 +511,21 @@ template <
       axpby)
 
 // clang-format off
-#define instantiate_gemv(name, itype, bm, sm, sn, tm, tn)              \
-  instantiate_gemv_helper(name, itype, bm, 1, sm, sn, tm, tn, 0, 0) \
-  instantiate_gemv_helper(name, itype, bm, 1, sm, sn, tm, tn, 0, 1) \
-  instantiate_gemv_helper(name, itype, bm, 1, sm, sn, tm, tn, 1, 0) \
-  instantiate_gemv_helper(name, itype, bm, 1, sm, sn, tm, tn, 1, 1) // clang-format on
+#define instantiate_gemv(name, itype, bm, bn, sm, sn, tm, tn)        \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 1) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 1, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 1, 1) // clang-format on
 
 // clang-format off
 #define instantiate_gemv_blocks(name, itype) \
-  instantiate_gemv(name, itype, 1, 8,  4, 4, 4) \
-  instantiate_gemv(name, itype, 4, 1, 32, 1, 4) \
-  instantiate_gemv(name, itype, 4, 1, 32, 4, 4) \
-  instantiate_gemv(name, itype, 8, 1, 32, 4, 4) // clang-format on
+  instantiate_gemv(name, itype, 1,  8, 1, 32, 4, 4) \
+  instantiate_gemv(name, itype, 1,  8, 1, 32, 1, 4) \
+  instantiate_gemv(name, itype, 1,  1, 8,  4, 4, 4) \
+  instantiate_gemv(name, itype, 1,  1, 8,  4, 1, 4) \
+  instantiate_gemv(name, itype, 4,  1, 1, 32, 1, 4) \
+  instantiate_gemv(name, itype, 4,  1, 1, 32, 4, 4) \
+  instantiate_gemv(name, itype, 8,  1, 1, 32, 4, 4) // clang-format on
 
 instantiate_gemv_blocks(float32, float);
 instantiate_gemv_blocks(float16, half);

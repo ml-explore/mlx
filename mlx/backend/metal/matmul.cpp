@@ -702,6 +702,9 @@ void gemv_axbpy(
       bm = 1;
       sm = 8;
       sn = 4;
+    } else if (K >= 16 * out_vector_len) {
+      bm = 1;
+      bn = 8;
     }
 
     // Specialized kernel for very small outputs
