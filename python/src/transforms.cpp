@@ -441,6 +441,7 @@ struct PyCompiledFun {
     constexpr uint64_t array_identifier = 18446744073709551557UL;
     constexpr uint64_t list_identifier = 18446744073709551533UL;
     constexpr uint64_t dict_identifier = 18446744073709551521UL;
+    constexpr uint64_t none_identifier = 10239356951478402889UL;
 
     // Flatten the tree with hashed constants and structure
     std::function<void(nb::handle)> recurse;
@@ -476,6 +477,8 @@ struct PyCompiledFun {
       } else if (nb::isinstance<nb::float_>(obj)) {
         auto r = nb::cast<double>(obj);
         constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+      } else if (obj.is_none()) {
+        constants.push_back(none_identifier);
       } else {
         std::ostringstream msg;
         msg << "[compile] Function arguments must be trees of arrays "
