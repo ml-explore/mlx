@@ -482,7 +482,7 @@ struct PyCompiledFun {
       } else {
         std::ostringstream msg;
         msg << "[compile] Function arguments must be trees of arrays "
-            << "or constants (floats, ints, or strings), but received "
+            << "or constants (floats, ints, strings, or None), but received "
             << "type " << type_name_str(obj) << ".";
         throw std::invalid_argument(msg.str());
       }
