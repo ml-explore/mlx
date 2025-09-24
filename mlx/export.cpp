@@ -467,8 +467,10 @@ struct FunctionTable {
   };
   bool shapeless;
   std::unordered_map<int, std::vector<Function>> table;
-  Function* find(const Args& args, const Kwargs& kwargs);
-  std::pair<Function&, bool> emplace(const Args& args, const Kwargs& kwargs);
+  Function* find(const Args& args, const std::map<std::string, array>& kwargs);
+  std::pair<Function&, bool> emplace(
+      const Args& args,
+      const std::map<std::string, array>& kwargs);
   void insert(
       std::vector<std::string> kwarg_keys,
       std::vector<array> inputs,
@@ -504,12 +506,15 @@ struct FunctionTable {
   }
 
  private:
-  bool match(const Args& args, const Kwargs& kwargs, const Function& fun);
+  bool match(
+      const Args& args,
+      const std::map<std::string, array>& kwargs,
+      const Function& fun);
 };
 
 bool FunctionTable::match(
     const Args& args,
-    const Kwargs& kwargs,
+    const std::map<std::string, array>& kwargs,
     const Function& fun) {
   for (auto& k : fun.kwarg_keys) {
     if (kwargs.find(k) == kwargs.end()) {
@@ -537,9 +542,7 @@ bool FunctionTable::match(
       return false;
     }
   }
-  auto sorted_kwargs =
-      std::map<std::string, array>(kwargs.begin(), kwargs.end());
-  for (auto& [_, in] : sorted_kwargs) {
+  for (auto& [_, in] : kwargs) {
     if (!match_inputs(in, fun.inputs[i++])) {
       return false;
     }
@@ -550,7 +553,7 @@ bool FunctionTable::match(
 
 std::pair<FunctionTable::Function&, bool> FunctionTable::emplace(
     const Args& args,
-    const Kwargs& kwargs) {
+    const std::map<std::string, array>& kwargs) {
   auto n_inputs = args.size() + kwargs.size();
   auto [it, _] = table.emplace(n_inputs, std::vector<Function>{});
   auto& funs_vec = it->second;
@@ -567,7 +570,7 @@ std::pair<FunctionTable::Function&, bool> FunctionTable::emplace(
 
 FunctionTable::Function* FunctionTable::find(
     const Args& args,
-    const Kwargs& kwargs) {
+    const std::map<std::string, array>& kwargs) {
   auto n_inputs = args.size() + kwargs.size();
   auto it = table.find(n_inputs);
   if (it == table.end()) {
@@ -611,7 +614,8 @@ void FunctionExporter::close() {
 void FunctionExporter::export_with_callback(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
-    const std::vector<array>& tape) {
+    const std::vector<array>& tape,
+    const std::vector<std::string>& kwarg_keys) {
   NodeNamer namer{};
   auto to_vector_data = [&namer](const auto& arrays) {
     std::vector<std::tuple<std::string, Shape, Dtype>> data;
@@ -622,10 +626,15 @@ void FunctionExporter::export_with_callback(
   };
 
   // Callback on the inputs
-  callback({{"inputs", to_vector_data(inputs)}});
+  callback({{"type", "inputs"}, {"inputs", to_vector_data(inputs)}});
+  std::vector<std::pair<std::string, std::string>> keyword_inputs;
+  for (int i = inputs.size() - kwarg_keys.size(); i < inputs.size(); ++i) {
+    keyword_inputs.emplace_back(kwarg_keys[i], namer.get_name(inputs[i]));
+  }
+  callback({{"type", "keyword_inputs"}, {"keywords", keyword_inputs}});
 
   // Callback on the outputs
-  callback({{"outputs", to_vector_data(outputs)}});
+  callback({{"type", "outputs"}, {"outputs", to_vector_data(outputs)}});
 
   // Callback on the constants
   {
@@ -642,7 +651,7 @@ void FunctionExporter::export_with_callback(
         new_constants.emplace_back(namer.get_name(arr), arr);
       }
     }
-    callback({{"constants", new_constants}});
+    callback({{"type", "constants"}, {"constants", new_constants}});
   }
   auto factory = PrimitiveFactory();
 
@@ -653,10 +662,11 @@ void FunctionExporter::export_with_callback(
     }
     auto [name, state] = factory.extract_state(arr.primitive_ptr());
     callback(
-        {{"inputs", to_vector_data(arr.inputs())},
+        {{"type", "primitive"},
+         {"inputs", to_vector_data(arr.inputs())},
          {"outputs", to_vector_data(arr.outputs())},
-         {"primitive", name},
-         {"state", state}});
+         {"name", name},
+         {"arguments", state}});
   }
 }
 
@@ -665,7 +675,9 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
     throw std::runtime_error(
         "[export_function] Attempting to write after exporting is closed.");
   }
-  auto [fentry, inserted] = ftable->emplace(args, kwargs);
+  auto sorted_kwargs =
+      std::map<std::string, array>(kwargs.begin(), kwargs.end());
+  auto [fentry, inserted] = ftable->emplace(args, sorted_kwargs);
   if (!inserted) {
     throw std::runtime_error(
         "[export_function] Attempting to export a function twice with "
@@ -675,8 +687,6 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   // Flatten the inputs to the function for tracing
   std::vector<std::string> kwarg_keys;
   auto inputs = args;
-  auto sorted_kwargs =
-      std::map<std::string, array>(kwargs.begin(), kwargs.end());
   for (auto& [k, v] : sorted_kwargs) {
     kwarg_keys.push_back(k);
     inputs.push_back(v);
@@ -710,7 +720,7 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   count++;
 
   if (callback) {
-    export_with_callback(trace_inputs, trace_outputs, tape);
+    export_with_callback(trace_inputs, trace_outputs, tape, kwarg_keys);
     return;
   }
 
@@ -908,7 +918,9 @@ std::vector<array> ImportedFunction::operator()(const Args& args) const {
 std::vector<array> ImportedFunction::operator()(
     const Args& args,
     const Kwargs& kwargs) const {
-  auto* fun = ftable->find(args, kwargs);
+  auto sorted_kwargs =
+      std::map<std::string, array>(kwargs.begin(), kwargs.end());
+  auto* fun = ftable->find(args, sorted_kwargs);
   if (fun == nullptr) {
     std::ostringstream msg;
     msg << "[import_function::call] No imported function found which matches "
@@ -927,7 +939,7 @@ std::vector<array> ImportedFunction::operator()(
   }
 
   auto inputs = args;
-  for (auto& [_, v] : kwargs) {
+  for (auto& [_, v] : sorted_kwargs) {
     inputs.push_back(v);
   }
   return detail::compile_replace(

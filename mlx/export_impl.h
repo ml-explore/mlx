@@ -70,7 +70,8 @@ struct FunctionExporter {
   void export_with_callback(
       const std::vector<array>& inputs,
       const std::vector<array>& outputs,
-      const std::vector<array>& tape);
+      const std::vector<array>& tape,
+      const std::vector<std::string>& kwarg_keys);
   std::set<std::uintptr_t> constants;
   int count{0};
   bool closed{false};

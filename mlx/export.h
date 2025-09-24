@@ -31,6 +31,7 @@ using ExportCallbackInput = std::unordered_map<
     std::variant<
         std::vector<std::tuple<std::string, Shape, Dtype>>,
         std::vector<std::pair<std::string, array>>,
+        std::vector<std::pair<std::string, std::string>>,
         std::vector<StateT>,
         std::string>>;
 using ExportCallback = std::function<void(const ExportCallbackInput&)>;
