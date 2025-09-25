@@ -727,7 +727,7 @@ void compile_fuse(
       }
     };
 
-    if (arr.has_primitive()) {
+    if (arr.has_primitive() && !is_broadcast(arr.primitive())) {
       Stream s = arr.primitive().stream();
       recurse(arr, 0, s, arr.shape());
     }
