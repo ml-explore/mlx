@@ -1037,6 +1037,20 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(inner.__doc__, c_inner.__doc__)
         self.assertEqual(inspect.signature(inner), inspect.signature(c_inner))
 
+    def test_compile_with_none(self):
+        @mx.compile
+        def fun(x, y):
+            if y is None:
+                return mx.abs(x - 2.0)
+            else:
+                return mx.abs(x + y)
+
+        out = fun(mx.array(1.0), None)
+        self.assertEqual(out.item(), 1.0)
+
+        out = fun(mx.array(1.0), mx.array(2.0))
+        self.assertEqual(out.item(), 3.0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
