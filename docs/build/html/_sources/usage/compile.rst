@@ -130,8 +130,8 @@ Now make an array, and benchmark both functions:
 .. code-block:: python
 
   x = mx.random.uniform(shape=(32, 1000, 4096))
-  timeit(nn.gelu, x)
-  timeit(mx.compile(nn.gelu), x)
+  timeit(gelu, x)
+  timeit(mx.compile(gelu), x)
 
 On an M1 Max the times are 15.5 and 3.1 milliseconds. The compiled ``gelu`` is
 five times faster.

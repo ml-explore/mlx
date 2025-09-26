@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Exporting Functions &#8212; MLX 0.29.1 documentation</title>
+    <title>Exporting Functions &#8212; MLX 0.29.2 documentation</title>
   
   
   
@@ -37,7 +37,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../_static/documentation_options.js?v=27a4ca17"></script>
+    <script src="../_static/documentation_options.js?v=30d04a71"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -140,8 +140,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.29.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.29.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.29.2 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.29.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -1070,11 +1070,11 @@ parameters, pass them as inputs to the <code class="docutils literal notranslate
 <p>Just like <a class="reference internal" href="../python/_autosummary/mlx.core.compile.html#mlx.core.compile" title="mlx.core.compile"><code class="xref py py-func docutils literal notranslate"><span class="pre">compile()</span></code></a>, functions can also be exported for dynamically shaped
 inputs. Pass <code class="docutils literal notranslate"><span class="pre">shapeless=True</span></code> to <a class="reference internal" href="../python/_autosummary/mlx.core.export_function.html#mlx.core.export_function" title="mlx.core.export_function"><code class="xref py py-func docutils literal notranslate"><span class="pre">export_function()</span></code></a> or <a class="reference internal" href="../python/_autosummary/mlx.core.exporter.html#mlx.core.exporter" title="mlx.core.exporter"><code class="xref py py-func docutils literal notranslate"><span class="pre">exporter()</span></code></a>
 to export a function which can be used for inputs with variable shapes:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mx</span><span class="o">.</span><span class="n">export_function</span><span class="p">(</span><span class="s2">&quot;fun.mlxfn&quot;</span><span class="p">,</span> <span class="n">mx</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">shapeless</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mx</span><span class="o">.</span><span class="n">export_function</span><span class="p">(</span><span class="s2">&quot;fun.mlxfn&quot;</span><span class="p">,</span> <span class="n">mx</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">]),</span> <span class="n">shapeless</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">imported_abs</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">import_function</span><span class="p">(</span><span class="s2">&quot;fun.mlxfn&quot;</span><span class="p">)</span>
 
 <span class="c1"># Ok</span>
-<span class="n">out</span><span class="p">,</span> <span class="o">=</span> <span class="n">imported_abs</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">))</span>
+<span class="n">out</span><span class="p">,</span> <span class="o">=</span> <span class="n">imported_abs</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">]))</span>
 
 <span class="c1"># Also ok</span>
 <span class="n">out</span><span class="p">,</span> <span class="o">=</span> <span class="n">imported_abs</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">]))</span>

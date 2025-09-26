@@ -164,11 +164,11 @@ to export a function which can be used for inputs with variable shapes:
 
 .. code-block:: python
 
-  mx.export_function("fun.mlxfn", mx.abs, mx.array(0.0), shapeless=True)
+  mx.export_function("fun.mlxfn", mx.abs, mx.array([0.0]), shapeless=True)
   imported_abs = mx.import_function("fun.mlxfn")
 
   # Ok
-  out, = imported_abs(mx.array(-1.0))
+  out, = imported_abs(mx.array([-1.0]))
 
   # Also ok
   out, = imported_abs(mx.array([-1.0, -2.0]))
