@@ -38,13 +38,40 @@ struct FunctionExporter {
       const std::function<std::vector<array>(const Args&, const Kwargs&)>&,
       bool shapeless);
 
+  friend FunctionExporter exporter(
+      const ExportCallback&,
+      const std::function<std::vector<array>(const Args&)>&,
+      bool shapeless);
+
+  friend FunctionExporter exporter(
+      const ExportCallback&,
+      const std::function<std::vector<array>(const Kwargs&)>&,
+      bool shapeless);
+
+  friend FunctionExporter exporter(
+      const ExportCallback&,
+      const std::function<std::vector<array>(const Args&, const Kwargs&)>&,
+      bool shapeless);
+
   FunctionExporter(
       const std::string& file,
       std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
       bool shapeless);
+
+  FunctionExporter(
+      const ExportCallback& callback,
+      std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
+      bool shapeless);
+
   io::FileWriter os;
+  ExportCallback callback;
   std::function<std::vector<array>(const Args&, const Kwargs& kwargs)> fun;
   void export_function(const Args& args, const Kwargs& kwargs);
+  void export_with_callback(
+      const std::vector<array>& inputs,
+      const std::vector<array>& outputs,
+      const std::vector<array>& tape,
+      const std::vector<std::string>& kwarg_keys);
   std::set<std::uintptr_t> constants;
   int count{0};
   bool closed{false};
