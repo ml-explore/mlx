@@ -184,7 +184,7 @@ almost identical to the example above:
 
     def step(model, x, y):
         loss, grads = loss_grad_fn(model, x, y)
-        grads = mlx.nn.average_gradients(grads) # <---- This line was added
+        grads = mx.nn.average_gradients(grads)  # <---- This line was added
         optimizer.update(model, grads)
         return loss
 
