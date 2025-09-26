@@ -727,6 +727,10 @@ void compile_fuse(
       }
     };
 
+    // This will be the result of the fused operation so it needs
+    //   a) to not be already computed ie have a primitive
+    //   b) that primitive to not be a broadcast since it will unnecessarily
+    //      cast to a contiguous array potentially blowing up memory
     if (arr.has_primitive() && !is_broadcast(arr.primitive())) {
       Stream s = arr.primitive().stream();
       recurse(arr, 0, s, arr.shape());
