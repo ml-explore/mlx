@@ -15,7 +15,7 @@ namespace mlx::core::cu {
 // Run tasks in worker thread, synchronized with cuda stream.
 class Worker {
  public:
-  Worker();
+  explicit Worker(Device& d);
   ~Worker();
 
   Worker(const Worker&) = delete;

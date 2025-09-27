@@ -22,11 +22,15 @@ namespace cu {
 namespace {
 
 // Manage cached cudaEvent_t objects.
-struct CudaEventPool {
-  static CudaEventHandle create(int flags) {
-    auto& cache = cache_for(flags);
+class CudaEventPool {
+ public:
+  CudaEventHandle create(Device& d, int flags) {
+    if (!on_creation_thread()) {
+      return CudaEventHandle(d, flags);
+    }
+    auto& cache = cache_for(d, flags);
     if (cache.empty()) {
-      return CudaEventHandle(flags);
+      return CudaEventHandle(d, flags);
     } else {
       CudaEventHandle ret = std::move(cache.back());
       cache.pop_back();
@@ -34,44 +38,78 @@ struct CudaEventPool {
     }
   }
 
-  static void release(CudaEventHandle event) {
-    cache_for(event.flags).push_back(std::move(event));
+  void release(CudaEventHandle event) {
+    if (!on_creation_thread()) {
+      // Event will be destroyed directly instead of getting moved to cache.
+      return;
+    }
+    cache_for(event.device, event.flags).push_back(std::move(event));
   }
 
-  static std::vector<CudaEventHandle>& cache_for(int flags) {
-    static std::map<int, std::vector<CudaEventHandle>> cache;
-    return cache[flags];
+ private:
+  std::vector<CudaEventHandle>& cache_for(Device& d, int flags) {
+    return cache_[d.cuda_device()][flags];
   }
+
+  bool on_creation_thread() {
+    return std::this_thread::get_id() == thread_id_;
+  }
+
+  // The CudaEvent may be created and destroyed on different threads (for
+  // example when waiting on GPU work in CPU stream), we don't want to make
+  // the cache thread-safe as it adds overhead, so we just skip cache when
+  // using events in worker threads.
+  std::thread::id thread_id_{std::this_thread::get_id()};
+
+  // {device: {flags: [events]}}
+  std::map<int, std::map<int, std::vector<CudaEventHandle>>> cache_;
 };
+
+CudaEventPool& cuda_event_pool() {
+  static CudaEventPool pool;
+  return pool;
+}
 
 } // namespace
 
-CudaEventHandle::CudaEventHandle(int flags) : flags(flags) {
+CudaEventHandle::CudaEventHandle(Device& d, int flags)
+    : device(d), flags(flags) {
+  device.make_current();
   CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&handle_, flags));
   assert(handle_ != nullptr);
 }
 
-CudaEvent::CudaEvent(int flags) : event_(CudaEventPool::create(flags)) {}
+CudaEvent::CudaEvent(Device& d, int flags)
+    : event_(cuda_event_pool().create(d, flags)) {}
 
 CudaEvent::~CudaEvent() {
-  CudaEventPool::release(std::move(event_));
+  cuda_event_pool().release(std::move(event_));
 }
 
 void CudaEvent::wait() {
   nvtx3::scoped_range r("cu::CudaEvent::wait");
+  event_.device.make_current();
   cudaEventSynchronize(event_);
 }
 
 void CudaEvent::wait(cudaStream_t stream) {
+  event_.device.make_current();
   cudaStreamWaitEvent(stream, event_);
 }
 
 void CudaEvent::record(cudaStream_t stream) {
+  event_.device.make_current();
   cudaEventRecord(event_, stream);
 }
 
 bool CudaEvent::completed() const {
+  // Note: cudaEventQuery can be safely called from any device.
   return cudaEventQuery(event_) == cudaSuccess;
+}
+
+// static
+void CudaEvent::init_pool() {
+  cuda_event_pool();
 }
 
 // Wraps CudaEvent with a few features:
@@ -80,8 +118,9 @@ bool CudaEvent::completed() const {
 // 3. Add checks for waiting on un-recorded event.
 class CopyableCudaEvent {
  public:
-  CopyableCudaEvent()
+  explicit CopyableCudaEvent(Device& d)
       : event_(std::make_shared<CudaEvent>(
+            d,
             cudaEventDisableTiming | cudaEventBlockingSync)) {}
 
   void wait() {
@@ -245,7 +284,7 @@ struct EventImpl {
       nvtx3::mark("Using slow AtomicEvent");
       atomic = std::make_unique<cu::AtomicEvent>();
     } else {
-      cuda = std::make_unique<cu::CopyableCudaEvent>();
+      cuda = std::make_unique<cu::CopyableCudaEvent>(cu::device(s.device));
     }
   }
 };

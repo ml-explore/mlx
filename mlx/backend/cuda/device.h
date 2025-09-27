@@ -140,7 +140,7 @@ class Device {
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
 
-  // Make this device the current cuda device, required by some cuda calls.
+  // Make this device the current cuda device, this method is thread-safe.
   void make_current();
 
   CommandEncoder& get_command_encoder(Stream s);
