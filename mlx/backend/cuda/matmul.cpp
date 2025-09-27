@@ -31,6 +31,7 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
 
 void gemm_and_bias(
     cu::CommandEncoder& encoder,
+    const Stream& s,
     int M,
     int N,
     int K,
@@ -93,6 +94,10 @@ void gemm_and_bias(
       a_batch_strides.back(),
       b_batch_strides.back());
   if (bias) {
+    if (a.dtype() == complex64) {
+      throw std::runtime_error(
+          "[gemm_and_bias] complex64 bias epilogue isn’t supported in cublasLtMatmul.");
+    }
     gemm.set_bias(encoder, *bias);
   }
   gemm.run(
@@ -129,7 +134,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
 
   gemm_and_bias(
-      encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+      encoder, s, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -157,10 +162,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Dispatch to GEMM with epilogue or AddMM
 
-  if (beta_ == 1 && c.strides(-1) == 1 && c.data_size() == out.shape(-1)) {
+  if (beta_ == 1 && a.dtype() != complex64 && c.strides(-1) == 1 &&
+      c.data_size() == out.shape(-1)) {
     out.set_data(allocator::malloc(out.nbytes()));
     gemm_and_bias(
         encoder,
+        s,
         M,
         N,
         K,

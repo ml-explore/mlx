@@ -1228,14 +1228,14 @@ array pad(
     if (low_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid low padding size (" << low_pad_size[i]
-          << ") passed to pad" << " for axis " << i
+          << ") passed to pad for axis " << i
           << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
     if (high_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid high padding size (" << high_pad_size[i]
-          << ") passed to pad" << " for axis " << i
+          << ") passed to pad for axis " << i
           << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
@@ -2859,26 +2859,6 @@ array matmul(
         "have at least one dimension.");
   }
 
-  // complex matmul using Karatsuba's Algorithm
-  if (a.dtype() == complex64 || b.dtype() == complex64) {
-    // Extract real and imaginary parts
-    auto a_real = real(a, s);
-    auto a_imag = imag(a, s);
-    auto b_real = real(b, s);
-    auto b_imag = imag(b, s);
-
-    // Compute real and imaginary components of the result
-    auto m1 = matmul(a_real, b_real, s);
-    auto m2 = matmul(a_imag, b_imag, s);
-    auto m3 = matmul(add(a_real, a_imag, s), add(b_real, b_imag, s), s);
-
-    auto c_real = subtract(m1, m2, s);
-    auto c_imag = subtract(m3, add(m1, m2, s), s);
-
-    return add(
-        c_real, multiply(array(complex64_t{0, 1}, complex64), c_imag, s), s);
-  }
-
   if (a.ndim() == 1) {
     // Insert a singleton dim in the beginning
     a = expand_dims(a, 0, s);
@@ -2898,11 +2878,11 @@ array matmul(
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
 
-  if (!issubdtype(out_type, floating)) {
+  if (!issubdtype(out_type, inexact)) {
     std::ostringstream msg;
-    msg << "[matmul] Only real floating point types are supported but "
-        << a.dtype() << " and " << b.dtype() << " were provided which results"
-        << " in " << out_type << ", which is not a real floating point type.";
+    msg << "[matmul] Only inexact types are supported but " << a.dtype()
+        << " and " << b.dtype() << " were provided which results"
+        << " in " << out_type << ", which is not a floating point type.";
     throw std::invalid_argument(msg.str());
   }
   if (a.dtype() != out_type) {
@@ -3146,8 +3126,8 @@ array take_along_axis(
     StreamOrDevice s /* = {} */) {
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-    msg << "[take_along_axis] Received invalid axis " << " for array with "
-        << a.ndim() << " dimensions.";
+    msg << "[take_along_axis] Received invalid axis for array with " << a.ndim()
+        << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -3184,7 +3164,7 @@ array scatter_axis(
       (mode == ScatterAxis::None) ? "[put_along_axis]" : "[scatter_add_axis]";
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-    msg << prefix << " Received invalid axis " << " for array with " << a.ndim()
+    msg << prefix << " Received invalid axis for array with " << a.ndim()
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
@@ -3592,7 +3572,7 @@ run_conv_checks(const array& in, const array& wt, int n_dim, int groups) {
   if (in.ndim() != n_dim + 2) {
     std::ostringstream msg;
     msg << "[conv] Invalid input array with " << in.ndim() << " dimensions for "
-        << n_dim << "D convolution." << " Expected an array with " << n_dim + 2
+        << n_dim << "D convolution. Expected an array with " << n_dim + 2
         << " dimensions following the format [N, ..., C_in].";
     throw std::invalid_argument(msg.str());
   }
@@ -4141,7 +4121,8 @@ std::vector<array> quantize(
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
-        << ". However the provided " << " matrix has shape " << w.shape();
+        << ". However the provided "
+        << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
 
