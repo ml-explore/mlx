@@ -99,10 +99,13 @@ class JitModule {
   CUfunction get_kernel(
       const std::string& kernel_name,
       std::function<void(CUfunction)> configure_kernel = nullptr);
+  std::pair<CUfunction, uint> get_kernel_and_dims(
+      const std::string& kernel_name,
+      std::function<void(CUfunction)> configure_kernel = nullptr);
 
  private:
   CUmodule module_{nullptr};
-  std::unordered_map<std::string, std::pair<CUfunction, bool>> kernels_;
+  std::unordered_map<std::string, std::tuple<CUfunction, bool, uint>> kernels_;
 };
 
 std::unordered_map<std::string, JitModule>& get_jit_module_cache();
