@@ -9,7 +9,7 @@
 
 #include "mlx/backend/cpu/simd/base_simd.h"
 
-// There seems to be a bug in sims/base.h
+// There seems to be a bug in simd/base_simd.h
 // __XROS_2_0 is not defined, the expression evaluates
 // to true instead of false setting the SIMD library
 // higher than it should be even on macOS < 15
