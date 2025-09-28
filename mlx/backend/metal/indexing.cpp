@@ -378,7 +378,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   if (upd_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
+    // Need placeholders so Metal doesn't complain
     int shape_ = 0;
     int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 3);
@@ -393,7 +393,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Set output info
   size_t out_ndim = out.ndim();
   if (out_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
+    // Need placeholders so Metal doesn't complain
     int shape_ = 0;
     int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 7);
