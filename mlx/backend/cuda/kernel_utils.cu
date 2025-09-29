@@ -35,12 +35,10 @@ std::tuple<dim3, uint> get_launch_args(
     const Shape& shape,
     const Strides& strides,
     bool large,
-    int work_per_thread) {
+    int work_per_thread /* = 1 */,
+    uint max_block_dim /* = 1024 */) {
   size_t nthreads = cuda::ceil_div(size, work_per_thread);
-  uint block_dim = 1024;
-  if (block_dim > nthreads) {
-    block_dim = nthreads;
-  }
+  uint block_dim = max_block_dim < nthreads ? max_block_dim : nthreads;
   dim3 num_blocks;
   if (large) {
     num_blocks = get_2d_grid_dims(shape, strides, work_per_thread);
