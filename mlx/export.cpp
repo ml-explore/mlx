@@ -579,11 +579,11 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
     for (auto& k : kwarg_keys) {
       kwargs.insert({k, *it++});
     }
-    return fun(args, kwargs);
+    return detail::ArraysAndExtra{fun(args, kwargs), nullptr};
   };
 
   // Trace to build the graph
-  auto [trace_inputs, trace_outputs] =
+  auto [trace_inputs, trace_outputs, extra] =
       detail::compile_trace(flat_fun, inputs, ftable->shapeless);
 
   // DFS the graph and get the tape
