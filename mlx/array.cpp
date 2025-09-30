@@ -21,11 +21,12 @@ array::array(
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
     std::vector<array> inputs)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          std::move(shape),
-          dtype,
-          std::move(primitive),
-          std::move(inputs))) {
+    : array_desc_(
+          std::make_shared<ArrayDesc>(
+              std::move(shape),
+              dtype,
+              std::move(primitive),
+              std::move(inputs))) {
   if (has_primitive() && this->primitive().stream().device == Device::gpu) {
     for (auto& in : this->inputs()) {
       if (in.dtype() == float64) {
@@ -69,16 +70,18 @@ array array::unsafe_weak_copy(const array& other) {
 }
 
 array::array(std::initializer_list<float> data)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          Shape{static_cast<ShapeElem>(data.size())},
-          float32)) {
+    : array_desc_(
+          std::make_shared<ArrayDesc>(
+              Shape{static_cast<ShapeElem>(data.size())},
+              float32)) {
   init(data.begin());
 }
 
 array::array(std::initializer_list<int> data, Dtype dtype)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          Shape{static_cast<ShapeElem>(data.size())},
-          dtype)) {
+    : array_desc_(
+          std::make_shared<ArrayDesc>(
+              Shape{static_cast<ShapeElem>(data.size())},
+              dtype)) {
   init(data.begin());
 }
 

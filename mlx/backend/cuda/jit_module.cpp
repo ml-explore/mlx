@@ -307,8 +307,9 @@ void load_module(
   CUresult jit_result = cuModuleLoadDataEx(
       &module_, ptx.data(), std::size(options), options, values);
   if (jit_result != CUDA_SUCCESS) {
-    throw std::runtime_error(fmt::format(
-        "Failed to load compiled {} kernel: {}.", module_name, jit_log));
+    throw std::runtime_error(
+        fmt::format(
+            "Failed to load compiled {} kernel: {}.", module_name, jit_log));
   }
 
   // Load kernels.

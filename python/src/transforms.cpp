@@ -545,7 +545,42 @@ struct PyCompiledFun {
     }
 
     // Put the outputs back in the container
-    nb::object py_outputs = tree_cache().at(fun_id);
+    // For variable output functions, we need to determine the actual output
+    // structure dynamically. We do this by running the function with the actual
+    // inputs to get the correct structure, but only if there's a mismatch with
+    // the cached structure.
+    nb::object py_outputs;
+
+    try {
+      // Try to get cached structure first
+      py_outputs = tree_cache().at(fun_id);
+
+      // Verify if this structure is compatible with current outputs
+      // by checking if the number of arrays matches
+      auto cached_flat = tree_flatten(py_outputs, false);
+      if (cached_flat.size() != num_outputs) {
+        // Structure mismatch - need to get actual structure
+        // Run function with actual inputs to get the true output structure
+        auto actual_args = tree_unflatten(args, inputs);
+        auto actual_kwargs = tree_unflatten(kwargs, inputs, num_args);
+        auto actual_outputs = fun(*actual_args, **actual_kwargs);
+        auto [_, py_structure] =
+            tree_flatten_with_structure(std::move(actual_outputs), false);
+        py_outputs = py_structure;
+        tree_cache()[fun_id] = py_outputs; // Update cache
+      }
+    } catch (const std::out_of_range&) {
+      // No cached structure - this should not happen as it should be set during
+      // tracing But if it does, run the function to get the structure
+      auto actual_args = tree_unflatten(args, inputs);
+      auto actual_kwargs = tree_unflatten(kwargs, inputs, num_args);
+      auto actual_outputs = fun(*actual_args, **actual_kwargs);
+      auto [_, py_structure] =
+          tree_flatten_with_structure(std::move(actual_outputs), false);
+      py_outputs = py_structure;
+      tree_cache().insert({fun_id, py_outputs});
+    }
+
     return tree_unflatten_from_structure(py_outputs, outputs);
   }
 

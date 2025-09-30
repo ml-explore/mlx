@@ -34,18 +34,20 @@ struct VisualStudioInfo {
     arch = "x64";
 #endif
     // Get path of Visual Studio.
-    std::string vs_path = JitCompiler::exec(fmt::format(
-        "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
-        " -property installationPath",
-        std::getenv("ProgramFiles(x86)")));
+    std::string vs_path = JitCompiler::exec(
+        fmt::format(
+            "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
+            " -property installationPath",
+            std::getenv("ProgramFiles(x86)")));
     if (vs_path.empty()) {
       throw std::runtime_error("Can not find Visual Studio.");
     }
     // Read the envs from vcvarsall.
-    std::string envs = JitCompiler::exec(fmt::format(
-        "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",
-        vs_path,
-        arch));
+    std::string envs = JitCompiler::exec(
+        fmt::format(
+            "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",
+            vs_path,
+            arch));
     for (const std::string& line : str_split(envs, '\n')) {
       // Each line is in the format "ENV_NAME=values".
       auto pos = line.find_first_of('=');
@@ -140,12 +142,13 @@ std::string JitCompiler::exec(const std::string& cmd) {
   int code = WEXITSTATUS(status);
 #endif
   if (code != 0) {
-    throw std::runtime_error(fmt::format(
-        "Failed to execute command with return code {0}: \"{1}\", "
-        "the output is: {2}",
-        code,
-        cmd,
-        ret));
+    throw std::runtime_error(
+        fmt::format(
+            "Failed to execute command with return code {0}: \"{1}\", "
+            "the output is: {2}",
+            code,
+            cmd,
+            ret));
   }
   return ret;
 }

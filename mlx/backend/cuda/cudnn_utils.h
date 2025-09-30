@@ -88,8 +88,9 @@ inline cudnnDataType_t dtype_to_cudnn_type(Dtype dtype) {
     case float64:
       return CUDNN_DATA_DOUBLE;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in Convolution: {}.", dtype_to_string(dtype)));
+      throw std::runtime_error(
+          fmt::format(
+              "Unsupported dtype in Convolution: {}.", dtype_to_string(dtype)));
   }
 }
 

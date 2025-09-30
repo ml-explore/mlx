@@ -668,17 +668,18 @@ class RingGroup : public GroupImpl {
       std::vector<std::future<void>> all_gathers;
       for (int i = 0; i < n_gathers; i++) {
         auto offset = i * bytes_per_gather;
-        all_gathers.emplace_back(pool_.enqueue(std::bind(
-            &RingGroup::all_gather_impl,
-            this,
-            input_ptr + offset,
-            output_ptr + offset,
-            nbytes,
-            offset + bytes_per_gather > nbytes ? nbytes - offset
-                                               : bytes_per_gather,
-            sockets_right_[i / 2],
-            sockets_left_[i / 2],
-            (i % 2) ? -1 : 1)));
+        all_gathers.emplace_back(pool_.enqueue(
+            std::bind(
+                &RingGroup::all_gather_impl,
+                this,
+                input_ptr + offset,
+                output_ptr + offset,
+                nbytes,
+                offset + bytes_per_gather > nbytes ? nbytes - offset
+                                                   : bytes_per_gather,
+                sockets_right_[i / 2],
+                sockets_left_[i / 2],
+                (i % 2) ? -1 : 1)));
       }
       for (auto& f : all_gathers) {
         f.wait();
@@ -788,17 +789,18 @@ class RingGroup : public GroupImpl {
       std::vector<std::future<void>> all_sums;
 
       for (int i = 0; i < n_reduces; i++) {
-        all_sums.emplace_back(pool_.enqueue(std::bind(
-            &RingGroup::all_reduce_impl<T, ReduceOp>,
-            this,
-            reinterpret_cast<T*>(
-                buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
-            reinterpret_cast<T*>(out_ptr) + i * step,
-            std::min(size, (i + 1) * step) - i * step,
-            sockets_right_[i / 2],
-            sockets_left_[i / 2],
-            (i % 2) ? -1 : 1,
-            reduce_op)));
+        all_sums.emplace_back(pool_.enqueue(
+            std::bind(
+                &RingGroup::all_reduce_impl<T, ReduceOp>,
+                this,
+                reinterpret_cast<T*>(
+                    buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
+                reinterpret_cast<T*>(out_ptr) + i * step,
+                std::min(size, (i + 1) * step) - i * step,
+                sockets_right_[i / 2],
+                sockets_left_[i / 2],
+                (i % 2) ? -1 : 1,
+                reduce_op)));
       }
       for (auto& f : all_sums) {
         f.wait();

@@ -89,11 +89,12 @@ class LRUCache {
     }
 
     if (env_name_ && ++cache_misses_ > 2 * capacity_) {
-      throw std::runtime_error(fmt::format(
-          "Cache thrashing is happening, please set the environment variable "
-          "{} to a larger value than {} to fix degraded performance.",
-          env_name_,
-          capacity_));
+      throw std::runtime_error(
+          fmt::format(
+              "Cache thrashing is happening, please set the environment variable "
+              "{} to a larger value than {} to fix degraded performance.",
+              env_name_,
+              capacity_));
     }
 
     vlist_.emplace_front(key, std::forward<U>(value));

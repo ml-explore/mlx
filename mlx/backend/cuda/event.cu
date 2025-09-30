@@ -119,9 +119,10 @@ void CudaEvent::init_pool() {
 class CopyableCudaEvent {
  public:
   explicit CopyableCudaEvent(Device& d)
-      : event_(std::make_shared<CudaEvent>(
-            d,
-            cudaEventDisableTiming | cudaEventBlockingSync)) {}
+      : event_(
+            std::make_shared<CudaEvent>(
+                d,
+                cudaEventDisableTiming | cudaEventBlockingSync)) {}
 
   void wait() {
     event_->wait();

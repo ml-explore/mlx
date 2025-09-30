@@ -185,11 +185,12 @@ void unary_op_gpu_inplace(
           }
         });
       } else {
-        throw std::runtime_error(fmt::format(
-            "Can not do unary op {} on input of {} with output of {}.",
-            op,
-            dtype_to_string(in.dtype()),
-            dtype_to_string(out.dtype())));
+        throw std::runtime_error(
+            fmt::format(
+                "Can not do unary op {} on input of {} with output of {}.",
+                op,
+                dtype_to_string(in.dtype()),
+                dtype_to_string(out.dtype())));
       }
     });
   });

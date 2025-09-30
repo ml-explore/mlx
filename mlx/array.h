@@ -518,9 +518,10 @@ template <typename T>
 array::array(
     std::initializer_list<T> data,
     Dtype dtype /* = TypeToDtype<T>() */)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          Shape{static_cast<ShapeElem>(data.size())},
-          dtype)) {
+    : array_desc_(
+          std::make_shared<ArrayDesc>(
+              Shape{static_cast<ShapeElem>(data.size())},
+              dtype)) {
   init(data.begin());
 }
 

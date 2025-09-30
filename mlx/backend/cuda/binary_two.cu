@@ -374,11 +374,12 @@ void binary_two_op_gpu_inplace(
           });
         }
       } else {
-        throw std::runtime_error(fmt::format(
-            "Can not do binary op {} on inputs of {} with result of {}.",
-            op,
-            dtype_to_string(a.dtype()),
-            dtype_to_string(out_a.dtype())));
+        throw std::runtime_error(
+            fmt::format(
+                "Can not do binary op {} on inputs of {} with result of {}.",
+                op,
+                dtype_to_string(a.dtype()),
+                dtype_to_string(out_a.dtype())));
       }
     });
   });

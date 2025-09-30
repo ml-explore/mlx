@@ -454,11 +454,12 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
           });
         });
       } else {
-        throw std::runtime_error(fmt::format(
-            "Can not do scan op {} on inputs of {} with result of {}.",
-            op_to_string<Op>(),
-            dtype_to_string(in.dtype()),
-            dtype_to_string(out.dtype())));
+        throw std::runtime_error(
+            fmt::format(
+                "Can not do scan op {} on inputs of {} with result of {}.",
+                op_to_string<Op>(),
+                dtype_to_string(in.dtype()),
+                dtype_to_string(out.dtype())));
       }
     });
   });

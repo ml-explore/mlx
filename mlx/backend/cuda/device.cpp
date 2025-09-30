@@ -46,9 +46,10 @@ Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
       &attr, cudaDevAttrConcurrentManagedAccess, device_));
   if (attr != 1) {
-    throw std::runtime_error(fmt::format(
-        "Device {} does not support synchronization in managed memory.",
-        device_));
+    throw std::runtime_error(
+        fmt::format(
+            "Device {} does not support synchronization in managed memory.",
+            device_));
   }
   // The cublasLt handle is used by matmul.
   make_current();

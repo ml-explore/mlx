@@ -17,7 +17,7 @@ template <
     bool transpose_a,
     bool transpose_b,
     typename AccumType = float>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void gather_mm_rhs(
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void gather_mm_rhs(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
     const device uint32_t* rhs_indices [[buffer(2)]],
@@ -248,7 +248,7 @@ template <
     bool transpose_a,
     bool transpose_b,
     typename AccumType = float>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void gather_mm(
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void gather_mm(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
     const device uint32_t* lhs_indices [[buffer(2)]],
