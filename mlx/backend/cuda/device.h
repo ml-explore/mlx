@@ -83,7 +83,7 @@ class CommandEncoder {
   }
 
   void add_completed_handler(std::function<void()> task);
-  void maybe_commit();
+  int get_num_ops();
   void commit();
 
   Device& device() {
