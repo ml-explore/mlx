@@ -1007,6 +1007,14 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     std::uintptr_t fun_id,
     bool shapeless /* = false */,
     std::vector<uint64_t> constants /* = {} */) {
+  if (skip_compile()) {
+    return fun;
+  }
+  if (!fun) {
+    throw std::invalid_argument(
+        "[compile] Cannot compile a function without a target.");
+  }
+
   ArrayFnWithExtra fun_with_extra =
       [fun = std::move(fun)](const std::vector<array>& inputs) {
         return std::pair<std::vector<array>, std::shared_ptr<void>>{
