@@ -995,7 +995,7 @@ ArrayFnWithExtra compile(
 
     // At this point we must have a tape, now replace the placeholders
     // with real arrays that can be evaluated
-    return std::pair<std::vector<array>, std::shared_ptr<void>>{
+    return ArraysAndExtra{
         compile_replace(
             entry.tape, entry.inputs, entry.outputs, inputs, shapeless),
         entry.extra};
@@ -1017,8 +1017,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 
   ArrayFnWithExtra fun_with_extra =
       [fun = std::move(fun)](const std::vector<array>& inputs) {
-        return std::pair<std::vector<array>, std::shared_ptr<void>>{
-            fun(inputs), nullptr};
+        return ArraysAndExtra{fun(inputs), nullptr};
       };
 
   auto compiled_fun = compile(
