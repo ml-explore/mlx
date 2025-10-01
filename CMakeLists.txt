@@ -173,7 +173,7 @@ if(MLX_BUILD_CPU)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
     set(MLX_BUILD_ACCELERATE ON)
   else()
-    message(STATUS "Accelerate or arm neon not found, using default backend.")
+    message(STATUS "Accelerate not found, using default backend.")
     set(MLX_BUILD_ACCELERATE OFF)
   endif()
 
