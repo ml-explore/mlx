@@ -19,6 +19,7 @@
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
 #include "mlx/threadpool.h"
 
@@ -373,39 +374,6 @@ std::vector<int> make_connections(
   return sockets;
 }
 
-template <typename T>
-struct SumOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output += *input;
-      input++;
-      output++;
-    }
-  }
-};
-
-template <typename T>
-struct MaxOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output = std::max(*output, *input);
-      input++;
-      output++;
-    }
-  }
-};
-
-template <typename T>
-struct MinOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output = std::min(*output, *input);
-      input++;
-      output++;
-    }
-  }
-};
-
 } // namespace
 
 class RingGroup : public GroupImpl {
@@ -506,17 +474,17 @@ class RingGroup : public GroupImpl {
 
   void all_sum(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, SumOp<T>>(input, output, stream, SumOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::SumOp<T>()));
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, MaxOp<T>>(input, output, stream, MaxOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::MaxOp<T>()));
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, MinOp<T>>(input, output, stream, MinOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::MinOp<T>()));
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
