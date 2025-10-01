@@ -3442,6 +3442,23 @@ array scatter_min(
   return scatter(a, indices, updates, axes, Scatter::Min, s);
 }
 
+array masked_scatter(
+    const array& a,
+    const array& mask,
+    const array& src,
+    StreamOrDevice s /* =  {} */) {
+  if (mask.dtype() != bool_) {
+    throw std::invalid_argument(
+        "[masked_scatter] Mask has to be boolean type.");
+  }
+
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<MaskedScatter>(to_stream(s), /*vmap_axis=*/-1),
+      {a, broadcast_to(mask, a.shape(), s), src});
+}
+
 array sqrt(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(a.dtype());
   return array(

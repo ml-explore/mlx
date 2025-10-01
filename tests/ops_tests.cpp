@@ -2421,6 +2421,210 @@ TEST_CASE("test scatter") {
   }
 }
 
+TEST_CASE("test masked_scatter") {
+  // Wrong mask dtype
+  CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
+
+  // Mask must be broadcastable to self array
+  CHECK_THROWS(masked_scatter(
+      array({1, 2, 3, 4}, {2, 2}),
+      array({false, true, true, false}, {4, 1}),
+      array({1, 2})));
+
+  // 1D mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({true, true, false, true});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source, Device::cpu);
+    CHECK(array_equal(out, array({1, 2, 0, 4})).item<bool>());
+  }
+
+  // Empty mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({false, false, false, false});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source, Device::cpu);
+    CHECK(array_equal(out, self).item<bool>());
+  }
+
+  // Broadcasted mask
+  {
+    auto self = zeros({2, 2}, int32);
+    auto mask = array({true, false});
+    auto source = array({5, 6, 7});
+    auto out = masked_scatter(self, mask, source, Device::cpu);
+    CHECK(array_equal(out, array({5, 0, 6, 0}, {2, 2})).item<bool>());
+  }
+}
+
+TEST_CASE("test scatter") {
+  // More indices than dimensions
+  CHECK_THROWS(scatter(array(0), array({1}), array(1), 0));
+
+  // Mismatch dimensions and indices
+  CHECK_THROWS(scatter(array({0}), {array({0})}, array({1}, {1, 1}), {0, 1}));
+  CHECK_THROWS(scatter(array({0}), array({0}), array({1}, {1, 1}), -1));
+
+  // Repeat dimensions
+  CHECK_THROWS(scatter(
+      array({0}, {1, 1}), {array({0}), array({0})}, array({1}), {0, 0}));
+
+  // Update sizes incorrect
+  CHECK_THROWS(scatter(array({0}), array({0}), array({0, 1}), 0));
+  CHECK_THROWS(scatter(array({0}), array({0}), array({0, 1}, {2, 1}), 0));
+  CHECK_THROWS(scatter(array({0}, {1}), array({0}), array({0, 1}, {1, 2}), 0));
+
+  // Wrong index type
+  CHECK_THROWS(scatter(array({0}), array({0.0f}), array({0}, {1, 1}), 0));
+  CHECK_THROWS(scatter(
+      array({0}, {1, 1}),
+      {array({0}), array({0.0f})},
+      array({1}, {1, 1, 1}),
+      {0, 1}));
+
+  // Index arrays must be broadcastable
+  CHECK_THROWS(scatter(
+      array({0}, {1, 1}),
+      {array({0, 0, 0}, {3}), array({0, 0}, {2})},
+      ones({3, 2, 1, 1}),
+      {0, 1}));
+
+  // Single element scatter
+  auto in = zeros({4}, float32);
+  auto inds = arange(2);
+  auto updates = ones({2, 1}, float32);
+  auto out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, array({1.0f, 1.0f, 0.0f, 0.0f})).item<bool>());
+
+  // Single element scatter add
+  in = ones({4}, float32);
+  inds = array({0, 0, 3});
+  updates = ones({3, 1}, float32);
+  out = scatter_add(in, inds, updates, 0);
+  CHECK(array_equal(out, array({3.0f, 1.0f, 1.0f, 2.0f})).item<bool>());
+
+  // Single element scatter prod
+  in = ones({4}, float32);
+  inds = array({0, 0, 3});
+  updates = full({3, 1}, 2.0f, float32);
+  out = scatter_prod(in, inds, updates, 0);
+  CHECK(array_equal(out, array({4.0f, 1.0f, 1.0f, 2.0f})).item<bool>());
+
+  // Single element scatter max
+  in = ones({4}, float32);
+  inds = array({0, 0, 3});
+  updates = array({1.0f, 6.0f, -2.0f}, {3, 1});
+  out = scatter_max(in, inds, updates, 0);
+  CHECK(array_equal(out, array({6.0f, 1.0f, 1.0f, 1.0f})).item<bool>());
+
+  // Single element scatter min
+  in = ones({4}, float32);
+  inds = array({0, 0, 3});
+  updates = array({1.0f, -6.0f, 2.0f}, {3, 1});
+  out = scatter_min(in, inds, updates, 0);
+  CHECK(array_equal(out, array({-6.0f, 1.0f, 1.0f, 1.0f})).item<bool>());
+
+  // Empty scatter
+  in = arange(4, float32);
+  inds = astype(array({}), uint32);
+  updates = reshape(array({}), {0, 1});
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, in).item<bool>());
+
+  // Array scatters
+  in = zeros({4, 4}, float32);
+  inds = array({0, 1, 2, 3});
+  updates = reshape(arange(16, float32), {4, 1, 4});
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
+
+  // Array scatters with col contiguous updates
+  in = zeros({4, 4}, float32);
+  inds = array({0, 1, 2, 3});
+  updates = transpose(reshape(arange(16, float32), {4, 1, 4}));
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, transpose(reshape(arange(16, float32), {4, 4})))
+            .item<bool>());
+
+  // Irregular strided index and reduce collision test
+  in = zeros({10}, float32);
+  inds = broadcast_to(array(3), {10});
+  updates = ones({10, 1}, float32);
+  out = scatter_add(in, inds, updates, 0);
+  CHECK_EQ(take(out, array(3)).item<float>(), 10);
+
+  // 1 element array with 0 dim index
+  in = array({1}, int32);
+  updates = array({2}, int32);
+  out = scatter_max(in, array(0), updates, 0);
+  CHECK_EQ(out.item<int>(), 2);
+
+  // No index arrays or axes
+  out = scatter_max(array(1), {}, array(2), std::vector<int>{});
+  CHECK_EQ(out.item<int>(), 2);
+
+  // Irregularly strided updates test
+  in = ones({3, 3});
+  updates = broadcast_to(array({2, 2, 2}), {1, 3, 3});
+  inds = array({0});
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, ones({3, 3}) * 2).item<bool>());
+
+  // Along different axis
+  in = zeros({2, 3});
+  updates = array({1, 2, 3, 4}, {2, 2, 1});
+  inds = array({0, 2});
+  out = scatter(in, inds, updates, 1);
+  auto expected = array({1, 0, 3, 2, 0, 4}, {2, 3});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Multiple index arrays
+  in = zeros({2, 2});
+  updates = array({1, 2}, {2, 1, 1});
+  inds = array({0, 1});
+  out = scatter(in, {inds, inds}, updates, {0, 1});
+  CHECK(array_equal(out, array({1, 0, 0, 2}, {2, 2})).item<bool>());
+
+  // Broadcasted indices
+  in = zeros({2, 2});
+  updates = array({5, 2, 9, 1}, {2, 2, 1, 1});
+  auto inds0 = array({0, 1}, {2, 1});
+  auto inds1 = array({0, 1}, {1, 2});
+  out = scatter(in, {inds0, inds1}, updates, {0, 1});
+  CHECK(array_equal(out, array({5, 2, 9, 1}, {2, 2})).item<bool>());
+
+  // Brodacasted operand
+  in = broadcast_to(array({0, 0}), {2, 2});
+  updates = array({1, 1}, {2, 1, 1});
+  inds = array({0, 1});
+  out = scatter_add(in, inds, updates, 0);
+  CHECK(array_equal(out, array({1, 0, 1, 0}, {2, 2})).item<bool>());
+
+  // 1D scatter
+  {
+    auto dst = zeros({2, 4}, int32);
+    auto src = reshape(array({1, 2, 3, 4}), {1, 1, 4});
+    auto idx = array({1});
+    auto expected = reshape(array({0, 0, 0, 0, 1, 2, 3, 4}), {2, 4});
+    auto out = scatter(dst, idx, src, 0);
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
+  // 1D indices with 2D update
+  {
+    auto dst = zeros({3, 4}, int32);
+    auto indices = {array({1}), array({2})};
+    auto axes = {0, 1};
+    auto updates = reshape(array({1, 2, 3, 4}, int32), {1, 2, 2});
+    auto out = scatter(dst, indices, updates, axes);
+    auto expected =
+        reshape(array({0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 3, 4}), {3, 4});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test is positive infinity") {
   array x(1.0f);
   CHECK_FALSE(isposinf(x).item<bool>());

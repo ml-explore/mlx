@@ -1260,7 +1260,6 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_put_along_axis(self):
         for ax in [None, 0, 1, 2]:
-
             a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
             a_mlx = mx.array(a_np)
 
@@ -3133,6 +3132,41 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.depends(b, c)
         self.assertTrue(mx.array_equal(out, b))
 
+    def test_masked_scatter(self):
+        # functional and method outputs match
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = mx.array([True, False, True])
+        src = mx.array([5.0, 6.0])
+        out = mx.masked_scatter(a, mask, src, stream=mx.cpu)
+        self.assertTrue(mx.array_equal(out, mx.array([5.0, 2.0, 6.0])))
+        out_array = a.masked_scatter(mask, src, stream=mx.cpu)
+        self.assertTrue(mx.array_equal(out_array, out))
+        self.assertTrue(mx.array_equal(a, mx.array([1.0, 2.0, 3.0])))
+
+        # non-boolean mask raises
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = mx.array([1, 0, 1])
+        src = mx.array([4.0, 5.0])
+        with self.assertRaises((TypeError, ValueError)):
+            mx.masked_scatter(a, mask, src, stream=mx.cpu)
+
+        # broadcasted mask and source
+        a = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        mask = mx.array([[True], [False]])  # broadcasts along axis 1
+        src = mx.array([2.0, 3.0, 4.0])
+        out = mx.masked_scatter(a, mask, src, stream=mx.cpu)
+        expected = mx.array([[2.0, 3.0, 4.0], [1.0, 1.0, 1.0]])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        # mask with no updates returns self
+        a = mx.array([[7.0, 8.0], [9.0, 10.0]])
+        mask = mx.zeros_like(a).astype(mx.bool_)
+        src = mx.array([1.0])
+        out = mx.masked_scatter(a, mask, src, stream=mx.cpu)
+        self.assertTrue(mx.array_equal(out, a))
+
+
+class TestBroadcast(mlx_tests.MLXTestCase):
     def test_broadcast_shapes(self):
         # Basic broadcasting
         self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))

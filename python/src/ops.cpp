@@ -4094,6 +4094,37 @@ void init_ops(nb::module_& m) {
                obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
       )pbdoc");
   m.def(
+      "masked_scatter",
+      [](const mx::array& a,
+         const mx::array& mask,
+         const mx::array& src,
+         mx::StreamOrDevice s) { return mx::masked_scatter(a, mask, src, s); },
+      nb::arg(),
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def masked_scatter(a: array, mask: array, src: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Scatter values from ``src`` into ``a`` at locations indicated by ``mask``.
+
+        The mask must be of boolean type and is broadcast against the shape of ``a``.
+        For every ``True`` entry in ``mask`` the corresponding value from ``src`` is
+        written into ``a``.
+        The source should have at least as many elements as the number of ``True`` in
+        ``mask``.
+
+        Args:
+            a (array): Input array providing the base values.
+            mask (array): Boolean mask that selects positions to update. Broadcasts
+              against ``a``.
+            src (array): Source values used to update ``a`` at masked positions.
+
+        Returns:
+            array: The updated array.
+      )pbdoc");
+  m.def(
       "where",
       [](const ScalarOrArray& condition,
          const ScalarOrArray& x_,

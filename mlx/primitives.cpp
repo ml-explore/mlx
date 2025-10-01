@@ -1317,15 +1317,15 @@ Shape Convolution::conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
-          << pads_lo << " | " << pads_hi << ".";
+      msg << "[conv] Padding sizes must be non-negative."
+          << " Got padding " << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
     if (strides[i - 1] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive." << " Got strides "
-          << strides << ".";
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -4346,6 +4346,34 @@ std::vector<Shape> ScatterAxis::output_shapes(
 bool ScatterAxis::is_equivalent(const Primitive& other) const {
   auto& s_other = static_cast<const ScatterAxis&>(other);
   return reduce_type_ == s_other.reduce_type_ && axis_ == s_other.axis_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [self, mask, src, to_ax] = vmap_ternary_op(inputs, axes, stream());
+  if (to_ax == -1) {
+    return {{masked_scatter(self, mask, src, stream())}, {to_ax}};
+  }
+
+  if (mask.dtype() != bool_) {
+    throw std::invalid_argument(
+        "[masked_scatter] Mask has to be boolean type.");
+  }
+
+  auto broadcast_mask = broadcast_to(mask, self.shape(), stream());
+  auto self_front = moveaxis(self, to_ax, 0, stream());
+  auto mask_front = moveaxis(broadcast_mask, to_ax, 0, stream());
+  auto src_front = moveaxis(src, to_ax, 0, stream());
+
+  auto scattered_front = array(
+      self_front.shape(),
+      self_front.dtype(),
+      std::make_shared<MaskedScatter>(stream(), /*vmap_axis=*/0),
+      {self_front, mask_front, src_front});
+
+  auto scattered = moveaxis(scattered_front, 0, to_ax, stream());
+  return {{scattered}, {to_ax}};
 }
 
 std::vector<array> Sigmoid::vjp(
