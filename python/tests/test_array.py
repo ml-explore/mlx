@@ -2005,6 +2005,7 @@ class TestArray(mlx_tests.MLXTestCase):
             b = mx.reshape(b, [])
             return b
 
+        mx.synchronize()
         t()
         gc.collect()
         expected = get_mem()

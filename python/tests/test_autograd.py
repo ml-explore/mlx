@@ -746,6 +746,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
             mx.checkpoint,
         ]:
             mx.synchronize()
+            gc.collect()
             mem_pre = mx.get_active_memory()
 
             def outer():
