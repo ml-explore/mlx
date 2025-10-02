@@ -9,8 +9,12 @@
 #include "mlx/backend/metal/kernels/ternary.h"
 
 #define instantiate_ternary_base(op, tname, type)                    \
-  instantiate_kernel("v_" #op #tname, ternary_v, type, op, 1)        \
-  instantiate_kernel("v2_" #op #tname, ternary_v2, type, op)         \
+  instantiate_kernel("v_" #op #tname, ternary_v, type, op, false, false, 1) \
+  instantiate_kernel("v2_" #op #tname, ternary_v2, type, op, false, false)  \
+  instantiate_kernel("vs_" #op #tname, ternary_v, type, op, false, true, 1) \
+  instantiate_kernel("vs2_" #op #tname, ternary_v2, type, op, false, true)  \
+  instantiate_kernel("sv_" #op #tname, ternary_v, type, op, true, false, 1) \
+  instantiate_kernel("sv2_" #op #tname, ternary_v2, type, op, true, false)  \
   instantiate_kernel("gn2_" #op #tname, ternary_g, type, op, 2, int) \
   instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op, int) \
   instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op, int) \
@@ -21,7 +25,9 @@
   instantiate_kernel("gn4large_" #op #tname, ternary_g, type, op, 4) \
 
 #define instantiate_ternary_all(op, tname, type)            \
-  instantiate_kernel("vn_" #op #tname, ternary_v, type, op) \
+  instantiate_kernel("vn_" #op #tname, ternary_v, type, op, false, false) \
+  instantiate_kernel("vsn_" #op #tname, ternary_v, type, op, false, true) \
+  instantiate_kernel("svn_" #op #tname, ternary_v, type, op, true, false) \
   instantiate_ternary_base(op, tname, type)
 
 #define instantiate_ternary_types(op)               \

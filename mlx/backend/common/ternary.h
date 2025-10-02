@@ -11,6 +11,8 @@ namespace mlx::core {
 enum class TernaryOpType {
   ScalarScalarScalar,
   VectorVectorVector,
+  VectorVectorScalar,
+  VectorScalarVector,
   General,
 };
 
@@ -25,6 +27,14 @@ get_ternary_op_type(const array& a, const array& b, const array& c) {
       (a.flags().col_contiguous && b.flags().col_contiguous &&
        c.flags().col_contiguous)) {
     topt = TernaryOpType::VectorVectorVector;
+  } else if (
+      b.data_size() == 1 && a.flags().row_contiguous &&
+      c.flags().row_contiguous) {
+    topt = TernaryOpType::VectorScalarVector;
+  } else if (
+      c.data_size() == 1 && a.flags().row_contiguous &&
+      b.flags().row_contiguous) {
+    topt = TernaryOpType::VectorVectorScalar;
   } else {
     topt = TernaryOpType::General;
   }
@@ -59,6 +69,8 @@ inline void set_ternary_op_output_data(
             b.flags());
       }
       break;
+    case TernaryOpType::VectorVectorScalar:
+    case TernaryOpType::VectorScalarVector:
     case TernaryOpType::General:
       // Try to donate an input which is row_contiguous
       if (!((a.flags().row_contiguous && maybe_donate(a)) ||
