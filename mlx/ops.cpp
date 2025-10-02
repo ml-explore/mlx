@@ -348,16 +348,16 @@ array tril(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[tril] array must be at least 2-D");
   }
-  auto mask = tri(x.shape(-2), x.shape(-1), k, x.dtype(), s);
-  return where(mask, x, zeros_like(x, s), s);
+  auto mask = tri(x.shape(-2), x.shape(-1), k, bool_, s);
+  return where(mask, x, array(0, x.dtype()), s);
 }
 
 array triu(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[triu] array must be at least 2-D");
   }
-  auto mask = tri(x.shape(-2), x.shape(-1), k - 1, x.dtype(), s);
-  return where(mask, zeros_like(x, s), x, s);
+  auto mask = tri(x.shape(-2), x.shape(-1), k - 1, bool_, s);
+  return where(mask, array(0, x.dtype()), x, s);
 }
 
 array reshape(const array& a, Shape shape, StreamOrDevice s /* = {} */) {
