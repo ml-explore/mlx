@@ -7,8 +7,6 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_reduce.cuh>
 
 namespace mlx::core {
 
