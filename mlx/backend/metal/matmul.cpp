@@ -86,7 +86,13 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
 
 #define GEMM_TPARAM_MACRO(devc)                                           \
   if (devc == 'g' || devc == 'p') { /* Small device */                    \
-    if (!transpose_a && transpose_b) { /* nt */                           \
+    if (out.dtype() == complex64) {                                       \
+      bm = 64;                                                            \
+      bn = 32;                                                            \
+      bk = 8;                                                             \
+      wm = 4;                                                             \
+      wn = 1;                                                             \
+    } else if (!transpose_a && transpose_b) { /* nt */                    \
       bm = 64;                                                            \
       bn = 32;                                                            \
       bk = 32;                                                            \
@@ -362,7 +368,11 @@ void steel_gemm_splitk_axpby(
   int gemm_k_iterations = (K / bk) / split_k_partitions;
   int split_k_partition_size = gemm_k_iterations * bk;
 
-  array C_split({split_k_partitions, M, N}, float32, nullptr, {});
+  array C_split(
+      {split_k_partitions, M, N},
+      issubdtype(out.dtype(), complexfloating) ? complex64 : float32,
+      nullptr,
+      {});
   C_split.set_data(allocator::malloc(C_split.nbytes()));
   copies.push_back(C_split);
 
@@ -807,9 +817,8 @@ inline void gemv(
 
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
-  if (!issubdtype(out.dtype(), floating)) {
-    throw std::runtime_error(
-        "[matmul] Does not yet support non-floating point types.");
+  if (!issubdtype(out.dtype(), inexact)) {
+    throw std::runtime_error("[matmul] dtype must be inexact.");
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -1338,7 +1347,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_" << (mn_aligned ? "t" : "n")
-        << "aligned" << "_K_" << (k_aligned ? "t" : "n") << "aligned";
+        << "aligned"
+        << "_K_" << (k_aligned ? "t" : "n") << "aligned";
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);

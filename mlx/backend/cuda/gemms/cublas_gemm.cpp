@@ -50,8 +50,10 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
       return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
                                            : CUBLAS_COMPUTE_32F;
     case float64:
-    case complex64:
       return CUBLAS_COMPUTE_64F;
+    case complex64:
+      return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
+                                           : CUBLAS_COMPUTE_32F;
     default:
       throw std::runtime_error(fmt::format(
           "Unsupported dtype in CublasGemm: {}.", dtype_to_string(dtype)));
@@ -126,12 +128,13 @@ CublasGemm::CublasGemm(
       N_(b_cols) {
   heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
-  auto scale_type = dtype_to_cublas_type(dtype);
+  scale_type_ = dtype_to_cublas_type(dtype);
   if (dtype == bfloat16 || dtype == float16) {
-    scale_type = CUDA_R_32F;
+    scale_type_ = CUDA_R_32F;
   }
+
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescCreate(
-      &matmul_desc_, dtype_to_compute_type(dtype), scale_type));
+      &matmul_desc_, dtype_to_compute_type(dtype), scale_type_));
   int32_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
@@ -352,6 +355,16 @@ void CublasGemm::execute(
     }
   }
 
+  const void* alpha_ptr = &alpha;
+  const void* beta_ptr = &beta;
+  complex64_t alpha_c, beta_c;
+  if (scale_type_ == CUDA_C_32F) {
+    alpha_c = complex64_t{alpha, 0.0f};
+    beta_c = complex64_t{beta, 0.0f};
+    alpha_ptr = &alpha_c;
+    beta_ptr = &beta_c;
+  }
+
   void* workspace_ptr = nullptr;
   if (heuristic_.workspaceSize > 0) {
     // Ensure workspace is 256-byte aligned
@@ -368,12 +381,12 @@ void CublasGemm::execute(
   CHECK_CUBLAS_ERROR(cublasLtMatmul(
       handle_,
       matmul_desc_,
-      &alpha,
+      alpha_ptr,
       b, // a and b are swapped
       a_desc_,
       a,
       b_desc_,
-      &beta,
+      beta_ptr,
       c ? c : out,
       c ? c_desc_ : out_desc_,
       out,

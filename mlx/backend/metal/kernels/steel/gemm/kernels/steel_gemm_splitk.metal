@@ -60,6 +60,7 @@
 instantiate_gemm_shapes_helper(float16, half, float32, float);
 instantiate_gemm_shapes_helper(bfloat16, bfloat16_t, float32, float);
 instantiate_gemm_shapes_helper(float32, float, float32, float);
+instantiate_gemm_shapes_helper(complex64, complex64_t, complex64, complex64_t);
 
 #define instantiate_accum(oname, otype, aname, atype)      \
   instantiate_kernel(                                      \
@@ -71,4 +72,5 @@ instantiate_gemm_shapes_helper(float32, float, float32, float);
 
 instantiate_accum(bfloat16, bfloat16_t, float32, float);
 instantiate_accum(float16, half, float32, float);
-instantiate_accum(float32, float, float32, float); // clang-format on
+instantiate_accum(float32, float, float32, float);
+instantiate_accum(complex64, complex64_t, complex64, complex64_t); // clang-format on
