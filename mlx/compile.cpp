@@ -95,6 +95,11 @@ Compiled::Compiled(
   std::ostringstream os;
   std::ostringstream constant_hasher;
 
+  std::unordered_set<uintptr_t> output_ids;
+  for (auto& o : outputs_) {
+    output_ids.insert(o.id());
+  }
+
   // Fill the input names. This is not really necessary, I just like having A,
   // B, C, ... as the inputs.
   for (const auto& x : inputs_) {
@@ -106,6 +111,12 @@ Compiled::Compiled(
   for (const auto& a : tape_) {
     // name and type of output
     os << namer.get_name(a) << kindof(a.dtype()) << a.itemsize();
+    // whether or not it's an output
+    if (output_ids.find(a.id()) != output_ids.end()) {
+      os << "O";
+    } else {
+      os << "I";
+    }
     // computation performed
     os << a.primitive().name();
     // name of inputs to the function
