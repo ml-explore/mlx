@@ -718,6 +718,13 @@ array topk(const array& a, int k, int axis, StreamOrDevice s = {});
 /** Cumulative logsumexp of an array. */
 array logcumsumexp(
     const array& a,
+    bool reverse = false,
+    bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** Cumulative logsumexp of an array along the given axis. */
+array logcumsumexp(
+    const array& a,
     int axis,
     bool reverse = false,
     bool inclusive = true,
@@ -1188,12 +1195,26 @@ array power(const array& a, const array& b, StreamOrDevice s = {});
 /** Cumulative sum of an array. */
 array cumsum(
     const array& a,
+    bool reverse = false,
+    bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** Cumulative sum of an array along the given axis. */
+array cumsum(
+    const array& a,
     int axis,
     bool reverse = false,
     bool inclusive = true,
     StreamOrDevice s = {});
 
 /** Cumulative product of an array. */
+array cumprod(
+    const array& a,
+    bool reverse = false,
+    bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** Cumulative product of an array along the given axis. */
 array cumprod(
     const array& a,
     int axis,
@@ -1204,12 +1225,26 @@ array cumprod(
 /** Cumulative max of an array. */
 array cummax(
     const array& a,
+    bool reverse = false,
+    bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** Cumulative max of an array along the given axis. */
+array cummax(
+    const array& a,
     int axis,
     bool reverse = false,
     bool inclusive = true,
     StreamOrDevice s = {});
 
 /** Cumulative min of an array. */
+array cummin(
+    const array& a,
+    bool reverse = false,
+    bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** Cumulative min of an array along the given axis. */
 array cummin(
     const array& a,
     int axis,
