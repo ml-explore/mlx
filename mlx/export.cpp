@@ -222,7 +222,6 @@ void extract_state(const T state, std::vector<StateT>& unpacked_state) {
   }
 }
 
-// std::vector<StateT> extract_state(const Primitive& p) {
 template <typename T>
 std::vector<StateT> primitive_state(const Primitive& p) {
   std::vector<StateT> state;
@@ -628,8 +627,9 @@ void FunctionExporter::export_with_callback(
   // Callback on the inputs
   callback({{"type", "inputs"}, {"inputs", to_vector_data(inputs)}});
   std::vector<std::pair<std::string, std::string>> keyword_inputs;
-  for (int i = inputs.size() - kwarg_keys.size(); i < inputs.size(); ++i) {
-    keyword_inputs.emplace_back(kwarg_keys[i], namer.get_name(inputs[i]));
+  for (int i = inputs.size() - kwarg_keys.size(), j = 0; i < inputs.size();
+       ++i, ++j) {
+    keyword_inputs.emplace_back(kwarg_keys[j], namer.get_name(inputs[i]));
   }
   callback({{"type", "keyword_inputs"}, {"keywords", keyword_inputs}});
 

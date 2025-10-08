@@ -498,6 +498,39 @@ class TestExportImport(mlx_tests.MLXTestCase):
         out = imported(y=mx.array(2.0), x=mx.array(3.0))[0]
         self.assertEqual(out.item(), 1.0)
 
+    def test_export_with_callback(self):
+
+        def fn(x, y):
+            return mx.log(mx.abs(x - y))
+
+        n_in = None
+        n_out = None
+        n_const = None
+        keywords = None
+        primitives = []
+
+        def callback(args):
+            nonlocal n_in, n_out, n_const, keywords, primitives
+            t = args["type"]
+            if t == "inputs":
+                n_in = len(args["inputs"])
+            elif args["type"] == "outputs":
+                n_out = len(args["outputs"])
+            elif args["type"] == "keyword_inputs":
+                keywords = args["keywords"]
+            elif t == "constants":
+                n_const = len(args["constants"])
+            elif t == "primitive":
+                primitives.append(args["name"])
+
+        mx.export_function(callback, fn, mx.array(1.0), y=mx.array(1.0))
+        self.assertEqual(n_in, 2)
+        self.assertEqual(n_out, 1)
+        self.assertEqual(n_const, 0)
+        self.assertEqual(len(keywords), 1)
+        self.assertEqual(keywords[0][0], "y")
+        self.assertEqual(primitives, ["Subtract", "Abs", "Log"])
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
