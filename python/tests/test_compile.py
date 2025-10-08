@@ -319,7 +319,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         # Check the state is unchanged
         self.assertEqual(state["y"], 2)
 
-        # Check the udpated state is used
+        # Check the updated state is used
         state["y"] = mx.array(3)
         out = test_state(mx.array(1))
         self.assertEqual(out.item(), 4)

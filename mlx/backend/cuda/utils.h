@@ -1,6 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-// This file include utilies that are used by C++ code (i.e. .cpp files).
+// This file include utilities that are used by C++ code (i.e. .cpp files).
 
 #pragma once
 

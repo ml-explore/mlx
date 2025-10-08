@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-// This file includes host-only utilies for writing CUDA kernels, the difference
-// from backend/cuda/device/utils.cuh is that the latter file only include
-// device-only code.
+// This file includes host-only utilities for writing CUDA kernels, the
+// difference from backend/cuda/device/utils.cuh is that the latter file only
+// include device-only code.
 
 #pragma once
 
