@@ -1041,6 +1041,12 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = 1 / (1 + np.exp(-a, dtype=np.float32))
         self.assertTrue(np.allclose(result, expected))
 
+        # Low precision
+        a = mx.array(-8.0).astype(mx.float16)
+        self.assertNotEqual(mx.sigmoid(a).item(), 0.0)
+        a = mx.array(8.0).astype(mx.float16)
+        self.assertNotEqual(mx.sigmoid(a).item(), 1.0)
+
     def test_allclose(self):
         a = mx.array(1.0)
         b = mx.array(1.0)

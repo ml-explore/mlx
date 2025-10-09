@@ -77,7 +77,8 @@ struct Real {
 struct Sigmoid {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {
-    return 1.0f / (1.0f + simd::exp(-x));
+    auto y = 1.0f / (1.0f + simd::exp(simd::abs(x)));
+    return simd::select(x < Simd<T, N>{0}, y, Simd<T, N>{1} - y);
   }
   SINGLE()
 };
