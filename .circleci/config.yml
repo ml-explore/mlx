@@ -213,7 +213,7 @@ jobs:
         default: "2023.11.1"
     machine:
       image: "linux-cuda-12:<< parameters.image_date >>"
-      resource_class: gpu.nvidia.small.gen2
+      resource_class: gpu.nvidia.medium.multi 
     steps:
       - checkout
       - restore_cache:
