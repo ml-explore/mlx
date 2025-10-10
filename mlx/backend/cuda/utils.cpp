@@ -8,11 +8,41 @@
 
 namespace mlx::core {
 
-void check_cublas_error(const char* name, cublasStatus_t err) {
-  if (err != CUBLAS_STATUS_SUCCESS) {
-    // TODO: Use cublasGetStatusString when it is widely available.
-    throw std::runtime_error(
-        fmt::format("{} failed with code: {}.", name, static_cast<int>(err)));
+inline const char* cublasGetStatusStringLocal(cublasStatus_t status) {
+  switch (status) {
+    case CUBLAS_STATUS_SUCCESS: return "CUBLAS_STATUS_SUCCESS";
+    case CUBLAS_STATUS_NOT_INITIALIZED: return "CUBLAS_STATUS_NOT_INITIALIZED";
+    case CUBLAS_STATUS_ALLOC_FAILED: return "CUBLAS_STATUS_ALLOC_FAILED";
+    case CUBLAS_STATUS_INVALID_VALUE: return "CUBLAS_STATUS_INVALID_VALUE";
+    case CUBLAS_STATUS_ARCH_MISMATCH: return "CUBLAS_STATUS_ARCH_MISMATCH";
+    case CUBLAS_STATUS_MAPPING_ERROR: return "CUBLAS_STATUS_MAPPING_ERROR";
+    case CUBLAS_STATUS_EXECUTION_FAILED: return "CUBLAS_STATUS_EXECUTION_FAILED";
+    case CUBLAS_STATUS_INTERNAL_ERROR: return "CUBLAS_STATUS_INTERNAL_ERROR";
+#if CUDART_VERSION >= 11000
+    case CUBLAS_STATUS_NOT_SUPPORTED: return "CUBLAS_STATUS_NOT_SUPPORTED";
+    case CUBLAS_STATUS_LICENSE_ERROR: return "CUBLAS_STATUS_LICENSE_ERROR";
+#endif
+    default: return "Unknown cuBLAS status";
+  }
+}
+  
+inline void check_cublas_error(const char* name, cublasStatus_t status) {
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    cudaError_t cuda_err = cudaGetLastError();
+    const char* cuda_err_name = cudaGetErrorName(cuda_err);
+    const char* cuda_err_str  = cudaGetErrorString(cuda_err);
+
+    std::string msg = fmt::format(
+        "[cuBLAS] {} failed:\n"
+        "  cuBLAS status : {} ({})\n"
+        "  CUDA last err : {} ({})\n",
+        name,
+        cublasGetStatusStringLocal(status),
+        static_cast<int>(status),
+        cuda_err_name ? cuda_err_name : "unknown",
+        cuda_err_str ? cuda_err_str : "unknown");
+
+    throw std::runtime_error(msg);
   }
 }
 

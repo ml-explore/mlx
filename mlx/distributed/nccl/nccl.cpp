@@ -256,7 +256,6 @@ class NCCLGroup : public GroupImpl {
 
   ~NCCLGroup() {
     ncclCommDestroy(comm_);
-    ncclGroupEnd();
     initialized_ = false;
   }
 
