@@ -1365,8 +1365,7 @@ TEST_CASE("test masked_scatter autograd") {
     auto src_tan = array({9.f, 11.f}, {2});
 
     auto fun = [&mask](const std::vector<array>& in) {
-      return std::vector<array>{
-          masked_scatter(in[0], mask, in[1], Device::cpu)};
+      return std::vector<array>{masked_scatter(in[0], mask, in[1])};
     };
 
     auto outs = jvp(fun, {self, src}, {self_tan, src_tan}).second;

@@ -725,7 +725,7 @@ class TestVmap(mlx_tests.MLXTestCase):
 
     def test_vmap_masked_scatter(self):
         def scatter_fn(x, m, src):
-            return mx.masked_scatter(x, m, src, stream=mx.cpu)
+            return mx.masked_scatter(x, m, src)
 
         # Batched sources
         a = mx.array([[10, 20, 30, 40], [50, 60, 70, 80]])
