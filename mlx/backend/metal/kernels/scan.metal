@@ -51,6 +51,7 @@ using namespace metal;
   instantiate_strided_scan(reverse_exclusive_##name, itype, otype, op, false, true, nreads)
 
 instantiate_scan_helper(sum_bool__int32,         bool,        int32_t,     CumSum, 4)
+instantiate_scan_helper(sum_bool__uint32,        bool,        uint32_t,    CumSum, 4)
 instantiate_scan_helper(sum_uint8_uint8,         uint8_t,     uint8_t,     CumSum, 4)
 instantiate_scan_helper(sum_uint16_uint16,       uint16_t,    uint16_t,    CumSum, 4)
 instantiate_scan_helper(sum_uint32_uint32,       uint32_t,    uint32_t,    CumSum, 4)
