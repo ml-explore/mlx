@@ -131,10 +131,6 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
-  if (out.dtype() != float32) {
-    throw std::runtime_error(
-        "[AddMM::eval_cpu] Currently only supports float32.");
-  }
   if (out.size() == 0) {
     out.set_data(allocator::malloc(out.nbytes()));
     return;
