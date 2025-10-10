@@ -1933,7 +1933,7 @@ class MaskedScatter : public UnaryPrimitive {
       : UnaryPrimitive(stream), vmap_axis_(vmap_axis) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override {}
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP();
   DEFINE_GRADS();

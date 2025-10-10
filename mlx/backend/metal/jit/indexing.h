@@ -70,3 +70,62 @@ constexpr std::string_view scatter_kernels = R"(
       gid);
 }}
 )";
+
+constexpr std::string_view masked_assign_kernel = R"(
+[[kernel]] void masked_assign_{0}(
+    const device bool* mask [[buffer(0)]],
+    const device uint* idx_mask [[buffer(1)]],
+    const device {0}* src [[buffer(2)]],
+    device {0}* out [[buffer(3)]],
+    const constant uint& src_size [[buffer(4)]],
+    uint3 gid [[thread_position_in_grid]]) {{
+  uint index = static_cast<uint>(gid.x);
+  if (!static_cast<bool>(mask[index])) {{
+    return;
+  }}
+  uint src_index = static_cast<uint>(idx_mask[index]);
+  if (src_index >= src_size) {{
+    return;
+  }}
+  out[index] = src[src_index];
+}}
+)";
+
+constexpr std::string_view masked_assign_batched_kernel = R"(
+[[kernel]] void masked_assign_batched_{0}(
+    const device bool* mask [[buffer(0)]],
+    const device uint* idx_mask [[buffer(1)]],
+    const device {1}* src [[buffer(2)]],
+    device {1}* out [[buffer(3)]],
+    const constant uint& src_size [[buffer(4)]],
+    const constant uint& inner [[buffer(5)]],
+    const constant uint& src_block [[buffer(6)]],
+    const constant uint& src_capacity [[buffer(7)]],
+    uint3 gid [[thread_position_in_grid]]) {{
+  constexpr bool SRC_BATCHED = {2};
+  if (inner == static_cast<uint>(0)) {{
+    return;
+  }}
+  uint index = static_cast<uint>(gid.x);
+  if (!static_cast<bool>(mask[index])) {{
+    return;
+  }}
+  uint batch_idx = index / inner;
+  uint src_index = static_cast<uint>(idx_mask[index]) -
+      static_cast<uint>(idx_mask[batch_idx * inner]);
+  if (SRC_BATCHED) {{
+    if (src_index >= src_block) {{
+      return;
+    }}
+    src_index += batch_idx * src_block;
+  }} else {{
+    if (src_index >= src_capacity) {{
+      return;
+    }}
+  }}
+  if (src_index >= src_size) {{
+    return;
+  }}
+  out[index] = src[src_index];
+}}
+)";
