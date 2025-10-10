@@ -13,7 +13,7 @@ inline std::tuple<Shape, Strides, Strides> collapse_batches(
     const array& a,
     const array& b) {
   if (a.ndim() == 2) {
-    return {{1}, {0}, {0}};
+    return {Shape{1}, Strides{0}, Strides{0}};
   }
 
   Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
@@ -38,7 +38,7 @@ inline std::tuple<Shape, Strides, Strides> collapse_batches(
 inline std::tuple<Shape, Strides, Strides, Strides>
 collapse_batches(const array& a, const array& b, const array& c) {
   if (a.ndim() == 2) {
-    return {{1}, {0}, {0}, {0}};
+    return {Shape{1}, Strides{0}, Strides{0}, Strides{0}};
   }
 
   Shape A_bshape{a.shape().begin(), a.shape().end() - 2};
