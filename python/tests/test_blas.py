@@ -712,6 +712,15 @@ class TestBlas(mlx_tests.MLXTestCase):
             expected = beta * c + alpha * (a @ b)
             self.assertTrue(mx.allclose(expected, out))
 
+        # Test half precision
+        for t, tol in [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]:
+            c = mx.ones((32, 32)).astype(t)
+            a = mx.random.uniform(shape=(32, 32)).astype(t)
+            b = mx.random.uniform(shape=(32, 32)).astype(t)
+            out = mx.addmm(c, a, b)
+            expected = a @ b + c
+            self.assertTrue(mx.allclose(out, expected, rtol=tol, atol=tol))
+
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
             return lambda c, a, b: alpha * (a @ b) + beta * c
