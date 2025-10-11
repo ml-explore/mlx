@@ -641,4 +641,113 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
+void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
+  const array& self = inputs[0];
+  const array& mask = inputs[1];
+  const array& src = inputs[2];
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  const size_t total = mask.size();
+  if (total == 0) {
+    const CopyType ct = (self.data_size() == 1)
+        ? CopyType::Scalar
+        : (self.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+    copy_gpu(self, out, ct, s);
+    return;
+  }
+
+  if (src.dtype() != self.dtype()) {
+    throw std::invalid_argument(
+        "[MaskedScatter::eval_gpu] dtype(src) must match dtype(self).");
+  }
+
+  const Shape flat_shape{static_cast<ShapeElem>(total)};
+  auto flatten_contig = [&](const array& a) {
+    const Shape flat{static_cast<ShapeElem>(a.size())};
+    array tmp = reshape_in_eval(a, flat, s);
+    return contiguous_copy_gpu(tmp, s);
+  };
+
+  array mask_flat = flatten_contig(mask);
+  array out_flat = flatten_contig(self);
+  array src_flat = flatten_contig(src);
+
+  const bool batched = vmap_axis_ == 0 && mask.ndim() > 0;
+  const size_t batch = batched ? static_cast<size_t>(mask.shape(0)) : 1;
+  const size_t inner = batched && batch > 0 ? total / batch : total;
+  const bool src_batched =
+      batched && src.ndim() > 0 && src.shape(0) == static_cast<int>(batch);
+  const size_t src_block =
+      src_batched && batch > 0 ? (src_flat.size() / batch) : src_flat.size();
+  const size_t src_capacity = src_batched ? src_block : src_flat.size();
+
+  array idx_mask(flat_shape, uint32, nullptr, {});
+  idx_mask.set_data(allocator::malloc(idx_mask.nbytes()));
+
+  Scan cumsum(stream(), Scan::Sum, 0, false, false);
+  cumsum.eval_gpu({mask_flat}, idx_mask);
+
+  std::string value_type = get_type_string(out_flat.dtype());
+  auto make_unbatched_kernel = [&]() {
+    std::string kernel_name = fmt::format("masked_assign_{}", value_type);
+    std::string kernel_src = fmt::format(masked_assign_kernel, value_type);
+    return std::make_pair(kernel_name, kernel_src);
+  };
+
+  auto make_batched_kernel = [&]() {
+    std::string batched_kernel_tag =
+        fmt::format("{}_{}", value_type, src_batched ? "srcb" : "shared");
+    std::string kernel_name =
+        fmt::format("masked_assign_batched_{}", batched_kernel_tag);
+    std::string kernel_src = fmt::format(
+        masked_assign_batched_kernel,
+        batched_kernel_tag,
+        value_type,
+        src_batched ? "true" : "false");
+    return std::make_pair(kernel_name, kernel_src);
+  };
+
+  const bool needs_batched_kernel = batched && batch > 1;
+  const auto& [kernel_name, kernel_src] =
+      needs_batched_kernel ? make_batched_kernel() : make_unbatched_kernel();
+
+  auto build_kernel = [&](const std::string& kernel_name,
+                          const std::string& kernel_src) {
+    auto lib = d.get_library(kernel_name, [&]() {
+      std::string source = metal::utils();
+      source += kernel_src;
+      return source;
+    });
+    return d.get_kernel(kernel_name, lib);
+  };
+
+  auto kernel = build_kernel(kernel_name, kernel_src);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(mask_flat, 0);
+  compute_encoder.set_input_array(idx_mask, 1);
+  compute_encoder.set_input_array(src_flat, 2);
+  compute_encoder.set_output_array(out_flat, 3);
+
+  auto set_scalar_bytes = [&](auto caster) {
+    compute_encoder.set_bytes(caster(src_flat.size()), 4);
+    if (needs_batched_kernel) {
+      compute_encoder.set_bytes(caster(inner), 5);
+      compute_encoder.set_bytes(caster(src_block), 6);
+      compute_encoder.set_bytes(caster(src_capacity), 7);
+    }
+  };
+
+  set_scalar_bytes([](size_t v) { return static_cast<uint32_t>(v); });
+
+  auto group_dims = get_block_dims(total, 1, 1);
+  MTL::Size grid_dims(total, 1, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+  reshape_gpu(out_flat, out, s);
+}
+
 } // namespace mlx::core
