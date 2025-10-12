@@ -8,6 +8,7 @@
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/indexing.h"
 #include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -686,8 +687,14 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   array idx_mask(flat_shape, uint32, nullptr, {});
   idx_mask.set_data(allocator::malloc(idx_mask.nbytes()));
 
-  Scan cumsum(stream(), Scan::Sum, 0, false, false);
-  cumsum.eval_gpu({mask_flat}, idx_mask);
+  scan_gpu(
+      mask_flat,
+      idx_mask,
+      Scan::Sum,
+      /*axis=*/0,
+      /*reverse=*/false,
+      /*inclusive=*/false,
+      s);
 
   std::string value_type = get_type_string(out_flat.dtype());
   auto make_unbatched_kernel = [&]() {
@@ -748,6 +755,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   reshape_gpu(out_flat, out, s);
+  d.add_temporaries({mask_flat, src_flat, idx_mask, out_flat}, s.index);
 }
 
 } // namespace mlx::core
