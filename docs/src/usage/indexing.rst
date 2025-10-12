@@ -70,7 +70,8 @@ Differences from NumPy
 
   * Indexing does not perform bounds checking. Indexing out of bounds is
     undefined behavior.
-  * Boolean mask based indexing is not yet supported.
+  * Boolean mask based indexing is supported for assignment only (see
+    :ref:`boolean-mask-assignment`).
 
 The reason for the lack of bounds checking is that exceptions cannot propagate
 from the GPU. Performing bounds checking for array indices before launching the
@@ -143,3 +144,35 @@ expected. For example:
 
 In the above ``dfdx`` will have the correct gradient, namely zeros at ``idx``
 and ones elsewhere.
+
+.. _boolean-mask-assignment:
+
+Boolean Mask Assignment
+-----------------------
+
+MLX supports updating arrays with boolean masks using familiar NumPy syntax.
+A mask must already be a :class:`bool_` MLX :class:`array` or a NumPy
+``ndarray`` with ``dtype=bool``; other index types are routed through the
+standard scatter code.
+
+.. code-block:: shell
+
+   >>> a = mx.array([1.0, 2.0, 3.0])
+   >>> mask = mx.array([True, False, True])
+   >>> a[mask] = mx.array([5.0, 6.0])
+   >>> a
+   array([5.0, 2.0, 6.0], dtype=float32)
+
+Scalar assignments broadcast across every ``True`` entry:
+
+.. code-block:: shell
+
+   >>> b = mx.zeros((2, 3))
+   >>> mask = mx.array([[True], [False]])  # broadcasts along axis 1
+   >>> b[mask] = 1.0
+   >>> b
+   array([[1.0, 1.0, 1.0],
+          [0.0, 0.0, 0.0]], dtype=float32)
+
+See :func:`masked_scatter` for more about the masking semantics and
+requirements on update shapes.

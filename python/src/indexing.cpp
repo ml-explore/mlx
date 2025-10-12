@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <numeric>
+#include <optional>
 #include <sstream>
 
 #include "python/src/convert.h"
@@ -885,6 +886,22 @@ auto mlx_slice_update(
   return std::make_pair(true, out);
 }
 
+std::optional<mx::array> extract_boolean_mask(const nb::object& obj) {
+  using NDArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+  if (nb::isinstance<mx::array>(obj)) {
+    auto mask = nb::cast<mx::array>(obj);
+    if (mask.dtype() == mx::bool_) {
+      return mask;
+    }
+  } else if (nb::isinstance<NDArray>(obj)) {
+    auto mask = nb::cast<NDArray>(obj);
+    if (mask.dtype() == nb::dtype<bool>()) {
+      return nd_array_to_mlx(mask, mx::bool_);
+    }
+  }
+  return std::nullopt;
+}
+
 void mlx_set_item(
     mx::array& src,
     const nb::object& obj,
@@ -892,6 +909,16 @@ void mlx_set_item(
   auto [success, out] = mlx_slice_update(src, obj, v);
   if (success) {
     src.overwrite_descriptor(out);
+    return;
+  }
+
+  if (auto mask = extract_boolean_mask(obj)) {
+    auto updates = to_array(v, src.dtype());
+    if (updates.size() == 1) {
+      updates = broadcast_to(updates, src.shape());
+    }
+    auto result = masked_scatter(src, *mask, updates);
+    src.overwrite_descriptor(result);
     return;
   }
 
