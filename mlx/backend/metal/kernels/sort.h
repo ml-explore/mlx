@@ -19,11 +19,28 @@ METAL_FUNC void thread_swap(thread T& a, thread T& b) {
   b = w;
 }
 
+template <typename T, typename = void>
+struct Init {
+  static constexpr constant T v = Limits<T>::max;
+};
+
+template <typename T>
+struct Init<T, metal::enable_if_t<metal::is_floating_point_v<T>>> {
+  static constexpr constant T v = metal::numeric_limits<T>::quiet_NaN();
+};
+
 template <typename T>
 struct LessThan {
-  static constexpr constant T init = Limits<T>::max;
-
-  METAL_FUNC bool operator()(T a, T b) {
+  static constexpr constant T init = Init<T>::v;
+  METAL_FUNC bool operator()(T a, T b) const {
+    if constexpr (
+        metal::is_floating_point_v<T> || metal::is_same_v<T, complex64_t>) {
+      bool an = isnan(a);
+      bool bn = isnan(b);
+      if (an | bn) {
+        return (!an) & bn;
+      }
+    }
     return a < b;
   }
 };
