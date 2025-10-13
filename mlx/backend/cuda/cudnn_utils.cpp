@@ -210,6 +210,9 @@ std::optional<cudnn_frontend::ExecutionPlan> find_cudnn_plan_from_op_graph(
     Dtype dtype,
     cudnn_frontend::OperationGraph& op_graph) {
   auto engine_configs = get_cudnn_engine_configs(backend_type, dtype, op_graph);
+  if (engine_configs.empty()) {
+    return std::nullopt;
+  }
   return find_cudnn_plan_from_engine_configs(handle, engine_configs, op_graph);
 }
 
