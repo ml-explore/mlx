@@ -28,6 +28,44 @@ struct LessThan {
   }
 };
 
+template <typename T>
+struct NanLastLess {
+  static constexpr constant T init = Limits<T>::max;
+  METAL_FUNC bool operator()(T a, T b) const {
+    return a < b;
+  }
+};
+
+
+// Specialization for float
+template <>
+struct NanLastLess<float> {
+  static constexpr constant float init = NAN;
+  METAL_FUNC bool operator()(float a, float b) const {
+    bool an = isnan(a);
+    bool bn = isnan(b);
+    if (an | bn) {
+      return (!an) & bn;
+    }
+    return a < b;
+  }
+};
+
+
+// Specialization for half
+template <>
+struct NanLastLess<half> {
+  static constexpr constant half init = half(NAN);
+  METAL_FUNC bool operator()(half a, half b) const {
+    bool an = isnan(a);
+    bool bn = isnan(b);
+    if (an | bn) {
+      return (!an) & bn;
+    }
+    return a < b;
+  }
+};
+
 template <
     typename ValT,
     typename IdxT,
@@ -220,7 +258,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = LessThan<T>>
+    typename CompareOp = NanLastLess<T>>
 struct KernelMergeSort {
   using ValT = T;
   using IdxT = uint;
@@ -398,7 +436,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = LessThan<ValT>>
+    typename CompareOp = NanLastLess<ValT>>
 struct KernelMultiBlockMergeSort {
   using block_merge_sort_t = BlockMergeSort<
       ValT,
@@ -577,7 +615,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = LessThan<ValT>>
+    typename CompareOp = NanLastLess<ValT>>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 mb_block_merge(
     const device IdxT* block_partitions [[buffer(0)]],
