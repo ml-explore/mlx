@@ -1059,6 +1059,30 @@ TEST_CASE("test reduction ops") {
     x = array({1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
     CHECK(array_equal(max(x, 0), array({4.0f, NAN, 6.0f}), true).item<bool>());
     CHECK(array_equal(max(x, 1), array({NAN, 6.0f}), true).item<bool>());
+
+    // Test maximum and minimum with NaN values
+    x = array({1.0f, NAN, 3.0f});
+    auto y = array({NAN, 2.0f, 1.0f});
+    auto max_result = maximum(x, y);
+    auto min_result = minimum(x, y);
+    CHECK(array_equal(max_result, array({NAN, NAN, 3.0f}), true).item<bool>());
+    CHECK(array_equal(min_result, array({NAN, NAN, 1.0f}), true).item<bool>());
+
+    // Test with all NaN values
+    x = array({NAN, NAN, NAN});
+    y = array({NAN, NAN, NAN});
+    max_result = maximum(x, y);
+    min_result = minimum(x, y);
+    CHECK(array_equal(max_result, array({NAN, NAN, NAN}), true).item<bool>());
+    CHECK(array_equal(min_result, array({NAN, NAN, NAN}), true).item<bool>());
+
+    // Test broadcasting with NaN
+    x = array({1.0f, NAN});
+    y = array({2.0f});
+    max_result = maximum(x, y);
+    min_result = minimum(x, y);
+    CHECK(array_equal(max_result, array({2.0f, NAN}), true).item<bool>());
+    CHECK(array_equal(min_result, array({1.0f, NAN}), true).item<bool>());
   }
 
   // Test logsumexp
