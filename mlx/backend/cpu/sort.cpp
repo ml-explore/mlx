@@ -20,10 +20,12 @@ template <typename T>
 bool nan_aware_less(T a, T b) {
   // For floating point types, handle NaNs
   if (std::is_floating_point<T>::value) {
-    if (std::isnan(a)) return false;  // NaN goes to end
-    if (std::isnan(b)) return true;   // NaN goes to end
+    if (std::isnan(a))
+      return false; // NaN goes to end
+    if (std::isnan(b))
+      return true; // NaN goes to end
   }
-  return a < b;  // Normal comparison for non-NaN values
+  return a < b; // Normal comparison for non-NaN values
 }
 
 template <typename T>
@@ -195,13 +197,15 @@ void argsort(const array& in, array& out, int axis) {
     std::stable_sort(st, ed, [data_ptr, in_stride](IdxT a, IdxT b) {
       auto v1 = data_ptr[a * in_stride];
       auto v2 = data_ptr[b * in_stride];
-      
+
       // Handle NaNs (place them at the end)
       if (std::is_floating_point<T>::value) {
-        if (std::isnan(v1)) return false;
-        if (std::isnan(v2)) return true;
+        if (std::isnan(v1))
+          return false;
+        if (std::isnan(v2))
+          return true;
       }
-      
+
       return v1 < v2 || (v1 == v2 && a < b);
     });
   }
@@ -294,13 +298,15 @@ void argpartition(const array& in, array& out, int axis, int kth) {
     std::nth_element(st, md, ed, [data_ptr, in_stride](IdxT a, IdxT b) {
       auto v1 = data_ptr[a * in_stride];
       auto v2 = data_ptr[b * in_stride];
-      
+
       // Handle NaNs (place them at the end)
       if (std::is_floating_point<T>::value) {
-        if (std::isnan(v1)) return false;
-        if (std::isnan(v2)) return true;
+        if (std::isnan(v1))
+          return false;
+        if (std::isnan(v2))
+          return true;
       }
-      
+
       return v1 < v2 || (v1 == v2 && a < b);
     });
   }

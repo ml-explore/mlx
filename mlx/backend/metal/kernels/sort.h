@@ -36,7 +36,6 @@ struct NanLastLess {
   }
 };
 
-
 // Specialization for float
 template <>
 struct NanLastLess<float> {
@@ -50,7 +49,6 @@ struct NanLastLess<float> {
     return a < b;
   }
 };
-
 
 // Specialization for half
 template <>
