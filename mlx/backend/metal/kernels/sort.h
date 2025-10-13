@@ -19,46 +19,27 @@ METAL_FUNC void thread_swap(thread T& a, thread T& b) {
   b = w;
 }
 
+template <typename T, typename = void>
+struct Init {
+  static constexpr constant T v = Limits<T>::max;
+};
+
+template <typename T>
+struct Init<T, metal::enable_if_t<metal::is_floating_point_v<T>>> {
+  static constexpr constant T v = metal::numeric_limits<T>::quiet_NaN();
+};
+
 template <typename T>
 struct LessThan {
-  static constexpr constant T init = Limits<T>::max;
-
-  METAL_FUNC bool operator()(T a, T b) {
-    return a < b;
-  }
-};
-
-template <typename T>
-struct NanLastLess {
-  static constexpr constant T init = Limits<T>::max;
+  static constexpr constant T init = Init<T>::v;
   METAL_FUNC bool operator()(T a, T b) const {
-    return a < b;
-  }
-};
-
-// Specialization for float
-template <>
-struct NanLastLess<float> {
-  static constexpr constant float init = NAN;
-  METAL_FUNC bool operator()(float a, float b) const {
-    bool an = isnan(a);
-    bool bn = isnan(b);
-    if (an | bn) {
-      return (!an) & bn;
-    }
-    return a < b;
-  }
-};
-
-// Specialization for half
-template <>
-struct NanLastLess<half> {
-  static constexpr constant half init = half(NAN);
-  METAL_FUNC bool operator()(half a, half b) const {
-    bool an = isnan(a);
-    bool bn = isnan(b);
-    if (an | bn) {
-      return (!an) & bn;
+    if constexpr (
+        metal::is_floating_point_v<T> || metal::is_same_v<T, complex64_t>) {
+      bool an = isnan(a);
+      bool bn = isnan(b);
+      if (an | bn) {
+        return (!an) & bn;
+      }
     }
     return a < b;
   }
@@ -256,7 +237,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = NanLastLess<T>>
+    typename CompareOp = LessThan<T>>
 struct KernelMergeSort {
   using ValT = T;
   using IdxT = uint;
@@ -434,7 +415,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = NanLastLess<ValT>>
+    typename CompareOp = LessThan<ValT>>
 struct KernelMultiBlockMergeSort {
   using block_merge_sort_t = BlockMergeSort<
       ValT,
@@ -613,7 +594,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD,
-    typename CompareOp = NanLastLess<ValT>>
+    typename CompareOp = LessThan<ValT>>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 mb_block_merge(
     const device IdxT* block_partitions [[buffer(0)]],

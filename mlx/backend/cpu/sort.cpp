@@ -15,17 +15,16 @@ namespace mlx::core {
 
 namespace {
 
-// NaN-aware comparator that places NaNs at the end (NumPy behavior)
+// NaN-aware comparator that places NaNs at the end
 template <typename T>
 bool nan_aware_less(T a, T b) {
-  // For floating point types, handle NaNs
-  if (std::is_floating_point<T>::value) {
+  if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
     if (std::isnan(a))
-      return false; // NaN goes to end
+      return false;
     if (std::isnan(b))
-      return true; // NaN goes to end
+      return true;
   }
-  return a < b; // Normal comparison for non-NaN values
+  return a < b;
 }
 
 template <typename T>
