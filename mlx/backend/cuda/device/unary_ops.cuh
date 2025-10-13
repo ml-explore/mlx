@@ -113,121 +113,11 @@ struct Erf {
     } else {
       return erf(x);
     }
-  }
-};
+  
 
-struct ErfInv {
-  template <typename T>
-  __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, __half>) {
-      return erfinv(__half2float(x));
-    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-      return erfinv(__bfloat162float(x));
-    } else {
-      return erfinv(x);
-    }
-  }
-};
+… [truncated 2298 chars] …
 
-struct Exp {
-  template <typename T>
-  __device__ T operator()(T x) {
-    return exp(x);
-  }
-};
-
-struct Expm1 {
-  template <typename T>
-  __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, __half>) {
-      return expm1(__half2float(x));
-    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-      return expm1(__bfloat162float(x));
-    } else {
-      return expm1(x);
-    }
-  }
-};
-
-struct Floor {
-  template <typename T>
-  __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_integral_v<T>) {
-      return x;
-    } else if constexpr (is_complex_v<T>) {
-      return T{floor(x.real()), floor(x.imag())};
-    } else {
-      return floor(x);
-    }
-  }
-};
-
-struct Imag {
-  template <typename T>
-  __device__ auto operator()(complex_t<T> x) {
-    return x.imag();
-  }
-};
-
-struct Log {
-  template <typename T>
-  __device__ T operator()(T x) {
-    return log(x);
-  }
-};
-
-struct Log2 {
-  template <typename T>
-  __device__ T operator()(T x) {
-    if constexpr (is_complex_v<T>) {
-      auto y = Log{}(x);
-      return {y.real() / CUDART_LN2_F, y.imag() / CUDART_LN2_F};
-    } else {
-      return log2(x);
-    }
-  }
-};
-
-struct Log10 {
-  template <typename T>
-  __device__ T operator()(T x) {
-    return log10(x);
-  }
-};
-
-struct Log1p {
-  template <typename T>
-  __device__ T operator()(T z) {
-    if constexpr (is_complex_v<T>) {
-      float x = z.real();
-      float y = z.imag();
-      float zabs = Abs{}(z).real();
-      float theta = atan2f(y, x + 1);
-      if (zabs < 0.5f) {
-        float r = x * (2 + x) + y * y;
-        if (r == 0) { // handle underflow
-          return {x, theta};
-        }
-        return {0.5f * log1pf(r), theta};
-      } else {
-        float z0 = hypotf(x + 1, y);
-        return {logf(z0), theta};
-      }
-    } else {
-      return log1p(z);
-    }
-  }
-};
-
-struct LogicalNot {
-  __device__ bool operator()(bool x) {
-    return !x;
-  }
-};
-
-struct Negative {
-  template <typename T>
-  __device__ T operator()(T x) {
+or()(T x) {
     if constexpr (is_complex_v<T>) {
       return T{0, 0} - x;
     } else {
@@ -257,8 +147,9 @@ struct Round {
 struct Sigmoid {
   template <typename T>
   __device__ T operator()(T x) {
-    T y = 1 / (1 + exp(abs(x)));
-    return (x < 0) ? y : 1 - y;
+    T one = T(1);
+    T y = one / (one + exp(abs(x)));
+    return (x < 0) ? y : one - y;
   }
 };
 
