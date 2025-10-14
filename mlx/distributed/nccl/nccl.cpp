@@ -237,7 +237,7 @@ inline void bootstrap_unique_id(
 
     if (!connected) {
       std::ostringstream msg;
-      msg << "[Rank " << rank << "] connect() failed after " << elapsed_ms
+      msg << "[Rank " << rank << "] connect() failed after " << timeout_ms
           << " milliseconds and " << attempt << " retries: " << strerror(errno);
       close(sock);
       throw std::runtime_error(msg.str());
