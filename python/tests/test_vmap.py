@@ -723,36 +723,39 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(gconv, in_axes=(0, 0))(x, w)
         self.assertTrue(mx.allclose(expected, out))
 
-    def test_vmap_masked_scatter(self):
+    def test_vmap_mask_assignment(self):
         def scatter_fn(x, m, src):
-            return mx.masked_scatter(x, m, src)
+            x[m] = src
+            return x
 
         # Batched sources
         a = mx.array([[10, 20, 30, 40], [50, 60, 70, 80]])
-        mask = mx.array([[False, True, True, False], [True, False, True, True]])
+        mask = mx.array([[False, True, True, True], [True, False, True, True]])
         src = mx.array([[1, 2, 3], [4, 5, 6]])
 
-        expected = mx.stack([scatter_fn(a[i], mask[i], src[i]) for i in range(2)])
+        expected = mx.array([[10, 1, 2, 3], [4, 60, 5, 6]])
         vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, 0))
         out = vmap_scatter(a, mask, src)
         self.assertTrue(mx.array_equal(expected, out))
 
-        # Shared source across batch
+        # Shared source across batch (matching mask populations)
         a = mx.array([[0, 0, 0], [5, 5, 5]])
-        mask = mx.array([[True, False, True], [False, True, False]])
+        mask = mx.array([[True, False, True], [False, True, True]])
         src = mx.array([9, 8])
 
-        expected = mx.stack([scatter_fn(a[i], mask[i], src) for i in range(2)])
+        expected = mx.array([[9, 0, 8], [5, 9, 8]])
         vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, None))
         out = vmap_scatter(a, mask, src)
         self.assertTrue(mx.array_equal(expected, out))
 
-        # Uneven mask populations
-        a = mx.array([[0, 0, 0, 0], [10, 20, 30, 40]])
+        # Uneven mask populations with scalar broadcast
+        a = mx.array([[0.0, 0.0, 0.0, 0.0], [10.0, 20.0, 30.0, 40.0]])
         mask = mx.array([[True, False, True, True], [False, True, False, False]])
-        shared_src = mx.array([1, 2, 3])
+        shared_src = mx.array(1.5)
 
-        expected = mx.stack([scatter_fn(a[i], mask[i], shared_src) for i in range(2)])
+        expected = mx.array(
+            [[1.5, 0.0, 1.5, 1.5], [10.0, 1.5, 30.0, 40.0]], dtype=a.dtype
+        )
         vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, None))
         out = vmap_scatter(a, mask, shared_src)
         self.assertTrue(mx.array_equal(expected, out))

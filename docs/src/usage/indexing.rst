@@ -174,5 +174,9 @@ Scalar assignments broadcast across every ``True`` entry:
    array([[1.0, 1.0, 1.0],
           [0.0, 0.0, 0.0]], dtype=float32)
 
-See :func:`masked_scatter` for more about the masking semantics and
-requirements on update shapes.
+The mask is broadcast against the shape of the target array, and the updates
+are consumed in row-major order across every ``True`` entry. The update array
+must therefore provide exactly as many elements as the mask selects, unless a
+scalar is supplied (which broadcasts to all selected locations). Attempting to
+use a mask of any other dtype raises an error. These assignments mutate the
+target array in place; no copy is produced.
