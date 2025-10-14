@@ -12,6 +12,7 @@ void scan_gpu(
     int axis,
     bool reverse,
     bool inclusive,
-    const Stream& s);
+    const Stream& s,
+    bool allow_in_buffer_donation = true);
 
 } // namespace mlx::core

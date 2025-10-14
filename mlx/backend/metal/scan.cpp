@@ -19,10 +19,11 @@ void scan_gpu(
     int axis,
     bool reverse,
     bool inclusive,
-    const Stream& s) {
+    const Stream& s,
+    bool allow_in_buffer_donation) {
   auto& d = metal::device(s.device);
 
-  bool donate = in.is_donatable();
+  bool donate = allow_in_buffer_donation && in.is_donatable();
   if (in.flags().contiguous && in.strides()[axis] != 0) {
     if (donate && in.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(in);
