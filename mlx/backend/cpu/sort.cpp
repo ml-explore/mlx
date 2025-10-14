@@ -15,6 +15,18 @@ namespace mlx::core {
 
 namespace {
 
+// NaN-aware comparator that places NaNs at the end
+template <typename T>
+bool nan_aware_less(T a, T b) {
+  if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
+    if (std::isnan(a))
+      return false;
+    if (std::isnan(b))
+      return true;
+  }
+  return a < b;
+}
+
 template <typename T>
 struct StridedIterator {
   using iterator_category = std::random_access_iterator_tag;
@@ -130,7 +142,7 @@ void sort(array& out, int axis) {
     StridedIterator st(data_ptr, axis_stride, 0);
     StridedIterator ed(data_ptr, axis_stride, axis_size);
 
-    std::stable_sort(st, ed);
+    std::stable_sort(st, ed, nan_aware_less<T>);
     src_it.step();
   }
 }
@@ -184,6 +196,15 @@ void argsort(const array& in, array& out, int axis) {
     std::stable_sort(st, ed, [data_ptr, in_stride](IdxT a, IdxT b) {
       auto v1 = data_ptr[a * in_stride];
       auto v2 = data_ptr[b * in_stride];
+
+      // Handle NaNs (place them at the end)
+      if (std::is_floating_point<T>::value) {
+        if (std::isnan(v1))
+          return false;
+        if (std::isnan(v2))
+          return true;
+      }
+
       return v1 < v2 || (v1 == v2 && a < b);
     });
   }
@@ -219,7 +240,7 @@ void partition(array& out, int axis, int kth) {
     StridedIterator md(data_ptr, axis_stride, kth);
     StridedIterator ed(data_ptr, axis_stride, axis_size);
 
-    std::nth_element(st, md, ed);
+    std::nth_element(st, md, ed, nan_aware_less<T>);
   }
 }
 
@@ -276,6 +297,15 @@ void argpartition(const array& in, array& out, int axis, int kth) {
     std::nth_element(st, md, ed, [data_ptr, in_stride](IdxT a, IdxT b) {
       auto v1 = data_ptr[a * in_stride];
       auto v2 = data_ptr[b * in_stride];
+
+      // Handle NaNs (place them at the end)
+      if (std::is_floating_point<T>::value) {
+        if (std::isnan(v1))
+          return false;
+        if (std::isnan(v2))
+          return true;
+      }
+
       return v1 < v2 || (v1 == v2 && a < b);
     });
   }
