@@ -184,7 +184,7 @@ inline void bootstrap_unique_id(
     close(sock);
 
   } else {
-    // Here we want to make show that rank 0 has enough time to bind
+    // Here we want to make sure that rank 0 has enough time to bind
     // so we will retry to connect until elapsed time exceeds nccl_timeout
     // this is particularity important for multinode setup
 
