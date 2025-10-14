@@ -165,6 +165,11 @@ inline bool enable_tf32() {
   return enable_tf32_;
 }
 
+inline int nccl_timeout(int default_value) {
+  static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
+  return nccl_timeout;
+}
+
 } // namespace env
 
 } // namespace mlx::core
