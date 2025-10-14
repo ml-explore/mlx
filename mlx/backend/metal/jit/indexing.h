@@ -78,8 +78,7 @@ constexpr std::string_view masked_assign_kernel = R"(
     const device {0}* src [[buffer(2)]],
     device {0}* out [[buffer(3)]],
     const constant uint& src_size [[buffer(4)]],
-    uint3 gid [[thread_position_in_grid]]) {{
-  uint index = static_cast<uint>(gid.x);
+    uint index [[thread_position_in_grid]]) {{
   if (!static_cast<bool>(mask[index])) {{
     return;
   }}
@@ -101,12 +100,11 @@ constexpr std::string_view masked_assign_batched_kernel = R"(
     const constant uint& inner [[buffer(5)]],
     const constant uint& src_block [[buffer(6)]],
     const constant uint& src_capacity [[buffer(7)]],
-    uint3 gid [[thread_position_in_grid]]) {{
+    uint  index [[thread_position_in_grid]]) {{
   constexpr bool SRC_BATCHED = {2};
   if (inner == static_cast<uint>(0)) {{
     return;
   }}
-  uint index = static_cast<uint>(gid.x);
   if (!static_cast<bool>(mask[index])) {{
     return;
   }}

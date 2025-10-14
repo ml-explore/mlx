@@ -694,7 +694,8 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       /*axis=*/0,
       /*reverse=*/false,
       /*inclusive=*/false,
-      s);
+      s,
+      /*allow_in_buffer_donation=*/false);
 
   std::string value_type = get_type_string(out_flat.dtype());
   auto make_unbatched_kernel = [&]() {
