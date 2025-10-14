@@ -1266,19 +1266,6 @@ void init_array(nb::module_& m) {
           "stream"_a = nb::none(),
           "See :func:`max`.")
       .def(
-          "masked_scatter",
-          [](const mx::array& a,
-             const mx::array& mask,
-             const mx::array& src,
-             mx::StreamOrDevice s) {
-            return mx::masked_scatter(a, mask, src, s);
-          },
-          "mask"_a,
-          "src"_a,
-          nb::kw_only(),
-          "stream"_a = nb::none(),
-          "See :func:`masked_scatter`.")
-      .def(
           "logcumsumexp",
           [](const mx::array& a,
              std::optional<int> axis,

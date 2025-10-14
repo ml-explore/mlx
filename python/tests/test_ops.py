@@ -3132,38 +3132,36 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.depends(b, c)
         self.assertTrue(mx.array_equal(out, b))
 
-    def test_masked_scatter(self):
-        # functional and method outputs match
+    def test_mask_assignment(self):
+        # boolean mask updates matching numpy semantics
         a = mx.array([1.0, 2.0, 3.0])
         mask = mx.array([True, False, True])
         src = mx.array([5.0, 6.0])
-        out = mx.masked_scatter(a, mask, src)
-        self.assertTrue(mx.array_equal(out, mx.array([5.0, 2.0, 6.0])))
-        out_array = a.masked_scatter(mask, src)
-        self.assertTrue(mx.array_equal(out_array, out))
-        self.assertTrue(mx.array_equal(a, mx.array([1.0, 2.0, 3.0])))
+        expected = mx.array([5.0, 2.0, 6.0])
+        a[mask] = src
+        self.assertTrue(mx.array_equal(a, expected))
 
         # non-boolean mask raises
-        a = mx.array([1.0, 2.0, 3.0])
-        mask = mx.array([1, 0, 1])
+        b = mx.array([1.0, 2.0, 3.0])
+        bad_mask = mx.array([1, 0, 1])
         src = mx.array([4.0, 5.0])
         with self.assertRaises((TypeError, ValueError)):
-            mx.masked_scatter(a, mask, src)
+            b[bad_mask] = src
 
         # broadcasted mask and source
-        a = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
-        mask = mx.array([[True], [False]])  # broadcasts along axis 1
+        c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        mask = mx.array([[True], [False]])
         src = mx.array([2.0, 3.0, 4.0])
-        out = mx.masked_scatter(a, mask, src)
         expected = mx.array([[2.0, 3.0, 4.0], [1.0, 1.0, 1.0]])
-        self.assertTrue(mx.array_equal(out, expected))
+        c[mask] = src
+        self.assertTrue(mx.array_equal(c, expected))
 
-        # mask with no updates returns self
-        a = mx.array([[7.0, 8.0], [9.0, 10.0]])
-        mask = mx.zeros_like(a).astype(mx.bool_)
+        # mask with no updates leaves values unchanged
+        d = mx.array([[7.0, 8.0], [9.0, 10.0]])
+        mask = mx.zeros_like(d).astype(mx.bool_)
         src = mx.array([1.0])
-        out = mx.masked_scatter(a, mask, src)
-        self.assertTrue(mx.array_equal(out, a))
+        d[mask] = src
+        self.assertTrue(mx.array_equal(d, mx.array([[7.0, 8.0], [9.0, 10.0]])))
 
 
 class TestBroadcast(mlx_tests.MLXTestCase):

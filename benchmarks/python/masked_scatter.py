@@ -2,6 +2,7 @@ import math
 import os
 import subprocess
 import time
+from copy import copy
 from functools import partial
 
 import matplotlib.pyplot as plt
@@ -30,7 +31,7 @@ N_WARMUP = 5
 N_ITER_BENCH = 50
 N_ITER_FUNC = 20
 
-VECTOR_LENGTHS = [4096 * (2**i) for i in range(5)]
+VECTOR_LENGTHS = [4096 * (2**i) for i in range(8)]
 MASK_DENSITIES = [0.1, 0.25, 0.5, 0.75]
 D_TYPES = ("float32", "float16")
 
@@ -52,7 +53,11 @@ def torch_sync():
 
 
 def masked_scatter_mlx(self_arr, mask_arr, src_arr):
-    outs = [mx.masked_scatter(self_arr, mask_arr, src_arr) for _ in range(N_ITER_FUNC)]
+    outs = []
+    for _ in range(N_ITER_FUNC):
+        out = copy(self_arr)
+        out[mask_arr] = src_arr
+        outs.append(out)
     mx.eval(outs)
     return outs
 
@@ -104,7 +109,8 @@ def build_case(length, density, np_dtype, torch_dtype):
     src_torch = torch.from_numpy(src_np).to(device=TORCH_DEVICE, dtype=torch_dtype)
 
     # Correctness check once per configuration
-    mx_out = mx.masked_scatter(self_mlx, mask_mlx, src_mlx)
+    mx_out = mx.array(self_np)
+    mx_out[mask_mlx] = src_mlx
     mx.eval(mx_out)
     torch_out = self_torch.clone()
     torch_out.masked_scatter_(mask_torch, src_torch)
