@@ -336,7 +336,7 @@ std::vector<int> accept_connections(
   for (auto& address : addresses) {
     detail::TCPSocket socket(RING_TAG);
     socket.listen(RING_TAG, address);
-    sockets.push_back(socket.accept(RING_TAG));
+    sockets.push_back(socket.accept(RING_TAG).detach());
   }
 
   return sockets;
@@ -354,21 +354,22 @@ std::vector<int> make_connections(
 
   for (auto& address : addresses) {
     sockets.push_back(detail::TCPSocket::connect(
-        RING_TAG,
-        address,
-        CONN_ATTEMPTS,
-        CONN_WAIT,
-        [verbose](int attempt, int wait) {
-          log_info(
-              verbose,
-              "Attempt",
-              attempt,
-              "waiting",
-              wait,
-              "ms (error:",
-              errno,
-              ")");
-        }));
+                          RING_TAG,
+                          address,
+                          CONN_ATTEMPTS,
+                          CONN_WAIT,
+                          [verbose](int attempt, int wait) {
+                            log_info(
+                                verbose,
+                                "Attempt",
+                                attempt,
+                                "waiting",
+                                wait,
+                                "ms (error:",
+                                errno,
+                                ")");
+                          })
+                          .detach());
   }
 
   return sockets;
