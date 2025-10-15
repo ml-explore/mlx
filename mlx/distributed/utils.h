@@ -34,6 +34,7 @@ class TCPSocket {
   TCPSocket(const TCPSocket&) = delete;
   TCPSocket& operator=(const TCPSocket&) = delete;
   TCPSocket(TCPSocket&& s);
+  TCPSocket& operator=(TCPSocket&&);
   ~TCPSocket();
 
   void listen(const char* tag, const address_t& addr);
