@@ -63,6 +63,14 @@ TCPSocket::TCPSocket(TCPSocket&& s) {
   s.sock_ = -1;
 }
 
+TCPSocket& TCPSocket::operator=(TCPSocket&& s) {
+  if (this != &s) {
+    sock_ = s.sock_;
+    s.sock_ = -1;
+  }
+  return *this;
+}
+
 TCPSocket::TCPSocket(int s) : sock_(s) {}
 
 TCPSocket::~TCPSocket() {
