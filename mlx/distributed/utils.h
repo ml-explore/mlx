@@ -43,6 +43,8 @@ class TCPSocket {
   void send(const char* tag, const void* data, size_t len);
   void recv(const char* tag, void* data, size_t len);
 
+  int detach();
+
   operator int() const {
     return sock_;
   }

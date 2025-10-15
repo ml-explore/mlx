@@ -80,6 +80,12 @@ TCPSocket::~TCPSocket() {
   }
 }
 
+int TCPSocket::detach() {
+  int s = sock_;
+  sock_ = -1;
+  return s;
+}
+
 void TCPSocket::listen(const char* tag, const address_t& addr) {
   int success;
 
