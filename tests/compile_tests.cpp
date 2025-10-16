@@ -194,8 +194,7 @@ auto multi_one(const std::vector<array>&) {
 auto multi_two(const std::vector<array>&) {
   auto a = array(1.0);
   auto b = array(1.0);
-  auto c = divmod(a, b);
-  return std::vector<array>{c};
+  return divmod(a, b);
 }
 
 auto multi_three(const std::vector<array>&) {
