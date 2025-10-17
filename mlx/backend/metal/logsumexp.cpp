@@ -61,15 +61,37 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   const int n_reads = 4;
   const int looped_limit = LOGSUMEXP_LOOPED_LIMIT;
 
-  std::string kernel_name = (axis_size > looped_limit) ? "looped_" : "block_";
+  bool split = n_rows < 4 && axis_size > 4 * looped_limit;
+  bool looped = !split && axis_size > looped_limit;
+  std::string kernel_name = looped ? "looped_" : "block_";
   kernel_name += "logsumexp_";
   kernel_name += type_to_name(out);
 
   auto kernel = get_logsumexp_kernel(d, kernel_name, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
+  if (split) {
+    auto tmp_size = ceildiv(axis_size, looped_limit);
+    auto tmp_shape = Shape{n_rows, static_cast<int>(tmp_size)};
+    array tmp(tmp_shape, in.dtype(), nullptr, {});
+    tmp.set_data(allocator::malloc(tmp.nbytes()));
+    size_t threadgroup_size = 1024;
+    assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+    size_t n_threads = n_rows * threadgroup_size;
+    auto grid_dims = MTL::Size(n_threads, tmp_size, 1);
+    auto group_dims = MTL::Size(threadgroup_size, 1, 1);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(tmp, 1);
+    compute_encoder.set_bytes(axis_size, 2);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    d.add_temporary(tmp, s.index);
+    in = tmp;
+    axis_size = tmp_size;
+  }
+
   {
     MTL::Size grid_dims, group_dims;
-    if (axis_size <= looped_limit) {
+    if (!looped) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
