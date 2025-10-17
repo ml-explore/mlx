@@ -170,6 +170,10 @@ target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
                                    --diag_suppress=997>)
+# Supress warnings: note: parameter passing for argument of type
+# ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
+# 10.1
+target_compile_options(mlx PRIVATE -Wno-psabi)
 
 # Install CCCL headers for JIT.
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
