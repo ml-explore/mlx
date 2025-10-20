@@ -745,7 +745,8 @@ MTL::ComputePipelineState* get_quantized_kernel(
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::gemm() << metal::quantized()
+    kernel_source << "#include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>"
+                  << metal::utils() << metal::gemm() << metal::quantized()
                   << template_def;
     return kernel_source.str();
   });

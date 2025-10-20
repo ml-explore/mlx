@@ -417,8 +417,8 @@ void qmm(
 
   int wm = 2;
   int wn = 2;
-  int bm = 32;
-  int bn = 32;
+  int bm = (transpose) ? 64 : 32;
+  int bn = (transpose) ? 64 : 32;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
@@ -688,8 +688,8 @@ void gather_qmm_rhs(
   array biases = ensure_row_contiguous(biases_, d, s);
 
   // TODO: Tune the block sizes
-  int bm = 16, bn = 32, bk = 32;
-  int wm = 1, wn = 2;
+  int bm = 32, bn = 32, bk = 32;
+  int wm = 2, wn = 2;
 
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;

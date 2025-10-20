@@ -2,6 +2,10 @@
 
 using namespace mlx::steel;
 
+#include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
+
+using namespace mpp::tensor_ops;
+
 ///////////////////////////////////////////////////////////////////////////////
 // GEMM kernels
 ///////////////////////////////////////////////////////////////////////////////
@@ -461,4 +465,285 @@ template <
   } else {
     Otile.template store<T, 1, 1>(O, params->O_strides[2]);
   }
+}
+
+// clang-format off
+template <
+    typename T,
+    int BQ,
+    int BK,
+    int BD,
+    int WM,
+    int WN,
+    typename MaskType = float,
+    typename AccumType = float>
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void attention_tops(
+    device T* Q [[buffer(0)]],
+    device T* K [[buffer(1)]],
+    device T* V [[buffer(2)]],
+    device T* O [[buffer(3)]],
+    const constant mlx::steel::AttnParams* params [[buffer(4)]],
+    const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
+    const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]]) { // clang-format on
+
+    // Pacifying compiler
+    (void)lid;
+
+    const int blockQ = tid.x; // Index of the block along Q dimension for this threadgroup
+    const int q_head = tid.y;
+    const int kv_head = q_head / params->gqa_factor;
+    const int batch_id = tid.z;
+    
+    const int D = BD;
+    
+    const int ROWS_PER_SIMD = BQ / WM; // assumes WN = 1
+    
+    // Offset to this threadgroup's tile
+    Q += params->Q_strides[0] * batch_id + params->Q_strides[1] * q_head + params->Q_strides[2] * BQ * blockQ;
+    K += params->K_strides[0] * batch_id + params->K_strides[1] * kv_head;
+    V += params->V_strides[0] * batch_id + params->V_strides[1] * kv_head;
+    O += params->O_strides[0] * batch_id + params->O_strides[1] * q_head + params->O_strides[2] * BQ * blockQ;
+
+    Q += params->Q_strides[2] * simd_group_id * ROWS_PER_SIMD;
+    
+    int kb_lim = params->NK;
+
+    if (do_causal) {
+        int q_max = (tid.x + 1) * BQ + params->qL_off;
+        kb_lim = (q_max + BK - 1) / BK;
+        kb_lim = min(params->NK, kb_lim);
+    }
+    
+    // Each threadgroup will compute a block of Q * K^T into threadgroup memory
+    // [ BQ * D ] * [ D * BK ] -> [ BQ * BK ]
+    threadgroup float tg_QKT[BQ * BK];
+    
+    float softmax_scale = params->scale;
+    softmax_scale *= 1.44269504089f; // to use exp2
+    
+    using QKVTensorType = tensor<device T, dextents<int, 2>, tensor_inline>;
+    using STensorType = tensor<threadgroup float, dextents<int, 2>, tensor_inline>;
+
+    const int MUL_SV_BD = D <= 80 ? D : 64;
+    
+    // Q * K^T
+    constexpr auto mul_qkt_op_desc = mpp::tensor_ops::matmul2d_descriptor(/* M = */ ROWS_PER_SIMD,
+                                                         /* N = */ BK,
+                                                         /* K = */ D,
+                                                         /* transposeLeft = */ false,
+                                                         /* transposeRight = */ true,
+                                                         /* relaxedPrecision = */ true,
+                                                         /* mode = */ mpp::tensor_ops::matmul2d_descriptor::mode::multiply);
+    
+    mpp::tensor_ops::matmul2d<mul_qkt_op_desc, metal::execution_simdgroup> mul_qkt_op;
+    
+    // Op which multiplies SoftMax result by V
+    constexpr auto mul_sv_op_desc = mpp::tensor_ops::matmul2d_descriptor(/* M = */ ROWS_PER_SIMD,
+                                                        /* N = */ MUL_SV_BD,
+                                                        /* K = */ BK,
+                                                        /* transposeLeft = */ false,
+                                                        /* transposeRight = */ false,
+                                                        /* relaxedPrecision = */ true,
+                                                        /* mode = */ mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    
+    mpp::tensor_ops::matmul2d<mul_sv_op_desc, metal::execution_simdgroup> mul_sv_op;
+    
+    auto ct_row_sum = mul_qkt_op.template get_row_reduction_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+    auto ct_row_max = mul_qkt_op.template get_row_reduction_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+    
+    #pragma clang loop unroll(full)
+    for (int i = 0; i < ct_row_sum.get_capacity(); i++) {
+        // ct_row_sum already cleared to zero
+        ct_row_max[i] = -INFINITY;
+    }
+    
+    // Cooperative output matrix accumulator
+    auto ctO_0 = mul_sv_op.template get_destination_cooperative_tensor<STensorType, QKVTensorType, float>();
+    auto ctO_1 = mul_sv_op.template get_destination_cooperative_tensor<STensorType, QKVTensorType, float>();
+
+    STensorType tQKT(tg_QKT + simd_group_id * ROWS_PER_SIMD * BK, dextents<int, 2>(BK, BQ), array<int, 2>({ 1, BK }));
+
+    dextents<int, 2> QExtents = dextents<int, 2>(D, BQ);
+
+    if (!align_Q && blockQ == params->NQ_aligned)
+        QExtents = dextents<int, 2>(D, params->qL_rem);
+  
+    // Outer loop over blocks along K. Equivalent to looping over columns of Q * K^T
+    for (int k = 0; k < kb_lim; k++) {
+        dextents<int, 2> KVExtents = dextents<int, 2>(D, BK);
+
+        if (!align_K && k == params->NK_aligned)
+            KVExtents = dextents<int, 2>(D, params->kL_rem);
+
+        QKVTensorType tQ(Q, QExtents,  array<int, 2>({ 1, static_cast<int>(params->Q_strides[2]) }));
+        QKVTensorType tK(K, KVExtents, array<int, 2>({ 1, static_cast<int>(params->K_strides[2]) }));
+        QKVTensorType tV(V, KVExtents, array<int, 2>({ 1, static_cast<int>(params->V_strides[2]) }));
+
+        auto cTQKT = mul_qkt_op.template get_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+        
+        mul_qkt_op.run(tQ, tK, cTQKT);
+
+        #pragma clang loop unroll(full)
+        for (int i = 0; i < cTQKT.get_capacity(); i++)
+           cTQKT[i] *= softmax_scale;
+
+        // Mask out length sequence
+        if (!align_K && k == (params->NK_aligned)) {
+          #pragma clang loop unroll(full)
+          for (int i = 0; i < cTQKT.get_capacity(); i++) {
+            auto idxs = cTQKT.get_multidimensional_index(i);
+
+            cTQKT[i] = idxs[0] >= params->kL_rem ? -INFINITY : cTQKT[i];
+          }
+        }
+        
+        // causal masking
+        if (do_causal && k >= (kb_lim - ((BQ + BK - 1) / BK) - int(!align_K))) {
+            int row_base = blockQ * BQ + params->qL_off + simd_group_id * ROWS_PER_SIMD;
+            int col_base = k * BK;
+
+            #pragma clang loop unroll(full)
+            for (int i = 0; i < cTQKT.get_capacity(); i++) {
+                auto idxs = cTQKT.get_multidimensional_index(i);
+
+                int row = row_base + idxs[1];
+                int col = col_base + idxs[0];
+
+                cTQKT[i] = row < col ? -INFINITY : cTQKT[i];
+            }
+        }
+        
+        auto ct_tile_row_max = mul_qkt_op.template get_row_reduction_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+        
+        reduce_rows(cTQKT, ct_tile_row_max, reduction_operation::max, -INFINITY);
+            
+        auto ct_row_scale = mul_qkt_op.template get_row_reduction_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+        
+        // Compute SoftMax for each row of this SIMD group
+        #pragma clang loop unroll(full)
+        for (int i = 0; i < ct_tile_row_max.get_capacity(); i++) {
+            float new_max = max(ct_tile_row_max[i], ct_row_max[i]);
+            
+            ct_row_scale[i] = fast::exp2(ct_row_max[i] - new_max);
+            
+            ct_row_max[i] = new_max;
+        }
+
+        #pragma clang loop unroll(full)
+        for (auto it = cTQKT.begin(); it != cTQKT.end(); it++) {
+            auto row_it = ct_row_max.map_iterator(it);
+
+            *it = fast::exp2(*it - *row_it);
+        }
+
+        auto ct_tile_row_sum = mul_qkt_op.template get_row_reduction_destination_cooperative_tensor<QKVTensorType, QKVTensorType, float>();
+        
+        reduce_rows(cTQKT, ct_tile_row_sum, reduction_operation::sum, 0.0f);
+        
+        #pragma clang loop unroll(full)
+        for (uint i = 0; i < ct_tile_row_sum.get_capacity(); i++)
+            ct_row_sum[i] = ct_row_sum[i] * ct_row_scale[i] + ct_tile_row_sum[i];
+        
+        #pragma clang loop unroll(full)
+        for (auto it = ctO_0.begin(); it != ctO_0.end(); it++) {
+            auto row_it = ct_row_scale.map_iterator(it);
+
+            *it *= *row_it;
+        }
+
+        if (D == 128) {
+            #pragma clang loop unroll(full)
+            for (auto it = ctO_1.begin(); it != ctO_1.end(); it++) {
+                auto row_it = ct_row_scale.map_iterator(it);
+
+                *it *= *row_it;
+            }
+        }
+        
+        // Wait for other SIMD groups to finish reading threadgroup memory before we clobber it
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+        
+        cTQKT.store(tQKT); // elided by backend optimization
+        
+        // Wait for store to complete
+        simdgroup_barrier(mem_flags::mem_threadgroup);
+
+        mul_sv_op.run(tQKT, tV, ctO_0);
+
+        if (D == 128) {
+            threadgroup_barrier(mem_flags::mem_none);
+
+            auto tV_off = tV.slice(MUL_SV_BD, 0);
+
+            mul_sv_op.run(tQKT, tV_off, ctO_1);
+        }
+
+        K += BK * params->K_strides[2];
+        V += BK * params->V_strides[2];
+    }
+
+    threadgroup_barrier(mem_flags::mem_none);
+    
+    if (align_Q || blockQ < params->NQ_aligned) {
+        // Write out result
+        #pragma clang loop unroll(full)
+        for (auto it = ctO_0.begin(); it != ctO_0.end(); it++) {
+              auto md_indices = it.get_multidimensional_index();
+
+              auto row_it = ct_row_sum.map_iterator(it);
+              
+              float softmax_denom = 1.0f / *row_it;
+              
+              O[(simd_group_id * ROWS_PER_SIMD + md_indices[1]) * params->O_strides[2] + md_indices[0]] = (T)(*it * softmax_denom);
+        }
+
+        if (D == 128) {
+            #pragma clang loop unroll(full)
+            for (auto it = ctO_1.begin(); it != ctO_1.end(); it++) {
+                  auto md_indices = it.get_multidimensional_index();
+
+                  auto row_it = ct_row_sum.map_iterator(it);
+                  
+                  float softmax_denom = 1.0f / *row_it;
+                  
+                  O[(simd_group_id * ROWS_PER_SIMD + md_indices[1]) * params->O_strides[2] + md_indices[0] + MUL_SV_BD] = (T)(*it * softmax_denom);
+            }
+        }
+    }
+    else {
+        // Write out result
+        #pragma clang loop unroll(full)
+        for (auto it = ctO_0.begin(); it != ctO_0.end(); it++) {
+              auto md_indices = it.get_multidimensional_index();
+
+              short2 coords = short2(md_indices[0], md_indices[1] + simd_group_id * ROWS_PER_SIMD);
+
+              auto row_it = ct_row_sum.map_iterator(it);
+              
+              float softmax_denom = 1.0f / *row_it;
+              
+              if (coords.y < params->qL_rem)
+                O[coords.y * params->O_strides[2] + coords.x] = (T)(*it * softmax_denom);
+        }
+
+        if (D == 128) {
+            #pragma clang loop unroll(full)
+            for (auto it = ctO_1.begin(); it != ctO_1.end(); it++) {
+                  auto md_indices = it.get_multidimensional_index();
+
+                  short2 coords = short2(md_indices[0] + MUL_SV_BD, md_indices[1] + simd_group_id * ROWS_PER_SIMD);
+
+                  auto row_it = ct_row_sum.map_iterator(it);
+                  
+                  float softmax_denom = 1.0f / *row_it;
+
+                  if (coords.y < params->qL_rem)
+                    O[coords.y * params->O_strides[2] + coords.x] = (T)(*it * softmax_denom);
+            }
+        }
+    }
 }

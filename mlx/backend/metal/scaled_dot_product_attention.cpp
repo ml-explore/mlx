@@ -28,10 +28,6 @@ void sdpa_full_self_attention_metal(
   int wm = 4;
   int wn = 1;
 
-  int bd = q.shape(-1);
-  int bq = 32;
-  int bk = bd < 128 ? 32 : 16;
-
   int B = q.shape(0);
   int H = q.shape(1);
   int D = q.shape(3);
@@ -40,10 +36,22 @@ void sdpa_full_self_attention_metal(
   int qL = q.shape(2);
   int kL = k.shape(2);
 
-  const bool align_Q = (qL % bq) == 0;
-  const bool align_K = (kL % bk) == 0;
   const bool has_mask = !!mask;
   const bool do_causal = do_causal_;
+
+  bool useTensorOps = q.dtype() != bfloat16 && !has_mask;
+
+  int bd = q.shape(-1);
+  int bq = 32;
+  int bk = bd < 128 ? 32 : 16;
+
+  if (useTensorOps) {
+    bq = 64;
+    bk = 32;
+  }
+
+  const bool align_Q = (qL % bq) == 0;
+  const bool align_K = (kL % bk) == 0;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
@@ -54,6 +62,7 @@ void sdpa_full_self_attention_metal(
   std::ostringstream kname;
   // clang-format off
   kname << "steel_attention_"
+        << (useTensorOps ? "tops_" : "")
         << type_to_name(q)
         << "_bq" << bq
         << "_bk" << bk
