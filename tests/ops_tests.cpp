@@ -2,7 +2,6 @@
 
 // Required for using M_PI_2 in MSVC.
 #define _USE_MATH_DEFINES
-
 #include <cmath>
 #include <numeric>
 
@@ -4038,6 +4037,7 @@ TEST_CASE("test fp8 conversion") {
     array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
     auto in_fp8 = to_fp8(in);
     auto out = from_fp8(in_fp8, t);
+    CHECK(array_equal(out, in).item<bool>());
   }
 
   array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0});

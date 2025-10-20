@@ -334,4 +334,17 @@ struct Tanh {
   }
 };
 
+struct ToFP8 {
+  template <typename T>
+  __device__ uint8_t operator()(T x) {
+    return __nv_fp8_e4m3(x).__x;
+  }
+};
+
+struct FromFP8 {
+  __device__ float operator()(uint8_t x) {
+    return float(*(__nv_fp8_e4m3*)(&x));
+  }
+};
+
 } // namespace mlx::core::cu
