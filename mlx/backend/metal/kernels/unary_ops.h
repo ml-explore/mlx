@@ -458,8 +458,8 @@ struct ToFP8 {
     uint32_t sign = f_bits & 0x80000000;
     f_bits ^= sign;
     if (f_bits >= fp8_max) {
-      // NaN - all exponent and mantissa bits set to 1
-      result = 0x7f;
+      // Default behavior saturates to min/max
+      result = fp8_max;
     } else {
       if (f_bits < (121 << 23)) {
         f_bits =

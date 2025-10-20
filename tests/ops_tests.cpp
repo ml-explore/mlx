@@ -4051,6 +4051,6 @@ TEST_CASE("test fp8 conversion") {
   in_fp8 = to_fp8(in);
   out = from_fp8(in_fp8, float32);
 
-  auto expected = array({NAN, NAN});
+  auto expected = array({-448.0f, 448.0f});
   CHECK(array_equal(out, expected, true).item<bool>());
 }

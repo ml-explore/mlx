@@ -138,8 +138,8 @@ struct ToFP8 {
     auto result_high = Simd<uint8_t, N>(f_bits_high >> 20);
     result = select(f_bits < (121 << 23), result_low, result_high);
 
-    auto result_nan = Simd<uint8_t, N>(0x7f);
-    result = select(f_bits >= fp8_max, result_nan, result);
+    auto result_sat = Simd<uint8_t, N>(fp8_max);
+    result = select(f_bits >= fp8_max, result_sat, result);
     return result | Simd<uint8_t, N>(sign >> 24);
   }
 
