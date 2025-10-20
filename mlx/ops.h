@@ -1400,6 +1400,7 @@ array dequantize(
     int group_size = 64,
     int bits = 4,
     const std::string& mode = "affine",
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */

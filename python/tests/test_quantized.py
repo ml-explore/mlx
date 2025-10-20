@@ -77,6 +77,84 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, group_size=32, bits=4, mode="mxfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+    def test_mxfp8_quantize_dequantize(self):
+        w = 2 * mx.random.uniform(shape=(512, 32)) - 1
+        w = w.astype(mx.bfloat16)
+
+        # Invalid bits / group size
+        with self.assertRaises(ValueError):
+            mx.quantize(w, bits=3, group_size=32, mode="mxfp8")
+
+        with self.assertRaises(ValueError):
+            mx.quantize(w, group_size=32, bits=7, mode="mxfp8")
+
+        w_q, scales = mx.quantize(w, group_size=32, bits=8, mode="mxfp8")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, bits=8, group_size=16, mode="mxfp8")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, group_size=32, bits=4, mode="mxfp8")
+
+        w_hat = mx.dequantize(w_q, scales, group_size=32, bits=8, mode="mxfp8")
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-1, atol=1e-2))
+
+        # test quantize/dequantize 0s
+        a = mx.zeros((256, 512))
+        w_q, scales = mx.quantize(a, group_size=32, bits=8, mode="mxfp8")
+        w_hat = mx.dequantize(w_q, scales, group_size=32, bits=8, mode="mxfp8")
+        self.assertTrue(mx.all(w_hat == 0))
+
+    def test_nvfp4_quantize_dequantize(self):
+        lut = mx.array(
+            [
+                +0.0,
+                +0.5,
+                +1.0,
+                +1.5,
+                +2.0,
+                +3.0,
+                +4.0,
+                +6.0,
+                -0.0,
+                -0.5,
+                -1.0,
+                -1.5,
+                -2.0,
+                -3.0,
+                -4.0,
+                -6.0,
+            ]
+        )
+        w = lut[mx.random.randint(0, 16, shape=(128, 512))]
+        w = w.reshape(-1, 16)
+        w[:, 0] = 6
+        w = (w + 3e-6).astype(mx.bfloat16)
+
+        # Invalid bits / group size
+        with self.assertRaises(ValueError):
+            mx.quantize(w, bits=3, group_size=16, mode="nvfp4")
+
+        with self.assertRaises(ValueError):
+            mx.quantize(w, group_size=64, bits=4, mode="nvfp4")
+
+        w_q, scales = mx.quantize(w, group_size=16, bits=4, mode="nvfp4")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, bits=4, group_size=32, mode="nvfp4")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, group_size=32, bits=4, mode="nvfp4")
+
+        w_hat = mx.dequantize(w_q, scales, group_size=16, bits=4, mode="nvfp4")
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
+        # test quantize/dequantize 0s
+        a = mx.zeros((256, 512))
+        w_q, scales = mx.quantize(a, group_size=16, bits=4, mode="nvfp4")
+        w_hat = mx.dequantize(w_q, scales, group_size=16, bits=4, mode="nvfp4")
+        self.assertTrue(mx.all(w_hat == 0))
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

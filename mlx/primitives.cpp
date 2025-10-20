@@ -3404,6 +3404,7 @@ std::vector<array> QuantizedMatmul::vjp(
             group_size_,
             bits_,
             quantization_mode_to_string(mode_),
+            std::nullopt,
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
@@ -3558,6 +3559,7 @@ std::vector<array> GatherQMM::vjp(
                             group_size_,
                             bits_,
                             quantization_mode_to_string(mode_),
+                            std::nullopt,
                             stream()),
                         -1,
                         {-1, group_size_},
