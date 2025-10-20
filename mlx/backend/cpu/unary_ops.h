@@ -122,7 +122,9 @@ struct ToFP8 {
   Simd<uint8_t, N> operator()(Simd<T, N> f) {
     uint32_t fp8_max = 1087 << 20;
     auto denorm_mask = Simd<uint32_t, N>(141 << 23);
-    auto f_bits = fp32_to_bits(Simd<float, N>(f));
+    Simd<uint32_t, N> f_bits;
+    Simd<float, N> f32 = f;
+    f_bits = fp32_to_bits(f32);
     Simd<uint8_t, N> result = 0u;
     auto sign = f_bits & 0x80000000;
     f_bits = f_bits ^ sign;
