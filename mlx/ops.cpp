@@ -4430,6 +4430,40 @@ array dequantize(
   }
 }
 
+array from_fp8(array x, Dtype dtype, StreamOrDevice s) {
+  if (x.dtype() != uint8) {
+    std::ostringstream msg;
+    msg << "[from_fp8] Input must have type uint8 but "
+        << "x.dtype() == " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (!issubdtype(dtype, floating)) {
+    std::ostringstream msg;
+    msg << "[from_fp8] Only real floating types are supported but "
+        << "dtype == " << dtype << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  return array(
+      x.shape(),
+      dtype,
+      std::make_shared<fast::ConvertFP8>(to_stream(s), false),
+      {x});
+}
+
+array to_fp8(array x, StreamOrDevice s) {
+  if (!issubdtype(x.dtype(), floating)) {
+    std::ostringstream msg;
+    msg << "[to_fp8] Only real floating types are supported but "
+        << "x.dtype() == " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  return array(
+      x.shape(),
+      uint8,
+      std::make_shared<fast::ConvertFP8>(to_stream(s), true),
+      {x});
+}
+
 array gather_qmm(
     const array& x,
     const array& w,

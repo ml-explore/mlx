@@ -846,4 +846,9 @@ std::vector<Shape> Quantize::output_shapes(const std::vector<array>& inputs) {
   }
 }
 
+bool ConvertFP8::is_equivalent(const Primitive& other) const {
+  const ConvertFP8& a_other = static_cast<const ConvertFP8&>(other);
+  return to_fp8_ == a_other.to_fp8_;
+}
+
 } // namespace mlx::core::fast
