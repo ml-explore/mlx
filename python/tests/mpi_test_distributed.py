@@ -2,8 +2,9 @@
 
 import unittest
 
-import mlx.core as mx
 import mlx_distributed_tests
+
+import mlx.core as mx
 
 
 class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):

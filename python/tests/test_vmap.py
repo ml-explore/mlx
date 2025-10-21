@@ -3,8 +3,9 @@
 import gc
 import unittest
 
-import mlx.core as mx
 import mlx_tests
+
+import mlx.core as mx
 
 
 class TestVmap(mlx_tests.MLXTestCase):

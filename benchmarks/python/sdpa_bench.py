@@ -6,8 +6,9 @@ import os
 import subprocess
 import time
 
-import mlx.core as mx
 import numpy as np
+
+import mlx.core as mx
 
 device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
 device_name = device_name.decode("utf-8").strip("\n")

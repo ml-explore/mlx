@@ -8,8 +8,9 @@ import unittest
 from functools import partial, wraps
 from io import StringIO
 
-import mlx.core as mx
 import mlx_tests
+
+import mlx.core as mx
 
 
 class TestCompile(mlx_tests.MLXTestCase):

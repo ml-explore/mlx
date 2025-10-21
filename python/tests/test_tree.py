@@ -2,10 +2,11 @@
 
 import unittest
 
+import mlx_tests
+
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.utils
-import mlx_tests
 
 
 class TestTreeUtils(mlx_tests.MLXTestCase):

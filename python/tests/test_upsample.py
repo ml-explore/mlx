@@ -2,10 +2,11 @@
 
 import unittest
 
-import mlx.core as mx
-import mlx.nn as nn
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
+import mlx.nn as nn
 
 try:
     import torch

@@ -711,10 +711,11 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
         ellipsis_length = operand->ndim() - cnt_before - cnt_after;
         if (ellipsis_length < 0) {
           std::ostringstream msg;
-          msg << "[" << fn_name << "] Operand " << operand_idx << " with shape " 
-              << operand->shape() << " has insufficient dimensions for subscript '" 
-              << subscript << "'. The ellipsis requires at least " 
-              << (cnt_before + cnt_after) << " dimensions but the operand has " 
+          msg << "[" << fn_name << "] Operand " << operand_idx << " with shape "
+              << operand->shape()
+              << " has insufficient dimensions for subscript '" << subscript
+              << "'. The ellipsis requires at least "
+              << (cnt_before + cnt_after) << " dimensions but the operand has "
               << operand->ndim() << " dimensions.";
           throw std::invalid_argument(msg.str());
         }
@@ -722,22 +723,24 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
       } else {
         ellipsis_length = max_ellipsis_length;
       }
-      
+
       if (ellipsis_length < 0) {
         std::ostringstream msg;
-        msg << "[" << fn_name << "] Ellipsis expansion resulted in negative length (" 
+        msg << "[" << fn_name
+            << "] Ellipsis expansion resulted in negative length ("
             << ellipsis_length << ") for subscript '" << subscript << "'.";
         throw std::invalid_argument(msg.str());
       }
-      
+
       if (ellipsis_length > remaining_chars.size()) {
         std::ostringstream msg;
-        msg << "[" << fn_name << "] Not enough characters available for ellipsis expansion. "
-            << "Required " << ellipsis_length << " characters but only " 
+        msg << "[" << fn_name
+            << "] Not enough characters available for ellipsis expansion. "
+            << "Required " << ellipsis_length << " characters but only "
             << remaining_chars.size() << " available.";
         throw std::invalid_argument(msg.str());
       }
-      
+
       subscript.replace(
           subscript.begin() + cnt_before,
           subscript.begin() + cnt_before + 3,

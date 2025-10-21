@@ -1,9 +1,10 @@
 import math
 import unittest
 
-import mlx.core as mx
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
 
 
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):

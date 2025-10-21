@@ -3,8 +3,9 @@
 import gc
 import unittest
 
-import mlx.core as mx
 import mlx_tests
+
+import mlx.core as mx
 
 
 class TestAutograd(mlx_tests.MLXTestCase):

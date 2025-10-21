@@ -2,9 +2,10 @@
 
 import argparse
 
-import mlx.core as mx
 import torch
 from time_utils import measure_runtime
+
+import mlx.core as mx
 
 
 def benchmark_gather_mlx(x_shape, idx_shape):

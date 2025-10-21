@@ -2,9 +2,10 @@ import argparse
 import math
 import time
 
-import mlx.core as mx
 import numpy as np
 import torch
+
+import mlx.core as mx
 
 N_warmup = 1
 N_iter_bench = 10

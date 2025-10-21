@@ -4,9 +4,10 @@ import os
 import subprocess
 import time
 
-import mlx.core as mx
 import numpy as np
 import torch
+
+import mlx.core as mx
 
 N_warmup = 10
 N_iter_bench = 100

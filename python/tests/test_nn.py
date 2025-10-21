@@ -4,10 +4,11 @@ import os
 import tempfile
 import unittest
 
-import mlx.core as mx
-import mlx.nn as nn
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
+import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map, tree_reduce
 
 

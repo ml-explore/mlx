@@ -2,8 +2,9 @@
 
 import time
 
-import mlx.core as mx
 import numpy as np
+
+import mlx.core as mx
 
 
 def timeit(fn, its=100, args=[]):

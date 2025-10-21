@@ -1,5 +1,6 @@
-import mlx.core as mx
 from mlx_sample_extensions import axpby
+
+import mlx.core as mx
 
 a = mx.ones((3, 4))
 b = mx.ones((3, 4))

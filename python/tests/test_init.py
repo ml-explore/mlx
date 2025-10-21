@@ -1,10 +1,11 @@
 # Copyright © 2023 Apple Inc.
 import unittest
 
-import mlx.core as mx
-import mlx.nn.init as init
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
+import mlx.nn.init as init
 
 
 class TestInit(mlx_tests.MLXTestCase):

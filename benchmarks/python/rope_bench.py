@@ -1,8 +1,9 @@
 # Copyright © 2023-2024 Apple Inc.
 
+from time_utils import time_fn
+
 import mlx.core as mx
 import mlx.nn as nn
-from time_utils import time_fn
 
 
 def time_rope():

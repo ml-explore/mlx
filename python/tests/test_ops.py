@@ -5,9 +5,10 @@ import os
 import unittest
 from itertools import permutations, product
 
-import mlx.core as mx
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
 
 
 def np_wrap_between(x, a):
