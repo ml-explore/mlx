@@ -26,7 +26,7 @@ void unary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  auto maybe_collapse = [contig, &in, &out]() {
+  auto maybe_collapse = [contig, &in]() {
     if (!contig) {
       return collapse_contiguous_dims(in);
     } else {

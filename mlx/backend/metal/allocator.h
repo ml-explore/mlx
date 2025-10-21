@@ -65,7 +65,6 @@ class MetalAllocator : public allocator::Allocator {
   size_t peak_memory_{0};
   size_t max_pool_size_;
   size_t wired_limit_{0};
-  bool relaxed_{true};
   size_t num_resources_{0};
   size_t resource_limit_{0};
 

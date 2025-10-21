@@ -447,7 +447,7 @@ TEST_CASE("test gpu matmul") {
 TEST_CASE("test gpu validation") {
   // Run this test with Metal validation enabled
   // METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./tests/tests \
-  //     -tc="test metal validation" \
+  //     -tc="test metal validation"
 
   auto x = array({});
   eval(exp(x));

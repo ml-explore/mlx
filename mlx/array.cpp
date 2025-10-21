@@ -241,8 +241,8 @@ array::ArrayDesc::ArrayDesc(
     std::vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
-      status(Status::unscheduled),
       primitive(std::move(primitive)),
+      status(Status::unscheduled),
       inputs(std::move(inputs)) {
   init();
 }

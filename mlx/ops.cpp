@@ -244,7 +244,7 @@ array linspace(
 
 array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
-    return std::move(a);
+    return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved
   return array(
@@ -2129,7 +2129,6 @@ array min(
 }
 
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
-  int size = a.size();
   auto result = argmin(flatten(a, s), 0, true, s);
   if (keepdims) {
     std::vector<int> axes(a.ndim() - 1);
@@ -2167,7 +2166,6 @@ array argmin(
 }
 
 array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
-  int size = a.size();
   auto result = argmax(flatten(a, s), 0, true, s);
   if (keepdims) {
     std::vector<int> axes(a.ndim() - 1);
@@ -4273,9 +4271,6 @@ array affine_dequantize(
     if (is_power_of_2(bits)) {
       std::vector<array> parts;
       for (int start = 0; start < 32; start += bits) {
-        int shift_left = 32 - (start + bits);
-        int shift_right = shift_left + start;
-
         parts.push_back(expand_dims(
             right_shift(
                 left_shift(w, array(32 - (start + bits), uint32), s),
@@ -4883,7 +4878,7 @@ array block_masked_mm(
   };
 
   // Out mask
-  if (mask_out.has_value()) {
+  if (has_out_mask) {
     array mask_out_p = mask_out.value_or(array({true}));
     if (in_a_ndim == 1 || in_b_ndim == 1) {
       std::vector<int> ex_dims;
@@ -5015,7 +5010,6 @@ array gather_mm(
 
   int M = a.shape(-2);
   int N = b.shape(-1);
-  int K = a.shape(-1);
 
   std::tie(lhs_indices, rhs_indices) =
       broadcast_arrays(lhs_indices, rhs_indices, s);

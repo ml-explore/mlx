@@ -1105,7 +1105,6 @@ std::pair<std::vector<array>, std::vector<int>> Concatenate::vmap(
   // Make sure vmapped arrays have all vmapped axes in the same location and
   // expand non-vmapped arrays to be compatible with the vmapped ones.
   std::vector<array> t_inputs;
-  int N = inputs[first_vmap].shape(out_ax);
   int axis = axis_ + (axis_ >= out_ax);
   auto cat_shape = inputs[first_vmap].shape();
   for (int i = 0; i < axes.size(); i++) {
@@ -3475,7 +3474,6 @@ std::vector<array> GatherQMM::vjp(
       : std::nullopt;
 
   int M = cotan.shape(-2);
-  int N = cotan.shape(-1);
   int K = x.shape(-1);
 
   bool sorted = left_sorted_ || right_sorted_;
@@ -4536,7 +4534,6 @@ std::vector<array> SliceUpdate::vjp(
   assert(primals.size() == 2);
 
   auto& cotan = cotangents[0];
-  auto& src = primals[0];
   auto& upd = primals[1];
 
   std::vector<array> vjps;
@@ -5116,12 +5113,8 @@ std::vector<array> BlockMaskedMM::vjp(
   const int op_mask_idx = has_out_mask ? 3 : 2;
   bool needs_lhs_mask_vjp = has_op_mask;
   bool needs_rhs_mask_vjp = has_op_mask;
-  bool needs_lhs_vjp = false;
-  bool needs_rhs_vjp = false;
 
   for (auto arg : argnums) {
-    needs_lhs_vjp = arg == 0;
-    needs_rhs_vjp = arg == 1;
     needs_lhs_mask_vjp = arg == op_mask_idx;
     needs_rhs_mask_vjp = arg == op_mask_idx + 1;
   }
@@ -5346,7 +5339,6 @@ std::vector<array> GatherMM::vjp(
   auto& rhs_indices = primals[3];
 
   int M = cotan.shape(-2);
-  int N = cotan.shape(-1);
   int K = primals[0].shape(-1);
 
   bool sorted = left_sorted_ || right_sorted_;

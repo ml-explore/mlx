@@ -3635,7 +3635,6 @@ TEST_CASE("test conv1d") {
           {1, 3, 2}),
       float16);
 
-  int kernel = 3;
   int stride = 1;
   int padding = 1;
 
@@ -3735,7 +3734,6 @@ TEST_CASE("test conv2d") {
        -0.26912728},
       {1, 2, 2, 2});
 
-  std::pair<int, int> kernel{2, 2};
   std::pair<int, int> stride{1, 1};
   std::pair<int, int> padding{0, 0};
 

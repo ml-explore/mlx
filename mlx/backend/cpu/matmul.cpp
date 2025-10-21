@@ -91,7 +91,6 @@ void matmul_general(
   auto [b_transposed, ldb, b] = check_transpose(b_pre);
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
   if (M == 0 || N == 0) {
     return;
   }

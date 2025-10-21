@@ -102,17 +102,15 @@ void RMSNormVJP::eval_gpu(
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
-  auto check_input = [&d, &s](const array& x) -> std::pair<array, bool> {
+  auto check_input = [&s](const array& x) -> std::pair<array, bool> {
     if (x.flags().row_contiguous) {
       return {x, false};
     }
     array x_copy = contiguous_copy_gpu(x, s);
     return {x_copy, true};
   };
-  bool donate_x = inputs[0].is_donatable();
   bool donate_g = inputs[2].is_donatable();
   auto [x, copied] = check_input(inputs[0]);
-  donate_x |= copied;
   const array& w = inputs[1];
   auto [g, g_copied] = check_input(inputs[2]);
   donate_g |= g_copied;
@@ -323,7 +321,6 @@ void LayerNormVJP::eval_gpu(
   auto [x, copied] = check_input(inputs[0]);
   donate_x |= copied;
   const array& w = inputs[1];
-  const array& b = inputs[2];
   auto [g, g_copied] = check_input(inputs[3]);
   donate_g |= g_copied;
   array& gx = outputs[0];
