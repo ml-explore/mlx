@@ -459,7 +459,7 @@ struct ToFP8 {
     f_bits ^= sign;
     if (f_bits >= fp8_max) {
       // Default behavior saturates to min/max
-      result = fp8_max;
+      result = 0x7E;
     } else {
       if (f_bits < (121 << 23)) {
         f_bits =
