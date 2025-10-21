@@ -3328,19 +3328,37 @@ std::pair<std::vector<array>, std::vector<int>> Power::vmap(
 }
 
 std::string quantization_mode_to_string(QuantizationMode mode) {
-  if (mode == QuantizationMode::Affine) {
-    return "affine";
-  } else {
-    return "mxfp4";
+  switch (mode) {
+    case QuantizationMode::Affine:
+      return "affine";
+    case QuantizationMode::Mxfp4:
+      return "mxfp4";
+    case QuantizationMode::Mxfp8:
+      return "mxfp8";
+    case QuantizationMode::Nvfp4:
+    default:
+      return "nvfp4";
   }
 }
 
-QuantizationMode string_to_quantization_mode(const std::string& mode) {
+QuantizationMode string_to_quantization_mode(
+    const std::string& mode,
+    std::string_view tag /* = "" */) {
   if (mode == "affine") {
     return QuantizationMode::Affine;
-  } else {
+  } else if (mode == "mxfp4") {
     return QuantizationMode::Mxfp4;
+  } else if (mode == "mxfp8") {
+    return QuantizationMode::Mxfp8;
+  } else if (mode == "nvfp4") {
+    return QuantizationMode::Nvfp4;
   }
+  std::string msg;
+  if (!tag.empty()) {
+    msg += "[" + std::string(tag) + "]";
+  }
+  msg += " Invalid quantization mode '" + mode + "'.";
+  throw std::invalid_argument(msg);
 }
 
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(

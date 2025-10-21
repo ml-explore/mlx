@@ -61,12 +61,17 @@ class TestQuantized(mlx_tests.MLXTestCase):
             mx.quantize(w, group_size=64, bits=4, mode="mxfp4")
 
         w_q, scales = mx.quantize(w, group_size=32, bits=4, mode="mxfp4")
-
         with self.assertRaises(ValueError):
             mx.dequantize(w_q, scales, bits=3, group_size=32, mode="mxfp4")
 
         with self.assertRaises(ValueError):
             mx.dequantize(w_q, scales, group_size=64, bits=4, mode="mxfp4")
+
+        # Invalid output type
+        with self.assertRaises(ValueError):
+            mx.dequantize(
+                w_q, scales, group_size=32, bits=4, mode="mxfp4", dtype=mx.int32
+            )
 
         w_hat = mx.dequantize(w_q, scales, group_size=32, bits=4, mode="mxfp4")
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
