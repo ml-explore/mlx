@@ -2578,8 +2578,7 @@ void init_ops(nb::module_& m) {
             indices_or_sections (int or list(int)): If ``indices_or_sections``
               is an integer the array is split into that many sections of equal
               size. An error is raised if this is not possible. If ``indices_or_sections``
-              is a list, the list contains the indices of the start of each subarray
-              along the given axis.
+              is a list, the list contains the list ontains the indices which are the split points or boundaries where the array should be divided.
             axis (int, optional): Axis to split along, defaults to `0`.
 
         Returns:
