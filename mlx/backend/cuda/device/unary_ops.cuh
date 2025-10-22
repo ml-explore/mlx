@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cuda_fp8.h>
+
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
