@@ -57,9 +57,15 @@ Shape get_shape(const gguf_tensor& tensor) {
 }
 
 std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+  if (tensor == nullptr) {
+    throw std::invalid_argument("[extract_tensor_data] Input tensor pointer is null.");
+  }
   std::optional<Dtype> equivalent_dtype = gguf_type_to_dtype(tensor->type);
   // If there's an equivalent type, we can simply copy.
   if (equivalent_dtype.has_value()) {
+    if (tensor->weights_data == nullptr) {
+      throw std::runtime_error("[load_gguf] NULL tensor data pointer");
+    }
     allocator::Buffer buffer = allocator::malloc(tensor->bsize);
     memcpy(
         buffer.raw_ptr(),
