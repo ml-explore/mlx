@@ -265,7 +265,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   std::vector<char> buffer(header_len + 1);
   in_stream->read(&buffer[0], header_len);
   buffer[header_len] = 0;
-  std::string header(&buffer[0]);
+  std::string header(buffer.data(), header_len);
 
   // Read data type from header
   std::string dtype_str = header.substr(11, 3);
@@ -273,7 +273,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   Dtype dtype = dtype_from_array_protocol(dtype_str);
 
   // Read contiguity order
-  bool col_contiguous = header[34] == 'T';
+  bool col_contiguous = header.at(34) == 'T';
 
   // Read array shape from header
   Shape shape;
