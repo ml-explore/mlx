@@ -26,9 +26,9 @@ jobs:
           name: Install
           command: |
             xcodebuild -downloadComponent MetalToolchain
-            brew install python@3.9
+            brew install python@3.10
             brew install doxygen
-            python3.9 -m venv env
+            python3.10 -m venv env
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
@@ -140,7 +140,7 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            uv venv --python 3.9
+            uv venv --python 3.10
             uv pip install \
               nanobind==2.4.0 \
               cmake \
@@ -273,7 +273,7 @@ jobs:
     parameters:
       python_version:
         type: string
-        default: "3.9"
+        default: "3.10"
       xcode_version:
         type: string
         default: "26.0.0"
@@ -328,7 +328,7 @@ jobs:
             << parameters.build_env >> MLX_BUILD_STAGE=1 python -m build -w
       - when:
           condition:
-            equal: ["3.9", << parameters.python_version >>]
+            equal: ["3.10", << parameters.python_version >>]
           steps:
             - run:
                 name: Build common package
@@ -351,7 +351,7 @@ jobs:
     parameters:
       python_version:
         type: string
-        default: "3.9"
+        default: "3.10"
       build_env:
         type: string
         default: ""
@@ -387,7 +387,7 @@ jobs:
             bash python/scripts/repair_linux.sh
       - when:
           condition:
-            equal: ["3.9", << parameters.python_version >>]
+            equal: ["3.10", << parameters.python_version >>]
           steps:
             - run:
                 name: Build common package
@@ -484,7 +484,7 @@ workflows:
               ignore: /.*/
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["PYPI_RELEASE=1"]
               xcode_version: ["26.0.0"]
@@ -503,7 +503,7 @@ workflows:
               ignore: /.*/
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
               build_env: ["PYPI_RELEASE=1"]
       - build_cuda_release:
           filters:
@@ -546,13 +546,13 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
               xcode_version: ["26.0.0"]
       - build_linux_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
       - build_cuda_release
 
   build_dev_release:
@@ -564,14 +564,14 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
               macosx_deployment_target: ["13.5", "14.0", "15.0"]
               build_env: ["DEV_RELEASE=1"]
               xcode_version: ["26.0.0"]
       - build_linux_release:
           matrix:
             parameters:
-              python_version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+              python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
               build_env: ["DEV_RELEASE=1"]
       - build_cuda_release:
           matrix:
