@@ -8,6 +8,7 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda_fp4.h>
+#include <cuda_fp8.h>
 
 namespace mlx::core {
 namespace cu {
