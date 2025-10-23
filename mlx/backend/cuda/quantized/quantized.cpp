@@ -2,8 +2,10 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
 
@@ -55,6 +57,39 @@ inline array ensure_row_contiguous_matrix(
 }
 
 } // namespace
+
+void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
+  auto& s = stream();
+  auto& d = cu::device(s.device);
+  auto& enc = d.get_command_encoder(s);
+
+  out.set_data(cu::malloc_async(out.nbytes(), enc.stream()));
+
+  // Make sure the last two dims of x and w, s, b are contiguous. This should
+  // be relaxed for x.
+  array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], enc, s);
+  std::optional<array> biases = std::nullopt;
+  if (inputs.size() == 4) {
+    biases = ensure_row_contiguous_matrix(inputs[3], enc, s);
+  }
+
+  bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+  int K = x.shape(-1);
+  int M = non_batched ? x.size() / K : x.shape(-2);
+  int N = out.shape(-1);
+
+  if (M != 1 || !transpose_ || mode_ == QuantizationMode::Affine) {
+    throw std::runtime_error("QMM NYI");
+  }
+
+  if (transpose_) {
+    fp_qmv(w, scales, x, out, bits_, group_size_, enc);
+    return;
+  }
+}
 
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
