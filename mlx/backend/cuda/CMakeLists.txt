@@ -59,6 +59,11 @@ target_sources(
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 
+# fp4 is not available on < 12.8
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
+  target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+endif()
+
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
   target_sources(
     mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm_batched_12_9.cu)
