@@ -4249,8 +4249,8 @@ void init_ops(nb::module_& m) {
           ``quantize`` currently only supports 2D inputs with the second
           dimension divisible by ``group_size``
 
-        The supported quantization modes are ``"affine"`` and ``"mxfp4"``. They
-        are described in more detail below.
+        The supported quantization modes are ``"affine"``, ``"mxfp4"``,
+        ``"mxfp8"``, and ``"nvfp4"``. They are described in more detail below.
 
         Args:
           w (array): Matrix to be quantized
@@ -4268,7 +4268,7 @@ void init_ops(nb::module_& m) {
           * biases (array): The quantization biases (returned for ``mode=="affine"``).
 
         Notes:
-          The ``affine`` mode quantizes groups of :math:`g` consecutive
+          The ``"affine"`` mode quantizes groups of :math:`g` consecutive
           elements in a row of ``w``. For each group the quantized
           representation of each element :math:`\hat{w_i}` is computed as follows:
 
@@ -4291,11 +4291,17 @@ void init_ops(nb::module_& m) {
           :math:`\beta` which are the returned ``scales`` and
           ``biases`` respectively.
 
-          The ``mxfp4`` mode similarly quantizes groups of :math:`g` elements
-          of ``w``. For ``mxfp4`` the group size must be ``32``. The elements
-          are quantized to 4-bit precision floating-point values (E2M1) with a
-          shared 8-bit scale per group. Unlike ``affine`` quantization,
-          ``mxfp4`` does not have a bias value. More details on the format can
+          The ``"mxfp4"``, ``"mxfp8"``, and ``"nvfp4"`` modes similarly
+          quantize groups of :math:`g` elements of ``w``. For the ``"mx"``
+          modes, the group size must be ``32``.  For ``"nvfp4"`` the group
+          size must be 16. The elements are quantized to 4-bit or 8-bit
+          precision floating-point values: E2M1 for ``"fp4"`` and E4M3 for
+          ``"fp8"``. There is a shared 8-bit scale per group. The ``"mx"``
+          modes us an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
+          Unlike ``affine`` quantization, these modes does not have a bias
+          value.
+
+          More details on the ``"mx"`` formats can
           be found in the `specification <https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf>`_.
       )pbdoc");
   m.def(
@@ -4326,15 +4332,16 @@ void init_ops(nb::module_& m) {
             ``w``. Default: ``4``.
           dtype (Dtype, optional): The data type of the dequantized output. If
             ``None`` the return type is inferred from the scales and biases
-             when possible and otherwise defaults to ``bfloat16``.
-             Default: ``None``.
+            when possible and otherwise defaults to ``bfloat16``.
+            Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
 
         Returns:
           array: The dequantized version of ``w``
 
         Notes:
-          The currently supported quantization modes are ``"affine"`` and ``mxfp4``.
+          The currently supported quantization modes are ``"affine"``,
+          ``"mxfp4``, ``"mxfp8"``, and ``"nvfp4"``.
 
           For ``affine`` quantization, given the notation in :func:`quantize`,
           we compute :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s`
