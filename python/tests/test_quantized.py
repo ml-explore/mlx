@@ -92,7 +92,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.quantize(w, group_size=32, bits=7, mode="mxfp8")
-
         w_q, scales = mx.quantize(w, group_size=32, bits=8, mode="mxfp8")
 
         with self.assertRaises(ValueError):
@@ -102,7 +101,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             mx.dequantize(w_q, scales, group_size=32, bits=4, mode="mxfp8")
 
         w_hat = mx.dequantize(w_q, scales, group_size=32, bits=8, mode="mxfp8")
-        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-1, atol=1e-2))
+
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-1, atol=1e-1))
 
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))

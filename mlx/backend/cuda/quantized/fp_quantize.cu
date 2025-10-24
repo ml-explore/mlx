@@ -49,13 +49,12 @@ fp_quantize(const T* w, uint8_t* out, uint8_t* scales, size_t size) {
 
   auto grid_dim_x =
       cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
-  size_t out_index = tidx + grid_dim_x * size_t(tidy);
-  size_t in_index = out_index;
-  if (in_index >= size) {
+  size_t index = tidx + grid_dim_x * size_t(tidy);
+  if (index >= size) {
     return;
   }
 
-  float w_thread = w[in_index];
+  float w_thread = w[index];
 
   cg::greater<float> max_op;
   auto warp = cg::tiled_partition<group_size>(cg::this_thread_block());
@@ -70,21 +69,19 @@ fp_quantize(const T* w, uint8_t* out, uint8_t* scales, size_t size) {
   scale = float(s);
 
   // Write out the scales
-  size_t gindex = in_index / group_size;
-  if (in_index % group_size == 0) {
+  size_t gindex = index / group_size;
+  if (index % group_size == 0) {
     scales[gindex] = q_scale;
   }
 
-  uint8_t output = 0;
-  uint8_t val = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
-  output = val;
+  uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
   if (bits == 4) {
-    uint8_t sval = warp.shfl_down(val, 1);
+    uint8_t sval = warp.shfl_down(output, 1);
     output |= sval << bits;
   }
   constexpr int pack_factor = bits == 8 ? 1 : 2;
-  if (out_index % pack_factor == 0) {
-    out[out_index / pack_factor] = output;
+  if (index % pack_factor == 0) {
+    out[index / pack_factor] = output;
   }
 }
 

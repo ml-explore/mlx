@@ -2,7 +2,6 @@
 
 // Required for using M_PI in MSVC.
 #define _USE_MATH_DEFINES
-
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -4259,8 +4258,11 @@ std::vector<array> fp_quantize(
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
-      scales =
-          where(equal(scales, z, s), z, astype(log2(scales, s), int32, s), s);
+      scales = where(
+          equal(scales, z, s),
+          z,
+          astype(round(log2(scales, s), s), int32, s),
+          s);
 
       wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
       scales = astype(add(scales, array(127, int32), s), uint8, s);
