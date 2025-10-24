@@ -916,7 +916,7 @@ std::function<array(const array&, const array&)> vmap(
     int in_axis_b /* = 0 */,
     int out_axis /* = 0 */) {
   auto vfun = vmap(
-      [in_axis_a, in_axis_b, out_axis, fun](const std::vector<array>& inputs) {
+      [fun](const std::vector<array>& inputs) {
         return std::vector<array>{fun(inputs[0], inputs[1])};
       },
       {in_axis_a, in_axis_b},
@@ -929,7 +929,7 @@ std::function<array(const array&)> vmap(
     int in_axis /* = 0 */,
     int out_axis /* = 0 */) {
   auto vfun = vmap(
-      [in_axis, out_axis, fun](const std::vector<array>& inputs) {
+      [fun](const std::vector<array>& inputs) {
         return std::vector<array>{fun(inputs[0])};
       },
       {in_axis},

@@ -213,7 +213,7 @@ namespace detail {
 
 CompileMode& compile_mode() {
   auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILE")) {
+    if (std::getenv("MLX_DISABLE_COMPILE")) {
       return CompileMode::disabled;
     } else {
       return CompileMode::enabled;
@@ -282,7 +282,7 @@ array split_one(
     }
   }
 
-  return std::move(y);
+  return y;
 }
 
 template <typename T, typename... U>
@@ -493,7 +493,6 @@ void compile_simplify(
   };
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;
-    int dtype;
     switch (a.dtype().size()) {
       case 1:
         v = *a.data<uint8_t>();

@@ -441,7 +441,7 @@ void save_gguf(
     const char* tensorname = key.c_str();
     const uint64_t namelen = key.length();
     const uint32_t num_dim = arr.ndim();
-    uint64_t dim[num_dim];
+    std::vector<uint64_t> dim(num_dim);
     for (int i = 0; i < num_dim; i++) {
       dim[i] = arr.shape()[num_dim - 1 - i];
     }
@@ -450,7 +450,7 @@ void save_gguf(
             tensorname,
             namelen,
             num_dim,
-            dim,
+            dim.data(),
             gguf_type.value(),
             tensor_offset)) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_info failed");

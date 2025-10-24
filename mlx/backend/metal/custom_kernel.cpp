@@ -327,6 +327,10 @@ CustomKernelFunction metal_kernel(
 void CustomKernel::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  // silence some warnings
+  (void)is_precompiled_;
+  (void)shared_memory_;
+
   auto& s = stream();
 
   std::vector<array> copies;

@@ -108,7 +108,6 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_output_array(out, 1);
     size_t size = in.shape(axis_);
     size_t stride = in.strides()[axis_];
-    int bm = 32;
     int bn = 32;
     size_t stride_blocks = (stride + bn - 1) / bn;
     compute_encoder.set_bytes(size, 2);

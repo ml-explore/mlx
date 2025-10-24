@@ -445,7 +445,6 @@ void mxfp4_qmm(
     int K) {
   constexpr int group_size = 32;
   constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -487,7 +486,6 @@ void mxfp4_qmm_t(
     int K) {
   constexpr int group_size = 32;
   constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {

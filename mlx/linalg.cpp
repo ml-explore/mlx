@@ -271,7 +271,7 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   if (!compute_uv) {
     return {array(
         std::move(s_shape),
-        std::move(a.dtype()),
+        a.dtype(),
         std::make_shared<SVD>(to_stream(s), compute_uv),
         {a})};
   }
