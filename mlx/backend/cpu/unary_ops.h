@@ -120,7 +120,7 @@ Simd<uint32_t, N> fp32_to_bits(Simd<float, N> x) {
 struct ToFP8 {
   template <typename T, int N>
   Simd<uint8_t, N> operator()(Simd<T, N> f) {
-    uint32_t fp8_max = 1087 << 20;
+    uint32_t fp8_max = 543 << 21;
     auto denorm_mask = Simd<uint32_t, N>(141 << 23);
     Simd<uint32_t, N> f_bits;
     Simd<float, N> f32 = f;

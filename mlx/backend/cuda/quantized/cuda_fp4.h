@@ -1,7 +1,22 @@
 #pragma once
 
 struct __nv_fp8_e8m0 {
-  __device__ __nv_fp8_e8m0(uint8_t x) : __x(x) {}
+  __device__ __nv_fp8_e8m0(float x) {
+    if (!std::isfinite(x)) {
+      __x = 0xFF;
+      return;
+    }
+    if (x < 0.0f) {
+      __x = 0x00;
+      return;
+    }
+    float le = std::log2f(x);
+    int n = static_cast<int>(std::nearbyintf(le));
+
+    n = n < -127 ? -127 : n;
+    n = n > 127 ? 127 : n;
+    __x = static_cast<uint8_t>(n + 127);
+  }
 
   __device__ operator float() {
     if (__x == 0xFF) {

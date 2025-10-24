@@ -4,7 +4,9 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 #include "mlx/backend/metal/kernels/quantized_utils.h"
-#include "mlx/backend/metal/kernels/fp4_quantized.h"
+#include "mlx/backend/metal/kernels/fp8.h"
+#include "mlx/backend/metal/kernels/fp4.h"
+#include "mlx/backend/metal/kernels/fp_quantized.h"
 
 #define instantiate_quantized(name, type) \
   instantiate_kernel( \
@@ -113,13 +115,33 @@
   instantiate_gather_qmm_rhs(mxfp4_gather_qmm_rhs, mxfp4_gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true) \
   instantiate_gather_qmm_rhs(mxfp4_gather_qmm_rhs, mxfp4_gather_qmm_rhs_nn, type, 16, 32, 32, 1, 2, false)
 
+#define instantiate_quantize_dequantize(type, mode, group_size, bits) \
+  instantiate_kernel( \
+    mode "_quantize_" #type "_gs_" #group_size "_b_" #bits, \
+    fp_quantize, \
+    type, \
+    group_size,  \
+    bits) \
+  instantiate_kernel( \
+    mode "_dequantize_" #type "_gs_" #group_size "_b_" #bits, \
+    fp_dequantize, \
+    type, \
+    group_size,  \
+    bits)
+
+#define instantiate_quantize_dequantize_modes(type) \
+  instantiate_quantize_dequantize(type, "mxfp4", 32, 4) \
+  instantiate_quantize_dequantize(type, "nvfp4", 16, 4) \
+  instantiate_quantize_dequantize(type, "mxfp8", 32, 8)
+
 #define instantiate_quantized_types(type) \
   instantiate_quantized_all_batched(type) \
   instantiate_quantized_all_quad(type)    \
   instantiate_quantized_all_splitk(type)  \
   instantiate_quantized_all_single(type)  \
   instantiate_quantized_all_aligned(type) \
-  instantiate_quantized_all_rhs(type)
+  instantiate_quantized_all_rhs(type)     \
+  instantiate_quantize_dequantize_modes(type)
 
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)

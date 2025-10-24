@@ -29,7 +29,7 @@ make_jit_source(
   kernels/bf16_math.h
   kernels/complex.h
   kernels/defines.h)
-make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h)
+make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h kernels/fp8.h)
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
 make_jit_source(reduce_utils kernels/atomic.h kernels/reduction/ops.h)

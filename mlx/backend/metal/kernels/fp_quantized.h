@@ -59,28 +59,10 @@ inline void load_vector_safe(const device T* x, thread U* x_thread, int N) {
   }
 }
 
-constexpr constant static float MXFP4_LUT[16] = {
-    +0.0f,
-    +0.5f,
-    +1.0f,
-    +1.5f,
-    +2.0f,
-    +3.0f,
-    +4.0f,
-    +6.0f,
-    -0.0f,
-    -0.5f,
-    -1.0f,
-    -1.5f,
-    -2.0f,
-    -3.0f,
-    -4.0f,
-    -6.0f};
-
 template <typename T>
 void load_mxfp4_lut(threadgroup T* lut, uint simd_gid, uint simd_lid) {
   if (simd_gid == 0 && simd_lid < 16) {
-    lut[simd_lid] = static_cast<T>(MXFP4_LUT[simd_lid]);
+    lut[simd_lid] = static_cast<T>(FP4_LUT[simd_lid]);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 }
@@ -1787,5 +1769,102 @@ template <
             y, N, short2(0, offset), short2(tgp_bn, offset_next));
       }
     }
+  }
+}
+
+template <int bits>
+struct Quantize {
+  uint8_t operator()(float x) {
+    if constexpr (bits == 8) {
+      return fp8_e4m3(x).bits;
+    } else {
+      return fp4_e2m1(x).bits;
+    }
+  }
+};
+
+template <int bits>
+struct Dequantize {
+  float operator()(uint8_t x) {
+    if constexpr (bits == 8) {
+      return float(*(thread fp8_e4m3*)(&x));
+    } else {
+      return float(*(thread fp4_e2m1*)(&x));
+    }
+  }
+};
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_quantize(
+    const device T* w [[buffer(0)]],
+    device uint8_t* out [[buffer(1)]],
+    device uint8_t* scales [[buffer(2)]],
+    uint2 tidx [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  constexpr bool use_mx_scale = group_size == 32;
+  size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
+
+  float scale;
+  float w_thread = w[index];
+  if (use_mx_scale) {
+    scale = simd_max(abs(w_thread));
+  } else {
+    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
+    scale = tidx.x < 16 ? w_max_l : w_max_r;
+  }
+  scale /= bits == 4 ? 6.0f : 448.0f;
+
+  using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
+  auto s = ScaleType(scale);
+  uint8_t q_scale = s.bits;
+  scale = float(s);
+
+  // Write out the scales and biases
+  size_t gindex = index / group_size;
+  if (index % group_size == 0) {
+    scales[gindex] = q_scale;
+  }
+
+  uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
+  if (bits == 4) {
+    uint8_t sval = simd_shuffle_down(output, 1);
+    output |= sval << bits;
+  }
+  constexpr int pack_factor = bits == 8 ? 1 : 2;
+  if (index % pack_factor == 0) {
+    out[index / pack_factor] = output;
+  }
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_dequantize(
+    const device uint8_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    device T* out [[buffer(3)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  constexpr bool use_mx_scale = group_size == 32;
+  constexpr int pack_factor = bits == 8 ? 1 : 2;
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  size_t oindex = offset * pack_factor;
+  size_t gindex = oindex / group_size;
+
+  out += oindex;
+
+  using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
+  auto q_scale = ((device ScaleType*)(scales))[gindex];
+  auto scale = float(q_scale);
+
+  uint val = w[offset];
+#pragma clang loop unroll(full)
+  for (int i = 0; i < pack_factor; i++) {
+    uint8_t d;
+    if (bits == 4) {
+      d = (val >> (bits * i)) & 0x0f;
+    } else if (bits == 8) {
+      d = val;
+    }
+    out[i] = static_cast<T>(scale * Dequantize<bits>{}(d));
   }
 }
