@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/reduce.h"
+#include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
@@ -26,14 +27,9 @@ auto get_quantized_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  auto fname = mode + "_" + func;
-  if (mode == "affine") {
-    template_def = get_template_definition(
-        name, fname, type, group_size, bits, std::forward<Args>(args)...);
-  } else {
-    template_def = get_template_definition(
-        name, fname, type, group_size, "uint8_t", std::forward<Args>(args)...);
-  }
+  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  template_def = get_template_definition(
+      name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
@@ -1044,26 +1040,31 @@ void fast::Quantize::eval_gpu(
   compute_encoder.set_input_array(w, 0);
   if (dequantize_) {
     auto scales = ensure_row_contiguous(inputs[1], d, s);
-    auto biases = ensure_row_contiguous(inputs[2], d, s);
     compute_encoder.set_input_array(scales, 1);
-    compute_encoder.set_input_array(biases, 2);
     compute_encoder.set_output_array(out, 3);
+    if (mode_ == QuantizationMode::Affine) {
+      auto biases = ensure_row_contiguous(inputs[2], d, s);
+      compute_encoder.set_input_array(biases, 2);
+    }
   } else {
     auto& scales = outputs[1];
-    auto& biases = outputs[2];
     scales.set_data(allocator::malloc(scales.nbytes()));
-    biases.set_data(allocator::malloc(biases.nbytes()));
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_output_array(scales, 2);
-    compute_encoder.set_output_array(biases, 3);
+    if (mode_ == QuantizationMode::Affine) {
+      auto& biases = outputs[2];
+      biases.set_data(allocator::malloc(biases.nbytes()));
+      compute_encoder.set_output_array(biases, 3);
+    }
   }
 
   auto type_string = dequantize_ ? get_type_string(out.dtype())
                                  : get_type_string(w_pre.dtype());
+  auto mode = quantization_mode_to_string(mode_);
   std::string kname;
   concatenate(
       kname,
-      dequantize_ ? "affine_dequantize" : "affine_quantize",
+      mode + (dequantize_ ? "_dequantize" : "_quantize"),
       "_",
       type_string,
       "_gs_",
@@ -1074,7 +1075,7 @@ void fast::Quantize::eval_gpu(
       d,
       kname,
       dequantize_ ? "dequantize" : "quantize",
-      "affine",
+      mode,
       type_string,
       group_size_,
       bits_);
@@ -1087,7 +1088,8 @@ void fast::Quantize::eval_gpu(
   int packs_per_int = (bits_ == 3 || bits_ == 5) ? 8
       : bits_ == 6                               ? 4
                                                  : 8 / bits_;
-  int per_thread = dequantize_ ? packs_per_int : group_size_ / simd_size;
+  int per_thread =
+      dequantize_ ? packs_per_int : std::max(group_size_ / simd_size, 1);
   size_t nthreads =
       dequantize_ ? out.size() / packs_per_int : w.size() / per_thread;
 
@@ -1106,6 +1108,14 @@ void fast::Quantize::eval_gpu(
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
                                : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void fast::ConvertFP8::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& in = inputs[0];
+  auto& out = outputs[0];
+  unary_op_gpu(inputs, out, name(), stream());
 }
 
 } // namespace mlx::core

@@ -130,6 +130,7 @@ NO_CPU(View)
 
 namespace fast {
 NO_CPU_MULTI(Quantize)
+NO_CPU_MULTI(ConvertFP8)
 } // namespace fast
 
 namespace distributed {
