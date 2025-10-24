@@ -1,5 +1,6 @@
 #pragma once
 
+#include <arm_neon.h>
 #include <simd/math.h>
 #include <simd/vector.h>
 
@@ -199,6 +200,15 @@ SIMD_DEFAULT_COMPARISONS(>=)
 SIMD_DEFAULT_COMPARISONS(<=)
 SIMD_DEFAULT_COMPARISONS(==)
 SIMD_DEFAULT_COMPARISONS(!=)
+
+template <typename T, int N>
+Simd<T, N> clz(Simd<T, N> x) {
+  auto a = *(uint32x4_t*)(&x);
+  auto b = *((uint32x4_t*)(&x) + 1);
+  a = vclzq_u32(a);
+  b = vclzq_u32(b);
+  return asd::make_uint8(a, b);
+}
 
 template <typename T, int N>
 Simd<T, N> atan2(Simd<T, N> a, Simd<T, N> b) {

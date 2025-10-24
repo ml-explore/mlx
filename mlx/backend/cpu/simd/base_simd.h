@@ -172,6 +172,11 @@ DEFAULT_BINARY(&&)
 DEFAULT_BINARY(||)
 
 template <typename T>
+Simd<T, 1> clz(Simd<T, 1> x_) {
+  return __builtin_clz(x_.value);
+}
+
+template <typename T>
 Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;

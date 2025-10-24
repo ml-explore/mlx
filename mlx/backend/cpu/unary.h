@@ -24,9 +24,9 @@ void unary_op(const array& a, array& out, Op) {
   auto ndim = a.ndim();
   if (a.flags().contiguous) {
     auto size = a.data_size();
-    constexpr int N = simd::max_size<T>;
+    constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
     while (size >= N) {
-      simd::store(dst, Op{}(simd::load<T, N>(src)));
+      simd::store(dst, simd::Simd<U, N>(Op{}(simd::load<T, N>(src))));
       size -= N;
       src += N;
       dst += N;

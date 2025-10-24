@@ -108,4 +108,73 @@ struct Square {
   SINGLE()
 };
 
+template <int N>
+Simd<float, N> fp32_from_bits(Simd<uint32_t, N> x) {
+  return *(Simd<float, N>*)(&x);
+}
+template <int N>
+Simd<uint32_t, N> fp32_to_bits(Simd<float, N> x) {
+  return *(Simd<uint32_t, N>*)(&x);
+}
+
+struct ToFP8 {
+  template <typename T, int N>
+  Simd<uint8_t, N> operator()(Simd<T, N> f) {
+    uint32_t fp8_max = 1087 << 20;
+    auto denorm_mask = Simd<uint32_t, N>(141 << 23);
+    Simd<uint32_t, N> f_bits;
+    Simd<float, N> f32 = f;
+    f_bits = fp32_to_bits(f32);
+    Simd<uint8_t, N> result = 0u;
+    auto sign = f_bits & 0x80000000;
+    f_bits = f_bits ^ sign;
+
+    auto f_bits_low =
+        fp32_to_bits(fp32_from_bits(f_bits) + fp32_from_bits(denorm_mask));
+    auto result_low = Simd<uint8_t, N>(f_bits_low - denorm_mask);
+
+    auto mant_odd = Simd<uint8_t, N>((f_bits >> 20) & 1);
+    auto f_bits_high = f_bits + (((uint32_t)(7 - 127) << 23) + 0x7FFFF);
+    f_bits_high = f_bits_high + Simd<uint32_t, N>(mant_odd);
+
+    auto result_high = Simd<uint8_t, N>(f_bits_high >> 20);
+    result = select(f_bits < (121 << 23), result_low, result_high);
+
+    auto result_sat = Simd<uint8_t, N>(0x7E);
+    result = select(f_bits >= fp8_max, result_sat, result);
+    return result | Simd<uint8_t, N>(sign >> 24);
+  }
+
+  template <typename T>
+  uint8_t operator()(T x) {
+    return (*this)(Simd<T, 1>(x)).value;
+  }
+};
+
+struct FromFP8 {
+  template <int N>
+  Simd<float, N> operator()(Simd<uint8_t, N> x) {
+    auto w = Simd<uint32_t, N>(x) << 24;
+    auto sign = w & 0x80000000;
+    auto nonsign = w & 0x7FFFFFFF;
+
+    auto renorm_shift = clz(nonsign);
+    renorm_shift = simd::select(
+        renorm_shift > Simd<uint32_t, N>{4},
+        renorm_shift - Simd<uint32_t, N>{4},
+        Simd<uint32_t, N>{0});
+
+    Simd<int32_t, N> inf_nan_mask =
+        (Simd<int32_t, N>(nonsign + 0x01000000) >> 8) & 0x7F800000;
+    auto zero_mask = Simd<int32_t, N>(nonsign - 1) >> 31;
+    auto result = sign |
+        ((((nonsign << renorm_shift >> 4) + ((0x78 - renorm_shift) << 23)) |
+          inf_nan_mask) &
+         ~zero_mask);
+    return fp32_from_bits(result);
+  }
+  float operator()(uint8_t x) {
+    return (*this)(Simd<uint8_t, 1>(x)).value;
+  }
+};
 } // namespace mlx::core::detail

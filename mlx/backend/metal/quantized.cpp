@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/reduce.h"
+#include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
@@ -1106,6 +1107,14 @@ void fast::Quantize::eval_gpu(
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
                                : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void fast::ConvertFP8::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& in = inputs[0];
+  auto& out = outputs[0];
+  unary_op_gpu(inputs, out, name(), stream());
 }
 
 } // namespace mlx::core
