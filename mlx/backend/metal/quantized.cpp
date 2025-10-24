@@ -27,14 +27,9 @@ auto get_quantized_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  auto fname = mode + "_" + func;
-  if (mode == "affine") {
-    template_def = get_template_definition(
-        name, fname, type, group_size, bits, std::forward<Args>(args)...);
-  } else {
-    template_def = get_template_definition(
-        name, fname, type, group_size, "uint8_t", std::forward<Args>(args)...);
-  }
+  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  template_def = get_template_definition(
+      name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
