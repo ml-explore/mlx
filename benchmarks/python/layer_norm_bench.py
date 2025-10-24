@@ -2,10 +2,9 @@
 
 from functools import partial
 
-from time_utils import time_fn
-
 import mlx.core as mx
 import mlx.nn as nn
+from time_utils import time_fn
 
 
 def layer_norm(x, w, b, eps):

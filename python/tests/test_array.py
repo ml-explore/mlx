@@ -16,10 +16,9 @@ if platform.system() == "Windows":
 else:
     import resource
 
+import mlx.core as mx
 import mlx_tests
 import numpy as np
-
-import mlx.core as mx
 
 try:
     import tensorflow as tf

@@ -3,9 +3,8 @@
 import math
 import unittest
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):

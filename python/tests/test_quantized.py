@@ -3,9 +3,8 @@
 import unittest
 from itertools import product
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 class TestQuantized(mlx_tests.MLXTestCase):

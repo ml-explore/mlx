@@ -2,9 +2,8 @@
 
 import argparse
 
-from time_utils import time_fn
-
 import mlx.core as mx
+from time_utils import time_fn
 
 
 def time_add():

@@ -2,9 +2,8 @@
 
 import unittest
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 # Don't inherit from MLXTestCase to avoid call to setUp

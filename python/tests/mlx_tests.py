@@ -12,9 +12,8 @@ import platform
 import unittest
 from typing import Any, Callable, List, Tuple, Union
 
-import numpy as np
-
 import mlx.core as mx
+import numpy as np
 
 
 class MLXTestRunner(unittest.TestProgram):

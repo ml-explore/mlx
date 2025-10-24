@@ -2,10 +2,9 @@
 
 import unittest
 
-import mlx_tests
-
 import mlx.core as mx
 import mlx.nn as nn
+import mlx_tests
 from mlx.nn.layers.distributed import shard_inplace, shard_linear
 from mlx.nn.utils import average_gradients
 

@@ -3,9 +3,8 @@
 import math
 import unittest
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 class TestRandom(mlx_tests.MLXTestCase):

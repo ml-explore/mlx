@@ -4,9 +4,8 @@ import argparse
 import math
 import random
 
-from time_utils import time_fn
-
 import mlx.core as mx
+from time_utils import time_fn
 
 
 def bench_gelu():

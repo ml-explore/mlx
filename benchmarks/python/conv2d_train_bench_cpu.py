@@ -1,10 +1,9 @@
 import time
 
-import torch
-
 import mlx.core as mx
 import mlx.nn
 import mlx.optimizers as opt
+import torch
 
 
 def bench_mlx(steps: int = 20) -> float:

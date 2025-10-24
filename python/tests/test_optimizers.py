@@ -5,13 +5,12 @@ import math
 import unittest
 from functools import partial
 
-import mlx_tests
-import numpy as np
-
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as opt
 import mlx.utils
+import mlx_tests
+import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 try:

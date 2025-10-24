@@ -3,9 +3,8 @@
 import unittest
 from functools import partial
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 class TestEval(mlx_tests.MLXTestCase):

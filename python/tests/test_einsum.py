@@ -2,10 +2,9 @@
 
 import unittest
 
+import mlx.core as mx
 import mlx_tests
 import numpy as np
-
-import mlx.core as mx
 
 
 class TestEinsum(mlx_tests.MLXTestCase):

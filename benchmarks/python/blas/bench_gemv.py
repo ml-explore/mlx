@@ -6,10 +6,9 @@ import subprocess
 import time
 
 import matplotlib.pyplot as plt
+import mlx.core as mx
 import numpy as np
 import torch
-
-import mlx.core as mx
 
 results_dir = "./results"
 

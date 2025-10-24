@@ -5,10 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import mlx.core as mx
 import mlx_tests
 import numpy as np
-
-import mlx.core as mx
 
 
 class TestLoad(mlx_tests.MLXTestCase):

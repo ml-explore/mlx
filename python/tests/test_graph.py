@@ -3,9 +3,8 @@
 import io
 import unittest
 
-import mlx_tests
-
 import mlx.core as mx
+import mlx_tests
 
 
 class TestGraph(mlx_tests.MLXTestCase):

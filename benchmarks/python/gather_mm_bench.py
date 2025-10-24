@@ -1,8 +1,7 @@
 # Copyright © 2025 Apple Inc.
 
-from time_utils import time_fn
-
 import mlx.core as mx
+from time_utils import time_fn
 
 N = 1024
 D = 1024
