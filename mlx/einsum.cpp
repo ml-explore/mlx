@@ -724,23 +724,6 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
         ellipsis_length = max_ellipsis_length;
       }
 
-      if (ellipsis_length < 0) {
-        std::ostringstream msg;
-        msg << "[" << fn_name
-            << "] Ellipsis expansion resulted in negative length ("
-            << ellipsis_length << ") for subscript '" << subscript << "'.";
-        throw std::invalid_argument(msg.str());
-      }
-
-      if (ellipsis_length > remaining_chars.size()) {
-        std::ostringstream msg;
-        msg << "[" << fn_name
-            << "] Not enough characters available for ellipsis expansion. "
-            << "Required " << ellipsis_length << " characters but only "
-            << remaining_chars.size() << " available.";
-        throw std::invalid_argument(msg.str());
-      }
-
       subscript.replace(
           subscript.begin() + cnt_before,
           subscript.begin() + cnt_before + 3,
