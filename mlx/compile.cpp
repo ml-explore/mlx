@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -317,6 +318,7 @@ class CompilerCache {
       const std::vector<array>& inputs,
       bool shapeless,
       const std::vector<uint64_t>& constants) {
+    std::lock_guard<std::mutex> guard(mtx_);
     // Find the cache entries for |fun_id|.
     std::vector<CacheEntry>& entries = cache_[fun_id];
 
@@ -365,10 +367,12 @@ class CompilerCache {
   }
 
   void erase(std::uintptr_t fun_id) {
+    std::lock_guard<std::mutex> guard(mtx_);
     cache_.erase(fun_id);
   }
 
   void clear() {
+    std::lock_guard<std::mutex> guard(mtx_);
     cache_.clear();
   }
 
@@ -380,6 +384,7 @@ class CompilerCache {
   }
 
   friend CompilerCache& compiler_cache();
+  std::mutex mtx_;
   std::unordered_map<std::uintptr_t, std::vector<CacheEntry>> cache_;
 };
 
