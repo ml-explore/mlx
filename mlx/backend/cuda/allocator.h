@@ -5,6 +5,7 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 
+#include <cuda_runtime.h>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -45,6 +46,7 @@ class SmallSizePool {
 class CudaAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
+  Buffer malloc_async(size_t size, cudaStream_t stream);
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
@@ -58,6 +60,7 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
+  Buffer malloc_impl(size_t size, cudaStream_t stream);
   void cuda_free(CudaBuffer* buf);
 
   CudaAllocator();
@@ -70,8 +73,11 @@ class CudaAllocator : public allocator::Allocator {
   size_t active_memory_{0};
   size_t peak_memory_{0};
   SmallSizePool scalar_pool_;
+  cudaMemPool_t cuda_pool_{nullptr};
 };
 
 CudaAllocator& allocator();
+
+Buffer malloc_async(size_t size, cudaStream_t stream);
 
 } // namespace mlx::core::cu

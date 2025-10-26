@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/allocator.h"
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/utils.h"
 
@@ -93,9 +94,17 @@ CudaAllocator::CudaAllocator()
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
   memory_limit_ = total * 0.95;
   max_pool_size_ = memory_limit_;
+#if CUDART_VERSION >= 13000
+  cudaMemLocation loc;
+  loc.id = 0;
+  loc.type = cudaMemLocationTypeNone;
+  cudaMemGetDefaultMemPool(&cuda_pool_, &loc, cudaMemAllocationTypeManaged);
+  // TODO set that.
+  // uint64_t threshold = UINT64_MAX;
+#endif
 }
 
-Buffer CudaAllocator::malloc(size_t size) {
+Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
   // Find available buffer from cache.
   auto orig_size = size;
   std::unique_lock lock(mutex_);
@@ -123,7 +132,12 @@ Buffer CudaAllocator::malloc(size_t size) {
     lock.unlock();
     if (!buf) {
       buf = new CudaBuffer{nullptr, size};
-      cudaError_t err = cudaMallocManaged(&buf->data, size);
+      cudaError_t err;
+      if (stream != nullptr && cuda_pool_ != nullptr) {
+        err = cudaMallocFromPoolAsync(&buf->data, size, cuda_pool_, stream);
+      } else {
+        err = cudaMallocManaged(&buf->data, size);
+      }
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
         throw std::runtime_error(fmt::format(
             "cudaMallocManaged failed: {}.", cudaGetErrorString(err)));
@@ -139,6 +153,14 @@ Buffer CudaAllocator::malloc(size_t size) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
   return Buffer{buf};
+}
+
+Buffer CudaAllocator::malloc_async(size_t size, cudaStream_t stream) {
+  return malloc_impl(size, stream);
+}
+
+Buffer CudaAllocator::malloc(size_t size) {
+  return malloc_impl(size, nullptr);
 }
 
 void CudaAllocator::free(Buffer buffer) {
@@ -218,6 +240,16 @@ CudaAllocator& allocator() {
   // can save some time at program exit.
   static CudaAllocator* allocator_ = new CudaAllocator;
   return *allocator_;
+}
+
+Buffer malloc_async(size_t size, cudaStream_t stream) {
+  auto buffer = allocator().malloc_async(size, stream);
+  if (size && !buffer.ptr()) {
+    std::ostringstream msg;
+    msg << "[malloc_async] Unable to allocate " << size << " bytes.";
+    throw std::runtime_error(msg.str());
+  }
+  return buffer;
 }
 
 } // namespace cu

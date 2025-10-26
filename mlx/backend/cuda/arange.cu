@@ -41,9 +41,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
     return;
   }
-  out.set_data(allocator::malloc(out.nbytes()));
-
   auto& encoder = cu::get_command_encoder(stream());
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   encoder.set_output_array(out);
 
   dispatch_int_float_types(out.dtype(), "Arange", [&](auto type_tag) {
