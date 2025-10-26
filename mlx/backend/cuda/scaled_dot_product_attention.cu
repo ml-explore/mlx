@@ -565,9 +565,10 @@ void sdpa_vector_2pass_fallback(
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
 
-  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  sums.set_data(allocator::malloc(sums.nbytes()));
-  maxs.set_data(allocator::malloc(maxs.nbytes()));
+  intermediate.set_data(
+      cu::malloc_async(intermediate.nbytes(), encoder.stream()));
+  sums.set_data(cu::malloc_async(sums.nbytes(), encoder.stream()));
+  maxs.set_data(cu::malloc_async(maxs.nbytes(), encoder.stream()));
 
   encoder.add_temporary(intermediate);
   encoder.add_temporary(sums);
@@ -787,7 +788,7 @@ void ScaledDotProductAttention::eval_gpu(
       };
 
       o.set_data(
-          allocator::malloc(o.nbytes()),
+          cu::malloc_async(o.nbytes(), encoder.stream()),
           o.size(),
           {str_oB, str_oH, str_oL, str_oD},
           flags);

@@ -23,14 +23,15 @@ void concatenate_gpu(
   }
   std::partial_sum(sizes.cbegin(), sizes.cend(), sizes.begin());
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
 
   auto strides = out.strides();
   auto flags = out.flags();
   flags.row_contiguous = false;
   flags.col_contiguous = false;
   flags.contiguous = false;
-  auto concurrent = cu::get_command_encoder(s).concurrent_context();
+  auto concurrent = encoder.concurrent_context();
   for (int i = 0; i < inputs.size(); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
     size_t data_offset = strides[axis] * sizes[i];
@@ -80,6 +81,7 @@ array compute_dynamic_offset(
     return std::make_tuple(false, std::move(source), std::vector{kernel_name});
   });
 
+  auto& encoder = cu::get_command_encoder(s);
   // Prepare output.
   array offset({1}, int64, nullptr, {});
   bool donate = indices.is_donatable() &&
@@ -87,10 +89,9 @@ array compute_dynamic_offset(
   if (donate) {
     offset.copy_shared_buffer(indices);
   } else {
-    offset.set_data(allocator::malloc(offset.itemsize()));
+    offset.set_data(cu::malloc_async(offset.itemsize(), encoder.stream()));
   }
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.add_temporary(offset);
   encoder.set_input_array(indices);
   encoder.set_output_array(offset);

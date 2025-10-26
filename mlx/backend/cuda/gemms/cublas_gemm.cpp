@@ -370,7 +370,7 @@ void CublasGemm::execute(
     // Ensure workspace is 256-byte aligned
     int nbytes = cuda::ceil_div(heuristic_.workspaceSize, 256) * 256;
     array workspace(
-        allocator::malloc(nbytes),
+        cu::malloc_async(nbytes, encoder.stream()),
         {static_cast<int>(heuristic_.workspaceSize)},
         int8);
     encoder.add_temporary(workspace);
