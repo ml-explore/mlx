@@ -755,7 +755,7 @@ void masked_scatter_impl(
     int vmap_axis) {
   ContiguousIterator mask_it(mask);
   ContiguousIterator src_it(src);
-  ContiguousIterator out_it(src);
+  ContiguousIterator out_it(out);
 
   const bool* mask_ptr = mask.data<bool>();
   const T* src_ptr = src.data<T>();

@@ -31,8 +31,8 @@ N_WARMUP = 5
 N_ITER_BENCH = 50
 N_ITER_FUNC = 20
 
-VECTOR_LENGTHS = [4096 * (2**i) for i in range(8)]
-MASK_DENSITIES = [0.1, 0.25, 0.5, 0.75]
+VECTOR_LENGTHS = [4096 * (2**i) for i in range(10)]
+MASK_DENSITIES = [0.01, 0.1, 0.25, 0.5]
 D_TYPES = ("float32", "float16")
 
 

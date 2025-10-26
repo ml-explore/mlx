@@ -3163,6 +3163,28 @@ class TestOps(mlx_tests.MLXTestCase):
         d[mask] = src
         self.assertTrue(mx.array_equal(d, mx.array([[7.0, 8.0], [9.0, 10.0]])))
 
+        # empty mask leaves array unchanged
+        e = mx.zeros((0,), dtype=mx.float32)
+        mask = mx.zeros((0,), dtype=mx.bool_)
+        src = mx.zeros((0,), dtype=mx.float32)
+        e[mask] = src
+        self.assertTrue(mx.array_equal(e, mx.zeros((0,), dtype=mx.float32)))
+
+        # strided target, mask, and source derived from slices
+        target = mx.arange(10.0, dtype=mx.float32)[1::2]
+        mask = mx.array(
+            [False, True, False, False, True, False, False, True, False, False],
+            dtype=mx.bool_,
+        )[1::2]
+        src = mx.arange(-4.0, 0.0, dtype=mx.float32)[::2]
+
+        target[mask] = src
+        self.assertTrue(
+            mx.array_equal(
+                target, mx.array([-4.0, 3.0, 5.0, -2.0, 9.0], dtype=mx.float32)
+            )
+        )
+
 
 class TestBroadcast(mlx_tests.MLXTestCase):
     def test_broadcast_shapes(self):

@@ -10,6 +10,7 @@
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/dtype.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -647,49 +648,63 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& mask = inputs[1];
   const array& src = inputs[2];
 
-  auto& s = stream();
-  auto& d = metal::device(s.device);
-
-  const size_t total = mask.size();
-  if (total == 0) {
-    const CopyType ct = (self.data_size() == 1)
-        ? CopyType::Scalar
-        : (self.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-    copy_gpu(self, out, ct, s);
-    return;
-  }
-
   if (src.dtype() != self.dtype()) {
     throw std::invalid_argument(
         "[MaskedScatter::eval_gpu] dtype(src) must match dtype(self).");
   }
 
-  const Shape flat_shape{static_cast<ShapeElem>(total)};
-  auto flatten_contig = [&](const array& a) {
-    const Shape flat{static_cast<ShapeElem>(a.size())};
-    array tmp = reshape_in_eval(a, flat, s);
-    return contiguous_copy_gpu(tmp, s);
-  };
+  if (self.shape() != mask.shape()) {
+    throw std::invalid_argument(
+        "[MaskedScatter::eval_gpu] self and mask must have same shape.");
+  }
 
-  array mask_flat = flatten_contig(mask);
-  array out_flat = flatten_contig(self);
-  array src_flat = flatten_contig(src);
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  const size_t total = mask.size();
+  const CopyType ct = (total == 1)
+      ? CopyType::Scalar
+      : (self.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy_gpu(self, out, ct, s);
+  if (total == 0)
+    return;
+
+  // Plan && batching
+  if (vmap_axis_ > 0) {
+    throw std::invalid_argument(
+        "[MaskedScatter::eval_gpu] Unsupported batch axis.");
+  }
 
   const bool batched = vmap_axis_ == 0 && mask.ndim() > 0;
   const size_t batch = batched ? static_cast<size_t>(mask.shape(0)) : 1;
-  const size_t inner = batched && batch > 0 ? total / batch : total;
+  if (batched && (batch == 0 || total % batch != 0)) {
+    throw std::invalid_argument(
+        "[MaskedScatter::eval_gpu] total elements must be divisible by batch.");
+  }
+
+  const size_t inner = batched ? total / batch : total;
+
   const bool src_batched =
       batched && src.ndim() > 0 && src.shape(0) == static_cast<int>(batch);
-  const size_t src_block =
-      src_batched && batch > 0 ? (src_flat.size() / batch) : src_flat.size();
-  const size_t src_capacity = src_batched ? src_block : src_flat.size();
+  const size_t src_size = src.size();
+  if (src_batched && (src_size % batch != 0)) {
+    throw std::invalid_argument(
+        "[MaskedScatter::eval_gpu] src.size() must be divisible by batch when src is batched.");
+  }
 
-  array idx_mask(flat_shape, uint32, nullptr, {});
-  idx_mask.set_data(allocator::malloc(idx_mask.nbytes()));
+  const size_t src_block = src_batched ? (src_size / batch) : src_size;
+  const size_t src_capacity = src_block;
+
+  const Shape flat_shape{static_cast<ShapeElem>(total)};
+  array mask_flat = reshape_in_eval(mask, flat_shape, s);
+
+  // Prefix (exclusive) of mask → scatter_offsets
+  array scatter_offsets(flat_shape, uint32, nullptr, {});
+  scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
 
   scan_gpu(
       mask_flat,
-      idx_mask,
+      scatter_offsets,
       Scan::Sum,
       /*axis=*/0,
       /*reverse=*/false,
@@ -697,66 +712,85 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       s,
       /*allow_in_buffer_donation=*/false);
 
-  std::string value_type = get_type_string(out_flat.dtype());
-  auto make_unbatched_kernel = [&]() {
-    std::string kernel_name = fmt::format("masked_assign_{}", value_type);
-    std::string kernel_src = fmt::format(masked_assign_kernel, value_type);
-    return std::make_pair(kernel_name, kernel_src);
-  };
+  // Kernel selection/build
+  const bool is_batched_run = batched && (batch > 1);
+  const bool src_has_batches = is_batched_run && src_batched;
+  static constexpr std::string_view kBaseName = "masked_assign";
+  const std::string dtype_tag = type_to_name(out.dtype());
+  const std::string value_type = get_type_string(out.dtype());
+  const std::string kernel_name = fmt::format(
+      "{}_{}_b{}_src{}",
+      kBaseName,
+      dtype_tag,
+      is_batched_run ? 1 : 0,
+      src_has_batches ? 1 : 0);
 
-  auto make_batched_kernel = [&]() {
-    std::string batched_kernel_tag =
-        fmt::format("{}_{}", value_type, src_batched ? "srcb" : "shared");
-    std::string kernel_name =
-        fmt::format("masked_assign_batched_{}", batched_kernel_tag);
-    std::string kernel_src = fmt::format(
-        masked_assign_batched_kernel,
-        batched_kernel_tag,
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::string source = metal::utils();
+    source += metal::masked_scatter();
+    source += fmt::format(
+        std::string(masked_assign_kernel),
+        kernel_name,
         value_type,
-        src_batched ? "true" : "false");
-    return std::make_pair(kernel_name, kernel_src);
-  };
+        is_batched_run ? "true" : "false",
+        src_has_batches ? "true" : "false");
+    return source;
+  });
+  auto kernel = d.get_kernel(kernel_name, lib);
 
-  const bool needs_batched_kernel = batched && batch > 1;
-  const auto& [kernel_name, kernel_src] =
-      needs_batched_kernel ? make_batched_kernel() : make_unbatched_kernel();
-
-  auto build_kernel = [&](const std::string& kernel_name,
-                          const std::string& kernel_src) {
-    auto lib = d.get_library(kernel_name, [&]() {
-      std::string source = metal::utils();
-      source += kernel_src;
-      return source;
-    });
-    return d.get_kernel(kernel_name, lib);
-  };
-
-  auto kernel = build_kernel(kernel_name, kernel_src);
-
+  // Binding
+  int bind_idx = 0;
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(mask_flat, 0);
-  compute_encoder.set_input_array(idx_mask, 1);
-  compute_encoder.set_input_array(src_flat, 2);
-  compute_encoder.set_output_array(out_flat, 3);
+  compute_encoder.set_input_array(mask_flat, bind_idx++);
+  compute_encoder.set_input_array(scatter_offsets, bind_idx++);
+  compute_encoder.set_input_array(src, bind_idx++);
+  compute_encoder.set_output_array(out, bind_idx++);
 
-  auto set_scalar_bytes = [&](auto caster) {
-    compute_encoder.set_bytes(caster(src_flat.size()), 4);
-    if (needs_batched_kernel) {
-      compute_encoder.set_bytes(caster(inner), 5);
-      compute_encoder.set_bytes(caster(src_block), 6);
-      compute_encoder.set_bytes(caster(src_capacity), 7);
-    }
+  auto bind_shape_info =
+      [&](const array& arr, int shape_index, int stride_index, int ndim_index) {
+        const int ndim = static_cast<int>(arr.ndim());
+        if (ndim == 0) {
+          const int shape0 = 0;
+          const int64_t stride0 = 0;
+          compute_encoder.set_bytes(shape0, shape_index);
+          compute_encoder.set_bytes(stride0, stride_index);
+        } else {
+          compute_encoder.set_vector_bytes(arr.shape(), shape_index);
+          compute_encoder.set_vector_bytes(arr.strides(), stride_index);
+        }
+        compute_encoder.set_bytes(ndim, ndim_index);
+      };
+
+  bind_shape_info(mask, bind_idx, bind_idx + 1, bind_idx + 2);
+  bind_idx += 3;
+  bind_shape_info(src, bind_idx, bind_idx + 1, bind_idx + 2);
+  bind_idx += 3;
+  bind_shape_info(out, bind_idx, bind_idx + 1, bind_idx + 2);
+  bind_idx += 3;
+
+  auto set_u32 = [&](uint32_t v, int idx) {
+    compute_encoder.set_bytes(v, idx);
   };
+  auto as_u32 = [](size_t v) -> uint32_t {
+    if (v > std::numeric_limits<uint32_t>::max())
+      throw std::overflow_error(
+          "[MaskedScatter::eval_gpu] uint64 size not implemented.");
+    return static_cast<uint32_t>(v);
+  };
+  set_u32(as_u32(src_size), bind_idx++);
+  set_u32(as_u32(total), bind_idx++);
+  set_u32(is_batched_run ? as_u32(inner) : 0u, bind_idx++);
+  set_u32(src_has_batches ? as_u32(src_block) : 0u, bind_idx++);
+  set_u32(is_batched_run ? as_u32(src_capacity) : 0u, bind_idx++);
 
-  set_scalar_bytes([](size_t v) { return static_cast<uint32_t>(v); });
-
+  // Dispatch
   auto group_dims = get_block_dims(total, 1, 1);
   MTL::Size grid_dims(total, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 
-  reshape_gpu(out_flat, out, s);
-  d.add_temporaries({mask_flat, src_flat, idx_mask, out_flat}, s.index);
+  // Lifetimes
+  d.add_temporaries({mask_flat, scatter_offsets}, s.index);
 }
 
 } // namespace mlx::core
