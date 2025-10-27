@@ -2485,6 +2485,35 @@ void init_ops(nb::module_& m) {
             array: The output array of means.
       )pbdoc");
   m.def(
+      "median",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        return mx::median(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      "keepdims"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def median(a: array, /, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the median(s) over the given axes.
+
+        Args:
+            a (array): Input array.
+            axis (int or list(int), optional): Optional axis or
+              axes to reduce over. If unspecified this defaults
+              to reducing over the entire array.
+            keepdims (bool, optional): Keep reduced axes as
+              singleton dimensions, defaults to `False`.
+
+        Returns:
+            array: The output array of medians.
+      )pbdoc");
+  m.def(
       "var",
       [](const mx::array& a,
          const IntOrVec& axis,

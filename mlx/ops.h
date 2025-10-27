@@ -539,6 +539,26 @@ array mean(
     bool keepdims = false,
     StreamOrDevice s = {});
 
+/** Computes the median of the elements of an array. */
+array median(const array& a, bool keepdims, StreamOrDevice s = {});
+inline array median(const array& a, StreamOrDevice s = {}) {
+  return median(a, false, to_stream(s));
+}
+
+/** Computes the median of the elements of an array along the given axes */
+array median(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
+/** Computes the median of the elements of an array along the given axis */
+array median(
+    const array& a,
+    int axis,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
 /** Computes the variance of the elements of an array. */
 array var(const array& a, bool keepdims, int ddof = 0, StreamOrDevice s = {});
 inline array var(const array& a, StreamOrDevice s = {}) {
