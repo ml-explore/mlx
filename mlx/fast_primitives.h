@@ -250,6 +250,35 @@ class ScaledDotProductAttention : public Custom {
   bool has_sinks_;
 };
 
+class ConvertFP8 : public Primitive {
+ public:
+  explicit ConvertFP8(Stream stream, bool to_fp8)
+      : Primitive(stream), to_fp8_(to_fp8) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  const char* name() const override {
+    if (to_fp8_) {
+      return "ToFP8";
+    } else {
+      return "FromFP8";
+    }
+  }
+  bool state() const {
+    return to_fp8_;
+  };
+
+  bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  bool to_fp8_;
+};
+
 class Quantize : public Custom {
  public:
   explicit Quantize(

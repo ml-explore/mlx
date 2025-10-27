@@ -108,6 +108,12 @@ constexpr bool supports_unary_op() {
   if (std::is_same_v<Op, LogicalNot>) {
     return std::is_same_v<In, Out> && std::is_same_v<In, bool>;
   }
+  if (std::is_same_v<Op, ToFP8>) {
+    return std::is_same_v<Out, uint8_t> && is_floating_v<In>;
+  }
+  if (std::is_same_v<Op, FromFP8>) {
+    return std::is_same_v<In, uint8_t> && is_floating_v<Out>;
+  }
   return false;
 }
 

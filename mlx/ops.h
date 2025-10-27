@@ -1402,6 +1402,12 @@ array dequantize(
     const std::string& mode = "affine",
     StreamOrDevice s = {});
 
+/** Convert an E4M3 float8 to the given floating point dtype. */
+array from_fp8(array x, Dtype dtype, StreamOrDevice s = {});
+
+/** Convert a floating point matrix to E4M3 float8. */
+array to_fp8(array x, StreamOrDevice s = {});
+
 /** Compute matrix products with matrix-level gather. */
 array gather_qmm(
     const array& x,

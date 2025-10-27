@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cuda_fp8.h>
+
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
@@ -331,6 +333,19 @@ struct Tanh {
   template <typename T>
   __device__ T operator()(T x) {
     return tanh(x);
+  }
+};
+
+struct ToFP8 {
+  template <typename T>
+  __device__ uint8_t operator()(T x) {
+    return __nv_fp8_e4m3(x).__x;
+  }
+};
+
+struct FromFP8 {
+  __device__ float operator()(uint8_t x) {
+    return float(*(__nv_fp8_e4m3*)(&x));
   }
 };
 
