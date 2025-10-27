@@ -717,8 +717,8 @@ class TestBlas(mlx_tests.MLXTestCase):
             c = mx.ones((32, 32)).astype(t)
             a = mx.random.uniform(shape=(32, 32)).astype(t)
             b = mx.random.uniform(shape=(32, 32)).astype(t)
-            out = mx.addmm(c, a, b)
-            expected = a @ b + c
+            out = mx.addmm(c, a, b, alpha=0.5, beta=2.0)
+            expected = 0.5 * (a @ b) + 2.0 * c
             self.assertTrue(mx.allclose(out, expected, rtol=tol, atol=tol))
 
     def test_addmm_grad(self):
