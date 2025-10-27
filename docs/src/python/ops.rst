@@ -112,6 +112,7 @@ Operations
    max
    maximum
    mean
+   median
    meshgrid
    min
    minimum
