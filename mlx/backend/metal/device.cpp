@@ -72,6 +72,19 @@ MTL::Library* try_load_bundle(
   }
   return nullptr;
 }
+
+MTL::Library* try_load_framework(
+    MTL::Device* device,
+    NS::URL* url,
+    const std::string& lib_name) {
+  std::string resource_path = std::string(url->fileSystemRepresentation()) +
+      "/" + lib_name + ".metallib";
+  auto [lib, error] = load_library_from_path(device, resource_path.c_str());
+  if (lib) {
+    return lib;
+  }
+  return nullptr;
+}
 #endif
 
 // Firstly, search for the metallib in the same path as this binary
@@ -101,6 +114,17 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
     library = try_load_bundle(device, bundle->resourceURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
+    }
+  }
+  // if SWIFTPM_BUNDLE is a framework identifier, try loading from that
+  auto frameworks = NS::Bundle::allFrameworks();
+  for (int i = 0, c = (int)frameworks->count(); i < c; i++) {
+    auto bundle = reinterpret_cast<NS::Bundle*>(frameworks->object(i));
+    if (!strcmp(bundle->bundleIdentifier()->utf8String(), SWIFTPM_BUNDLE)) {
+      library = try_load_framework(device, bundle->resourceURL(), lib_name);
+      if (library != nullptr) {
+        return {library, nullptr};
+      }
     }
   }
 #endif
