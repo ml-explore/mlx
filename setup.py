@@ -224,7 +224,7 @@ if __name__ == "__main__":
         include_package_data=True,
         package_dir=package_dir,
         zip_safe=False,
-        python_requires=">=3.9",
+        python_requires=">=3.10",
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={
             "build_ext": CMakeBuild,
