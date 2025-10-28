@@ -4111,7 +4111,11 @@ array quantized_matmul(
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  dtype = promote_types(x.dtype(), dtype);
+  if (qmode == QuantizationMode::Affine) {
+    dtype = promote_types(x.dtype(), dtype);
+  } else {
+    dtype = x.dtype();
+  }
 
   if (!issubdtype(dtype, floating)) {
     std::ostringstream msg;
@@ -4695,7 +4699,11 @@ array gather_qmm(
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
-  out_type = promote_types(x.dtype(), out_type);
+  if (qmode == QuantizationMode::Affine) {
+    out_type = promote_types(x.dtype(), out_type);
+  } else {
+    out_type = x.dtype();
+  }
 
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;

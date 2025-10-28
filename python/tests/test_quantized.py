@@ -745,6 +745,25 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
 
+    def test_qmm_mxfp4_type(self):
+        indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+
+        for t in [mx.bfloat16, mx.float16, mx.float32]:
+            x = mx.random.normal((32, 256)).astype(t)
+
+            w = mx.random.normal((32, 256))
+            wq, s = mx.quantize(w, mode="mxfp4", bits=4, group_size=32)
+            out = mx.quantized_matmul(x, wq, s, mode="mxfp4", group_size=32, bits=4)
+            self.assertEqual(out.dtype, t)
+
+            w = mx.random.normal((4, 32, 256))
+            wq, s = mx.quantize(w, mode="mxfp4", bits=4, group_size=32)
+
+            out = mx.gather_qmm(
+                x, wq, s, rhs_indices=indices, mode="mxfp4", group_size=32, bits=4
+            )
+            self.assertEqual(out.dtype, t)
+
     def test_gather_matmul_grad(self):
         def quantize(w, transpose=True, group_size=64, bits=4):
             qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
