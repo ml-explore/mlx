@@ -119,8 +119,10 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
   // if SWIFTPM_BUNDLE is a framework identifier, try loading from that
   auto frameworks = NS::Bundle::allFrameworks();
   for (int i = 0, c = (int)frameworks->count(); i < c; i++) {
-    auto bundle = reinterpret_cast<NS::Bundle*>(frameworks->object(i));
-    if (!strcmp(bundle->bundleIdentifier()->utf8String(), SWIFTPM_BUNDLE)) {
+    const auto bundle = reinterpret_cast<NS::Bundle*>(frameworks->object(i));
+    const auto identifier = bundle->bundleIdentifier();
+    if (identifier != nullptr &&
+        !strcmp(bundle->bundleIdentifier()->utf8String(), SWIFTPM_BUNDLE)) {
       library = try_load_framework(device, bundle->resourceURL(), lib_name);
       if (library != nullptr) {
         return {library, nullptr};
