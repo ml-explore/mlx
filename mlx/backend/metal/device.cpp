@@ -122,7 +122,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
     const auto bundle = reinterpret_cast<NS::Bundle*>(frameworks->object(i));
     const auto identifier = bundle->bundleIdentifier();
     if (identifier != nullptr &&
-        !strcmp(bundle->bundleIdentifier()->utf8String(), SWIFTPM_BUNDLE)) {
+        !strcmp(identifier->utf8String(), SWIFTPM_BUNDLE)) {
       library = try_load_framework(device, bundle->resourceURL(), lib_name);
       if (library != nullptr) {
         return {library, nullptr};
