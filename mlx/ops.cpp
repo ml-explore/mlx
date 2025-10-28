@@ -4037,7 +4037,7 @@ std::pair<int, int> quantization_params_from_mode(
       break;
     case QuantizationMode::Mxfp8:
       default_group_size = 32;
-      default_bits = 4;
+      default_bits = 8;
       break;
   }
   return {

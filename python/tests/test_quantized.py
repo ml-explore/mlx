@@ -146,7 +146,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_q, scales = mx.quantize(w, mode="nvfp4")
 
         with self.assertRaises(ValueError):
-            mx.dequantize(w_q, scales, mode="nvfp4")
+            mx.dequantize(w_q, scales, bits=3, mode="nvfp4")
 
         with self.assertRaises(ValueError):
             mx.dequantize(w_q, scales, group_size=32, mode="nvfp4")
