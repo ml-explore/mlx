@@ -29,7 +29,7 @@ make_jit_source(
   kernels/bf16_math.h
   kernels/complex.h
   kernels/defines.h)
-make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h)
+make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h kernels/fp8.h)
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
 make_jit_source(reduce_utils kernels/atomic.h kernels/reduction/ops.h)
@@ -81,7 +81,8 @@ if(MLX_METAL_JIT)
 
   make_jit_source(quantized_utils)
   make_jit_source(quantized kernels/quantized_utils.h)
-  make_jit_source(fp4_quantized kernels/quantized_utils.h)
+  make_jit_source(fp_quantized kernels/quantized_utils.h kernels/fp8.h
+                  kernels/fp4.h)
   make_jit_source(gemv_masked)
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)

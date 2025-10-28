@@ -306,7 +306,7 @@ void affine_dequantize(
   enc.set_input_array(scales);
   enc.set_input_array(biases);
   enc.set_output_array(w);
-  dispatch_float_types(w.dtype(), "affine_quantize", [&](auto type_tag) {
+  dispatch_float_types(w.dtype(), "affine_dequantize", [&](auto type_tag) {
     dispatch_groups(group_size_, [&](auto group_size) {
       dispatch_bits(bits_, [&](auto bits) {
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;

@@ -273,7 +273,7 @@ class ConvertFP8 : public Primitive {
   };
 
   bool is_equivalent(const Primitive& other) const override;
-  DEFINE_INPUT_OUTPUT_SHAPE()
+  DEFINE_INPUT_OUTPUT_SHAPE();
 
  private:
   bool to_fp8_;
