@@ -4016,6 +4016,35 @@ array conv_general(
       {in, wt});
 }
 
+std::pair<int, int> quantization_params_from_mode(
+    QuantizationMode mode,
+    std::optional<int> group_size_,
+    std::optional<int> bits_) {
+  int default_group_size;
+  int default_bits;
+  switch (mode) {
+    case QuantizationMode::Affine:
+      default_group_size = 64;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Nvfp4:
+      default_group_size = 16;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Mxfp4:
+      default_group_size = 32;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Mxfp8:
+      default_group_size = 32;
+      default_bits = 4;
+      break;
+  }
+  return {
+      group_size_.has_value() ? *group_size_ : default_group_size,
+      bits_.has_value() ? *bits_ : default_bits};
+}
+
 std::pair<Dtype, QuantizationMode> validate_mode_with_type(
     std::string_view tag,
     const array& scales,
@@ -4023,7 +4052,6 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
     const std::optional<Dtype> out_type,
     const std::string& mode) {
   auto qmode = string_to_quantization_mode(mode, tag);
-  // TODO add tests for out_type
   if (out_type.has_value() && !issubdtype(*out_type, floating)) {
     std::ostringstream msg;
     msg << "[" << tag << "] Only real floating types are supported but "
@@ -4070,16 +4098,19 @@ array quantized_matmul(
     array scales,
     std::optional<array> biases /* = std::nullopt */,
     bool transpose /* = true */,
-    int group_size /* = 64 */,
-    int bits /* = 4 */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
+  auto [dtype, qmode] = validate_mode_with_type(
+      "quantized_matmul", scales, biases, std::nullopt, mode);
+
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  auto [dtype, qmode] = validate_mode_with_type(
-      "quantized_matmul", scales, biases, std::nullopt, mode);
   dtype = promote_types(x.dtype(), dtype);
 
   if (!issubdtype(dtype, floating)) {
@@ -4317,11 +4348,13 @@ std::vector<array> fp_quantize(
 
 std::vector<array> quantize(
     const array& w,
-    int group_size /* = 64 */,
-    int bits /* = 4 */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   auto qmode = string_to_quantization_mode(mode, "quantize");
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
   if (!issubdtype(w.dtype(), floating)) {
     std::ostringstream msg;
     msg << "[quantize] Only real floating types can be quantized "
@@ -4563,13 +4596,15 @@ array dequantize(
     const array& w,
     const array& scales,
     const std::optional<array>& biases /* = std::nullopt */,
-    int group_size /* = 64 */,
-    int bits /* = 4 */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     std::optional<Dtype> dtype /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto [out_type, qmode] =
       validate_mode_with_type("dequantize", scales, biases, dtype, mode);
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
   if (bits <= 0) {
     std::ostringstream msg;
     msg << "[dequantize] Invalid value for bits: " << bits;
@@ -4644,21 +4679,22 @@ array gather_qmm(
     std::optional<array> lhs_indices_ /* = std::nullopt */,
     std::optional<array> rhs_indices_ /* = std::nullopt */,
     bool transpose /* = true */,
-    int group_size /* = 64 */,
-    int bits /* = 4 */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size, bits, mode, s);
+        x, w, scales, biases, transpose, group_size_, bits_, mode, s);
   }
-
-  auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
 
   auto [out_type, qmode] =
       validate_mode_with_type("gather_qmm", scales, biases, std::nullopt, mode);
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+  auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
+      "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
   out_type = promote_types(x.dtype(), out_type);
 
   if (!issubdtype(out_type, floating)) {

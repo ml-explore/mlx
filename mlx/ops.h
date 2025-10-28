@@ -1379,16 +1379,16 @@ array quantized_matmul(
     array scales,
     std::optional<array> biases = std::nullopt,
     bool transpose = true,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
 std::vector<array> quantize(
     const array& w,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     StreamOrDevice s = {});
 
@@ -1397,8 +1397,8 @@ array dequantize(
     const array& w,
     const array& scales,
     const std::optional<array>& biases = std::nullopt,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
@@ -1418,8 +1418,8 @@ array gather_qmm(
     std::optional<array> lhs_indices = std::nullopt,
     std::optional<array> rhs_indices = std::nullopt,
     bool transpose = true,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     bool sorted_indices = false,
     StreamOrDevice s = {});
