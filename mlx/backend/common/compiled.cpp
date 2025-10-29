@@ -120,7 +120,7 @@ void compiled_allocate_outputs(
     Strides strides;
     size_t data_size;
     array::Flags flags;
-    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(inputs) && o < std::ssize(outputs); ++i) {
       auto& in = inputs[i];
       // Conditions for donation
       // - Correct size
@@ -138,7 +138,7 @@ void compiled_allocate_outputs(
         data_size = in.data_size();
       }
     }
-    for (; o < outputs.size(); ++o) {
+    for (; o < std::ssize(outputs); ++o) {
       outputs[o].set_data(
           allocator::malloc(data_size * outputs[o].itemsize()),
           data_size,
@@ -147,7 +147,7 @@ void compiled_allocate_outputs(
     }
   } else {
     int o = 0;
-    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(inputs) && o < std::ssize(outputs); ++i) {
       auto& in = inputs[i];
       // Conditions for donation
       // - Row contiguous
@@ -162,7 +162,7 @@ void compiled_allocate_outputs(
         o++;
       }
     }
-    for (; o < outputs.size(); ++o) {
+    for (; o < std::ssize(outputs); ++o) {
       outputs[o].set_data(allocator::malloc(outputs[o].nbytes()));
     }
   }
@@ -193,7 +193,7 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
 
     // Broadcast the inputs to the output shape.
     Strides xstrides;
-    size_t j = 0;
+    int j = 0;
     for (; j < shape.size() - x.ndim(); ++j) {
       if (shape[j] == 1) {
         xstrides.push_back(out.strides()[j]);
@@ -201,7 +201,7 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
         xstrides.push_back(0);
       }
     }
-    for (size_t i = 0; i < x.ndim(); ++i, ++j) {
+    for (int i = 0; i < x.ndim(); ++i, ++j) {
       if (x.shape(i) == 1) {
         if (shape[j] == 1) {
           xstrides.push_back(out.strides()[j]);
@@ -224,13 +224,13 @@ bool compiled_use_large_index(
     const std::vector<array>& outputs,
     bool contiguous) {
   if (contiguous) {
-    size_t max_size = 0;
+    int64_t max_size = 0;
     for (const auto& in : inputs) {
       max_size = std::max(max_size, in.data_size());
     }
     return max_size > UINT32_MAX;
   } else {
-    size_t max_size = 0;
+    int64_t max_size = 0;
     for (const auto& o : outputs) {
       max_size = std::max(max_size, o.size());
     }
