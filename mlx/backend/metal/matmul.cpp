@@ -8,6 +8,7 @@
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/metal/binary.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -925,19 +926,28 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // Copy c into out and return
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Handle empty matrix case (K=0)
   if (inputs[0].shape(-1) == 0) {
-    copy_gpu(
-        inputs[2],
-        out,
-        inputs[2].flags().row_contiguous ? CopyType::Vector : CopyType::General,
-        stream());
+    auto& c = inputs[2];
+    if (beta_ == 1.0f) {
+      copy_gpu(
+          c,
+          out,
+          c.flags().row_contiguous ? CopyType::Vector : CopyType::General,
+          s);
+    } else {
+      out.set_data(allocator::malloc(out.nbytes()));
+      array beta_scalar = array(beta_, c.dtype());
+      binary_op_gpu({c, beta_scalar}, out, "Multiply", s);
+      d.add_temporary(std::move(beta_scalar), s.index);
+    }
     return;
   }
 
   out.set_data(allocator::malloc(out.nbytes()));
-  auto& s = stream();
-  auto& d = metal::device(s.device);
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
