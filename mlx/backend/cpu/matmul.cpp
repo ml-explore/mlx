@@ -135,15 +135,64 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  // Handle empty matrix case (K=0)
+  if (inputs[0].shape(-1) == 0) {
+    auto& c = inputs[2];
+    CopyType ctype = c.data_size() == 1
+        ? CopyType::Scalar
+        : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+    copy_cpu(c, out, ctype, stream());
+    if (beta_ != 1.0f) {
+      auto& encoder = cpu::get_command_encoder(stream());
+      encoder.set_output_array(out);
+      encoder.dispatch([out_ptr = out.data<void>(),
+                        size = out.size(),
+                        beta = beta_,
+                        dtype = out.dtype()]() mutable {
+        switch (dtype) {
+          case float32:
+            for (size_t i = 0; i < size; ++i) {
+              static_cast<float*>(out_ptr)[i] *= beta;
+            }
+            break;
+          case float16:
+            for (size_t i = 0; i < size; ++i) {
+              auto& val = static_cast<float16_t*>(out_ptr)[i];
+              val = static_cast<float16_t>(static_cast<float>(val) * beta);
+            }
+            break;
+          case bfloat16:
+            for (size_t i = 0; i < size; ++i) {
+              auto& val = static_cast<bfloat16_t*>(out_ptr)[i];
+              val = static_cast<bfloat16_t>(static_cast<float>(val) * beta);
+            }
+            break;
+          case float64:
+            for (size_t i = 0; i < size; ++i) {
+              static_cast<double*>(out_ptr)[i] *= beta;
+            }
+            break;
+          case complex64:
+            for (size_t i = 0; i < size; ++i) {
+              auto& val = static_cast<complex64_t*>(out_ptr)[i];
+              val = complex64_t(val.real() * beta, val.imag() * beta);
+            }
+            break;
+          default:
+            throw std::runtime_error(
+                "[AddMM::eval_cpu] Unsupported dtype for beta scaling");
+        }
+      });
+    }
+    return;
+  }
+
   // Fill output with C
   auto& c = inputs[2];
   CopyType ctype = c.data_size() == 1
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy_cpu(c, out, ctype, stream());
-  if (inputs[0].shape(-1) == 0) {
-    return;
-  }
   matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 
