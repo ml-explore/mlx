@@ -99,7 +99,7 @@ void binary_op_dispatch_dims(
   ContiguousIterator a_it(shape, a_strides, ndim - 2);
   ContiguousIterator b_it(shape, b_strides, ndim - 2);
   auto stride = out_strides[ndim - 3];
-  for (size_t elem = 0; elem < a.size(); elem += stride) {
+  for (int64_t elem = 0; elem < std::ssize(a); elem += stride) {
     binary_op_dims<T, U, Op, 2>(
         a_ptr + a_it.loc,
         b_ptr + b_it.loc,
@@ -137,21 +137,21 @@ void binary_op(
   if (bopt == BinaryOpType::ScalarScalar) {
     std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
   } else if (bopt == BinaryOpType::ScalarVector) {
-    for (size_t i = 0; i < b.data_size(); ++i) {
+    for (int64_t i = 0; i < b.data_size(); ++i) {
       std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
       out_a_ptr++;
       out_b_ptr++;
       b_ptr++;
     }
   } else if (bopt == BinaryOpType::VectorScalar) {
-    for (size_t i = 0; i < a.data_size(); ++i) {
+    for (int64_t i = 0; i < a.data_size(); ++i) {
       std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
       out_a_ptr++;
       out_b_ptr++;
       a_ptr++;
     }
   } else { // VectorVector
-    for (size_t i = 0; i < a.size(); ++i) {
+    for (int64_t i = 0; i < a.size(); ++i) {
       std::tie(*out_a_ptr, *out_b_ptr) = op(*a_ptr, *b_ptr);
       out_a_ptr++;
       out_b_ptr++;

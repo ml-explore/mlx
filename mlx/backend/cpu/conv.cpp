@@ -860,7 +860,7 @@ void explicit_gemm_conv_1D_cpu(
     const std::vector<int>& padding_lo,
     const std::vector<int>& padding_hi,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation,
+    const std::vector<int>& /* wt_dilation */,
     Stream stream) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = in.shape(1); // Input spatial dim
@@ -1003,7 +1003,7 @@ void explicit_gemm_conv_ND_cpu(
     const std::vector<int>& padding_lo,
     const std::vector<int>& padding_hi,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation,
+    const std::vector<int>& /* wt_dilation */,
     const bool flip,
     Stream stream) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
@@ -1023,7 +1023,7 @@ void explicit_gemm_conv_ND_cpu(
   // Pad input
   Shape padded_shape(in.shape().size());
   padded_shape.front() = N;
-  for (size_t i = 0; i < iDim.size(); i++) {
+  for (int i = 0; i < iDim.size(); i++) {
     padded_shape[i + 1] = iDim[i] + padding_lo[i] + padding_hi[i];
   }
   padded_shape.back() = C;
@@ -1054,20 +1054,20 @@ void explicit_gemm_conv_ND_cpu(
   // Make strided view
   Shape strided_shape(oDim.size() + wDim.size() + 2);
   strided_shape.front() = N;
-  for (size_t i = 0; i < oDim.size(); i++) {
+  for (int i = 0; i < oDim.size(); i++) {
     strided_shape[i + 1] = oDim[i];
   }
-  for (size_t i = 0; i < wDim.size(); i++) {
+  for (int i = 0; i < wDim.size(); i++) {
     strided_shape[i + 1 + oDim.size()] = wDim[i];
   }
   strided_shape.back() = C;
 
   Strides strided_strides(in.shape().size() * 2 - 2);
   strided_strides[0] = in_padded.strides()[0];
-  for (size_t i = 0; i < wt_strides.size(); i++) {
+  for (int i = 0; i < std::ssize(wt_strides); i++) {
     strided_strides[i + 1] = in_padded.strides()[i + 1] * wt_strides[i];
   }
-  for (size_t i = 1; i < in_padded.strides().size(); i++) {
+  for (int i = 1; i < std::ssize(in_padded.strides()); i++) {
     strided_strides[i + wt_strides.size()] = in_padded.strides()[i];
   }
 

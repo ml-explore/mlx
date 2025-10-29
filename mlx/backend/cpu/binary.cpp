@@ -17,7 +17,7 @@ namespace mlx::core {
 namespace {
 
 template <typename Op>
-void binary(const array& a, const array& b, array& out, Op op, Stream stream) {
+void binary(const array& a, const array& b, array& out, Op /* op */, Stream stream) {
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, out, bopt);
 
@@ -81,7 +81,7 @@ void comparison_op(
     const array& a,
     const array& b,
     array& out,
-    Op op,
+    Op /* op */,
     Stream stream) {
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, out, bopt);
@@ -146,7 +146,7 @@ void binary_float(
     const array& a,
     const array& b,
     array& out,
-    Op op,
+    Op /* op */,
     Stream stream) {
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, out, bopt);
@@ -187,7 +187,7 @@ void binary_int(
     const array& a,
     const array& b,
     array& out,
-    Op op,
+    Op /* op */,
     Stream stream) {
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, out, bopt);
