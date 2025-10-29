@@ -46,8 +46,9 @@ class RMSNorm : public Custom {
 
   static bool use_fallback(Stream stream);
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -79,8 +80,9 @@ class RMSNormVJP : public Custom {
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -106,8 +108,9 @@ class LayerNorm : public Custom {
 
   static bool use_fallback(Stream s);
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -138,8 +141,9 @@ class LayerNormVJP : public Custom {
       float eps)
       : Custom(stream, fallback), eps_(eps) {}
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -174,8 +178,9 @@ class RoPE : public Custom {
 
   static bool use_fallback(Stream s);
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -225,8 +230,9 @@ class ScaledDotProductAttention : public Custom {
       bool do_causal,
       Stream s);
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("NYI");
   }
 
@@ -320,8 +326,9 @@ class CustomKernel : public Primitive {
         is_precompiled_(is_precompiled),
         shared_memory_(shared_memory) {}
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
+  void eval_cpu(
+      const std::vector<array>& /* inputs */,
+      std::vector<array>& /* outputs */) override {
     throw std::runtime_error("Custom kernels only run on GPU.");
   }
 
