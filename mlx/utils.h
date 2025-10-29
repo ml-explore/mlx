@@ -138,8 +138,8 @@ namespace env {
 
 int get_var(const char* name, int default_value);
 
-inline int bfs_max_width() {
-  static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);
+inline unsigned int bfs_max_width() {
+  static unsigned int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);
   return bfs_max_width_;
 }
 

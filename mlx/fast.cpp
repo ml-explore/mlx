@@ -13,11 +13,11 @@ std::vector<array> Custom::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& /* outputs */) {
   auto [_, vjps] = mlx::core::vjp(fallback_, primals, cotangents);
   std::vector<array> vjp_outs;
-  for (int i = 0, j = 0; i < vjps.size(); ++i) {
-    if (j < argnums.size() && i == argnums[j]) {
+  for (int i = 0, j = 0; i < std::ssize(vjps); ++i) {
+    if (j < std::ssize(argnums) && i == argnums[j]) {
       vjp_outs.push_back(vjps[i]);
       j++;
     }
@@ -30,8 +30,8 @@ std::vector<array> Custom::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   std::vector<array> all_tangents;
-  for (int i = 0, j = 0; i < primals.size(); i++) {
-    if (j < argnums.size() && i == argnums[j]) {
+  for (int i = 0, j = 0; i < std::ssize(primals); i++) {
+    if (j < std::ssize(argnums) && i == argnums[j]) {
       all_tangents.emplace_back(tangents[j++]);
     } else {
       all_tangents.emplace_back(zeros_like(primals[i]));
@@ -536,7 +536,7 @@ std::vector<array> RoPE::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& /* outputs */) {
   auto s = stream();
   auto fallback = [dims = dims_,
                    traditional = traditional_,
@@ -635,7 +635,7 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  const size_t batch_dim = queries.shape(0);
+  const int batch_dim = queries.shape(0);
   for (const auto& tensor : {keys, values}) {
     if (tensor.shape(0) != batch_dim) {
       std::ostringstream msg;

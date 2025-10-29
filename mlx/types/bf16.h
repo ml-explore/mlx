@@ -24,9 +24,6 @@ struct _MLX_BFloat16 {
   // Default constructor
   _MLX_BFloat16() = default;
 
-  // Default copy constructor
-  _MLX_BFloat16(_MLX_BFloat16 const&) = default;
-
   // Appease std::vector<bool> for being special
   _MLX_BFloat16& operator=(std::vector<bool>::reference x) {
     bits_ = x;

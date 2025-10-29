@@ -103,7 +103,7 @@ class Scheduler {
     default_streams_.at(s.device.type) = s;
   }
 
-  void notify_new_task(const Stream& stream) {
+  void notify_new_task(const Stream& /* stream */) {
     {
       std::lock_guard<std::mutex> lk(mtx);
       n_active_tasks_++;
@@ -111,7 +111,7 @@ class Scheduler {
     completion_cv.notify_all();
   }
 
-  void notify_task_completion(const Stream& stream) {
+  void notify_task_completion(const Stream& /* stream */) {
     {
       std::lock_guard<std::mutex> lk(mtx);
       n_active_tasks_--;

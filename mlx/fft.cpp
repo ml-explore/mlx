@@ -20,14 +20,14 @@ array fft_impl(
     throw std::invalid_argument(
         "[fftn] Requires array with at least one dimension.");
   }
-  if (n.size() != axes.size()) {
+  if (n.size() != std::ssize(axes)) {
     throw std::invalid_argument("[fftn] Shape and axes have different sizes.");
   }
   if (axes.empty()) {
     return a;
   }
 
-  std::vector<size_t> valid_axes;
+  std::vector<int> valid_axes;
   for (int ax : axes) {
     valid_axes.push_back(ax < 0 ? ax + a.ndim() : ax);
   }
@@ -59,7 +59,7 @@ array fft_impl(
   }
 
   auto in_shape = a.shape();
-  for (int i = 0; i < valid_axes.size(); ++i) {
+  for (int i = 0; i < std::ssize(valid_axes); ++i) {
     in_shape[valid_axes[i]] = n[i];
   }
   if (real && inverse) {

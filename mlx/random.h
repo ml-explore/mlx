@@ -89,6 +89,7 @@ inline array uniform(
     const Shape& shape,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
+  (void)s;
   return uniform(shape, float32, key);
 }
 

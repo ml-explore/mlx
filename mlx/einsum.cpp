@@ -190,8 +190,8 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
 
   // Start by iterating over all possible combinations
   std::vector<std::pair<int, int>> pos_pairs;
-  for (int i = 0; i < inputs.size(); ++i) {
-    for (int j = i + 1; j < inputs.size(); ++j) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
+    for (int j = i + 1; j < std::ssize(inputs); ++j) {
       pos_pairs.emplace_back(i, j);
     }
   }
@@ -200,13 +200,13 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
   std::vector<Contraction> possible_contractions;
   size_t path_cost = 0;
   int path_scaling = 0;
-  auto num_in = inputs.size();
+  auto num_in = std::ssize(inputs);
   for (int i = 0; i < num_in - 1; ++i) {
     auto add_contraction = [&](int p1, int p2) {
       CharSet new_term;
       CharSet contractions(inputs[p1].set.begin(), inputs[p1].set.end());
       contractions.insert(inputs[p2].set.begin(), inputs[p2].set.end());
-      for (int i = 0; i < inputs.size(); i++) {
+      for (int i = 0; i < std::ssize(inputs); i++) {
         if (i == p1 || i == p2) {
           continue;
         }
@@ -321,7 +321,7 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     }
 
     pos_pairs.clear();
-    for (int i = 0; i < inputs.size() - 1; ++i) {
+    for (int i = 0; i < std::ssize(inputs) - 1; ++i) {
       pos_pairs.emplace_back(i, inputs.size() - 1);
     }
     path_cost += best.cost;
@@ -360,7 +360,7 @@ array batch_tensordot(
   {
     auto a_shape = a.shape();
     auto b_shape = b.shape();
-    for (int i = 0; i < a_contract.size(); ++i) {
+    for (int i = 0; i < std::ssize(a_contract); ++i) {
       auto d = std::max(a.shape(a_contract[i]), b.shape(b_contract[i]));
       a_shape[a_contract[i]] = d;
       b_shape[b_contract[i]] = d;
@@ -430,7 +430,7 @@ array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
     std::string repeat_str;
     std::string no_repeat_str;
     std::unordered_map<char, int> counts;
-    for (int i = 0; i < str.size(); ++i) {
+    for (int i = 0; i < std::ssize(str); ++i) {
       auto [it, _] = counts.insert({str[i], 0});
       it->second++;
     }
@@ -455,7 +455,7 @@ array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
   std::vector<array> indices;
   int n_expand = repeats.size();
   for (auto [c, v] : repeats) {
-    for (int i = 0; i < str.size(); ++i) {
+    for (int i = 0; i < std::ssize(str); ++i) {
       if (str[i] == c) {
         slice_sizes[i] = 1;
         axes.push_back(i);
@@ -494,7 +494,7 @@ void preprocess_einsum_inputs(
     std::vector<array>& operands,
     StreamOrDevice s) {
   // Collapse repeat indices
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     auto& in = inputs[i];
     if (in.set.size() < in.str.size()) {
       operands[positions[i]] = collapse_repeats(operands[positions[i]], in, s);
@@ -514,10 +514,10 @@ void preprocess_einsum_inputs(
       auto inserted = counts.insert({c, 0});
       inserted.first->second++;
     }
-    for (int i = 0; i < inputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(inputs); ++i) {
       auto& in = inputs[i];
       std::vector<int> sum_axes;
-      for (int ax = 0; ax < in.str.size(); ++ax) {
+      for (int ax = 0; ax < std::ssize(in.str); ++ax) {
         if (counts[in.str[ax]] == 1) {
           sum_axes.push_back(ax);
         }
@@ -549,12 +549,12 @@ array einsum_naive(
   }
 
   // Expand and transpose inputs as needed
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     int pos = positions[i];
     auto& op = operands[pos];
 
     // Add missing dimensions at the end
-    if (op.ndim() != char_to_ax.size()) {
+    if (op.ndim() != std::ssize(char_to_ax)) {
       auto shape = op.shape();
       shape.insert(shape.end(), char_to_ax.size() - shape.size(), 1);
       op = reshape(op, std::move(shape), s);
@@ -597,7 +597,7 @@ array einsum_naive(
 
   // Multiply and sum
   auto out = operands[positions[0]];
-  for (int i = 1; i < positions.size(); ++i) {
+  for (int i = 1; i < std::ssize(positions); ++i) {
     out = multiply(out, operands[positions[i]], s);
   }
   std::vector<int> sum_axes;
@@ -675,9 +675,9 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
                                                int operand_idx) {
     bool have_ellipsis = false;
     int cnt_before = 0, cnt_after = 0;
-    for (int i = 0; i < subscript.size(); i++) {
+    for (int i = 0; i < std::ssize(subscript); i++) {
       if (!isalpha(subscript[i])) {
-        if (i + 2 >= subscript.size() || subscript[i] != '.' ||
+        if (i + 2 >= std::ssize(subscript) || subscript[i] != '.' ||
             subscript[i + 1] != '.' || subscript[i + 2] != '.') {
           std::ostringstream msg;
           msg << "[" << fn_name << "] Subscripts must be letters, but got '"
@@ -732,7 +732,7 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
     }
   };
 
-  for (int i = 0; i < operands.size(); i++) {
+  for (int i = 0; i < std::ssize(operands); i++) {
     check_letters_and_expand_ellipsis(in_subscripts[i], &operands[i], i);
   }
   check_letters_and_expand_ellipsis(out_subscript, nullptr, -1);
@@ -747,12 +747,12 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
 
   std::unordered_map<char, ShapeElem> dim_map;
   std::vector<Subscript> inputs;
-  for (int i = 0; i < in_subscripts.size(); ++i) {
+  for (int i = 0; i < std::ssize(in_subscripts); ++i) {
     auto& in = in_subscripts[i];
     CharSet in_set(in.begin(), in.end());
     inputs.emplace_back(in, in_set);
 
-    if (in.size() != operands[i].ndim()) {
+    if (std::ssize(in) != operands[i].ndim()) {
       std::ostringstream msg;
       msg << "[" << fn_name << "] Invalid number of subscripts " << in.size()
           << " for input " << i << " with " << operands[i].ndim()
@@ -763,7 +763,7 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
     // Check repeat subscripts are valid
     if (in_set.size() < in.size()) {
       std::unordered_map<char, ShapeElem> local_dims;
-      for (int j = 0; j < in.size(); ++j) {
+      for (int j = 0; j < std::ssize(in); ++j) {
         auto dim = operands[i].shape(j);
         auto inserted = local_dims.insert({in[j], dim});
         if (!inserted.second) {
@@ -778,7 +778,7 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
       }
     }
 
-    for (int j = 0; j < in.size(); j++) {
+    for (int j = 0; j < std::ssize(in); j++) {
       auto c = in[j];
       auto dim = operands[i].shape(j);
       auto inserted = dim_map.insert({c, dim});
@@ -864,7 +864,7 @@ array einsum(
       std::vector<int> a_contract;
       std::vector<int> a_batch;
       std::vector<int> a_concat;
-      for (int i = 0; i < in_a.str.size(); ++i) {
+      for (int i = 0; i < std::ssize(in_a.str); ++i) {
         auto c = in_a.str[i];
         if (out.set.find(c) == out.set.end()) {
           // Not in the output, contraction
@@ -887,7 +887,7 @@ array einsum(
       for (auto a_i : a_batch) {
         b_batch.push_back(in_b.str.find(in_a.str[a_i]));
       }
-      for (int i = 0; i < in_b.str.size(); ++i) {
+      for (int i = 0; i < std::ssize(in_b.str); ++i) {
         auto c = in_b.str[i];
         if (out.set.find(c) != out.set.end() &&
             in_a.set.find(c) == in_a.set.end()) {
