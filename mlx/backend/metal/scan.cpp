@@ -111,8 +111,8 @@ void scan_gpu(
     compute_encoder.set_input_array(
         in.data_shared_ptr() == nullptr ? out : in, 0);
     compute_encoder.set_output_array(out, 1);
-    size_t size = in.shape(axis_);
-    size_t stride = in.strides()[axis_];
+    size_t size = in.shape(axis);
+    size_t stride = in.strides()[axis];
     int bn = 32;
     size_t stride_blocks = (stride + bn - 1) / bn;
     compute_encoder.set_bytes(size, 2);
