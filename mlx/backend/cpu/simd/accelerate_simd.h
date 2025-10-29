@@ -253,12 +253,12 @@ Simd<T, N> pow(Simd<T, N> base, Simd<T, N> exp) {
   } else {
     Simd<T, N> res = 1;
     // Raising an integer to a negative power is undefined
-    if (any(exp < 0)) {
+    if (any(exp < static_cast<T>(0))) {
       return 0;
     }
-    while (any(exp > 0)) {
+    while (any(exp > static_cast<T>(0))) {
       res = select((exp & 1) != 0, res * base, res);
-      base = select(exp > 0, base * base, base);
+      base = select(exp > static_cast<T>(0), base * base, base);
       exp = exp >> 1;
     }
     return res;
