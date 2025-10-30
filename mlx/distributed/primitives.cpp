@@ -27,7 +27,7 @@ std::pair<std::vector<array>, std::vector<int>> AllReduce::vmap(
 }
 
 std::vector<array> AllReduce::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
     const std::vector<int>&) {
   switch (reduce_type_) {
@@ -44,10 +44,10 @@ std::vector<array> AllReduce::jvp(
 }
 
 std::vector<array> AllReduce::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
     const std::vector<int>&,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& /* outputs */) {
   return cotangents;
 }
 
@@ -58,7 +58,7 @@ std::pair<std::vector<array>, std::vector<int>> AllGather::vmap(
 }
 
 std::vector<array> AllGather::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
     const std::vector<int>&) {
   return {all_gather(tangents[0], group(), stream())};
