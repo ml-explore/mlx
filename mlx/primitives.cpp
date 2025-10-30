@@ -2156,7 +2156,7 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   auto out_shape = in.shape();
   if (ax >= 0) {
     for (auto& fft_ax : fft_axes) {
-      if (fft_ax >= ax) {
+      if (static_cast<int>(fft_ax) >= ax) {
         fft_ax++;
       }
       if (real_) {

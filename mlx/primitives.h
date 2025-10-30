@@ -1071,7 +1071,8 @@ class FFT : public UnaryPrimitive {
  public:
   explicit FFT(
       Stream stream,
-      const std::vector<int>& axes,
+      // Note: PocketFFT requires size_t
+      const std::vector<size_t>& axes,
       bool inverse,
       bool real)
       : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real) {}
@@ -1089,7 +1090,7 @@ class FFT : public UnaryPrimitive {
   }
 
  private:
-  std::vector<int> axes_;
+  std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
 };

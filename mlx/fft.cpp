@@ -27,7 +27,7 @@ array fft_impl(
     return a;
   }
 
-  std::vector<int> valid_axes;
+  std::vector<size_t> valid_axes;
   for (int ax : axes) {
     valid_axes.push_back(ax < 0 ? ax + a.ndim() : ax);
   }
