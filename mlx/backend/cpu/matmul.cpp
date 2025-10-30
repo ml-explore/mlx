@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include "mlx/array.h"
+#include "mlx/backend/cpu/binary.h"
+#include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/gemm.h"
@@ -138,45 +140,38 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Handle empty matrix case (K=0)
   if (inputs[0].shape(-1) == 0) {
     auto& c = inputs[2];
-    CopyType ctype = c.data_size() == 1
-        ? CopyType::Scalar
-        : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-    copy_cpu(c, out, ctype, stream());
-    if (beta_ != 1.0f) {
+    if (beta_ == 1.0f) {
+      CopyType ctype = c.data_size() == 1
+          ? CopyType::Scalar
+          : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+      copy_cpu(c, out, ctype, stream());
+    } else {
+      array beta_scalar = array(beta_, c.dtype());
+      auto bopt = get_binary_op_type(c, beta_scalar);
+      set_binary_op_output_data(c, beta_scalar, out, bopt);
       auto& encoder = cpu::get_command_encoder(stream());
+      encoder.set_input_array(c);
+      encoder.set_input_array(beta_scalar);
       encoder.set_output_array(out);
-      encoder.dispatch([out_ptr = out.data<void>(),
-                        size = out.size(),
-                        beta = beta_,
-                        dtype = out.dtype()]() mutable {
-        switch (dtype) {
-          case float32:
-            for (size_t i = 0; i < size; ++i) {
-              static_cast<float*>(out_ptr)[i] *= beta;
-            }
-            break;
+      encoder.dispatch([c = array::unsafe_weak_copy(c),
+                        beta_scalar = array::unsafe_weak_copy(beta_scalar),
+                        out = array::unsafe_weak_copy(out),
+                        bopt]() mutable {
+        switch (out.dtype()) {
           case float16:
-            for (size_t i = 0; i < size; ++i) {
-              auto& val = static_cast<float16_t*>(out_ptr)[i];
-              val = static_cast<float16_t>(static_cast<float>(val) * beta);
-            }
+            binary_op<float16_t, detail::Multiply>(c, beta_scalar, out, bopt);
             break;
-          case bfloat16:
-            for (size_t i = 0; i < size; ++i) {
-              auto& val = static_cast<bfloat16_t*>(out_ptr)[i];
-              val = static_cast<bfloat16_t>(static_cast<float>(val) * beta);
-            }
+          case float32:
+            binary_op<float, detail::Multiply>(c, beta_scalar, out, bopt);
             break;
           case float64:
-            for (size_t i = 0; i < size; ++i) {
-              static_cast<double*>(out_ptr)[i] *= beta;
-            }
+            binary_op<double, detail::Multiply>(c, beta_scalar, out, bopt);
+            break;
+          case bfloat16:
+            binary_op<bfloat16_t, detail::Multiply>(c, beta_scalar, out, bopt);
             break;
           case complex64:
-            for (size_t i = 0; i < size; ++i) {
-              auto& val = static_cast<complex64_t*>(out_ptr)[i];
-              val = complex64_t(val.real() * beta, val.imag() * beta);
-            }
+            binary_op<complex64_t, detail::Multiply>(c, beta_scalar, out, bopt);
             break;
           default:
             throw std::runtime_error(

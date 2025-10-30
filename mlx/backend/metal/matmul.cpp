@@ -939,7 +939,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           c.flags().row_contiguous ? CopyType::Vector : CopyType::General,
           s);
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
       array beta_scalar = array(beta_, c.dtype());
       binary_op_gpu({c, beta_scalar}, out, "Multiply", s);
       d.add_temporary(std::move(beta_scalar), s.index);
