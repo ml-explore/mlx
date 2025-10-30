@@ -1,20 +1,46 @@
-on:
-  pull_request:
-    branches:
-      - main
+name: Build and Test
+
+on: pull_request  
+
+permissions:
+  contents: read
 
 jobs:
   check_lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+      - uses: pre-commit/action@v3.0.1
+
+  linux_build_and_test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+      - uses: ./.github/actions/build-linux
+
+  mac_build_and_test:
+    runs-on: [self-hosted, macos]
+    needs: check_lint
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-macos
+      - uses: ./.github/actions/build-macos
+
+  cuda_build_and_test:
+    runs-on: gpu-t4-4-core
+    needs: check_lint
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
         with:
-          python-version: 3.8
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pre-commit black isort clang-format
-      - name: Run lint
-        run: |
-          pre-commit run --all-files
+          runner-type: 'cuda'
+      - uses: ./.github/actions/build-cuda
+
+  build_documentation:
+    runs-on: [self-hosted, macos]
+    needs: check_lint
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/build-docs

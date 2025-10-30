@@ -1,0 +1,93 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: 33 6 * * 1-5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_linux_release:
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.10", "3.14"]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+      - uses: ./.github/actions/build-linux
+        with:
+          build-type: release
+          run-tests: false
+      - name: Upload mlx artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-wheels-${{ matrix.python_version }}
+          path: wheelhouse/mlx-*.whl
+          retention-days: 7
+      - name: Upload mlx-cpu artifacts
+        if: matrix.python_version == '3.10'
+        uses: actions/upload-artifact@v5
+        with:
+          name: mlx-cpu
+          path: wheelhouse/mlx_cpu-*.whl
+          retention-days: 7
+  
+  build_linux_with_tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+        with:
+          python-version: ${{ matrix.python_version }}
+      - uses: ./.github/actions/build-linux
+
+  build_mac_release:
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+        # TODO: 3.14 had issues finding a compatible tensorflow
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+    runs-on: [self-hosted, macos]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-macos
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: ./.github/actions/build-macos
+
+  build_cuda_with_tests:
+    runs-on: gpu-t4-4-core
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+        with:
+          runner-type: 'cuda'
+      - uses: ./.github/actions/build-cuda
+
+  build_cuda_release:
+    runs-on: ubuntu-22-large
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+        with:
+          runner-type: 'cuda'
+      - name: Build Python package
+        uses: ./.github/actions/build-cuda-release
+        with:
+          nvcc-location: '/usr/local/cuda-12.9/bin/nvcc'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: mlx-cuda
+          path: wheelhouse/mlx_cuda-*.whl
+          retention-days: 7
+

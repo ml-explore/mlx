@@ -1,0 +1,22 @@
+name: 'Build macOS release'
+description: 'Build MLX releases macOS'
+
+inputs:
+  macos-target:
+    description: 'macOS build target'
+    required: false
+    default: '15.0'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Python package(s)
+      shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      run: |
+        uv pip install build
+        uv run --no-project setup.py clean --all
+        MLX_BUILD_STAGE=1 uv run -m build -w
+        uv run --no-project setup.py clean --all
+        MLX_BUILD_STAGE=2 uv run -m build -w
