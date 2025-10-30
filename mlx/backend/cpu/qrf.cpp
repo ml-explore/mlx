@@ -13,7 +13,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
   const int lda = M;
-  size_t num_matrices = a.size() / (M * N);
+  int64_t num_matrices = a.size() / (M * N);
 
   // Copy A to inplace input and make it col-contiguous
   array in(a.shape(), a.dtype(), nullptr, {});
@@ -54,7 +54,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
     auto work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
-    for (int i = 0; i < num_matrices; ++i) {
+    for (int64_t i = 0; i < num_matrices; ++i) {
       // Solve
       geqrf<T>(
           &M,
@@ -68,7 +68,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
     }
     allocator::free(work);
 
-    for (int i = 0; i < num_matrices; ++i) {
+    for (int64_t i = 0; i < num_matrices; ++i) {
       /// num_reflectors x N
       for (int j = 0; j < num_reflectors; ++j) {
         for (int k = 0; k < j; ++k) {
@@ -97,7 +97,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
     work = allocator::malloc(sizeof(T) * lwork);
 
     // Loop over matrices
-    for (int i = 0; i < num_matrices; ++i) {
+    for (int64_t i = 0; i < num_matrices; ++i) {
       // Compute Q
       orgqr<T>(
           &M,
@@ -111,7 +111,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
           &info);
     }
 
-    for (int i = 0; i < num_matrices; ++i) {
+    for (int64_t i = 0; i < num_matrices; ++i) {
       // M x num_reflectors
       for (int j = 0; j < M; ++j) {
         for (int k = 0; k < num_reflectors; ++k) {

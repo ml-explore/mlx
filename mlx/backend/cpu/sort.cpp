@@ -120,8 +120,8 @@ template <typename T>
 void sort(array& out, int axis) {
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + out.ndim() : axis;
-  size_t in_size = out.size();
-  size_t n_rows = in_size / out.shape(axis);
+  int64_t in_size = out.size();
+  int64_t n_rows = in_size / out.shape(axis);
 
   auto remaining_shape = out.shape();
   remaining_shape.erase(remaining_shape.begin() + axis);
@@ -136,7 +136,7 @@ void sort(array& out, int axis) {
   ContiguousIterator src_it(
       remaining_shape, remaining_strides, remaining_shape.size());
   auto out_ptr = out.data<T>();
-  for (int i = 0; i < n_rows; i++) {
+  for (int64_t i = 0; i < n_rows; i++) {
     T* data_ptr = out_ptr + src_it.loc;
 
     StridedIterator st(data_ptr, axis_stride, 0);
@@ -151,7 +151,7 @@ template <typename T, typename IdxT = uint32_t>
 void argsort(const array& in, array& out, int axis) {
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
-  size_t n_rows = in.size() / in.shape(axis);
+  int64_t n_rows = in.size() / in.shape(axis);
 
   auto in_remaining_shape = in.shape();
   in_remaining_shape.erase(in_remaining_shape.begin() + axis);
@@ -176,7 +176,7 @@ void argsort(const array& in, array& out, int axis) {
       out_remaining_shape, out_remaining_strides, out_remaining_shape.size());
   auto in_ptr = in.data<T>();
   auto out_ptr = out.data<IdxT>();
-  for (int i = 0; i < n_rows; i++) {
+  for (int64_t i = 0; i < n_rows; i++) {
     const T* data_ptr = in_ptr + in_it.loc;
     IdxT* idx_ptr = out_ptr + out_it.loc;
 
@@ -214,8 +214,8 @@ template <typename T>
 void partition(array& out, int axis, int kth) {
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + out.ndim() : axis;
-  size_t in_size = out.size();
-  size_t n_rows = in_size / out.shape(axis);
+  int64_t in_size = out.size();
+  int64_t n_rows = in_size / out.shape(axis);
 
   auto remaining_shape = out.shape();
   remaining_shape.erase(remaining_shape.begin() + axis);
@@ -232,7 +232,7 @@ void partition(array& out, int axis, int kth) {
   ContiguousIterator src_it(
       remaining_shape, remaining_strides, remaining_shape.size());
   auto out_ptr = out.data<T>();
-  for (int i = 0; i < n_rows; i++) {
+  for (int64_t i = 0; i < n_rows; i++) {
     T* data_ptr = out_ptr + src_it.loc;
     src_it.step();
 
@@ -248,7 +248,7 @@ template <typename T, typename IdxT = uint32_t>
 void argpartition(const array& in, array& out, int axis, int kth) {
   // Get axis, shape and stride info
   axis = axis < 0 ? axis + in.ndim() : axis;
-  size_t n_rows = in.size() / in.shape(axis);
+  int64_t n_rows = in.size() / in.shape(axis);
 
   auto in_remaining_shape = in.shape();
   in_remaining_shape.erase(in_remaining_shape.begin() + axis);
@@ -277,7 +277,7 @@ void argpartition(const array& in, array& out, int axis, int kth) {
   auto in_ptr = in.data<T>();
   auto out_ptr = out.data<IdxT>();
 
-  for (int i = 0; i < n_rows; i++) {
+  for (int64_t i = 0; i < n_rows; i++) {
     const T* data_ptr = in_ptr + in_it.loc;
     IdxT* idx_ptr = out_ptr + out_it.loc;
     in_it.step();

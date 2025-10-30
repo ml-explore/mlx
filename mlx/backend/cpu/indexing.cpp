@@ -78,7 +78,7 @@ void gather(
     can_copy = true;
 
     // Ignore leading 1s
-    int i = 0;
+    int64_t i = 0;
     for (; i < slice_sizes.size() && slice_sizes[i] == 1; ++i)
       ;
 
@@ -91,7 +91,7 @@ void gather(
     can_copy = true;
 
     // Ignore trailing 1s
-    int i = slice_sizes.size() - 1;
+    int64_t i = slice_sizes.size() - 1;
     for (; i >= 0 && slice_sizes[i] == 1; --i)
       ;
 
@@ -101,11 +101,11 @@ void gather(
       can_copy = (src.shape(i) == slice_sizes[i]);
     }
   }
-  size_t slice_size = 1;
+  int64_t slice_size = 1;
   for (auto s : slice_sizes) {
     slice_size *= s;
   }
-  size_t ind_size = slice_size == 0 ? 0 : out.size() / slice_size;
+  int64_t ind_size = slice_size == 0 ? 0 : out.size() / slice_size;
   const T* src_ptr = src.data<T>();
   T* dst_ptr = out.data<T>();
 
@@ -115,10 +115,10 @@ void gather(
     src_it = ContiguousIterator(slice_sizes, src.strides(), src.ndim());
   }
 
-  size_t out_idx = 0;
-  for (int idx = 0; idx < ind_size; idx++) {
-    size_t src_idx = 0;
-    for (int ii = 0; ii < inds.size(); ++ii) {
+  int64_t out_idx = 0;
+  for (int64_t idx = 0; idx < ind_size; idx++) {
+    int64_t src_idx = 0;
+    for (int ii = 0; ii < std::ssize(inds); ++ii) {
       auto ax = axes[ii];
       auto idx_loc = its[ii].loc;
       its[ii].step();
@@ -134,7 +134,7 @@ void gather(
           src_ptr + src_idx, src_ptr + src_idx + slice_size, dst_ptr + out_idx);
       out_idx += slice_size;
     } else {
-      for (int jj = 0; jj < slice_size; jj++) {
+      for (int64_t jj = 0; jj < slice_size; jj++) {
         dst_ptr[out_idx++] = src_ptr[src_idx + src_it.loc];
         src_it.step();
       }
@@ -403,11 +403,11 @@ void scatter(
     const std::vector<int>& axes) {
   int nind = inds.size();
   auto inds_ndim = updates.ndim() - out.ndim();
-  size_t n_updates = nind ? inds[0].size() : 1;
+  int64_t n_updates = nind ? inds[0].size() : 1;
 
   Shape update_shape(
       updates.shape().begin() + inds_ndim, updates.shape().end());
-  size_t update_size = 1;
+  int64_t update_size = 1;
   for (auto us : update_shape) {
     update_size *= us;
   }
@@ -418,9 +418,9 @@ void scatter(
 
   auto out_ptr = out.data<InT>();
   auto upd_ptr = updates.data<InT>();
-  for (int i = 0; i < n_updates; ++i) {
-    size_t out_offset = 0;
-    for (int j = 0; j < inds.size(); ++j) {
+  for (int64_t i = 0; i < n_updates; ++i) {
+    int64_t out_offset = 0;
+    for (int j = 0; j < std::ssize(inds); ++j) {
       auto ax = axes[j];
       auto idx_loc = its[j].loc;
       its[j].step();
@@ -429,7 +429,7 @@ void scatter(
       out_offset += (idx_val * out.strides()[ax]);
     }
     update_it.seek(i * update_size);
-    for (int j = 0; j < update_size; ++j) {
+    for (int64_t j = 0; j < update_size; ++j) {
       OpT{}(upd_ptr[update_it.loc], out_ptr + out_offset + out_it.loc);
       update_it.step();
       out_it.step();

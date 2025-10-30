@@ -34,7 +34,7 @@ void matmul_bnns(
     bool b_transposed,
     size_t lda,
     size_t ldb,
-    size_t ldc,
+    size_t /* ldc */,
     float alpha,
     float beta,
     size_t batch_size,
@@ -52,7 +52,7 @@ void matmul_bnns(
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   if (beta != 1.0 && beta != 0.0) {
     // scale the output
-    for (auto i = 0; i < batch_size * M * N; ++i) {
+    for (size_t i = 0; i < batch_size * M * N; ++i) {
       out[i] *= beta;
     }
     beta = 1.0;
@@ -127,7 +127,7 @@ void matmul_bnns(
   auto bnns_filter =
       BNNSFilterCreateLayerBroadcastMatMul(&gemm_params, nullptr);
 
-  for (int i = 0; i < batch_size; ++i) {
+  for (size_t i = 0; i < batch_size; ++i) {
     BNNSFilterApplyTwoInput(
         bnns_filter,
         reinterpret_cast<const uint8_t*>(
@@ -148,12 +148,12 @@ void matmul<float16_t>(
     float16_t* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
-    size_t ldc,
+    int64_t lda,
+    int64_t ldb,
+    int64_t ldc,
     float alpha,
     float beta,
-    size_t batch_size,
+    int64_t batch_size,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,
@@ -183,12 +183,12 @@ void matmul<bfloat16_t>(
     bfloat16_t* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
-    size_t ldc,
+    int64_t lda,
+    int64_t ldb,
+    int64_t ldc,
     float alpha,
     float beta,
-    size_t batch_size,
+    int64_t batch_size,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,

@@ -17,7 +17,12 @@ namespace mlx::core {
 namespace {
 
 template <typename Op>
-void binary(const array& a, const array& b, array& out, Op /* op */, Stream stream) {
+void binary(
+    const array& a,
+    const array& b,
+    array& out,
+    Op /* op */,
+    Stream stream) {
   auto bopt = get_binary_op_type(a, b);
   set_binary_op_output_data(a, b, out, bopt);
 

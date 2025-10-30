@@ -10,8 +10,8 @@
 namespace mlx::core {
 
 template <typename T, typename U = T, typename Op>
-void unary_op(const T* a, U* out, size_t shape, size_t stride) {
-  for (size_t i = 0; i < shape; i += 1) {
+void unary_op(const T* a, U* out, int64_t shape, int64_t stride) {
+  for (int64_t i = 0; i < shape; i += 1) {
     out[i] = Op{}(*a);
     a += stride;
   }
@@ -38,14 +38,14 @@ void unary_op(const array& a, array& out, Op) {
       src++;
     }
   } else {
-    size_t shape = ndim > 0 ? a.shape().back() : 1;
-    size_t stride = ndim > 0 ? a.strides().back() : 1;
+    int64_t shape = ndim > 0 ? a.shape().back() : 1;
+    int64_t stride = ndim > 0 ? a.strides().back() : 1;
     if (ndim <= 1) {
       unary_op<T, U, Op>(src, dst, shape, stride);
       return;
     }
     auto it = ContiguousIterator(a.shape(), a.strides(), ndim - 1);
-    for (size_t elem = 0; elem < a.size(); elem += shape) {
+    for (int64_t elem = 0; elem < a.size(); elem += shape) {
       unary_op<T, U, Op>(src + it.loc, dst + elem, shape, stride);
       it.step();
     }

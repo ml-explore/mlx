@@ -13,20 +13,20 @@ void matmul<float>(
     float* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
-    size_t ldc,
+    int64_t lda,
+    int64_t ldb,
+    int64_t ldc,
     float alpha,
     float beta,
-    size_t batch_size,
+    int64_t batch_size,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,
     const Strides& b_strides) {
   auto ndim = a_shape.size();
-  size_t M = a_shape[ndim - 2];
-  size_t N = b_shape[ndim - 1];
-  size_t K = a_shape[ndim - 1];
+  int64_t M = a_shape[ndim - 2];
+  int64_t N = b_shape[ndim - 1];
+  int64_t K = a_shape[ndim - 1];
 
   for (int i = 0; i < batch_size; ++i) {
     cblas_sgemm(
@@ -54,20 +54,20 @@ void matmul<double>(
     double* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
-    size_t ldc,
+    int64_t lda,
+    int64_t ldb,
+    int64_t ldc,
     float alpha,
     float beta,
-    size_t batch_size,
+    int64_t batch_size,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,
     const Strides& b_strides) {
   auto ndim = a_shape.size();
-  size_t M = a_shape[ndim - 2];
-  size_t N = b_shape[ndim - 1];
-  size_t K = a_shape[ndim - 1];
+  int64_t M = a_shape[ndim - 2];
+  int64_t N = b_shape[ndim - 1];
+  int64_t K = a_shape[ndim - 1];
 
   for (int i = 0; i < batch_size; ++i) {
     cblas_dgemm(
@@ -95,20 +95,20 @@ void matmul<complex64_t>(
     complex64_t* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
-    size_t ldc,
+    int64_t lda,
+    int64_t ldb,
+    int64_t ldc,
     float alpha,
     float beta,
-    size_t batch_size,
+    int64_t batch_size,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,
     const Strides& b_strides) {
   auto ndim = a_shape.size();
-  size_t M = a_shape[ndim - 2];
-  size_t N = b_shape[ndim - 1];
-  size_t K = a_shape[ndim - 1];
+  int64_t M = a_shape[ndim - 2];
+  int64_t N = b_shape[ndim - 1];
+  int64_t K = a_shape[ndim - 1];
   auto calpha = static_cast<complex64_t>(alpha);
   auto cbeta = static_cast<complex64_t>(beta);
 

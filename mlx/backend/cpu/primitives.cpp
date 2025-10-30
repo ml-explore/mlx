@@ -48,7 +48,7 @@ static std::pair<array, bool> compute_dynamic_offset(
   auto compute_offset =
       [strides, axes, offset = offset.data<int64_t>()](const auto* indices) {
         int64_t offset_ = 0;
-        for (int i = 0; i < axes.size(); ++i) {
+        for (int i = 0; i < std::ssize(axes); ++i) {
           offset_ += indices[i] * strides[axes[i]];
         }
         offset[0] = offset_;
@@ -193,9 +193,9 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
   flags.row_contiguous = false;
   flags.col_contiguous = false;
   flags.contiguous = false;
-  for (int i = 0; i < inputs.size(); i++) {
+  for (int i = 0; i < std::ssize(inputs); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
-    size_t data_offset = strides[axis_] * sizes[i];
+    int64_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
     copy_cpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
@@ -205,7 +205,7 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
 void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  constexpr size_t extra_bytes = 16384;
+  constexpr int64_t extra_bytes = 16384;
   if (in.buffer_size() <= out.nbytes() + extra_bytes &&
       (in.flags().row_contiguous ||
        (allow_col_major_ && in.flags().col_contiguous))) {
@@ -254,8 +254,8 @@ void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
   copy_cpu(val, out, CopyType::Scalar, stream());
 
   // Find offset for start of input values
-  size_t data_offset = 0;
-  for (int i = 0; i < axes_.size(); i++) {
+  int64_t data_offset = 0;
+  for (int i = 0; i < std::ssize(axes_); i++) {
     auto ax = axes_[i] < 0 ? out.ndim() + axes_[i] : axes_[i];
     data_offset += out.strides()[ax] * low_pad_size_[i];
   }
@@ -274,10 +274,10 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
   auto& keys = inputs[0];
-  size_t num_keys = keys.size() / 2;
+  int64_t num_keys = keys.size() / 2;
 
-  size_t elems_per_key = out.size() / num_keys;
-  size_t bytes_per_key = out.itemsize() * elems_per_key;
+  int64_t elems_per_key = out.size() / num_keys;
+  int64_t bytes_per_key = out.itemsize() * elems_per_key;
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto kptr = inputs[0].data<uint32_t>();
@@ -291,8 +291,8 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
                     num_keys,
                     kshape = keys.shape(),
                     kstrides = keys.strides()]() mutable {
-    size_t out_skip = (bytes_per_key + 4 - 1) / 4;
-    auto half_size = out_skip / 2;
+    int64_t out_skip = (bytes_per_key + 4 - 1) / 4;
+    uintptr_t half_size = out_skip / 2;
     bool even = out_skip % 2 == 0;
     for (int i = 0; i < num_keys; ++i, cptr += bytes_per_key) {
       auto ptr = reinterpret_cast<uint32_t*>(cptr);

@@ -10,7 +10,7 @@ namespace mlx::core {
 namespace {
 
 template <typename T>
-void arange(T start, T next, array& out, size_t size, Stream stream) {
+void arange(T start, T next, array& out, int64_t size, Stream stream) {
   auto ptr = out.data<T>();
   auto step_size = next - start;
   auto& encoder = cpu::get_command_encoder(stream);
