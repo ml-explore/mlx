@@ -127,6 +127,7 @@ std::vector<array> RMSNorm::vjp(
   assert(primals.size() == 2);
   assert(outputs.size() == 1);
   assert(cotangents.size() == 1);
+  (void)outputs;
 
   auto s = stream();
   auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
@@ -269,6 +270,7 @@ std::vector<array> LayerNorm::vjp(
   assert(primals.size() == 3);
   assert(outputs.size() == 1);
   assert(cotangents.size() == 1);
+  (void)outputs;
 
   auto s = stream();
   auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
