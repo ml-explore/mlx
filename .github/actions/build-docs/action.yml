@@ -25,7 +25,7 @@ runs:
     
     - name: Create artifact tar
       shell: sh
-      run: tar -cf artifact.tar --cd docs/build/html -L .
+      run: tar -cf artifact.tar --cd docs --dereference build/html index.html
 
     # Do it manually because upload-pages-artifact requires gtar
     - name: Upload artifact
