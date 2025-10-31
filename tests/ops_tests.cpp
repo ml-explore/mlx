@@ -1668,7 +1668,7 @@ TEST_CASE("test error functions") {
         -0.1124629160182849,
         -0.5204998778130465,
         -0.7969082124228322};
-    for (int i = 0; i < vals.size(); ++i) {
+    for (int i = 0; i < std::ssize(vals); ++i) {
       x = array(vals.begin()[i]);
       CHECK_EQ(erf(x).item<float>(), doctest::Approx(expected.begin()[i]));
     }
@@ -1686,7 +1686,7 @@ TEST_CASE("test error functions") {
         -0.08885599049425769,
         -0.4769362762044699,
         -1.1630871536766743};
-    for (int i = 0; i < vals.size(); ++i) {
+    for (int i = 0; i < std::ssize(vals); ++i) {
       x = array(vals.begin()[i]);
       CHECK_EQ(erfinv(x).item<float>(), doctest::Approx(expected.begin()[i]));
     }
