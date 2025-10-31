@@ -86,7 +86,7 @@ auto py_value_and_grad(
           << argnums[0];
       throw std::invalid_argument(msg.str());
     }
-    for (int i = 1; i < argnums.size(); ++i) {
+    for (int i = 1; i < std::ssize(argnums); ++i) {
       if (argnums[i] == argnums[i - 1]) {
         std::ostringstream msg;
         msg << error_msg_tag << " Duplicate argument index " << argnums[0]
@@ -99,7 +99,7 @@ auto py_value_and_grad(
   return [fun, argnums, argnames, error_msg_tag, scalar_func_only](
              nb::args& args, nb::kwargs& kwargs) {
     // Sanitize the input
-    if (argnums.size() > 0 && argnums.back() >= args.size()) {
+    if (argnums.size() > 0 && argnums.back() >= std::ssize(args)) {
       std::ostringstream msg;
       msg << error_msg_tag << " Can't compute the gradient of argument index "
           << argnums.back() << " because the function is called with only "
@@ -126,8 +126,8 @@ auto py_value_and_grad(
     std::vector<mx::array> arrays;
     std::vector<int> counts(1, 0);
     std::vector<int> gradient_indices;
-    for (int i = 0, j = 0; i < args.size(); ++i) {
-      bool needs_grad = (j < argnums.size() && argnums[j] == i);
+    for (int i = 0, j = 0; i < std::ssize(args); ++i) {
+      bool needs_grad = (j < std::ssize(argnums) && argnums[j] == i);
       auto argsi = tree_flatten(args[i], /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
@@ -257,7 +257,7 @@ auto py_value_and_grad(
       positional_grads = tree_unflatten(args[argnums[0]], gradients, counts[0]);
     } else if (argnums.size() > 1) {
       nb::list grads_;
-      for (int i = 0; i < argnums.size(); i++) {
+      for (int i = 0; i < std::ssize(argnums); i++) {
         grads_.append(tree_unflatten(args[argnums[i]], gradients, counts[i]));
       }
       positional_grads = nb::tuple(grads_);
@@ -366,14 +366,13 @@ auto py_vmap(
     // able to reconstruct the python tree of extra return values
     nb::object py_outputs;
 
-    auto vmap_fn =
-        [&fun, &args, &inputs, &py_outputs](const std::vector<mx::array>& a) {
-          // Call the python function
-          py_outputs = fun(*tree_unflatten(args, a));
+    auto vmap_fn = [&fun, &args, &py_outputs](const std::vector<mx::array>& a) {
+      // Call the python function
+      py_outputs = fun(*tree_unflatten(args, a));
 
-          // Flatten the outputs
-          return tree_flatten(py_outputs, true);
-        };
+      // Flatten the outputs
+      return tree_flatten(py_outputs, true);
+    };
 
     auto [trace_inputs, trace_outputs] =
         mx::detail::vmap_trace(vmap_fn, inputs, flat_in_axes);
@@ -451,7 +450,7 @@ struct PyCompiledFun {
       if (nb::isinstance<nb::list>(obj)) {
         auto l = nb::cast<nb::list>(obj);
         constants.push_back(list_identifier);
-        for (int i = 0; i < l.size(); ++i) {
+        for (int i = 0; i < std::ssize(l); ++i) {
           recurse(l[i]);
         }
       } else if (nb::isinstance<nb::tuple>(obj)) {

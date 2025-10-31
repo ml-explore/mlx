@@ -436,7 +436,7 @@ void mlx_savez_helper(
       nb::cast<std::unordered_map<std::string, mx::array>>(kwargs);
   auto arrays_list = nb::cast<std::vector<mx::array>>(args);
 
-  for (int i = 0; i < arrays_list.size(); i++) {
+  for (int i = 0; i < std::ssize(arrays_list); i++) {
     std::string arr_name = "arr_" + std::to_string(i);
 
     if (arrays_dict.count(arr_name) > 0) {

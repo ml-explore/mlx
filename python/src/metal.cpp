@@ -22,7 +22,9 @@ bool DEPRECATE(const char* old_fn, const char* new_fn) {
   return true;
 }
 
-#define DEPRECATE(oldfn, newfn) static bool dep = DEPRECATE(oldfn, newfn)
+#define DEPRECATE(oldfn, newfn)              \
+  static bool dep = DEPRECATE(oldfn, newfn); \
+  (void)dep;
 
 void init_metal(nb::module_& m) {
   nb::module_ metal = m.def_submodule("metal", "mlx.metal");

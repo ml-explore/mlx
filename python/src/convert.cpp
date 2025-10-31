@@ -50,7 +50,7 @@ mx::array nd_array_to_mlx(
   // Compute the shape and size
   mx::Shape shape;
   shape.reserve(nd_array.ndim());
-  for (int i = 0; i < nd_array.ndim(); i++) {
+  for (int i = 0; i < static_cast<int>(nd_array.ndim()); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
   auto type = nd_array.dtype();
@@ -289,7 +289,7 @@ PyScalarT validate_shape(
     throw std::invalid_argument("Initialization encountered extra dimension.");
   }
   auto s = shape[idx];
-  if (nb::len(list) != s) {
+  if (nb::len(list) != static_cast<size_t>(s)) {
     throw std::invalid_argument(
         "Initialization encountered non-uniform length.");
   }
