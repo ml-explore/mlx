@@ -103,3 +103,14 @@ jobs:
         run: |
             bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
 
+  linux_fedora_build_cpp_aarch64:
+    runs-on: ubuntu-22.04-arm
+    container:
+      image: fedora:42
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: CPP Build Test - No Release
+        run: |
+            bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
