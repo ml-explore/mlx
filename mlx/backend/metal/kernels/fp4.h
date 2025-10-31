@@ -49,7 +49,10 @@ struct fp4_e2m1 {
   }
 
   operator float() {
-    return FP4_LUT[bits];
+    half converted = as_type<half>(ushort((bits & 7) << 9));
+    converted *= 16384.0;
+    converted = bits & 8 ? -converted : converted;
+    return converted;
   }
 
   uint8_t bits;
