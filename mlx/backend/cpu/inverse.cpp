@@ -122,7 +122,7 @@ void inverse_impl(
       stream);
 
   const int N = a.shape(-1);
-  const size_t num_matrices = a.size() / (N * N);
+  const int64_t num_matrices = a.size() / (N * N);
 
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(inv);
@@ -130,13 +130,13 @@ void inverse_impl(
   auto inv_ptr = inv.data<T>();
   if (tri) {
     encoder.dispatch([inv_ptr, N, num_matrices, upper]() {
-      for (int i = 0; i < num_matrices; i++) {
+      for (int64_t i = 0; i < num_matrices; i++) {
         tri_inv<T>(inv_ptr + N * N * i, N, upper);
       }
     });
   } else {
     encoder.dispatch([inv_ptr, N, num_matrices]() {
-      for (int i = 0; i < num_matrices; i++) {
+      for (int64_t i = 0; i < num_matrices; i++) {
         general_inv<T>(inv_ptr + N * N * i, N);
       }
     });
