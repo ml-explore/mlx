@@ -26,6 +26,7 @@ void arange_set_scalars(T start, T next, metal::CommandEncoder& enc) {
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
+  (void)inputs;
   out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
     return;
