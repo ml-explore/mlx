@@ -302,7 +302,7 @@ class SmallVector {
   }
 
   T& at(int index) {
-    if (index >= size()) {
+    if (index < 0 || index >= size()) {
       throw std::out_of_range("SmallVector out of range.");
     }
     return begin_[index];
@@ -312,7 +312,7 @@ class SmallVector {
   }
 
   T& operator[](int index) {
-    assert(size() > index);
+    assert(index >= 0 && size() > index);
     return begin_[index];
   }
   const T& operator[](int index) const {
