@@ -11,7 +11,7 @@ void slice_gpu(
     array& out,
     const Shape& start_indices,
     const Shape& strides,
-    const Stream& s) {
+    const Stream& /* s */) {
   slice(in, out, start_indices, strides);
 }
 
@@ -27,7 +27,7 @@ void pad_gpu(
 
   // Find offset for start of input values
   size_t data_offset = 0;
-  for (int i = 0; i < axes.size(); i++) {
+  for (int i = 0; i < std::ssize(axes); i++) {
     auto ax = axes[i] < 0 ? out.ndim() + axes[i] : axes[i];
     data_offset += out.strides()[ax] * low_pad_size[i];
   }

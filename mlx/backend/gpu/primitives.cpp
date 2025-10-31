@@ -51,7 +51,7 @@ void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Contiguous::eval_gpu");
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  constexpr size_t extra_bytes = 16384;
+  constexpr int64_t extra_bytes = 16384;
   if (in.buffer_size() <= out.nbytes() + extra_bytes &&
       (in.flags().row_contiguous ||
        (allow_col_major_ && in.flags().col_contiguous))) {
