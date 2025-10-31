@@ -1105,6 +1105,108 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(grad_x, expected))
         self.assertTrue(mx.array_equal(grad_ind, mx.zeros(ind.shape)))
 
+    def test_numpy_scalar_indexing(self):
+        """Test indexing with numpy scalar types"""
+        # Basic numpy scalar indexing
+        x = mx.array([1, 2, 3, 4, 5])
+        result = x[np.int64(1)]
+        self.assertEqual(result.item(), 2)
+
+        # Numpy scalar in slice start
+        result = x[np.int64(1) :]
+        self.assertTrue(np.array_equal(np.array(result), np.array([2, 3, 4, 5])))
+
+        # Numpy scalar in slice stop
+        result = x[: np.int64(3)]
+        self.assertTrue(np.array_equal(np.array(result), np.array([1, 2, 3])))
+
+        # Other numpy scalar types
+        result = x[np.int32(2)]
+        self.assertEqual(result.item(), 3)
+
+        # Negative numpy scalar indexing
+        result = x[np.int64(-1)]
+        self.assertEqual(result.item(), 5)
+
+        # Numpy scalar assignment
+        x_copy = mx.array([1, 2, 3, 4, 5])
+        x_copy[np.int64(2)] = 99
+        self.assertTrue(np.array_equal(np.array(x_copy), np.array([1, 2, 99, 4, 5])))
+
+        # Numpy scalar in both slice start and stop
+        x = mx.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        result = x[np.int64(2) : np.int64(8)]
+        expected = np.arange(1, 11)[np.int64(2) : np.int64(8)]
+        self.assertTrue(np.array_equal(np.array(result), expected))
+
+        # Test with 2D array
+        x_2d = mx.array([[1, 2], [3, 4], [5, 6]])
+        result = x_2d[np.int32(1)]
+        self.assertTrue(np.array_equal(np.array(result), np.array([3, 4])))
+
+    def test_boolean_mask_indexing(self):
+        """Test boolean mask indexing"""
+        # Basic boolean indexing
+        x = mx.array([1, 2, 3, 4, 5])
+        mask = x > 2
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([3, 4, 5])))
+
+        # Boolean indexing with all True
+        x = mx.array([1, 2, 3])
+        mask = mx.array([True, True, True])
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([1, 2, 3])))
+
+        # Boolean indexing with all False
+        x = mx.array([1, 2, 3])
+        mask = mx.array([False, False, False])
+        result = x[mask]
+        self.assertEqual(result.size, 0)
+
+        # Boolean indexing with alternating pattern
+        x = mx.array([10, 20, 30, 40, 50])
+        mask = mx.array([True, False, True, False, True])
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([10, 30, 50])))
+
+        # Boolean assignment
+        x = mx.array([1, 2, 3, 4, 5])
+        mask = x > 2
+        x[mask] = 99
+        self.assertTrue(np.array_equal(np.array(x), np.array([1, 2, 99, 99, 99])))
+
+        # Boolean indexing with 2D array (flatten behavior)
+        x = mx.array([[1, 2], [3, 4], [5, 6]])
+        mask = x > 3
+        result = x[mask]
+        expected = np.array([4, 5, 6])
+        self.assertTrue(np.array_equal(np.array(result), expected))
+
+        # Boolean indexing with negative values
+        x = mx.array([-3, -1, 0, 2, 4])
+        mask = x < 0
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([-3, -1])))
+
+        # Complex boolean condition
+        x = mx.array([0, 1, 2, 3, 4, 5, 6])
+        mask = (x > 1) & (x < 5)
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([2, 3, 4])))
+
+        # Empty result from boolean indexing
+        x = mx.array([1, 2, 3])
+        mask = x > 10
+        result = x[mask]
+        self.assertEqual(result.size, 0)
+
+        # Single element from boolean indexing
+        x = mx.array([1, 2, 3, 4, 5])
+        mask = x == 3
+        result = x[mask]
+        self.assertTrue(np.array_equal(np.array(result), np.array([3])))
+
     def test_setitem(self):
         a = mx.array(0)
         a[None] = 1
