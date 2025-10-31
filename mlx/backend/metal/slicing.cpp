@@ -33,7 +33,7 @@ void concatenate_gpu(
   auto& d = metal::device(s.device);
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto concurrent_ctx = compute_encoder.start_concurrent();
-  for (int i = 0; i < inputs.size(); i++) {
+  for (int i = 0; i < std::ssize(inputs); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
     size_t data_offset = strides[axis] * sizes[i];
     out_slice.copy_shared_buffer(

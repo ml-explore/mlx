@@ -127,6 +127,9 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
       }
     }
   }
+#else
+  (void)device;
+  (void)lib_name;
 #endif
   return {nullptr, nullptr};
 }
@@ -713,7 +716,7 @@ MTL::LinkedFunctions* Device::get_linked_functions_(
   auto lfuncs = MTL::LinkedFunctions::linkedFunctions();
 
   std::vector<NS::Object*> objs(funcs.size());
-  for (int i = 0; i < funcs.size(); i++) {
+  for (int i = 0; i < std::ssize(funcs); i++) {
     objs[i] = funcs[i];
   }
 

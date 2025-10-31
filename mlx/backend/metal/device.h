@@ -137,7 +137,7 @@ struct DeviceStream {
   // Data updated between command buffers
   MTL::CommandBuffer* buffer{nullptr};
   int buffer_ops{0};
-  size_t buffer_sizes{0};
+  int64_t buffer_sizes{0};
 
   // The command encoder, fence, and temporaries are updated between command
   // encoders

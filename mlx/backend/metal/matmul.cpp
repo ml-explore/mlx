@@ -344,7 +344,7 @@ void steel_gemm_splitk_axpby(
     int M,
     int N,
     int K,
-    int batch_size_out,
+    int /* batch_size_out */,
     int lda,
     int ldb,
     bool transpose_a,

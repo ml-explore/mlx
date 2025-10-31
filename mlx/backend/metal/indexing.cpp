@@ -52,7 +52,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  size_t slice_size = 1;
+  int64_t slice_size = 1;
   for (auto s : slice_sizes_) {
     slice_size *= s;
   }
@@ -94,8 +94,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto kernel = d.get_kernel(kernel_name, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
 
-    size_t dim_x = (slice_size + work_per_thread - 1) / work_per_thread;
-    size_t dim_y = indices.size();
+    int64_t dim_x = (slice_size + work_per_thread - 1) / work_per_thread;
+    int64_t dim_y = indices.size();
     auto group_dims = get_block_dims(dim_x, dim_y, 1);
     MTL::Size grid_dims = MTL::Size(dim_x, dim_y, 1);
 
@@ -110,7 +110,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  size_t ndim = src.ndim();
+  int64_t ndim = src.ndim();
 
   std::string kernel_name = fmt::format(
       "gather{0}{1}_{2}_{3}_{4}",
@@ -149,8 +149,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Launch 3D grid of threads
   // First two dimensions for the indices, the last one for the slice
-  size_t dim0 = 1;
-  size_t dim1 = 1;
+  int64_t dim0 = 1;
+  int64_t dim1 = 1;
   if (nidx) {
     if (inputs[1].ndim() >= 1) {
       dim0 = inputs[1].shape(0);
@@ -159,13 +159,13 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       dim1 = inputs[1].size() / dim0;
     }
   }
-  size_t dim2 = slice_size;
+  int64_t dim2 = slice_size;
   auto group_dims = get_block_dims(dim0, dim1, dim2);
   MTL::Size grid_dims = MTL::Size(dim0, dim1, dim2);
 
   // Collect all idx shapes and strides into one place
   std::vector<int> idx_shapes;
-  std::vector<size_t> idx_strides;
+  std::vector<int64_t> idx_strides;
   std::vector<char> idx_contigs;
   for (int i = 0; i < nidx; ++i) {
     idx_shapes.insert(
@@ -246,7 +246,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
 
   int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  size_t idx_size = nidx ? inputs[1].size() : 1;
+  int64_t idx_size = nidx ? inputs[1].size() : 1;
 
   auto idx_to_out = idx_size / out.size();
   int nwork;
@@ -345,7 +345,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kernel_name, lib);
 
-  size_t nthreads = upd.size();
+  int64_t nthreads = upd.size();
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -354,8 +354,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 2);
 
   // Set update info
-  size_t upd_ndim = upd.ndim();
-  size_t upd_size = 1;
+  int64_t upd_ndim = upd.ndim();
+  int64_t upd_size = 1;
   for (int i = idx_ndim; i < upd.ndim(); ++i) {
     upd_size *= upd.shape(i);
   }
@@ -391,7 +391,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_bytes(upd_size, 6);
 
   // Set output info
-  size_t out_ndim = out.ndim();
+  int64_t out_ndim = out.ndim();
   if (out_ndim == 0) {
     // Need placeholders so Metal doesn't complain
     int shape_ = 0;
@@ -448,7 +448,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  size_t ndim = src.ndim();
+  int64_t ndim = src.ndim();
 
   bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
 
@@ -486,8 +486,8 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Grid [size post, index size, size pre]
-  size_t size_pre = 1;
-  size_t size_post = 1;
+  int64_t size_pre = 1;
+  int64_t size_post = 1;
   for (int i = 0; i < axis_; ++i) {
     size_pre *= idx.shape(i);
   }
@@ -541,7 +541,7 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  size_t ndim = src.ndim();
+  int64_t ndim = src.ndim();
 
   bool large = idx.size() > INT32_MAX || src.size() > INT32_MAX;
 
@@ -602,8 +602,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Grid [size post, index size, size pre]
-  size_t size_pre = 1;
-  size_t size_post = 1;
+  int64_t size_pre = 1;
+  int64_t size_post = 1;
   for (int i = 0; i < axis_; ++i) {
     size_pre *= idx.shape(i);
   }

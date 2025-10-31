@@ -43,7 +43,7 @@ std::string gen_hadamard_codelet(int m) {
   while (end != std::string_view::npos) {
     source << "  tmp[" << index << "] = ";
     auto row = matrix.substr(start, end - start);
-    for (int i = 0; i < row.length(); i++) {
+    for (int i = 0; i < std::ssize(row); i++) {
       source << " " << row[i] << " x[" << i << "]";
     }
     source << ";" << std::endl;

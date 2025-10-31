@@ -291,7 +291,7 @@ void init_reduce(
     const std::string& op_name,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   auto [_, out_type] = remap_reduce_types(out, op_name);
   const std::string func_name = "init_reduce";
   std::string kname = func_name;
@@ -397,7 +397,7 @@ void row_reduce_small(
     RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   // Set the kernel
   int n = get_kernel_reduce_ndim(args.reduce_ndim);
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
@@ -453,7 +453,7 @@ void row_reduce_simple(
     RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   // Set the kernel
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "row_reduce_simple";
@@ -493,7 +493,7 @@ void row_reduce_looped(
     RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
 
   // Set the kernel
@@ -570,7 +570,7 @@ void strided_reduce_small(
     ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
 
   // Figure out the grid dims
@@ -747,7 +747,7 @@ void strided_reduce_looped(
     ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& /* s */) {
   auto [in_type, out_type] = remap_reduce_types(in, op_name);
 
   // Prepare the arguments for the kernel
@@ -959,7 +959,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Continue with reduction operation
   // Minimum of 4 bytes since we use size 4 structs for all reduce
   // and metal will complain o/w
-  size_t min_bytes = std::max(out.nbytes(), 4ul);
+  size_t min_bytes = std::max<int64_t>(out.nbytes(), 4);
   out.set_data(allocator::malloc(min_bytes));
   std::string op_name;
   switch (reduce_type_) {

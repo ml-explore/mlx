@@ -76,7 +76,7 @@ void Fence::wait(Stream stream, const array& x) {
     auto command_buffer = d.get_command_buffer(idx);
     command_buffer->encodeWait(static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
-        [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+        [fence_ = fence_](MTL::CommandBuffer* /* cbuf */) {});
     return;
   }
 
@@ -96,7 +96,7 @@ void Fence::wait(Stream stream, const array& x) {
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
-      [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+      [fence_ = fence_](MTL::CommandBuffer* /* cbuf */) {});
 }
 
 void Fence::update(Stream stream, const array& x) {
@@ -124,7 +124,7 @@ void Fence::update(Stream stream, const array& x) {
     command_buffer->encodeSignalEvent(
         static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
-        [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+        [fence_ = fence_](MTL::CommandBuffer* /* cbuf */) {});
     return;
   }
 
@@ -154,7 +154,7 @@ void Fence::update(Stream stream, const array& x) {
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
-      [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+      [fence_ = fence_](MTL::CommandBuffer* /* cbuf */) {});
 }
 
 } // namespace mlx::core

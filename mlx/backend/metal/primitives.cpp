@@ -152,7 +152,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
+void Load::eval_gpu(const std::vector<array>& /* inputs */, array& /* out */) {
   throw std::runtime_error("[Load::eval_gpu] Not implemented.");
 }
 
@@ -201,41 +201,45 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void QRF::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& /* inputs */,
+    std::vector<array>& /* outputs */) {
   throw std::runtime_error("[QRF::eval_gpu] Metal QR factorization NYI.");
 }
 
 void SVD::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& /* inputs */,
+    std::vector<array>& /* outputs */) {
   throw std::runtime_error("[SVD::eval_gpu] Metal SVD NYI.");
 }
 
-void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
+void Inverse::eval_gpu(
+    const std::vector<array>& /* inputs */,
+    array& /* output */) {
   throw std::runtime_error("[Inverse::eval_gpu] Metal inversion NYI.");
 }
 
-void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
+void Cholesky::eval_gpu(
+    const std::vector<array>& /* inputs */,
+    array& /* out */) {
   throw std::runtime_error(
       "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
 }
 
 void Eig::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& /* inputs */,
+    std::vector<array>& /* outputs */) {
   throw std::runtime_error("[Eig::eval_gpu] Metal Eig NYI.");
 }
 
 void Eigh::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& /* inputs */,
+    std::vector<array>& /* outputs */) {
   throw std::runtime_error("[Eigh::eval_gpu] Metal Eigh NYI.");
 }
 
 void LUF::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& /* inputs */,
+    std::vector<array>& /* outputs */) {
   throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
 }
 

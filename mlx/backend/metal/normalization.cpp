@@ -134,7 +134,7 @@ void RMSNormVJP::eval_gpu(
     d.add_temporary(g, s.index);
   }
 
-  auto axis_size = static_cast<uint32_t>(x.shape().back());
+  auto axis_size = x.shape().back();
   int n_rows = x.data_size() / axis_size;
 
   // Allocate the gradient accumulator gw and a temporary to store the
@@ -246,7 +246,7 @@ void LayerNorm::eval_gpu(
   const array& w = inputs[1];
   const array& b = inputs[2];
 
-  auto axis_size = static_cast<uint32_t>(x.shape().back());
+  auto axis_size = x.shape().back();
   int n_rows = x.data_size() / axis_size;
 
   int simd_size = 32;
@@ -344,7 +344,7 @@ void LayerNormVJP::eval_gpu(
     d.add_temporary(g, s.index);
   }
 
-  auto axis_size = static_cast<uint32_t>(x.shape().back());
+  auto axis_size = x.shape().back();
   int n_rows = x.data_size() / axis_size;
 
   // Allocate a temporary to store the gradients for w and allocate the output

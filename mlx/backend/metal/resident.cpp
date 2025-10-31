@@ -80,7 +80,7 @@ void ResidencySet::resize(size_t size) {
     // Remove wired allocations until under capacity
     auto allocations = wired_set_->allAllocations();
     auto num_allocations = wired_set_->allocationCount();
-    for (int i = 0; i < num_allocations && current_size > size; ++i) {
+    for (size_t i = 0; i < num_allocations && current_size > size; ++i) {
       auto buf = static_cast<const MTL::Allocation*>(allocations->object(i));
       wired_set_->removeAllocation(buf);
       current_size -= buf->allocatedSize();

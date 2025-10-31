@@ -68,7 +68,7 @@ std::string write_signature(
   int index = 0;
   constexpr int max_constant_array_size = 8;
   // Add inputs
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     const auto& name = input_names[i];
     const auto& arr = inputs[i];
     auto dtype = get_type_string(arr.dtype());
@@ -109,7 +109,7 @@ std::string write_signature(
     }
   }
   // Add outputs
-  for (int i = 0; i < output_names.size(); ++i) {
+  for (int i = 0; i < std::ssize(output_names); ++i) {
     const auto& name = output_names[i];
     const auto& dtype = output_dtypes[i];
     kernel_source += "  device ";
@@ -126,8 +126,8 @@ std::string write_signature(
     kernel_source += " [[buffer(";
     kernel_source += std::to_string(index);
     kernel_source += ")]]";
-    if (index < inputs.size() + output_names.size() - 1 ||
-        attributes.size() > 0) {
+    if (index < std::ssize(inputs) + std::ssize(output_names) - 1 ||
+        std::ssize(attributes) > 0) {
       kernel_source += ",\n";
     } else {
       kernel_source += ") {\n";
@@ -138,7 +138,7 @@ std::string write_signature(
   index = 0;
   for (const auto& attr : attributes) {
     kernel_source += attr;
-    if (index < attributes.size() - 1) {
+    if (index < std::ssize(attributes) - 1) {
       kernel_source += ",\n";
     } else {
       kernel_source += ") {\n";
@@ -381,7 +381,7 @@ void CustomKernel::eval_gpu(
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
   int index = 0;
-  for (int i = 0; i < checked_inputs.size(); i++) {
+  for (int i = 0; i < std::ssize(checked_inputs); i++) {
     const array& in = checked_inputs[i];
     auto& shape_info = shape_infos_[i];
     compute_encoder.set_input_array(in, index);
@@ -408,7 +408,7 @@ void CustomKernel::eval_gpu(
   }
 
   const auto [tx, ty, tz] = threadgroup_;
-  auto tg_size = tx * ty * tz;
+  unsigned long tg_size = tx * ty * tz;
   auto max_tg_size = kernel->maxTotalThreadsPerThreadgroup();
   if (tg_size > max_tg_size) {
     std::ostringstream msg;
