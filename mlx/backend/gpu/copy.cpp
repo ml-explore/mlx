@@ -7,18 +7,7 @@
 
 namespace mlx::core {
 
-void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
-  bool donated = set_copy_output_data(in, out, ctype);
-  if (donated && in.dtype() == out.dtype()) {
-    // If the output has the same type as the input then there is nothing to
-    // copy, just use the buffer.
-    return;
-  }
-  if (ctype == CopyType::GeneralGeneral) {
-    ctype = CopyType::General;
-  }
-  copy_gpu_inplace(in, out, ctype, s);
-}
+void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s);
 
 void copy_gpu(const array& in, array& out, CopyType ctype) {
   copy_gpu(in, out, ctype, out.primitive().stream());

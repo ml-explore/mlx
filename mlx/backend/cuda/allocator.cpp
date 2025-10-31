@@ -68,6 +68,7 @@ CudaBuffer* SmallSizePool::malloc() {
   next_free_ = next_free_->next;
   b->buf.data = static_cast<char*>(data_) + i * small_block_size;
   b->buf.size = small_block_size;
+  b->buf.managed = true;
   return &b->buf;
 }
 
@@ -94,16 +95,13 @@ CudaAllocator::CudaAllocator()
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
   memory_limit_ = total * 0.95;
   max_pool_size_ = memory_limit_;
-#if CUDART_VERSION >= 13000
-  cudaMemLocation loc;
-  loc.id = 0;
-  loc.type = cudaMemLocationTypeNone;
-  cudaMemGetDefaultMemPool(&cuda_pool_, &loc, cudaMemAllocationTypeManaged);
+  int loc = 0;
+  cudaDeviceGetDefaultMemPool(&cuda_pool_, loc);
+
   // TODO need a strategy for that
   uint64_t threshold = UINT64_MAX;
   cudaMemPoolSetAttribute(
       cuda_pool_, cudaMemPoolAttrReleaseThreshold, &threshold);
-#endif
 }
 
 Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
@@ -132,12 +130,13 @@ Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
     }
     lock.unlock();
     if (!buf) {
-      buf = new CudaBuffer{nullptr, size};
+      bool managed = stream == nullptr;
+      buf = new CudaBuffer{nullptr, size, managed};
       cudaError_t err;
-      if (stream != nullptr && cuda_pool_ != nullptr) {
-        err = cudaMallocFromPoolAsync(&buf->data, size, cuda_pool_, stream);
-      } else {
+      if (managed) {
         err = cudaMallocManaged(&buf->data, size);
+      } else {
+        err = cudaMallocFromPoolAsync(&buf->data, size, cuda_pool_, stream);
       }
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
         throw std::runtime_error(fmt::format(
@@ -265,7 +264,17 @@ void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
-  return static_cast<cu::CudaBuffer*>(ptr_)->data;
+  auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
+  if (!cbuf.managed) {
+    void* new_data;
+    CHECK_CUDA_ERROR(cudaMallocManaged(&new_data, cbuf.size));
+    cbuf.managed = true;
+    CHECK_CUDA_ERROR(
+        cudaMemcpy(new_data, cbuf.data, cbuf.size, cudaMemcpyDefault));
+    CHECK_CUDA_ERROR(cudaFree(cbuf.data));
+    cbuf.data = new_data;
+  }
+  return cbuf.data;
 }
 
 } // namespace allocator

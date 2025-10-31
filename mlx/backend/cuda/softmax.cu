@@ -152,8 +152,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
           n_rows,
           block_dim(),
           0,
-          in.data<DataType>(),
-          out.data<DataType>(),
+          gpu_ptr<DataType>(in),
+          gpu_ptr<DataType>(out),
           axis_size);
     });
   });

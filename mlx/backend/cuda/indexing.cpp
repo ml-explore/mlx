@@ -31,7 +31,7 @@ void append_indices_arg(
     int idx_ndim) {
   SmallVector<const void*> indices(nidx);
   for (int i = 0; i < nidx; ++i) {
-    indices[i] = inputs[i + 1].data<void>();
+    indices[i] = gpu_ptr<void>(inputs[i + 1]);
   }
   args.append(std::move(indices));
   SmallVector<int32_t> indices_shape(nidx * idx_ndim);

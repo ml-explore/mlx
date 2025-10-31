@@ -5,6 +5,7 @@
 #include <numeric>
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
@@ -92,9 +93,10 @@ block_reduce(Block block, Warp warp, T (&vals)[N], T* smem, Op op, T init) {
 inline void allocate_same_layout(
     array& out,
     const array& in,
-    const std::vector<int>& axes) {
+    const std::vector<int>& axes,
+    cu::CommandEncoder& encoder) {
   if (in.flags().row_contiguous) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
     return;
   }
 
@@ -133,7 +135,7 @@ inline void allocate_same_layout(
   fl.col_contiguous = cc;
   fl.contiguous = true;
   out.set_data(
-      allocator::malloc(out.nbytes()),
+      cu::malloc_async(out.nbytes(), encoder.stream()),
       data_size,
       final_strides,
       fl,

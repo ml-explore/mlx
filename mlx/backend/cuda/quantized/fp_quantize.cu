@@ -156,9 +156,9 @@ void fp_quantize(
           num_blocks,
           block_dims,
           0,
-          w.data<T>(),
-          wq.data<uint8_t>(),
-          scales.data<uint8_t>(),
+          gpu_ptr<T>(w),
+          gpu_ptr<uint8_t>(wq),
+          gpu_ptr<uint8_t>(scales),
           w.size());
     } else {
       throw std::runtime_error(
@@ -202,9 +202,9 @@ void fp_dequantize(
           num_blocks,
           block_dims,
           0,
-          wq.data<uint8_t>(),
-          scales.data<T>(),
-          w.data<T>(),
+          gpu_ptr<uint8_t>(wq),
+          gpu_ptr<uint8_t>(scales),
+          gpu_ptr<T>(w),
           w.size());
     } else {
       throw std::runtime_error(

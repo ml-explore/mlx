@@ -168,10 +168,10 @@ void ternary_op_gpu_inplace(
             num_blocks,
             block_dims,
             0,
-            a.data<bool>(),
-            b.data<DType>(),
-            c.data<DType>(),
-            out.data<DType>(),
+            gpu_ptr<bool>(a),
+            gpu_ptr<DType>(b),
+            gpu_ptr<DType>(c),
+            gpu_ptr<DType>(out),
             out.data_size());
       });
     } else {
@@ -211,10 +211,10 @@ void ternary_op_gpu_inplace(
                     {num_blocks_x, num_blocks_y},
                     block_dims,
                     0,
-                    a.data<bool>(),
-                    b.data<DType>(),
-                    c.data<DType>(),
-                    out.data<DType>(),
+                    gpu_ptr<bool>(a),
+                    gpu_ptr<DType>(b),
+                    gpu_ptr<DType>(c),
+                    gpu_ptr<DType>(out),
                     rest,
                     const_param<dims_constant()>(shape),
                     const_param<dims_constant()>(a_strides),
@@ -231,10 +231,10 @@ void ternary_op_gpu_inplace(
                   {num_blocks_x, num_blocks_y},
                   block_dims,
                   0,
-                  a.data<bool>(),
-                  b.data<DType>(),
-                  c.data<DType>(),
-                  out.data<DType>(),
+                  gpu_ptr<bool>(a),
+                  gpu_ptr<DType>(b),
+                  gpu_ptr<DType>(c),
+                  gpu_ptr<DType>(out),
                   rest,
                   const_param(shape),
                   const_param(a_strides),
@@ -256,7 +256,10 @@ void ternary_op_gpu(
   auto& b = inputs[1];
   auto& c = inputs[2];
   auto topt = get_ternary_op_type(a, b, c);
-  set_ternary_op_output_data(a, b, c, out, topt);
+  auto& encoder = cu::get_command_encoder(s);
+  set_ternary_op_output_data(a, b, c, out, topt, [&](auto n) {
+    return cu::malloc_async(n, encoder.stream());
+  });
   ternary_op_gpu_inplace<Op>(inputs, out, s);
 }
 

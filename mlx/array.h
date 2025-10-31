@@ -357,12 +357,13 @@ class array {
   // Return a raw pointer to the arrays data
   template <typename T>
   T* data() {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return reinterpret_cast<T*>(
+        (static_cast<char*>(buffer().raw_ptr()) + array_desc_->offset));
   }
 
   template <typename T>
   const T* data() const {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return const_cast<array&>(*this).data<T>();
   }
 
   enum Status {
@@ -466,8 +467,8 @@ class array {
     // can share the underlying data buffer.
     std::shared_ptr<Data> data;
 
-    // Properly offset data pointer
-    void* data_ptr{nullptr};
+    // Offset from beginning of data pointer
+    int64_t offset{0};
 
     // The size in elements of the data buffer the array accesses
     size_t data_size;

@@ -279,6 +279,7 @@ void CustomKernel::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("CustomKernel::eval_gpu");
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
 
   std::vector<array> copies;
 
@@ -288,7 +289,7 @@ void CustomKernel::eval_gpu(
       copies.emplace_back(init_value_.value(), out.dtype());
       fill_gpu(copies.back(), out, s);
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
     }
   }
 
@@ -356,7 +357,6 @@ void CustomKernel::eval_gpu(
   dim3 grid((gx + tx - 1) / tx, (gy + ty - 1) / ty, (gz + tz - 1) / tz);
 
   // Call the kernel
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : checked_inputs) {
     encoder.set_input_array(in);
   }

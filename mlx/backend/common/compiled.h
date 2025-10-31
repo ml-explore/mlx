@@ -58,7 +58,9 @@ void compiled_allocate_outputs(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
     const std::function<bool(size_t)>& is_constant,
-    bool contiguous);
+    bool contiguous,
+    const std::function<allocator::Buffer(size_t)>& mallocfn =
+        allocator::malloc);
 
 // Collapse contiguous dims ignoring scalars and constants.
 std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
