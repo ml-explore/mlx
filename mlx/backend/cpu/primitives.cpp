@@ -124,6 +124,7 @@ void Transpose::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void Arange::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
+  (void)inputs;
   out.set_data(allocator::malloc(out.nbytes()));
   switch (out.dtype()) {
     case bool_:
