@@ -10,6 +10,15 @@ permissions:
   contents: read
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      pypi_env: ${{ github.event_name == 'push' && 'pypi' || 'test-pypi' }}
+      pypi_url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+    steps:
+      - name: Set publishing variables
+        run: echo "Publishing setup complete"
+
   build_documentation:
     runs-on: [self-hosted, macos]
     steps:
@@ -108,81 +117,90 @@ jobs:
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
-    needs: [build_linux_release, build_mac_release]
+    needs: [setup, build_linux_release, build_mac_release]
     permissions:
       id-token: write
     environment:
-      name: pypi
+      name: ${{ needs.setup.outputs.pypi_env }}
       url: https://pypi.org/p/mlx
     steps:
       - uses: actions/download-artifact@v6
         with:
           pattern: linux-wheels-*
           merge-multiples: true
-          path: artifacts
+          path: dist
       - uses: actions/download-artifact@v6
         with:
           pattern: mac-wheels-*
           merge-multiples: true
-          path: artifacts
+          path: dist
       - name: Display structure of downloaded files
-        run: ls -R artifacts
-      # - name: Publish package distributions to PyPI
-      #  uses: pypa/gh-action-pypi-publish@release/v1
+        run: ls -R dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ needs.setup.outputs.pypi_url }}
   
   pypi-publish-cuda:
     name: Upload CUDA release to PyPI
     runs-on: ubuntu-latest
-    needs: build_cuda_release
+    needs: [setup, build_cuda_release]
     permissions:
       id-token: write
     environment:
-      name: pypi
+      name: ${{ needs.setup.outputs.pypi_env }}
       url: https://pypi.org/p/mlx-cuda
     steps:
       - uses: actions/download-artifact@v6
         with:
           name: mlx-cuda
-          path: artifacts
+          path: dist
       - name: Display structure of downloaded files
-        run: ls -R artifacts
-      # - name: Publish package distributions to PyPI
-      #  uses: pypa/gh-action-pypi-publish@release/v1
+        run: ls -R dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ needs.setup.outputs.pypi_url }}
 
   pypi-publish-cpu:
     name: Upload CPU release to PyPI
     runs-on: ubuntu-latest
-    needs: build_linux_release
+    needs: [setup, build_linux_release]
     permissions:
       id-token: write
     environment:
-      name: pypi
+      name: ${{ needs.setup.outputs.pypi_env }}
       url: https://pypi.org/p/mlx-cpu
     steps:
       - uses: actions/download-artifact@v6
         with:
           name: mlx-cpu
-          path: artifacts
+          path: dist
       - name: Display structure of downloaded files
-        run: ls -R artifacts
-      # - name: Publish package distributions to PyPI
-      #  uses: pypa/gh-action-pypi-publish@release/v1
+        run: ls -R dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ needs.setup.outputs.pypi_url }}
 
   pypi-publish-metal:
     name: Upload Metal release to PyPI
     runs-on: ubuntu-latest
-    needs: build_mac_release
+    needs: [setup, build_mac_release]
     permissions:
       id-token: write
     environment:
-      name: pypi
+      name: ${{ needs.setup.outputs.pypi_env }}
       url: https://pypi.org/p/mlx-metal
     steps:
       - uses: actions/download-artifact@v6
         with:
           name: mlx-metal
-          path: artifacts
+          path: dist
       - name: Display structure of downloaded files
-        run: ls -R artifacts
-      # - name: Publish package distributions to PyPI
-      #  uses: pypa/gh-action-pypi-publish@release/v1
+        run: ls -R dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ needs.setup.outputs.pypi_url }}
+
