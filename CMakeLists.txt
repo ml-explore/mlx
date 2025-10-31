@@ -20,9 +20,13 @@ project(
   LANGUAGES C CXX
   VERSION ${MLX_PROJECT_VERSION})
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  add_compile_options(-Wall -Wextra)
+endif()
+
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_MESSAGE NEVER)
