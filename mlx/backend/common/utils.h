@@ -162,7 +162,7 @@ struct ContiguousIterator {
 };
 
 inline auto check_contiguity(const Shape& shape, const Strides& strides) {
-  size_t no_broadcast_data_size = 1;
+  int64_t no_broadcast_data_size = 1;
   int64_t f_stride = 1;
   int64_t b_stride = 1;
   bool is_row_contiguous = true;
