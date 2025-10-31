@@ -44,3 +44,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/build-docs
+
+  linux_fedora_build_cpp:
+    runs-on: ubuntu-22.04
+    container:
+      image: fedora:42
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: CPP Build Test - No Release
+        run: |
+            bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
