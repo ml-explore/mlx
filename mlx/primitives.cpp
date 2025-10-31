@@ -230,6 +230,7 @@ std::vector<array> Abs::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], sign(primals[0], stream()), stream())};
 }
 
@@ -242,16 +243,16 @@ std::pair<std::vector<array>, std::vector<int>> Abs::vmap(
 }
 
 std::vector<array> Add::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   return {
       tangents.size() > 1 ? add(tangents[0], tangents[1], stream())
                           : tangents[0]};
 }
 
 std::vector<array> Add::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
@@ -315,7 +316,7 @@ std::vector<array> AddMM::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   std::vector<array> jvp;
-  for (int i = 0; i < argnums.size(); ++i) {
+  for (int i = 0; i < std::ssize(argnums); ++i) {
     auto arg = argnums[i];
     if (arg == 0) {
       if (jvp.empty()) {
@@ -383,6 +384,7 @@ std::vector<array> ArcCos::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = subtract(one, square(primals[0], stream()), stream());
   array denom = negative(rsqrt(t, stream()), stream());
@@ -411,6 +413,7 @@ std::vector<array> ArcCosh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = subtract(square(primals[0], stream()), one, stream());
   return {multiply(tangents[0], rsqrt(t, stream()), stream())};
@@ -438,6 +441,7 @@ std::vector<array> ArcSin::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = subtract(one, square(primals[0], stream()), stream());
   return {multiply(tangents[0], rsqrt(t, stream()), stream())};
@@ -465,6 +469,7 @@ std::vector<array> ArcSinh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = add(square(primals[0], stream()), one, stream());
   return {multiply(tangents[0], rsqrt(t, stream()), stream())};
@@ -492,6 +497,7 @@ std::vector<array> ArcTan::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = add(one, square(primals[0], stream()), stream());
   return {divide(tangents[0], t, stream())};
@@ -539,6 +545,7 @@ std::vector<array> ArcTan2::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() == 2);
+  (void)argnums;
 
   const auto& s = stream();
   const array& x1 = primals[0];
@@ -575,6 +582,7 @@ std::vector<array> ArcTanh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array one = array(1., primals[0].dtype());
   array t = subtract(one, square(primals[0], stream()), stream());
   return {divide(tangents[0], t, stream())};
@@ -692,7 +700,7 @@ std::vector<array> ArgSort::jvp(
 std::vector<array> AsType::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>&) {
   if (cotangents[0].dtype() != dtype_) {
     throw std::invalid_argument(
@@ -702,9 +710,9 @@ std::vector<array> AsType::vjp(
 }
 
 std::vector<array> AsType::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   return {astype(tangents[0], dtype_, stream())};
 }
 
@@ -725,6 +733,7 @@ std::vector<array> AsStrided::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(argnums.size() == 1);
+  (void)argnums;
 
   // Extract the sizes and cast them to ints
   int grad_size = primals[0].size();
@@ -752,8 +761,9 @@ std::vector<array> AsStrided::vjp(
 std::vector<array> AsStrided::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
+  (void)primals;
 
   return {as_strided(tangents[0], shape_, strides_, offset_, stream())};
 }
@@ -787,6 +797,7 @@ std::vector<array> BitwiseBinary::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
+  (void)primals;
   std::vector<array> vjps = {zeros_like(tangents[0], stream())};
   if (argnums.size() > 1) {
     vjps.push_back(vjps.back());
@@ -827,9 +838,9 @@ std::vector<array> Broadcast::vjp(
 }
 
 std::vector<array> Broadcast::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   return {array(
       shape_,
       tangents[0].dtype(),
@@ -858,7 +869,7 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
 
 Shape Broadcast::output_shape(const std::vector<array>& inputs) {
   auto shape = inputs[0].shape();
-  for (int i = 1; i < inputs.size(); ++i) {
+  for (int i = 1; i < std::ssize(inputs); ++i) {
     shape = broadcast_shapes(shape, inputs[i].shape());
   }
   return shape;
@@ -886,7 +897,7 @@ std::vector<array> BroadcastAxes::vjp(
 std::vector<array> BroadcastAxes::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   return {array(
       output_shape(primals, ignore_axes_),
       tangents[0].dtype(),
@@ -895,8 +906,8 @@ std::vector<array> BroadcastAxes::jvp(
 }
 
 std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
+    const std::vector<array>& /* inputs */,
+    const std::vector<int>& /* axes */) {
   throw std::invalid_argument("[BroadcastAxes] VMAP NYI");
 }
 
@@ -938,10 +949,11 @@ std::vector<array> Ceil::vjp(
 
 std::vector<array> Ceil::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {zeros_like(primals[0], stream())};
 }
 
@@ -1072,8 +1084,8 @@ std::vector<array> Concatenate::jvp(
   });
 
   std::vector<array> vals;
-  for (int i = 0, j = 0; i < primals.size(); ++i) {
-    if (j < argnums.size() && argnums[argidx[j]] == i) {
+  for (int i = 0, j = 0; i < std::ssize(primals); ++i) {
+    if (j < std::ssize(argnums) && argnums[argidx[j]] == i) {
       vals.push_back(tangents[argidx[j++]]);
     } else {
       vals.push_back(zeros_like(primals[i], stream()));
@@ -1089,7 +1101,7 @@ std::pair<std::vector<array>, std::vector<int>> Concatenate::vmap(
   int first_vmap = -1;
 
   // Find the first vmapped input
-  for (int i = 0; i < axes.size(); i++) {
+  for (int i = 0; i < std::ssize(axes); i++) {
     if (axes[i] >= 0) {
       out_ax = axes[i];
       first_vmap = i;
@@ -1107,7 +1119,7 @@ std::pair<std::vector<array>, std::vector<int>> Concatenate::vmap(
   std::vector<array> t_inputs;
   int axis = axis_ + (axis_ >= out_ax);
   auto cat_shape = inputs[first_vmap].shape();
-  for (int i = 0; i < axes.size(); i++) {
+  for (int i = 0; i < std::ssize(axes); i++) {
     if (axes[i] >= 0) {
       if (out_ax != axes[i]) {
         t_inputs.push_back(moveaxis(inputs[i], axes[i], out_ax, stream()));
@@ -1132,7 +1144,7 @@ bool Concatenate::is_equivalent(const Primitive& other) const {
 std::vector<Shape> Concatenate::output_shapes(
     const std::vector<array>& inputs) {
   auto shape = inputs[0].shape();
-  for (int i = 1; i < inputs.size(); ++i) {
+  for (int i = 1; i < std::ssize(inputs); ++i) {
     shape[axis_] += inputs[i].shape(axis_);
   }
   return {std::move(shape)};
@@ -1272,28 +1284,29 @@ Shape Convolution::conv_out_shape(
 
   int spatial_dims = in_shape.size() - 2;
 
-  if (strides.size() != spatial_dims) {
+  if (std::ssize(strides) != spatial_dims) {
     std::ostringstream msg;
     msg << "[conv] Invalid strides " << strides << " for " << spatial_dims
         << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
+  if (std::ssize(pads_lo) != spatial_dims ||
+      std::ssize(pads_hi) != spatial_dims) {
     std::ostringstream msg;
     msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (kernel_dilation.size() != spatial_dims) {
+  if (std::ssize(kernel_dilation) != spatial_dims) {
     std::ostringstream msg;
     msg << "[conv] Invalid kernel dilation " << kernel_dilation << " for "
         << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (input_dilation.size() != spatial_dims) {
+  if (std::ssize(input_dilation) != spatial_dims) {
     std::ostringstream msg;
     msg << "[conv] Invalid input dilation " << input_dilation << " for "
         << spatial_dims << "D convolution.";
@@ -1386,7 +1399,7 @@ std::vector<array> Convolution::vjp(
       std::vector<int> padding_lo = padding_lo_;
       std::vector<int> padding_hi = padding_hi_;
 
-      for (int i = 0; i < padding_lo.size(); ++i) {
+      for (int i = 0; i < std::ssize(padding_lo); ++i) {
         int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
         padding_lo[i] = wt_size - padding_lo_[i] - 1;
 
@@ -1440,7 +1453,7 @@ std::vector<array> Convolution::vjp(
     else if (a == 1) {
       bool no_dilation = true;
 
-      for (int i = 0; i < input_dilation_.size(); i++) {
+      for (int i = 0; i < std::ssize(input_dilation_); i++) {
         no_dilation &= (input_dilation_[i] == 1) && (kernel_dilation_[i] == 1);
       }
 
@@ -1451,7 +1464,7 @@ std::vector<array> Convolution::vjp(
       } else {
         auto padding_hi = padding_lo_;
 
-        for (int i = 0; i < padding_hi.size(); ++i) {
+        for (int i = 0; i < std::ssize(padding_hi); ++i) {
           int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
           int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
           int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
@@ -1580,6 +1593,8 @@ std::vector<array> Copy::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return cotangents;
 }
 
@@ -1589,6 +1604,8 @@ std::vector<array> Copy::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return tangents;
 }
 
@@ -1614,6 +1631,7 @@ std::vector<array> Cos::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(
       tangents[0], negative(sin(primals[0], stream()), stream()), stream())};
 }
@@ -1640,6 +1658,7 @@ std::vector<array> Cosh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], sinh(primals[0], stream()), stream())};
 }
 
@@ -1699,11 +1718,11 @@ std::vector<array> Depends::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& /* outputs */) {
   std::vector<array> vjps;
 
   for (auto arg : argnums) {
-    if (arg < cotangents.size()) {
+    if (arg < std::ssize(cotangents)) {
       vjps.push_back(cotangents[arg]);
     } else {
       vjps.push_back(zeros_like(primals[arg]));
@@ -1737,7 +1756,7 @@ std::vector<array> Divide::vjp(
 
 std::vector<array> DivMod::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -1749,8 +1768,8 @@ std::vector<array> DivMod::vjp(
 
 std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   return {zeros_like(primals[0], stream())};
 }
 
@@ -1848,7 +1867,7 @@ std::pair<std::vector<array>, std::vector<int>> Equal::vmap(
 
 std::vector<array> Equal::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -1860,8 +1879,8 @@ std::vector<array> Equal::vjp(
 
 std::vector<array> Equal::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
@@ -1880,6 +1899,7 @@ std::vector<array> Erf::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto dtype = primals[0].dtype();
   auto scale = multiply(array(M_2_SQRTPI, dtype), tangents[0], stream());
   return {multiply(
@@ -1899,7 +1919,7 @@ std::pair<std::vector<array>, std::vector<int>> Erf::vmap(
 std::vector<array> ErfInv::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   auto dtype = primals[0].dtype();
   auto scale =
@@ -1914,6 +1934,7 @@ std::vector<array> ErfInv::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto dtype = primals[0].dtype();
   auto scale = multiply(array(1.0 / M_2_SQRTPI, dtype), tangents[0], stream());
   return {multiply(
@@ -1931,9 +1952,9 @@ std::pair<std::vector<array>, std::vector<int>> ErfInv::vmap(
 }
 
 std::vector<array> Exp::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   return {multiply(cotangents[0], outputs[0], stream())};
 }
@@ -1944,6 +1965,7 @@ std::vector<array> Exp::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], exp(primals[0], stream()), stream())};
 }
 
@@ -1956,9 +1978,9 @@ std::pair<std::vector<array>, std::vector<int>> Exp::vmap(
 }
 
 std::vector<array> Expm1::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   return {multiply(
       cotangents[0],
@@ -1972,6 +1994,7 @@ std::vector<array> Expm1::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], exp(primals[0], stream()), stream())};
 }
 
@@ -2155,7 +2178,7 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   auto out_shape = in.shape();
   if (ax >= 0) {
     for (auto& fft_ax : fft_axes) {
-      if (fft_ax >= ax) {
+      if (static_cast<int>(fft_ax) >= ax) {
         fft_ax++;
       }
       if (real_) {
@@ -2180,6 +2203,7 @@ std::vector<array> FFT::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto& in = primals[0];
   std::vector<int> axes(axes_.begin(), axes_.end());
 
@@ -2259,6 +2283,8 @@ std::vector<array> FFT::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   auto& tan = tangents[0];
   if (real_ & inverse_) {
     return {fft::irfftn(tan, stream())};
@@ -2281,10 +2307,11 @@ std::vector<array> Floor::vjp(
 
 std::vector<array> Floor::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {zeros_like(primals[0], stream())};
 }
 
@@ -2303,6 +2330,7 @@ std::vector<array> Full::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(cotangents[0], primals[0], stream())};
 }
 
@@ -2312,6 +2340,8 @@ std::vector<array> Full::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return tangents;
 }
 
@@ -2346,7 +2376,7 @@ std::pair<std::vector<array>, std::vector<int>> Gather::vmap(
 
   // Reorder all the index arrays so the vmap axis is in the same spot.
   if (indices_vmapped) {
-    for (int i = 1; i < axes.size(); ++i) {
+    for (int i = 1; i < std::ssize(axes); ++i) {
       if (out_ax != axes[i] && axes[i] >= 0) {
         indices[i - 1] = moveaxis(indices[i - 1], axes[i], out_ax, stream());
       } else if (axes[i] < 0) {
@@ -2515,7 +2545,7 @@ std::pair<std::vector<array>, std::vector<int>> Greater::vmap(
 
 std::vector<array> Greater::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -2527,8 +2557,8 @@ std::vector<array> Greater::vjp(
 
 std::vector<array> Greater::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
@@ -2542,7 +2572,7 @@ std::pair<std::vector<array>, std::vector<int>> GreaterEqual::vmap(
 
 std::vector<array> GreaterEqual::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -2554,8 +2584,8 @@ std::vector<array> GreaterEqual::vjp(
 
 std::vector<array> GreaterEqual::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
@@ -2567,6 +2597,7 @@ std::vector<array> Imag::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(
       array(complex64_t{0.0f, 1.0f}, primals[0].dtype()),
       cotangents[0],
@@ -2579,6 +2610,8 @@ std::vector<array> Imag::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return {imag(tangents[0], stream())};
 }
 
@@ -2599,7 +2632,7 @@ std::pair<std::vector<array>, std::vector<int>> Less::vmap(
 
 std::vector<array> Less::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -2611,8 +2644,8 @@ std::vector<array> Less::vjp(
 
 std::vector<array> Less::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
@@ -2626,7 +2659,7 @@ std::pair<std::vector<array>, std::vector<int>> LessEqual::vmap(
 
 std::vector<array> LessEqual::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -2638,8 +2671,8 @@ std::vector<array> LessEqual::vjp(
 
 std::vector<array> LessEqual::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
@@ -2658,6 +2691,7 @@ std::vector<array> Log::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto out = divide(tangents[0], primals[0], stream());
   if (base_ != Base::e) {
     auto scale = 1 / std::log(base_ == Base::ten ? 10.0f : 2.0f);
@@ -2695,6 +2729,7 @@ std::vector<array> Log1p::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto dtype = primals[0].dtype();
   return {divide(
       tangents[0], add(array(1.0f, dtype), primals[0], stream()), stream())};
@@ -2722,6 +2757,8 @@ std::vector<array> LogicalNot::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return {zeros_like(tangents[0], stream())};
 }
 
@@ -2739,6 +2776,7 @@ std::vector<array> LogicalAnd::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
+  (void)primals;
   std::vector<array> vjps = {zeros_like(cotangents[0], stream())};
   if (argnums.size() > 1) {
     vjps.push_back(vjps.back());
@@ -2748,10 +2786,11 @@ std::vector<array> LogicalAnd::vjp(
 
 std::vector<array> LogicalAnd::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
+  (void)argnums;
   return {zeros_like(primals[0], stream())};
 }
 
@@ -2771,6 +2810,7 @@ std::vector<array> LogicalOr::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
+  (void)primals;
   std::vector<array> vjps = {zeros_like(cotangents[0], stream())};
   if (argnums.size() > 1) {
     vjps.push_back(vjps.back());
@@ -2780,10 +2820,11 @@ std::vector<array> LogicalOr::vjp(
 
 std::vector<array> LogicalOr::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
+  (void)argnums;
 
   return {zeros_like(primals[0], stream())};
 }
@@ -2859,7 +2900,7 @@ std::pair<std::vector<array>, std::vector<int>> LogSumExp::vmap(
 std::vector<array> LogSumExp::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(cotangents.size() == 1);
@@ -2872,7 +2913,7 @@ std::vector<array> LogSumExp::vjp(
 std::vector<array> LogSumExp::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
   return {multiply(
@@ -2920,7 +2961,7 @@ std::vector<array> Matmul::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   std::vector<array> jvp;
-  for (int i = 0; i < argnums.size(); ++i) {
+  for (int i = 0; i < std::ssize(argnums); ++i) {
     auto arg = argnums[i];
     if (arg == 0 && i == 0) {
       jvp.push_back(matmul(tangents[0], primals[1], stream()));
@@ -3096,7 +3137,7 @@ std::vector<array> Select::jvp(
   };
 
   array jvp = jvp_fun(argnums[0]);
-  for (int i = 1; i < argnums.size(); i++) {
+  for (int i = 1; i < std::ssize(argnums); i++) {
     jvp = add(jvp, jvp_fun(argnums[i]));
   }
   return {jvp};
@@ -3153,6 +3194,8 @@ std::vector<array> Negative::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return {negative(tangents[0], stream())};
 }
 
@@ -3173,7 +3216,7 @@ std::pair<std::vector<array>, std::vector<int>> NotEqual::vmap(
 
 std::vector<array> NotEqual::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
+    const std::vector<array>& /* cotangents */,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -3185,18 +3228,19 @@ std::vector<array> NotEqual::vjp(
 
 std::vector<array> NotEqual::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
   return {zeros(shape, bool_, stream())};
 }
 
 std::vector<array> Pad::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(argnums.size() == 1 && argnums[0] == 0);
+  (void)argnums;
 
   auto& cotan = cotangents[0];
   Shape start(cotan.ndim(), 0);
@@ -3213,10 +3257,11 @@ std::vector<array> Pad::vjp(
 }
 
 std::vector<array> Pad::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(argnums.size() == 1 && argnums[0] == 0);
+  (void)argnums;
 
   return {
       pad(tangents[0],
@@ -3229,8 +3274,8 @@ std::vector<array> Pad::jvp(
 }
 
 std::pair<std::vector<array>, std::vector<int>> Pad::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
+    const std::vector<array>& /* inputs */,
+    const std::vector<int>& /* axes */) {
   throw std::runtime_error("Pad vmap is NYI.");
 }
 
@@ -3244,7 +3289,7 @@ bool Pad::is_equivalent(const Primitive& other) const {
 std::vector<array> Partition::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>&) {
   auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
   return {put_along_axis(
@@ -3258,7 +3303,7 @@ std::vector<array> Partition::vjp(
 std::vector<array> Partition::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
   auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
@@ -3362,8 +3407,8 @@ QuantizationMode string_to_quantization_mode(
 }
 
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
+    const std::vector<array>& /* inputs */,
+    const std::vector<int>& /* axes */) {
   throw std::runtime_error("[QuantizedMatmul::vmap] NYI");
 }
 
@@ -3469,8 +3514,8 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
 }
 
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
+    const std::vector<array>& /* inputs */,
+    const std::vector<int>& /* axes */) {
   throw std::runtime_error("GatherQMM::vmap NYI");
 }
 
@@ -3593,9 +3638,9 @@ std::vector<array> GatherQMM::vjp(
 }
 
 std::vector<array> GatherQMM::jvp(
-    const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* primals */,
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   throw std::runtime_error("GatherQMM::jvp NYI");
 }
 
@@ -3658,6 +3703,7 @@ std::vector<array> Real::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {astype(cotangents[0], primals[0].dtype(), stream())};
 }
 
@@ -3667,6 +3713,8 @@ std::vector<array> Real::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return {real(tangents[0], stream())};
 }
 
@@ -3707,6 +3755,7 @@ std::vector<array> Reshape::vjp(
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
   assert(argnums[0] == 0);
+  (void)argnums;
   return {reshape(cotangents[0], primals[0].shape(), stream())};
 }
 
@@ -3717,6 +3766,8 @@ std::vector<array> Reshape::jvp(
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
   assert(argnums[0] == 0);
+  (void)primals;
+  (void)argnums;
   return {reshape(tangents[0], shape_, stream())};
 }
 
@@ -3726,7 +3777,7 @@ bool Reshape::is_equivalent(const Primitive& other) const {
 }
 
 Shape Reshape::output_shape(const array& input, Shape shape) {
-  size_t size = 1;
+  int64_t size = 1;
   int infer_idx = -1;
   for (int i = 0; i < shape.size(); ++i) {
     if (shape[i] == -1) {
@@ -3750,7 +3801,7 @@ Shape Reshape::output_shape(const array& input, Shape shape) {
   }
 
   // Check that the reshaping is valid
-  if (input.size() != size) {
+  if (std::ssize(input) != size) {
     std::ostringstream msg;
     msg << "[reshape] Cannot reshape array of size " << input.size()
         << " into shape " << shape << ".";
@@ -3766,7 +3817,7 @@ std::vector<Shape> Reshape::output_shapes(const std::vector<array>& inputs) {
 std::vector<array> Reduce::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   auto in = primals[0];
 
@@ -3796,7 +3847,7 @@ std::vector<array> Reduce::vjp(
         // except the reduced over axes.
         int j = 0;
         for (int i = 0; i < in.ndim(); i++) {
-          if (j < axes_.size() && axes_[j] == i) {
+          if (j < std::ssize(axes_) && axes_[j] == i) {
             j++;
           } else {
             transpose_to.push_back(i);
@@ -3808,7 +3859,7 @@ std::vector<array> Reduce::vjp(
         }
         shape_flat.push_back(-1);
         transpose_back.resize(transpose_to.size());
-        for (int i = 0; i < transpose_to.size(); i++) {
+        for (int i = 0; i < std::ssize(transpose_to); i++) {
           transpose_back[transpose_to[i]] = i;
         }
       }
@@ -3906,10 +3957,11 @@ std::vector<array> Round::vjp(
 
 std::vector<array> Round::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {zeros_like(primals[0], stream())};
 }
 
@@ -3945,6 +3997,7 @@ std::vector<array> Scan::vjp(
     const std::vector<array>& outputs) {
   assert(primals.size() == 1);
   assert(argnums[0] == 0);
+  (void)argnums;
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(cotangents[0], axis_, !reverse_, inclusive_, stream())};
@@ -4041,11 +4094,12 @@ std::vector<array> Scan::vjp(
 }
 
 std::vector<array> Scan::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(tangents.size() == 1);
   assert(argnums[0] == 0);
+  (void)argnums;
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
@@ -4119,7 +4173,7 @@ std::vector<array> Scatter::vjp(
           // Should never reach here
           throw std::invalid_argument("");
       }
-    } else if (num == primals.size() - 1) {
+    } else if (num == std::ssize(primals) - 1) {
       switch (reduce_type_) {
         case Scatter::None:
         case Scatter::Sum: {
@@ -4160,9 +4214,9 @@ std::vector<array> Scatter::vjp(
 }
 
 std::vector<array> Scatter::jvp(
-    const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<array>& /* primals */,
+    const std::vector<array>& /* tangents */,
+    const std::vector<int>& /* argnums */) {
   throw std::runtime_error("[scatter] JVP not yet implemented");
 }
 
@@ -4187,7 +4241,7 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
       inputs[0] =
           repeat(expand_dims(inputs[0], 0, stream()), vmap_size, 0, stream());
     }
-    for (int i = 1; i < vmap_axes.size() - 1; ++i) {
+    for (int i = 1; i < std::ssize(vmap_axes) - 1; ++i) {
       // vmap axis for indices goes to 0
       if (vmap_axes[i] >= 0) {
         inputs[i] = moveaxis(inputs[i], vmap_axes[i], 0, stream());
@@ -4323,7 +4377,7 @@ std::pair<std::vector<array>, std::vector<int>> ScatterAxis::vmap(
   }
 
   auto v_in = inputs;
-  for (int i = 0; i < axes.size(); ++i) {
+  for (int i = 0; i < std::ssize(axes); ++i) {
     if (axes[i] >= 0) {
       // if out_ax >= 0 move axis o/w set out_ax
       if (out_ax != axes[i]) {
@@ -4349,9 +4403,9 @@ bool ScatterAxis::is_equivalent(const Primitive& other) const {
 }
 
 std::vector<array> Sigmoid::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   auto& s = outputs[0];
   auto sprime =
@@ -4365,6 +4419,7 @@ std::vector<array> Sigmoid::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   auto s = sigmoid(primals[0], stream());
   auto sprime =
       multiply(s, subtract(array(1.0f, s.dtype()), s, stream()), stream());
@@ -4389,10 +4444,11 @@ std::vector<array> Sign::vjp(
 
 std::vector<array> Sign::jvp(
     const std::vector<array>& primals,
-    const std::vector<array>& tangents,
+    const std::vector<array>& /* tangents */,
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {zeros(primals[0].shape(), primals[0].dtype(), stream())};
 }
 
@@ -4418,6 +4474,7 @@ std::vector<array> Sin::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], cos(primals[0], stream()), stream())};
 }
 
@@ -4443,6 +4500,7 @@ std::vector<array> Sinh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   return {multiply(tangents[0], cosh(primals[0], stream()), stream())};
 }
 
@@ -4473,7 +4531,7 @@ std::pair<std::vector<array>, std::vector<int>> Slice::vmap(
 std::vector<array> Slice::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>&) {
   // Check inputs
   assert(primals.size() == 1);
@@ -4485,9 +4543,10 @@ std::vector<array> Slice::vjp(
 std::vector<array> Slice::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   // Check inputs
   assert(primals.size() == 1);
+  (void)primals;
   return {slice(tangents[0], start_indices_, end_indices_, strides_, stream())};
 }
 
@@ -4582,9 +4641,10 @@ std::vector<array> SliceUpdate::vjp(
 std::vector<array> SliceUpdate::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   // Check inputs
   assert(primals.size() == 2);
+  (void)primals;
   return {slice_update(
       tangents[0],
       tangents[1],
@@ -4763,10 +4823,11 @@ std::pair<std::vector<array>, std::vector<int>> Softmax::vmap(
 std::vector<array> Softmax::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   assert(primals.size() == 1);
   assert(cotangents.size() == 1);
+  (void)primals;
   auto& s = outputs[0];
   auto sv = multiply(s, cotangents[0], stream());
   return {subtract(
@@ -4777,7 +4838,7 @@ std::vector<array> Softmax::vjp(
 std::vector<array> Softmax::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
   auto s = softmax(primals[0], std::vector<int>{-1}, precise_, stream());
@@ -4813,7 +4874,7 @@ std::vector<array> Sort::vjp(
 std::vector<array> Sort::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
   auto sort_idx = argsort(primals[0], axis_, stream());
@@ -4836,17 +4897,17 @@ std::pair<std::vector<array>, std::vector<int>> Split::vmap(
 }
 
 std::vector<array> Split::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>&) {
   return {concatenate(cotangents, axis_, stream())};
 }
 
 std::vector<array> Split::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   return split(tangents[0], indices_, axis_, stream());
 }
 
@@ -4866,7 +4927,7 @@ std::vector<array> Square::vjp(
 std::vector<array> Square::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
   return {multiply(
@@ -4886,7 +4947,7 @@ std::pair<std::vector<array>, std::vector<int>> Square::vmap(
 std::vector<array> Sqrt::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<int>& /* argnums */,
     const std::vector<array>& outputs) {
   assert(primals.size() == 1);
   assert(cotangents.size() == 1);
@@ -4939,7 +5000,7 @@ std::pair<std::vector<array>, std::vector<int>> StopGradient::vmap(
 }
 
 std::vector<array> Subtract::vjp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
@@ -4955,7 +5016,7 @@ std::vector<array> Subtract::vjp(
 }
 
 std::vector<array> Subtract::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>& /* primals */,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto jvp_fun = [&](int i) {
@@ -5014,7 +5075,7 @@ bool Squeeze::is_equivalent(const Primitive& other) const {
 Shape Squeeze::output_shape(const array& input, const std::vector<int>& axes) {
   Shape shape;
   for (int i = 0, j = 0; i < input.ndim(); ++i) {
-    if (j < axes.size() && i == axes[j]) {
+    if (j < std::ssize(axes) && i == axes[j]) {
       j++;
     } else {
       shape.push_back(input.shape(i));
@@ -5041,6 +5102,7 @@ std::vector<array> Tan::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array cos_sq = square(cos(primals[0], stream()), stream());
   return {divide(tangents[0], cos_sq, stream())};
 }
@@ -5067,6 +5129,7 @@ std::vector<array> Tanh::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)argnums;
   array cosh_sq = square(cosh(primals[0], stream()), stream());
   return {divide(tangents[0], cosh_sq, stream())};
 }
@@ -5428,8 +5491,10 @@ std::vector<array> Transpose::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   std::vector<int> iaxes(axes_.size());
-  for (int i = 0; i < axes_.size(); ++i) {
+  for (int i = 0; i < std::ssize(axes_); ++i) {
     iaxes[axes_[i]] = i;
   }
   return {transpose(cotangents[0], iaxes, stream())};
@@ -5438,9 +5503,10 @@ std::vector<array> Transpose::vjp(
 std::vector<array> Transpose::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& /* argnums */) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
+  (void)primals;
   return {transpose(tangents[0], axes_, stream())};
 }
 
@@ -5469,7 +5535,7 @@ bool Transpose::is_equivalent(const Primitive& other) const {
 std::vector<Shape> Transpose::output_shapes(const std::vector<array>& inputs) {
   auto& in = inputs[0];
   Shape shape(in.ndim(), 0);
-  for (int i = 0; i < axes_.size(); ++i) {
+  for (int i = 0; i < std::ssize(axes_); ++i) {
     shape[i] = in.shape()[axes_[i]];
   }
   return {std::move(shape)};
@@ -5575,6 +5641,8 @@ std::vector<array> Hadamard::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
+  (void)primals;
+  (void)argnums;
   return {hadamard_transform(tangents[0], scale_, stream())};
 }
 

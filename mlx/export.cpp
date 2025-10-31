@@ -138,7 +138,7 @@ T deserialize(Reader& is) {
     T v;
     auto size = deserialize<uint64_t>(is);
     v.reserve(size);
-    for (int i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
       v.push_back(deserialize<typename T::value_type>(is));
     }
     return v;
@@ -487,11 +487,11 @@ struct FunctionTable {
     int n = 1;
     for (auto& [_, vec] : table) {
       for (auto& fun : vec) {
-        auto npos = fun.inputs.size() - fun.kwarg_keys.size();
+        auto npos = std::ssize(fun.inputs) - std::ssize(fun.kwarg_keys);
         os << " " << n++ << ". Function with " << npos
-           << " positional inputs and " << fun.kwarg_keys.size()
+           << " positional inputs and " << std::ssize(fun.kwarg_keys)
            << " keyword inputs:\n";
-        for (int j = 0; j < fun.inputs.size(); ++j) {
+        for (int j = 0; j < std::ssize(fun.inputs); ++j) {
           auto& in = fun.inputs[j];
           if (j < npos) {
             os << "   " << j + 1 << ": ";
@@ -536,7 +536,7 @@ bool FunctionTable::match(
   };
 
   int i = 0;
-  for (; i < args.size(); ++i) {
+  for (; i < std::ssize(args); ++i) {
     if (!match_inputs(args[i], fun.inputs[i])) {
       return false;
     }
@@ -627,7 +627,8 @@ void FunctionExporter::export_with_callback(
   // Callback on the inputs
   callback({{"type", "inputs"}, {"inputs", to_vector_data(inputs)}});
   std::vector<std::pair<std::string, std::string>> keyword_inputs;
-  for (int i = inputs.size() - kwarg_keys.size(), j = 0; i < inputs.size();
+  for (int i = std::ssize(inputs) - std::ssize(kwarg_keys), j = 0;
+       i < std::ssize(inputs);
        ++i, ++j) {
     keyword_inputs.emplace_back(kwarg_keys[j], namer.get_name(inputs[i]));
   }
@@ -928,7 +929,7 @@ std::vector<array> ImportedFunction::operator()(
     ftable->print_functions(msg);
     msg << "\nCalled with " << args.size() << " positional inputs and "
         << kwargs.size() << " keyword inputs:\n";
-    for (int i = 0; i < args.size(); ++i) {
+    for (int i = 0; i < std::ssize(args); ++i) {
       auto& in = args[i];
       msg << "  " << i + 1 << ": " << in.shape() << " " << in.dtype() << "\n";
     }
@@ -970,7 +971,7 @@ ImportedFunction::ImportedFunction(const std::string& file)
     std::unordered_map<uint64_t, array> array_map;
     auto trace_input_ids = deserialize<std::vector<uint64_t>>(is);
     auto trace_inputs = deserialize<std::vector<array>>(is);
-    for (int i = 0; i < trace_inputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(trace_inputs); ++i) {
       array_map.emplace(trace_input_ids[i], trace_inputs[i]);
     }
     auto trace_output_ids = deserialize<std::vector<uint64_t>>(is);
@@ -1006,7 +1007,7 @@ ImportedFunction::ImportedFunction(const std::string& file)
               std::move(types),
               std::move(prim),
               std::move(inputs));
-          for (int i = 0; i < arrays.size(); ++i) {
+          for (int i = 0; i < std::ssize(arrays); ++i) {
             auto sid = ids[i];
             if (sid == id) {
               tape.push_back(arrays[i]);

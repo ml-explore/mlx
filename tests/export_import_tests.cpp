@@ -44,7 +44,7 @@ TEST_CASE("test export basic functions") {
 }
 
 TEST_CASE("test export function with no inputs") {
-  auto fun = [](std::vector<array> x) -> std::vector<array> {
+  auto fun = [](std::vector<array> /* x */) -> std::vector<array> {
     return {zeros({2, 2})};
   };
 

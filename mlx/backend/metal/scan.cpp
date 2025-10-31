@@ -76,7 +76,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
-    size_t size = in.shape(axis_);
+    int64_t size = in.shape(axis_);
     compute_encoder.set_bytes(size, 2);
 
     // Compute the thread grid

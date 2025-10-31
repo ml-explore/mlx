@@ -90,6 +90,7 @@ void Recv::eval_cpu(
     std::vector<array>& outputs) {
   assert(inputs.size() == 0);
   assert(outputs.size() == 1);
+  (void)inputs;
 
   outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
   distributed::detail::recv(group(), outputs[0], src_, stream());

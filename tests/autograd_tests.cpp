@@ -145,7 +145,7 @@ TEST_CASE("test jvp") {
 
   // No dependence between input and output
   {
-    auto fun = [](array in) { return array({1.0, 1.0}); };
+    auto fun = [](array /* in */) { return array({1.0, 1.0}); };
     auto out = jvp(fun, array(1.0f), array(1.0f)).second;
     CHECK(array_equal(out, zeros({2})).item<bool>());
   }
@@ -195,7 +195,7 @@ TEST_CASE("test vjp") {
 
   // No dependence between input and output
   {
-    auto fun = [](array in) { return array(1.); };
+    auto fun = [](array /* in */) { return array(1.); };
     auto out = vjp(fun, zeros({2}), array(1.)).second;
     CHECK(array_equal(out, zeros({2})).item<bool>());
   }

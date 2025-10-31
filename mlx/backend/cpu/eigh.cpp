@@ -165,7 +165,7 @@ void eigh_impl(
     EighWork<T> work(jobz, uplo, N);
 
     // Work loop
-    for (size_t i = 0; i < size / (N * N); ++i) {
+    for (int64_t i = 0; i < size / (N * N); ++i) {
       work.run(vec_ptr, eig_ptr);
       vec_ptr += N * N;
       eig_ptr += N;

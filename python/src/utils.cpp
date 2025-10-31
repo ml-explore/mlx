@@ -57,8 +57,8 @@ std::pair<mx::array, mx::array> to_arrays(
   // - If neither is an array convert to arrays but leave their types alone
   auto is_mlx_array = [](const ScalarOrArray& x) {
     return std::holds_alternative<mx::array>(x) ||
-        std::holds_alternative<ArrayLike>(x) &&
-        nb::hasattr(std::get<ArrayLike>(x).obj, "__mlx_array__");
+        (std::holds_alternative<ArrayLike>(x) &&
+         nb::hasattr(std::get<ArrayLike>(x).obj, "__mlx_array__"));
   };
   auto get_mlx_array = [](const ScalarOrArray& x) {
     if (auto px = std::get_if<mx::array>(&x); px) {

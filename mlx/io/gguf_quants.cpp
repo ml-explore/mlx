@@ -77,8 +77,8 @@ void extract_q8_0_data(
     array& weights_arr,
     array& scales_arr,
     array& biases_arr) {
-  const uint64_t weights_per_block = 32;
-  const uint64_t bytes_per_block = 34; // 2 bytes scale, 32x1 byte weights
+  const int64_t weights_per_block = 32;
+  const int64_t bytes_per_block = 34; // 2 bytes scale, 32x1 byte weights
   auto data = static_cast<uint8_t*>(tensor.weights_data);
   auto weights = weights_arr.data<int8_t>();
   auto scales = scales_arr.data<float16_t>();

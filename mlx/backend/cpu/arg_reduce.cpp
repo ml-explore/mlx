@@ -19,12 +19,12 @@ void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
   auto in_ptr = in.data<InT>();
   auto out_ptr = out.data<uint32_t>();
 
-  for (uint32_t i = 0; i < out.size(); ++i) {
+  for (int64_t i = 0; i < out.size(); ++i) {
     auto loc = elem_to_loc(i, shape, strides);
     auto local_in_ptr = in_ptr + loc;
     uint32_t ind_v = 0;
     InT v = (*local_in_ptr);
-    for (uint32_t j = 0; j < axis_size; ++j, local_in_ptr += axis_stride) {
+    for (int64_t j = 0; j < axis_size; ++j, local_in_ptr += axis_stride) {
       op(j, (*local_in_ptr), &ind_v, &v);
     }
     out_ptr[i] = ind_v;

@@ -6,7 +6,8 @@ template <typename T, typename U, typename V>
 void validate_subtrees(const std::vector<nb::object>& subtrees) {
   int len = nb::cast<T>(subtrees[0]).size();
   for (auto& subtree : subtrees) {
-    if ((nb::isinstance<T>(subtree) && nb::cast<T>(subtree).size() != len) ||
+    if ((nb::isinstance<T>(subtree) &&
+         std::ssize(nb::cast<T>(subtree)) != len) ||
         nb::isinstance<U>(subtree) || nb::isinstance<V>(subtree)) {
       throw std::invalid_argument(
           "[tree_map] Additional input tree is not a valid prefix of the first tree.");
@@ -24,8 +25,8 @@ nb::object tree_map(
       nb::list l;
       std::vector<nb::object> items(subtrees.size());
       validate_subtrees<nb::list, nb::tuple, nb::dict>(subtrees);
-      for (int i = 0; i < nb::cast<nb::list>(subtrees[0]).size(); ++i) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+      for (int i = 0; i < std::ssize(nb::cast<nb::list>(subtrees[0])); ++i) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::list>(subtrees[j])) {
             items[j] = nb::cast<nb::list>(subtrees[j])[i];
           } else {
@@ -42,7 +43,7 @@ nb::object tree_map(
       nb::list l;
       validate_subtrees<nb::tuple, nb::list, nb::dict>(subtrees);
       for (int i = 0; i < len; ++i) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::tuple>(subtrees[j])) {
             items[j] = nb::cast<nb::tuple>(subtrees[j])[i];
           } else {
@@ -57,7 +58,7 @@ nb::object tree_map(
       validate_subtrees<nb::dict, nb::list, nb::tuple>(subtrees);
       nb::dict d;
       for (auto item : nb::cast<nb::dict>(subtrees[0])) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::dict>(subtrees[j])) {
             auto subdict = nb::cast<nb::dict>(subtrees[j]);
             if (!subdict.contains(item.first)) {
@@ -96,8 +97,8 @@ void tree_visit(
     if (nb::isinstance<nb::list>(subtrees[0])) {
       std::vector<nb::object> items(subtrees.size());
       validate_subtrees<nb::list, nb::tuple, nb::dict>(subtrees);
-      for (int i = 0; i < nb::cast<nb::list>(subtrees[0]).size(); ++i) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+      for (int i = 0; i < std::ssize(nb::cast<nb::list>(subtrees[0])); ++i) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::list>(subtrees[j])) {
             items[j] = nb::cast<nb::list>(subtrees[j])[i];
           } else {
@@ -112,7 +113,7 @@ void tree_visit(
       int len = nb::cast<nb::tuple>(subtrees[0]).size();
       validate_subtrees<nb::tuple, nb::list, nb::dict>(subtrees);
       for (int i = 0; i < len; ++i) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::tuple>(subtrees[j])) {
             items[j] = nb::cast<nb::tuple>(subtrees[j])[i];
           } else {
@@ -125,7 +126,7 @@ void tree_visit(
       std::vector<nb::object> items(subtrees.size());
       validate_subtrees<nb::dict, nb::list, nb::tuple>(subtrees);
       for (auto item : nb::cast<nb::dict>(subtrees[0])) {
-        for (int j = 0; j < subtrees.size(); ++j) {
+        for (int j = 0; j < std::ssize(subtrees); ++j) {
           if (nb::isinstance<nb::dict>(subtrees[j])) {
             auto subdict = nb::cast<nb::dict>(subtrees[j]);
             if (!subdict.contains(item.first)) {
@@ -173,13 +174,13 @@ void tree_visit_update(
   recurse = [&](nb::handle subtree) {
     if (nb::isinstance<nb::list>(subtree)) {
       auto l = nb::cast<nb::list>(subtree);
-      for (int i = 0; i < l.size(); ++i) {
+      for (int i = 0; i < std::ssize(l); ++i) {
         l[i] = recurse(l[i]);
       }
       return nb::cast<nb::object>(l);
     } else if (nb::isinstance<nb::tuple>(subtree)) {
       nb::list l(subtree);
-      for (int i = 0; i < l.size(); ++i) {
+      for (int i = 0; i < std::ssize(l); ++i) {
         l[i] = recurse(l[i]);
       }
       return nb::cast<nb::object>(nb::tuple(l));
@@ -204,7 +205,7 @@ void tree_visit_update(
 void tree_fill(nb::object& tree, const std::vector<mx::array>& values) {
   size_t index = 0;
   tree_visit_update(
-      tree, [&](nb::handle node) { return nb::cast(values[index++]); });
+      tree, [&](nb::handle /* node */) { return nb::cast(values[index++]); });
 }
 
 // Replace all the arrays from the src values with the dst values in the tree
@@ -213,7 +214,7 @@ void tree_replace(
     const std::vector<mx::array>& src,
     const std::vector<mx::array>& dst) {
   std::unordered_map<uintptr_t, mx::array> src_to_dst;
-  for (int i = 0; i < src.size(); ++i) {
+  for (int i = 0; i < std::ssize(src); ++i) {
     src_to_dst.insert({src[i].id(), dst[i]});
   }
   tree_visit_update(tree, [&](nb::handle node) {

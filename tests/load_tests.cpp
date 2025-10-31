@@ -168,7 +168,7 @@ TEST_CASE("test gguf metadata") {
     CHECK_EQ(loaded_metadata.count("meta"), 1);
     auto& strs = std::get<std::vector<std::string>>(loaded_metadata["meta"]);
     CHECK_EQ(strs.size(), 3);
-    for (int i = 0; i < strs.size(); ++i) {
+    for (int i = 0; i < std::ssize(strs); ++i) {
       CHECK_EQ(strs[i], data[i]);
     }
   }
@@ -187,7 +187,7 @@ TEST_CASE("test gguf metadata") {
     CHECK_EQ(loaded_metadata.size(), 4);
     auto& strs = std::get<std::vector<std::string>>(loaded_metadata["meta1"]);
     CHECK_EQ(strs.size(), 3);
-    for (int i = 0; i < strs.size(); ++i) {
+    for (int i = 0; i < std::ssize(strs); ++i) {
       CHECK_EQ(strs[i], data[i]);
     }
     auto& arr = std::get<array>(loaded_metadata["meta2"]);

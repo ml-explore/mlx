@@ -166,7 +166,7 @@ bool issubdtype(const Dtype& a, const Dtype& b) {
   return a == b;
 }
 
-bool issubdtype(const Dtype::Category& cat, const Dtype& type) {
+bool issubdtype(const Dtype::Category& /* cat */, const Dtype& /* type */) {
   return false;
 }
 

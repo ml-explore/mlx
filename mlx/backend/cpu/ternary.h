@@ -136,7 +136,7 @@ void ternary_op(
   if (topt == TernaryOpType::ScalarScalarScalar) {
     *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
   } else if (topt == TernaryOpType::VectorVectorVector) {
-    for (size_t i = 0; i < out.size(); ++i) {
+    for (int64_t i = 0; i < out.size(); ++i) {
       *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
       a_ptr++;
       b_ptr++;

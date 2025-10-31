@@ -27,7 +27,7 @@ void svd_impl(
   const int N = a.shape(-1);
   const int K = std::min(M, N);
 
-  size_t num_matrices = a.size() / (M * N);
+  int64_t num_matrices = a.size() / (M * N);
 
   // lapack clobbers the input, so we have to make a copy.
   array in(a.shape(), a.dtype(), nullptr, {});
@@ -121,7 +121,7 @@ void svd_impl(
     auto scratch = array::Data{allocator::malloc(sizeof(T) * lwork)};
 
     // Loop over matrices.
-    for (int i = 0; i < num_matrices; i++) {
+    for (int64_t i = 0; i < num_matrices; i++) {
       gesdd<T>(
           /* jobz = */ jobz,
           // M and N are swapped since lapack expects column-major.
@@ -153,10 +153,10 @@ void svd_impl(
 
 template <typename T>
 void compute_svd(
-    const array& a,
-    bool compute_uv,
-    std::vector<array>& outputs,
-    Stream stream) {}
+    const array& /* a */,
+    bool /* compute_uv */,
+    std::vector<array>& /* outputs */,
+    Stream /* stream */) {}
 
 void SVD::eval_cpu(
     const std::vector<array>& inputs,

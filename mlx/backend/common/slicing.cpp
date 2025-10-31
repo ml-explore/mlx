@@ -24,8 +24,8 @@ std::tuple<int64_t, Strides> prepare_slice(
 void shared_buffer_slice(
     const array& in,
     const Strides& out_strides,
-    size_t data_offset,
-    size_t data_size,
+    int64_t data_offset,
+    int64_t data_size,
     array& out) {
   // Compute row/col contiguity
   auto [no_bsx_size, is_row_contiguous, is_col_contiguous] =
@@ -61,7 +61,7 @@ void slice(
   if (data_end < 0) {
     data_end += in.data_size();
   }
-  size_t data_size = (data_end - data_offset);
+  int64_t data_size = (data_end - data_offset);
   shared_buffer_slice(in, inp_strides, data_offset, data_size, out);
 }
 

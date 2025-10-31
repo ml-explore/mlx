@@ -107,7 +107,7 @@ nb::callable mlx_func(
   return nb::steal<nb::callable>((PyObject*)r);
 }
 
-void init_mlx_func(nb::module_& m) {
+void init_mlx_func(nb::module_& /* m */) {
   gc_func_tp = (PyTypeObject*)PyType_FromSpec(&gc_func_spec);
   if (!gc_func_tp) {
     nb::raise("Could not register MLX function type.");

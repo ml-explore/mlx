@@ -49,7 +49,7 @@ static CompilerCache& cache() {
 // GPU compile is always available if the GPU is available and since we are in
 // this file CPU compile is also available.
 namespace detail {
-bool compile_available_for_device(const Device& device) {
+bool compile_available_for_device(const Device& /* device */) {
   return true;
 }
 
@@ -168,7 +168,7 @@ inline void build_kernel(
   // Add the input arguments
   int cnt = 0;
   int strides_index = 1;
-  for (size_t i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     // Skip constants from the input list
     if (is_constant(i)) {
       continue;
@@ -238,7 +238,7 @@ inline void build_kernel(
     } else {
       os << x.primitive().name();
       os << "()(";
-      for (int i = 0; i < x.inputs().size() - 1; i++) {
+      for (int i = 0; i < std::ssize(x.inputs()) - 1; i++) {
         os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
       }
       os << "tmp_" << namer.get_name(x.inputs().back()) << ");" << std::endl;

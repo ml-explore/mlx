@@ -11,9 +11,9 @@ namespace mlx::core {
 
 // n = 2^k component
 template <typename T>
-void hadamard_n(T* out, int n, int m, float scale, size_t size) {
+void hadamard_n(T* out, int n, int /* m */, float scale, int64_t size) {
   for (int b = 0; b < size / n; b++) {
-    size_t loc = b * n;
+    int64_t loc = b * n;
     T* data_ptr = out + loc;
     int h = 1;
     int n_over_2 = n / 2;
@@ -37,7 +37,7 @@ void hadamard_n(T* out, int n, int m, float scale, size_t size) {
 
 // m component
 template <typename T>
-void hadamard_m(T* out, int n, int m, float scale, size_t size) {
+void hadamard_m(T* out, int n, int m, float scale, int64_t size) {
   auto h_matrices = hadamard_matrices();
   auto& matrix = h_matrices[m];
   auto start = 1;
@@ -45,7 +45,7 @@ void hadamard_m(T* out, int n, int m, float scale, size_t size) {
   std::vector<bool> hmat_vec;
   while (end != std::string_view::npos) {
     auto row = matrix.substr(start, end - start);
-    for (int i = 0; i < row.length(); i++) {
+    for (int i = 0; i < std::ssize(row); i++) {
       hmat_vec.push_back(row[i] == '+');
     }
     start = end + 1;
@@ -53,7 +53,7 @@ void hadamard_m(T* out, int n, int m, float scale, size_t size) {
   }
 
   for (int b = 0; b < size / m / n; b++) {
-    size_t loc = b * n * m;
+    int64_t loc = b * n * m;
     T* data_ptr = out + loc;
     for (int i = 0; i < n; i++) {
       std::vector<float> out(m);

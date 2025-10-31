@@ -20,8 +20,8 @@ struct CommandEncoder {
   CommandEncoder(CommandEncoder&&) = delete;
   CommandEncoder& operator=(CommandEncoder&&) = delete;
 
-  void set_input_array(const array& a) {}
-  void set_output_array(array& a) {}
+  void set_input_array(const array& /* a */) {}
+  void set_output_array(array& /* a */) {}
 
   // Hold onto a temporary until any already scheduled tasks which use it as
   // an input are complete.

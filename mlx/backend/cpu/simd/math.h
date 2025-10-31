@@ -79,7 +79,8 @@ Simd<T, N> sincos(Simd<T, N> in) {
 
   // Get the polynom selection mask. There is one polynom for 0 <= x <= Pi/4
   // and another one for Pi/4<x<=Pi/2. Both branches will be computed.
-  auto poly_mask = (emm2 & 2) != 0;
+  auto poly_mask =
+      (emm2 & static_cast<uint32_t>(2)) != static_cast<uint32_t>(0);
 
   // The magic pass: "Extended precision modular arithmetic"
   // x = ((x - y * DP1) - y * DP2) - y * DP3
@@ -87,8 +88,8 @@ Simd<T, N> sincos(Simd<T, N> in) {
   x = fma(y, Simd<float, N>(-2.4187564849853515625e-4f), x);
   x = fma(y, Simd<float, N>(-3.77489497744594108e-8f), x);
 
-  sign_mask_sin = sign_mask_sin ^ ((emm2 & 4) != 0);
-  auto sign_mask_cos = ((emm2 - 2) & 4) != 0;
+  sign_mask_sin = sign_mask_sin ^ ((emm2 & 4) != static_cast<uint32_t>(0));
+  auto sign_mask_cos = ((emm2 - 2) & 4) != static_cast<uint32_t>(0);
 
   // Evaluate the first polynom  (0 <= x <= Pi/4) in y1,
   // and the second polynom      (Pi/4 <= x <= 0) in y2

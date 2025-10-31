@@ -28,7 +28,7 @@ std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
     if (shape[0] != 1) {
       to_collapse.push_back(0);
     }
-    size_t size = shape[0];
+    int64_t size = shape[0];
     for (int i = 1; i < shape.size(); i++) {
       bool contiguous = true;
       size *= shape[i];
@@ -64,7 +64,7 @@ std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
       current_shape *= shape[to_collapse[k]];
     }
     out_shape.push_back(current_shape);
-    for (int j = 0; j < strides.size(); j++) {
+    for (int j = 0; j < std::ssize(strides); j++) {
       const auto& st = strides[j];
       out_strides[j].push_back(st[to_collapse[k - 1]]);
     }

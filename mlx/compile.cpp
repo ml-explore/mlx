@@ -194,7 +194,7 @@ const char* Compiled::name() const {
 }
 
 std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
-  size_t nd = 0;
+  int nd = 0;
   for (auto& in : inputs) {
     nd = std::max(nd, in.ndim());
   }
@@ -256,7 +256,7 @@ void merge(array& dst, array& src, ParentsMap& parents_map) {
   auto sources = src.outputs();
   auto dests = dst.outputs();
   // For each src parent, point it to the corresponding dst
-  for (int i = 0; i < sources.size(); ++i) {
+  for (int i = 0; i < std::ssize(sources); ++i) {
     merge_one(dests[i], sources[i], parents_map);
   }
 }
@@ -327,7 +327,7 @@ class CompilerCache {
       if (in1.size() != in2.size()) {
         return false;
       }
-      for (size_t i = 0; i < in1.size(); ++i) {
+      for (int i = 0; i < std::ssize(in1); ++i) {
         if (in1[i].ndim() != in2[i].ndim()) {
           return false;
         }
@@ -399,7 +399,7 @@ compile_trace(
   // Run the function on placeholder inputs
   // to get compute graph
   std::vector<array> tracer_inputs;
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     array in(inputs[i].shape(), inputs[i].dtype(), nullptr, {});
     in.set_tracer(true);
     tracer_inputs.push_back(std::move(in));
@@ -420,7 +420,7 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
   std::unordered_set<std::uintptr_t> original_input_set;
   std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
       parents_map;
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     input_set.insert(inputs[i].id());
     original_input_set.insert(original_inputs[i].id());
   }
@@ -436,7 +436,7 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     if (cache.find(id) != cache.end()) {
       return;
     }
-    for (int i = 0; i < a.inputs().size(); i++) {
+    for (int i = 0; i < std::ssize(a.inputs()); i++) {
       auto& in = a.inputs()[i];
       parents_map[in.id()].push_back({a, i});
       for (auto& s : a.siblings()) {
@@ -534,7 +534,7 @@ void compile_simplify(
       return false;
     }
 
-    for (int i = 0; i < a.inputs().size(); i++) {
+    for (int i = 0; i < std::ssize(a.inputs()); i++) {
       if (a.inputs()[i].id() != b.inputs()[i].id()) {
         return false;
       }
@@ -599,7 +599,7 @@ void compile_simplify(
       auto maybe_merge_parents = [&](auto& a) {
         auto parents = parents_map.find(a.id());
         if (parents != parents_map.end()) {
-          auto N = parents->second.size();
+          auto N = std::ssize(parents->second);
           std::vector<bool> mask(N, false);
 
           auto try_merge = [&](int dst_idx, int src_idx) {
@@ -642,11 +642,11 @@ void compile_simplify(
               it->second.push_back(i);
             }
             for (auto& [_, group] : dst_map) {
-              for (int i = 0; i < group.size(); ++i) {
+              for (int i = 0; i < std::ssize(group); ++i) {
                 if (mask[group[i]]) {
                   continue;
                 }
-                for (int j = i + 1; j < group.size(); ++j) {
+                for (int j = i + 1; j < std::ssize(group); ++j) {
                   if (mask[group[j]]) {
                     continue;
                   }
@@ -847,7 +847,7 @@ void compile_fuse(
     std::vector<array> old_outputs;
     // Add to global cache and add any global outputs to outputs
     // of new primitive
-    for (int j = 0; j < fused_tape.size() - 1; ++j) {
+    for (int j = 0; j < std::ssize(fused_tape) - 1; ++j) {
       auto& f = fused_tape[j];
       if (output_map.find(f.id()) != output_map.end()) {
         old_outputs.push_back(f);
@@ -903,7 +903,7 @@ void compile_fuse(
     new_tape.push_back(compiled_outputs.back());
 
     // Replace inputs old parents with compiled_outputs
-    for (int i = 0; i < inputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(inputs); ++i) {
       auto& pairs = parents_map[inputs[i].id()];
       pairs.erase(
           std::remove_if(
@@ -918,7 +918,7 @@ void compile_fuse(
 
     // - Update outputs parents to point to compiled outputs
     // - Update any overall graph outputs to be compiled outputs
-    for (int o = 0; o < old_outputs.size(); ++o) {
+    for (int o = 0; o < std::ssize(old_outputs); ++o) {
       merge_one(compiled_outputs[o], old_outputs[o], parents_map);
       if (auto it = output_map.find(old_outputs[o].id());
           it != output_map.end()) {
@@ -943,7 +943,7 @@ std::vector<array> compile_replace(
     const std::vector<array>& inputs,
     bool shapeless) {
   std::unordered_map<uintptr_t, array> trace_to_real;
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     trace_to_real.insert({trace_inputs[i].id(), inputs[i]});
   }
 
@@ -989,7 +989,7 @@ std::vector<array> compile_replace(
         }
         auto real_out = array::make_arrays(
             std::move(shapes), types, a.primitive_ptr(), real_inputs);
-        for (int i = 0; i < trace_out.size(); ++i) {
+        for (int i = 0; i < std::ssize(trace_out); ++i) {
           trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
         }
       }

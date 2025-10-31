@@ -83,7 +83,7 @@ class ArrayPythonIterator {
       throw nb::stop_iteration();
     }
 
-    if (idx_ >= 0 && idx_ < splits_.size()) {
+    if (idx_ >= 0 && idx_ < std::ssize(splits_)) {
       return mx::squeeze(splits_[idx_++], 0);
     }
 
@@ -390,7 +390,7 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "__array_namespace__",
-          [](const mx::array& a,
+          [](const mx::array& /* a */,
              const std::optional<std::string>& api_version) {
             if (api_version) {
               throw std::invalid_argument(
@@ -501,7 +501,7 @@ void init_array(nb::module_& m) {
       .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
       .def(
           "__dlpack_device__",
-          [](const mx::array& a) {
+          [](const mx::array& /* a */) {
             // See
             // https://github.com/dmlc/dlpack/blob/5c210da409e7f1e51ddf445134a4376fdbd70d7d/include/dlpack/dlpack.h#L74
             if (mx::metal::is_available()) {

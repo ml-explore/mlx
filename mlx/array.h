@@ -81,22 +81,22 @@ class array {
   }
 
   /** The size of the array's datatype in bytes. */
-  size_t itemsize() const {
+  int itemsize() const {
     return size_of(dtype());
   }
 
   /** The number of elements in the array. */
-  size_t size() const {
+  int64_t size() const {
     return array_desc_->size;
   }
 
   /** The number of bytes in the array. */
-  size_t nbytes() const {
+  int64_t nbytes() const {
     return size() * itemsize();
   }
 
   /** The number of dimensions of the array. */
-  size_t ndim() const {
+  int ndim() const {
     return array_desc_->shape.size();
   }
 
@@ -329,7 +329,7 @@ class array {
    * corresponding to ``arr[-1, -1, ...]``) then ``data_size = last - first``.
    * Note, ``data_size`` is in units of ``item_size`` (not bytes).
    **/
-  size_t data_size() const {
+  int64_t data_size() const {
     return array_desc_->data_size;
   }
 
@@ -340,7 +340,7 @@ class array {
     return array_desc_->data->buffer;
   }
 
-  size_t buffer_size() const {
+  int64_t buffer_size() const {
     return allocator::allocator().size(buffer());
   }
 
@@ -530,7 +530,7 @@ array::array(
     Shape shape,
     Dtype dtype /* = TypeToDtype<T>() */)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
-  if (data.size() != size()) {
+  if (std::ssize(data) != size()) {
     throw std::invalid_argument(
         "Data size and provided shape mismatch in array construction.");
   }

@@ -14,14 +14,17 @@ void array_basics() {
   // Get the value out of it:
   auto s = x.item<float>();
   assert(s == 1.0);
+  (void)s;
 
   // Scalars have a size of 1:
-  size_t size = x.size();
+  int64_t size = x.size();
   assert(size == 1);
+  (void)size;
 
   // Scalars have 0 dimensions:
   int ndim = x.ndim();
   assert(ndim == 0);
+  (void)ndim;
 
   // The shape should be an empty vector:
   auto shape = x.shape();
@@ -30,6 +33,7 @@ void array_basics() {
   // The datatype should be float32:
   auto dtype = x.dtype();
   assert(dtype == mx::float32);
+  (void)dtype;
 
   // Specify the dtype when constructing the array:
   x = mx::array(1, mx::int32);

@@ -28,7 +28,7 @@ std::pair<Shape, Strides> shapes_without_reduction_axes(
 
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
   // The data is all there and we are reducing over everything
-  if (x.size() == x.data_size() && axes.size() == x.ndim() &&
+  if (x.size() == x.data_size() && std::ssize(axes) == x.ndim() &&
       x.flags().contiguous) {
     return ContiguousAllReduce;
   }
@@ -38,7 +38,7 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
     // Merge consecutive axes
     Shape shape = {x.shape(axes[0])};
     Strides strides = {x.strides()[axes[0]]};
-    for (int i = 1; i < axes.size(); i++) {
+    for (int i = 1; i < std::ssize(axes); i++) {
       if (axes[i] - 1 == axes[i - 1] && x.shape(axes[i]) > 1) {
         shape.back() *= x.shape(axes[i]);
         strides.back() = x.strides()[axes[i]];

@@ -25,7 +25,7 @@ inline void mask_matrix(
     const int64_t Y_data_str,
     const int64_t X_mask_str,
     const int64_t Y_mask_str,
-    const size_t mask_offset) {
+    const int64_t mask_offset) {
   int tX = (X + block_size - 1) / block_size;
   int tY = (Y + block_size - 1) / block_size;
 
@@ -61,13 +61,13 @@ inline void segmented_mm(
     T* out,
     bool a_transposed,
     bool b_transposed,
-    size_t lda,
-    size_t ldb,
+    int64_t lda,
+    int64_t ldb,
     const Shape& a_shape,
     const Strides& a_strides,
     const Shape& b_shape,
     const Strides& b_strides,
-    size_t num_segments,
+    int64_t num_segments,
     const Shape& segments_shape,
     const Strides& segments_strides) {
   int ndim = a_shape.size();
@@ -149,9 +149,9 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto [b_transposed, ldb, b, b_copied] =
       check_transpose(b_pre, has_op_mask, inputs.back().dtype() != bool_);
 
-  size_t M = a.shape(-2);
-  size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
+  int64_t M = a.shape(-2);
+  int64_t N = b.shape(-1);
+  int64_t K = a.shape(-1);
 
   if (M == 0 || N == 0) {
     return;
@@ -172,8 +172,8 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                        int batch_idx,
                        int X,
                        int Y,
-                       size_t X_data_str,
-                       size_t Y_data_str,
+                       int64_t X_data_str,
+                       int64_t Y_data_str,
                        const Shape& mask_shape,
                        const Strides& mask_strides,
                        bool is_bool) {
@@ -253,7 +253,7 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto a_ptr = a.data<float>();
   auto b_ptr = b.data<float>();
   auto out_ptr = out.data<float>();
-  size_t num_matrices = out.size() / (M * size_t(N));
+  int64_t num_matrices = out.size() / (M * int64_t(N));
   auto ldc = out.shape(-1);
 
   encoder.dispatch([a_ptr,
@@ -394,9 +394,9 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto [a_transposed, lda, a] = check_transpose(a_pre);
   auto [b_transposed, ldb, b] = check_transpose(b_pre);
 
-  size_t M = a.shape(-2);
-  size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
+  int64_t M = a.shape(-2);
+  int64_t N = b.shape(-1);
+  int64_t K = a.shape(-1);
 
   if (M == 0 || N == 0) {
     return;
@@ -413,7 +413,7 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   // Get batch dims
   auto batch_size_out = out.size() / (M * N);
-  size_t matrix_stride_out = M * N;
+  int64_t matrix_stride_out = M * N;
 
   auto get_batch_dims = [](const auto& v) {
     return decltype(v){v.begin(), v.end() - 2};

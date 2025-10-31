@@ -55,7 +55,8 @@ class EmptyGroup : public GroupImpl {
     return 1;
   }
 
-  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
+  std::shared_ptr<GroupImpl> split(int /* color */, int /* key */ = -1)
+      override {
     throw std::runtime_error("Cannot split the distributed group further.");
   }
 

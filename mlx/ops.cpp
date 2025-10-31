@@ -389,7 +389,7 @@ array unflatten(
     throw std::invalid_argument(msg.str());
   }
 
-  size_t size = 1;
+  int64_t size = 1;
   int infer_idx = -1;
   for (int i = 0; i < shape.size(); ++i) {
     if (shape[i] == -1) {
@@ -686,10 +686,10 @@ void normalize_dynamic_slice_inputs(
         << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (start.size() != axes.size()) {
+  if (start.size() != std::ssize(axes)) {
     std::ostringstream msg;
     msg << prefix << " Number of starting indices " << start.size()
-        << " does not match number of axes " << axes.size() << ".";
+        << " does not match number of axes " << std::ssize(axes) << ".";
     throw std::invalid_argument(msg.str());
   }
   if (!issubdtype(start.dtype(), integer)) {
@@ -846,7 +846,7 @@ array slice_update(
 
   // Broadcast update with unspecified axes
   auto up_shape = update.shape();
-  auto dim_diff = std::max(src.ndim() - update.ndim(), size_t(0));
+  auto dim_diff = std::max(src.ndim() - update.ndim(), 0);
   up_shape.insert(
       up_shape.begin(), src.shape().begin(), src.shape().begin() + dim_diff);
   for (int d = dim_diff; d < src.ndim(); ++d) {
@@ -956,7 +956,7 @@ std::vector<array> meshgrid(
         "[meshgrid] Invalid indexing value. Valid values are 'xy' and 'ij'.");
   }
 
-  auto ndim = arrays.size();
+  auto ndim = std::ssize(arrays);
   std::vector<array> outputs;
   for (int i = 0; i < ndim; ++i) {
     Shape shape(ndim, 1);
@@ -1134,10 +1134,10 @@ array tile(
     std::vector<int> reps,
     StreamOrDevice s /* = {} */) {
   auto shape = arr.shape();
-  if (reps.size() < shape.size()) {
+  if (std::ssize(reps) < shape.size()) {
     reps.insert(reps.begin(), shape.size() - reps.size(), 1);
   }
-  if (reps.size() > shape.size()) {
+  if (std::ssize(reps) > shape.size()) {
     shape.insert(shape.begin(), reps.size() - shape.size(), 1);
   }
 
@@ -1161,7 +1161,7 @@ array tile(
 
 array edge_pad(
     const array& a,
-    const std::vector<int>& axes,
+    const std::vector<int>& /* axes */,
     const Shape& low_pad_size,
     const Shape& high_pad_size,
     const Shape& out_shape,
@@ -1213,17 +1213,17 @@ array pad(
     const array& pad_value /*= array(0)*/,
     const std::string& mode /*= "constant"*/,
     StreamOrDevice s /* = {}*/) {
-  if (axes.size() != low_pad_size.size() ||
-      axes.size() != high_pad_size.size()) {
+  if (std::ssize(axes) != low_pad_size.size() ||
+      std::ssize(axes) != high_pad_size.size()) {
     std::ostringstream msg;
     msg << "Invalid number of padding sizes passed to pad "
-        << "with axes of size " << axes.size();
+        << "with axes of size " << std::ssize(axes);
     throw std::invalid_argument(msg.str());
   }
 
   auto out_shape = a.shape();
 
-  for (int i = 0; i < axes.size(); i++) {
+  for (int i = 0; i < std::ssize(axes); i++) {
     if (low_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid low padding size (" << low_pad_size[i]
@@ -1364,7 +1364,7 @@ array transpose(
   for (auto& ax : axes) {
     ax = ax < 0 ? ax + a.ndim() : ax;
   }
-  if (axes.size() != a.ndim()) {
+  if (std::ssize(axes) != a.ndim()) {
     std::ostringstream msg;
     msg << "[transpose] Recived " << axes.size() << " axes for array with "
         << a.ndim() << " dimensions.";
@@ -1386,7 +1386,7 @@ array transpose(
     shape[ax] = 1;
   }
 
-  for (int i = 0; i < axes.size(); ++i) {
+  for (int i = 0; i < std::ssize(axes); ++i) {
     shape[i] = a.shape()[axes[i]];
   }
   return array(
@@ -1443,7 +1443,7 @@ std::vector<array> broadcast_arrays(
   auto shape = BroadcastAxes::output_shape(inputs, ignore_axes);
   auto check_and_get_shape = [&shape, &ignore_axes](const array& in) {
     auto out_shape = shape;
-    for (int i = 0; i < ignore_axes.size(); ++i) {
+    for (int i = 0; i < std::ssize(ignore_axes); ++i) {
       auto ax = ignore_axes[i];
       auto pos_ax = in.ndim() + ax;
       if (pos_ax < 0 || pos_ax > in.ndim() ||
@@ -1477,7 +1477,7 @@ std::vector<array> broadcast_arrays(
     stop_grad_inputs.push_back(stop_gradient(in, s));
   }
 
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     auto& in = inputs[i];
     auto out_shape = check_and_get_shape(in);
     if (in.shape() == out_shape) {
@@ -1485,7 +1485,7 @@ std::vector<array> broadcast_arrays(
     } else {
       // broadcasted array goes first followed by other stopgrad inputs
       std::vector<array> p_inputs = {in};
-      for (int j = 0; j < inputs.size(); ++j) {
+      for (int j = 0; j < std::ssize(inputs); ++j) {
         if (j == i) {
           continue;
         }
@@ -1529,14 +1529,14 @@ std::vector<array> broadcast_arrays(
   for (auto& in : inputs) {
     stop_grad_inputs.push_back(stop_gradient(in, s));
   }
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     auto& in = inputs[i];
     if (in.shape() == shape) {
       outputs.push_back(in);
     } else {
       // broadcasted array goes first followed by other stopgrad inputs
       std::vector<array> p_inputs = {in};
-      for (int j = 0; j < inputs.size(); ++j) {
+      for (int j = 0; j < std::ssize(inputs); ++j) {
         if (j == i) {
           continue;
         }
@@ -1960,7 +1960,7 @@ array median(
   auto dtype = at_least_float(a.dtype());
   std::vector<int> transpose_axes;
   for (int i = 0, j = 0; i < a.ndim(); ++i) {
-    if (j < sorted_axes.size() && i == sorted_axes[j]) {
+    if (j < std::ssize(sorted_axes) && i == sorted_axes[j]) {
       j++;
       continue;
     }
@@ -3009,7 +3009,7 @@ array gather(
     const Shape& slice_sizes,
     StreamOrDevice s /* = {} */) {
   // Checks that indices, dimensions, and slice_sizes are all valid
-  if (indices.size() > a.ndim()) {
+  if (std::ssize(indices) > a.ndim()) {
     std::ostringstream msg;
     msg << "[gather] Too many index arrays. Got " << indices.size()
         << " index arrays for input with " << a.ndim() << " dimensions.";
@@ -3311,7 +3311,7 @@ array scatter(
     Scatter::ReduceType mode,
     StreamOrDevice s) {
   // Checks that indices, dimensions, and slice_sizes are all valid
-  if (indices.size() > a.ndim()) {
+  if (std::ssize(indices) > a.ndim()) {
     std::ostringstream msg;
     msg << "[scatter] Too many index arrays. Got " << indices.size()
         << " index arrays for input with " << a.ndim() << " dimensions.";
@@ -3819,7 +3819,7 @@ array conv_transpose_general(
     StreamOrDevice s) {
   std::vector<int> padding_lo(padding.size());
   std::vector<int> padding_hi(padding.size());
-  for (int i = 0; i < padding.size(); ++i) {
+  for (int i = 0; i < std::ssize(padding); ++i) {
     int wt_size = 1 + dilation[i] * (weight.shape(1 + i) - 1);
     padding_lo[i] = wt_size - padding[i] - 1;
 
@@ -4807,7 +4807,7 @@ array tensordot(
   int csize = 1;
   auto x = a;
   auto y = b;
-  for (int i = 0; i < axes_a.size(); i++) {
+  for (int i = 0; i < std::ssize(axes_a); i++) {
     if (x.shape(axes_a.at(i)) == y.shape(axes_b.at(i))) {
       csize *= x.shape(axes_a.at(i));
     } else {
@@ -5735,7 +5735,7 @@ array roll(
     return a;
   }
 
-  if (shift.size() < axes.size()) {
+  if (shift.size() < std::ssize(axes)) {
     std::ostringstream msg;
     msg << "[roll] At least one shift value per axis is required, "
         << shift.size() << " provided for " << axes.size() << " axes.";
@@ -5743,7 +5743,7 @@ array roll(
   }
 
   array result = a;
-  for (int i = 0; i < axes.size(); i++) {
+  for (int i = 0; i < std::ssize(axes); i++) {
     int ax = axes[i];
     if (ax < 0) {
       ax += a.ndim();

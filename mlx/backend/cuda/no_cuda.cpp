@@ -35,9 +35,9 @@ std::vector<array> precompiled_cuda_kernel(
     const std::vector<ScalarArg>&,
     std::tuple<int, int, int>,
     std::tuple<int, int, int>,
-    int shared_memory,
-    std::optional<float> init_value,
-    bool ensure_row_contiguous,
+    int /* shared_memory */,
+    std::optional<float> /* init_value */,
+    bool /* ensure_row_contiguous */,
     StreamOrDevice) {
   throw std::runtime_error("[cuda_kernel] No CUDA back-end.");
 }

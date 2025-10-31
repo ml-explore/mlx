@@ -109,7 +109,7 @@ inline void build_kernel(
 
   // Read constant / contiguous inputs in tmps
   std::vector<array> nc_inputs;
-  for (int i = 0; i < inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(inputs); ++i) {
     auto& x = inputs[i];
     auto& xname = namer.get_name(x);
 
@@ -134,7 +134,7 @@ inline void build_kernel(
   }
 
   // Initialize the indices for non-contiguous inputs
-  for (int i = 0; i < nc_inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(nc_inputs); ++i) {
     auto& xname = namer.get_name(nc_inputs[i]);
     os += fmt::format("  {0} index_{1} = ", idx_type, xname);
     if (ndim == 1) {
@@ -174,7 +174,7 @@ inline void build_kernel(
       os += fmt::format("  for (int d = {0}; d >= 0; --d) {{\n", ndim - 3);
     }
     os += "    uint l = zpos % output_shape[d];\n";
-    for (int i = 0; i < nc_inputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(nc_inputs); ++i) {
       auto& xname = namer.get_name(nc_inputs[i]);
       os += fmt::format("    index_{0} += ", xname);
       if (dynamic_dims) {
@@ -195,7 +195,7 @@ inline void build_kernel(
   }
 
   // Read non-contiguous inputs into tmps
-  for (int i = 0; i < nc_inputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(nc_inputs); ++i) {
     auto& x = nc_inputs[i];
     auto& xname = namer.get_name(x);
     os += fmt::format(
@@ -214,7 +214,7 @@ inline void build_kernel(
     } else {
       os += x.primitive().name();
       os += "()(";
-      for (int i = 0; i < x.inputs().size() - 1; i++) {
+      for (int i = 0; i < std::ssize(x.inputs()) - 1; i++) {
         os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));
       }
       os += fmt::format("tmp_{0});\n", namer.get_name(x.inputs().back()));
@@ -227,7 +227,7 @@ inline void build_kernel(
   }
   // Increment indices and close per thread loop
   if (work_per_thread > 1) {
-    for (int i = 0; i < nc_inputs.size(); ++i) {
+    for (int i = 0; i < std::ssize(nc_inputs); ++i) {
       auto& x = nc_inputs[i];
       auto& xname = namer.get_name(x);
       if (!dynamic_dims) {
@@ -396,7 +396,7 @@ void Compiled::eval_gpu(
   int cnt = 0;
   int stride_idx = 1; // idx 0 is the output strides
   Strides in_strides;
-  for (int i = 0; i < inputs.size(); i++) {
+  for (int i = 0; i < std::ssize(inputs); i++) {
     if (is_constant_(i)) {
       continue;
     }

@@ -60,7 +60,7 @@ struct FourStepParams {
 void fft_op(
     const array& in,
     array& out,
-    size_t axis,
+    int64_t axis,
     bool inverse,
     bool real,
     const FourStepParams four_step_params,
@@ -93,7 +93,7 @@ std::vector<int> plan_stockham_fft(int n) {
   if (n == 1) {
     return plan;
   }
-  for (int i = 0; i < radices.size(); i++) {
+  for (int i = 0; i < std::ssize(radices); i++) {
     int radix = radices[i];
     // Manually tuned radices for powers of 2
     if (is_power_of_2(orig_n) && orig_n < 512 && radix > 4) {
@@ -181,7 +181,7 @@ int compute_elems_per_thread(FFTPlan plan) {
   steps.insert(steps.end(), plan.stockham.begin(), plan.stockham.end());
   steps.insert(steps.end(), plan.rader.begin(), plan.rader.end());
   std::set<int> used_radices;
-  for (int i = 0; i < steps.size(); i++) {
+  for (int i = 0; i < std::ssize(steps); i++) {
     int radix = radices[i % radices.size()];
     if (steps[i] > 0) {
       used_radices.insert(radix);
@@ -260,7 +260,7 @@ int primitive_root(int n) {
 
 std::tuple<array, array, array> compute_raders_constants(
     int rader_n,
-    const Stream& s) {
+    const Stream& /* s */) {
   int proot = primitive_root(rader_n);
   // Fermat's little theorem
   int inv = mod_exp(proot, rader_n - 2, rader_n);
@@ -508,7 +508,7 @@ void four_step_fft(
 void fft_op(
     const array& in,
     array& out,
-    size_t axis,
+    int64_t axis,
     bool inverse,
     bool real,
     const FourStepParams four_step_params,
@@ -612,11 +612,11 @@ void fft_op(
 
   // Start of radix/rader step constants
   int index = 4;
-  for (int i = 0; i < plan.stockham.size(); i++) {
+  for (int i = 0; i < std::ssize(plan.stockham); i++) {
     func_consts.push_back(make_int(&plan.stockham[i], index));
     index += 1;
   }
-  for (int i = 0; i < plan.rader.size(); i++) {
+  for (int i = 0; i < std::ssize(plan.rader); i++) {
     func_consts.push_back(make_int(&plan.rader[i], index));
     index += 1;
   }
@@ -771,8 +771,8 @@ void nd_fft_op(
   array temp1(temp_shape, complex64, nullptr, {});
   array temp2(temp_shape, complex64, nullptr, {});
   std::vector<array> temp_arrs = {temp1, temp2};
-  for (int i = axes.size() - 1; i >= 0; i--) {
-    int reverse_index = axes.size() - i - 1;
+  for (int i = std::ssize(axes) - 1; i >= 0; i--) {
+    int reverse_index = std::ssize(axes) - i - 1;
     // For 5D and above, we don't want to reallocate our two temporary arrays
     bool inplace = reverse_index >= 3 && i != 0;
     // Opposite order for fft vs ifft
@@ -780,8 +780,8 @@ void nd_fft_op(
     size_t axis = axes[index];
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
-    bool step_real = (real && index == axes.size() - 1);
-    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[1 - i % 2];
+    bool step_real = (real && index == std::ssize(axes) - 1);
+    const array& in_arr = i == std::ssize(axes) - 1 ? in : temp_arrs[1 - i % 2];
     array& out_arr = i == 0 ? out : temp_arrs[i % 2];
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }

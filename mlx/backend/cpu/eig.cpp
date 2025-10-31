@@ -70,7 +70,7 @@ void eig_impl(
     auto eig_tmp = static_cast<T*>(eig_tmp_data.buffer.raw_ptr());
     auto vec_tmp = static_cast<T*>(vec_tmp_data.buffer.raw_ptr());
     auto work_buf = array::Data{allocator::malloc(sizeof(T) * lwork)};
-    for (size_t i = 0; i < size / (N * N); ++i) {
+    for (int64_t i = 0; i < size / (N * N); ++i) {
       geev<T>(
           &jobl,
           &jobr,

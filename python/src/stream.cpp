@@ -100,9 +100,9 @@ void init_stream(nb::module_& m) {
       .def(
           "__exit__",
           [](PyStreamContext& scm,
-             const std::optional<nb::type_object>& exc_type,
-             const std::optional<nb::object>& exc_value,
-             const std::optional<nb::object>& traceback) { scm.exit(); },
+             const std::optional<nb::type_object>& /* exc_type */,
+             const std::optional<nb::object>& /* exc_value */,
+             const std::optional<nb::object>& /* traceback */) { scm.exit(); },
           "exc_type"_a = nb::none(),
           "exc_value"_a = nb::none(),
           "traceback"_a = nb::none());

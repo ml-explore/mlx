@@ -44,11 +44,11 @@ std::vector<array> array::make_arrays(
     const std::shared_ptr<Primitive>& primitive,
     const std::vector<array>& inputs) {
   std::vector<array> outputs;
-  for (size_t i = 0; i < shapes.size(); ++i) {
+  for (int i = 0; i < std::ssize(shapes); ++i) {
     outputs.emplace_back(std::move(shapes[i]), dtypes[i], primitive, inputs);
   }
   // For each node in |outputs|, its siblings are the other nodes.
-  for (size_t i = 0; i < outputs.size(); ++i) {
+  for (int i = 0; i < std::ssize(outputs); ++i) {
     auto siblings = outputs;
     siblings.erase(siblings.begin() + i);
     outputs[i].set_siblings(std::move(siblings), i);
@@ -145,8 +145,9 @@ void array::set_data(allocator::Buffer buffer, Deleter d) {
   array_desc_->data_size = size();
   array_desc_->flags.contiguous = true;
   array_desc_->flags.row_contiguous = true;
-  auto max_dim = std::max_element(shape().begin(), shape().end());
-  array_desc_->flags.col_contiguous = size() <= 1 || size() == *max_dim;
+  auto max_dim =
+      static_cast<int64_t>(*std::max_element(shape().begin(), shape().end()));
+  array_desc_->flags.col_contiguous = size() <= 1 || size() == max_dim;
 }
 
 void array::set_data(
@@ -192,7 +193,7 @@ array::~array() {
   }
 
   // Break circular reference for non-detached arrays with siblings
-  if (auto n = siblings().size(); n > 0) {
+  if (auto n = std::ssize(siblings()); n > 0) {
     bool do_detach = true;
     // If all siblings have siblings.size() references except
     // the one we are currently destroying (which has siblings.size() + 1)
@@ -274,7 +275,7 @@ array::ArrayDesc::~ArrayDesc() {
     ad.inputs.clear();
     for (auto& [_, a] : input_map) {
       bool is_deletable =
-          (a.array_desc_.use_count() <= a.siblings().size() + 1);
+          (a.array_desc_.use_count() <= std::ssize(a.siblings()) + 1);
       // An array with siblings is deletable only if all of its siblings
       // are deletable
       for (auto& s : a.siblings()) {
@@ -283,7 +284,7 @@ array::ArrayDesc::~ArrayDesc() {
         }
         int is_input = (input_map.find(s.id()) != input_map.end());
         is_deletable &=
-            s.array_desc_.use_count() <= a.siblings().size() + is_input;
+            s.array_desc_.use_count() <= std::ssize(a.siblings()) + is_input;
       }
       if (is_deletable) {
         for_deletion.push_back(std::move(a.array_desc_));

@@ -29,6 +29,10 @@ inline void debug_set_stream_queue_label(MTL::CommandQueue* queue, int index) {
   std::ostringstream label;
   label << "Stream " << index;
   queue->setLabel(make_string(label));
+#else
+  // appease warnings
+  (void)queue;
+  (void)index;
 #endif
 }
 
@@ -42,6 +46,9 @@ inline void debug_set_primitive_buffer_label(
   }
   label << primitive.name();
   command_buffer->setLabel(make_string(label));
+#else
+  (void)command_buffer;
+  (void)primitive;
 #endif
 }
 

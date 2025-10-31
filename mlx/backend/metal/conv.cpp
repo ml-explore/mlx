@@ -990,7 +990,7 @@ void conv_3D_gpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip,
-    std::vector<array>& copies) {
+    std::vector<array>& /* copies */) {
   // Make conv params
   MLXConvParams<3> conv_params{
       /* const int  N = */ static_cast<int>(in.shape(0)),

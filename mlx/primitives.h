@@ -31,9 +31,9 @@
     return #PRIMITIVE;                \
   }
 
-#define DEFINE_DEFAULT_IS_EQUIVALENT()                        \
-  bool is_equivalent(const Primitive& other) const override { \
-    return true;                                              \
+#define DEFINE_DEFAULT_IS_EQUIVALENT()                              \
+  bool is_equivalent(const Primitive& /* other */) const override { \
+    return true;                                                    \
   }
 
 #define DEFINE_INPUT_OUTPUT_SHAPE()                                  \
@@ -104,7 +104,7 @@ class Primitive {
   virtual const char* name() const = 0;
 
   /** Equivalence check defaults to false unless overridden by the primitive */
-  virtual bool is_equivalent(const Primitive& other) const {
+  virtual bool is_equivalent(const Primitive& /* other */) const {
     return false;
   }
 
@@ -1073,6 +1073,7 @@ class FFT : public UnaryPrimitive {
  public:
   explicit FFT(
       Stream stream,
+      // Note: PocketFFT requires size_t
       const std::vector<size_t>& axes,
       bool inverse,
       bool real)
@@ -1528,7 +1529,8 @@ class NumberOfElements : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_NAME(NumberOfElements)
   bool is_equivalent(const Primitive& other) const override;
-  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+  std::vector<Shape> output_shapes(
+      const std::vector<array>& /* inputs */) override {
     return {{}};
   }
   std::tuple<std::vector<int>, bool, Dtype> state() const {

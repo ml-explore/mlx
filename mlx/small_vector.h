@@ -121,10 +121,10 @@ class SmallVector {
       std::initializer_list<T> init,
       const Allocator& allocator = Allocator())
       : allocator_(allocator) {
-    if (init.size() > capacity()) {
+    if (static_cast<int>(init.size()) > capacity()) {
       grow(init.size());
     }
-    assert(capacity() >= init.size()); // sanity check
+    assert(capacity() >= static_cast<int>(init.size())); // sanity check
     std::uninitialized_move(init.begin(), init.end(), begin_);
     end_ = begin_ + init.size();
   }
@@ -132,7 +132,7 @@ class SmallVector {
   template <typename Iter, typename = std::enable_if_t<is_iterator_v<Iter>>>
   SmallVector(Iter begin, Iter end, const Allocator& allocator = Allocator())
       : allocator_(allocator) {
-    size_t size = std::distance(begin, end);
+    int size = std::distance(begin, end);
     if (size > capacity()) {
       grow(size);
     }
@@ -164,7 +164,7 @@ class SmallVector {
     if (this == &other) {
       return *this;
     }
-    size_t other_size = other.size();
+    int other_size = other.size();
     if (capacity() < other_size) {
       // Create large-enough heap-allocated storage.
       free_storage();
@@ -273,13 +273,13 @@ class SmallVector {
     return std::make_reverse_iterator(begin_);
   }
 
-  size_t size() const {
+  int size() const {
     return end_ - begin_;
   }
   bool empty() const {
     return end_ == begin_;
   }
-  size_t capacity() const {
+  int capacity() const {
     return end_of_storage_ - begin_;
   }
 
@@ -301,21 +301,21 @@ class SmallVector {
     return end_[-1];
   }
 
-  T& at(size_t index) {
-    if (index >= size()) {
+  T& at(int index) {
+    if (index < 0 || index >= size()) {
       throw std::out_of_range("SmallVector out of range.");
     }
     return begin_[index];
   }
-  const T& at(size_t index) const {
+  const T& at(int index) const {
     return const_cast<SmallVector*>(this)->at(index);
   }
 
-  T& operator[](size_t index) {
-    assert(size() > index);
+  T& operator[](int index) {
+    assert(index >= 0 && size() > index);
     return begin_[index];
   }
-  const T& operator[](size_t index) const {
+  const T& operator[](int index) const {
     return const_cast<SmallVector*>(this)->operator[](index);
   }
 
@@ -333,7 +333,7 @@ class SmallVector {
     emplace_back(std::move(x));
   }
 
-  void pop_back(size_t count = 1) {
+  void pop_back(int count = 1) {
     assert(size() >= count);
     end_ -= count;
     std::destroy_n(end_, count);
@@ -400,7 +400,7 @@ class SmallVector {
     return erase(pos, pos + 1);
   }
 
-  void resize(size_t new_size) {
+  void resize(int new_size) {
     if (new_size > capacity()) {
       grow(new_size);
     }
@@ -415,7 +415,7 @@ class SmallVector {
     end_ = new_end;
   }
 
-  void resize(size_t new_size, const T& initial_value) {
+  void resize(int new_size, const T& initial_value) {
     if (new_size > capacity()) {
       grow(new_size);
     }
@@ -428,7 +428,7 @@ class SmallVector {
     end_ = new_end;
   }
 
-  void reserve(size_t new_capacity) {
+  void reserve(int new_capacity) {
     if (new_capacity > capacity()) {
       grow(new_capacity);
     }
@@ -443,8 +443,8 @@ class SmallVector {
  private:
   // Grows the backing store by a factor of two, and at least to {min_capacity}.
   // TODO: Move to private after removing external code using this method.
-  MLX_NOINLINE void grow(size_t min_capacity = 0) {
-    size_t new_capacity = std::max(min_capacity, 2 * capacity());
+  MLX_NOINLINE void grow(int min_capacity = 0) {
+    int new_capacity = std::max(min_capacity, 2 * capacity());
     // Round up to power of 2.
     new_capacity--;
     new_capacity |= new_capacity >> 1;
@@ -452,9 +452,6 @@ class SmallVector {
     new_capacity |= new_capacity >> 4;
     new_capacity |= new_capacity >> 8;
     new_capacity |= new_capacity >> 16;
-    if constexpr (sizeof(size_t) == sizeof(uint64_t)) {
-      new_capacity |= new_capacity >> 32;
-    }
     new_capacity++;
 
     T* new_storage = allocator_.allocate(new_capacity);

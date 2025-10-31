@@ -21,8 +21,8 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
 
   // Compute the flags given the shape and strides
   bool row_contiguous = true, col_contiguous = true;
-  size_t r = 1, c = 1;
-  for (int i = strides_.size() - 1, j = 0; i >= 0; i--, j++) {
+  int64_t r = 1, c = 1;
+  for (int i = std::ssize(strides_) - 1, j = 0; i >= 0; i--, j++) {
     row_contiguous &= (r == strides_[i]) || (shape_[i] == 1);
     col_contiguous &= (c == strides_[j]) || (shape_[j] == 1);
     r *= shape_[i];
@@ -60,7 +60,8 @@ void CustomTransforms::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() > outputs.size());
-  for (int i = 0, j = inputs.size() - outputs.size(); i < outputs.size();
+  for (int i = 0, j = std::ssize(inputs) - std::ssize(outputs);
+       i < std::ssize(outputs);
        i++, j++) {
     outputs[i].copy_shared_buffer(inputs[j]);
   }
@@ -70,7 +71,7 @@ void Depends::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() > outputs.size());
-  for (int i = 0; i < outputs.size(); i++) {
+  for (int i = 0; i < std::ssize(outputs); i++) {
     outputs[i].copy_shared_buffer(inputs[i]);
   }
 }
@@ -206,11 +207,11 @@ void Split::eval(
 
   auto compute_new_flags = [](const auto& shape,
                               const auto& strides,
-                              size_t in_data_size,
+                              int64_t in_data_size,
                               auto flags) {
-    size_t data_size = 1;
-    size_t f_stride = 1;
-    size_t b_stride = 1;
+    int64_t data_size = 1;
+    int64_t f_stride = 1;
+    int64_t b_stride = 1;
     flags.row_contiguous = true;
     flags.col_contiguous = true;
     for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
@@ -240,7 +241,7 @@ void Split::eval(
 
   std::vector<int> indices(1, 0);
   indices.insert(indices.end(), indices_.begin(), indices_.end());
-  for (int i = 0; i < indices.size(); i++) {
+  for (int i = 0; i < std::ssize(indices); i++) {
     size_t offset = indices[i] * in.strides()[axis_];
     auto [new_flags, data_size] = compute_new_flags(
         outputs[i].shape(), in.strides(), in.data_size(), in.flags());
@@ -254,7 +255,7 @@ void Squeeze::eval(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   Strides strides;
   for (int i = 0, j = 0; i < in.ndim(); ++i) {
-    if (j < axes_.size() && i == axes_[j]) {
+    if (j < std::ssize(axes_) && i == axes_[j]) {
       j++;
     } else {
       strides.push_back(in.strides(i));
@@ -272,7 +273,7 @@ void Transpose::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   Strides out_strides(out.ndim());
   auto& in = inputs[0];
-  for (int ax = 0; ax < axes_.size(); ++ax) {
+  for (int ax = 0; ax < std::ssize(axes_); ++ax) {
     out_strides[ax] = in.strides()[axes_[ax]];
   }
 

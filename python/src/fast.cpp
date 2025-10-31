@@ -201,7 +201,6 @@ void init_fast(nb::module_& parent_module) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
             has_mask && std::holds_alternative<std::string>(mask);
-        bool has_arr_mask = has_mask && std::holds_alternative<mx::array>(mask);
 
         if (has_mask) {
           if (has_str_mask) {
