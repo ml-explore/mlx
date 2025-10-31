@@ -36,7 +36,7 @@ void simple_sum(
     void* input,
     void* accumulator,
     int* len,
-    MPI_Datatype* datatype) {
+    MPI_Datatype* /* datatype */) {
   T* in = (T*)input;
   T* acc = (T*)accumulator;
   int N = *len;
@@ -55,7 +55,7 @@ void simple_max(
     void* input,
     void* accumulator,
     int* len,
-    MPI_Datatype* datatype) {
+    MPI_Datatype* /* datatype */) {
   T* in = (T*)input;
   T* acc = (T*)accumulator;
   int N = *len;
@@ -75,7 +75,7 @@ void simple_min(
     void* input,
     void* accumulator,
     int* len,
-    MPI_Datatype* datatype) {
+    MPI_Datatype* /* datatype */) {
   T* in = (T*)input;
   T* acc = (T*)accumulator;
   int N = *len;
