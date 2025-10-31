@@ -46,7 +46,17 @@ jobs:
       - uses: ./.github/actions/build-docs
 
   linux_fedora_build_cpp:
-    runs-on: ubuntu-22.04
+    name: Linux Fedora CPP Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-22.04
+            arch: x86_64
+          - host: ubuntu-22.04-arm
+            arch: aarch64
+
+    runs-on: ${{ matrix.host }}
     container:
       image: fedora:42
     steps:
@@ -55,16 +65,4 @@ jobs:
 
       - name: CPP Build Test - No Release
         run: |
-            bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
-
-  linux_fedora_build_cpp_aarch64:
-    runs-on: ubuntu-22.04-arm
-    container:
-      image: fedora:42
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: CPP Build Test - No Release
-        run: |
-            bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
+          bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
