@@ -238,7 +238,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   return array_map;
 }
 
-GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
+GGUFLoad load_gguf(const std::string& file, StreamOrDevice /* s */) {
   bool exists;
   {
     std::ifstream f(file.c_str());
@@ -440,7 +440,7 @@ void save_gguf(
     }
     const char* tensorname = key.c_str();
     const uint64_t namelen = key.length();
-    const uint32_t num_dim = arr.ndim();
+    const int num_dim = arr.ndim();
     std::vector<uint64_t> dim(num_dim);
     for (int i = 0; i < num_dim; i++) {
       dim[i] = arr.shape()[num_dim - 1 - i];
