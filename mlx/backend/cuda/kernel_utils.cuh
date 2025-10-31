@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuda.h>

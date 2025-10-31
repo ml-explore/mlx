@@ -92,8 +92,8 @@ void copy_general_input(
             using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
             using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-            const InType* in_ptr = in.data<InType>() + offset_in;
-            OutType* out_ptr = out.data<OutType>() + offset_out;
+            const InType* in_ptr = gpu_ptr<InType>(in) + offset_in;
+            OutType* out_ptr = gpu_ptr<OutType>(out) + offset_out;
             int ndim = shape.size();
             int work_per_thread = 1;
             auto dim0 = ndim > 0 ? shape.back() : 1;

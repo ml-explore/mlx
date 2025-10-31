@@ -18,7 +18,13 @@ using allocator::Buffer;
 struct CudaBuffer {
   void* data;
   size_t size;
+  bool managed;
 };
+
+template <typename T>
+T* gpu_ptr(Buffer buf) {
+  return static_cast<T*>(static_cast<cu::CudaBuffer*>(buf.ptr())->data);
+}
 
 class SmallSizePool {
  private:

@@ -133,13 +133,13 @@ bool prepare_cudnn_plan(
     F&& execute) {
   int workspace_size = plan.getWorkspaceSize();
   array workspace(
-      workspace_size > 0 ? allocator::malloc(workspace_size)
+      workspace_size > 0 ? cu::malloc_async(workspace_size, encoder.stream())
                          : allocator::Buffer(nullptr),
       {workspace_size},
       uint8);
 
   auto args = cudnn_frontend::VariantPackBuilder()
-                  .setWorkspacePointer(workspace.data<void>())
+                  .setWorkspacePointer(gpu_ptr<void>(workspace))
                   .setDataPointers(num_args, data_ptrs)
                   .setUids(num_args, uids)
                   .build();

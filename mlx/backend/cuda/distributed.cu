@@ -15,8 +15,10 @@ void AllReduce::eval_gpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto set_input_output =
-      [s = stream()](const array& in, array& out) -> std::pair<array, array> {
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  auto set_input_output = [&](const array& in,
+                              array& out) -> std::pair<array, array> {
     if (!in.flags().row_contiguous) {
       copy_gpu(in, out, CopyType::General, s);
       return {out, out};
@@ -24,19 +26,17 @@ void AllReduce::eval_gpu(
       out.copy_shared_buffer(in);
       return {in, out};
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
       return {in, out};
     }
   };
 
   auto [input, output] = set_input_output(inputs[0], outputs[0]);
 
-  auto& encoder = cu::get_command_encoder(stream());
   encoder.set_input_array(input);
   encoder.set_output_array(output);
 
   auto capture = encoder.capture_context();
-  auto& s = stream();
 
   switch (reduce_type_) {
     case Sum:

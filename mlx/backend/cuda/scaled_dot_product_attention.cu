@@ -513,11 +513,11 @@ void sdpa_vector_1pass_fallback(
             grid_dim,
             block_dim,
             0,
-            q.data<DataType>(),
-            k.data<DataType>(),
-            v.data<DataType>(),
-            o.data<DataType>(),
-            sinks ? (*sinks).data<DataType>() : nullptr,
+            gpu_ptr<DataType>(q),
+            gpu_ptr<DataType>(k),
+            gpu_ptr<DataType>(v),
+            gpu_ptr<DataType>(o),
+            sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
             params);
       });
     });
@@ -602,13 +602,13 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              q.data<DataType>(),
-              k.data<DataType>(),
-              v.data<DataType>(),
-              sinks ? (*sinks).data<DataType>() : nullptr,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
+              gpu_ptr<DataType>(q),
+              gpu_ptr<DataType>(k),
+              gpu_ptr<DataType>(v),
+              sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
               params);
         }
 
@@ -629,10 +629,10 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
-              o.data<DataType>(),
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
+              gpu_ptr<DataType>(o),
               params);
         }
       });

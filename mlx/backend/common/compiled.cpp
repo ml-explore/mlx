@@ -114,7 +114,9 @@ void compiled_allocate_outputs(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
     const std::function<bool(size_t)>& is_constant,
-    bool contiguous) {
+    bool contiguous,
+    const std::function<allocator::Buffer(size_t)>&
+        mallocfn /* = allocator::malloc */) {
   if (contiguous) {
     int o = 0;
     Strides strides;
@@ -140,7 +142,7 @@ void compiled_allocate_outputs(
     }
     for (; o < outputs.size(); ++o) {
       outputs[o].set_data(
-          allocator::malloc(data_size * outputs[o].itemsize()),
+          mallocfn(data_size * outputs[o].itemsize()),
           data_size,
           strides,
           flags);
@@ -163,7 +165,7 @@ void compiled_allocate_outputs(
       }
     }
     for (; o < outputs.size(); ++o) {
-      outputs[o].set_data(allocator::malloc(outputs[o].nbytes()));
+      outputs[o].set_data(mallocfn(outputs[o].nbytes()));
     }
   }
 }

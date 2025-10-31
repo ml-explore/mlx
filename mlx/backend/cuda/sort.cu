@@ -91,10 +91,10 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortPairs(
             nullptr,
             size,
-            in.data<Type>(),
-            discard.data<Type>(),
-            indices.data<uint32_t>(),
-            out.data<uint32_t>(),
+            gpu_ptr<Type>(in),
+            gpu_ptr<Type>(discard),
+            gpu_ptr<uint32_t>(indices),
+            gpu_ptr<uint32_t>(out),
             in.data_size(),
             in.data_size() / nsort,
             offsets,
@@ -115,16 +115,16 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             cu::thrust_policy(stream),
             thrust::counting_iterator<uint32_t>(0),
             thrust::counting_iterator<uint32_t>(indices.data_size()),
-            thrust::device_pointer_cast(indices.data<uint32_t>()),
+            thrust::device_pointer_cast(gpu_ptr<uint32_t>(indices)),
             ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
 
         CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortPairs(
-            temp.data<void>(),
+            gpu_ptr<void>(temp),
             size,
-            in.data<Type>(),
-            discard.data<Type>(),
-            indices.data<uint32_t>(),
-            out.data<uint32_t>(),
+            gpu_ptr<Type>(in),
+            gpu_ptr<Type>(discard),
+            gpu_ptr<uint32_t>(indices),
+            gpu_ptr<uint32_t>(out),
             in.data_size(),
             in.data_size() / nsort,
             offsets,
@@ -137,8 +137,8 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortKeys(
             nullptr,
             size,
-            in.data<Type>(),
-            out.data<Type>(),
+            gpu_ptr<Type>(in),
+            gpu_ptr<Type>(out),
             in.data_size(),
             in.data_size() / nsort,
             offsets,
@@ -156,10 +156,10 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         // Start capturing after allocations
         auto capture = encoder.capture_context();
         CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortKeys(
-            temp.data<void>(),
+            gpu_ptr<void>(temp),
             size,
-            in.data<Type>(),
-            out.data<Type>(),
+            gpu_ptr<Type>(in),
+            gpu_ptr<Type>(out),
             in.data_size(),
             in.data_size() / nsort,
             offsets,

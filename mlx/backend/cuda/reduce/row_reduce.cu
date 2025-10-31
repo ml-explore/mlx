@@ -238,7 +238,7 @@ void row_reduce_simple(
     const ReductionPlan& plan) {
   // Allocate data for the output using in's layout to avoid elem_to_loc in the
   // kernel.
-  allocate_same_layout(out, in, axes);
+  allocate_same_layout(out, in, axes, encoder);
 
   // TODO: If out.size() < 1024 which will be a common case then write this in
   //       2 passes. Something like 32 * out.size() and then do a warp reduce.
@@ -268,10 +268,10 @@ void row_reduce_simple(
         kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
       }
 
-      T* indata = const_cast<T*>(in.data<T>());
+      T* indata = const_cast<T*>(gpu_ptr<T>(in));
       int size = plan.shape.back();
       encoder.add_kernel_node(
-          kernel, grid, block, 0, indata, out.data<U>(), out.size(), size);
+          kernel, grid, block, 0, indata, gpu_ptr<U>(out), out.size(), size);
     });
   });
 }
@@ -286,7 +286,7 @@ void row_reduce_looped(
     cu::RowReduceArgs args) {
   // Allocate data for the output using in's layout to access them as
   // contiguously as possible.
-  allocate_same_layout(out, in, axes);
+  allocate_same_layout(out, in, axes, encoder);
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
@@ -315,7 +315,7 @@ void row_reduce_looped(
       });
 
       encoder.add_kernel_node(
-          kernel, grid, block, 0, in.data<T>(), out.data<U>(), args);
+          kernel, grid, block, 0, gpu_ptr<T>(in), gpu_ptr<U>(out), args);
     });
   });
 }

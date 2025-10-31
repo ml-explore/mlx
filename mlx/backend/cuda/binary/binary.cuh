@@ -292,9 +292,9 @@ void binary_op_gpu_inplace(
                         {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
-                        a.data<InType>(),
-                        b.data<InType>(),
-                        out.data<OutType>(),
+                        gpu_ptr<InType>(a),
+                        gpu_ptr<InType>(b),
+                        gpu_ptr<OutType>(out),
                         rest,
                         const_param<dims_constant()>(shape),
                         const_param<dims_constant()>(a_strides),
@@ -310,9 +310,9 @@ void binary_op_gpu_inplace(
                       {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
-                      a.data<InType>(),
-                      b.data<InType>(),
-                      out.data<OutType>(),
+                      gpu_ptr<InType>(a),
+                      gpu_ptr<InType>(b),
+                      gpu_ptr<OutType>(out),
                       rest,
                       const_param(shape),
                       const_param(a_strides),
@@ -339,9 +339,9 @@ void binary_op_gpu_inplace(
                 num_blocks,
                 block_dims,
                 0,
-                a.data<InType>(),
-                b.data<InType>(),
-                out.data<OutType>(),
+                gpu_ptr<InType>(a),
+                gpu_ptr<InType>(b),
+                gpu_ptr<OutType>(out),
                 out.data_size());
           });
         }
@@ -365,7 +365,11 @@ void binary_op_gpu(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, out, bopt);
+  auto& encoder = cu::get_command_encoder(s);
+
+  set_binary_op_output_data(a, b, out, bopt, [&](auto n) {
+    return cu::malloc_async(n, encoder.stream());
+  });
   binary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 

@@ -57,7 +57,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
           num_blocks,
           block_dims,
           0,
-          out.data<OutType>(),
+          gpu_ptr<OutType>(out),
           out.data_size(),
           static_cast<CTYPE>(start_),
           static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_));

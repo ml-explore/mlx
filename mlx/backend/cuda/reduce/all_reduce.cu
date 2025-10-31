@@ -66,7 +66,7 @@ void all_reduce(
     Reduce::ReduceType reduce_type) {
   constexpr int N_READS = 8;
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
 
   auto get_args = [](size_t size, int N) {
     int threads = std::min(512UL, (size + N - 1) / N);
@@ -100,14 +100,15 @@ void all_reduce(
   Dtype dt = in.dtype();
 
   // Cub doesn't like const pointers for load (sigh).
-  void* indata = const_cast<void*>(in.data<void>());
+  void* indata = const_cast<void*>(gpu_ptr<void>(in));
 
   // Large array so allocate an intermediate and accumulate there
   std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
   encoder.set_input_array(in);
   if (blocks > 1) {
     array intermediate({blocks}, out.dtype(), nullptr, {});
-    intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+    intermediate.set_data(
+        cu::malloc_async(intermediate.nbytes(), encoder.stream()));
     encoder.add_temporary(intermediate);
     encoder.set_output_array(intermediate);
     dispatch_all_types(dt, [&](auto type_tag) {
@@ -122,14 +123,14 @@ void all_reduce(
             threads,
             0,
             static_cast<T*>(indata),
-            intermediate.data<U>(),
+            gpu_ptr<U>(intermediate),
             block_step,
             insize);
       });
     });
 
     // Set the input for the next step and recalculate the blocks
-    indata = intermediate.data<void>();
+    indata = gpu_ptr<void>(intermediate);
     dt = intermediate.dtype();
     insize = intermediate.size();
     std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
@@ -149,7 +150,7 @@ void all_reduce(
           threads,
           0,
           static_cast<T*>(indata),
-          out.data<U>(),
+          gpu_ptr<U>(out),
           block_step,
           insize);
     });
