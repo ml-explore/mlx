@@ -1,0 +1,83 @@
+name: 'Setup Linux Environment'
+description: 'Install dependencies for Linux builds'
+
+inputs:
+  runner-type:
+    description: 'Whether to set this up as a linux or CUDA runner'
+    required: false
+    default: 'linux'
+    type: choice
+    options:
+      - linux
+      - cuda
+  python-version:
+    description: 'Version of python to set up'
+    required: false
+    default: '3.10'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Free disk space
+      shell: sh
+      if: inputs.runner-type == 'linux'
+      run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    - name: Install common dependencies
+      env:
+        TZ: Etc/UTC
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev tzdata zip
+        sudo apt autoremove -y
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: setup python venv
+      shell: bash
+      run: |
+        python -m venv .venv
+        source .venv/bin/activate
+        echo PATH=$PATH >> $GITHUB_ENV
+        pip install --upgrade pip cmake
+
+    - name: Install MPI
+      if: inputs.runner-type == 'linux'
+      shell: bash
+      run: sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
+
+    - name: Network CUDA installation from packages
+      id: install-cuda
+      if: inputs.runner-type == 'cuda'
+      env:
+        TZ: Etc/UTC
+      shell: bash ## Specific to Ubuntu 22.04 & Architecture x86_64
+      run: |
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get install -y libcudnn9-dev-cuda-12 libnccl2 libnccl-dev cuda-toolkit-12-9
+      # Note: This installs CUDA 12.9, which is the latest supported by cuDNN 9.x and works with the NVidia 570 drivers
+      # cuda-toolkit by itself installs version 13 (+) and requires updated drives (580+), which require a reboot to function properly.
+      # Compatibility matrix: https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
+      # This also drops `nvcc` into `/usr/local/cuda-12.9/bin/nvcc` - but it's *not* on the default PATH
+
+    - name: Package and Driver Report
+      if: inputs.runner-type == 'cuda'
+      shell: bash
+      run: |
+        sudo apt-get install -y ubuntu-drivers-common dkms
+        echo "NVIDIA Driver Packages Available:"
+        sudo ubuntu-drivers list --gpgpu
+        echo "NVIDIA Driver Version:"
+        cat /proc/driver/nvidia/version || echo "nvidia driver not found"
+        echo "Installed NVIDIA and CUDA packages:"
+        dpkg -l | egrep "cuda|nvidia" -i
+        echo "DKMS Status:"
+        dkms status || echo "dkms not found"
+        echo "NVIDIA-SMI Status:"
+        nvidia-smi || echo "nvidia-smi not found"

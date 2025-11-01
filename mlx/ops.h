@@ -539,6 +539,26 @@ array mean(
     bool keepdims = false,
     StreamOrDevice s = {});
 
+/** Computes the median of the elements of an array. */
+array median(const array& a, bool keepdims, StreamOrDevice s = {});
+inline array median(const array& a, StreamOrDevice s = {}) {
+  return median(a, false, to_stream(s));
+}
+
+/** Computes the median of the elements of an array along the given axes */
+array median(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
+/** Computes the median of the elements of an array along the given axis */
+array median(
+    const array& a,
+    int axis,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
 /** Computes the variance of the elements of an array. */
 array var(const array& a, bool keepdims, int ddof = 0, StreamOrDevice s = {});
 inline array var(const array& a, StreamOrDevice s = {}) {
@@ -1359,16 +1379,16 @@ array quantized_matmul(
     array scales,
     std::optional<array> biases = std::nullopt,
     bool transpose = true,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
 std::vector<array> quantize(
     const array& w,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     StreamOrDevice s = {});
 
@@ -1377,10 +1397,17 @@ array dequantize(
     const array& w,
     const array& scales,
     const std::optional<array>& biases = std::nullopt,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+
+/** Convert an E4M3 float8 to the given floating point dtype. */
+array from_fp8(array x, Dtype dtype, StreamOrDevice s = {});
+
+/** Convert a floating point matrix to E4M3 float8. */
+array to_fp8(array x, StreamOrDevice s = {});
 
 /** Compute matrix products with matrix-level gather. */
 array gather_qmm(
@@ -1391,8 +1418,8 @@ array gather_qmm(
     std::optional<array> lhs_indices = std::nullopt,
     std::optional<array> rhs_indices = std::nullopt,
     bool transpose = true,
-    int group_size = 64,
-    int bits = 4,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     bool sorted_indices = false,
     StreamOrDevice s = {});

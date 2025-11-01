@@ -176,17 +176,6 @@ std::ostream& operator<<(std::ostream& os, uint8_t x) {
 
 namespace {
 
-inline size_t
-elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
-  size_t loc = 0;
-  for (int i = shape.size() - 1; i >= 0; --i) {
-    auto q_and_r = ldiv(elem, shape[i]);
-    loc += q_and_r.rem * strides[i];
-    elem = q_and_r.quot;
-  }
-  return loc;
-}
-
 template <typename T>
 void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
   int num_print = 3;

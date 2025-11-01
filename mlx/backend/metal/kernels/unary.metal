@@ -103,4 +103,13 @@ instantiate_unary_base_same(Round, complex64, complex64_t)
 instantiate_unary_base(Real, complex64, float32, complex64_t, float)
 instantiate_unary_base(Imag, complex64, float32, complex64_t, float)
 
-instantiate_unary_all_same(LogicalNot, bool_, bool) // clang-format on
+instantiate_unary_all_same(LogicalNot, bool_, bool)
+
+instantiate_unary_all(ToFP8, float16, uint8, float16_t, uint8_t)
+instantiate_unary_all(ToFP8, bfloat16, uint8, bfloat16_t, uint8_t)
+instantiate_unary_all(ToFP8, float32, uint8, float, uint8_t)
+instantiate_unary_all(FromFP8, uint8, float16, uint8_t, float16_t)
+instantiate_unary_all(FromFP8, uint8, bfloat16, uint8_t, bfloat16_t)
+instantiate_unary_all(FromFP8, uint8, float32, uint8_t, float)
+
+    // clang-format on

@@ -26,7 +26,7 @@ void unary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  auto maybe_collapse = [contig, &in, &out]() {
+  auto maybe_collapse = [contig, &in]() {
     if (!contig) {
       return collapse_contiguous_dims(in);
     } else {
@@ -144,17 +144,7 @@ UNARY_GPU(Tan)
 UNARY_GPU(Tanh)
 
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
-  switch (base_) {
-    case Base::e:
-      unary_op_gpu(inputs, out, name());
-      break;
-    case Base::two:
-      unary_op_gpu(inputs, out, name());
-      break;
-    case Base::ten:
-      unary_op_gpu(inputs, out, name());
-      break;
-  }
+  unary_op_gpu(inputs, out, name());
 }
 
 void Round::eval_gpu(const std::vector<array>& inputs, array& out) {

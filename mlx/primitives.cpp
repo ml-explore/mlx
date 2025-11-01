@@ -1105,7 +1105,6 @@ std::pair<std::vector<array>, std::vector<int>> Concatenate::vmap(
   // Make sure vmapped arrays have all vmapped axes in the same location and
   // expand non-vmapped arrays to be compatible with the vmapped ones.
   std::vector<array> t_inputs;
-  int N = inputs[first_vmap].shape(out_ax);
   int axis = axis_ + (axis_ >= out_ax);
   auto cat_shape = inputs[first_vmap].shape();
   for (int i = 0; i < axes.size(); i++) {
@@ -3329,19 +3328,37 @@ std::pair<std::vector<array>, std::vector<int>> Power::vmap(
 }
 
 std::string quantization_mode_to_string(QuantizationMode mode) {
-  if (mode == QuantizationMode::Affine) {
-    return "affine";
-  } else {
-    return "mxfp4";
+  switch (mode) {
+    case QuantizationMode::Affine:
+      return "affine";
+    case QuantizationMode::Mxfp4:
+      return "mxfp4";
+    case QuantizationMode::Mxfp8:
+      return "mxfp8";
+    case QuantizationMode::Nvfp4:
+    default:
+      return "nvfp4";
   }
 }
 
-QuantizationMode string_to_quantization_mode(const std::string& mode) {
+QuantizationMode string_to_quantization_mode(
+    const std::string& mode,
+    std::string_view tag /* = "" */) {
   if (mode == "affine") {
     return QuantizationMode::Affine;
-  } else {
+  } else if (mode == "mxfp4") {
     return QuantizationMode::Mxfp4;
+  } else if (mode == "mxfp8") {
+    return QuantizationMode::Mxfp8;
+  } else if (mode == "nvfp4") {
+    return QuantizationMode::Nvfp4;
   }
+  std::string msg;
+  if (!tag.empty()) {
+    msg += "[" + std::string(tag) + "]";
+  }
+  msg += " Invalid quantization mode '" + mode + "'.";
+  throw std::invalid_argument(msg);
 }
 
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
@@ -3405,6 +3422,7 @@ std::vector<array> QuantizedMatmul::vjp(
             group_size_,
             bits_,
             quantization_mode_to_string(mode_),
+            std::nullopt,
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
@@ -3475,7 +3493,6 @@ std::vector<array> GatherQMM::vjp(
       : std::nullopt;
 
   int M = cotan.shape(-2);
-  int N = cotan.shape(-1);
   int K = x.shape(-1);
 
   bool sorted = left_sorted_ || right_sorted_;
@@ -3560,6 +3577,7 @@ std::vector<array> GatherQMM::vjp(
                             group_size_,
                             bits_,
                             quantization_mode_to_string(mode_),
+                            std::nullopt,
                             stream()),
                         -1,
                         {-1, group_size_},
@@ -4536,7 +4554,6 @@ std::vector<array> SliceUpdate::vjp(
   assert(primals.size() == 2);
 
   auto& cotan = cotangents[0];
-  auto& src = primals[0];
   auto& upd = primals[1];
 
   std::vector<array> vjps;
@@ -5116,12 +5133,8 @@ std::vector<array> BlockMaskedMM::vjp(
   const int op_mask_idx = has_out_mask ? 3 : 2;
   bool needs_lhs_mask_vjp = has_op_mask;
   bool needs_rhs_mask_vjp = has_op_mask;
-  bool needs_lhs_vjp = false;
-  bool needs_rhs_vjp = false;
 
   for (auto arg : argnums) {
-    needs_lhs_vjp = arg == 0;
-    needs_rhs_vjp = arg == 1;
     needs_lhs_mask_vjp = arg == op_mask_idx;
     needs_rhs_mask_vjp = arg == op_mask_idx + 1;
   }
@@ -5346,7 +5359,6 @@ std::vector<array> GatherMM::vjp(
   auto& rhs_indices = primals[3];
 
   int M = cotan.shape(-2);
-  int N = cotan.shape(-1);
   int K = primals[0].shape(-1);
 
   bool sorted = left_sorted_ || right_sorted_;

@@ -51,11 +51,18 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
+
+# fp4 is not available on < 12.8
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
+  target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
   target_sources(
@@ -170,11 +177,6 @@ target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
                                    --diag_suppress=997>)
-# Supress warnings: note: parameter passing for argument of type
-# ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
-# 10.1
-target_compile_options(mlx PRIVATE -Wno-psabi)
-
 # Install CCCL headers for JIT.
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)

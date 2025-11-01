@@ -58,6 +58,20 @@ class TestMemory(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.set_wired_limit(max_size + 10)
 
+    def test_active_memory_count(self):
+        mx.synchronize()
+        mx.clear_cache()
+        init_mem = mx.get_active_memory()
+        a = mx.zeros((128, 128))
+        mx.eval(a)
+        mx.synchronize()
+        del a
+        a = mx.zeros((90, 128))
+        mx.eval(a)
+        mx.synchronize()
+        del a
+        self.assertEqual(init_mem, mx.get_active_memory())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

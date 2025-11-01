@@ -2,7 +2,6 @@
 
 // Required for using M_PI_2 in MSVC.
 #define _USE_MATH_DEFINES
-
 #include <cmath>
 #include <numeric>
 
@@ -3635,7 +3634,6 @@ TEST_CASE("test conv1d") {
           {1, 3, 2}),
       float16);
 
-  int kernel = 3;
   int stride = 1;
   int padding = 1;
 
@@ -3735,7 +3733,6 @@ TEST_CASE("test conv2d") {
        -0.26912728},
       {1, 2, 2, 2});
 
-  std::pair<int, int> kernel{2, 2};
   std::pair<int, int> stride{1, 1};
   std::pair<int, int> padding{0, 0};
 
@@ -4031,4 +4028,27 @@ TEST_CASE("test conv_transpose3d with output_padding") {
        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0},
       {1, 2, 4, 4, 1});
   CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test fp8 conversion") {
+  for (auto t : {float32, float16, bfloat16}) {
+    array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
+    auto in_fp8 = to_fp8(in);
+    auto out = from_fp8(in_fp8, t);
+    CHECK(array_equal(out, in).item<bool>());
+  }
+
+  array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0});
+  array noisy_in({-1.135, -1.01, 0.0001, 1.01, 1.135, 4.6, 447.0});
+  auto in_fp8 = to_fp8(noisy_in);
+  auto out = from_fp8(in_fp8, float32);
+  CHECK(array_equal(out, in).item<bool>());
+
+  // Overflow
+  in = array({-600.0, 600.0});
+  in_fp8 = to_fp8(in);
+  out = from_fp8(in_fp8, float32);
+
+  auto expected = array({-448.0f, 448.0f});
+  CHECK(array_equal(out, expected, true).item<bool>());
 }

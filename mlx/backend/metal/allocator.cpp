@@ -32,7 +32,6 @@ namespace metal {
 
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
-      residency_set_(device_),
       buffer_cache_(
           vm_page_size,
           [](MTL::Buffer* buf) { return buf->length(); },
@@ -41,7 +40,8 @@ MetalAllocator::MetalAllocator()
               residency_set_.erase(buf);
             }
             buf->release();
-          }) {
+          }),
+      residency_set_(device_) {
   auto pool = metal::new_scoped_memory_pool();
   auto memsize = std::get<size_t>(device_info().at("memory_size"));
   auto max_rec_size =

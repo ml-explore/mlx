@@ -97,7 +97,6 @@ CudaAllocator::CudaAllocator()
 
 Buffer CudaAllocator::malloc(size_t size) {
   // Find available buffer from cache.
-  auto orig_size = size;
   std::unique_lock lock(mutex_);
   if (size <= small_block_size) {
     size = 8;
@@ -131,7 +130,7 @@ Buffer CudaAllocator::malloc(size_t size) {
     }
     lock.lock();
   }
-  active_memory_ += size;
+  active_memory_ += buf->size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
 
   // Maintain the cache below the requested limit.

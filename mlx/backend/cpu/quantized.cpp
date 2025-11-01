@@ -1,8 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
+#include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/unary.h"
+#include "mlx/backend/cpu/unary_ops.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -445,7 +448,6 @@ void mxfp4_qmm(
     int K) {
   constexpr int group_size = 32;
   constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -487,7 +489,6 @@ void mxfp4_qmm_t(
     int K) {
   constexpr int group_size = 32;
   constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -1100,6 +1101,46 @@ void fast::Quantize::eval_cpu(
     } else {
       throw std::runtime_error(
           "[fast::Quantize::eval_cpu] Only supports floating point inputs");
+    }
+  });
+}
+
+void fast::ConvertFP8::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& in = inputs[0];
+  auto& out = outputs[0];
+  set_unary_output_data(in, out);
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.dispatch([in = array::unsafe_weak_copy(in),
+                    out = array::unsafe_weak_copy(out),
+                    to_fp8 = to_fp8_]() mutable {
+    if (to_fp8) {
+      switch (in.dtype()) {
+        case float16:
+          unary_op<float16_t, uint8_t>(in, out, detail::ToFP8());
+          break;
+        case bfloat16:
+          unary_op<bfloat16_t, uint8_t>(in, out, detail::ToFP8());
+          break;
+        default:
+          unary_op<float, uint8_t>(in, out, detail::ToFP8());
+          break;
+      }
+    } else {
+      switch (out.dtype()) {
+        case float16:
+          unary_op<uint8_t, float16_t>(in, out, detail::FromFP8());
+          break;
+        case bfloat16:
+          unary_op<uint8_t, bfloat16_t>(in, out, detail::FromFP8());
+          break;
+        default:
+          unary_op<uint8_t, float>(in, out, detail::FromFP8());
+          break;
+      }
     }
   });
 }

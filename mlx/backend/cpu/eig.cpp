@@ -46,7 +46,6 @@ void eig_impl(
     int info;
     {
       T work;
-      int iwork;
       geev<T>(
           &jobl,
           &jobr,

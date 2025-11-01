@@ -39,7 +39,7 @@ struct StridedIterator {
   StridedIterator() = default;
 
   explicit StridedIterator(T* ptr, int64_t stride, difference_type offset = 0)
-      : ptr_(ptr + offset * stride), stride_(stride) {}
+      : stride_(stride), ptr_(ptr + offset * stride) {}
 
   explicit StridedIterator(array& arr, int axis, difference_type offset = 0)
       : StridedIterator(arr.data<T>(), arr.strides()[axis], offset) {}

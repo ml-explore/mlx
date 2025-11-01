@@ -365,7 +365,7 @@ std::vector<std::vector<address_t>> load_nodes(const char* hostfile) {
   for (auto& h : hosts) {
     std::vector<address_t> host;
     for (auto& ips : h) {
-      host.push_back(std::move(parse_address(ips.get<std::string>())));
+      host.push_back(parse_address(ips.get<std::string>()));
     }
     nodes.push_back(std::move(host));
   }
@@ -554,14 +554,14 @@ class RingGroup : public GroupImpl {
     // first and accept after.
     if (rank_ < connect_to) {
       log_info(verbose_, "Rank", rank_, "accepting");
-      sockets_left_ = std::move(accept_connections(nodes[rank_]));
+      sockets_left_ = accept_connections(nodes[rank_]);
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = std::move(make_connections(nodes[connect_to], verbose));
+      sockets_right_ = make_connections(nodes[connect_to], verbose);
     } else {
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = std::move(make_connections(nodes[connect_to], verbose));
+      sockets_right_ = make_connections(nodes[connect_to], verbose);
       log_info(verbose_, "Rank", rank_, "accepting");
-      sockets_left_ = std::move(accept_connections(nodes[rank_]));
+      sockets_left_ = accept_connections(nodes[rank_]);
     }
 
     // Failure if we couldn't make right or left sockets

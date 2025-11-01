@@ -1,0 +1,38 @@
+name: 'Build Documentation'
+description: 'Build documentation on a mac'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup machine
+      uses: ./.github/actions/setup-macos
+
+    - name: Install dependencies
+      shell: sh
+      run: |
+        brew install doxygen
+        uv pip install --upgrade pip cmake
+        uv pip install -r docs/requirements.txt
+        uv pip install . -v
+  
+    - name: Build documentation
+      shell: bash
+      run: |
+        source .venv/bin/activate
+        cd docs
+        doxygen
+        make html O=-W
+    
+    - name: Create artifact tar
+      shell: sh
+      run: tar -cf artifact.tar --cd docs --dereference build/html index.html
+
+    # Do it manually because upload-pages-artifact requires gtar
+    - name: Upload artifact
+      id: upload-artifact
+      uses: actions/upload-artifact@v5
+      with:
+        name: github-pages
+        path: artifact.tar
+        retention-days: 1
+        if-no-files-found: error

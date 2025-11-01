@@ -418,7 +418,7 @@ array rope(
     auto positions =
         multiply(add(arange(x.shape(2), t, s), offset, s), array(scale, t), s);
 
-    auto default_inv_freqs = [&inputs, &s, &t, base, half_dims]() {
+    auto default_inv_freqs = [&s, &t, base, half_dims]() {
       return exp(
           multiply(
               arange(0, -half_dims, -1, t, s),
@@ -687,7 +687,6 @@ array scaled_dot_product_attention(
   auto v = astype(values, final_type, s);
 
   auto fallback = [scale,
-                   final_type,
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
@@ -696,8 +695,6 @@ array scaled_dot_product_attention(
                    s](const std::vector<array>& inputs) {
     auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
     int n_repeats = n_q_heads / n_kv_heads;
-    int B = q.shape(0);
-    int L = q.shape(2);
     auto k = inputs[1];
     auto v = inputs[2];
     if (n_repeats > 1) {
@@ -844,6 +841,11 @@ std::vector<Shape> Quantize::output_shapes(const std::vector<array>& inputs) {
       return {std::move(wq_shape), std::move(sshape), std::move(bshape)};
     }
   }
+}
+
+bool ConvertFP8::is_equivalent(const Primitive& other) const {
+  const ConvertFP8& a_other = static_cast<const ConvertFP8&>(other);
+  return to_fp8_ == a_other.to_fp8_;
 }
 
 } // namespace mlx::core::fast

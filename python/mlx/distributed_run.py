@@ -567,13 +567,16 @@ def prepare_tb_ring(args, hosts):
         name = ""
         ports = []
         for t in c["SPThunderboltDataType"]:
+            uuid = t.get("domain_uuid_key")
+            if uuid is None:
+                continue
             name = t["device_name_key"]
-            uuid = t["domain_uuid_key"]
             tag = t["receptacle_1_tag"]["receptacle_id_key"]
-            if items := t.get("_items", []):
-                connected_to = items[0]["domain_uuid_key"]
-            else:
-                connected_to = None
+            items = t.get("_items", [])
+            connected_items = [item for item in items if "domain_uuid_key" in item]
+            connected_to = (
+                connected_items[0]["domain_uuid_key"] if connected_items else None
+            )
             iface = iface_map[f"Thunderbolt {tag}"]
             ports.append(ThunderboltPort(iface, uuid, connected_to))
         tb_hosts.append(ThunderboltHost(name, sorted(ports, key=lambda x: x.iface)))
@@ -633,9 +636,17 @@ def prepare_tb_ring(args, hosts):
             if ip0 > 255:
                 raise ValueError("Ran out of available local IPs for the ring")
 
+    # Extract the host order from the first ring
+    hostmap = dict((r[0][0], r[1][0]) for r in rings[0])
+    first_host = min(hostmap.keys())
+    order = [first_host]
+    while hostmap[order[-1]] != first_host:
+        order.append(hostmap[order[-1]])
+
     # Create the hostfile
     hostfile = []
-    for i, h in enumerate(hosts):
+    for i in order:
+        h = hosts[i]
         host = {
             "ssh": h.ssh_hostname,
             "ips": [

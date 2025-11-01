@@ -354,8 +354,6 @@ void steel_gemm_splitk_axpby(
     float beta = 0.0f) {
   using namespace mlx::steel;
 
-  int _tm = M / 16;
-  int _tn = N / 16;
   int _tk = K / 16;
 
   int bm = M < 40 ? 16 : 32;
@@ -659,15 +657,10 @@ void gemv_axbpy(
   int in_vector_len = K;
   int out_vector_len = is_b_matrix ? N : M;
 
-  int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
-  int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
   int mat_ld = is_b_matrix ? ldb : lda;
 
   auto batch_strides_mat = is_b_matrix ? B_batch_stride : A_batch_stride;
   auto batch_strides_vec = is_b_matrix ? A_batch_stride : B_batch_stride;
-
-  int stride_mat = batch_strides_mat.back();
-  int stride_vec = batch_strides_vec.back();
 
   // Determine if inputs have simple batching / broadcasting
   bool contiguous_kernel = (batch_shape.size() == 1);
@@ -964,12 +957,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [transpose_b, b_cols, b] = check_transpose(copies, s, b_pre, N == 1);
 
   array c = c_pre;
-  int ldc = c.strides()[c.ndim() - 2];
-  int fdc = c.strides()[c.ndim() - 1];
 
   int lda = a_cols;
   int ldb = b_cols;
-  int ldd = N;
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -1101,10 +1091,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::string out_mask_nm = has_out_mask ? type_to_name(inputs[2]) : "nomask";
   std::string op_mask_nm = has_op_mask ? type_to_name(inputs.back()) : "nomask";
 
-  auto get_batch_dims = [](const auto& v) {
-    return decltype(v){v.begin(), v.end() - 2};
-  };
-
   Shape batch_shape{1};
   Strides A_batch_stride{0};
   Strides B_batch_stride{0};
@@ -1165,8 +1151,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     int in_vector_len = K;
     int out_vector_len = is_b_matrix ? N : M;
 
-    int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
-    int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
     int mat_ld = is_b_matrix ? b_cols : a_cols;
 
     auto batch_strides_mat = is_b_matrix ? B_batch_stride : A_batch_stride;

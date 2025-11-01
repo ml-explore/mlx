@@ -83,8 +83,6 @@ void svd_impl(
 
     auto jobz = (u_ptr) ? "A" : "N";
 
-    // Will contain the number of singular values after the call has returned.
-    int ns = 0;
     T workspace_dimension = 0;
 
     // Will contain the indices of eigenvectors that failed to converge (not

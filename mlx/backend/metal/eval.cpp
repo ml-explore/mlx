@@ -71,7 +71,7 @@ void eval(array& arr) {
     d.get_command_buffer(s.index);
   } else {
     command_buffer->addCompletedHandler(
-        [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
           check_error(cbuf);
         });
   }
@@ -82,7 +82,7 @@ void finalize(Stream s) {
   auto& d = metal::device(s.device);
   auto cb = d.get_command_buffer(s.index);
   d.end_encoding(s.index);
-  cb->addCompletedHandler([s](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
+  cb->addCompletedHandler([](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
   d.commit_command_buffer(s.index);
   d.get_command_buffer(s.index);
 }
