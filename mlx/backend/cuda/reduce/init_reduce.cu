@@ -28,7 +28,7 @@ void init_reduce(
     Reduce::ReduceType reduce_type) {
   // Allocate if needed
   if (out.data_shared_ptr() == nullptr) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   }
 
   encoder.set_output_array(out);
@@ -42,7 +42,7 @@ void init_reduce(
       dim3 block(grid.x < 1024 ? grid.x : 1024, 1, 1);
       grid.x = (grid.x + 1023) / 1024;
       encoder.add_kernel_node(
-          kernel, grid, block, 0, out.data<U>(), out.size());
+          kernel, grid, block, 0, gpu_ptr<U>(out), out.size());
     });
   });
 }

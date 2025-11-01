@@ -367,13 +367,14 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto in = inputs[0];
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
 
   if (in.flags().contiguous && in.strides()[axis_] != 0) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
+          cu::malloc_async(in.data_size() * out.itemsize(), encoder.stream()),
           in.data_size(),
           in.strides(),
           in.flags());
@@ -387,7 +388,6 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   int32_t axis_size = in.shape(axis_);
   bool contiguous = in.strides()[axis_] == 1;
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
@@ -415,8 +415,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   in.data_size() / axis_size,
                   block_dim,
                   0,
-                  in.data<T>(),
-                  out.data<U>(),
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
                   axis_size);
             } else {
               constexpr int BM = WARP_SIZE;
@@ -445,8 +445,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   num_blocks,
                   block_dim,
                   0,
-                  in.data<T>(),
-                  out.data<U>(),
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
                   axis_size,
                   stride,
                   stride_blocks);

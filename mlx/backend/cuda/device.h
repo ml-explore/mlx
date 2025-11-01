@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/lru_cache.h"
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/stream.h"

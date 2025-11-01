@@ -7,12 +7,24 @@
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include "mlx/array.h"
+#include "mlx/backend/cuda/allocator.h"
 
 namespace mlx::core {
 
 namespace cu {
 class Device;
 
+}
+
+template <typename T>
+T* gpu_ptr(array& arr) {
+  return cu::gpu_ptr<T>(arr.buffer());
+}
+
+template <typename T>
+const T* gpu_ptr(const array& arr) {
+  return cu::gpu_ptr<T>(arr.buffer());
 }
 
 struct Dtype;

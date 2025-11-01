@@ -89,7 +89,7 @@ array grouped_unfold_transpose_inputs_nd(
     int mat_N,
     ConvParams<NDIM>& params) {
   array unfolded({mat_M, mat_K * params.groups}, in.dtype(), nullptr, {});
-  unfolded.set_data(allocator::malloc(unfolded.nbytes()));
+  unfolded.set_data(cu::malloc_async(unfolded.nbytes(), encoder.stream()));
   encoder.add_temporary(unfolded);
 
   int filter_size = params.C;
@@ -121,8 +121,8 @@ array grouped_unfold_transpose_inputs_nd(
         num_blocks,
         block_dims,
         0,
-        in.data<DataType>(),
-        unfolded.data<DataType>(),
+        gpu_ptr<DataType>(in),
+        gpu_ptr<DataType>(unfolded),
         filter_size,
         out_pixels,
         params);

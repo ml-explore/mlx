@@ -262,10 +262,10 @@ void affine_quantize(
             num_blocks,
             block_dims,
             0,
-            w.data<T>(),
-            wq.data<uint8_t>(),
-            scales.data<T>(),
-            biases.data<T>(),
+            gpu_ptr<T>(w),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<T>(scales),
+            gpu_ptr<T>(biases),
             w.size());
       });
     });
@@ -318,10 +318,10 @@ void affine_dequantize(
             num_blocks,
             block_dims,
             0,
-            wq.data<uint8_t>(),
-            scales.data<T>(),
-            biases.data<T>(),
-            w.data<T>(),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<T>(scales),
+            gpu_ptr<T>(biases),
+            gpu_ptr<T>(w),
             w.size());
       });
     });

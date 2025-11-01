@@ -22,7 +22,11 @@ enum class CopyType {
   GeneralGeneral
 };
 
-inline bool set_copy_output_data(const array& in, array& out, CopyType ctype) {
+inline bool set_copy_output_data(
+    const array& in,
+    array& out,
+    CopyType ctype,
+    std::function<allocator::Buffer(size_t)> mallocfn = allocator::malloc) {
   if (ctype == CopyType::Vector) {
     // If the input is donateable, we are doing a vector copy and the types
     // have the same size, then the input buffer can hold the output.
@@ -31,14 +35,14 @@ inline bool set_copy_output_data(const array& in, array& out, CopyType ctype) {
       return true;
     } else {
       out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
+          mallocfn(in.data_size() * out.itemsize()),
           in.data_size(),
           in.strides(),
           in.flags());
       return false;
     }
   } else {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mallocfn(out.nbytes()));
     return false;
   }
 }

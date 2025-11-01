@@ -245,14 +245,18 @@ void binary_two_op_gpu_inplace(
   auto& out_a = outputs[0];
   auto& out_b = outputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, out_a, bopt);
-  set_binary_op_output_data(a, b, out_b, bopt);
+  auto& encoder = cu::get_command_encoder(s);
+  set_binary_op_output_data(a, b, out_a, bopt, [&](auto n) {
+    return cu::malloc_async(n, encoder.stream());
+  });
+  set_binary_op_output_data(a, b, out_b, bopt, [&](auto n) {
+    return cu::malloc_async(n, encoder.stream());
+  });
 
   if (out_a.size() == 0) {
     return;
   }
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_output_array(out_a);
@@ -313,10 +317,10 @@ void binary_two_op_gpu_inplace(
                         {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
-                        a.data<InType>(),
-                        b.data<InType>(),
-                        out_a.data<OutType>(),
-                        out_b.data<OutType>(),
+                        gpu_ptr<InType>(a),
+                        gpu_ptr<InType>(b),
+                        gpu_ptr<OutType>(out_a),
+                        gpu_ptr<OutType>(out_b),
                         rest,
                         const_param<dims_constant()>(shape),
                         const_param<dims_constant()>(a_strides),
@@ -332,10 +336,10 @@ void binary_two_op_gpu_inplace(
                       {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
-                      a.data<InType>(),
-                      b.data<InType>(),
-                      out_a.data<OutType>(),
-                      out_b.data<OutType>(),
+                      gpu_ptr<InType>(a),
+                      gpu_ptr<InType>(b),
+                      gpu_ptr<OutType>(out_a),
+                      gpu_ptr<OutType>(out_b),
                       rest,
                       const_param(shape),
                       const_param(a_strides),
@@ -366,10 +370,10 @@ void binary_two_op_gpu_inplace(
                 num_blocks,
                 block_dims,
                 0,
-                a.data<InType>(),
-                b.data<InType>(),
-                out_a.data<OutType>(),
-                out_b.data<OutType>(),
+                gpu_ptr<InType>(a),
+                gpu_ptr<InType>(b),
+                gpu_ptr<OutType>(out_a),
+                gpu_ptr<OutType>(out_b),
                 out_a.data_size());
           });
         }

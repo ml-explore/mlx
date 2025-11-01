@@ -513,11 +513,11 @@ void sdpa_vector_1pass_fallback(
             grid_dim,
             block_dim,
             0,
-            q.data<DataType>(),
-            k.data<DataType>(),
-            v.data<DataType>(),
-            o.data<DataType>(),
-            sinks ? (*sinks).data<DataType>() : nullptr,
+            gpu_ptr<DataType>(q),
+            gpu_ptr<DataType>(k),
+            gpu_ptr<DataType>(v),
+            gpu_ptr<DataType>(o),
+            sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
             params);
       });
     });
@@ -565,9 +565,10 @@ void sdpa_vector_2pass_fallback(
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
 
-  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  sums.set_data(allocator::malloc(sums.nbytes()));
-  maxs.set_data(allocator::malloc(maxs.nbytes()));
+  intermediate.set_data(
+      cu::malloc_async(intermediate.nbytes(), encoder.stream()));
+  sums.set_data(cu::malloc_async(sums.nbytes(), encoder.stream()));
+  maxs.set_data(cu::malloc_async(maxs.nbytes(), encoder.stream()));
 
   encoder.add_temporary(intermediate);
   encoder.add_temporary(sums);
@@ -601,13 +602,13 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              q.data<DataType>(),
-              k.data<DataType>(),
-              v.data<DataType>(),
-              sinks ? (*sinks).data<DataType>() : nullptr,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
+              gpu_ptr<DataType>(q),
+              gpu_ptr<DataType>(k),
+              gpu_ptr<DataType>(v),
+              sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
               params);
         }
 
@@ -628,10 +629,10 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
-              o.data<DataType>(),
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
+              gpu_ptr<DataType>(o),
               params);
         }
       });
@@ -787,7 +788,7 @@ void ScaledDotProductAttention::eval_gpu(
       };
 
       o.set_data(
-          allocator::malloc(o.nbytes()),
+          cu::malloc_async(o.nbytes(), encoder.stream()),
           o.size(),
           {str_oB, str_oH, str_oL, str_oD},
           flags);

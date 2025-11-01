@@ -140,8 +140,10 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgReduce::eval_gpu");
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  out.set_data(allocator::malloc(out.nbytes()));
+
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
 
   // Prepare the shapes, strides and axis arguments.
   Shape shape = remove_index(in.shape(), axis_);
@@ -154,7 +156,6 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   int32_t ndim = shape.size();
 
   // ArgReduce.
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   dispatch_real_types(in.dtype(), "ArgReduce", [&](auto type_tag) {
@@ -172,8 +173,8 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           num_blocks,
           block_dim(),
           0,
-          in.data<T>(),
-          out.data<uint32_t>(),
+          gpu_ptr<T>(in),
+          gpu_ptr<uint32_t>(out),
           out.size(),
           const_param(shape),
           const_param(in_strides),

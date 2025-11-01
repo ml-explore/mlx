@@ -163,7 +163,7 @@ void CublasGemm::run_batched(
 
   // Launch kernel to set device offsets
   auto pointers = array(
-      allocator::malloc(batch_count * sizeof(void*) * 3),
+      cu::malloc_async(batch_count * sizeof(void*) * 3, encoder.stream()),
       {batch_count * 3},
       uint64);
 
@@ -183,10 +183,10 @@ void CublasGemm::run_batched(
           num_blocks,
           block_dims,
           0,
-          pointers.data<int8_t*>(),
-          a.data<int8_t>(),
-          b.data<int8_t>(),
-          out.data<int8_t>(),
+          gpu_ptr<int8_t*>(pointers),
+          gpu_ptr<int8_t>(a),
+          gpu_ptr<int8_t>(b),
+          gpu_ptr<int8_t>(out),
           item_size,
           const_param<ndim_constant()>(batch_shape),
           const_param<ndim_constant()>(a_batch_strides),
@@ -200,10 +200,10 @@ void CublasGemm::run_batched(
         num_blocks,
         block_dims,
         0,
-        pointers.data<int8_t*>(),
-        a.data<int8_t>(),
-        b.data<int8_t>(),
-        out.data<int8_t>(),
+        gpu_ptr<int8_t*>(pointers),
+        gpu_ptr<int8_t>(a),
+        gpu_ptr<int8_t>(b),
+        gpu_ptr<int8_t>(out),
         item_size,
         const_param(batch_shape),
         const_param(a_batch_strides),
@@ -219,7 +219,7 @@ void CublasGemm::run_batched(
   encoder.set_input_array(b);
   encoder.set_output_array(out);
 
-  auto a_pointers = pointers.data<int8_t*>();
+  auto a_pointers = gpu_ptr<int8_t*>(pointers);
   auto b_pointers = a_pointers + batch_count;
   auto out_pointers = b_pointers + batch_count;
   execute(
@@ -251,7 +251,7 @@ void CublasGemm::run_batched(
 
   // Launch kernel to set device offsets
   auto pointers = array(
-      allocator::malloc(batch_count * sizeof(uint64_t) * 4),
+      cu::malloc_async(batch_count * sizeof(uint64_t) * 4, encoder.stream()),
       {batch_count * 4},
       uint64);
 
@@ -271,11 +271,11 @@ void CublasGemm::run_batched(
           num_blocks,
           block_dims,
           0,
-          pointers.data<int8_t*>(),
-          a.data<int8_t>(),
-          b.data<int8_t>(),
-          c.data<int8_t>(),
-          out.data<int8_t>(),
+          gpu_ptr<int8_t*>(pointers),
+          gpu_ptr<int8_t>(a),
+          gpu_ptr<int8_t>(b),
+          gpu_ptr<int8_t>(c),
+          gpu_ptr<int8_t>(out),
           item_size,
           const_param<ndim_constant()>(batch_shape),
           const_param<ndim_constant()>(a_batch_strides),
@@ -290,11 +290,11 @@ void CublasGemm::run_batched(
         num_blocks,
         block_dims,
         0,
-        pointers.data<int8_t*>(),
-        a.data<int8_t>(),
-        b.data<int8_t>(),
-        c.data<int8_t>(),
-        out.data<int8_t>(),
+        gpu_ptr<int8_t*>(pointers),
+        gpu_ptr<int8_t>(a),
+        gpu_ptr<int8_t>(b),
+        gpu_ptr<int8_t>(c),
+        gpu_ptr<int8_t>(out),
         item_size,
         const_param(batch_shape),
         const_param(a_batch_strides),
@@ -312,7 +312,7 @@ void CublasGemm::run_batched(
   encoder.set_input_array(c);
   encoder.set_output_array(out);
 
-  auto a_pointers = pointers.data<int8_t*>();
+  auto a_pointers = gpu_ptr<int8_t*>(pointers);
   auto b_pointers = a_pointers + batch_count;
   auto c_pointers = b_pointers + batch_count;
   auto out_pointers = c_pointers + batch_count;

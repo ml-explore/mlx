@@ -250,7 +250,7 @@ void col_reduce_looped(
     const cu::ColReduceArgs& args) {
   // Allocate data for the output using in's layout to access them as
   // contiguously as possible.
-  allocate_same_layout(out, in, axes);
+  allocate_same_layout(out, in, axes, encoder);
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
@@ -261,7 +261,7 @@ void col_reduce_looped(
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename cu::ReduceResult<OP, T>::type;
         // Cub doesn't like const pointers for vectorized loads. (sigh)
-        T* indata = const_cast<T*>(in.data<T>());
+        T* indata = const_cast<T*>(gpu_ptr<T>(in));
 
         constexpr int N_READS = 4;
         constexpr int BM = 32;
@@ -276,7 +276,7 @@ void col_reduce_looped(
             blocks,
             0,
             indata,
-            out.data<U>(),
+            gpu_ptr<U>(out),
             static_cast<cu::ColReduceArgs>(args));
       });
     });
@@ -293,7 +293,7 @@ void col_reduce_small(
     const cu::ColReduceArgs& args) {
   // Allocate data for the output using in's layout to access them as
   // contiguously as possible.
-  allocate_same_layout(out, in, axes);
+  allocate_same_layout(out, in, axes, encoder);
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
@@ -312,8 +312,8 @@ void col_reduce_small(
           grid,
           block,
           0,
-          in.data<T>(),
-          out.data<U>(),
+          gpu_ptr<T>(in),
+          gpu_ptr<U>(out),
           static_cast<cu::ColReduceArgs>(args),
           out.size());
     });

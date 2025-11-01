@@ -31,7 +31,7 @@ void append_indices_arg(
     int idx_ndim) {
   SmallVector<const void*> indices(nidx);
   for (int i = 0; i < nidx; ++i) {
-    indices[i] = inputs[i + 1].data<void>();
+    indices[i] = gpu_ptr<void>(inputs[i + 1]);
   }
   args.append(std::move(indices));
   SmallVector<int32_t> indices_shape(nidx * idx_ndim);
@@ -59,7 +59,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() > 0);
   const auto& src = inputs[0];
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   if (out.size() == 0) {
     return;
   }
@@ -80,7 +82,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       dtype_to_string(idx_dtype),
       nidx);
 
-  auto& s = stream();
   cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
@@ -121,7 +122,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx_ndim,
       large ? "int64_t" : "int32_t");
 
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }
@@ -239,7 +239,9 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   const auto& src = inputs[0];
   const auto& idx = inputs[1];
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   if (out.size() == 0) {
     return;
   }
@@ -251,7 +253,6 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       dtype_to_string(out.dtype()),
       dtype_to_string(idx.dtype()));
 
-  auto& s = stream();
   cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
@@ -312,7 +313,6 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       idx.flags().row_contiguous,
       large ? "int64_t" : "int32_t");
 
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }

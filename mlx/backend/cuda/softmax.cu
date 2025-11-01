@@ -109,15 +109,16 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Softmax::eval_gpu");
   assert(inputs.size() == 1);
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
 
   // Make sure that the last dimension is contiguous.
-  auto set_output = [&s, &out](const array& x) {
+  auto set_output = [&s, &out, &encoder](const array& x) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       if (x.is_donatable()) {
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
+            cu::malloc_async(x.data_size() * x.itemsize(), encoder.stream()),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -136,7 +137,6 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   int axis_size = in.shape().back();
   int n_rows = in.data_size() / axis_size;
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "softmax", [&](auto type_tag) {
@@ -152,8 +152,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
           n_rows,
           block_dim(),
           0,
-          in.data<DataType>(),
-          out.data<DataType>(),
+          gpu_ptr<DataType>(in),
+          gpu_ptr<DataType>(out),
           axis_size);
     });
   });

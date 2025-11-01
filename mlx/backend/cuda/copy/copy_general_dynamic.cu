@@ -69,8 +69,8 @@ void copy_general_dynamic(
             using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
             using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-            const InType* in_ptr = in.data<InType>() + offset_in;
-            OutType* out_ptr = out.data<OutType>() + offset_out;
+            const InType* in_ptr = gpu_ptr<InType>(in) + offset_in;
+            OutType* out_ptr = gpu_ptr<OutType>(out) + offset_out;
             int ndim = shape.size();
             if (ndim <= 3) {
               dispatch_1_2_3(ndim, [&](auto dims_constant) {
@@ -90,8 +90,8 @@ void copy_general_dynamic(
                     const_param<dims_constant()>(shape),
                     const_param<dims_constant()>(strides_in),
                     const_param<dims_constant()>(strides_out),
-                    dynamic_offset_in.data<int64_t>(),
-                    dynamic_offset_out.data<int64_t>());
+                    gpu_ptr<int64_t>(dynamic_offset_in),
+                    gpu_ptr<int64_t>(dynamic_offset_out));
               });
             } else { // ndim >= 4
               auto [num_blocks, block_dims] = get_launch_args(out, large());
@@ -107,8 +107,8 @@ void copy_general_dynamic(
                   const_param(strides_in),
                   const_param(strides_out),
                   ndim,
-                  dynamic_offset_in.data<int64_t>(),
-                  dynamic_offset_out.data<int64_t>());
+                  gpu_ptr<int64_t>(dynamic_offset_in),
+                  gpu_ptr<int64_t>(dynamic_offset_out));
             }
           });
     });
