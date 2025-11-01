@@ -1,7 +1,5 @@
 # Copyright © 2025 Apple Inc.
 
-import unittest
-
 import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
@@ -10,7 +8,6 @@ from mlx.nn.utils import average_gradients
 
 
 class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
-
     def test_average_gradients(self):
         original_all_sum = mx.distributed.all_sum
         n_calls = 0
