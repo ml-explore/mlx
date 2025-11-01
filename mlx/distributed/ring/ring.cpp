@@ -731,6 +731,11 @@ class RingGroup : public GroupImpl {
         });
   }
 
+  void reduce_scatter(const array& input, array& output, Stream stream)
+      override {
+    throw std::runtime_error("[ring] reduce_scatter not supported.");
+  }
+
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(

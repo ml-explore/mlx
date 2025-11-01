@@ -301,4 +301,32 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The array that was received from ``src``.
       )pbdoc");
+
+  m.def(
+      "reduce_scatter",
+      [](const ScalarOrArray& x,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::reduce_scatter(to_array(x), group, s);
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def reduce_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Reduce scatter.
+      Reduce scatter the ``x`` arrays from all processes in the group. Size of x should be divisible by group size.
+      Currently supported only for NCCL backend.
+      Args:
+        x (array): Input array.
+        group (Group): The group of processes that will participate in the
+          reduction. If set to ``None`` the global group is used. Default:
+          ``None``.
+        stream (Stream, optional): Stream or device. Defaults to ``None``
+          in which case the default stream of the default device is used.
+      Returns:
+        array: The reduced scattered array of shape x.shape // group.size.
+    )pbdoc");
 }

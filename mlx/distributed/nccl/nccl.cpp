@@ -296,8 +296,17 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error(
-        "[nccl] All gather not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclAllGather(
+          input.data<T>(),
+          output.data<T>(),
+          input.size(),
+          dt,
+          comm_,
+          encoder.stream()));
+    });
   }
 
   void send(const array& input, int dst, Stream stream) override {
@@ -309,11 +318,33 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All max not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMax);
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All min not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMin);
+    });
+  }
+
+  void reduce_scatter(const array& input, array& output, Stream stream)
+      override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclReduceScatter(
+          input.data<T>(),
+          output.data<T>(),
+          output.size(),
+          dt,
+          ncclAvg,
+          comm_,
+          encoder.stream()));
+    });
   }
 
   template <typename T>

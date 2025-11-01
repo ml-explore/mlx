@@ -41,6 +41,14 @@ void recv(Group group, array& out, int src, Stream stream) {
   group.raw_group()->recv(out, src, stream);
 }
 
+void reduce_scatter(
+    Group group,
+    const array& input,
+    array& output,
+    Stream stream) {
+  group.raw_group()->reduce_scatter(input, output, stream);
+}
+
 class EmptyGroup : public GroupImpl {
  public:
   Stream communication_stream(StreamOrDevice s) override {
@@ -82,6 +90,10 @@ class EmptyGroup : public GroupImpl {
   }
 
   void all_min(const array&, array&, Stream) override {
+    throw std::runtime_error(
+        "Communication not implemented in an empty distributed group.");
+  }
+  void reduce_scatter(const array&, array&, Stream) override {
     throw std::runtime_error(
         "Communication not implemented in an empty distributed group.");
   }

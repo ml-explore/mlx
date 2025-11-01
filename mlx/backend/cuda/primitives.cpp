@@ -40,7 +40,6 @@ NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 
 namespace distributed {
-NO_GPU_MULTI(AllGather)
 NO_GPU_MULTI(Send)
 NO_GPU_MULTI(Recv)
 } // namespace distributed

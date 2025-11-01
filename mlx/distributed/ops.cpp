@@ -157,4 +157,29 @@ array recv_like(
   return recv(x.shape(), x.dtype(), src, group_, s);
 }
 
+array reduce_scatter(
+    const array& x,
+    std::optional<Group> group_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto group = to_group(group_);
+  if (group.size() == 1) {
+    return x;
+  }
+  if (x.shape().size() == 0 || x.shape()[0] % group.size() != 0) {
+    std::ostringstream msg;
+    msg << "Input shape " << x.shape() << " is not divisible by group size "
+        << group.size() << " for reduce_scatter operation.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto result_shape = x.shape();
+  result_shape[0] /= group.size();
+
+  return array(
+      std::move(result_shape),
+      x.dtype(),
+      std::make_shared<ReduceScatter>(
+          detail::communication_stream(group, s), group),
+      {x});
+}
 } // namespace mlx::core::distributed
