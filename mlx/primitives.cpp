@@ -4354,10 +4354,10 @@ std::vector<array> MaskedScatter::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   auto& s = stream();
-  const array& self = primals[0];
+  const array& dst = primals[0];
   const array& mask = primals[1];
   const array& src = primals[2];
-  const array mask_b = broadcast_to(mask, self.shape(), s);
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
   const array& cotan = cotangents[0];
 
   std::vector<array> vjps;
@@ -4380,9 +4380,8 @@ std::vector<array> MaskedScatter::vjp(
           zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
       if (src.size() > 0) {
         const int n = static_cast<int>(idx_src.size());
-        const array idx_vec = reshape(idx_src, {n}, s);
         const array cotan_updates = reshape(cotan_src, {n, 1}, s);
-        gsrc_flat = scatter_add(gsrc_flat, idx_vec, cotan_updates, 0, s);
+        gsrc_flat = scatter_add(gsrc_flat, idx_src, cotan_updates, 0, s);
       }
 
       vjps.push_back(reshape(gsrc_flat, src.shape(), s));
@@ -4399,21 +4398,16 @@ std::vector<array> MaskedScatter::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto& s = stream();
-  const array& self = primals[0];
+  const array& dst = primals[0];
   const array& mask = primals[1];
-  const array mask_b = broadcast_to(mask, self.shape(), s);
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
 
-  array out = zeros_like(self, s);
+  array out = zeros_like(dst, s);
   for (int arg : argnums) {
     if (arg == 0) {
       out = where(mask_b, out, tangents[0], s);
     } else if (arg == 2) {
       out = masked_scatter(out, mask_b, tangents[1], s);
-      out = array(
-          self.shape(),
-          tangents[1].dtype(),
-          std::make_shared<MaskedScatter>(stream()),
-          {out, mask_b, tangents[1]});
     } else {
       throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
     }
@@ -4424,29 +4418,45 @@ std::vector<array> MaskedScatter::jvp(
 std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  auto [self, mask, src, to_ax] = vmap_ternary_op(inputs, axes, stream());
+  auto& s = stream();
+  auto [dst, mask, src, to_ax] = vmap_ternary_op(inputs, axes, s);
   if (to_ax == -1) {
-    return {{masked_scatter(self, mask, src, stream())}, {to_ax}};
+    return {{masked_scatter(dst, mask, src, s)}, {to_ax}};
   }
 
-  if (mask.dtype() != bool_) {
-    throw std::invalid_argument(
-        "[masked_scatter] Mask has to be boolean type.");
-  }
+  auto dst_front = moveaxis(dst, to_ax, 0, s);
+  auto mask_front = moveaxis(mask, to_ax, 0, s);
+  auto src_front = moveaxis(src, to_ax, 0, s);
 
-  auto broadcast_mask = broadcast_to(mask, self.shape(), stream());
-  auto self_front = moveaxis(self, to_ax, 0, stream());
-  auto mask_front = moveaxis(broadcast_mask, to_ax, 0, stream());
-  auto src_front = moveaxis(src, to_ax, 0, stream());
+  const size_t batch =
+      std::max({dst_front.shape(0), mask_front.shape(0), src_front.shape(0)});
+
+  auto align_front = [&](array x) {
+    if (static_cast<size_t>(x.shape(0)) == batch) {
+      return x;
+    }
+    if (batch > 1 && x.shape(0) == 1) {
+      auto shape = x.shape();
+      shape[0] = static_cast<int>(batch);
+      return broadcast_to(x, shape, s);
+    }
+    auto expanded = expand_dims(x, 0, s);
+    auto shape = expanded.shape();
+    shape[0] = static_cast<int>(batch);
+    return broadcast_to(expanded, shape, s);
+  };
+
+  dst_front = align_front(dst_front);
+  mask_front = align_front(mask_front);
+  src_front = align_front(src_front);
+  mask_front = broadcast_to(mask_front, dst_front.shape(), s);
 
   auto scattered_front = array(
-      self_front.shape(),
-      self_front.dtype(),
-      std::make_shared<MaskedScatter>(stream(), /*vmap_axis=*/0),
-      {self_front, mask_front, src_front});
-
-  auto scattered = moveaxis(scattered_front, 0, to_ax, stream());
-  return {{scattered}, {to_ax}};
+      dst_front.shape(),
+      dst_front.dtype(),
+      std::make_shared<MaskedScatter>(to_stream(s)),
+      {dst_front, mask_front, src_front});
+  return {{moveaxis(scattered_front, 0, to_ax, s)}, {to_ax}};
 }
 
 std::vector<array> Sigmoid::vjp(
@@ -5212,11 +5222,14 @@ std::vector<array> BlockMaskedMM::vjp(
   //    - dB_m = A_m.T [..., K, M] @ dC [..., M, N]
   //    - dA = dA_m * mask_b_lhs [..., MP, KP]
   //    - dB = dB_m * mask_b_rhs [..., KP, MP]
-  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP, KP]
-  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP, NP]
+  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP,
+  //    KP]
+  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP,
+  //    NP]
   //
   // Observations:
-  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as a
+  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as
+  //  a
   //    as a block_masked_mm with mask_b_lhs as the out_mask without needing
   //    to materialize the intermediate dA_m. Similar for dB.
   //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and

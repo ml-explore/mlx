@@ -3452,11 +3452,23 @@ array masked_scatter(
         "[masked_scatter] Mask has to be boolean type.");
   }
 
-  return array(
-      a.shape(),
-      a.dtype(),
-      std::make_shared<MaskedScatter>(to_stream(s), /*vmap_axis=*/-1),
-      {a, broadcast_to(mask, a.shape(), s), src});
+  if (a.dtype() != src.dtype()) {
+    throw std::invalid_argument(
+        "[masked_scatter] dtype(a) must match dtype(src).");
+  }
+
+  auto expanded_a = expand_dims(a, 0, s);
+  auto expanded_mask = expand_dims(broadcast_to(mask, a.shape(), s), 0, s);
+  auto expanded_src = expand_dims(src, 0, s);
+
+  return squeeze(
+      array(
+          expanded_a.shape(),
+          a.dtype(),
+          std::make_shared<MaskedScatter>(to_stream(s)),
+          {expanded_a, expanded_mask, expanded_src}),
+      0,
+      s);
 }
 
 array sqrt(const array& a, StreamOrDevice s /* = {} */) {

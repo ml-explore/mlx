@@ -3132,7 +3132,7 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.depends(b, c)
         self.assertTrue(mx.array_equal(out, b))
 
-    def test_mask_assignment(self):
+    def test_masked_scatter(self):
         # boolean mask updates matching numpy semantics
         a = mx.array([1.0, 2.0, 3.0])
         mask = mx.array([True, False, True])
@@ -3153,6 +3153,14 @@ class TestOps(mlx_tests.MLXTestCase):
         mask = mx.array([[True], [False]])
         src = mx.array([2.0, 3.0, 4.0])
         expected = mx.array([[2.0, 3.0, 4.0], [1.0, 1.0, 1.0]])
+        c[mask] = src
+        self.assertTrue(mx.array_equal(c, expected))
+
+        # broadcasted mask and scalar source
+        c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        mask = mx.array([[True], [False]])
+        src = 2.0
+        expected = mx.array([[2.0, 2.0, 2.0], [1.0, 1.0, 1.0]])
         c[mask] = src
         self.assertTrue(mx.array_equal(c, expected))
 

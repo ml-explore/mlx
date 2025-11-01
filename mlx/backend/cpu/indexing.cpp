@@ -748,11 +748,7 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 template <typename T>
-void masked_scatter_impl(
-    const array& mask,
-    const array& src,
-    array& out,
-    int vmap_axis) {
+void masked_scatter_impl(const array& mask, const array& src, array& out) {
   ContiguousIterator mask_it(mask);
   ContiguousIterator src_it(src);
   ContiguousIterator out_it(out);
@@ -761,62 +757,26 @@ void masked_scatter_impl(
   const T* src_ptr = src.data<T>();
   T* dst_ptr = out.data<T>();
 
-  const size_t total = mask.size();
-  const size_t src_size = src.size();
+  const size_t batch_count = mask.shape(0);
+  const size_t mask_batch_size = mask.size() / batch_count;
+  const size_t src_batch_size = src.size() / batch_count;
 
-  const bool batched = vmap_axis == 0 && mask.ndim() > 0;
-  const size_t batch = batched ? static_cast<size_t>(mask.shape(0)) : 1;
+  for (uint b = 0; b < batch_count; ++b) {
+    size_t src_consumed = 0;
+    src_it.seek(b * src_batch_size);
 
-  auto src_ndim = static_cast<int>(src.ndim());
-  size_t src_block = 1;
-  if (src_ndim > 0) {
-    for (int d = 1; d < src_ndim; ++d) {
-      src_block *= src.shape(d);
-    }
-  }
-
-  auto scatter_once = [&](size_t capacity, size_t& consumed) {
-    if (mask_ptr[mask_it.loc]) {
-      if (consumed >= capacity) {
-        throw std::runtime_error(
-            "[MaskedScatter::eval_cpu] Source does not have enough elements for mask.");
+    for (size_t i = 0; i < mask_batch_size; ++i) {
+      if (mask_ptr[mask_it.loc]) {
+        if (src_consumed >= src_batch_size) {
+          throw std::runtime_error(
+              "[MaskedScatter::eval_cpu] Source does not have enough elements for mask.");
+        }
+        dst_ptr[out_it.loc] = src_ptr[src_it.loc];
+        src_it.step();
+        ++src_consumed;
       }
-      dst_ptr[out_it.loc] = src_ptr[src_it.loc];
-      src_it.step();
-      ++consumed;
-    }
-    mask_it.step();
-    out_it.step();
-  };
-
-  if (!batched || batch <= 1) {
-    size_t src_consumed = 0;
-    for (size_t i = 0; i < total; ++i) {
-      scatter_once(src_size, src_consumed);
-    }
-    return;
-  }
-
-  size_t inner = 1;
-  auto mask_ndim = static_cast<int>(mask.ndim());
-  for (int d = 1; d < mask_ndim; ++d) {
-    inner *= static_cast<size_t>(mask.shape(d));
-  }
-
-  const bool src_batched =
-      src_ndim > 0 && src.shape(0) == static_cast<int>(batch);
-  const size_t src_capacity = src_batched ? src_block : src_size;
-
-  for (size_t batch_idx = 0; batch_idx < batch; ++batch_idx) {
-    size_t src_consumed = 0;
-    if (src_batched) {
-      src_it.seek(batch_idx * src_block);
-    } else {
-      src_it.reset();
-    }
-
-    for (size_t j = 0; j < inner; ++j) {
-      scatter_once(src_capacity, src_consumed);
+      mask_it.step();
+      out_it.step();
     }
   }
 }
@@ -824,66 +784,64 @@ void masked_scatter_impl(
 void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 3);
 
-  auto& self = inputs[0];
+  auto& dst = inputs[0];
   auto& mask = inputs[1];
   auto& src = inputs[2];
 
   // Copy src into out (copy allocates memory for out)
   auto ctype =
-      self.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy_cpu(self, out, ctype, stream());
+      dst.flags().row_contiguous ? CopyType::Vector : CopyType::General;
+  copy_cpu(dst, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(mask);
   encoder.set_input_array(src);
   encoder.set_output_array(out);
-  auto vmap_axis = vmap_axis_;
   encoder.dispatch([mask = array::unsafe_weak_copy(mask),
                     src = array::unsafe_weak_copy(src),
-                    out = array::unsafe_weak_copy(out),
-                    vmap_axis]() mutable {
+                    out = array::unsafe_weak_copy(out)]() mutable {
     switch (out.dtype()) {
       case bool_:
-        masked_scatter_impl<bool>(mask, src, out, vmap_axis);
+        masked_scatter_impl<bool>(mask, src, out);
         break;
       case uint8:
-        masked_scatter_impl<uint8_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<uint8_t>(mask, src, out);
         break;
       case uint16:
-        masked_scatter_impl<uint16_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<uint16_t>(mask, src, out);
         break;
       case uint32:
-        masked_scatter_impl<uint32_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<uint32_t>(mask, src, out);
         break;
       case uint64:
-        masked_scatter_impl<uint64_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<uint64_t>(mask, src, out);
         break;
       case int8:
-        masked_scatter_impl<int8_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<int8_t>(mask, src, out);
         break;
       case int16:
-        masked_scatter_impl<int16_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<int16_t>(mask, src, out);
         break;
       case int32:
-        masked_scatter_impl<int32_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<int32_t>(mask, src, out);
         break;
       case int64:
-        masked_scatter_impl<int64_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<int64_t>(mask, src, out);
         break;
       case float16:
-        masked_scatter_impl<float16_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<float16_t>(mask, src, out);
         break;
       case float32:
-        masked_scatter_impl<float>(mask, src, out, vmap_axis);
+        masked_scatter_impl<float>(mask, src, out);
         break;
       case float64:
-        masked_scatter_impl<double>(mask, src, out, vmap_axis);
+        masked_scatter_impl<double>(mask, src, out);
         break;
       case bfloat16:
-        masked_scatter_impl<bfloat16_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<bfloat16_t>(mask, src, out);
         break;
       case complex64:
-        masked_scatter_impl<complex64_t>(mask, src, out, vmap_axis);
+        masked_scatter_impl<complex64_t>(mask, src, out);
         break;
     }
   });

@@ -644,19 +644,9 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
-  const array& self = inputs[0];
+  const array& dst = inputs[0];
   const array& mask = inputs[1];
   const array& src = inputs[2];
-
-  if (src.dtype() != self.dtype()) {
-    throw std::invalid_argument(
-        "[MaskedScatter::eval_gpu] dtype(src) must match dtype(self).");
-  }
-
-  if (self.shape() != mask.shape()) {
-    throw std::invalid_argument(
-        "[MaskedScatter::eval_gpu] self and mask must have same shape.");
-  }
 
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -664,76 +654,38 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   const size_t total = mask.size();
   const CopyType ct = (total == 1)
       ? CopyType::Scalar
-      : (self.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-  copy_gpu(self, out, ct, s);
-  if (total == 0)
+      : (dst.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy_gpu(dst, out, ct, s);
+  if (total == 0) {
     return;
-
-  // Plan && batching
-  if (vmap_axis_ > 0) {
-    throw std::invalid_argument(
-        "[MaskedScatter::eval_gpu] Unsupported batch axis.");
   }
 
-  const bool batched = vmap_axis_ == 0 && mask.ndim() > 0;
-  const size_t batch = batched ? static_cast<size_t>(mask.shape(0)) : 1;
-  if (batched && (batch == 0 || total % batch != 0)) {
-    throw std::invalid_argument(
-        "[MaskedScatter::eval_gpu] total elements must be divisible by batch.");
-  }
-
-  const size_t inner = batched ? total / batch : total;
-
-  const bool src_batched =
-      batched && src.ndim() > 0 && src.shape(0) == static_cast<int>(batch);
-  const size_t src_size = src.size();
-  if (src_batched && (src_size % batch != 0)) {
-    throw std::invalid_argument(
-        "[MaskedScatter::eval_gpu] src.size() must be divisible by batch when src is batched.");
-  }
-
-  const size_t src_block = src_batched ? (src_size / batch) : src_size;
-  const size_t src_capacity = src_block;
-
-  const Shape flat_shape{static_cast<ShapeElem>(total)};
-  array mask_flat = reshape_in_eval(mask, flat_shape, s);
+  array mask_flat = flatten_in_eval(mask, 1, -1, s);
 
   // Prefix (exclusive) of mask → scatter_offsets
-  array scatter_offsets(flat_shape, uint32, nullptr, {});
-  scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
+  array scatter_offsets(mask_flat.shape(), uint32, nullptr, {});
 
   scan_gpu(
       mask_flat,
       scatter_offsets,
       Scan::Sum,
-      /*axis=*/0,
+      /*axis=*/1,
       /*reverse=*/false,
       /*inclusive=*/false,
       s,
       /*allow_in_buffer_donation=*/false);
 
   // Kernel selection/build
-  const bool is_batched_run = batched && (batch > 1);
-  const bool src_has_batches = is_batched_run && src_batched;
   static constexpr std::string_view kBaseName = "masked_assign";
   const std::string dtype_tag = type_to_name(out.dtype());
   const std::string value_type = get_type_string(out.dtype());
-  const std::string kernel_name = fmt::format(
-      "{}_{}_b{}_src{}",
-      kBaseName,
-      dtype_tag,
-      is_batched_run ? 1 : 0,
-      src_has_batches ? 1 : 0);
+  const std::string kernel_name = fmt::format("{}_{}", kBaseName, dtype_tag);
 
   auto lib = d.get_library(kernel_name, [&]() {
     std::string source = metal::utils();
     source += metal::masked_scatter();
-    source += fmt::format(
-        std::string(masked_assign_kernel),
-        kernel_name,
-        value_type,
-        is_batched_run ? "true" : "false",
-        src_has_batches ? "true" : "false");
+    source +=
+        fmt::format(std::string(masked_assign_kernel), kernel_name, value_type);
     return source;
   });
   auto kernel = d.get_kernel(kernel_name, lib);
@@ -762,27 +714,16 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         compute_encoder.set_bytes(ndim, ndim_index);
       };
 
-  bind_shape_info(mask, bind_idx, bind_idx + 1, bind_idx + 2);
+  bind_shape_info(mask_flat, bind_idx, bind_idx + 1, bind_idx + 2);
   bind_idx += 3;
   bind_shape_info(src, bind_idx, bind_idx + 1, bind_idx + 2);
   bind_idx += 3;
   bind_shape_info(out, bind_idx, bind_idx + 1, bind_idx + 2);
   bind_idx += 3;
+  bind_shape_info(scatter_offsets, bind_idx, bind_idx + 1, bind_idx + 2);
+  bind_idx += 3;
 
-  auto set_u32 = [&](uint32_t v, int idx) {
-    compute_encoder.set_bytes(v, idx);
-  };
-  auto as_u32 = [](size_t v) -> uint32_t {
-    if (v > std::numeric_limits<uint32_t>::max())
-      throw std::overflow_error(
-          "[MaskedScatter::eval_gpu] uint64 size not implemented.");
-    return static_cast<uint32_t>(v);
-  };
-  set_u32(as_u32(src_size), bind_idx++);
-  set_u32(as_u32(total), bind_idx++);
-  set_u32(is_batched_run ? as_u32(inner) : 0u, bind_idx++);
-  set_u32(src_has_batches ? as_u32(src_block) : 0u, bind_idx++);
-  set_u32(is_batched_run ? as_u32(src_capacity) : 0u, bind_idx++);
+  compute_encoder.set_bytes(src.size() / src.shape(0), bind_idx++);
 
   // Dispatch
   auto group_dims = get_block_dims(total, 1, 1);
@@ -790,7 +731,10 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   // Lifetimes
-  d.add_temporaries({mask_flat, scatter_offsets}, s.index);
+  d.add_temporary(scatter_offsets, s.index);
+  if (mask_flat.data<void>() != mask.data<void>()) {
+    d.add_temporary(mask_flat, s.index);
+  }
 }
 
 } // namespace mlx::core
