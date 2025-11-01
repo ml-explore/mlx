@@ -90,18 +90,14 @@ CudaAllocator::CudaAllocator()
           page_size,
           [](CudaBuffer* buf) { return buf->size; },
           [this](CudaBuffer* buf) { cuda_free(buf); }) {
-  // TODO: Set memory limit for multi-device.
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
   memory_limit_ = total * 0.95;
   max_pool_size_ = memory_limit_;
   int loc = 0;
-  cudaDeviceGetDefaultMemPool(&cuda_pool_, loc);
-
-  // TODO need a strategy for that
-  uint64_t threshold = UINT64_MAX;
-  cudaMemPoolSetAttribute(
-      cuda_pool_, cudaMemPoolAttrReleaseThreshold, &threshold);
+  CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&cuda_pool_, loc));
+  CHECK_CUDA_ERROR(cudaMemPoolSetAttribute(
+      cuda_pool_, cudaMemPoolAttrReleaseThreshold, &memory_limit_));
 }
 
 Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
@@ -216,6 +212,9 @@ size_t CudaAllocator::get_memory_limit() {
 size_t CudaAllocator::set_memory_limit(size_t limit) {
   std::lock_guard lock(mutex_);
   std::swap(limit, memory_limit_);
+  CHECK_CUDA_ERROR(cudaMemPoolTrimTo(cuda_pool_, memory_limit_));
+  CHECK_CUDA_ERROR(cudaMemPoolSetAttribute(
+      cuda_pool_, cudaMemPoolAttrReleaseThreshold, &memory_limit_));
   return limit;
 }
 
@@ -266,6 +265,8 @@ void* Buffer::raw_ptr() {
   }
   auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
   if (!cbuf.managed) {
+    // TODO maybe make this async on a i/o stream to avoid synchronizing the
+    // device on malloc/and free
     void* new_data;
     CHECK_CUDA_ERROR(cudaMallocManaged(&new_data, cbuf.size));
     cbuf.managed = true;
