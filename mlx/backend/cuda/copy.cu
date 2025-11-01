@@ -110,4 +110,24 @@ void fill_gpu(const array& in, array& out, const Stream& s) {
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);
 }
 
+void reshape_gpu(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    auto& encoder = cu::get_command_encoder(s);
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
+}
+
 } // namespace mlx::core

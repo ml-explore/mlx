@@ -41,25 +41,6 @@ array contiguous_copy_gpu(const array& arr, const Stream& s) {
   return arr_copy;
 }
 
-void reshape_gpu(const array& in, array& out, Stream s) {
-  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
-  if (copy_necessary) {
-    out.set_data(allocator::malloc(out.nbytes()));
-    copy_gpu_inplace(
-        in,
-        out,
-        in.shape(),
-        in.strides(),
-        make_contiguous_strides(in.shape()),
-        0,
-        0,
-        CopyType::General,
-        s);
-  } else {
-    shared_buffer_reshape(in, out_strides, out);
-  }
-}
-
 array flatten_in_eval(const array& x, int start_axis, int end_axis, Stream s) {
   int ndim = x.ndim();
   if (start_axis < 0) {

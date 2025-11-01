@@ -76,7 +76,7 @@ void fast::Quantize::eval_gpu(
     scales.set_data(cu::malloc_async(scales.nbytes(), enc.stream()));
     if (mode_ == QuantizationMode::Affine) {
       auto& biases = outputs[2];
-      biases.set_data(allocator::malloc(biases.nbytes()));
+      biases.set_data(cu::malloc_async(biases.nbytes(), enc.stream()));
       affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
     } else {
       fp_quantize(w, wq, scales, group_size_, bits_, enc, s);
