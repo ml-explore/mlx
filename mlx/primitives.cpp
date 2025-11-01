@@ -1317,15 +1317,15 @@ Shape Convolution::conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
-          << pads_lo << " | " << pads_hi << ".";
+      msg << "[conv] Padding sizes must be non-negative."
+          << " Got padding " << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
     if (strides[i - 1] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive." << " Got strides "
-          << strides << ".";
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -4348,6 +4348,117 @@ bool ScatterAxis::is_equivalent(const Primitive& other) const {
   return reduce_type_ == s_other.reduce_type_ && axis_ == s_other.axis_;
 }
 
+std::vector<array> MaskedScatter::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  const array& src = primals[2];
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
+  const array& cotan = cotangents[0];
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+
+  for (int arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(where(mask_b, zeros_like(cotan, s), cotan, s));
+    } else if (arg == 2) {
+      const array mask_flat = flatten(mask_b, s);
+      const array cotan_flat = flatten(cotan, s);
+
+      const array mask_i = astype(mask_flat, int32, s);
+      const array prefix = cumsum(mask_i, 0, false, false, s);
+      const array idx_src = multiply(mask_i, prefix, s);
+      const array cotan_src =
+          multiply(cotan_flat, astype(mask_flat, cotan_flat.dtype(), s), s);
+
+      array gsrc_flat =
+          zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
+      if (src.size() > 0) {
+        const int n = static_cast<int>(idx_src.size());
+        const array cotan_updates = reshape(cotan_src, {n, 1}, s);
+        gsrc_flat = scatter_add(gsrc_flat, idx_src, cotan_updates, 0, s);
+      }
+
+      vjps.push_back(reshape(gsrc_flat, src.shape(), s));
+    } else {
+      throw std::invalid_argument(
+          "[masked_scatter] Cannot calculate VJP with respect to mask.");
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> MaskedScatter::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
+
+  array out = zeros_like(dst, s);
+  for (int arg : argnums) {
+    if (arg == 0) {
+      out = where(mask_b, out, tangents[0], s);
+    } else if (arg == 2) {
+      out = masked_scatter(out, mask_b, tangents[1], s);
+    } else {
+      throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
+    }
+  }
+  return {out};
+}
+
+std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto& s = stream();
+  auto [dst, mask, src, to_ax] = vmap_ternary_op(inputs, axes, s);
+  if (to_ax == -1) {
+    return {{masked_scatter(dst, mask, src, s)}, {to_ax}};
+  }
+
+  auto dst_front = moveaxis(dst, to_ax, 0, s);
+  auto mask_front = moveaxis(mask, to_ax, 0, s);
+  auto src_front = moveaxis(src, to_ax, 0, s);
+
+  const size_t batch =
+      std::max({dst_front.shape(0), mask_front.shape(0), src_front.shape(0)});
+
+  auto align_front = [&](array x) {
+    if (static_cast<size_t>(x.shape(0)) == batch) {
+      return x;
+    }
+    if (batch > 1 && x.shape(0) == 1) {
+      auto shape = x.shape();
+      shape[0] = static_cast<int>(batch);
+      return broadcast_to(x, shape, s);
+    }
+    auto expanded = expand_dims(x, 0, s);
+    auto shape = expanded.shape();
+    shape[0] = static_cast<int>(batch);
+    return broadcast_to(expanded, shape, s);
+  };
+
+  dst_front = align_front(dst_front);
+  mask_front = align_front(mask_front);
+  src_front = align_front(src_front);
+  mask_front = broadcast_to(mask_front, dst_front.shape(), s);
+
+  auto scattered_front = array(
+      dst_front.shape(),
+      dst_front.dtype(),
+      std::make_shared<MaskedScatter>(to_stream(s)),
+      {dst_front, mask_front, src_front});
+  return {{moveaxis(scattered_front, 0, to_ax, s)}, {to_ax}};
+}
+
 std::vector<array> Sigmoid::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -5111,14 +5222,18 @@ std::vector<array> BlockMaskedMM::vjp(
   //    - dB_m = A_m.T [..., K, M] @ dC [..., M, N]
   //    - dA = dA_m * mask_b_lhs [..., MP, KP]
   //    - dB = dB_m * mask_b_rhs [..., KP, MP]
-  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP, KP]
-  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP, NP]
+  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP,
+  //    KP]
+  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP,
+  //    NP]
   //
   // Observations:
-  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as a
-  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing to
-  //    materialize the intermediate dA_m. Similar for dB.
-  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and then
+  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as
+  //  a
+  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing
+  //    to materialize the intermediate dA_m. Similar for dB.
+  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and
+  //  then
   //    point-wise multiply with A. But the output needs to be padded
 
   std::vector<array> vjps;

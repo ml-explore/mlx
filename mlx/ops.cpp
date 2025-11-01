@@ -3442,6 +3442,35 @@ array scatter_min(
   return scatter(a, indices, updates, axes, Scatter::Min, s);
 }
 
+array masked_scatter(
+    const array& a,
+    const array& mask,
+    const array& src,
+    StreamOrDevice s /* =  {} */) {
+  if (mask.dtype() != bool_) {
+    throw std::invalid_argument(
+        "[masked_scatter] Mask has to be boolean type.");
+  }
+
+  if (a.dtype() != src.dtype()) {
+    throw std::invalid_argument(
+        "[masked_scatter] dtype(a) must match dtype(src).");
+  }
+
+  auto expanded_a = expand_dims(a, 0, s);
+  auto expanded_mask = expand_dims(broadcast_to(mask, a.shape(), s), 0, s);
+  auto expanded_src = expand_dims(src, 0, s);
+
+  return squeeze(
+      array(
+          expanded_a.shape(),
+          a.dtype(),
+          std::make_shared<MaskedScatter>(to_stream(s)),
+          {expanded_a, expanded_mask, expanded_src}),
+      0,
+      s);
+}
+
 array sqrt(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(a.dtype());
   return array(

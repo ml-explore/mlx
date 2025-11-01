@@ -1928,6 +1928,24 @@ class TestArray(mlx_tests.MLXTestCase):
         anp[:, idx] = 4
         self.assertTrue(np.array_equal(a, anp))
 
+    def test_setitem_with_boolean_mask(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = mx.array([True, False, True])
+        a[mask] = mx.array([5.0, 6.0])
+        self.assertTrue(mx.array_equal(a, mx.array([5.0, 2.0, 6.0])))
+
+        a = mx.zeros((2, 3))
+        mask = mx.array([[True], [False]])
+        a[mask] = mx.array([1.0, 2.0, 3.0])
+        expected = mx.array([[1.0, 2.0, 3.0], [0.0, 0.0, 0.0]])
+        self.assertTrue(mx.array_equal(a, expected))
+
+        a = mx.arange(6).reshape(2, 3).astype(mx.float32)
+        mask_np = np.array([[True, False, True], [False, True, False]])
+        a[mask_np] = 10.0
+        expected = mx.array([[10.0, 1.0, 10.0], [3.0, 10.0, 5.0]])
+        self.assertTrue(mx.array_equal(a, expected))
+
     def test_array_namespace(self):
         a = mx.array(1.0)
         api = a.__array_namespace__()

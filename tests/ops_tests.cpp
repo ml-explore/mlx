@@ -2421,6 +2421,44 @@ TEST_CASE("test scatter") {
   }
 }
 
+TEST_CASE("test masked_scatter") {
+  // Wrong mask dtype
+  CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
+
+  // Mask must be broadcastable to self array
+  CHECK_THROWS(masked_scatter(
+      array({1, 2, 3, 4}, {2, 2}),
+      array({false, true, true, false}, {4, 1}),
+      array({1, 2})));
+
+  // 1D mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({true, true, false, true});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({1, 2, 0, 4})).item<bool>());
+  }
+
+  // Empty mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({false, false, false, false});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, self).item<bool>());
+  }
+
+  // Broadcasted mask
+  {
+    auto self = zeros({2, 2}, int32);
+    auto mask = array({true, false});
+    auto source = array({5, 6, 7});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({5, 0, 6, 0}, {2, 2})).item<bool>());
+  }
+}
+
 TEST_CASE("test is positive infinity") {
   array x(1.0f);
   CHECK_FALSE(isposinf(x).item<bool>());
