@@ -482,6 +482,18 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 32))
 
+    def test_shapeless_compile_full_like(self):
+        x = mx.zeros((1, 1, 32))
+
+        def zeros_fun(x):
+            return mx.zeros_like(x)
+
+        def ones_fun(x):
+            return mx.ones_like(x)
+
+        self.assertEqual(mx.compile(zeros_fun, shapeless=True)(x).shape, (1, 1, 32))
+        self.assertEqual(mx.compile(ones_fun, shapeless=True)(x).shape, (1, 1, 32))
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
@@ -842,7 +854,6 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out, expected))
 
     def test_compile_many_outputs(self):
-
         @mx.compile
         def fun(arr):
             arrs = [arr] * 64
