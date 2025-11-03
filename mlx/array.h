@@ -294,6 +294,11 @@ class array {
     return array_desc_->siblings;
   }
 
+  /** The array's position in the sibling list. */
+  int sibling_position() const {
+    return array_desc_->position;
+  }
+
   void set_siblings(std::vector<array> siblings, uint16_t position) {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;

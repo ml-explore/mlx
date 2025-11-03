@@ -47,7 +47,7 @@ using ParentsMap =
 // Traverses the graph to build a tape and a map of array ids to their parents
 std::pair<std::vector<array>, ParentsMap> compile_dfs(
     const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
+    std::vector<array>& outputs,
     const std::vector<array>& original_inputs);
 
 // Simplify the tape.
