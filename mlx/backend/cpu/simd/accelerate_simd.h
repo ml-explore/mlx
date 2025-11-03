@@ -217,22 +217,20 @@ Simd<T, N> atan2(Simd<T, N> a, Simd<T, N> b) {
 
 template <typename T, int N>
 Simd<T, N> maximum(Simd<T, N> a, Simd<T, N> b) {
+  auto out = Simd<T, N>(asd::max(a.value, b.value));
   if constexpr (!std::is_integral_v<T>) {
-    auto a_is_nan = isnan(a);
-    return select(a_is_nan, a, Simd<T, N>(asd::max(a.value, b.value)));
+    out = select(isnan(b), b, select(isnan(a), a, out));
   }
-
-  return asd::max(a.value, b.value);
+  return out;
 }
 
 template <typename T, int N>
 Simd<T, N> minimum(Simd<T, N> a, Simd<T, N> b) {
+  auto out = Simd<T, N>(asd::min(a.value, b.value));
   if constexpr (!std::is_integral_v<T>) {
-    auto a_is_nan = isnan(a);
-    return select(a_is_nan, a, Simd<T, N>(asd::min(a.value, b.value)));
+    out = select(isnan(b), b, select(isnan(a), a, out));
   }
-
-  return asd::min(a.value, b.value);
+  return out;
 }
 
 template <typename T, int N>
