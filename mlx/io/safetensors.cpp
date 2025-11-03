@@ -114,7 +114,7 @@ SafetensorsLoad load_safetensors(
         "[load_safetensors] Failed to open " + in_stream->label());
   }
 
-  auto stream = to_stream(s, cu::is_available() ? Device::gpu : Device::cpu);
+  auto stream = cu::is_available() ? to_stream(s) : to_stream(s, Device::cpu);
 
   uint64_t jsonHeaderLength = 0;
   // This is the same limit as in the original Rust Safetensors code.

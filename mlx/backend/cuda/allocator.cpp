@@ -97,11 +97,11 @@ CudaAllocator::CudaAllocator()
 
   int device_count = 0;
   CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
-  int curr_device = 0;
-  CHECK_CUDA_ERROR(cudaGetDevice(&curr_device));
   for (int i = 0; i < device_count; ++i) {
-    free_streams_.emplace_back(
-        cu::device(mlx::core::Device{mlx::core::Device::gpu, i}));
+    CHECK_CUDA_ERROR(cudaSetDevice(i));
+    cudaStream_t s;
+    CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+    free_streams_.push_back(s);
   }
 }
 

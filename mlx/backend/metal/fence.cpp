@@ -31,7 +31,7 @@ struct FenceImpl {
       auto p = metal::new_scoped_memory_pool();
       static_cast<MTL::SharedEvent*>(fence)->release();
     } else {
-      allocator::free(static_cast<MTL::Buffer*>(fence));
+      allocator::free(allocator::Buffer{static_cast<MTL::Buffer*>(fence)});
     }
   }
   bool use_fast{false};

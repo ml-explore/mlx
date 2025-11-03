@@ -22,11 +22,6 @@ struct CudaBuffer {
   int device; // -1 for managed
 };
 
-template <typename T>
-inline T* gpu_ptr(Buffer buf) {
-  return static_cast<T*>(static_cast<cu::CudaBuffer*>(buf.ptr())->data);
-}
-
 class SmallSizePool {
  private:
   union Block {
@@ -79,7 +74,7 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
-  std::vector<CudaStream> free_streams_;
+  std::vector<cudaStream_t> free_streams_;
   SmallSizePool scalar_pool_;
 };
 

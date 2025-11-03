@@ -369,6 +369,10 @@ class array {
     return const_cast<array&>(*this).data<T>();
   }
 
+  int64_t offset() const {
+    return array_desc_->offset;
+  }
+
   enum Status {
     // The output of a computation which has not been scheduled.
     // For example, the status of `x` in `auto x = a + b`.

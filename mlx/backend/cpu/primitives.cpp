@@ -333,7 +333,7 @@ void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
   auto& in = inputs[0];
@@ -361,7 +361,7 @@ void DynamicSliceUpdate::eval_cpu(
     const std::vector<array>& inputs,
     array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -396,7 +396,7 @@ void DynamicSliceUpdate::eval_cpu(
 void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 

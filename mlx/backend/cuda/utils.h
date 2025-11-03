@@ -25,12 +25,15 @@ inline uint max_occupancy_block_dim(T kernel) {
 
 template <typename T>
 inline T* gpu_ptr(array& arr) {
-  return cu::gpu_ptr<T>(arr.buffer());
+  return reinterpret_cast<T*>(
+      static_cast<char*>(
+          static_cast<cu::CudaBuffer*>(arr.buffer().ptr())->data) +
+      arr.offset());
 }
 
 template <typename T>
 inline const T* gpu_ptr(const array& arr) {
-  return cu::gpu_ptr<T>(arr.buffer());
+  return gpu_ptr<T>(const_cast<array&>(arr));
 }
 
 struct Dtype;

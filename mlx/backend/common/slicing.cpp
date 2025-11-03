@@ -45,7 +45,7 @@ void slice(
     const Shape& start_indices,
     const Shape& strides) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
