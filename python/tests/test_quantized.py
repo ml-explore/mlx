@@ -338,6 +338,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+        # Test multiple of 16 but not 32
+        M = 128
+        N = 48
+        mode = "nvfp4"
+        with self.subTest(shape=(B, M, N), mode=mode):
+            x_shape = (1, N)
+            w_shape = (M, N)
+            x = mx.random.normal(shape=x_shape, key=k1)
+            w = mx.random.normal(shape=w_shape, key=k2)
+            w_q, scales = mx.quantize(w, mode=mode)
+            w_hat = mx.dequantize(w_q, scales, mode=mode)
+            y_q = mx.quantized_matmul(
+                x,
+                w_q,
+                scales,
+                transpose=True,
+                mode=mode,
+            )
+            y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_qvm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

@@ -13,6 +13,9 @@ void fp_qmv(
     array& out,
     int bits,
     int group_size,
+    int M,
+    int N,
+    int K,
     CommandEncoder& encoder);
 
 } // namespace mlx::core::cu

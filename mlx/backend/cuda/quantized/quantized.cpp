@@ -81,12 +81,12 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  if (M != 1 || !transpose_ || mode_ == QuantizationMode::Affine) {
+  if (M > 8 || !transpose_ || mode_ == QuantizationMode::Affine) {
     throw std::runtime_error("QMM NYI");
   }
 
   if (transpose_) {
-    fp_qmv(w, scales, x, out, bits_, group_size_, enc);
+    fp_qmv(w, scales, x, out, bits_, group_size_, M, N, K, enc);
     return;
   }
 }
