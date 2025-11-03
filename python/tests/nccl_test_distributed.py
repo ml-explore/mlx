@@ -14,7 +14,6 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
     def test_reduce_scatter(self):
 
-        mx.random.seed(0xF0F0F0F0)
         world = mx.distributed.init()
 
         dtypes = [
@@ -43,7 +42,6 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 stop = start + chunk
                 z_ref = z[start:stop]
 
-                print(f"z type: {z_ref.dtype}, y type: {y.dtype}")
                 maxrelerror = (y - z_ref).abs()
                 if rtol > 0:
                     maxrelerror /= z_ref.abs()
