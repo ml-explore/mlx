@@ -20,6 +20,7 @@ jobs:
         run: echo "Publishing setup complete"
 
   build_documentation:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: [self-hosted, macos]
     steps:
       - uses: actions/checkout@v5
@@ -40,6 +41,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   build_linux_release:
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -68,6 +70,7 @@ jobs:
           path: wheelhouse/mlx_cpu-*.whl
   
   build_mac_release:
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
@@ -96,6 +99,7 @@ jobs:
           path: dist/mlx_metal-*.whl
 
   build_cuda_release:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22-large
     env:
       PYPI_RELEASE: 1

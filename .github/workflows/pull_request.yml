@@ -21,6 +21,7 @@ jobs:
       - uses: ./.github/actions/build-linux
 
   mac_build_and_test:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: [self-hosted, macos]
     needs: check_lint
     steps:
@@ -29,6 +30,7 @@ jobs:
       - uses: ./.github/actions/build-macos
 
   cuda_build_and_test:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
@@ -39,6 +41,7 @@ jobs:
       - uses: ./.github/actions/build-cuda
 
   build_documentation:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: [self-hosted, macos]
     needs: check_lint
     steps:
