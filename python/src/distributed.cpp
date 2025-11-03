@@ -303,21 +303,27 @@ void init_distributed(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
-      "reduce_scatter",
+      "sum_scatter",
       [](const ScalarOrArray& x,
          std::optional<mx::distributed::Group> group,
          mx::StreamOrDevice s) {
-        return mx::distributed::reduce_scatter(to_array(x), group, s);
+        return mx::distributed::sum_scatter(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def reduce_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def sum_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      Reduce scatter.
-      Reduce scatter the ``x`` arrays from all processes in the group. Size of x should be divisible by group size.
+      Sum the ``x`` across all processes in the group and leave the summed result sharded along the first axis across ranks.
+      ``x.shape[0]`` must be divisible by the group size.
+
+      The result is equivalent to ``all_sum(x)[rank*chunk_size:(rank+1)*chunk_size]`` where ``chunk_size = x.shape[0] // group.size()`` and ``rank`` is the rank of the current process in the group.
+
+      Note: ``all_sum`` is mentioned only for illustration; the actual implementation is more efficient.
+      The ``all_sum`` operation can be decomposed into a ``sum_scatter`` followed by an ``all_gather``.
+
       Currently supported only for NCCL backend.
       Args:
         x (array): Input array.
@@ -327,6 +333,6 @@ void init_distributed(nb::module_& parent_module) {
         stream (Stream, optional): Stream or device. Defaults to ``None``
           in which case the default stream of the default device is used.
       Returns:
-        array: The reduced scattered array of shape x.shape // group.size.
+        array: The sum scattered array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
 }

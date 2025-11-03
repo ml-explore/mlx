@@ -111,6 +111,13 @@ void ReduceScatter::eval_gpu(
 
   auto capture = encoder.capture_context();
   auto& s = stream();
-  distributed::detail::reduce_scatter(group(), input, output, s);
+
+  switch (reduce_type_) {
+    case Sum:
+      distributed::detail::sum_scatter(group(), input, output, s);
+      break;
+    default:
+      throw std::runtime_error("Only sum scatter is supported. ");
+  }
 }
 } // namespace mlx::core::distributed

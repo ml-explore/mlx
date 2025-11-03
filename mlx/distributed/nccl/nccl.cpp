@@ -331,19 +331,10 @@ class NCCLGroup : public GroupImpl {
     });
   }
 
-  void reduce_scatter(const array& input, array& output, Stream stream)
-      override {
+  void sum_scatter(const array& input, array& output, Stream stream) override {
     detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
       using T = typename decltype(type_tag)::type;
-      auto& encoder = cu::get_command_encoder(stream);
-      CHECK_NCCL(ncclReduceScatter(
-          input.data<T>(),
-          output.data<T>(),
-          output.size(),
-          dt,
-          ncclAvg,
-          comm_,
-          encoder.stream()));
+      reduce_scatter_imp<T>(input, output, stream, dt, ncclSum);
     });
   }
 
@@ -357,6 +348,25 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclAllReduce(
+        input.data<T>(),
+        output.data<T>(),
+        input.size(),
+        dt,
+        op,
+        comm_,
+        encoder.stream()));
+  }
+
+  template <typename T>
+  void reduce_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclReduceScatter(
         input.data<T>(),
         output.data<T>(),
         input.size(),

@@ -157,7 +157,7 @@ array recv_like(
   return recv(x.shape(), x.dtype(), src, group_, s);
 }
 
-array reduce_scatter(
+array sum_scatter(
     const array& x,
     std::optional<Group> group_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
@@ -174,12 +174,12 @@ array reduce_scatter(
 
   auto result_shape = x.shape();
   result_shape[0] /= group.size();
+  auto stream = detail::communication_stream(group, s);
 
   return array(
       std::move(result_shape),
       x.dtype(),
-      std::make_shared<ReduceScatter>(
-          detail::communication_stream(group, s), group),
+      std::make_shared<ReduceScatter>(stream, group, ReduceScatter::Sum),
       {x});
 }
 } // namespace mlx::core::distributed
