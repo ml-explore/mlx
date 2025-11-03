@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/dtype_utils.h"
@@ -25,6 +26,38 @@ struct Dequantize {
   }
 };
 
+template <typename T>
+__device__ void adjust_matrix_offsets(
+    const T*& x,
+    const uint32_t*& w,
+    const uint8_t*& scales,
+    T*& y,
+    int output_stride,
+    const int& x_batch_ndims,
+    const Shape x_shape,
+    const Strides x_strides,
+    const int& w_batch_ndims,
+    const Shape w_shape,
+    const Strides w_strides,
+    const Strides s_strides) {
+  uint32_t idx = cg::this_grid().block_index().z;
+  if (x_batch_ndims == 1) {
+    x += idx * x_strides[0];
+  } else {
+    x += elem_to_loc(idx, x_shape.data(), x_strides.data(), x_batch_ndims);
+  }
+  if (w_batch_ndims == 1) {
+    w += idx * w_strides[0];
+    scales += idx * s_strides[0];
+  } else {
+    auto [w_idx, s_idx] = elem_to_loc(
+        idx, w_shape.data(), w_strides.data(), s_strides.data(), w_batch_ndims);
+    w += w_idx;
+    scales += s_idx;
+  }
+  y += idx * output_stride;
+}
+
 template <
     typename T,
     int rows_per_block,
@@ -32,7 +65,7 @@ template <
     int bits,
     int group_size,
     bool use_mx_scale>
-__device__ void qmv_impl(
+__device__ void fp_qmv_impl(
     const uint8_t* mat,
     const uint8_t* scales_,
     const T* vec,
@@ -46,7 +79,11 @@ __device__ void qmv_impl(
   constexpr int nv_per_thread = vals_per_byte * n_per_thread;
   auto g_idx = block.group_index();
   auto t_idx = block.thread_index();
-  int row = g_idx.x * rows_per_block + t_idx.y;
+  int row = g_idx.y * rows_per_block + t_idx.y;
+
+  vec += g_idx.x * cols;
+  out += g_idx.x * rows;
+
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
   auto scales = (ScaleType*)(scales_);
@@ -95,14 +132,14 @@ template <
     int bits,
     int group_size,
     bool use_mx_scale>
-__global__ void qmv_single(
+__global__ void fp_qmv_single(
     const uint8_t* mat,
     const uint8_t* scales,
     const T* vec,
     T* out,
     int rows,
     int cols) {
-  qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
+  fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
       mat, scales, vec, out, rows, cols);
 }
 
@@ -113,28 +150,35 @@ template <
     int bits,
     int group_size,
     bool use_mx_scale>
-__global__ void qmv_batched(
-    const uint8_t* mat,
+__global__ void fp_qmv_batched(
+    const uint32_t* mat,
     const uint8_t* scales,
     const T* vec,
     T* out,
     int rows,
     int cols,
-    const __grid_constant__ Shape batch_shape,
-    const __grid_constant__ Strides mat_batch_strides,
-    const __grid_constant__ Strides vec_batch_strides,
-    int batch_ndim) {
-  auto block = cg::this_thread_block();
-  auto batch_idx = block.group_index().y;
-  // TODO not sure about the offset there
-  auto [vec_offset, mat_offset] = elem_to_loc(
-      batch_idx,
-      batch_shape.data(),
-      vec_batch_strides.data(),
-      mat_batch_strides.data(),
-      batch_ndim);
-  qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      mat + mat_offset, vec + vec_offset, out + batch_idx * rows, rows, cols);
+    int vec_batch_ndims,
+    const __grid_constant__ Shape vec_shape,
+    const __grid_constant__ Strides vec_strides,
+    int mat_batch_ndims,
+    const __grid_constant__ Shape mat_shape,
+    const __grid_constant__ Strides mat_strides,
+    const __grid_constant__ Strides scales_strides) {
+  adjust_matrix_offsets<T>(
+      vec,
+      mat,
+      scales,
+      out,
+      rows * vec_shape[vec_batch_ndims],
+      vec_batch_ndims,
+      vec_shape,
+      vec_strides,
+      mat_batch_ndims,
+      mat_shape,
+      mat_strides,
+      scales_strides);
+  fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
+      (uint8_t*)mat, scales, vec, out, rows, cols);
 }
 
 void fp_qmv(
@@ -144,6 +188,9 @@ void fp_qmv(
     array& out,
     int bits,
     int group_size,
+    int M,
+    int N,
+    int K,
     CommandEncoder& encoder) {
   encoder.set_input_array(mat);
   encoder.set_input_array(scales);
@@ -153,33 +200,66 @@ void fp_qmv(
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     if constexpr (!std::is_same_v<T, double>) {
       dim3 block_dims{WARP_SIZE, rows_per_block};
-      int rows = out.shape(-1);
-      int cols = vec.shape(-1);
-      uint32_t num_blocks_x = (rows + rows_per_block - 1) / rows_per_block;
-      constexpr int n_per_t = 32;
+      uint B = out.size() / (M * N);
+      uint blocks_y = (N + rows_per_block - 1) / rows_per_block;
       int vals_per_byte = bits == 4 ? 2 : 1;
-      // TODO check alignment as well and fall back if unaligned
-      // TODO handle edges maybe with fallback kernel
-      if (cols % (n_per_t * vals_per_byte) != 0) {
-        throw std::runtime_error("NYI");
-      }
-      auto kernel = qmv_single<T, rows_per_block, n_per_t, 4, 32, true>;
-      if (bits == 8) {
-        kernel = qmv_single<T, rows_per_block, n_per_t, 8, 32, true>;
-      } else if (group_size == 16) {
-        kernel = qmv_single<T, rows_per_block, n_per_t, 4, 16, false>;
-      }
-      encoder.add_kernel_node(
-          kernel,
-          num_blocks_x,
-          block_dims,
-          0,
-          gpu_ptr<uint8_t>(mat),
-          gpu_ptr<uint8_t>(scales),
-          gpu_ptr<T>(vec),
-          gpu_ptr<T>(out),
-          rows,
-          cols);
+      int packed_cols = K / vals_per_byte;
+      const uint8_t* mat_ptr = gpu_ptr<uint8_t>(mat);
+      const T* vec_ptr = gpu_ptr<T>(vec);
+      bool aligned = packed_cols % 128 == 0;
+      aligned &= cu::is_aligned<4>(mat_ptr);
+      aligned &=
+          ((bits == 4 && cu::is_aligned<8>(vec_ptr)) ||
+           cu::is_aligned<4>(vec_ptr));
+      dispatch_bool(aligned, [&](auto aligned) {
+        dispatch_bool(B > 1, [&](auto batched) {
+          constexpr int n = aligned() ? 4 : 1;
+          if (!batched()) {
+            auto kernel = fp_qmv_single<T, rows_per_block, n, 4, 32, true>;
+            if (bits == 8) {
+              kernel = fp_qmv_single<T, rows_per_block, n, 8, 32, true>;
+            } else if (group_size == 16) {
+              kernel = fp_qmv_single<T, rows_per_block, n, 4, 16, false>;
+            }
+            encoder.add_kernel_node(
+                kernel,
+                {static_cast<uint>(M), blocks_y},
+                block_dims,
+                0,
+                mat_ptr,
+                gpu_ptr<uint8_t>(scales),
+                vec_ptr,
+                gpu_ptr<T>(out),
+                N,
+                K);
+          } else {
+            auto kernel = fp_qmv_batched<T, rows_per_block, n, 4, 32, true>;
+            if (bits == 8) {
+              kernel = fp_qmv_batched<T, rows_per_block, n, 8, 32, true>;
+            } else if (group_size == 16) {
+              kernel = fp_qmv_batched<T, rows_per_block, n, 4, 16, false>;
+            }
+            encoder.add_kernel_node(
+                kernel,
+                {static_cast<uint>(M), blocks_y, B},
+                block_dims,
+                0,
+                mat_ptr,
+                gpu_ptr<uint8_t>(scales),
+                vec_ptr,
+                gpu_ptr<T>(out),
+                N,
+                K,
+                vec.ndim() - 2,
+                const_param(vec.shape()),
+                const_param(vec.strides()),
+                mat.ndim() - 2,
+                const_param(mat.shape()),
+                const_param(mat.strides()),
+                const_param(scales.strides()));
+          }
+        });
+      });
     }
   });
 }
