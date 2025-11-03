@@ -354,7 +354,10 @@ class array {
     return array_desc_->data;
   }
 
-  // Return a raw pointer to the arrays data
+  // Return a raw pointer to the arrays data. This function may do a copy if
+  // the underlying buffer is not accessible on the CPU. When accessing the
+  // data for GPU kernels, be sure to use the correct method / function for the
+  // given backend to access the GPU pointer.
   template <typename T>
   T* data() {
     return reinterpret_cast<T*>(

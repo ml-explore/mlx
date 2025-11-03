@@ -348,8 +348,8 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclAllReduce(
-        input.data<T>(),
-        output.data<T>(),
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
         input.size(),
         dt,
         op,

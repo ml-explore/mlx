@@ -4,6 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
+#include "mlx/backend/cuda/cuda_utils.h"
 
 #include <cuda_runtime.h>
 #include <mutex>
@@ -18,11 +19,11 @@ using allocator::Buffer;
 struct CudaBuffer {
   void* data;
   size_t size;
-  bool managed;
+  int device; // -1 for managed
 };
 
 template <typename T>
-T* gpu_ptr(Buffer buf) {
+inline T* gpu_ptr(Buffer buf) {
   return static_cast<T*>(static_cast<cu::CudaBuffer*>(buf.ptr())->data);
 }
 
@@ -78,8 +79,8 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
+  std::vector<CudaStream> free_streams_;
   SmallSizePool scalar_pool_;
-  cudaMemPool_t cuda_pool_{nullptr};
 };
 
 CudaAllocator& allocator();
