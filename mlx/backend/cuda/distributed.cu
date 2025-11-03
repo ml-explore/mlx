@@ -64,7 +64,7 @@ void AllGather::eval_gpu(
   auto& encoder = cu::get_command_encoder(s);
 
   auto ensure_contiguous = [&s, &encoder](const array& x) {
-    if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
+    if (x.flags().contiguous) {
       return x;
     } else {
       array x_copy = contiguous_copy_gpu(x, s);
