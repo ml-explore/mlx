@@ -178,6 +178,7 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                 "[AddMM::eval_cpu] Unsupported dtype for beta scaling");
         }
       });
+      encoder.add_temporary(std::move(beta_scalar));
     }
     return;
   }
