@@ -50,6 +50,7 @@ jobs:
       - uses: ./.github/actions/build-linux
 
   build_mac_release:
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         python-version: ["3.10", "3.13"]
@@ -65,6 +66,7 @@ jobs:
       - uses: ./.github/actions/build-macos
 
   build_cuda_with_tests:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: gpu-t4-4-core
     steps:
       - uses: actions/checkout@v5
@@ -74,6 +76,7 @@ jobs:
       - uses: ./.github/actions/build-cuda
 
   build_cuda_release:
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22-large
     steps:
       - uses: actions/checkout@v5
@@ -91,3 +94,24 @@ jobs:
           path: wheelhouse/mlx_cuda-*.whl
           retention-days: 7
 
+  linux_fedora_build_cpp:
+    name: Linux Fedora CPP Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-22.04
+            arch: x86_64
+          - host: ubuntu-22.04-arm
+            arch: aarch64
+
+    runs-on: ${{ matrix.host }}
+    container:
+      image: fedora:42
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: CPP Build Test - No Release
+        run: |
+          bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
