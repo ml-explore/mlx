@@ -300,8 +300,8 @@ class NCCLGroup : public GroupImpl {
       using T = typename decltype(type_tag)::type;
       auto& encoder = cu::get_command_encoder(stream);
       CHECK_NCCL(ncclAllGather(
-          input.data<T>(),
-          output.data<T>(),
+          gpu_ptr<T>(input),
+          gpu_ptr<T>(output),
           input.size(),
           dt,
           comm_,
@@ -367,8 +367,8 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclReduceScatter(
-        input.data<T>(),
-        output.data<T>(),
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
         output.size(),
         dt,
         op,

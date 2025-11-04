@@ -74,7 +74,7 @@ void AllGather::eval_gpu(
   };
 
   auto input = ensure_contiguous(inputs[0]);
-  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+  outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder.stream()));
 
   encoder.set_input_array(input);
   encoder.set_output_array(outputs[0]);
@@ -103,7 +103,7 @@ void ReduceScatter::eval_gpu(
   };
 
   auto input = ensure_contiguous(inputs[0]);
-  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+  outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder.stream()));
 
   encoder.set_input_array(input);
   encoder.set_output_array(outputs[0]);

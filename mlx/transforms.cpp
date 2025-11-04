@@ -197,7 +197,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::unordered_set<int> open_streams;
-
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
