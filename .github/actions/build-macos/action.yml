@@ -107,11 +107,6 @@ runs:
             -v python/tests \
             -o test-results/gpu_jit
 
-    - name: Build macOS 13 package
-      if: inputs.build-type == 'release'
-      uses: ./.github/actions/build-macos-release
-      with:
-        macos-target: 13.0
     - name: Build macOS 14 package
       if: inputs.build-type == 'release'
       uses: ./.github/actions/build-macos-release

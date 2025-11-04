@@ -130,6 +130,9 @@ if(MLX_BUILD_METAL)
       https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18.zip)
 
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+    if(${CMAKE_OSX_DEPLOYMENT_TARGET} LESS 14.0)
+      message(FATAL_ERROR "MLX requires macOS >= 14.0")
+    endif()
     set(XCRUN_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
   execute_process(
@@ -138,7 +141,6 @@ if(MLX_BUILD_METAL)
       "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal ${XCRUN_FLAGS} -E -x metal -P - | tail -1 | tr -d '\n'"
     OUTPUT_VARIABLE MLX_METAL_VERSION COMMAND_ERROR_IS_FATAL ANY)
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
-
   FetchContent_MakeAvailable(metal_cpp)
   target_include_directories(
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>

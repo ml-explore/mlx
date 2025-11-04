@@ -17,11 +17,10 @@ To install from PyPI your system must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
 - Using a native Python >= 3.10
-- macOS >= 13.5
+- macOS >= 14.0
 
 .. note::
-    MLX is only available on devices running macOS >= 13.5
-    It is highly recommended to use macOS 14 (Sonoma)
+    MLX is only available on devices running macOS >= 14.0 and higher.
 
 CUDA
 ^^^^
