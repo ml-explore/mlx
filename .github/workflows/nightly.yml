@@ -53,8 +53,7 @@ jobs:
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
-        python-version: ["3.10", "3.13"]
-        # TODO: 3.14 had issues finding a compatible tensorflow
+        python-version: ["3.10", "3.14"]
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
     runs-on: [self-hosted, macos]
