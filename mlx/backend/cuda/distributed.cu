@@ -106,7 +106,7 @@ void ReduceScatter::eval_gpu(
   outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
 
   encoder.set_input_array(input);
-  encoder.set_output_array(output);
+  encoder.set_output_array(outputs[0]);
 
   auto capture = encoder.capture_context();
 
