@@ -89,28 +89,26 @@ void ReduceScatter::eval_gpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto set_input_output =
-      [s = stream()](const array& in, array& out) -> std::pair<array, array> {
-    if (!in.flags().row_contiguous) {
-      copy_gpu(in, out, CopyType::General, s);
-      return {out, out};
-    } else if (in.is_donatable()) {
-      out.copy_shared_buffer(in);
-      return {in, out};
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  auto ensure_contiguous = [&s, &encoder](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
-      return {in, out};
+      array x_copy = contiguous_copy_gpu(x, s);
+      encoder.add_temporary(x_copy);
+      return x_copy;
     }
   };
 
-  auto [input, output] = set_input_output(inputs[0], outputs[0]);
+  auto input = ensure_contiguous(inputs[0]);
+  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
 
-  auto& encoder = cu::get_command_encoder(stream());
   encoder.set_input_array(input);
   encoder.set_output_array(output);
 
   auto capture = encoder.capture_context();
-  auto& s = stream();
 
   switch (reduce_type_) {
     case Sum:

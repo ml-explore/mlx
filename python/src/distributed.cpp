@@ -316,7 +316,7 @@ void init_distributed(nb::module_& parent_module) {
       nb::sig(
           "def sum_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      Sum and scatter ``x`` across all processes in the group and leave the summed result sharded along the first axis across ranks.
+      Sum ``x`` across all processes in the group and shard the result along the first axis across ranks.
       ``x.shape[0]`` must be divisible by the group size.
 
       The result is equivalent to ``all_sum(x)[rank*chunk_size:(rank+1)*chunk_size]``, where ``chunk_size = x.shape[0] // group.size()`` and ``rank`` is the rank of this process in the group.

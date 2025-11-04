@@ -167,8 +167,8 @@ array sum_scatter(
   }
   if (x.shape()[0] % group.size() != 0) {
     std::ostringstream msg;
-    msg << "Invalid shape=" << x.shape() << " for a group of size "
-        << group.size()
+    msg << "[sum_scatter] Invalid shape=" << x.shape()
+        << " for a group of size " << group.size()
         << ". The first dimension (axis 0) must be divisible by the group size.";
     throw std::invalid_argument(msg.str());
   }
