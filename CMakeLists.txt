@@ -127,7 +127,7 @@ if(MLX_BUILD_METAL)
   message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 
   set(METAL_CPP_URL
-      https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18.zip)
+      https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip)
 
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
     if(${CMAKE_OSX_DEPLOYMENT_TARGET} LESS 14.0)
