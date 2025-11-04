@@ -311,8 +311,7 @@ array full_like(
 }
 
 array full_like(const array& a, array vals, StreamOrDevice s /* = {} */) {
-  auto dtype = vals.dtype();
-  return full_like(a, std::move(vals), dtype, to_stream(s));
+  return full_like(a, std::move(vals), a.dtype(), to_stream(s));
 }
 
 array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {

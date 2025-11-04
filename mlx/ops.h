@@ -77,7 +77,7 @@ array full_like(const array& a, T val, Dtype dtype, StreamOrDevice s = {}) {
 }
 template <typename T>
 array full_like(const array& a, T val, StreamOrDevice s = {}) {
-  return full_like(a, array(val), to_stream(s));
+  return full_like(a, array(val, a.dtype()), to_stream(s));
 }
 
 /** Fill an array of the given shape with zeros. */

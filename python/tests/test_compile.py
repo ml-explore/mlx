@@ -483,7 +483,8 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 32))
 
     def test_shapeless_compile_full_like(self):
-        x = mx.zeros((1, 1, 32))
+        x_shape = (1, 1, 32)
+        x = mx.zeros((x_shape))
 
         def zeros_fun(x):
             return mx.zeros_like(x)
@@ -491,8 +492,17 @@ class TestCompile(mlx_tests.MLXTestCase):
         def ones_fun(x):
             return mx.ones_like(x)
 
-        self.assertEqual(mx.compile(zeros_fun, shapeless=True)(x).shape, (1, 1, 32))
-        self.assertEqual(mx.compile(ones_fun, shapeless=True)(x).shape, (1, 1, 32))
+        compiled_zero_like = mx.compile(zeros_fun, shapeless=True)
+        compiled_ones_like = mx.compile(ones_fun, shapeless=True)
+
+        self.assertEqual(compiled_zero_like(x).shape, x_shape)
+        self.assertEqual(compiled_ones_like(x).shape, x_shape)
+
+        y_shape = (2, 2, 16)
+        y = mx.zeros(y_shape)
+
+        self.assertEqual(compiled_zero_like(y).shape, y_shape)
+        self.assertEqual(compiled_ones_like(y).shape, y_shape)
 
     def test_compile_with_constant(self):
         # Test float
