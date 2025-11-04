@@ -147,37 +147,8 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       copy_cpu(c, out, ctype, stream());
     } else {
       array beta_scalar = array(beta_, c.dtype());
-      auto bopt = get_binary_op_type(c, beta_scalar);
-      set_binary_op_output_data(c, beta_scalar, out, bopt);
       auto& encoder = cpu::get_command_encoder(stream());
-      encoder.set_input_array(c);
-      encoder.set_input_array(beta_scalar);
-      encoder.set_output_array(out);
-      encoder.dispatch([c = array::unsafe_weak_copy(c),
-                        beta_scalar = array::unsafe_weak_copy(beta_scalar),
-                        out = array::unsafe_weak_copy(out),
-                        bopt]() mutable {
-        switch (out.dtype()) {
-          case float16:
-            binary_op<float16_t, detail::Multiply>(c, beta_scalar, out, bopt);
-            break;
-          case float32:
-            binary_op<float, detail::Multiply>(c, beta_scalar, out, bopt);
-            break;
-          case float64:
-            binary_op<double, detail::Multiply>(c, beta_scalar, out, bopt);
-            break;
-          case bfloat16:
-            binary_op<bfloat16_t, detail::Multiply>(c, beta_scalar, out, bopt);
-            break;
-          case complex64:
-            binary_op<complex64_t, detail::Multiply>(c, beta_scalar, out, bopt);
-            break;
-          default:
-            throw std::runtime_error(
-                "[AddMM::eval_cpu] Unsupported dtype for beta scaling");
-        }
-      });
+      binary_float_cpu(c, beta_scalar, out, detail::Multiply(), stream());
       encoder.add_temporary(std::move(beta_scalar));
     }
     return;
