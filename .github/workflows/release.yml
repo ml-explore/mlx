@@ -85,6 +85,7 @@ jobs:
       - uses: ./.github/actions/build-macos
         with:
           build-type: release
+          run-tests: false
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:

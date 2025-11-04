@@ -14,10 +14,6 @@ inputs:
     description: 'Whether to run tests'
     required: false
     default: 'true'
-  build-jit:
-    description: 'Whether to build with JIT'
-    required: false
-    default: 'true'
 
 runs:
   using: "composite"
@@ -28,9 +24,8 @@ runs:
         DEBUG: 1
         DEV_RELEASE: 1
       run: |
-        uv pip install --upgrade pip cmake setuptools
-        uv pip install nanobind==2.4.0 \
-          numpy torch tensorflow unittest-xml-reporting
+        uv pip install --upgrade pip
+        uv pip install cmake setuptools nanobind==2.4.0
         uv pip install -e . -v
 
     - name: Generate package stubs
@@ -38,6 +33,12 @@ runs:
       run: |
         uv pip install typing_extensions
         uv run --no-project setup.py generate_stubs
+
+    - name: Install tests dependencies
+      if: inputs.run-tests == 'true'
+      shell: sh
+      run: |
+        uv pip install numpy torch tensorflow unittest-xml-reporting
 
     - name: Run Python tests
       if: inputs.run-tests == 'true'
@@ -61,7 +62,7 @@ runs:
         uv run --no-project test.py
     
     - name: Build CPP only
-      if: inputs.build-type == 'debug'
+      if: inputs.run-tests == 'true'
       shell: bash
       run: |
         mkdir -p build
@@ -70,7 +71,7 @@ runs:
         make -j $(sysctl -n hw.ncpu)
     
     - name: Run CPP tests
-      if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
+      if: inputs.run-tests == 'true'
       shell: bash
       env:
         DEVICE: gpu
@@ -79,7 +80,7 @@ runs:
       run: ./build/tests/tests
     
     - name: Build small binary with JIT
-      if: inputs.build-jit == 'true'
+      if: inputs.run-tests == 'true'
       shell: bash
       run: |
         mkdir -p build
@@ -93,7 +94,7 @@ runs:
         make -j $(sysctl -n hw.ncpu)
     
     - name: Run Python tests with JIT
-      if: ${{ inputs.build-jit == 'true' && inputs.run-tests == 'true' }}
+      if: inputs.run-tests == 'true'
       shell: bash
       env:
         LOW_MEMORY: 1
