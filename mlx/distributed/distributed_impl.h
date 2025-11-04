@@ -29,7 +29,7 @@ class GroupImpl {
   virtual void all_max(const array& input, array& output, Stream stream) = 0;
   virtual void all_min(const array& input, array& output, Stream stream) = 0;
   virtual void
-  reduce_scatter(const array& input, array& output, Stream stream) = 0;
+  sum_scatter(const array& input, array& output, Stream stream) = 0;
 };
 
 /* Define the MLX stream that the communication should happen in. */
@@ -54,10 +54,6 @@ void all_max(Group group, const array& input, array& output, Stream stream);
 void all_min(Group group, const array& input, array& output, Stream stream);
 
 /** Reduce scatter with average operation */
-void reduce_scatter(
-    Group group,
-    const array& input,
-    array& output,
-    Stream stream);
+void sum_scatter(Group group, const array& input, array& output, Stream stream);
 
 } // namespace mlx::core::distributed::detail

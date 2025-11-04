@@ -149,5 +149,8 @@ class ReduceScatter : public DistPrimitive {
     }
     return "<unknwon ReduceScatter>";
   }
+
+ private:
+  ReduceType reduce_type_;
 };
 } // namespace mlx::core::distributed

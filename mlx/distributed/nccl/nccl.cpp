@@ -334,7 +334,7 @@ class NCCLGroup : public GroupImpl {
   void sum_scatter(const array& input, array& output, Stream stream) override {
     detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
       using T = typename decltype(type_tag)::type;
-      reduce_scatter_imp<T>(input, output, stream, dt, ncclSum);
+      reduce_scatter_impl<T>(input, output, stream, dt, ncclSum);
     });
   }
 
@@ -369,7 +369,7 @@ class NCCLGroup : public GroupImpl {
     CHECK_NCCL(ncclReduceScatter(
         input.data<T>(),
         output.data<T>(),
-        input.size(),
+        output.size(),
         dt,
         op,
         comm_,

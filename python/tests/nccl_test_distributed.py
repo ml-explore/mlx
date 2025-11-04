@@ -12,7 +12,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         cls.atol = 1e-4
         cls.rtol = 1e-4
 
-    def test_reduce_scatter(self):
+    def test_sum_scatter(self):
 
         world = mx.distributed.init()
 
@@ -33,10 +33,9 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             for sh in sizes:
                 x = (mx.random.uniform(shape=sh, key=key) * 10).astype(dt)  # shape=sh
 
-                # Reduce scatter sum
-                y = mx.distributed.reduce_scatter(x)  # shape=sh/world.size()
-                z = mx.distributed.all_sum(x) / world.size()  # shape=sh
-
+                # Sum scatter
+                y = mx.distributed.sum_scatter(x)  # shape=sh/world.size()
+                z = mx.distributed.all_sum(x)  # shape=sh
                 chunk = sh[0] // world.size()
                 start = world.rank() * chunk
                 stop = start + chunk

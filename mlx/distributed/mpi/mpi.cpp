@@ -465,8 +465,7 @@ class MPIGroup : public GroupImpl {
     });
   }
 
-  void reduce_scatter(const array& input, array& output, Stream stream)
-      override {
+  void sum_scatter(const array& input, array& output, Stream stream) override {
     throw std::runtime_error("[mpi] Reduce scatter not yet implemented.");
   }
 

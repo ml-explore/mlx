@@ -319,16 +319,14 @@ void init_distributed(nb::module_& parent_module) {
       Sum the ``x`` across all processes in the group and leave the summed result sharded along the first axis across ranks.
       ``x.shape[0]`` must be divisible by the group size.
 
-      The result is equivalent to ``all_sum(x)[rank*chunk_size:(rank+1)*chunk_size]`` where ``chunk_size = x.shape[0] // group.size()`` and ``rank`` is the rank of the current process in the group.
+      The result is equivalent to ``all_sum(x)[rank*chunk_size:(rank+1)*chunk_size]``, where ``chunk_size = x.shape[0] // group.size()`` and ``rank`` is the rank of this process in the group.
+      Note: ``all_sum`` is mentioned only for illustration; the actual implementation does not perform ``all_sum`` and uses a single reduce-scatter collective instead.
+      Currently supported only for the NCCL backend.
 
-      Note: ``all_sum`` is mentioned only for illustration; the actual implementation is more efficient.
-      The ``all_sum`` operation can be decomposed into a ``sum_scatter`` followed by an ``all_gather``.
-
-      Currently supported only for NCCL backend.
       Args:
         x (array): Input array.
         group (Group): The group of processes that will participate in the
-          reduction. If set to ``None`` the global group is used. Default:
+          sum scatter. If set to ``None`` the global group is used. Default:
           ``None``.
         stream (Stream, optional): Stream or device. Defaults to ``None``
           in which case the default stream of the default device is used.

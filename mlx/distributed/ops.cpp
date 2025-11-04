@@ -165,10 +165,11 @@ array sum_scatter(
   if (group.size() == 1) {
     return x;
   }
-  if (x.shape().size() == 0 || x.shape()[0] % group.size() != 0) {
+  if (x.shape()[0] % group.size() != 0) {
     std::ostringstream msg;
-    msg << "Input shape " << x.shape() << " is not divisible by group size "
-        << group.size() << " for reduce_scatter operation.";
+    msg << "Invalid shape=" << x.shape() << " for a group of size "
+        << group.size()
+        << ". The first dimension (axis 0) must be divisible by the group size.";
     throw std::invalid_argument(msg.str());
   }
 

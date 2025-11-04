@@ -731,9 +731,8 @@ class RingGroup : public GroupImpl {
         });
   }
 
-  void reduce_scatter(const array& input, array& output, Stream stream)
-      override {
-    throw std::runtime_error("[ring] reduce_scatter not supported.");
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[ring] sum_scatter not supported.");
   }
 
  private:
