@@ -326,7 +326,7 @@ void init_distributed(nb::module_& parent_module) {
       Args:
         x (array): Input array.
         group (Group): The group of processes that will participate in the
-          sum and scatter. If set to ``None`` the global group is used. Default:
+          sum scatter. If set to ``None`` the global group is used. Default:
           ``None``.
         stream (Stream, optional): Stream or device. Defaults to ``None``
           in which case the default stream of the default device is used.
