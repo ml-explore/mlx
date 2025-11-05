@@ -8,7 +8,7 @@ import mlx_tests
 class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
-        _ = mx.distributed.init(strict=True, backend="nccl")
+        _ = mx.distributed.init(strict=True, backend="mpi")
         cls.atol = 1e-6
         cls.rtol = 1e-4
 
