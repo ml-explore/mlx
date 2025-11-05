@@ -164,6 +164,7 @@ NO_GPU_MULTI(AllReduce)
 NO_GPU_MULTI(AllGather)
 NO_GPU_MULTI(Send)
 NO_GPU_MULTI(Recv)
+NO_GPU_MULTI(ReduceScatter)
 } // namespace distributed
 
 } // namespace mlx::core
