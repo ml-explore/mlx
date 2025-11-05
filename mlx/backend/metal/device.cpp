@@ -750,8 +750,12 @@ MTL::ComputePipelineState* Device::get_kernel_(
   auto mtl_linked_funcs = get_linked_functions_(linked_functions);
   auto kernel = get_kernel_(hash_name, mtl_function, mtl_linked_funcs);
 
-  mtl_function->release();
-  mtl_linked_funcs->release();
+  if (mtl_function) {
+    mtl_function->release();
+  }
+  if (mtl_linked_funcs) {
+    mtl_linked_funcs->release();
+  }
 
   // Add kernel to cache
   kernel_map_.insert({hash_name, kernel});
