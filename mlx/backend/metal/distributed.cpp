@@ -30,4 +30,9 @@ void Recv::eval_gpu(const std::vector<array>&, std::vector<array>&) {
   throw std::runtime_error("[Recv::eval_gpu] has no GPU implementation.");
 }
 
+void ReduceScatter::eval_gpu(const std::vector<array>&, std::vector<array>&) {
+  throw std::runtime_error(
+      "[ReduceScatter::eval_gpu] has no GPU implementation.");
+}
+
 } // namespace mlx::core::distributed

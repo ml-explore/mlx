@@ -465,6 +465,10 @@ class MPIGroup : public GroupImpl {
     });
   }
 
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[mpi] sum_scatter not yet implemented.");
+  }
+
  private:
   MPI_Comm comm_;
   bool global_;
