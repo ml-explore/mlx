@@ -179,7 +179,7 @@ void LogAddExp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  binary_float_cpu(a, b, out, detail::LogAddExp(), stream());
+  binary_float_op_cpu(a, b, out, detail::LogAddExp(), stream());
 }
 
 void LogicalAnd::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -242,19 +242,19 @@ void BitwiseBinary::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
   switch (op_) {
     case BitwiseBinary::And:
-      binary_int_cpu(a, b, out, detail::BitwiseAnd(), stream());
+      binary_int_op_cpu(a, b, out, detail::BitwiseAnd(), stream());
       break;
     case BitwiseBinary::Or:
-      binary_int_cpu(a, b, out, detail::BitwiseOr(), stream());
+      binary_int_op_cpu(a, b, out, detail::BitwiseOr(), stream());
       break;
     case BitwiseBinary::Xor:
-      binary_int_cpu(a, b, out, detail::BitwiseXor(), stream());
+      binary_int_op_cpu(a, b, out, detail::BitwiseXor(), stream());
       break;
     case BitwiseBinary::LeftShift:
-      binary_int_cpu(a, b, out, detail::LeftShift(), stream());
+      binary_int_op_cpu(a, b, out, detail::LeftShift(), stream());
       break;
     case BitwiseBinary::RightShift:
-      binary_int_cpu(a, b, out, detail::RightShift(), stream());
+      binary_int_op_cpu(a, b, out, detail::RightShift(), stream());
       break;
   }
 }
@@ -263,7 +263,7 @@ void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   const auto& a = inputs[0];
   const auto& b = inputs[1];
-  binary_float_cpu(a, b, out, detail::ArcTan2(), stream());
+  binary_float_op_cpu(a, b, out, detail::ArcTan2(), stream());
 }
 
 } // namespace mlx::core

@@ -148,7 +148,7 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     } else {
       array beta_scalar = array(beta_, c.dtype());
       auto& encoder = cpu::get_command_encoder(stream());
-      binary_float_cpu(c, beta_scalar, out, detail::Multiply(), stream());
+      binary_float_op_cpu(c, beta_scalar, out, detail::Multiply(), stream());
       encoder.add_temporary(std::move(beta_scalar));
     }
     return;

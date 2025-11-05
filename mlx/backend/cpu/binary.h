@@ -422,7 +422,7 @@ void comparison_op_cpu(
 }
 
 template <typename Op>
-void binary_float_cpu(
+void binary_float_op_cpu(
     const array& a,
     const array& b,
     array& out,
@@ -463,7 +463,7 @@ void binary_float_cpu(
 }
 
 template <typename Op>
-void binary_int_cpu(
+void binary_int_op_cpu(
     const array& a,
     const array& b,
     array& out,
