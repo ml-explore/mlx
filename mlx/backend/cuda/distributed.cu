@@ -112,7 +112,7 @@ void ReduceScatter::eval_gpu(
 
   switch (reduce_type_) {
     case Sum:
-      distributed::detail::sum_scatter(group(), input, output, s);
+      distributed::detail::sum_scatter(group(), input, outputs[0], s);
       break;
     default:
       throw std::runtime_error("Only sum scatter is supported. ");
