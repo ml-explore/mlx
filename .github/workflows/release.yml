@@ -131,12 +131,12 @@ jobs:
       - uses: actions/download-artifact@v6
         with:
           pattern: linux-wheels-*
-          merge-multiples: true
+          merge-multiple: true
           path: dist
       - uses: actions/download-artifact@v6
         with:
           pattern: mac-wheels-*
-          merge-multiples: true
+          merge-multiple: true
           path: dist
       - name: Display structure of downloaded files
         run: ls -R dist
