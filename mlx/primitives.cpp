@@ -4377,7 +4377,7 @@ std::vector<array> MaskedScatter::vjp(
           multiply(cotan_flat, astype(mask_flat, cotan_flat.dtype(), s), s);
 
       array gsrc_flat =
-          zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
+          zeros_like(src, s);
       if (src.size() > 0) {
         const int n = static_cast<int>(idx_src.size());
         const array cotan_updates = reshape(cotan_src, {n, 1}, s);
