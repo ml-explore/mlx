@@ -285,15 +285,14 @@ array full_impl(array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
       vals.shape(),
       dtype,
       std::make_shared<Full>(to_stream(s)),
-      {astype(std::move(vals), dtype, s)});
+      {astype(vals, dtype, s)});
 }
 
 array full(Shape shape, array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
     throw std::invalid_argument("[full] Negative dimensions not allowed.");
   }
-  return full_impl(
-      broadcast_to(std::move(vals), std::move(shape), s), dtype, s);
+  return full_impl(broadcast_to(vals, std::move(shape), s), dtype, s);
 }
 
 array full(Shape shape, array vals, StreamOrDevice s /* = {} */) {
