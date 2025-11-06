@@ -63,3 +63,54 @@ INSTANTIATE_LAPACK_REAL(trtri)
   }
 
 INSTANTIATE_LAPACK_COMPLEX(heevd)
+
+// Wrapper for complex geev (needs rwork parameter)
+inline void cgeev_wrapper(
+    const char* jobvl,
+    const char* jobvr,
+    const int* n,
+    std::complex<float>* a,
+    const int* lda,
+    std::complex<float>* w,
+    std::complex<float>* vl,
+    const int* ldvl,
+    std::complex<float>* vr,
+    const int* ldvr,
+    std::complex<float>* work,
+    const int* lwork,
+    float* rwork,
+    int* info) {
+#ifdef MLX_USE_ACCELERATE
+  cgeev_(
+      jobvl, jobvr, n, a, lda, w, vl, ldvl, vr, ldvr, work, lwork, rwork, info);
+#else
+  MLX_LAPACK_FUNC(cgeev)(
+      jobvl, jobvr, n, a, lda, w, vl, ldvl, vr, ldvr, work, lwork, rwork, info);
+#endif
+}
+
+// Wrapper for complex gesdd (needs rwork parameter)
+inline void cgesdd_wrapper(
+    const char* jobz,
+    const int* m,
+    const int* n,
+    std::complex<float>* a,
+    const int* lda,
+    float* s,
+    std::complex<float>* u,
+    const int* ldu,
+    std::complex<float>* vt,
+    const int* ldvt,
+    std::complex<float>* work,
+    const int* lwork,
+    float* rwork,
+    int* iwork,
+    int* info) {
+#ifdef MLX_USE_ACCELERATE
+  cgesdd_(
+      jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info);
+#else
+  MLX_LAPACK_FUNC(cgesdd)(
+      jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info);
+#endif
+}
