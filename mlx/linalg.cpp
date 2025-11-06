@@ -269,10 +269,7 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   s_shape[rank - 2] = std::min(m, n);
 
   // For complex inputs, singular values are real
-  Dtype s_dtype = a.dtype();
-  if (a.dtype() == complex64) {
-    s_dtype = float32;
-  }
+  auto s_dtype = a.dtype() == complex64 ? float32 : a.dtype();
 
   if (!compute_uv) {
     return {array(
