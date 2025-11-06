@@ -167,6 +167,30 @@ NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)
+
+bool paged_attention_use_fallback(
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    Stream) {
+  return true;
+}
+
+void paged_attention(
+    const Stream&,
+    metal::Device&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const std::optional<array>&,
+    float,
+    array&) {
+  throw std::runtime_error("paged_attention has no GPU implementation.");
+}
 } // namespace fast
 
 namespace distributed {

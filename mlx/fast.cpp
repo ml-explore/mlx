@@ -1,12 +1,13 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
+#include <cmath>
 #include <numeric>
 
+#include "mlx/backend/metal/paged_attention.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
-#include "mlx/transforms_impl.h"
 
 namespace mlx::core::fast {
 
@@ -416,25 +417,23 @@ array rope(
     if (offset.size() > 1) {
       offset = expand_dims(offset, {-1, -2}, s);
     }
-    auto positions = multiply(
-        add(arange(x.shape(2), float32, s), offset, s),
-        array(scale, float32),
-        s);
+    auto positions =
+        multiply(add(arange(x.shape(2), t, s), offset, s), array(scale, t), s);
 
-    auto default_inv_freqs = [&s, base, half_dims]() {
+    auto default_inv_freqs = [&s, &t, base, half_dims]() {
       return exp(
           multiply(
-              arange(0, -half_dims, -1, float32, s),
-              array(std::log(base) / half_dims, float32),
+              arange(0, -half_dims, -1, t, s),
+              array(std::log(base) / half_dims, t),
               s),
           s);
     };
 
-    auto inv_freqs =
-        inputs.size() == 3 ? reciprocal(inputs[2], s) : default_inv_freqs();
+    auto inv_freqs = inputs.size() == 3 ? astype(reciprocal(inputs[2], s), t, s)
+                                        : default_inv_freqs();
     auto theta = multiply(expand_dims(positions, -1, s), inv_freqs, s);
-    auto coss = astype(cos(theta, s), t, s);
-    auto sins = astype(sin(theta, s), t, s);
+    auto coss = cos(theta, s);
+    auto sins = sin(theta, s);
 
     auto apply_rope = [forward, s](
                           const array& x1,
@@ -581,7 +580,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::string& mask_mode /* = "" */,
-    std::optional<array> mask_arr /* = {} */,
+    const std::vector<array>& mask_arrs /* = {} */,
     const std::optional<array>& sinks /* = {} */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
@@ -609,22 +608,32 @@ array scaled_dot_product_attention(
     has_mask = true;
     do_causal = true;
 
-    if (mask_arr) {
+    if (!mask_arrs.empty()) {
       std::ostringstream msg;
-      msg << "[scaled_dot_product_attention] Invalid mask_arr for mask_mode "
-          << "'casusal'. No array mask should be passed.";
+      msg << "[scaled_dot_product_attention] Invalid mask_arrs for mask_mode "
+          << "'casusal'. No array masks supported.";
       throw std::invalid_argument(msg.str());
     }
-  } else if (mask_arr) {
-    has_mask = true;
-    has_arr_mask = true;
-    has_bool_mask = mask_arr->dtype() == bool_;
   }
 
-  if (has_arr_mask && mask_arr->ndim() > 4) {
+  if (mask_mode == "array" || (mask_mode == "" && !mask_arrs.empty())) {
+    if (mask_arrs.size() != 1) {
+      std::ostringstream msg;
+      msg << "[scaled_dot_product_attention] Invalid mask_arrs for mask_mode "
+          << "'" << mask_mode << "'. Only 1 mask array is supported, got "
+          << mask_arrs.size() << "arrays.";
+      throw std::invalid_argument(msg.str());
+    }
+
+    has_mask = true;
+    has_arr_mask = true;
+    has_bool_mask = mask_arrs[0].dtype() == bool_;
+  }
+
+  if (has_arr_mask && (mask_arrs[0]).ndim() > 4) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] the mask with shape "
-        << mask_arr->shape() << " expected to have at most rank 4.";
+        << mask_arrs[0].shape() << " expected to have at most rank 4.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -757,19 +766,20 @@ array scaled_dot_product_attention(
   std::vector<array> inputs = {q, k, v};
   if (has_arr_mask) {
     // Check type
-    has_bool_mask = mask_arr->dtype() == bool_;
-    if (promote_types(mask_arr->dtype(), final_type) != final_type) {
+    auto mask_arr = mask_arrs[0];
+    has_bool_mask = mask_arr.dtype() == bool_;
+    if (promote_types(mask_arr.dtype(), final_type) != final_type) {
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] Mask type must promote to output type "
           << final_type << ".";
       throw std::invalid_argument(msg.str());
     } else if (!has_bool_mask) {
-      mask_arr = astype(*mask_arr, final_type, stream);
+      mask_arr = astype(mask_arr, final_type, stream);
     }
     // Broadcast mask
     auto mask_shape = queries.shape();
     mask_shape.back() = keys.shape(-2);
-    inputs.push_back(broadcast_to(*mask_arr, mask_shape, stream));
+    inputs.push_back(broadcast_to(mask_arr, mask_shape, stream));
   }
   if (has_sinks) {
     if (promote_types(sinks->dtype(), final_type) != final_type) {
@@ -787,88 +797,148 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
-  bool is_training = detail::in_grad_tracing();
-  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
-  bool output_logsumexp = is_training && has_fast_vjp;
   if (!ScaledDotProductAttention::use_fallback(
-          q,
-          k,
-          v,
-          has_mask,
-          has_arr_mask,
-          do_causal,
-          is_training,
-          output_logsumexp,
-          stream)) {
-    Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
-    auto primitive = std::make_shared<ScaledDotProductAttention>(
-        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
-    if (output_logsumexp) {
-      return array::make_arrays(
-          {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
-          {final_type, float32},
-          primitive,
-          std::move(inputs))[0];
-    } else {
-      return array(
-          std::move(out_shape), final_type, primitive, std::move(inputs));
-    }
+          q, k, v, has_mask, has_arr_mask, do_causal, stream)) {
+    auto out_shape = Shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
+    return array(
+        std::move(out_shape),
+        final_type,
+        std::make_shared<ScaledDotProductAttention>(
+            stream, fallback, scale, do_causal, has_sinks),
+        std::move(inputs));
   }
   return fallback(std::move(inputs))[0];
 }
 
-std::vector<array> ScaledDotProductAttention::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
-    const std::vector<array>& outputs) {
-  assert(primals.size() >= 3);
-  assert(cotangents.size() == outputs.size());
-
-  auto s = stream();
-  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
-    assert(outputs.size() == 1);
-    return Custom::vjp(primals, cotangents, argnums, outputs);
+array paged_attention_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& maybe_scale,
+    StreamOrDevice s) {
+  if (queries.ndim() != 4) {
+    std::ostringstream msg;
+    msg << "[paged_attention] queries expected rank 4 but received shape "
+        << queries.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (block_tables.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[paged_attention] block_tables expected rank 2 but received shape "
+        << block_tables.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (context_lens.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[paged_attention] context_lens expected rank 1 but received shape "
+        << context_lens.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (block_tables.shape(0) != queries.shape(0) ||
+      context_lens.shape(0) != queries.shape(0)) {
+    std::ostringstream msg;
+    msg << "[paged_attention] block_tables/context_lens batch mismatch. "
+        << "queries batch=" << queries.shape(0)
+        << " block_tables batch=" << block_tables.shape(0)
+        << " context_lens batch=" << context_lens.shape(0) << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (queries.shape(2) != 1) {
+    std::ostringstream msg;
+    msg << "[paged_attention] decode expects Lq=1 but received queries shape "
+        << queries.shape() << ".";
+    throw std::invalid_argument(msg.str());
   }
 
-  auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
-    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
-    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
-    return vjps;
-  };
+  auto stream = to_stream(s);
 
-  std::vector<Shape> shapes;
-  std::vector<Dtype> dtypes;
-  for (int i = 0; i < primals.size(); ++i) {
-    shapes.push_back(primals[i].shape());
-    dtypes.push_back(primals[i].dtype());
+  array k_view = k_cache;
+  array v_view = v_cache;
+  if (k_cache.ndim() == 5) {
+    if (layer_idx < 0 || layer_idx >= k_cache.shape(0)) {
+      std::ostringstream msg;
+      msg << "[paged_attention] layer_idx " << layer_idx
+          << " out of range for cache with " << k_cache.shape(0) << " layers.";
+      throw std::invalid_argument(msg.str());
+    }
+    Shape start;
+    start.insert(start.end(), k_cache.ndim(), 0);
+    Shape stop(k_cache.shape().begin(), k_cache.shape().end());
+    start[0] = layer_idx;
+    stop[0] = layer_idx + 1;
+    k_view = squeeze(slice(k_cache, start, stop, stream), 0, stream);
+    v_view = squeeze(slice(v_cache, start, stop, stream), 0, stream);
+  } else {
+    layer_idx = 0;
   }
-  auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
-      s, fallback, scale_, do_causal_, has_sinks_);
-  std::vector<array> inputs = primals;
-  inputs.push_back(outputs[0]);
-  inputs.push_back(outputs[1]);
-  inputs.push_back(cotangents[0]);
-  auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
 
-  std::vector<array> returned_vjps;
-  for (int arg : argnums) {
-    returned_vjps.push_back(std::move(vjps[arg]));
+  if (k_view.ndim() != 4 || v_view.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_attention] k_cache/v_cache expected rank 4 after layer "
+        "selection.");
   }
-  return returned_vjps;
+  if (k_view.shape(0) == 0 || k_view.shape(2) == 0 ||
+      k_view.shape(3) != queries.shape(3) || v_view.shape() != k_view.shape()) {
+    throw std::invalid_argument(
+        "[paged_attention] mismatched cache shapes for keys/values.");
+  }
+
+  auto final_type = result_type(queries, k_view, v_view);
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[paged_attention] unsupported dtype " << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  float scale = maybe_scale.has_value()
+      ? *maybe_scale
+      : 1.0f / std::sqrt(static_cast<float>(queries.shape(3)));
+
+  auto q_cast = astype(queries, final_type, stream);
+  auto k_cast = astype(k_view, final_type, stream);
+  auto v_cast = astype(v_view, final_type, stream);
+  auto tables_i32 = astype(block_tables, int32, stream);
+  auto lens_i32 = astype(context_lens, int32, stream);
+  std::optional<array> mapping_i32;
+  if (kv_head_mapping.has_value()) {
+    mapping_i32 = astype(*kv_head_mapping, int32, stream);
+  }
+
+  if (paged_attention_use_fallback(
+          q_cast, k_cast, v_cast, tables_i32, lens_i32, stream)) {
+    throw std::runtime_error(
+        "paged_attention_impl: configuration not supported on Metal backend.");
+  }
+
+  array out(
+      Shape{q_cast.shape(0), q_cast.shape(1), 1, q_cast.shape(3)},
+      final_type,
+      nullptr,
+      {});
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& device = metal::device(stream.device);
+  paged_attention(
+      stream,
+      device,
+      q_cast,
+      k_cast,
+      v_cast,
+      tables_i32,
+      lens_i32,
+      mapping_i32,
+      scale,
+      out);
+  return out;
 }
 
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
-  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
-      has_sinks_ == a_other.has_sinks_ &&
-      output_logsumexp_ == a_other.output_logsumexp_;
-}
-
-bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
-  const ScaledDotProductAttentionVJP& a_other =
-      static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
 }

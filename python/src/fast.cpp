@@ -622,4 +622,37 @@ void init_fast(nb::module_& parent_module) {
            before the kernel runs. Default: ``False``.
         stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
       )pbdoc");
+
+  m.def(
+      "_paged_attention_impl",
+      [](const mx::array& q,
+         const mx::array& k_cache,
+         const mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& context_lens,
+         int layer_idx,
+         std::optional<mx::array> kv_head_mapping,
+         std::optional<float> scale,
+         mx::StreamOrDevice s) {
+        return mx::fast::paged_attention_impl(
+            q,
+            k_cache,
+            v_cache,
+            block_tables,
+            context_lens,
+            layer_idx,
+            kv_head_mapping,
+            scale,
+            s);
+      },
+      "q"_a,
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "context_lens"_a,
+      "layer_idx"_a,
+      nb::kw_only(),
+      "kv_head_mapping"_a = nb::none(),
+      "scale"_a = nb::none(),
+      "stream"_a = nb::none());
 }
