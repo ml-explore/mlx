@@ -143,7 +143,9 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   uint32_t elems_per_key = out.size() / num_keys;
   uint32_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   if (out.size() == 0) {
     return;
   }
@@ -152,8 +154,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   uint32_t half_size = out_per_key / 2;
   bool odd = out_per_key % 2;
 
-  auto& s = stream();
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(keys);
   encoder.set_output_array(out);
   dim3 grid_dims{num_keys, half_size + odd};
@@ -171,8 +171,8 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         grid,
         block,
         0,
-        keys.data<uint32_t>(),
-        out.data<uint8_t>(),
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<uint8_t>(out),
         grid_dims,
         odd,
         bytes_per_key);
@@ -182,8 +182,8 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         grid,
         block,
         0,
-        keys.data<uint32_t>(),
-        out.data<uint8_t>(),
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<uint8_t>(out),
         grid_dims,
         odd,
         bytes_per_key,

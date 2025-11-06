@@ -230,9 +230,10 @@ void LayerNorm::eval_gpu(
   nvtx3::scoped_range r("LayerNorm::eval_gpu");
   auto& s = stream();
   auto& out = outputs[0];
+  auto& encoder = cu::get_command_encoder(s);
 
   // Make sure that the last dimension is contiguous.
-  auto set_output = [&s, &out](const array& x) {
+  auto set_output = [&s, &out, &encoder](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
@@ -243,7 +244,7 @@ void LayerNorm::eval_gpu(
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
+            cu::malloc_async(x.data_size() * x.itemsize(), encoder.stream()),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -265,7 +266,6 @@ void LayerNorm::eval_gpu(
   int64_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
   int64_t b_stride = (b.ndim() == 1) ? b.strides()[0] : 0;
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(b);
@@ -280,10 +280,10 @@ void LayerNorm::eval_gpu(
           n_rows,
           block_dim(),
           0,
-          x.data<DataType>(),
-          w.data<DataType>(),
-          b.data<DataType>(),
-          out.data<DataType>(),
+          gpu_ptr<DataType>(x),
+          gpu_ptr<DataType>(w),
+          gpu_ptr<DataType>(b),
+          gpu_ptr<DataType>(out),
           eps_,
           axis_size,
           w_stride,
@@ -335,7 +335,7 @@ void LayerNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(allocator::malloc(gx.nbytes()));
+    gx.set_data(cu::malloc_async(gx.nbytes(), encoder.stream()));
   }
   if (g_copied && !g_in_gx) {
     encoder.add_temporary(g);
@@ -355,7 +355,7 @@ void LayerNormVJP::eval_gpu(
       g_in_gw = true;
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
+      gw_temp.set_data(cu::malloc_async(gw_temp.nbytes(), encoder.stream()));
       encoder.add_temporary(gw_temp);
     }
   }
@@ -393,11 +393,11 @@ void LayerNormVJP::eval_gpu(
                 n_rows,
                 block_dim(),
                 0,
-                x.data<DataType>(),
-                w.data<DataType>(),
-                g.data<DataType>(),
-                gx.data<DataType>(),
-                gw_temp.data<DataType>(),
+                gpu_ptr<DataType>(x),
+                gpu_ptr<DataType>(w),
+                gpu_ptr<DataType>(g),
+                gpu_ptr<DataType>(gx),
+                gpu_ptr<DataType>(gw_temp),
                 eps_,
                 axis_size,
                 w_stride);

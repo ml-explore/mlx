@@ -5,6 +5,22 @@
 
 namespace mlx::core {
 
+void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
+  auto& encoder = cu::get_command_encoder(s);
+  bool donated = set_copy_output_data(in, out, ctype, [&](auto n) {
+    return cu::malloc_async(n, encoder.stream());
+  });
+  if (donated && in.dtype() == out.dtype()) {
+    // If the output has the same type as the input then there is nothing to
+    // copy, just use the buffer.
+    return;
+  }
+  if (ctype == CopyType::GeneralGeneral) {
+    ctype = CopyType::General;
+  }
+  copy_gpu_inplace(in, out, ctype, s);
+}
+
 void copy_gpu_inplace(
     const array& in,
     array& out,
@@ -87,11 +103,31 @@ void fill_gpu(const array& in, array& out, const Stream& s) {
   if (out.size() == 0) {
     return;
   }
-  out.set_data(allocator::malloc(out.nbytes()));
   auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);
+}
+
+void reshape_gpu(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    auto& encoder = cu::get_command_encoder(s);
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
 }
 
 } // namespace mlx::core

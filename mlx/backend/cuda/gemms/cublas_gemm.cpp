@@ -241,7 +241,7 @@ void CublasGemm::set_bias(cu::CommandEncoder& encoder, const array& bias) {
       CUBLASLT_MATMUL_DESC_EPILOGUE,
       &epilogue,
       sizeof(epilogue)));
-  auto* bias_ptr = bias.data<void>();
+  auto* bias_ptr = gpu_ptr<void>(bias);
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
       CUBLASLT_MATMUL_DESC_BIAS_POINTER,
@@ -278,9 +278,9 @@ void CublasGemm::run(
 
   execute(
       encoder,
-      out.data<void>(),
-      a.data<void>(),
-      b.data<void>(),
+      gpu_ptr<void>(out),
+      gpu_ptr<void>(a),
+      gpu_ptr<void>(b),
       nullptr,
       alpha);
 }
@@ -321,10 +321,10 @@ void CublasGemm::run(
 
   execute(
       encoder,
-      out.data<void>(),
-      a.data<void>(),
-      b.data<void>(),
-      c.data<void>(),
+      gpu_ptr<void>(out),
+      gpu_ptr<void>(a),
+      gpu_ptr<void>(b),
+      gpu_ptr<void>(c),
       alpha,
       beta);
 }
@@ -370,11 +370,11 @@ void CublasGemm::execute(
     // Ensure workspace is 256-byte aligned
     int nbytes = cuda::ceil_div(heuristic_.workspaceSize, 256) * 256;
     array workspace(
-        allocator::malloc(nbytes),
+        cu::malloc_async(nbytes, encoder.stream()),
         {static_cast<int>(heuristic_.workspaceSize)},
         int8);
     encoder.add_temporary(workspace);
-    workspace_ptr = workspace.data<void>();
+    workspace_ptr = gpu_ptr<void>(workspace);
   }
 
   auto capture = encoder.capture_context();

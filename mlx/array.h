@@ -354,15 +354,23 @@ class array {
     return array_desc_->data;
   }
 
-  // Return a raw pointer to the arrays data
+  // Return a raw pointer to the arrays data. This function may do a copy if
+  // the underlying buffer is not accessible on the CPU. When accessing the
+  // data for GPU kernels, be sure to use the correct method / function for the
+  // given backend to access the GPU pointer.
   template <typename T>
   T* data() {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return reinterpret_cast<T*>(
+        (static_cast<char*>(buffer().raw_ptr()) + array_desc_->offset));
   }
 
   template <typename T>
   const T* data() const {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return const_cast<array&>(*this).data<T>();
+  }
+
+  int64_t offset() const {
+    return array_desc_->offset;
   }
 
   enum Status {
@@ -466,8 +474,8 @@ class array {
     // can share the underlying data buffer.
     std::shared_ptr<Data> data;
 
-    // Properly offset data pointer
-    void* data_ptr{nullptr};
+    // Offset from beginning of data pointer
+    int64_t offset{0};
 
     // The size in elements of the data buffer the array accesses
     size_t data_size;

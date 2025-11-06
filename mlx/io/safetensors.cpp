@@ -4,6 +4,7 @@
 #include <memory>
 #include <stack>
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/io.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
@@ -113,10 +114,7 @@ SafetensorsLoad load_safetensors(
         "[load_safetensors] Failed to open " + in_stream->label());
   }
 
-  auto stream = to_stream(s, Device::cpu);
-  if (stream.device != Device::cpu) {
-    throw std::runtime_error("[load_safetensors] Must run on a CPU stream.");
-  }
+  auto stream = cu::is_available() ? to_stream(s) : to_stream(s, Device::cpu);
 
   uint64_t jsonHeaderLength = 0;
   // This is the same limit as in the original Rust Safetensors code.

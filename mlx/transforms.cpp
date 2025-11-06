@@ -62,7 +62,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   // Map of array id that needs fence and stream it's computed on
-  std::unordered_map<uintptr_t, uint32_t> needs_fence;
+  std::unordered_map<uintptr_t, std::pair<uint32_t, bool>> needs_fence;
 
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
@@ -114,7 +114,14 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 "https://github.com/ml-explore/mlx/issues.");
           }
           if (a.primitive().stream() != in.primitive().stream()) {
-            needs_fence.emplace(in.id(), in.primitive().stream().index);
+            bool device_switch =
+                a.primitive().stream().device != in.primitive().stream().device;
+            auto [it, inserted] = needs_fence.emplace(
+                in.id(),
+                std::make_pair(in.primitive().stream().index, device_switch));
+            if (!inserted) {
+              it->second.second |= device_switch;
+            }
           }
         }
 
@@ -190,7 +197,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::unordered_set<int> open_streams;
-
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
@@ -216,7 +222,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // Use fence to wait within a single eval
         // Get the input array's stream fence and wait on the
         // output arrays stream
-        fences[it->second].wait(stream, in);
+        fences[it->second.first].wait(stream, in);
       } else if (in.event().valid()) {
         if (in.event().is_signaled()) {
           in.detach_event();
@@ -251,12 +257,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
-      if (needs_fence.find(a.id()) != needs_fence.end()) {
+      if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
         auto it = fences.find(stream.index);
         if (it == fences.end()) {
           it = fences.emplace(stream.index, Fence{stream}).first;
         }
-        it->second.update(stream, a);
+        it->second.update(stream, a, nf->second.second);
       }
     };
 

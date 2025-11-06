@@ -115,7 +115,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto in = ensure_contiguous(inputs[0]);
   if (in.flags().row_contiguous) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
   } else {
     auto n = in.shape(-1);
     auto flags = in.flags();
@@ -130,7 +130,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
     flags.col_contiguous = col_contig;
     out.set_data(
-        allocator::malloc(in.nbytes() / n),
+        cu::malloc_async(in.nbytes() / n, encoder.stream()),
         in.data_size() / n,
         std::move(strides),
         flags);
@@ -151,8 +151,8 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
           n_rows,
           block_dim(),
           0,
-          in.data<DataType>(),
-          out.data<DataType>(),
+          gpu_ptr<DataType>(in),
+          gpu_ptr<DataType>(out),
           axis_size);
     });
   });

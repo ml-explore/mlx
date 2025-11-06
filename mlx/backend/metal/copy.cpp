@@ -10,6 +10,19 @@ namespace mlx::core {
 
 constexpr int MAX_COPY_SPECIALIZED_DIMS = 3;
 
+void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
+  bool donated = set_copy_output_data(in, out, ctype);
+  if (donated && in.dtype() == out.dtype()) {
+    // If the output has the same type as the input then there is nothing to
+    // copy, just use the buffer.
+    return;
+  }
+  if (ctype == CopyType::GeneralGeneral) {
+    ctype = CopyType::General;
+  }
+  copy_gpu_inplace(in, out, ctype, s);
+}
+
 void copy_gpu_inplace(
     const array& in,
     array& out,
@@ -199,6 +212,25 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
     grid_dims = MTL::Size(nthreads, 1, 1);
   }
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void reshape_gpu(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    out.set_data(allocator::malloc(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
 }
 
 } // namespace mlx::core

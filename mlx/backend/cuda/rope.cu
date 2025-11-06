@@ -250,6 +250,7 @@ void RoPE::eval_gpu(
   nvtx3::scoped_range r("RoPE::eval_gpu");
 
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
   auto& in = inputs[0];
   auto& offset = inputs[1];
   auto& out = outputs[0];
@@ -291,14 +292,14 @@ void RoPE::eval_gpu(
       donated = true;
       out.copy_shared_buffer(in);
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
     }
     strides[0] = mat_size;
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];
   } else if (dispatch_ndim == 3) {
     // Handle non-contiguous 3D inputs
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
     strides[0] = in.strides()[ndim - 3];
     strides[1] = in.strides()[ndim - 2];
     strides[2] = in.strides()[ndim - 1];
@@ -319,7 +320,6 @@ void RoPE::eval_gpu(
   bool single = in.flags().row_contiguous && B == 1 && T == 1;
   bool with_freqs = inputs.size() == 3;
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(donated ? out : in);
   encoder.set_input_array(offset);
   if (with_freqs) {
@@ -340,9 +340,9 @@ void RoPE::eval_gpu(
               grid,
               block,
               0,
-              (donated ? out : in).data<DataType>(),
-              out.data<DataType>(),
-              offset.data<int32_t>(),
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
               scale_,
               std::log2(base_),
               mat_size,
@@ -357,10 +357,10 @@ void RoPE::eval_gpu(
               grid,
               block,
               0,
-              (donated ? out : in).data<DataType>(),
-              out.data<DataType>(),
-              offset.data<int32_t>(),
-              inputs[2].data<float>(),
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              gpu_ptr<float>(inputs[2]),
               scale_,
               mat_size,
               dims,
@@ -381,10 +381,10 @@ void RoPE::eval_gpu(
               grid,
               block,
               0,
-              (donated ? out : in).data<DataType>(),
-              out.data<DataType>(),
-              offset.data<int32_t>(),
-              inputs[2].data<float>(),
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              gpu_ptr<float>(inputs[2]),
               scale_,
               std::log2(base_),
               strides,
@@ -408,9 +408,9 @@ void RoPE::eval_gpu(
               grid,
               block,
               0,
-              (donated ? out : in).data<DataType>(),
-              out.data<DataType>(),
-              offset.data<int32_t>(),
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
               scale_,
               std::log2(base_),
               strides,

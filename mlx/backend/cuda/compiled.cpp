@@ -293,8 +293,13 @@ void Compiled::eval_gpu(
     }
   }
 
+  auto& encoder = cu::get_command_encoder(s);
+
   // Put outputs.
-  compiled_allocate_outputs(inputs, outputs, is_constant_, contiguous);
+  compiled_allocate_outputs(
+      inputs, outputs, is_constant_, contiguous, [&](auto n) {
+        return cu::malloc_async(n, encoder.stream());
+      });
   for (auto& x : outputs) {
     args.append(x);
   }
@@ -324,7 +329,6 @@ void Compiled::eval_gpu(
     kernel_name += fmt::format(
         "_strided<{}, {}, {}>", shape.size(), index_type, work_per_thread);
   }
-  auto& encoder = cu::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
   }

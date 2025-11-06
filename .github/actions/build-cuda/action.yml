@@ -26,10 +26,6 @@ runs:
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
       run: pip install -e ".[dev]" -v
 
-    - name: Check if build actually worked
-      shell: bash
-      run: python -c "import mlx.core"
-
     - name: Run Python tests - CPU
       if: inputs.run-tests == 'true'
       shell: bash
