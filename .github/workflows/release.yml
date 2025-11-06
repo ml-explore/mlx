@@ -15,7 +15,7 @@ jobs:
     outputs:
       pypi_env: ${{ github.event_name == 'push' && 'pypi' || 'test-pypi' }}
       pypi_url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
-      pypi_dups: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      skip_duplicates: ${{ github.event_name == 'push' && 'false' || 'true' }}
     steps:
       - name: Set publishing variables
         run: echo "Publishing setup complete"
@@ -145,7 +145,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
           print-hash: true
   
   pypi-publish-cuda:
@@ -168,7 +168,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
           print-hash: true
 
   pypi-publish-cpu:
@@ -191,7 +191,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
           print-hash: true
 
   pypi-publish-metal:
@@ -214,5 +214,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
           print-hash: true
