@@ -28,18 +28,24 @@ runs:
       shell: sh
       env:
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
-      run: pip install -e ".[dev]" -v
+      run: |
+        echo "::group::Install Python Package"
+        pip install -e ".[dev]" -v
+        echo "::endgroup::"
     
     - name: Generate package stubs
       shell: sh
       run: |
+        echo "::group::Generate package stubs"
         pip install typing_extensions
         python setup.py generate_stubs
-    
+        echo "::endgroup::"
+
     - name: Run Python tests
       if: inputs.run-tests == 'true'
       shell: bash
       run: |
+        echo "::group::Run Python tests"
         python -m unittest discover python/tests -v
         mpirun --bind-to none --allow-run-as-root -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
         mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
@@ -48,24 +54,31 @@ runs:
           echo "Distributed ring test failed";
           exit 1;
         fi
-    
+        echo "::endgroup::"
+
     - name: Build CPP only
       if: inputs.build-type == 'debug'
       shell: bash
       run: |
+        echo "::group::Build CPP"
         mkdir -p build && cd build
         cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
         make -j $(nproc)
-    
+        echo "::endgroup::"
+
     - name: Run CPP tests
       if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
       shell: sh
-      run: ./build/tests/tests
+      run: |
+        echo "::group::Run CPP Tests"
+        ./build/tests/tests
+        echo "::endgroup::"
     
     - name: Build Python package
       if: inputs.build-type == 'release'
       shell: bash
       run: |
+        echo "::group::Build Python Package"
         pip install auditwheel patchelf build
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
@@ -76,3 +89,4 @@ runs:
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
         auditwheel repair dist/mlx_cpu*.whl --plat manylinux_2_35_x86_64
+        echo "::endgroup::"

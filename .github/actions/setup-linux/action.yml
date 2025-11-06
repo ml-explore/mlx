@@ -28,9 +28,11 @@ runs:
         TZ: Etc/UTC
       shell: bash
       run: |
+        echo "::group::Install dependencies"
         sudo apt-get update
         sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev tzdata zip
         sudo apt autoremove -y
+        echo "::endgroup::"
 
     - uses: actions/setup-python@v6
       with:

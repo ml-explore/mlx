@@ -10,18 +10,22 @@ runs:
     - name: Install dependencies
       shell: sh
       run: |
+        echo "::group::Install dependencies"
         brew install doxygen
         uv pip install --upgrade pip cmake
         uv pip install -r docs/requirements.txt
         uv pip install . -v
+        echo "::endgroup::"
   
     - name: Build documentation
       shell: bash
       run: |
+        echo "::group::Build documentation"
         source .venv/bin/activate
         cd docs
         doxygen
         make html O=-W
+        echo "::endgroup::"
     
     - name: Create artifact tar
       shell: sh

@@ -15,6 +15,7 @@ runs:
         MLX_BUILD_STAGE: 2
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
       run: |
+        echo "::group::Build packages"
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
         python -m build -w
@@ -22,3 +23,4 @@ runs:
         if [ -f "python/scripts/repair_cuda.sh" ]; then
           bash python/scripts/repair_cuda.sh
         fi
+        echo "::endgroup::"
