@@ -8,32 +8,6 @@
 
 namespace mlx::core {
 
-// Wrapper for cgesdd
-inline void cgesdd_wrapper(
-    const char* jobz,
-    const int* m,
-    const int* n,
-    std::complex<float>* a,
-    const int* lda,
-    float* s,
-    std::complex<float>* u,
-    const int* ldu,
-    std::complex<float>* vt,
-    const int* ldvt,
-    std::complex<float>* work,
-    const int* lwork,
-    float* rwork,
-    int* iwork,
-    int* info) {
-#ifdef MLX_USE_ACCELERATE
-  cgesdd_(
-      jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info);
-#else
-  MLX_LAPACK_FUNC(cgesdd)(
-      jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, rwork, iwork, info);
-#endif
-}
-
 template <typename T>
 void svd_impl(
     const array& a,
