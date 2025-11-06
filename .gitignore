@@ -13,6 +13,7 @@ __pycache__/
 # Metal libraries
 *.metallib
 venv/
+.venv/
 
 # Distribution / packaging
 python/mlx/core

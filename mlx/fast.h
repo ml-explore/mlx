@@ -53,6 +53,17 @@ array scaled_dot_product_attention(
     const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 
+array paged_attention_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& scale,
+    StreamOrDevice s = {});
+
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 

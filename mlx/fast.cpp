@@ -1,9 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
+#include <cmath>
 #include <numeric>
 
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/backend/metal/paged_attention.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
 
@@ -806,6 +808,132 @@ array scaled_dot_product_attention(
         std::move(inputs));
   }
   return fallback(std::move(inputs))[0];
+}
+
+array paged_attention_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& maybe_scale,
+    StreamOrDevice s) {
+  if (queries.ndim() != 4) {
+    std::ostringstream msg;
+    msg << "[paged_attention] queries expected rank 4 but received shape "
+        << queries.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (block_tables.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[paged_attention] block_tables expected rank 2 but received shape "
+        << block_tables.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (context_lens.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[paged_attention] context_lens expected rank 1 but received shape "
+        << context_lens.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (block_tables.shape(0) != queries.shape(0) ||
+      context_lens.shape(0) != queries.shape(0)) {
+    std::ostringstream msg;
+    msg << "[paged_attention] block_tables/context_lens batch mismatch. "
+        << "queries batch=" << queries.shape(0)
+        << " block_tables batch=" << block_tables.shape(0)
+        << " context_lens batch=" << context_lens.shape(0) << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (queries.shape(2) != 1) {
+    std::ostringstream msg;
+    msg << "[paged_attention] decode expects Lq=1 but received queries shape "
+        << queries.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto stream = to_stream(s);
+
+  array k_view = k_cache;
+  array v_view = v_cache;
+  if (k_cache.ndim() == 5) {
+    if (layer_idx < 0 || layer_idx >= k_cache.shape(0)) {
+      std::ostringstream msg;
+      msg << "[paged_attention] layer_idx " << layer_idx
+          << " out of range for cache with " << k_cache.shape(0) << " layers.";
+      throw std::invalid_argument(msg.str());
+    }
+    Shape start;
+    start.insert(start.end(), k_cache.ndim(), 0);
+    Shape stop(k_cache.shape().begin(), k_cache.shape().end());
+    start[0] = layer_idx;
+    stop[0] = layer_idx + 1;
+    k_view = squeeze(slice(k_cache, start, stop, stream), 0, stream);
+    v_view = squeeze(slice(v_cache, start, stop, stream), 0, stream);
+  } else {
+    layer_idx = 0;
+  }
+
+  if (k_view.ndim() != 4 || v_view.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_attention] k_cache/v_cache expected rank 4 after layer "
+        "selection.");
+  }
+  if (k_view.shape(0) == 0 || k_view.shape(2) == 0 ||
+      k_view.shape(3) != queries.shape(3) || v_view.shape() != k_view.shape()) {
+    throw std::invalid_argument(
+        "[paged_attention] mismatched cache shapes for keys/values.");
+  }
+
+  auto final_type = result_type(queries, k_view, v_view);
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[paged_attention] unsupported dtype " << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  float scale = maybe_scale.has_value()
+      ? *maybe_scale
+      : 1.0f / std::sqrt(static_cast<float>(queries.shape(3)));
+
+  auto q_cast = astype(queries, final_type, stream);
+  auto k_cast = astype(k_view, final_type, stream);
+  auto v_cast = astype(v_view, final_type, stream);
+  auto tables_i32 = astype(block_tables, int32, stream);
+  auto lens_i32 = astype(context_lens, int32, stream);
+  std::optional<array> mapping_i32;
+  if (kv_head_mapping.has_value()) {
+    mapping_i32 = astype(*kv_head_mapping, int32, stream);
+  }
+
+  if (paged_attention_use_fallback(
+          q_cast, k_cast, v_cast, tables_i32, lens_i32, stream)) {
+    throw std::runtime_error(
+        "paged_attention_impl: configuration not supported on Metal backend.");
+  }
+
+  array out(
+      Shape{q_cast.shape(0), q_cast.shape(1), 1, q_cast.shape(3)},
+      final_type,
+      nullptr,
+      {});
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& device = metal::device(stream.device);
+  paged_attention(
+      stream,
+      device,
+      q_cast,
+      k_cast,
+      v_cast,
+      tables_i32,
+      lens_i32,
+      mapping_i32,
+      scale,
+      out);
+  return out;
 }
 
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
