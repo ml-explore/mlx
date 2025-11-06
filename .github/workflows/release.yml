@@ -15,6 +15,7 @@ jobs:
     outputs:
       pypi_env: ${{ github.event_name == 'push' && 'pypi' || 'test-pypi' }}
       pypi_url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+      pypi_dups: ${{ github.event_name == 'push' && 'true' || 'false' }}
     steps:
       - name: Set publishing variables
         run: echo "Publishing setup complete"
@@ -144,6 +145,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
+          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          print-hash: true
   
   pypi-publish-cuda:
     name: Upload CUDA release to PyPI
@@ -165,6 +168,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
+          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          print-hash: true
 
   pypi-publish-cpu:
     name: Upload CPU release to PyPI
@@ -186,6 +191,8 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
+          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          print-hash: true
 
   pypi-publish-metal:
     name: Upload Metal release to PyPI
@@ -207,4 +214,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.setup.outputs.pypi_url }}
-
+          skip-existing: ${{ needs.setup.outputs.pypi_dups }}
+          print-hash: true
