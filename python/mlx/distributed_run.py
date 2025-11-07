@@ -393,7 +393,9 @@ def get_mpi_libname():
         ompi_info = ompi_info.stdout.strip().decode()
 
         if platform.system() == "Darwin":
-            otool_output = run(["otool", "-L", ompi_info], check=True, capture_output=True)
+            otool_output = run(
+                ["otool", "-L", ompi_info], check=True, capture_output=True
+            )
         else:
             otool_output = run(["ldd", ompi_info], check=True, capture_output=True)
         otool_output = otool_output.stdout.decode()
