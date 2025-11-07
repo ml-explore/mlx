@@ -21,7 +21,7 @@
   }
 
 static const char* get_libmpi_name() {
-  const char* libname = std::getenv("MPI_LIBNAME");
+  const char* libname = std::getenv("MLX_MPI_LIBNAME");
   if (libname != nullptr) {
     return libname;
   }
