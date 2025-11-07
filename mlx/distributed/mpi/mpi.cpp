@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
+#include <cstdlib>
 #include <dlfcn.h>
 #include <iostream>
 
@@ -19,11 +20,17 @@
     }                                                              \
   }
 
+static const char* get_libmpi_name() {
+  const char* libname = std::getenv("MPI_LIBNAME");
+  if (libname != nullptr) {
+    return libname;
+  }
 #ifdef __APPLE__
-static constexpr const char* libmpi_name = "libmpi.dylib";
+  return "libmpi.dylib";
 #else
-static constexpr const char* libmpi_name = "libmpi.so";
+  return "libmpi.so";
 #endif
+}
 
 namespace mlx::core::distributed::mpi {
 
@@ -94,7 +101,7 @@ struct MPIWrapper {
   MPIWrapper() {
     initialized_ = false;
 
-    libmpi_handle_ = dlopen(libmpi_name, RTLD_NOW | RTLD_GLOBAL);
+    libmpi_handle_ = dlopen(get_libmpi_name(), RTLD_NOW | RTLD_GLOBAL);
     if (libmpi_handle_ == nullptr) {
       return;
     }
