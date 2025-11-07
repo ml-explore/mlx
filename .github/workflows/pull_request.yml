@@ -35,6 +35,67 @@ jobs:
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
 
+  paged_attention_bench:
+    if: github.repository == 'ml-explore/mlx'
+    runs-on: [self-hosted, macos]
+    needs: mac_build_and_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-macos
+        with:
+          python-version: '3.12'
+      - name: Run paged attention microbench
+        run: |
+          python benchmarks/python/paged_attention_bench.py \
+            --batch 64 --q-heads 8 --kv-heads 4 --head-dim 128 \
+            --block-size 32 --max-blocks 128 --active-blocks 64 \
+            --repeats 16 --dtype float16 --tg-size 128 > paged_attention_pr.csv
+      - name: Upload paged attention bench CSV
+        uses: actions/upload-artifact@v5
+        with:
+          name: paged-attention-bench
+          path: paged_attention_pr.csv
+          retention-days: 7
+
+  paged_attention_bench:
+    if: github.repository == 'ml-explore/mlx'
+    runs-on: [self-hosted, macos]
+    needs: mac_build_and_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-macos
+        with:
+          python-version: '3.12'
+      - name: Run paged attention microbench
+        run: |
+          source .venv/bin/activate || python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          mkdir -p bench
+          python benchmarks/python/paged_attention_bench.py \
+            --batch 64 \
+            --q-heads 32 \
+            --kv-heads 8 \
+            --head-dim 128 \
+            --block-sizes 32 64 \
+            --tg-sizes 64 128 \
+            --vec-widths 1 2 4 \
+            --max-blocks 128 \
+            --active-blocks 64 \
+            --repeats 16 \
+            --dtype float16 \
+            --csv bench/paged_attention_pr.csv
+      - name: Print paged attention CSV
+        run: |
+          cat bench/paged_attention_pr.csv
+      - name: Upload paged attention bench CSV
+        uses: actions/upload-artifact@v5
+        with:
+          name: paged-attention-bench
+          path: bench/paged_attention_pr.csv
+          retention-days: 7
+
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'
     runs-on: gpu-t4-4-core

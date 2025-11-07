@@ -259,6 +259,7 @@ class Device {
   int arch_gen_;
   int max_ops_per_buffer_;
   int max_mb_per_buffer_;
+  bool profiling_enabled_{false};
 };
 
 Device& device(mlx::core::Device);

@@ -3,11 +3,13 @@
 
 from collections import deque
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import mlx.core as mx
 
 _NATIVE_PAGED_ATTENTION = getattr(mx.fast, "_paged_attention_impl", None)
+_NATIVE_PAGED_KV_WRITE = getattr(mx.fast, "_paged_kv_write_impl", None)
+_PAGED_ATTENTION_PREWARM = getattr(mx.fast, "_paged_attention_prewarm", None)
 
 class KVBlockManager:
     def __init__(
@@ -30,6 +32,12 @@ class KVBlockManager:
             (num_layers, num_kv_heads, max_blocks, block_size, head_dim), dtype=dtype
         )
         self.v = mx.zeros_like(self.k)
+
+        if _PAGED_ATTENTION_PREWARM is not None:
+            try:
+                _PAGED_ATTENTION_PREWARM(block_size, dtype)
+            except RuntimeError:
+                pass
 
         self._free_blocks: deque[int] = deque(range(max_blocks))
         self._ref_counts: List[int] = [0 for _ in range(max_blocks)]
@@ -79,16 +87,44 @@ class KVBlockManager:
         start_pos: int,
     ) -> None:
         tokens = int(k_chunk.shape[1])
-        for t in range(tokens):
-            position = start_pos + t
-            block_idx = position // self.block_size
-            offset = position % self.block_size
-            block_id = self._ensure_block(seq_id, block_idx, copy_existing=True)
-            self.k[layer_idx, :, block_id, offset] = k_chunk[:, t]
-            self.v[layer_idx, :, block_id, offset] = v_chunk[:, t]
+        if tokens == 0:
+            return
 
+        end_pos = start_pos + tokens
+        first_block = start_pos // self.block_size
+        last_block = math.ceil(end_pos / self.block_size)
+        for block_idx in range(first_block, last_block):
+            self._ensure_block(seq_id, block_idx, copy_existing=True)
+
+        table = self._block_tables.get(seq_id)
+        if table is None:
+            raise ValueError(f"sequence {seq_id} missing")
+        block_row = mx.array(table, dtype=mx.int32)
+
+        if _NATIVE_PAGED_KV_WRITE is not None:
+            try:
+                k_tokens = self._prepare_chunk(k_chunk)
+                v_tokens = self._prepare_chunk(v_chunk)
+                _NATIVE_PAGED_KV_WRITE(
+                    self.k[layer_idx],
+                    self.v[layer_idx],
+                    block_row,
+                    start_pos,
+                    k_tokens,
+                    v_tokens,
+                )
+                self._context_lens[seq_id] = max(
+                    self._context_lens.get(seq_id, 0), end_pos
+                )
+                return
+            except RuntimeError:
+                pass
+
+        self._write_prefill_python(
+            seq_id, layer_idx, k_chunk, v_chunk, start_pos
+        )
         self._context_lens[seq_id] = max(
-            self._context_lens.get(seq_id, 0), start_pos + tokens
+            self._context_lens.get(seq_id, 0), end_pos
         )
 
     def append_decode_token(
@@ -120,6 +156,24 @@ class KVBlockManager:
         block_ids = mx.array(table, dtype=mx.int32)
         ctx_len = self._context_lens.get(seq_id, 0)
         return block_ids, ctx_len
+
+    def batch_tables(self, seq_ids: Sequence[int]) -> Tuple[mx.array, mx.array]:
+        """Return block tables/context lengths for the provided sequence ids."""
+        if not seq_ids:
+            raise ValueError("batch_tables expects at least one sequence id")
+        tables = mx.full(
+            (len(seq_ids), self.max_blocks_per_sequence),
+            -1,
+            dtype=mx.int32,
+        )
+        ctx = mx.zeros((len(seq_ids),), dtype=mx.int32)
+        for idx, seq_id in enumerate(seq_ids):
+            block_table = self._block_tables.get(seq_id)
+            if block_table is None:
+                raise ValueError(f"sequence {seq_id} missing")
+            tables[idx] = mx.array(block_table, dtype=mx.int32)
+            ctx[idx] = int(self._context_lens.get(seq_id, 0))
+        return tables, ctx
 
     def free(self, seq_id: int) -> None:
         table = self._block_tables.pop(seq_id, None)
@@ -168,6 +222,29 @@ class KVBlockManager:
 
         return block_id
 
+    def _prepare_chunk(self, chunk: mx.array) -> mx.array:
+        if chunk.ndim != 3:
+            raise ValueError("expected chunk with shape [kv_heads, tokens, head_dim]")
+        prepared = chunk.astype(self.dtype) if chunk.dtype != self.dtype else chunk
+        return mx.swapaxes(prepared, 0, 1)
+
+    def _write_prefill_python(
+        self,
+        seq_id: int,
+        layer_idx: int,
+        k_chunk: mx.array,
+        v_chunk: mx.array,
+        start_pos: int,
+    ) -> None:
+        tokens = int(k_chunk.shape[1])
+        for t in range(tokens):
+            position = start_pos + t
+            block_idx = position // self.block_size
+            offset = position % self.block_size
+            block_id = self._ensure_block(seq_id, block_idx, copy_existing=True)
+            self.k[layer_idx, :, block_id, offset] = k_chunk[:, t]
+            self.v[layer_idx, :, block_id, offset] = v_chunk[:, t]
+
 
 def _paged_attention_reference(
     q: mx.array,
@@ -207,7 +284,7 @@ def _paged_attention_reference(
     elif num_kv_heads == 1:
         mapping = [0 for _ in range(num_heads)]
     else:
-        mapping = [h % num_kv_heads for h in range(num_heads)]
+        mapping = [(h * num_kv_heads) // num_heads for h in range(num_heads)]
 
     if _NATIVE_PAGED_ATTENTION is not None:
         try:
@@ -285,4 +362,29 @@ def _materialize_sequence(
 if not hasattr(mx.fast, "paged_attention"):
     mx.fast.paged_attention = _paged_attention_reference
 
-__all__ = ["KVBlockManager"]
+
+def prefill_into_kv(
+    manager: "KVBlockManager",
+    seq_id: int,
+    chunk_iterator: Iterable[Tuple[Sequence[mx.array], Sequence[mx.array]]],
+    on_chunk_committed: Optional[Callable[[], None]] = None,
+) -> None:
+    """Write per-chunk layer K/V outputs into the KV cache."""
+
+    start_pos = manager._context_lens.get(seq_id, 0)
+    for k_layers, v_layers in chunk_iterator:
+        if len(k_layers) != manager.num_layers or len(v_layers) != manager.num_layers:
+            raise ValueError("chunk does not match manager.num_layers")
+        if not k_layers:
+            continue
+        chunk_tokens = k_layers[0].shape[1]
+        if chunk_tokens == 0:
+            continue
+        for layer_idx, (k_chunk, v_chunk) in enumerate(zip(k_layers, v_layers)):
+            manager.write_prefill(seq_id, layer_idx, k_chunk, v_chunk, start_pos)
+        start_pos += chunk_tokens
+        if on_chunk_committed is not None:
+            on_chunk_committed()
+
+
+__all__ = ["KVBlockManager", "prefill_into_kv"]

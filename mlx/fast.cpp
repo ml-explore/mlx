@@ -6,6 +6,7 @@
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/backend/metal/paged_attention.h"
+#include "mlx/backend/metal/paged_kv.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
 
@@ -934,6 +935,65 @@ array paged_attention_impl(
       scale,
       out);
   return out;
+}
+
+void paged_kv_write_impl(
+    array& k_cache,
+    array& v_cache,
+    const array& block_row,
+    int start_pos,
+    const array& k_chunk,
+    const array& v_chunk,
+    StreamOrDevice s) {
+  if (k_cache.ndim() != 4 || v_cache.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_kv_write] expected cache tensors with rank 4.");
+  }
+  if (k_cache.dtype() != v_cache.dtype()) {
+    throw std::invalid_argument(
+        "[paged_kv_write] key/value cache require matching dtypes.");
+  }
+  if (k_chunk.ndim() != 3 || v_chunk.ndim() != 3) {
+    throw std::invalid_argument(
+        "[paged_kv_write] chunks must have rank 3.");
+  }
+  if (k_chunk.shape() != v_chunk.shape()) {
+    throw std::invalid_argument(
+        "[paged_kv_write] key/value chunk shapes must match.");
+  }
+  if (k_chunk.shape(2) != k_cache.shape(3)) {
+    throw std::invalid_argument(
+        "[paged_kv_write] chunk head_dim must match cache head_dim.");
+  }
+
+  auto stream = to_stream(s);
+  auto block_i32 = astype(block_row, int32, stream);
+  auto k_cast = astype(k_chunk, k_cache.dtype(), stream);
+  auto v_cast = astype(v_chunk, k_cache.dtype(), stream);
+  if (paged_kv_write_use_fallback(
+          k_cache, v_cache, block_i32, k_cast, v_cast, stream)) {
+    throw std::runtime_error(
+        "paged_kv_write_impl: configuration not supported on Metal backend.");
+  }
+  auto& device = metal::device(stream.device);
+  paged_kv_write(
+      stream, device, k_cache, v_cache, block_i32, start_pos, k_cast, v_cast);
+}
+
+void paged_attention_prewarm(
+    uint32_t block_size,
+    Dtype dtype,
+    std::optional<uint32_t> threads_per_head,
+    std::optional<uint32_t> vec_width,
+    StreamOrDevice s) {
+  auto stream = to_stream(s);
+  auto& device = metal::device(stream.device);
+  paged_attention_prewarm_kernel(
+      device,
+      dtype,
+      block_size,
+      threads_per_head.value_or(0),
+      vec_width.value_or(0));
 }
 
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {

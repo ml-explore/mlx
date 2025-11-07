@@ -1,5 +1,10 @@
 #include "mlx/backend/metal/paged_attention.h"
 
+#include <algorithm>
+#include <atomic>
+#include <cstdlib>
+#include <stdexcept>
+
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -27,9 +32,103 @@ struct PagedAttentionParams {
 
 namespace {
 
-std::string kernel_name(const array& q) {
-  std::string name = "paged_attention_decode_";
-  name += get_type_string(q.dtype());
+std::atomic<double> g_last_gpu_time_ms{0.0};
+
+uint32_t read_env_u32(const char* name) {
+  if (const char* value = std::getenv(name)) {
+    try {
+      auto parsed = std::stoul(value);
+      return static_cast<uint32_t>(parsed);
+    } catch (...) {
+    }
+  }
+  return 0;
+}
+
+uint32_t clamp_threads_per_head(uint32_t tg_size, metal::Device& device) {
+  auto max_threads_size = device.mtl_device()->maxThreadsPerThreadgroup();
+  auto max_threads = static_cast<uint32_t>(max_threads_size.width);
+  constexpr uint32_t kMaxKernelThreads = 256;
+  if (tg_size == 0) {
+    return 32;
+  }
+  tg_size = std::max<uint32_t>(32, tg_size);
+  tg_size = std::min(tg_size, max_threads);
+  tg_size = std::min(tg_size, kMaxKernelThreads);
+  return tg_size;
+}
+
+uint32_t choose_threads_per_head(
+    uint32_t head_dim,
+    uint32_t batch,
+    metal::Device& device) {
+  if (uint32_t override = read_env_u32("MLX_PAGED_ATTN_TG_SIZE")) {
+    return clamp_threads_per_head(override, device);
+  }
+  uint32_t guess;
+  if (head_dim >= 128) {
+    guess = batch >= 48 ? 128 : 96;
+  } else if (head_dim >= 64) {
+    guess = batch >= 32 ? 96 : 64;
+  } else {
+    guess = 64;
+  }
+  return clamp_threads_per_head(guess, device);
+}
+
+uint32_t choose_vec_width(uint32_t head_dim) {
+  if (head_dim == 0) {
+    return 1;
+  }
+  if (uint32_t override = read_env_u32("MLX_PAGED_ATTN_VEC_WIDTH")) {
+    override = std::max<uint32_t>(1u, override);
+    override = std::min<uint32_t>(override, 8u);
+    while (override > head_dim && override > 1) {
+      override >>= 1;
+    }
+    return std::max<uint32_t>(1u, override);
+  }
+  if (head_dim % 8 == 0) {
+    return 8;
+  }
+  if (head_dim % 4 == 0) {
+    return 4;
+  }
+  if (head_dim % 2 == 0) {
+    return 2;
+  }
+  return 1;
+}
+
+std::string kernel_dtype_suffix(Dtype dtype) {
+  switch (dtype) {
+    case float16:
+      return "float16";
+    case bfloat16:
+      return "bfloat16";
+    case float32:
+      return "float32";
+    default:
+      throw std::invalid_argument("paged_attention: unsupported dtype");
+  }
+}
+
+std::string kernel_base_name(Dtype dtype) {
+  return "paged_attention_decode_" + kernel_dtype_suffix(dtype);
+}
+
+std::string kernel_specialized_name(
+    Dtype dtype,
+    uint32_t block_size,
+    uint32_t threads_per_head,
+    uint32_t vec_width) {
+  std::string name = kernel_base_name(dtype);
+  name += "_bs";
+  name += std::to_string(block_size);
+  name += "_tg";
+  name += std::to_string(threads_per_head);
+  name += "_vw";
+  name += std::to_string(vec_width);
   return name;
 }
 
@@ -97,10 +196,21 @@ void paged_attention(
   params.out_batch_stride = static_cast<uint32_t>(out.strides()[0]);
   params.out_head_stride = static_cast<uint32_t>(out.strides()[1]);
 
-  auto kernel_id = kernel_name(q);
-  metal::MTLFCList func_consts;
+  auto kernel_base = kernel_base_name(q.dtype());
+  uint16_t block_const = static_cast<uint16_t>(params.block_size);
+  uint32_t threads_per_head =
+      choose_threads_per_head(params.head_dim, q.shape(0), device);
+  uint16_t tg_const = static_cast<uint16_t>(threads_per_head);
+  uint32_t vec_width = choose_vec_width(params.head_dim);
+  uint16_t vec_const = static_cast<uint16_t>(vec_width);
+  auto specialized_name = kernel_specialized_name(
+      q.dtype(), params.block_size, threads_per_head, vec_width);
+  metal::MTLFCList func_consts = {
+      {&block_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(0)},
+      {&tg_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(1)},
+      {&vec_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(2)}};
   auto& compute_encoder = device.get_command_encoder(s.index);
-  auto kernel = device.get_kernel(kernel_id, kernel_id, func_consts);
+  auto kernel = device.get_kernel(kernel_base, specialized_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(q, 0);
@@ -120,8 +230,53 @@ void paged_attention(
       static_cast<NS::UInteger>(q.shape(1)),
       static_cast<NS::UInteger>(q.shape(0)),
       1);
-  MTL::Size group_dims(1, 1, 1);
+  MTL::Size group_dims(threads_per_head, 1, 1);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  auto command_buffer = device.get_command_buffer(s.index);
+  command_buffer->addCompletedHandler([](MTL::CommandBuffer* cb) {
+    double start = cb->GPUStartTime();
+    double end = cb->GPUEndTime();
+    double elapsed = 0.0;
+    if (end > start && start > 0.0) {
+      elapsed = end - start;
+    } else {
+      start = cb->kernelStartTime();
+      end = cb->kernelEndTime();
+      if (end > start && start > 0.0) {
+        elapsed = end - start;
+      }
+    }
+    if (elapsed > 0.0) {
+      g_last_gpu_time_ms.store(elapsed * 1000.0, std::memory_order_relaxed);
+    }
+  });
+}
+
+void paged_attention_prewarm_kernel(
+    metal::Device& device,
+    Dtype dtype,
+    uint32_t block_size,
+    uint32_t threads_per_head,
+    uint32_t vec_width) {
+  if (block_size == 0) {
+    return;
+  }
+  uint16_t block_const = static_cast<uint16_t>(block_size);
+  uint16_t tg_const = static_cast<uint16_t>(threads_per_head);
+  uint16_t vec_const = static_cast<uint16_t>(vec_width);
+  metal::MTLFCList func_consts = {
+      {&block_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(0)},
+      {&tg_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(1)},
+      {&vec_const, MTL::DataTypeUShort, static_cast<NS::UInteger>(2)}};
+  auto kernel_base = kernel_base_name(dtype);
+  auto specialized_name =
+      kernel_specialized_name(dtype, block_size, threads_per_head, vec_width);
+  device.get_kernel(kernel_base, specialized_name, func_consts);
+}
+
+double paged_attention_last_time_ms() {
+  return g_last_gpu_time_ms.load(std::memory_order_relaxed);
 }
 
 } // namespace mlx::core::fast

@@ -28,5 +28,13 @@ void paged_attention(
     float scale,
     array& out);
 
-} // namespace mlx::core::fast
+void paged_attention_prewarm_kernel(
+    metal::Device& device,
+    Dtype dtype,
+    uint32_t block_size,
+    uint32_t threads_per_head = 0,
+    uint32_t vec_width = 0);
 
+double paged_attention_last_time_ms();
+
+} // namespace mlx::core::fast

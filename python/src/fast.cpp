@@ -9,6 +9,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/fast.h"
+#include "mlx/backend/metal/paged_kv.h"
 #include "mlx/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -655,5 +656,48 @@ void init_fast(nb::module_& parent_module) {
       "kv_head_mapping"_a = nb::none(),
       "scale"_a = nb::none(),
       "stream"_a = nb::none());
+
+  m.def(
+      "_paged_kv_write_impl",
+      [](mx::array& k_cache,
+         mx::array& v_cache,
+         const mx::array& block_row,
+         int start_pos,
+         const mx::array& k_chunk,
+         const mx::array& v_chunk,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_kv_write_impl(
+            k_cache, v_cache, block_row, start_pos, k_chunk, v_chunk, s);
+      },
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_row"_a,
+      "start_pos"_a,
+      "k_chunk"_a,
+      "v_chunk"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "_paged_attention_prewarm",
+      [](uint32_t block_size,
+         mx::Dtype dtype,
+         std::optional<uint32_t> threads_per_head,
+         std::optional<uint32_t> vec_width,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_attention_prewarm(
+            block_size, dtype, threads_per_head, vec_width, s);
+      },
+      "block_size"_a,
+      "dtype"_a,
+      nb::kw_only(),
+      "threads_per_head"_a = nb::none(),
+      "vec_width"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "_paged_attention_last_time_ms",
+      []() { return mx::fast::paged_attention_last_time_ms(); },
+      nb::sig("def _paged_attention_last_time_ms() -> float"));
 
 }

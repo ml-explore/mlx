@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <cctype>
 #include <cstdlib>
 #include <sstream>
 
@@ -9,6 +10,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
+#include "metal_cpp_shims.hpp"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
@@ -18,6 +20,17 @@ namespace mlx::core::metal {
 namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
+
+bool env_flag_enabled(const char* name) {
+  if (const char* value = std::getenv(name)) {
+    if (*value == '\0') {
+      return false;
+    }
+    char c = static_cast<char>(std::tolower(*value));
+    return c == '1' || c == 't' || c == 'y';
+  }
+  return false;
+}
 
 auto get_metal_version() {
   auto get_metal_version_ = []() {
@@ -320,6 +333,11 @@ Device::Device() {
   device_ = load_device();
   default_library_ = load_default_library(device_);
   arch_ = std::string(device_->architecture()->name()->utf8String());
+#if defined(__APPLE__)
+  profiling_enabled_ = env_flag_enabled("MLX_METAL_PROFILING");
+#else
+  profiling_enabled_ = false;
+#endif
   int ag_tens = arch_[arch_.size() - 3] - '0';
   int ag_ones = arch_[arch_.size() - 2] - '0';
   arch_gen_ = ag_tens * 10 + ag_ones;
@@ -392,7 +410,33 @@ bool Device::command_buffer_needs_commit(int index) {
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
   auto& stream = get_stream_(index);
   if (stream.buffer == nullptr) {
-    stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
+    if (profiling_enabled_) {
+      auto pool = new_scoped_memory_pool();
+      auto desc = MTL::CommandBufferDescriptor::alloc()->init();
+      if (!desc) {
+        throw std::runtime_error(
+            "[metal::Device] Unable to create command buffer descriptor");
+      }
+      desc->setRetainedReferences(false);
+      bool enabled = set_profiling_enabled(desc, true);
+      if (enabled) {
+        stream.buffer = stream.queue->commandBuffer(desc);
+      } else {
+        static bool warned = false;
+        if (!warned) {
+          fprintf(
+              stderr,
+              "[mlx] Metal profiling unavailable on this platform; "
+              "disabling MLX_METAL_PROFILING.\n");
+          warned = true;
+        }
+        profiling_enabled_ = false;
+      }
+      desc->release();
+    }
+    if (stream.buffer == nullptr) {
+      stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
+    }
     if (!stream.buffer) {
       throw std::runtime_error(
           "[metal::Device] Unable to create new command buffer");

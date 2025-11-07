@@ -64,6 +64,24 @@ array paged_attention_impl(
     const std::optional<float>& scale,
     StreamOrDevice s = {});
 
+void paged_kv_write_impl(
+    array& k_cache,
+    array& v_cache,
+    const array& block_row,
+    int start_pos,
+    const array& k_chunk,
+    const array& v_chunk,
+    StreamOrDevice s = {});
+
+void paged_attention_prewarm(
+    uint32_t block_size,
+    Dtype dtype,
+    std::optional<uint32_t> threads_per_head = std::nullopt,
+    std::optional<uint32_t> vec_width = std::nullopt,
+    StreamOrDevice s = {});
+
+double paged_attention_last_time_ms();
+
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 
