@@ -419,7 +419,7 @@ def launch_mpi(parser, hosts, args, command):
         dyld = Path(mpirun).parent.parent / "lib"
         args.env = [
             f"DYLD_LIBRARY_PATH={str(dyld)}",
-            f"MPI_LIBNAME={mpi_libname}",
+            f"MLX_MPI_LIBNAME={mpi_libname}",
         ] + args.env
 
     log(args.verbose, f"Using '{mpirun}'")
