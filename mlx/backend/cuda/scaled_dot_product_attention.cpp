@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/scaled_dot_product_attention.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/lru_cache.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/transforms_impl.h"
@@ -219,6 +219,24 @@ void sdpa_cudnn(
       handle, variant_pack, workspace_ptr, cuda_graph));
   encoder.add_graph_node(cuda_graph);
 }
+
+// Defined in scaled_dot_product_attention.cu file.
+bool supports_sdpa_vector(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_mask,
+    bool has_arr_mask,
+    bool do_causal);
+void sdpa_vector(
+    const array& q,
+    const array& k,
+    const array& v,
+    float scale,
+    array& o,
+    bool do_causal,
+    const std::optional<array>& sinks,
+    Stream s);
 
 namespace fast {
 

@@ -1,9 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/scaled_dot_product_attention.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 
