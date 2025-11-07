@@ -551,10 +551,15 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 class TestSDPA(mlx_tests.MLXTestCase):
     @property
     def dtypes(self):
-        return ["float32", "float16"] if mx.metal.is_available() else ["float32"]
+        if mx.metal.is_available():
+            return ["float32", "float16"]
+        elif mx.cuda.is_available():
+            return ["float16"]
+        else:
+            return ["float32"]
 
     def test_sdpa(self):
-        if not mx.metal.is_available():
+        if not mx.metal.is_available() and not mx.cuda.is_available():
             return
 
         # fmt: off
