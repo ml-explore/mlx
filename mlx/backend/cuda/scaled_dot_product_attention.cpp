@@ -133,11 +133,23 @@ bool supports_sdpa_cudnn(
     const array& k,
     const array& v,
     bool has_mask,
-    bool has_arr_mask,
     bool do_causal) {
-  if (has_mask && !do_causal) { // causal mask only
+  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SPDA", 0);
+  if (!enabled) {
     return false;
   }
+
+  if (has_mask) {
+    // TODO: Support array masks.
+    if (!do_causal) {
+      return false;
+    }
+    // TODO: Fix causal mask when L_Q != L_K.
+    if (q.shape(2) != k.shape(2)) {
+      return false;
+    }
+  }
+
   Dtype dtype = q.dtype();
   return dtype == float16 || dtype == bfloat16;
 }
@@ -149,7 +161,6 @@ void sdpa_cudnn(
     float scale,
     array& o,
     bool do_causal,
-    const std::optional<array>& sinks,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
   // TODO: Handle donation.
@@ -227,7 +238,7 @@ bool ScaledDotProductAttention::use_fallback(
   }
 
   return !supports_sdpa_vector(q, k, v, has_mask, has_arr_mask, do_causal) &&
-      !supports_sdpa_cudnn(q, k, v, has_mask, has_arr_mask, do_causal);
+      !supports_sdpa_cudnn(q, k, v, has_mask, do_causal);
 }
 
 void ScaledDotProductAttention::eval_gpu(
@@ -237,20 +248,20 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& s = stream();
 
-  assert(inputs.size() == 3 || inputs.size() == 4);
   const auto& q = inputs[0];
   const auto& k = inputs[1];
   const auto& v = inputs[2];
+  bool has_mask = inputs.size() - has_sinks_ > 3;
 
-  sdpa_cudnn(q, k, v, scale_, out, do_causal_, std::nullopt, s);
-
-#if 0
-  if (has_sinks_) {
-    sdpa_vector(q, k, v, scale_, out, do_causal_, inputs.back(), s);
+  if (supports_sdpa_cudnn(q, k, v, has_mask, do_causal_)) {
+    sdpa_cudnn(q, k, v, scale_, out, do_causal_, s);
   } else {
-    sdpa_vector(q, k, v, scale_, out, do_causal_, std::nullopt, s);
+    if (has_sinks_) {
+      sdpa_vector(q, k, v, scale_, out, do_causal_, inputs.back(), s);
+    } else {
+      sdpa_vector(q, k, v, scale_, out, do_causal_, std::nullopt, s);
+    }
   }
-#endif
 }
 
 } // namespace fast
