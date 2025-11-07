@@ -1146,6 +1146,7 @@ class Full : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(Full)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
 class Gather : public UnaryPrimitive {

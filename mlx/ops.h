@@ -69,6 +69,17 @@ array full(Shape shape, T val, StreamOrDevice s = {}) {
   return full(std::move(shape), array(val), to_stream(s));
 }
 
+array full_like(const array& a, array vals, Dtype dtype, StreamOrDevice s = {});
+array full_like(const array& a, array vals, StreamOrDevice s = {});
+template <typename T>
+array full_like(const array& a, T val, Dtype dtype, StreamOrDevice s = {}) {
+  return full_like(a, array(val, dtype), dtype, to_stream(s));
+}
+template <typename T>
+array full_like(const array& a, T val, StreamOrDevice s = {}) {
+  return full_like(a, array(val, a.dtype()), to_stream(s));
+}
+
 /** Fill an array of the given shape with zeros. */
 array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s = {});
 inline array zeros(const Shape& shape, StreamOrDevice s = {}) {

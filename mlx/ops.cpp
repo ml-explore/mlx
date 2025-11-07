@@ -280,16 +280,19 @@ array copy(array a, StreamOrDevice s /* = {} */) {
       {std::move(a)});
 }
 
+array full_impl(array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return array(
+      vals.shape(),
+      dtype,
+      std::make_shared<Full>(to_stream(s)),
+      {astype(vals, dtype, s)});
+}
+
 array full(Shape shape, array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
     throw std::invalid_argument("[full] Negative dimensions not allowed.");
   }
-  auto copied_shape = shape; // |shape| will be moved
-  return array(
-      std::move(copied_shape),
-      dtype,
-      std::make_shared<Full>(to_stream(s)),
-      {broadcast_to(astype(std::move(vals), dtype, s), std::move(shape), s)});
+  return full_impl(broadcast_to(vals, std::move(shape), s), dtype, s);
 }
 
 array full(Shape shape, array vals, StreamOrDevice s /* = {} */) {
@@ -297,12 +300,25 @@ array full(Shape shape, array vals, StreamOrDevice s /* = {} */) {
   return full(std::move(shape), std::move(vals), dtype, to_stream(s));
 }
 
+array full_like(
+    const array& a,
+    array vals,
+    Dtype dtype,
+    StreamOrDevice s /* = {} */) {
+  auto inputs = broadcast_arrays({a, std::move(vals)}, s);
+  return full_impl(std::move(inputs[1]), dtype, s);
+}
+
+array full_like(const array& a, array vals, StreamOrDevice s /* = {} */) {
+  return full_like(a, std::move(vals), a.dtype(), to_stream(s));
+}
+
 array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
   return full(shape, array(0, dtype), to_stream(s));
 }
 
 array zeros_like(const array& a, StreamOrDevice s /* = {} */) {
-  return zeros(a.shape(), a.dtype(), to_stream(s));
+  return full_like(a, 0, a.dtype(), to_stream(s));
 }
 
 array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -310,7 +326,7 @@ array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array ones_like(const array& a, StreamOrDevice s /* = {} */) {
-  return ones(a.shape(), a.dtype(), to_stream(s));
+  return full_like(a, 1, a.dtype(), to_stream(s));
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
