@@ -5,6 +5,7 @@ import base64
 import ipaddress
 import json
 import os
+import platform
 import shlex
 import shutil
 import sys
@@ -391,7 +392,10 @@ def get_mpi_libname():
         ompi_info = run(["which", "ompi_info"], check=True, capture_output=True)
         ompi_info = ompi_info.stdout.strip().decode()
 
-        otool_output = run(["otool", "-L", ompi_info], check=True, capture_output=True)
+        if platform.system() == "Darwin":
+            otool_output = run(["otool", "-L", ompi_info], check=True, capture_output=True)
+        else:
+            otool_output = run(["ldd", ompi_info], check=True, capture_output=True)
         otool_output = otool_output.stdout.decode()
 
         # StopIteration if not found
