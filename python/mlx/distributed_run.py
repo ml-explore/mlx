@@ -395,7 +395,9 @@ def get_mpi_libname():
         otool_output = otool_output.stdout.decode()
 
         # StopIteration if not found
-        libmpi_line = next(filter(lambda line: "libmpi" in line, otool_output.splitlines()))
+        libmpi_line = next(
+            filter(lambda line: "libmpi" in line, otool_output.splitlines())
+        )
         return libmpi_line.strip().split()[0].removeprefix("@rpath/")
     except:
         return None
@@ -409,7 +411,10 @@ def launch_mpi(parser, hosts, args, command):
     mpi_libname = get_mpi_libname()
     if mpi_libname is not None:
         dyld = Path(mpirun).parent.parent / "lib"
-        args.env = [f"DYLD_LIBRARY_PATH={str(dyld)}", f"MPI_LIBNAME={mpi_libname}"] + args.env
+        args.env = [
+            f"DYLD_LIBRARY_PATH={str(dyld)}",
+            f"MPI_LIBNAME={mpi_libname}",
+        ] + args.env
 
     log(args.verbose, f"Using '{mpirun}'")
     with tempfile.NamedTemporaryFile(mode="w") as f:

@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
-#include <cstdlib>
 #include <dlfcn.h>
+#include <cstdlib>
 #include <iostream>
 
 #include "mlx/backend/cpu/encoder.h"
