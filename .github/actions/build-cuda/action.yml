@@ -24,7 +24,10 @@ runs:
       env:
         DEBUG: 1
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
-      run: pip install -e ".[dev]" -v
+      run: |
+        echo "::group::Install Python Package"
+        pip install -e ".[dev]" -v
+        echo "::endgroup::"
 
     - name: Run Python tests - CPU
       if: inputs.run-tests == 'true'
@@ -32,7 +35,10 @@ runs:
       env:
         LOW_MEMORY: 1
         DEVICE: cpu
-      run: python -m unittest discover python/tests -v
+      run: |
+        echo "::group::Run Python tests - CPU"
+        python -m unittest discover python/tests -v
+        echo "::endgroup::"
 
     - name: Run Python tests - GPU
       if: inputs.run-tests == 'true'
@@ -40,22 +46,30 @@ runs:
       env:
         LOW_MEMORY: 1
         DEVICE: gpu
-      run: python -m tests discover python/tests -v
+      run: |
+        echo "::group::Run Python tests - GPU"
+        python -m tests discover python/tests -v
+        echo "::endgroup::"
 
     - name: Build CPP only
       if: inputs.build-type == 'debug'
       shell: bash
       run: |
+        echo "::group::Build CPP"
         cmake . -B build \
           -DMLX_BUILD_CUDA=ON \
           -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }} \
           -DCMAKE_BUILD_TYPE=DEBUG
         cmake --build build -j $(nproc)
+        echo "::endgroup::"
     
     - name: Run CPP tests
       if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
       shell: bash
-      run: ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
+      run: |
+        echo "::group::Run CPP Tests"
+        ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
+        echo "::endgroup::"
 
     - name: Build Python package
       if: inputs.build-type == 'release'
