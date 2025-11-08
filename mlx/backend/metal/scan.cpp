@@ -12,32 +12,15 @@
 
 namespace mlx::core {
 
-void scan_gpu(
+void scan_gpu_inplace(
     array in,
     array& out,
     Scan::ReduceType reduce_type,
     int axis,
     bool reverse,
     bool inclusive,
-    const Stream& s,
-    bool allow_in_buffer_donation) {
+    const Stream& s) {
   auto& d = metal::device(s.device);
-
-  bool donate = allow_in_buffer_donation && in.is_donatable();
-  if (in.flags().contiguous && in.strides()[axis] != 0) {
-    if (donate && in.itemsize() == out.itemsize()) {
-      out.copy_shared_buffer(in);
-    } else {
-      out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
-          in.data_size(),
-          in.strides(),
-          in.flags());
-    }
-  } else {
-    in = contiguous_copy_gpu(in, s);
-    out.copy_shared_buffer(in);
-  }
 
   bool contiguous = in.strides()[axis] == 1;
 
@@ -140,7 +123,24 @@ void scan_gpu(
 void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
-  scan_gpu(inputs[0], out, reduce_type_, axis_, reverse_, inclusive_, stream());
+  auto in = inputs[0];
+  if (in.flags().contiguous && in.strides()[axis_] != 0) {
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
+  } else {
+    in = contiguous_copy_gpu(in, stream());
+    out.copy_shared_buffer(in);
+  }
+
+  scan_gpu_inplace(
+      in, out, reduce_type_, axis_, reverse_, inclusive_, stream());
 }
 
 } // namespace mlx::core

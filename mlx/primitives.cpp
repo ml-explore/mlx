@@ -1317,8 +1317,8 @@ Shape Convolution::conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative."
-          << " Got padding " << pads_lo << " | " << pads_hi << ".";
+      msg << "[conv] Padding sizes must be non-negative. Got padding "
+          << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -4370,17 +4370,16 @@ std::vector<array> MaskedScatter::vjp(
       const array mask_flat = flatten(mask_b, s);
       const array cotan_flat = flatten(cotan, s);
 
-      const array mask_i = astype(mask_flat, int32, s);
-      const array prefix = cumsum(mask_i, 0, false, false, s);
-      const array idx_src = multiply(mask_i, prefix, s);
+      const array idx_src =
+          cumsum(astype(mask_flat, int32, s), 0, false, false, s);
       const array cotan_src =
-          multiply(cotan_flat, astype(mask_flat, cotan_flat.dtype(), s), s);
+          where(mask_flat, cotan_flat, array(0, cotan_flat.dtype()), s);
 
       array gsrc_flat =
-          zeros_like(src, s);
+          zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
       if (src.size() > 0) {
-        const int n = static_cast<int>(idx_src.size());
-        const array cotan_updates = reshape(cotan_src, {n, 1}, s);
+        const array cotan_updates =
+            reshape(cotan_src, {static_cast<int>(idx_src.size()), 1}, s);
         gsrc_flat = scatter_add(gsrc_flat, idx_src, cotan_updates, 0, s);
       }
 

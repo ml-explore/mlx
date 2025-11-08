@@ -1929,22 +1929,16 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(np.array_equal(a, anp))
 
     def test_setitem_with_boolean_mask(self):
-        a = mx.array([1.0, 2.0, 3.0])
-        mask = mx.array([True, False, True])
-        a[mask] = mx.array([5.0, 6.0])
-        self.assertTrue(mx.array_equal(a, mx.array([5.0, 2.0, 6.0])))
+        mask_np = np.zeros((10, 10), dtype=bool)
+        mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
 
-        a = mx.zeros((2, 3))
-        mask = mx.array([[True], [False]])
-        a[mask] = mx.array([1.0, 2.0, 3.0])
-        expected = mx.array([[1.0, 2.0, 3.0], [0.0, 0.0, 0.0]])
-        self.assertTrue(mx.array_equal(a, expected))
+        mask_np = np.zeros((1, 10, 10), dtype=bool)
+        with self.assertRaises(ValueError):
+            mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
 
-        a = mx.arange(6).reshape(2, 3).astype(mx.float32)
-        mask_np = np.array([[True, False, True], [False, True, False]])
-        a[mask_np] = 10.0
-        expected = mx.array([[10.0, 1.0, 10.0], [3.0, 10.0, 5.0]])
-        self.assertTrue(mx.array_equal(a, expected))
+        mask_np = np.zeros((10, 10, 1), dtype=bool)
+        with self.assertRaises(ValueError):
+            mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
 
     def test_array_namespace(self):
         a = mx.array(1.0)

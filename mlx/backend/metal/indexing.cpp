@@ -662,18 +662,22 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   array mask_flat = flatten_in_eval(mask, 1, -1, s);
 
+  if (!mask_flat.flags().row_contiguous) {
+    mask_flat = contiguous_copy_gpu(mask_flat, s);
+  }
+
   // Prefix (exclusive) of mask → scatter_offsets
   array scatter_offsets(mask_flat.shape(), uint32, nullptr, {});
+  scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
 
-  scan_gpu(
+  scan_gpu_inplace(
       mask_flat,
       scatter_offsets,
       Scan::Sum,
       /*axis=*/1,
       /*reverse=*/false,
       /*inclusive=*/false,
-      s,
-      /*allow_in_buffer_donation=*/false);
+      s);
 
   // Kernel selection/build
   static constexpr std::string_view kBaseName = "masked_assign";
@@ -714,16 +718,11 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         compute_encoder.set_bytes(ndim, ndim_index);
       };
 
-  bind_shape_info(mask_flat, bind_idx, bind_idx + 1, bind_idx + 2);
-  bind_idx += 3;
   bind_shape_info(src, bind_idx, bind_idx + 1, bind_idx + 2);
-  bind_idx += 3;
-  bind_shape_info(out, bind_idx, bind_idx + 1, bind_idx + 2);
-  bind_idx += 3;
-  bind_shape_info(scatter_offsets, bind_idx, bind_idx + 1, bind_idx + 2);
   bind_idx += 3;
 
   compute_encoder.set_bytes(src.size() / src.shape(0), bind_idx++);
+  compute_encoder.set_bytes(mask_flat.size() / mask.shape(0), bind_idx++);
 
   // Dispatch
   auto group_dims = get_block_dims(total, 1, 1);

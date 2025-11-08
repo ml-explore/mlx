@@ -5,14 +5,13 @@
 
 namespace mlx::core {
 
-void scan_gpu(
+void scan_gpu_inplace(
     array in,
     array& out,
     Scan::ReduceType reduce_type,
     int axis,
     bool reverse,
     bool inclusive,
-    const Stream& s,
-    bool allow_in_buffer_donation = true);
+    const Stream& s);
 
 } // namespace mlx::core

@@ -3449,16 +3449,47 @@ array masked_scatter(
     StreamOrDevice s /* =  {} */) {
   if (mask.dtype() != bool_) {
     throw std::invalid_argument(
-        "[masked_scatter] Mask has to be boolean type.");
+        "[masked_scatter] mask has to be boolean type.");
+  }
+  if (a.dtype() != src.dtype()) {
+    std::ostringstream msg;
+    msg << "[masked_scatter] dtype(a) " << a.dtype()
+        << " must match dtype(src) " << src.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (mask.ndim() == 0) {
+    throw std::invalid_argument(
+        "[masked_scatter] scalar boolean masks are not supported.");
+  } else if (mask.ndim() > a.ndim()) {
+    throw std::invalid_argument(
+        "[masked_scatter] mask cannot have more dimensions than target.");
   }
 
-  if (a.dtype() != src.dtype()) {
-    throw std::invalid_argument(
-        "[masked_scatter] dtype(a) must match dtype(src).");
+  const auto& a_shape = a.shape();
+  const auto& mask_shape = mask.shape();
+  array mask_aligned = mask;
+
+  if (mask.ndim() == a.ndim()) {
+    if (mask_shape != a_shape) {
+      throw std::invalid_argument(
+          "[masked_scatter] mask shape must exactly match the a shape.");
+    }
+  } else {
+    for (size_t i = 0; i < mask_shape.size(); ++i) {
+      if (mask_shape[i] != a_shape[i]) {
+        throw std::invalid_argument(
+            "[masked_scatter] mask must match leading dimensions of the a.");
+      }
+    }
+    Shape reshape_shape(mask_shape.begin(), mask_shape.end());
+    reshape_shape.insert(
+        reshape_shape.end(), a_shape.size() - mask_shape.size(), 1);
+    mask_aligned = reshape(mask_aligned, std::move(reshape_shape), s);
   }
 
   auto expanded_a = expand_dims(a, 0, s);
-  auto expanded_mask = expand_dims(broadcast_to(mask, a.shape(), s), 0, s);
+  auto expanded_mask =
+      expand_dims(broadcast_to(mask_aligned, a.shape(), s), 0, s);
   auto expanded_src = expand_dims(src, 0, s);
 
   return squeeze(

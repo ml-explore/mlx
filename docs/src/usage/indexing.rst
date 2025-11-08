@@ -150,33 +150,45 @@ and ones elsewhere.
 Boolean Mask Assignment
 -----------------------
 
-MLX supports updating arrays with boolean masks using familiar NumPy syntax.
-A mask must already be a :class:`bool_` MLX :class:`array` or a NumPy
-``ndarray`` with ``dtype=bool``; other index types are routed through the
-standard scatter code.
+MLX supports boolean indices using NumPy syntax. A mask must already be
+a :class:`bool_` MLX :class:`array` or a NumPy ``ndarray`` with ``dtype=bool``.
+Other index types are routed through the standard scatter code.
 
 .. code-block:: shell
 
    >>> a = mx.array([1.0, 2.0, 3.0])
    >>> mask = mx.array([True, False, True])
-   >>> a[mask] = mx.array([5.0, 6.0])
+   >>> updates = mx.array([5.0, 6.0])
+   >>> a[mask] = updates
    >>> a
    array([5.0, 2.0, 6.0], dtype=float32)
 
-Scalar assignments broadcast across every ``True`` entry:
+Scalar assignments broadcast to every ``True`` entry in ``mask``. For non-scalar
+assignments, ``updates`` must provide at least as many elements as there are
+``True`` entries in ``mask``.
 
 .. code-block:: shell
 
-   >>> b = mx.zeros((2, 3))
-   >>> mask = mx.array([[True], [False]])  # broadcasts along axis 1
-   >>> b[mask] = 1.0
-   >>> b
-   array([[1.0, 1.0, 1.0],
-          [0.0, 0.0, 0.0]], dtype=float32)
+   >>> a = mx.zeros((2, 3))
+   >>> mask = mx.array([[True, False, True],
+                        [False, False, True]])
+   >>> a[mask] = 1.0
+   >>> a
+   array([[1.0, 0.0, 1.0],
+          [0.0, 0.0, 1.0]], dtype=float32)
 
-The mask is broadcast against the shape of the target array, and the updates
-are consumed in row-major order across every ``True`` entry. The update array
-must therefore provide exactly as many elements as the mask selects, unless a
-scalar is supplied (which broadcasts to all selected locations). Attempting to
-use a mask of any other dtype raises an error. These assignments mutate the
-target array in place; no copy is produced.
+Boolean masks follow NumPy semantics:
+
+- The mask shape must match the shape of the axes it indexes exactly. No mask
+  broadcasting occurs.
+- Any axes not covered by the mask are taken in full.
+
+.. code-block:: shell
+
+   >>> a = mx.arange(1000).reshape(10, 10, 10)
+   >>> a[mx.random.randn(10, 10) > 0.0] = 0  # valid: mask covers axes 0 and 1
+
+The mask of shape ``(10, 10)`` applies to the first two axes, so ``a[mask]``
+selects the 1-D slices ``a[i, j, :]`` where ``mask[i, j]`` is ``True``.
+Shapes such as ``(1, 10, 10)`` or ``(10, 10, 1)`` do not match the indexed
+axes and therefore raise errors.

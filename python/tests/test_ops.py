@@ -3148,17 +3148,17 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises((TypeError, ValueError)):
             b[bad_mask] = src
 
-        # broadcasted mask and source
+        # mask matching leading dimension selects entire trailing slices
         c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
-        mask = mx.array([[True], [False]])
+        mask = mx.array([True, False])
         src = mx.array([2.0, 3.0, 4.0])
         expected = mx.array([[2.0, 3.0, 4.0], [1.0, 1.0, 1.0]])
         c[mask] = src
         self.assertTrue(mx.array_equal(c, expected))
 
-        # broadcasted mask and scalar source
+        # scalar source applies to all selected entries
         c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
-        mask = mx.array([[True], [False]])
+        mask = mx.array([True, False])
         src = 2.0
         expected = mx.array([[2.0, 2.0, 2.0], [1.0, 1.0, 1.0]])
         c[mask] = src
