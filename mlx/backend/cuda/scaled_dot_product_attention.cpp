@@ -134,7 +134,7 @@ bool supports_sdpa_cudnn(
     const array& v,
     bool has_mask,
     bool do_causal) {
-  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SPDA", 0);
+  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SPDA", 1);
   if (!enabled) {
     return false;
   }
@@ -144,10 +144,15 @@ bool supports_sdpa_cudnn(
     if (!do_causal) {
       return false;
     }
-    // TODO: Fix causal mask when L_Q != L_K.
+    // FIXME: Causal mask generates wrong results when L_Q != L_K.
     if (q.shape(2) != k.shape(2)) {
       return false;
     }
+  }
+
+  // Only use cuDNN for prefilling.
+  if (q.shape(2) != k.shape(2)) {
+    return false;
   }
 
   Dtype dtype = q.dtype();
@@ -175,7 +180,8 @@ void sdpa_cudnn(
   cudnnSetStream(handle, encoder.stream());
 
   // Search cache.
-  SDPACacheKey cache_key{
+  BytesKey<SDPACacheKey> cache_key;
+  cache_key.pod = {
       encoder.device().cuda_device(),
       dtype_to_cudnn_type(q.dtype()),
       vector_key<QKV_NDIM>(q.shape()),

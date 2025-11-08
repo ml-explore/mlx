@@ -135,12 +135,19 @@ class LRUCache {
 };
 
 // Turn a POD struct into a container key by doing bytes compare.
+//
+// Usage:
+//   BytesKey<MyKey> key;
+//   key.pod = { ... };
 template <typename T>
 struct BytesKey {
   T pod;
   static_assert(std::is_standard_layout_v<T>, "T is not POD");
 
-  BytesKey(T pod) : pod(std::move(pod)) {}
+  BytesKey() {
+    // Make sure the paddings between members are filled with 0.
+    memset(&pod, 0, sizeof(T));
+  }
 
   BytesKey(const BytesKey& other) {
     memcpy(&pod, &other.pod, sizeof(T));
