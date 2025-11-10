@@ -738,6 +738,26 @@ class TestSDPA(mlx_tests.MLXTestCase):
                     )
                     self.assertTrue(mx.allclose(out, expected, atol=1e-5))
 
+    def test_sdpa_grad(self):
+        B = 2
+        N_q = N_kv = 8
+        T_q = T_kv = 128
+        D = 64
+        scale = D**-0.5
+
+        f1 = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale).sum()
+        f2 = lambda q, k, v: (
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        ).sum()
+
+        q = mx.random.normal(shape=(B, N_q, T_q, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(B, N_kv, T_kv, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(B, N_kv, T_kv, D), dtype=mx.float16)
+
+        g1 = mx.grad(f1)(q, k, v)
+        g2 = mx.grad(f2)(q, k, v)
+        self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

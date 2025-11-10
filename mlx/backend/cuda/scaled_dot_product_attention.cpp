@@ -281,9 +281,6 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_arr_mask,
     bool do_causal,
     Stream s) {
-  if (detail::in_grad_tracing()) {
-    return true;
-  }
   if (s.device == Device::cpu) {
     return true;
   }
@@ -314,6 +311,17 @@ void ScaledDotProductAttention::eval_gpu(
   } else {
     sdpa_cudnn(q, k, v, scale_, out, do_causal_, s);
   }
+}
+
+bool ScaledDotProductAttentionVJP::use_fallback(Stream s) {
+  return true;
+  // return s.device == Device::cpu;
+}
+
+void ScaledDotProductAttentionVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("NYI");
 }
 
 } // namespace fast

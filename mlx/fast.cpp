@@ -808,9 +808,53 @@ array scaled_dot_product_attention(
   return fallback(std::move(inputs))[0];
 }
 
+std::vector<array> ScaledDotProductAttention::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  auto s = stream();
+  if (ScaledDotProductAttentionVJP::use_fallback(s)) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
+    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
+    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
+    return vjps;
+  };
+
+  assert(primals.size() >= 3 && primals.size() <= 5);
+  assert(cotangents.size() == 1);
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < primals.size(); ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(primals[i].dtype());
+  }
+  auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
+      s, fallback, scale_, do_causal_, has_sinks_);
+  std::vector<array> inputs = primals;
+  inputs.push_back(cotangents[0]);
+  auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
+}
+
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      has_sinks_ == a_other.has_sinks_;
+}
+
+bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
+  const ScaledDotProductAttentionVJP& a_other =
+      static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
 }
