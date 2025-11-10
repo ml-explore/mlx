@@ -133,9 +133,15 @@ bool supports_sdpa_cudnn(
     const array& k,
     const array& v,
     bool has_mask,
-    bool do_causal) {
+    bool do_causal,
+    Stream s) {
   static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SPDA", 1);
   if (!enabled) {
+    return false;
+  }
+
+  // cuDNN SDPA requires Ampere and later.
+  if (cu::device(s.device).compute_capability_major() < 8) {
     return false;
   }
 
@@ -262,7 +268,7 @@ bool ScaledDotProductAttention::use_fallback(
   }
 
   return !supports_sdpa_vector(q, k, v, has_mask, has_arr_mask, do_causal) &&
-      !supports_sdpa_cudnn(q, k, v, has_mask, do_causal);
+      !supports_sdpa_cudnn(q, k, v, has_mask, do_causal, s);
 }
 
 void ScaledDotProductAttention::eval_gpu(
@@ -277,7 +283,7 @@ void ScaledDotProductAttention::eval_gpu(
   const auto& v = inputs[2];
   bool has_mask = inputs.size() - has_sinks_ > 3;
 
-  if (supports_sdpa_cudnn(q, k, v, has_mask, do_causal_)) {
+  if (supports_sdpa_cudnn(q, k, v, has_mask, do_causal_, s)) {
     sdpa_cudnn(q, k, v, scale_, out, do_causal_, s);
   } else {
     if (has_sinks_) {
