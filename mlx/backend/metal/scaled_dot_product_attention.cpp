@@ -553,4 +553,14 @@ void ScaledDotProductAttention::eval_gpu(
   d.add_temporaries(std::move(copies), s.index);
 }
 
+bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+  return true;
+}
+
+void ScaledDotProductAttentionVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("NYI");
+}
+
 } // namespace mlx::core::fast

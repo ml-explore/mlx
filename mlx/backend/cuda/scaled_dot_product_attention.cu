@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
+#include "mlx/transforms_impl.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -665,6 +666,10 @@ bool supports_sdpa_vector(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal) {
+  if (detail::in_grad_tracing()) {
+    return false;
+  }
+
   const int value_head_dim = v.shape(-1);
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);
