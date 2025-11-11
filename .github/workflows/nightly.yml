@@ -18,10 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
-      - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/build-linux-release
         with:
-          build-type: release
-          run-tests: false
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload mlx artifacts
         uses: actions/upload-artifact@v5
         with:
@@ -54,8 +53,6 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.13"]
-    env:
-      MACOSX_DEPLOYMENT_TARGET: "15.0"
     runs-on: [self-hosted, macos]
     steps:
       - uses: actions/checkout@v5
@@ -63,6 +60,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: ./.github/actions/build-macos
+
+      - name: Build macOS 15 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 15.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 14 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 14.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
 
   build_cuda_with_tests:
     if: github.repository == 'ml-explore/mlx'

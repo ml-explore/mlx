@@ -53,10 +53,9 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           python-version: ${{ matrix.python_version }}
-      - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/build-linux-release
         with:
-          build-type: release
-          run-tests: false
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:
@@ -82,10 +81,27 @@ jobs:
       - uses: ./.github/actions/setup-macos
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: ./.github/actions/build-macos
+      - name: Install dependencies
+        shell: sh
+        run: |
+          uv pip install --upgrade pip
+          uv pip install cmake setuptools nanobind==2.4.0
+          uv pip install -e . -v
+      - name: Generate package stubs
+        shell: bash
+        run: |
+          uv pip install typing_extensions
+          uv run --no-project setup.py generate_stubs
+      - name: Build macOS 14 package
+        uses: ./.github/actions/build-macos-release
         with:
-          build-type: release
-          run-tests: false
+          macos-target: 14.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 15 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 15.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:

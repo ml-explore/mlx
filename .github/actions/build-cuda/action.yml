@@ -2,19 +2,10 @@ name: 'Build and Test with CUDA'
 description: 'Build and test MLX with CUDA'
 
 inputs:
-  build-type:
-    description: 'Build type (debug, release)'
-    required: false
-    default: 'debug'
-  run-tests:
-    description: 'Whether to run tests'
-    required: false
-    default: 'true'
   nvcc-location:
     description: 'Location of nvcc compiler'
     required: true
     default: '/usr/local/cuda-12.9/bin/nvcc'
-    # this value is dependent on the CUDA tools installed in the setup-linux workflow
 
 runs:
   using: "composite"
@@ -27,7 +18,6 @@ runs:
       run: pip install -e ".[dev]" -v
 
     - name: Run Python tests - CPU
-      if: inputs.run-tests == 'true'
       shell: bash
       env:
         LOW_MEMORY: 1
@@ -35,7 +25,6 @@ runs:
       run: python -m unittest discover python/tests -v
 
     - name: Run Python tests - GPU
-      if: inputs.run-tests == 'true'
       shell: bash
       env:
         LOW_MEMORY: 1
@@ -43,7 +32,6 @@ runs:
       run: python -m tests discover python/tests -v
 
     - name: Build CPP only
-      if: inputs.build-type == 'debug'
       shell: bash
       run: |
         cmake . -B build \
@@ -53,12 +41,5 @@ runs:
         cmake --build build -j $(nproc)
     
     - name: Run CPP tests
-      if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
       shell: bash
       run: ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
-
-    - name: Build Python package
-      if: inputs.build-type == 'release'
-      uses: ./.github/actions/build-cuda-release
-      with:
-        nvcc-location: ${{ inputs.nvcc-location }}

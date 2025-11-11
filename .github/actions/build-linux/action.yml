@@ -1,33 +1,14 @@
 name: 'Build and Test on Linux'
 description: 'Build and test MLX on Linux'
 
-inputs:
-  build-type:
-    description: 'Build type'
-    required: false
-    default: 'debug'
-    type: choice
-    options:
-      - debug
-      - release
-  run-tests:
-    description: 'Whether to run tests'
-    required: false
-    default: 'true'
-    type: boolean
-
 runs:
   using: "composite"
   steps:
-    - name: Set DEBUG
-      shell: sh
-      if: inputs.build-type == 'debug'
-      run: echo "DEBUG=1" >> $GITHUB_ENV
-
     - name: Install Python package
       shell: sh
       env:
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+        DEBUG: 1
       run: pip install -e ".[dev]" -v
     
     - name: Generate package stubs
@@ -37,7 +18,6 @@ runs:
         python setup.py generate_stubs
     
     - name: Run Python tests
-      if: inputs.run-tests == 'true'
       shell: bash
       run: |
         python -m unittest discover python/tests -v
@@ -50,7 +30,6 @@ runs:
         fi
     
     - name: Build CPP only
-      if: inputs.build-type == 'debug'
       shell: bash
       run: |
         mkdir -p build && cd build
@@ -58,21 +37,5 @@ runs:
         make -j $(nproc)
     
     - name: Run CPP tests
-      if: ${{ inputs.build-type == 'debug' && inputs.run-tests == 'true' }}
       shell: sh
       run: ./build/tests/tests
-    
-    - name: Build Python package
-      if: inputs.build-type == 'release'
-      shell: bash
-      run: |
-        pip install auditwheel patchelf build
-        python setup.py clean --all
-        MLX_BUILD_STAGE=1 python -m build -w
-        if [ -f "python/scripts/repair_linux.sh" ]; then
-          bash python/scripts/repair_linux.sh
-        fi
-
-        python setup.py clean --all
-        MLX_BUILD_STAGE=2 python -m build -w
-        auditwheel repair dist/mlx_cpu*.whl --plat manylinux_2_35_x86_64

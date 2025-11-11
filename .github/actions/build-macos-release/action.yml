@@ -6,11 +6,16 @@ inputs:
     description: 'macOS build target'
     required: false
     default: '15.0'
+  build-backend:
+    description: 'Build the backend mlx-metal package'
+    type: boolean
+    required: false
+    default: false
 
 runs:
   using: "composite"
   steps:
-    - name: Build Python package(s)
+    - name: Build Python package
       shell: bash
       env:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
@@ -18,5 +23,11 @@ runs:
         uv pip install build
         uv run --no-project setup.py clean --all
         MLX_BUILD_STAGE=1 uv run -m build -w
+    - name: Build backend package
+      if: ${{ inputs.build-backend }}
+      shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      run: |
         uv run --no-project setup.py clean --all
         MLX_BUILD_STAGE=2 uv run -m build -w
