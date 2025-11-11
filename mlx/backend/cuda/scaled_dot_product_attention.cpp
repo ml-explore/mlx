@@ -25,6 +25,11 @@ namespace {
 
 std::vector<int64_t> normalized_strides(const array& x) {
   std::vector<int64_t> strides(x.strides().begin(), x.strides().end());
+  if (std::all_of(
+          strides.begin(), strides.end(), [](int64_t s) { return s == 0; })) {
+    strides.back() = 1;
+    return strides;
+  }
   if (!x.flags().row_contiguous || x.ndim() < 2) {
     return strides;
   }
@@ -342,7 +347,6 @@ void sdpa_cudnn(
   encoder.set_input_array(v);
   encoder.set_output_array(o);
 
-  printf("sdpa_cudnn: generate_stats(%d)\n", (int)generate_stats);
   if (generate_stats) {
     stats.set_data(cu::malloc_async(stats.nbytes(), encoder.stream()));
     encoder.set_output_array(stats);
@@ -511,9 +515,8 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   assert(outputs.size() == 3);
   auto& d_q = outputs[0];
   auto& d_k = outputs[1];
-  auto& d_v = outputs[1];
+  auto& d_v = outputs[2];
 
-  printf("sdpa_backward_cudnn\n");
   sdpa_backward_cudnn(
       q, k, v, scale_, o, stats, do_causal_, d_o, d_q, d_k, d_v, s);
 }
