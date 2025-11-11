@@ -7,6 +7,13 @@ inputs:
     type: boolean
     required: false
     default: false
+  arch:
+    description: 'Platform architecture tag'
+    required: true
+    type: choice
+    options:
+      - x86_64
+      - aarch64
 
 runs:
   using: "composite"
@@ -23,11 +30,11 @@ runs:
         pip install auditwheel patchelf build
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
-        bash python/scripts/repair_linux.sh
+        bash python/scripts/repair_linux.sh ${{ inputs.arch }}
     - name: Build backend package
       if: ${{ inputs.build-backend }}
       shell: bash
       run: |
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
-        auditwheel repair dist/mlx_cpu*.whl --plat manylinux_2_35_x86_64
+        auditwheel repair dist/mlx_cpu*.whl --plat manylinux_2_35_${{ inputs.arch }}
