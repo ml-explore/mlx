@@ -210,11 +210,13 @@ class ScaledDotProductAttention : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float scale,
       bool do_causal,
-      bool has_sinks)
+      bool has_sinks,
+      bool generate_stats)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
-        has_sinks_(has_sinks) {}
+        has_sinks_(has_sinks),
+        generate_stats_(generate_stats) {}
 
   static bool use_fallback(
       const array& q,
@@ -231,11 +233,7 @@ class ScaledDotProductAttention : public Custom {
   }
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    eval_gpu(inputs, outputs[0]);
-  }
-
-  void eval_gpu(const std::vector<array>& inputs, array& out);
+      override;
 
   std::vector<array> vjp(
       const std::vector<array>& primals,
@@ -248,13 +246,15 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_tuple(nullptr, scale_, do_causal_, has_sinks_);
+    return std::make_tuple(
+        nullptr, scale_, do_causal_, has_sinks_, generate_stats_);
   }
 
  private:
   float scale_;
   bool do_causal_;
   bool has_sinks_;
+  bool generate_stats_;
 };
 
 class ScaledDotProductAttentionVJP : public Custom {
