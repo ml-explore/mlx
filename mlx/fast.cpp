@@ -821,7 +821,7 @@ std::vector<array> ScaledDotProductAttention::vjp(
   assert(outputs.size() == 2);
 
   auto s = stream();
-  if (ScaledDotProductAttentionVJP::use_fallback(s)) {
+  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 

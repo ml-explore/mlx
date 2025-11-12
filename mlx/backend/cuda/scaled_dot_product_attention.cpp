@@ -494,7 +494,12 @@ void ScaledDotProductAttention::eval_gpu(
   }
 }
 
-bool ScaledDotProductAttentionVJP::use_fallback(Stream s) {
+bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+  // The frontend adds a padding mask when sequence length is not a multiple of
+  // tile size.
+  if (q.shape(2) % 128 != 0) {
+    return true;
+  }
   return s.device == Device::cpu;
 }
 
@@ -506,12 +511,13 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   auto& s = stream();
 
   assert(inputs.size() == 6);
-  const auto& q = inputs[0];
-  const auto& k = inputs[1];
-  const auto& v = inputs[2];
-  const auto& o = inputs[3];
-  const auto& stats = inputs[4];
-  const auto& d_o = inputs[5];
+  array q = prepare_sdpa_input(inputs[0], s);
+  array k = prepare_sdpa_input(inputs[1], s);
+  array v = prepare_sdpa_input(inputs[2], s);
+  array o = prepare_sdpa_input(inputs[3], s);
+  array stats = prepare_sdpa_input(inputs[4], s);
+  array d_o = prepare_sdpa_input(inputs[5], s);
+
   assert(outputs.size() == 3);
   auto& d_q = outputs[0];
   auto& d_k = outputs[1];

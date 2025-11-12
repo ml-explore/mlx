@@ -553,7 +553,7 @@ void ScaledDotProductAttention::eval_gpu(
   d.add_temporaries(std::move(copies), s.index);
 }
 
-bool ScaledDotProductAttentionVJP::use_fallback(Stream s) {
+bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
   return true;
 }
 
