@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/lru_cache.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/transforms_impl.h"
 
@@ -43,6 +44,19 @@ void set_tensor_attrs(
   tensor->set_uid(uid)
       .set_dim({x.shape().begin(), x.shape().end()})
       .set_stride(normalized_strides(x));
+}
+
+array prepare_sdpa_input(const array& x, Stream s) {
+  // SDPA kernel's requirements on inputs:
+  // 1. last dim's stride be 1;
+  // 2. pointer be aligned.
+  if (x.strides(-1) != 1 || get_alignment(x) < 16) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    auto& encoder = cu::get_command_encoder(s);
+    encoder.add_temporary(x_copy);
+    return x_copy;
+  }
+  return x;
 }
 
 constexpr int QKV_NDIM = 4;
@@ -167,11 +181,6 @@ bool supports_sdpa_cudnn(
     return false;
   }
 
-  // TODO: Do contiguous copy for inputs.
-  if (q.strides(-1) != 1 || k.strides(-1) != 1 || v.strides(-1) != 1) {
-    return false;
-  }
-
   Dtype dtype = q.dtype();
   return dtype == float16 || dtype == bfloat16;
 }
@@ -290,9 +299,9 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& s = stream();
 
-  const auto& q = inputs[0];
-  const auto& k = inputs[1];
-  const auto& v = inputs[2];
+  array q = prepare_sdpa_input(inputs[0], s);
+  array k = prepare_sdpa_input(inputs[1], s);
+  array v = prepare_sdpa_input(inputs[2], s);
   bool has_mask = inputs.size() - has_sinks_ > 3;
   bool has_arr_mask = has_mask && !do_causal_;
 
