@@ -15,16 +15,13 @@ namespace cg = cooperative_groups;
 
 static constexpr int rows_per_block = 8;
 
-template <int bits>
-struct Dequantize {
-  __device__ float operator()(uint8_t x) {
-    if constexpr (bits == 8) {
-      return float(*(__nv_fp8_e4m3*)(&x));
-    } else {
-      return float(*(__nv_fp4_e2m1*)(&x));
-    }
-  }
-};
+inline __device__ float4 dequant_fp8(uint32_t bits) {
+  return float4(*(__nv_fp8x4_e4m3*)(&bits));
+}
+
+inline __device__ float2 dequant_fp4(uint8_t bits) {
+  return float2(*(__nv_fp4x2_e2m1*)(&bits));
+}
 
 template <typename T>
 __device__ void adjust_matrix_offsets(
@@ -66,7 +63,7 @@ template <
     int group_size,
     bool use_mx_scale>
 __device__ void fp_qmv_impl(
-    const uint8_t* mat,
+    const uint32_t* mat,
     const uint8_t* scales_,
     const T* vec,
     T* out,
@@ -75,8 +72,8 @@ __device__ void fp_qmv_impl(
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  constexpr int vals_per_byte = bits == 8 ? 1 : 2;
-  constexpr int nv_per_thread = vals_per_byte * n_per_thread;
+  constexpr int vals_per_item = bits == 8 ? 4 : 8;
+  constexpr int nv_per_thread = vals_per_item * n_per_thread;
   auto g_idx = block.group_index();
   auto t_idx = block.thread_index();
   int row = g_idx.y * rows_per_block + t_idx.y;
@@ -87,11 +84,13 @@ __device__ void fp_qmv_impl(
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
   auto scales = (ScaleType*)(scales_);
-  auto packed_cols = cols / vals_per_byte;
+  auto packed_cols = cols / vals_per_item;
 
   if (row < rows) {
+    constexpr int scales_per_step = std::max(nv_per_thread / group_size, 1);
+    constexpr int scale_step = (WARP_SIZE * nv_per_thread) / group_size;
+    constexpr int n_per_step = n_per_thread / scales_per_step;
     // Offset scales to correct row
-    int scale_step = (WARP_SIZE * nv_per_thread) / group_size;
     scales += row * (cols / group_size) +
         (warp.thread_rank() * nv_per_thread) / group_size;
     float sum = 0.0f;
@@ -100,21 +99,51 @@ __device__ void fp_qmv_impl(
       auto local_mat =
           unsafe_load_vector<n_per_thread>(mat + row * packed_cols + col, 0);
       auto local_vec =
-          unsafe_load_vector<nv_per_thread>(vec + vals_per_byte * col, 0);
-      float local_sum = 0.0f;
+          unsafe_load_vector<nv_per_thread>(vec + vals_per_item * col, 0);
+      // #pragma unroll
+      for (int i = 0; i < scales_per_step; ++i) {
+        float2 local_sum = {0.0f, 0.0f};
 #pragma unroll
-      for (int j = 0; j < n_per_thread; ++j) {
-        if constexpr (bits == 8) {
-          local_sum += Dequantize<bits>{}(local_mat[j]) *
-              static_cast<float>(local_vec[j]);
-        } else {
-          local_sum += Dequantize<bits>{}(local_mat[j]) *
-              static_cast<float>(local_vec[2 * j]);
-          local_sum += Dequantize<bits>{}(local_mat[j] >> 4) *
-              static_cast<float>(local_vec[2 * j + 1]);
+        for (int j = 0; j < n_per_step; ++j) {
+          int k = n_per_step * i + j;
+          if constexpr (bits == 8) {
+            auto v = dequant_fp8(local_mat[k]);
+            local_sum.x +=
+                v.x * static_cast<float>(local_vec[vals_per_item * k]);
+            local_sum.x +=
+                v.y * static_cast<float>(local_vec[vals_per_item * k + 1]);
+            local_sum.y +=
+                v.z * static_cast<float>(local_vec[vals_per_item * k + 2]);
+            local_sum.y +=
+                v.w * static_cast<float>(local_vec[vals_per_item * k + 3]);
+          } else {
+            auto v = dequant_fp4(local_mat[k]);
+            local_sum.x +=
+                v.x * static_cast<float>(local_vec[vals_per_item * k]);
+            local_sum.y +=
+                v.y * static_cast<float>(local_vec[vals_per_item * k + 1]);
+
+            v = dequant_fp4(local_mat[k] >> 8);
+            local_sum.x +=
+                v.x * static_cast<float>(local_vec[vals_per_item * k + 2]);
+            local_sum.y +=
+                v.y * static_cast<float>(local_vec[vals_per_item * k + 3]);
+
+            v = dequant_fp4(local_mat[k] >> 16);
+            local_sum.x +=
+                v.x * static_cast<float>(local_vec[vals_per_item * k + 4]);
+            local_sum.y +=
+                v.y * static_cast<float>(local_vec[vals_per_item * k + 5]);
+
+            v = dequant_fp4(local_mat[k] >> 24);
+            local_sum.x +=
+                v.x * static_cast<float>(local_vec[vals_per_item * k + 6]);
+            local_sum.y +=
+                v.y * static_cast<float>(local_vec[vals_per_item * k + 7]);
+          }
         }
+        sum += (local_sum.x + local_sum.y) * float(scales[i]);
       }
-      sum += local_sum * float(scales[0]);
       scales += scale_step;
     }
 
@@ -133,7 +162,7 @@ template <
     int group_size,
     bool use_mx_scale>
 __global__ void fp_qmv_single(
-    const uint8_t* mat,
+    const uint32_t* mat,
     const uint8_t* scales,
     const T* vec,
     T* out,
@@ -178,7 +207,7 @@ __global__ void fp_qmv_batched(
       mat_strides,
       scales_strides);
   fp_qmv_impl<T, rows_per_block, n_per_thread, bits, group_size, use_mx_scale>(
-      (uint8_t*)mat, scales, vec, out, rows, cols);
+      mat, scales, vec, out, rows, cols);
 }
 
 void fp_qmv(
@@ -202,12 +231,10 @@ void fp_qmv(
       dim3 block_dims{WARP_SIZE, rows_per_block};
       uint B = out.size() / (M * N);
       uint blocks_y = (N + rows_per_block - 1) / rows_per_block;
-      int vals_per_byte = bits == 4 ? 2 : 1;
-      int packed_cols = K / vals_per_byte;
-      const uint8_t* mat_ptr = gpu_ptr<uint8_t>(mat);
+      const uint32_t* mat_ptr = gpu_ptr<uint32_t>(mat);
       const T* vec_ptr = gpu_ptr<T>(vec);
-      bool aligned = packed_cols % 128 == 0;
-      aligned &= cu::is_aligned<4>(mat_ptr);
+      // TODO deal with multiple of 16 but not 32
+      bool aligned = cu::is_aligned<4>(mat_ptr);
       aligned &=
           ((bits == 4 && cu::is_aligned<8>(vec_ptr)) ||
            cu::is_aligned<4>(vec_ptr));
