@@ -161,6 +161,17 @@ bool supports_sdpa_cudnn(
     return false;
   }
 
+  // D_qk and D_v must be a multiple of 8 with maximum value 128.
+  if ((q.shape(-1) % 8 != 0) || (q.shape(-1) > 128) || (v.shape(-1) % 8 != 0) ||
+      (v.shape(-1) > 128)) {
+    return false;
+  }
+
+  // TODO: Do contiguous copy for inputs.
+  if (q.strides(-1) != 1 || k.strides(-1) != 1 || v.strides(-1) != 1) {
+    return false;
+  }
+
   Dtype dtype = q.dtype();
   return dtype == float16 || dtype == bfloat16;
 }
@@ -175,6 +186,7 @@ void sdpa_cudnn(
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
   // TODO: Handle donation.
+  // TODO: Make O use same memory layout with Q.
   o.set_data(cu::malloc_async(o.nbytes(), encoder.stream()));
 
   encoder.set_input_array(q);
@@ -282,15 +294,16 @@ void ScaledDotProductAttention::eval_gpu(
   const auto& k = inputs[1];
   const auto& v = inputs[2];
   bool has_mask = inputs.size() - has_sinks_ > 3;
+  bool has_arr_mask = has_mask && !do_causal_;
 
-  if (supports_sdpa_cudnn(q, k, v, has_mask, do_causal_, s)) {
-    sdpa_cudnn(q, k, v, scale_, out, do_causal_, s);
-  } else {
+  if (supports_sdpa_vector(q, k, v, has_mask, has_arr_mask, do_causal_)) {
     if (has_sinks_) {
       sdpa_vector(q, k, v, scale_, out, do_causal_, inputs.back(), s);
     } else {
       sdpa_vector(q, k, v, scale_, out, do_causal_, std::nullopt, s);
     }
+  } else {
+    sdpa_cudnn(q, k, v, scale_, out, do_causal_, s);
   }
 }
 
