@@ -315,12 +315,6 @@ class Quantize : public Custom {
   bool dequantize_;
 };
 
-struct CustomKernelShapeInfo {
-  bool shape = false;
-  bool strides = false;
-  bool ndim = false;
-};
-
 using ScalarArg = std::variant<bool, int, float>;
 
 class CustomKernel : public Primitive {
@@ -331,15 +325,15 @@ class CustomKernel : public Primitive {
       std::string source,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
-      std::vector<CustomKernelShapeInfo> shape_infos,
+      std::vector<std::tuple<bool, bool, bool>> shape_infos,
       bool ensure_row_contiguous,
       std::optional<float> init_value,
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
       int shared_memory)
       : Primitive(stream),
-        source_(std::move(source)),
         name_(std::move(name)),
+        source_(std::move(source)),
         grid_(grid),
         threadgroup_(threadgroup),
         shape_infos_(std::move(shape_infos)),
@@ -358,13 +352,26 @@ class CustomKernel : public Primitive {
       override;
 
   DEFINE_NAME(CustomKernel);
+  auto state() const {
+    return std::make_tuple(
+        name_,
+        source_,
+        grid_,
+        threadgroup_,
+        shape_infos_,
+        ensure_row_contiguous_,
+        init_value_,
+        scalar_arguments_,
+        is_precompiled_,
+        shared_memory_);
+  }
 
  private:
-  std::string source_;
   std::string name_;
+  std::string source_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
-  std::vector<CustomKernelShapeInfo> shape_infos_;
+  std::vector<std::tuple<bool, bool, bool>> shape_infos_;
   bool ensure_row_contiguous_;
   std::optional<float> init_value_;
   std::vector<ScalarArg> scalar_arguments_;

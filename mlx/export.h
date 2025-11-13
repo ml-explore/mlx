@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <optional>
 #include <set>
 #include <unordered_map>
 #include <variant>
@@ -24,6 +25,9 @@ using StateT = std::variant<
     Strides,
     std::vector<int>,
     std::vector<size_t>,
+    std::vector<std::tuple<bool, bool, bool>>,
+    std::vector<std::variant<bool, int, float>>,
+    std::optional<float>,
     std::string>;
 
 using ExportCallbackInput = std::unordered_map<
