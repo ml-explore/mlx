@@ -3058,6 +3058,11 @@ class TestOps(mlx_tests.MLXTestCase):
         out = a[::-1]
         self.assertTrue(mx.array_equal(out[-1, :], a[0, :]))
 
+        a = mx.arange(8)
+        for _ in range(4):
+            a = a[::-1]
+        self.assertTrue(mx.array_equal(a, mx.arange(8)))
+
     def test_complex_ops(self):
         x = mx.array(
             [

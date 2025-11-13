@@ -292,7 +292,7 @@ TEST_CASE("test slice") {
 
   out = slice(x, {0}, {4}, {2});
   eval(out);
-  CHECK_EQ(out.data_size(), 4);
+  CHECK_EQ(out.data_size(), 3);
 
   x = ones({4, 4});
   out = slice(x, {0, 0}, {2, 4});
@@ -325,6 +325,20 @@ TEST_CASE("test slice") {
   out = slice(x, {2, 2, 2}, {3, 4, 3});
   eval(out);
   CHECK_EQ(out.data_size(), 5);
+
+  x = ones({8});
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  x = ones({4, 2});
+  out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
 }
 
 TEST_CASE("test slice update") {
