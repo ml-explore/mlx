@@ -439,7 +439,7 @@ class array {
       const Strides& strides,
       Flags flags,
       size_t data_size,
-      size_t offset = 0);
+      int64_t offset = 0);
 
   void copy_shared_buffer(const array& other);
 

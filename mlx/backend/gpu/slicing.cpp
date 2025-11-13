@@ -11,7 +11,7 @@ void slice_gpu(
     array& out,
     const Shape& start_indices,
     const Shape& strides,
-    const Stream& s) {
+    const Stream&) {
   slice(in, out, start_indices, strides);
 }
 

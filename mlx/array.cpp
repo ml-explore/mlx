@@ -167,7 +167,7 @@ void array::copy_shared_buffer(
     const Strides& strides,
     Flags flags,
     size_t data_size,
-    size_t offset /* = 0 */) {
+    int64_t offset /* = 0 */) {
   array_desc_->data = other.array_desc_->data;
   array_desc_->strides = strides;
   array_desc_->flags = flags;
