@@ -174,6 +174,8 @@ class Device {
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
+  void set_profiling_enabled(bool enabled);
+  bool profiling_enabled() const;
 
   MTL::Library* get_library(
       const std::string& name,

@@ -1,8 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
+#include <stdexcept>
 
 #include <sys/sysctl.h>
 
+#include "metal_cpp_shims.hpp"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
@@ -47,6 +49,42 @@ void stop_capture() {
   auto pool = new_scoped_memory_pool();
   auto manager = MTL::CaptureManager::sharedCaptureManager();
   manager->stopCapture();
+}
+
+bool command_buffer_profiling_supported() {
+#if defined(__APPLE__)
+  auto pool = new_scoped_memory_pool();
+  auto desc = MTL::CommandBufferDescriptor::alloc()->init();
+  bool supported = set_profiling_enabled(desc, true);
+  desc->release();
+  return supported;
+#else
+  return false;
+#endif
+}
+
+void set_command_buffer_profiling(bool enabled) {
+#if defined(__APPLE__)
+  if (enabled && !command_buffer_profiling_supported()) {
+    throw std::runtime_error(
+        "[metal::set_command_buffer_profiling] Command buffer profiling is not supported on this platform.");
+  }
+  auto& dev = metal::device(mlx::core::Device::gpu);
+  dev.set_profiling_enabled(enabled);
+#else
+  if (enabled) {
+    throw std::runtime_error(
+        "[metal::set_command_buffer_profiling] Command buffer profiling is not available on this platform.");
+  }
+#endif
+}
+
+bool command_buffer_profiling_enabled() {
+#if defined(__APPLE__)
+  return metal::device(mlx::core::Device::gpu).profiling_enabled();
+#else
+  return false;
+#endif
 }
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&

@@ -35,7 +35,7 @@ jobs:
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
 
-  paged_attention_bench:
+  paged_attention_sweep:
     if: github.repository == 'ml-explore/mlx'
     runs-on: [self-hosted, macos]
     needs: mac_build_and_test

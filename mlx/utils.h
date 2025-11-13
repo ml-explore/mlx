@@ -9,6 +9,7 @@
 #include "mlx/device.h"
 #include "mlx/dtype.h"
 #include "mlx/stream.h"
+#include "mlx/transforms_impl.h"
 
 namespace mlx::core {
 
@@ -132,6 +133,10 @@ inline int next_power_of_2(int n) {
     return n;
   }
   return pow(2, std::ceil(std::log2(n)));
+}
+
+inline bool in_function_transform() {
+  return detail::in_tracing();
 }
 
 namespace env {

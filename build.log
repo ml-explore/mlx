@@ -1,0 +1,22 @@
+Obtaining file:///Volumes/1TB%20SSD/mlx-proj/mlx
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: mlx
+  Building editable for mlx (pyproject.toml): started
+  Building editable for mlx (pyproject.toml): still running...
+  Building editable for mlx (pyproject.toml): finished with status 'done'
+  Created wheel for mlx: filename=mlx-0.29.4.dev20251107+fc25aea5-0.editable-cp310-cp310-macosx_15_0_arm64.whl size=4737 sha256=9b47626ad41a5dae33a090bd5b7e6ffa0ba214f8ad849dafe3d7e061cdb88491
+  Stored in directory: /private/var/folders/0p/whfxs4wd1z5fzngnh3q3bgvr0000gn/T/pip-ephem-wheel-cache-mkgsaz8n/wheels/db/1b/6b/fd1113735e951b11e1a110b2b47eb71e70ba2d7836ee3461fb
+Successfully built mlx
+Installing collected packages: mlx
+  Attempting uninstall: mlx
+    Found existing installation: mlx 0.29.4.dev20251107+fc25aea5
+    Uninstalling mlx-0.29.4.dev20251107+fc25aea5:
+      Successfully uninstalled mlx-0.29.4.dev20251107+fc25aea5
+Successfully installed mlx-0.29.4.dev20251107+fc25aea5

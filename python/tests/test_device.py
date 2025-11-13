@@ -113,5 +113,27 @@ class TestStream(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), b.item())
 
 
+class TestMetalProfiling(unittest.TestCase):
+    def setUp(self):
+        if not hasattr(mx, "metal") or not mx.metal.is_available():
+            self.skipTest("Metal backend is unavailable")
+
+    def test_command_buffer_profiling_api(self):
+        supported = mx.metal.command_buffer_profiling_supported()
+        self.assertIsInstance(supported, bool)
+        enabled = mx.metal.command_buffer_profiling_enabled()
+        self.assertIsInstance(enabled, bool)
+
+    def test_set_command_buffer_profiling_matches_support(self):
+        supported = mx.metal.command_buffer_profiling_supported()
+        current = mx.metal.command_buffer_profiling_enabled()
+        try:
+            mx.metal.set_command_buffer_profiling(current)
+        except RuntimeError:
+            self.assertFalse(supported)
+        else:
+            self.assertEqual(mx.metal.command_buffer_profiling_enabled(), current)
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

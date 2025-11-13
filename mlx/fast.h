@@ -62,6 +62,53 @@ array paged_attention_impl(
     int layer_idx,
     const std::optional<array>& kv_head_mapping,
     const std::optional<float>& scale,
+    const std::optional<array>& v_q_cache = std::nullopt,
+    const std::optional<array>& v_scale_cache = std::nullopt,
+    const std::optional<array>& v_zero_cache = std::nullopt,
+    const std::optional<int>& quant_bits = std::nullopt,
+    const std::optional<int>& quant_group_size = std::nullopt,
+    const std::optional<int>& quant_groups_per_head = std::nullopt,
+    const std::optional<bool>& quant_symmetric = std::nullopt,
+    StreamOrDevice s = {});
+
+array paged_attention_with_overlay_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& scale,
+    const array& overlay_k,
+    const array& overlay_v,
+    const std::optional<array>& overlay_len_override,
+    const std::optional<array>& v_q_cache = std::nullopt,
+    const std::optional<array>& v_scale_cache = std::nullopt,
+    const std::optional<array>& v_zero_cache = std::nullopt,
+    const std::optional<int>& quant_bits = std::nullopt,
+    const std::optional<int>& quant_group_size = std::nullopt,
+    const std::optional<int>& quant_groups_per_head = std::nullopt,
+    const std::optional<bool>& quant_symmetric = std::nullopt,
+    StreamOrDevice s = {});
+
+array paged_prefill_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& base_lens,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& scale,
+    const std::optional<array>& v_q_cache = std::nullopt,
+    const std::optional<array>& v_scale_cache = std::nullopt,
+    const std::optional<array>& v_zero_cache = std::nullopt,
+    const std::optional<int>& quant_bits = std::nullopt,
+    const std::optional<int>& quant_group_size = std::nullopt,
+    const std::optional<int>& quant_groups_per_head = std::nullopt,
+    const std::optional<bool>& quant_symmetric = std::nullopt,
     StreamOrDevice s = {});
 
 void paged_kv_write_impl(
@@ -71,6 +118,41 @@ void paged_kv_write_impl(
     int start_pos,
     const array& k_chunk,
     const array& v_chunk,
+    array* vq_cache = nullptr,
+    array* v_scale_cache = nullptr,
+    array* v_zero_cache = nullptr,
+    std::optional<int> quant_bits = std::nullopt,
+    std::optional<int> quant_group_size = std::nullopt,
+    std::optional<int> quant_bytes_per_token = std::nullopt,
+    std::optional<int> quant_groups_per_head = std::nullopt,
+    std::optional<bool> quant_symmetric = std::nullopt,
+    StreamOrDevice s = {});
+
+void paged_kv_write_batch(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_batch,
+    const array& v_batch,
+    StreamOrDevice s = {});
+
+void paged_kv_write_layers_batch(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_batch,
+    const array& v_batch,
+    StreamOrDevice s = {});
+
+void paged_kv_write_layers_tokens(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_tokens,
+    const array& v_tokens,
     StreamOrDevice s = {});
 
 void paged_attention_prewarm(
@@ -81,6 +163,15 @@ void paged_attention_prewarm(
     StreamOrDevice s = {});
 
 double paged_attention_last_time_ms();
+
+void paged_prefill_prewarm(
+    uint32_t block_size,
+    Dtype dtype,
+    std::optional<uint32_t> threads_per_head = std::nullopt,
+    std::optional<uint32_t> vec_width = std::nullopt,
+    StreamOrDevice s = {});
+
+double paged_prefill_last_time_ms();
 
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;

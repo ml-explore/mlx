@@ -8,8 +8,8 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/fast.h"
 #include "mlx/backend/metal/paged_kv.h"
+#include "mlx/fast.h"
 #include "mlx/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -634,6 +634,13 @@ void init_fast(nb::module_& parent_module) {
          int layer_idx,
          std::optional<mx::array> kv_head_mapping,
          std::optional<float> scale,
+         std::optional<mx::array> v_q_cache,
+         std::optional<mx::array> v_scale_cache,
+         std::optional<mx::array> v_zero_cache,
+         std::optional<int> quant_bits,
+         std::optional<int> quant_group_size,
+         std::optional<int> quant_groups_per_head,
+         std::optional<bool> quant_symmetric,
          mx::StreamOrDevice s) {
         return mx::fast::paged_attention_impl(
             q,
@@ -644,6 +651,13 @@ void init_fast(nb::module_& parent_module) {
             layer_idx,
             kv_head_mapping,
             scale,
+            v_q_cache,
+            v_scale_cache,
+            v_zero_cache,
+            quant_bits,
+            quant_group_size,
+            quant_groups_per_head,
+            quant_symmetric,
             s);
       },
       "q"_a,
@@ -655,6 +669,137 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "kv_head_mapping"_a = nb::none(),
       "scale"_a = nb::none(),
+      "v_q_cache"_a = nb::none(),
+      "v_scale_cache"_a = nb::none(),
+      "v_zero_cache"_a = nb::none(),
+      "quant_bits"_a = nb::none(),
+      "quant_group_size"_a = nb::none(),
+      "quant_groups_per_head"_a = nb::none(),
+      "quant_symmetric"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "_paged_attention_with_overlay_impl",
+      [](const mx::array& q,
+         const mx::array& k_cache,
+         const mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& context_lens,
+         int layer_idx,
+         std::optional<mx::array> kv_head_mapping,
+         std::optional<float> scale,
+         const mx::array& k_overlay,
+         const mx::array& v_overlay,
+         std::optional<mx::array> overlay_len,
+         std::optional<mx::array> v_q_cache,
+         std::optional<mx::array> v_scale_cache,
+         std::optional<mx::array> v_zero_cache,
+         std::optional<int> quant_bits,
+         std::optional<int> quant_group_size,
+         std::optional<int> quant_groups_per_head,
+         std::optional<bool> quant_symmetric,
+         mx::StreamOrDevice s) {
+        std::optional<mx::array> overlay_len_arr = std::nullopt;
+        if (overlay_len.has_value()) {
+          overlay_len_arr = mx::astype(*overlay_len, mx::int32);
+        }
+        return mx::fast::paged_attention_with_overlay_impl(
+            q,
+            k_cache,
+            v_cache,
+            block_tables,
+            context_lens,
+            layer_idx,
+            kv_head_mapping,
+            scale,
+            k_overlay,
+            v_overlay,
+            overlay_len_arr,
+            v_q_cache,
+            v_scale_cache,
+            v_zero_cache,
+            quant_bits,
+            quant_group_size,
+            quant_groups_per_head,
+            quant_symmetric,
+            s);
+      },
+      "q"_a,
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "context_lens"_a,
+      "layer_idx"_a,
+      nb::kw_only(),
+      "kv_head_mapping"_a = nb::none(),
+      "scale"_a = nb::none(),
+      "k_overlay"_a,
+      "v_overlay"_a,
+      "overlay_len"_a = nb::none(),
+      "v_q_cache"_a = nb::none(),
+      "v_scale_cache"_a = nb::none(),
+      "v_zero_cache"_a = nb::none(),
+      "quant_bits"_a = nb::none(),
+      "quant_group_size"_a = nb::none(),
+      "quant_groups_per_head"_a = nb::none(),
+      "quant_symmetric"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "_paged_prefill_impl",
+      [](const mx::array& q,
+         const mx::array& k_cache,
+         const mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& base_lens,
+         const mx::array& context_lens,
+         int layer_idx,
+         std::optional<mx::array> kv_head_mapping,
+         std::optional<float> scale,
+         std::optional<mx::array> v_q_cache,
+         std::optional<mx::array> v_scale_cache,
+         std::optional<mx::array> v_zero_cache,
+         std::optional<int> quant_bits,
+         std::optional<int> quant_group_size,
+         std::optional<int> quant_groups_per_head,
+         std::optional<bool> quant_symmetric,
+         mx::StreamOrDevice s) {
+        return mx::fast::paged_prefill_impl(
+            q,
+            k_cache,
+            v_cache,
+            block_tables,
+            base_lens,
+            context_lens,
+            layer_idx,
+            kv_head_mapping,
+            scale,
+            v_q_cache,
+            v_scale_cache,
+            v_zero_cache,
+            quant_bits,
+            quant_group_size,
+            quant_groups_per_head,
+            quant_symmetric,
+            s);
+      },
+      "q"_a,
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "base_lens"_a,
+      "context_lens"_a,
+      "layer_idx"_a,
+      nb::kw_only(),
+      "kv_head_mapping"_a = nb::none(),
+      "scale"_a = nb::none(),
+      "v_q_cache"_a = nb::none(),
+      "v_scale_cache"_a = nb::none(),
+      "v_zero_cache"_a = nb::none(),
+      "quant_bits"_a = nb::none(),
+      "quant_group_size"_a = nb::none(),
+      "quant_groups_per_head"_a = nb::none(),
+      "quant_symmetric"_a = nb::none(),
       "stream"_a = nb::none());
 
   m.def(
@@ -665,9 +810,49 @@ void init_fast(nb::module_& parent_module) {
          int start_pos,
          const mx::array& k_chunk,
          const mx::array& v_chunk,
+         nb::object v_q_cache,
+         nb::object v_scale_cache,
+         nb::object v_zero_cache,
+         nb::object quant_bits,
+         nb::object quant_group_size,
+         nb::object quant_bytes_per_token,
+         nb::object quant_groups_per_head,
+         nb::object quant_symmetric,
          mx::StreamOrDevice s) {
+        auto* vq_ptr =
+            v_q_cache.is_none() ? nullptr : &nb::cast<mx::array&>(v_q_cache);
+        auto* v_scale_ptr = v_scale_cache.is_none()
+            ? nullptr
+            : &nb::cast<mx::array&>(v_scale_cache);
+        auto* v_zero_ptr = v_zero_cache.is_none()
+            ? nullptr
+            : &nb::cast<mx::array&>(v_zero_cache);
+        auto to_optional_int = [](const nb::object& obj) -> std::optional<int> {
+          if (obj.is_none()) {
+            return std::nullopt;
+          }
+          return nb::cast<int>(obj);
+        };
+        std::optional<bool> quant_sym;
+        if (!quant_symmetric.is_none()) {
+          quant_sym = nb::cast<bool>(quant_symmetric);
+        }
         mx::fast::paged_kv_write_impl(
-            k_cache, v_cache, block_row, start_pos, k_chunk, v_chunk, s);
+            k_cache,
+            v_cache,
+            block_row,
+            start_pos,
+            k_chunk,
+            v_chunk,
+            vq_ptr,
+            v_scale_ptr,
+            v_zero_ptr,
+            to_optional_int(quant_bits),
+            to_optional_int(quant_group_size),
+            to_optional_int(quant_bytes_per_token),
+            to_optional_int(quant_groups_per_head),
+            quant_sym,
+            s);
       },
       "k_cache"_a,
       "v_cache"_a,
@@ -675,6 +860,83 @@ void init_fast(nb::module_& parent_module) {
       "start_pos"_a,
       "k_chunk"_a,
       "v_chunk"_a,
+      nb::kw_only(),
+      "v_q_cache"_a = nb::none(),
+      "v_scale_cache"_a = nb::none(),
+      "v_zero_cache"_a = nb::none(),
+      "quant_bits"_a = nb::none(),
+      "quant_group_size"_a = nb::none(),
+      "quant_bytes_per_token"_a = nb::none(),
+      "quant_groups_per_head"_a = nb::none(),
+      "quant_symmetric"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "paged_kv_write_batch",
+      [](mx::array& k_cache,
+         mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& context_lens,
+         const mx::array& k_batch,
+         const mx::array& v_batch,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_kv_write_batch(
+            k_cache, v_cache, block_tables, context_lens, k_batch, v_batch, s);
+      },
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "context_lens"_a,
+      "k_batch"_a,
+      "v_batch"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "paged_kv_write_layers_batch",
+      [](mx::array& k_cache,
+         mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& context_lens,
+         const mx::array& k_batch,
+         const mx::array& v_batch,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_kv_write_layers_batch(
+            k_cache, v_cache, block_tables, context_lens, k_batch, v_batch, s);
+      },
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "context_lens"_a,
+      "k_batch"_a,
+      "v_batch"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "paged_kv_write_layers_tokens",
+      [](mx::array& k_cache,
+         mx::array& v_cache,
+         const mx::array& block_tables,
+         const mx::array& context_lens,
+         const mx::array& k_tokens,
+         const mx::array& v_tokens,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_kv_write_layers_tokens(
+            k_cache,
+            v_cache,
+            block_tables,
+            context_lens,
+            k_tokens,
+            v_tokens,
+            s);
+      },
+      "k_cache"_a,
+      "v_cache"_a,
+      "block_tables"_a,
+      "context_lens"_a,
+      "k_tokens"_a,
+      "v_tokens"_a,
       nb::kw_only(),
       "stream"_a = nb::none());
 
@@ -700,4 +962,25 @@ void init_fast(nb::module_& parent_module) {
       []() { return mx::fast::paged_attention_last_time_ms(); },
       nb::sig("def _paged_attention_last_time_ms() -> float"));
 
+  m.def(
+      "_paged_prefill_prewarm",
+      [](uint32_t block_size,
+         mx::Dtype dtype,
+         std::optional<uint32_t> threads_per_head,
+         std::optional<uint32_t> vec_width,
+         mx::StreamOrDevice s) {
+        mx::fast::paged_prefill_prewarm(
+            block_size, dtype, threads_per_head, vec_width, s);
+      },
+      "block_size"_a,
+      "dtype"_a,
+      nb::kw_only(),
+      "threads_per_head"_a = nb::none(),
+      "vec_width"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "_paged_prefill_last_time_ms",
+      []() { return mx::fast::paged_prefill_last_time_ms(); },
+      nb::sig("def _paged_prefill_last_time_ms() -> float"));
 }

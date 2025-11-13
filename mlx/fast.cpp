@@ -3,12 +3,13 @@
 #include <cmath>
 #include <numeric>
 
-#include "mlx/fast.h"
-#include "mlx/fast_primitives.h"
 #include "mlx/backend/metal/paged_attention.h"
 #include "mlx/backend/metal/paged_kv.h"
+#include "mlx/fast.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 
 namespace mlx::core::fast {
 
@@ -811,7 +812,66 @@ array scaled_dot_product_attention(
   return fallback(std::move(inputs))[0];
 }
 
-array paged_attention_impl(
+namespace {
+
+array make_traced_paged_attention_output(
+    const Stream& stream,
+    Dtype final_type,
+    float scale,
+    const array& q_cast,
+    const array& k_cast,
+    const array& v_cast,
+    const array& tables_i32,
+    const array& lens_i32,
+    const std::optional<array>& mapping_i32,
+    const std::optional<array>& vq_view,
+    const std::optional<array>& v_scale_view,
+    const std::optional<array>& v_zero_view,
+    const std::optional<array>& overlay_k_cast,
+    const std::optional<array>& overlay_v_cast,
+    const std::optional<array>& overlay_len_override,
+    const PagedAttentionQuantConfig* quant_cfg) {
+  std::vector<array> inputs = {q_cast, k_cast, v_cast, tables_i32, lens_i32};
+  int mapping_index = -1;
+  if (mapping_i32.has_value()) {
+    mapping_index = inputs.size();
+    inputs.push_back(*mapping_i32);
+  }
+
+  auto push_optional = [&](const std::optional<array>& value) -> int {
+    if (!value.has_value()) {
+      return -1;
+    }
+    int idx = inputs.size();
+    inputs.push_back(*value);
+    return idx;
+  };
+
+  int vq_index = push_optional(vq_view);
+  int v_scale_index = push_optional(v_scale_view);
+  int v_zero_index = push_optional(v_zero_view);
+  int overlay_k_index = push_optional(overlay_k_cast);
+  int overlay_v_index = push_optional(overlay_v_cast);
+  int overlay_len_index = push_optional(overlay_len_override);
+
+  auto primitive = std::make_shared<PagedAttentionPrimitive>(
+      stream,
+      scale,
+      mapping_index,
+      vq_index,
+      v_scale_index,
+      v_zero_index,
+      overlay_k_index,
+      overlay_v_index,
+      overlay_len_index,
+      quant_cfg ? std::optional<PagedAttentionQuantConfig>(*quant_cfg)
+                : std::nullopt);
+
+  return array(
+      q_cast.shape(), final_type, std::move(primitive), std::move(inputs));
+}
+
+array paged_attention_core_impl(
     const array& queries,
     const array& k_cache,
     const array& v_cache,
@@ -820,6 +880,16 @@ array paged_attention_impl(
     int layer_idx,
     const std::optional<array>& kv_head_mapping,
     const std::optional<float>& maybe_scale,
+    const std::optional<array>& v_q_cache,
+    const std::optional<array>& v_scale_cache,
+    const std::optional<array>& v_zero_cache,
+    const std::optional<int>& quant_bits,
+    const std::optional<int>& quant_group_size,
+    const std::optional<int>& quant_groups_per_head,
+    const std::optional<bool>& quant_symmetric,
+    const array* overlay_k,
+    const array* overlay_v,
+    const std::optional<array>& overlay_len_override,
     StreamOrDevice s) {
   if (queries.ndim() != 4) {
     std::ostringstream msg;
@@ -856,6 +926,17 @@ array paged_attention_impl(
   }
 
   auto stream = to_stream(s);
+  const bool tracing = ::mlx::core::detail::in_tracing();
+  auto realize = [&](array& arr) {
+    if (!tracing) {
+      arr.eval();
+    }
+  };
+  auto realize_optional = [&](std::optional<array>& opt) {
+    if (!tracing && opt.has_value()) {
+      opt->eval();
+    }
+  };
 
   array k_view = k_cache;
   array v_view = v_cache;
@@ -888,6 +969,41 @@ array paged_attention_impl(
         "[paged_attention] mismatched cache shapes for keys/values.");
   }
 
+  const bool has_overlay = overlay_k != nullptr && overlay_v != nullptr;
+  std::optional<array> overlay_k_cast;
+  std::optional<array> overlay_v_cast;
+  if (has_overlay) {
+    const auto overlay_rank = overlay_k->ndim();
+    if (!((overlay_rank == 3) || (overlay_rank == 4))) {
+      throw std::invalid_argument(
+          "[paged_attention] overlay tensors must be rank 3 "
+          "[batch, kv_heads, head_dim] or rank 4 "
+          "[overlay, batch, kv_heads, head_dim].");
+    }
+    if (overlay_v->ndim() != overlay_rank) {
+      throw std::invalid_argument(
+          "[paged_attention] overlay value rank must match overlay key.");
+    }
+
+    const int batch_axis = overlay_rank == 4 ? 1 : 0;
+    const int head_axis = overlay_rank == 4 ? 2 : 1;
+    const int feat_axis = overlay_rank == 4 ? 3 : 2;
+    if (overlay_k->shape(batch_axis) != queries.shape(0) ||
+        overlay_k->shape(head_axis) != k_view.shape(0) ||
+        overlay_k->shape(feat_axis) != queries.shape(3)) {
+      std::ostringstream msg;
+      msg << "[paged_attention] overlay key shape mismatch; expected batch="
+          << queries.shape(0) << ", kv_heads=" << k_view.shape(0)
+          << ", head_dim=" << queries.shape(3) << " but received "
+          << overlay_k->shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (overlay_v->shape() != overlay_k->shape()) {
+      throw std::invalid_argument(
+          "[paged_attention] overlay value shape must match overlay key.");
+    }
+  }
+
   auto final_type = result_type(queries, k_view, v_view);
   if (!issubdtype(final_type, floating)) {
     std::ostringstream msg;
@@ -900,19 +1016,149 @@ array paged_attention_impl(
       : 1.0f / std::sqrt(static_cast<float>(queries.shape(3)));
 
   auto q_cast = astype(queries, final_type, stream);
+  if (!q_cast.flags().row_contiguous) {
+    q_cast = contiguous(q_cast, false, stream);
+  }
+  if (!q_cast.flags().row_contiguous) {
+    q_cast = contiguous(q_cast, false, stream);
+  }
   auto k_cast = astype(k_view, final_type, stream);
   auto v_cast = astype(v_view, final_type, stream);
   auto tables_i32 = astype(block_tables, int32, stream);
   auto lens_i32 = astype(context_lens, int32, stream);
+  std::optional<array> overlay_len_arr;
+  if (overlay_len_override.has_value()) {
+    overlay_len_arr = astype(*overlay_len_override, int32, stream);
+  }
+  if (has_overlay) {
+    overlay_k_cast = astype(*overlay_k, final_type, stream);
+    overlay_v_cast = astype(*overlay_v, final_type, stream);
+    if (!overlay_k_cast->flags().row_contiguous) {
+      overlay_k_cast = contiguous(*overlay_k_cast, false, stream);
+    }
+    if (!overlay_v_cast->flags().row_contiguous) {
+      overlay_v_cast = contiguous(*overlay_v_cast, false, stream);
+    }
+  }
   std::optional<array> mapping_i32;
   if (kv_head_mapping.has_value()) {
     mapping_i32 = astype(*kv_head_mapping, int32, stream);
   }
 
+  auto slice_quant_layer = [&](const array& arr, const char* name) -> array {
+    if (arr.ndim() == 5) {
+      if (layer_idx < 0 || layer_idx >= arr.shape(0)) {
+        std::ostringstream msg;
+        msg << "[paged_attention] layer_idx " << layer_idx
+            << " out of range for " << name << " with " << arr.shape(0)
+            << " layers.";
+        throw std::invalid_argument(msg.str());
+      }
+      Shape start;
+      start.insert(start.end(), arr.ndim(), 0);
+      Shape stop(arr.shape().begin(), arr.shape().end());
+      start[0] = layer_idx;
+      stop[0] = layer_idx + 1;
+      return squeeze(slice(arr, start, stop, stream), 0, stream);
+    }
+    if (arr.ndim() != 4) {
+      std::ostringstream msg;
+      msg << "[paged_attention] " << name
+          << " expected rank 4 or 5 but received shape " << arr.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    return arr;
+  };
+
+  bool quant_args_present = v_q_cache.has_value() ||
+      v_scale_cache.has_value() || v_zero_cache.has_value() ||
+      quant_bits.has_value() || quant_group_size.has_value() ||
+      quant_groups_per_head.has_value() || quant_symmetric.has_value();
+
+  std::optional<array> vq_view;
+  std::optional<array> v_scale_view;
+  std::optional<array> v_zero_view;
+  PagedAttentionQuantConfig quant_cfg;
+  const PagedAttentionQuantConfig* quant_ptr = nullptr;
+
+  if (quant_args_present) {
+    if (!v_q_cache.has_value() || !v_scale_cache.has_value() ||
+        !v_zero_cache.has_value() || !quant_bits.has_value() ||
+        !quant_group_size.has_value() || !quant_groups_per_head.has_value() ||
+        !quant_symmetric.has_value()) {
+      throw std::invalid_argument(
+          "[paged_attention] quantized arguments require caches,"
+          " bits, group_size, groups_per_head, and symmetric flag.");
+    }
+    quant_cfg.bits = *quant_bits;
+    quant_cfg.group_size = *quant_group_size;
+    quant_cfg.groups_per_head = *quant_groups_per_head;
+    quant_cfg.bytes_per_group = (*quant_group_size * *quant_bits + 7) / 8;
+    quant_cfg.symmetric = *quant_symmetric ? true : false;
+    quant_ptr = &quant_cfg;
+
+    vq_view = astype(slice_quant_layer(*v_q_cache, "v_q_cache"), uint8, stream);
+    v_scale_view = astype(
+        slice_quant_layer(*v_scale_cache, "v_scale_cache"), float16, stream);
+    v_zero_view = astype(
+        slice_quant_layer(*v_zero_cache, "v_zero_cache"), float16, stream);
+  }
+
   if (paged_attention_use_fallback(
-          q_cast, k_cast, v_cast, tables_i32, lens_i32, stream)) {
+          q_cast,
+          k_cast,
+          v_cast,
+          tables_i32,
+          lens_i32,
+          vq_view ? &*vq_view : nullptr,
+          v_scale_view ? &*v_scale_view : nullptr,
+          v_zero_view ? &*v_zero_view : nullptr,
+          quant_ptr,
+          stream)) {
     throw std::runtime_error(
         "paged_attention_impl: configuration not supported on Metal backend.");
+  }
+
+  if (tracing) {
+    return make_traced_paged_attention_output(
+        stream,
+        final_type,
+        scale,
+        q_cast,
+        k_cast,
+        v_cast,
+        tables_i32,
+        lens_i32,
+        mapping_i32,
+        vq_view,
+        v_scale_view,
+        v_zero_view,
+        overlay_k_cast,
+        overlay_v_cast,
+        overlay_len_arr,
+        quant_ptr);
+  }
+
+  std::optional<uint32_t> overlay_len_scalar;
+  if (overlay_len_arr.has_value()) {
+    mlx::core::eval(*overlay_len_arr);
+    overlay_len_scalar =
+        static_cast<uint32_t>(overlay_len_arr->item<int64_t>());
+  }
+  realize(q_cast);
+  realize(k_cast);
+  realize(v_cast);
+  realize(tables_i32);
+  realize(lens_i32);
+  realize_optional(mapping_i32);
+  if (vq_view.has_value()) {
+    realize_optional(vq_view);
+    realize_optional(v_scale_view);
+    realize_optional(v_zero_view);
+  }
+  if (has_overlay) {
+    realize_optional(overlay_k_cast);
+    realize_optional(overlay_v_cast);
   }
 
   array out(
@@ -923,17 +1169,348 @@ array paged_attention_impl(
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto& device = metal::device(stream.device);
-  paged_attention(
+  if (has_overlay) {
+    paged_attention_with_overlay(
+        stream,
+        device,
+        q_cast,
+        k_cast,
+        v_cast,
+        tables_i32,
+        lens_i32,
+        mapping_i32,
+        scale,
+        vq_view ? &*vq_view : nullptr,
+        v_scale_view ? &*v_scale_view : nullptr,
+        v_zero_view ? &*v_zero_view : nullptr,
+        quant_ptr,
+        *overlay_k_cast,
+        *overlay_v_cast,
+        out,
+        overlay_len_scalar);
+  } else {
+    paged_attention(
+        stream,
+        device,
+        q_cast,
+        k_cast,
+        v_cast,
+        tables_i32,
+        lens_i32,
+        mapping_i32,
+        scale,
+        vq_view ? &*vq_view : nullptr,
+        v_scale_view ? &*v_scale_view : nullptr,
+        v_zero_view ? &*v_zero_view : nullptr,
+        quant_ptr,
+        out);
+  }
+  out.set_status(array::Status::available);
+  return out;
+}
+
+} // namespace
+
+array paged_attention_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& maybe_scale,
+    const std::optional<array>& v_q_cache,
+    const std::optional<array>& v_scale_cache,
+    const std::optional<array>& v_zero_cache,
+    const std::optional<int>& quant_bits,
+    const std::optional<int>& quant_group_size,
+    const std::optional<int>& quant_groups_per_head,
+    const std::optional<bool>& quant_symmetric,
+    StreamOrDevice s) {
+  return paged_attention_core_impl(
+      queries,
+      k_cache,
+      v_cache,
+      block_tables,
+      context_lens,
+      layer_idx,
+      kv_head_mapping,
+      maybe_scale,
+      v_q_cache,
+      v_scale_cache,
+      v_zero_cache,
+      quant_bits,
+      quant_group_size,
+      quant_groups_per_head,
+      quant_symmetric,
+      nullptr,
+      nullptr,
+      std::nullopt,
+      s);
+}
+
+array paged_attention_with_overlay_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& maybe_scale,
+    const array& overlay_k,
+    const array& overlay_v,
+    const std::optional<array>& overlay_len_override,
+    const std::optional<array>& v_q_cache,
+    const std::optional<array>& v_scale_cache,
+    const std::optional<array>& v_zero_cache,
+    const std::optional<int>& quant_bits,
+    const std::optional<int>& quant_group_size,
+    const std::optional<int>& quant_groups_per_head,
+    const std::optional<bool>& quant_symmetric,
+    StreamOrDevice s) {
+  return paged_attention_core_impl(
+      queries,
+      k_cache,
+      v_cache,
+      block_tables,
+      context_lens,
+      layer_idx,
+      kv_head_mapping,
+      maybe_scale,
+      v_q_cache,
+      v_scale_cache,
+      v_zero_cache,
+      quant_bits,
+      quant_group_size,
+      quant_groups_per_head,
+      quant_symmetric,
+      &overlay_k,
+      &overlay_v,
+      overlay_len_override,
+      s);
+}
+
+array paged_prefill_impl(
+    const array& queries,
+    const array& k_cache,
+    const array& v_cache,
+    const array& block_tables,
+    const array& base_lens,
+    const array& context_lens,
+    int layer_idx,
+    const std::optional<array>& kv_head_mapping,
+    const std::optional<float>& maybe_scale,
+    const std::optional<array>& v_q_cache,
+    const std::optional<array>& v_scale_cache,
+    const std::optional<array>& v_zero_cache,
+    const std::optional<int>& quant_bits,
+    const std::optional<int>& quant_group_size,
+    const std::optional<int>& quant_groups_per_head,
+    const std::optional<bool>& quant_symmetric,
+    StreamOrDevice s) {
+  if (queries.ndim() != 4) {
+    std::ostringstream msg;
+    msg << "[paged_prefill] queries expected rank 4 but received shape "
+        << queries.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (block_tables.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[paged_prefill] block_tables expected rank 2 but received shape "
+        << block_tables.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (context_lens.ndim() != 1 || base_lens.ndim() != 1) {
+    throw std::invalid_argument(
+        "[paged_prefill] base_lens/context_lens must be rank 1.");
+  }
+  if (block_tables.shape(0) != queries.shape(0) ||
+      context_lens.shape(0) != queries.shape(0) ||
+      base_lens.shape(0) != queries.shape(0)) {
+    std::ostringstream msg;
+    msg << "[paged_prefill] batch mismatch between queries/block_tables/base_lens.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (queries.shape(2) == 0) {
+    throw std::invalid_argument("[paged_prefill] expected Lq > 0.");
+  }
+
+  auto stream = to_stream(s);
+  const bool tracing = ::mlx::core::detail::in_tracing();
+  auto realize = [&](array& arr) {
+    if (!tracing) {
+      arr.eval();
+    }
+  };
+  auto realize_optional = [&](std::optional<array>& opt) {
+    if (!tracing && opt.has_value()) {
+      opt->eval();
+    }
+  };
+
+  array k_view = k_cache;
+  array v_view = v_cache;
+  if (k_cache.ndim() == 5) {
+    if (layer_idx < 0 || layer_idx >= k_cache.shape(0)) {
+      std::ostringstream msg;
+      msg << "[paged_prefill] layer_idx " << layer_idx
+          << " out of range for cache with " << k_cache.shape(0) << " layers.";
+      throw std::invalid_argument(msg.str());
+    }
+    Shape start;
+    start.insert(start.end(), k_cache.ndim(), 0);
+    Shape stop(k_cache.shape().begin(), k_cache.shape().end());
+    start[0] = layer_idx;
+    stop[0] = layer_idx + 1;
+    k_view = squeeze(slice(k_cache, start, stop, stream), 0, stream);
+    v_view = squeeze(slice(v_cache, start, stop, stream), 0, stream);
+  } else {
+    layer_idx = 0;
+  }
+  if (k_view.ndim() != 4 || v_view.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_prefill] k_cache/v_cache expected rank 4 after layer selection.");
+  }
+  if (k_view.shape(0) == 0 || k_view.shape(2) == 0 ||
+      k_view.shape(3) != queries.shape(3) || v_view.shape() != k_view.shape()) {
+    throw std::invalid_argument(
+        "[paged_prefill] mismatched cache shapes for keys/values.");
+  }
+
+  auto final_type = result_type(queries, k_view, v_view);
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[paged_prefill] unsupported dtype " << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  float scale = maybe_scale.has_value()
+      ? *maybe_scale
+      : 1.0f / std::sqrt(static_cast<float>(queries.shape(3)));
+
+  auto q_cast = astype(queries, final_type, stream);
+  auto k_cast = astype(k_view, final_type, stream);
+  auto v_cast = astype(v_view, final_type, stream);
+  auto tables_i32 = astype(block_tables, int32, stream);
+  auto lens_i32 = astype(context_lens, int32, stream);
+  auto base_i32 = astype(base_lens, int32, stream);
+  std::optional<array> mapping_i32;
+  if (kv_head_mapping.has_value()) {
+    mapping_i32 = astype(*kv_head_mapping, int32, stream);
+  }
+
+  auto slice_quant_layer = [&](const array& arr, const char* name) -> array {
+    if (arr.ndim() == 5) {
+      if (layer_idx < 0 || layer_idx >= arr.shape(0)) {
+        std::ostringstream msg;
+        msg << "[paged_prefill] layer_idx " << layer_idx << " out of range for "
+            << name << " with " << arr.shape(0) << " layers.";
+        throw std::invalid_argument(msg.str());
+      }
+      Shape start;
+      start.insert(start.end(), arr.ndim(), 0);
+      Shape stop(arr.shape().begin(), arr.shape().end());
+      start[0] = layer_idx;
+      stop[0] = layer_idx + 1;
+      return squeeze(slice(arr, start, stop, stream), 0, stream);
+    }
+    if (arr.ndim() != 4) {
+      std::ostringstream msg;
+      msg << "[paged_prefill] " << name
+          << " expected rank 4 or 5 but received shape " << arr.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    return arr;
+  };
+
+  bool quant_args_present = v_q_cache.has_value() ||
+      v_scale_cache.has_value() || v_zero_cache.has_value() ||
+      quant_bits.has_value() || quant_group_size.has_value() ||
+      quant_groups_per_head.has_value() || quant_symmetric.has_value();
+
+  std::optional<array> vq_view;
+  std::optional<array> v_scale_view;
+  std::optional<array> v_zero_view;
+  PagedAttentionQuantConfig quant_cfg;
+  const PagedAttentionQuantConfig* quant_ptr = nullptr;
+
+  if (quant_args_present) {
+    if (!v_q_cache.has_value() || !v_scale_cache.has_value() ||
+        !v_zero_cache.has_value() || !quant_bits.has_value() ||
+        !quant_group_size.has_value() || !quant_groups_per_head.has_value() ||
+        !quant_symmetric.has_value()) {
+      throw std::invalid_argument(
+          "[paged_prefill] quantized arguments require caches, bits, group_size, groups_per_head, and symmetric flag.");
+    }
+    quant_cfg.bits = *quant_bits;
+    quant_cfg.group_size = *quant_group_size;
+    quant_cfg.groups_per_head = *quant_groups_per_head;
+    quant_cfg.bytes_per_group = (*quant_group_size * *quant_bits + 7) / 8;
+    quant_cfg.symmetric = *quant_symmetric ? true : false;
+    quant_ptr = &quant_cfg;
+
+    vq_view = astype(slice_quant_layer(*v_q_cache, "v_q_cache"), uint8, stream);
+    v_scale_view = astype(
+        slice_quant_layer(*v_scale_cache, "v_scale_cache"), float16, stream);
+    v_zero_view = astype(
+        slice_quant_layer(*v_zero_cache, "v_zero_cache"), float16, stream);
+  }
+
+  realize(q_cast);
+  realize(k_cast);
+  realize(v_cast);
+  realize(tables_i32);
+  realize(lens_i32);
+  realize(base_i32);
+  realize_optional(mapping_i32);
+  if (vq_view.has_value()) {
+    realize_optional(vq_view);
+    realize_optional(v_scale_view);
+    realize_optional(v_zero_view);
+  }
+
+  if (paged_attention_use_fallback(
+          q_cast,
+          k_cast,
+          v_cast,
+          tables_i32,
+          lens_i32,
+          vq_view ? &*vq_view : nullptr,
+          v_scale_view ? &*v_scale_view : nullptr,
+          v_zero_view ? &*v_zero_view : nullptr,
+          quant_ptr,
+          stream)) {
+    throw std::runtime_error(
+        "paged_prefill_impl: configuration not supported on Metal backend.");
+  }
+
+  array out(
+      Shape{q_cast.shape(0), q_cast.shape(1), q_cast.shape(2), q_cast.shape(3)},
+      final_type,
+      nullptr,
+      {});
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& device = metal::device(stream.device);
+  paged_prefill(
       stream,
       device,
       q_cast,
       k_cast,
       v_cast,
+      base_i32,
       tables_i32,
       lens_i32,
       mapping_i32,
       scale,
+      vq_view ? &*vq_view : nullptr,
+      v_scale_view ? &*v_scale_view : nullptr,
+      v_zero_view ? &*v_zero_view : nullptr,
+      quant_ptr,
       out);
+  out.set_status(array::Status::available);
   return out;
 }
 
@@ -944,6 +1521,14 @@ void paged_kv_write_impl(
     int start_pos,
     const array& k_chunk,
     const array& v_chunk,
+    array* vq_cache,
+    array* v_scale_cache,
+    array* v_zero_cache,
+    std::optional<int> quant_bits,
+    std::optional<int> quant_group_size,
+    std::optional<int> quant_bytes_per_token,
+    std::optional<int> quant_groups_per_head,
+    std::optional<bool> quant_symmetric,
     StreamOrDevice s) {
   if (k_cache.ndim() != 4 || v_cache.ndim() != 4) {
     throw std::invalid_argument(
@@ -954,8 +1539,7 @@ void paged_kv_write_impl(
         "[paged_kv_write] key/value cache require matching dtypes.");
   }
   if (k_chunk.ndim() != 3 || v_chunk.ndim() != 3) {
-    throw std::invalid_argument(
-        "[paged_kv_write] chunks must have rank 3.");
+    throw std::invalid_argument("[paged_kv_write] chunks must have rank 3.");
   }
   if (k_chunk.shape() != v_chunk.shape()) {
     throw std::invalid_argument(
@@ -966,18 +1550,211 @@ void paged_kv_write_impl(
         "[paged_kv_write] chunk head_dim must match cache head_dim.");
   }
 
+  PagedKVQuantConfig quant_config;
+  const PagedKVQuantConfig* quant_ptr = nullptr;
+  const bool quant_requested = vq_cache != nullptr ||
+      v_scale_cache != nullptr || v_zero_cache != nullptr ||
+      quant_bits.has_value() || quant_group_size.has_value() ||
+      quant_bytes_per_token.has_value() || quant_groups_per_head.has_value() ||
+      quant_symmetric.has_value();
+  if (quant_requested) {
+    if (vq_cache == nullptr || v_scale_cache == nullptr ||
+        v_zero_cache == nullptr || !quant_bits.has_value() ||
+        !quant_group_size.has_value() || !quant_bytes_per_token.has_value() ||
+        !quant_groups_per_head.has_value() || !quant_symmetric.has_value()) {
+      throw std::invalid_argument(
+          "[paged_kv_write] quantized write requires caches, bits, group_size, "
+          "bytes_per_token, groups_per_head, and symmetric flag.");
+    }
+    quant_config.bits = *quant_bits;
+    quant_config.group_size = *quant_group_size;
+    quant_config.bytes_per_token = *quant_bytes_per_token;
+    quant_config.groups_per_head = *quant_groups_per_head;
+    quant_config.symmetric = *quant_symmetric;
+    quant_ptr = &quant_config;
+  }
+
   auto stream = to_stream(s);
   auto block_i32 = astype(block_row, int32, stream);
   auto k_cast = astype(k_chunk, k_cache.dtype(), stream);
   auto v_cast = astype(v_chunk, k_cache.dtype(), stream);
   if (paged_kv_write_use_fallback(
-          k_cache, v_cache, block_i32, k_cast, v_cast, stream)) {
+          k_cache,
+          v_cache,
+          block_i32,
+          k_cast,
+          v_cast,
+          vq_cache,
+          v_scale_cache,
+          v_zero_cache,
+          quant_ptr,
+          stream)) {
     throw std::runtime_error(
         "paged_kv_write_impl: configuration not supported on Metal backend.");
   }
   auto& device = metal::device(stream.device);
   paged_kv_write(
-      stream, device, k_cache, v_cache, block_i32, start_pos, k_cast, v_cast);
+      stream,
+      device,
+      k_cache,
+      v_cache,
+      block_i32,
+      start_pos,
+      k_cast,
+      v_cast,
+      vq_cache,
+      v_scale_cache,
+      v_zero_cache,
+      quant_ptr);
+}
+
+void paged_kv_write_batch(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_batch,
+    const array& v_batch,
+    StreamOrDevice s) {
+  if (k_cache.ndim() != 4 || v_cache.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] expected cache tensors with rank 4.");
+  }
+  if (k_cache.dtype() != v_cache.dtype()) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] key/value cache require matching dtypes.");
+  }
+  if (block_tables.ndim() != 2 || context_lens.ndim() != 1) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] block tables must be 2-D and context lens 1-D.");
+  }
+  if (block_tables.shape(0) != context_lens.shape(0)) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] block tables and context lens must align.");
+  }
+  if (k_batch.ndim() != 3 || v_batch.ndim() != 3) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] batch chunks must have rank 3.");
+  }
+  if (k_batch.shape() != v_batch.shape()) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] key/value batch shapes must match.");
+  }
+  if (k_batch.shape(1) != k_cache.shape(0) ||
+      k_batch.shape(2) != k_cache.shape(3)) {
+    throw std::invalid_argument(
+        "[paged_kv_write_batch] batch head dims must match cache layout.");
+  }
+
+  auto stream = to_stream(s);
+  auto block_tables_i32 = astype(block_tables, int32, stream);
+  auto context_i32 = astype(context_lens, int32, stream);
+  auto k_cast = astype(k_batch, k_cache.dtype(), stream);
+  auto v_cast = astype(v_batch, k_cache.dtype(), stream);
+  if (!::mlx::core::detail::in_tracing()) {
+    eval(k_cache, v_cache, block_tables_i32, context_i32, k_cast, v_cast);
+  }
+  if (paged_kv_write_batch_use_fallback(
+          k_cache,
+          v_cache,
+          block_tables_i32,
+          context_i32,
+          k_cast,
+          v_cast,
+          stream)) {
+    throw std::runtime_error(
+        "paged_kv_write_batch: configuration not supported on Metal backend.");
+  }
+  auto& device = metal::device(stream.device);
+  paged_kv_write_batch(
+      stream,
+      device,
+      k_cache,
+      v_cache,
+      block_tables_i32,
+      context_i32,
+      k_cast,
+      v_cast);
+}
+
+void paged_kv_write_layers_batch(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_batch,
+    const array& v_batch,
+    StreamOrDevice s) {
+  if (k_cache.ndim() != 5 || v_cache.ndim() != 5) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_batch] expected cache tensors with rank 5.");
+  }
+  if (k_batch.ndim() != 4 || v_batch.ndim() != 4) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_batch] batch tensors must have rank 4.");
+  }
+  if (k_batch.shape() != v_batch.shape()) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_batch] key/value batch shapes must match.");
+  }
+  auto stream = to_stream(s);
+  auto block_tables_i32 = astype(block_tables, int32, stream);
+  auto context_i32 = astype(context_lens, int32, stream);
+  auto k_cast = astype(k_batch, k_cache.dtype(), stream);
+  auto v_cast = astype(v_batch, k_cache.dtype(), stream);
+  if (!::mlx::core::detail::in_tracing()) {
+    eval(k_cache, v_cache, block_tables_i32, context_i32, k_cast, v_cast);
+  }
+  auto& device = metal::device(stream.device);
+  paged_kv_write_layers_batch(
+      stream,
+      device,
+      k_cache,
+      v_cache,
+      block_tables_i32,
+      context_i32,
+      k_cast,
+      v_cast);
+}
+
+void paged_kv_write_layers_tokens(
+    array& k_cache,
+    array& v_cache,
+    const array& block_tables,
+    const array& context_lens,
+    const array& k_tokens,
+    const array& v_tokens,
+    StreamOrDevice s) {
+  if (k_cache.ndim() != 5 || v_cache.ndim() != 5) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_tokens] expected cache tensors with rank 5.");
+  }
+  if (k_tokens.ndim() != 5 || v_tokens.ndim() != 5) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_tokens] token tensors must have rank 5.");
+  }
+  if (k_tokens.shape() != v_tokens.shape()) {
+    throw std::invalid_argument(
+        "[paged_kv_write_layers_tokens] key/value token shapes must match.");
+  }
+  auto stream = to_stream(s);
+  auto block_tables_i32 = astype(block_tables, int32, stream);
+  auto context_i32 = astype(context_lens, int32, stream);
+  auto k_cast = astype(k_tokens, k_cache.dtype(), stream);
+  auto v_cast = astype(v_tokens, k_cache.dtype(), stream);
+  if (!::mlx::core::detail::in_tracing()) {
+    eval(k_cache, v_cache, block_tables_i32, context_i32, k_cast, v_cast);
+  }
+  auto& device = metal::device(stream.device);
+  paged_kv_write_layers_tokens(
+      stream,
+      device,
+      k_cache,
+      v_cache,
+      block_tables_i32,
+      context_i32,
+      k_cast,
+      v_cast);
 }
 
 void paged_attention_prewarm(
@@ -989,6 +1766,22 @@ void paged_attention_prewarm(
   auto stream = to_stream(s);
   auto& device = metal::device(stream.device);
   paged_attention_prewarm_kernel(
+      device,
+      dtype,
+      block_size,
+      threads_per_head.value_or(0),
+      vec_width.value_or(0));
+}
+
+void paged_prefill_prewarm(
+    uint32_t block_size,
+    Dtype dtype,
+    std::optional<uint32_t> threads_per_head,
+    std::optional<uint32_t> vec_width,
+    StreamOrDevice s) {
+  auto stream = to_stream(s);
+  auto& device = metal::device(stream.device);
+  paged_prefill_prewarm_kernel(
       device,
       dtype,
       block_size,

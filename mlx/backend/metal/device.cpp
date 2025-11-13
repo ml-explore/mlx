@@ -8,9 +8,9 @@
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
 
+#include "metal_cpp_shims.hpp"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
-#include "metal_cpp_shims.hpp"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
@@ -407,6 +407,31 @@ bool Device::command_buffer_needs_commit(int index) {
   return false;
 }
 
+void Device::set_profiling_enabled(bool enabled) {
+#if defined(__APPLE__)
+  if (profiling_enabled_ == enabled) {
+    return;
+  }
+  for (auto& [idx, stream] : stream_map_) {
+    if (stream.buffer != nullptr) {
+      throw std::runtime_error(
+          "[metal::Device] Cannot toggle Metal profiling while command buffers are active. "
+          "Synchronize outstanding work and retry.");
+    }
+  }
+  profiling_enabled_ = enabled;
+#else
+  if (enabled) {
+    throw std::runtime_error(
+        "[metal::Device] Metal profiling is unavailable on this platform.");
+  }
+#endif
+}
+
+bool Device::profiling_enabled() const {
+  return profiling_enabled_;
+}
+
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
   auto& stream = get_stream_(index);
   if (stream.buffer == nullptr) {
@@ -418,7 +443,7 @@ MTL::CommandBuffer* Device::get_command_buffer(int index) {
             "[metal::Device] Unable to create command buffer descriptor");
       }
       desc->setRetainedReferences(false);
-      bool enabled = set_profiling_enabled(desc, true);
+      bool enabled = mlx::core::metal::set_profiling_enabled(desc, true);
       if (enabled) {
         stream.buffer = stream.queue->commandBuffer(desc);
       } else {

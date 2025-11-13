@@ -3,6 +3,7 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/backend/metal/paged_attention.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -315,6 +316,54 @@ class Quantize : public Custom {
   bool dequantize_;
 };
 
+class PagedAttentionPrimitive : public UnaryPrimitive {
+ public:
+  PagedAttentionPrimitive(
+      Stream stream,
+      float scale,
+      int mapping_index,
+      int vq_index,
+      int v_scale_index,
+      int v_zero_index,
+      int overlay_k_index,
+      int overlay_v_index,
+      int overlay_len_index,
+      std::optional<PagedAttentionQuantConfig> quant_cfg)
+      : UnaryPrimitive(stream),
+        scale_(scale),
+        mapping_index_(mapping_index),
+        vq_index_(vq_index),
+        v_scale_index_(v_scale_index),
+        v_zero_index_(v_zero_index),
+        overlay_k_index_(overlay_k_index),
+        overlay_v_index_(overlay_v_index),
+        overlay_len_index_(overlay_len_index),
+        has_quant_(quant_cfg.has_value()),
+        quant_cfg_(quant_cfg.value_or(PagedAttentionQuantConfig{})) {}
+
+  void eval_cpu(const std::vector<array>&, array&) override {
+    throw std::runtime_error(
+        "PagedAttentionPrimitive CPU path not implemented.");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(PagedAttention)
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  float scale_;
+  int mapping_index_;
+  int vq_index_;
+  int v_scale_index_;
+  int v_zero_index_;
+  int overlay_k_index_;
+  int overlay_v_index_;
+  int overlay_len_index_;
+  bool has_quant_;
+  PagedAttentionQuantConfig quant_cfg_;
+};
+
 using ScalarArg = std::variant<bool, int, float>;
 
 class CustomKernel : public Primitive {
@@ -378,5 +427,6 @@ class CustomKernel : public Primitive {
   bool is_precompiled_;
   int shared_memory_;
 };
+
 
 } // namespace mlx::core::fast

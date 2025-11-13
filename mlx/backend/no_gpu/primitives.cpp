@@ -181,6 +181,28 @@ void paged_attention(
     array&) {
   throw std::runtime_error("paged_attention has no GPU implementation.");
 }
+
+void paged_attention_with_overlay(
+    const Stream&,
+    metal::Device&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const std::optional<array>&,
+    float,
+    const array*,
+    const array*,
+    const array*,
+    const PagedAttentionQuantConfig*,
+    const array&,
+    const array&,
+    array&,
+    std::optional<uint32_t>) {
+  throw std::runtime_error(
+      "paged_attention_with_overlay has no GPU implementation.");
+}
 } // namespace fast
 
 namespace distributed {

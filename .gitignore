@@ -14,6 +14,7 @@ __pycache__/
 *.metallib
 venv/
 .venv/
+.venv-mlx/
 
 # Distribution / packaging
 python/mlx/core

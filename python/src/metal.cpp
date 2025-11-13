@@ -107,4 +107,29 @@ void init_metal(nb::module_& m) {
       Returns:
           dict: A dictionary with string keys and string or integer values.
       )pbdoc");
+  metal.def(
+      "command_buffer_profiling_supported",
+      &mx::metal::command_buffer_profiling_supported,
+      R"pbdoc(
+      Check if command buffer profiling can be enabled on this platform.
+
+      Returns:
+          bool: ``True`` when ``MTLCommandBufferDescriptor.profilingEnabled`` is available.
+      )pbdoc");
+  metal.def(
+      "command_buffer_profiling_enabled",
+      &mx::metal::command_buffer_profiling_enabled,
+      R"pbdoc(
+      Report whether command buffer profiling is currently enabled.
+      )pbdoc");
+  metal.def(
+      "set_command_buffer_profiling",
+      &mx::metal::set_command_buffer_profiling,
+      "enabled"_a = true,
+      R"pbdoc(
+      Enable or disable Metal command buffer profiling.
+
+      Args:
+        enabled (bool): ``True`` to request GPU profiling (requires macOS 16+/Xcode 16+).
+      )pbdoc");
 }

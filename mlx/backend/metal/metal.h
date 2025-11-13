@@ -15,6 +15,11 @@ bool is_available();
 void start_capture(std::string path = "");
 void stop_capture();
 
+/** Command buffer profiling helpers */
+bool command_buffer_profiling_supported();
+void set_command_buffer_profiling(bool enabled);
+bool command_buffer_profiling_enabled();
+
 /** Get information about the GPU and system settings. */
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info();
