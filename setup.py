@@ -24,11 +24,11 @@ def get_version():
             if "#define MLX_VERSION_PATCH" in l:
                 patch = l.split()[-1]
     version = f"{major}.{minor}.{patch}"
-    if "PYPI_RELEASE" not in os.environ:
+    if os.environ.get("PYPI_RELEASE", False):
         today = datetime.date.today()
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
 
-        if "DEV_RELEASE" not in os.environ:
+        if os.environ.get("DEV_RELEASE", False):
             git_hash = (
                 run(
                     "git rev-parse --short HEAD".split(),
