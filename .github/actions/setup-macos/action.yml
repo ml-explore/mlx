@@ -1,12 +1,6 @@
 name: 'Setup macOS Environment'
 description: 'Install dependencies for macOS builds'
 
-inputs:
-  python-version:
-    description: 'Python version to use'
-    required: false
-    default: '3.10'
-
 runs:
   using: "composite"
   steps:
@@ -17,9 +11,3 @@ runs:
     - name: Verify MetalToolchain installed
       shell: bash
       run: xcodebuild -showComponent MetalToolchain
-    
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v6
-      with:
-          python-version: ${{ inputs.python-version }}
-          activate-environment: true

@@ -1,14 +1,31 @@
 name: 'Build and Test on macOS'
 description: 'Build and test MLX on macOS'
 
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.10'
+  macos-target:
+    description: 'macOS target to build and test for'
+    required: false
+    default: '14.0'
+
 runs:
   using: "composite"
   steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v6
+      with:
+          python-version: ${{ inputs.python-version }}
+          activate-environment: true
+
     - name: Install dependencies
       shell: sh
       env:
         DEBUG: 1
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         uv pip install --upgrade pip
         uv pip install cmake setuptools nanobind==2.4.0
@@ -29,6 +46,7 @@ runs:
       shell: bash
       env:
         LOW_MEMORY: 1
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         DEVICE=cpu uv run -m xmlrunner discover -v python/tests -o test-results/cpu
         DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 uv run -m xmlrunner discover -v python/tests -o test-results/gpu
@@ -38,6 +56,8 @@ runs:
     
     - name: Build example extension
       shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         cd examples/extensions
         uv pip install -r requirements.txt
@@ -46,6 +66,8 @@ runs:
     
     - name: Build CPP only
       shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         mkdir -p build
         cd build
@@ -62,6 +84,8 @@ runs:
     
     - name: Build small binary with JIT
       shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         mkdir -p build
         cd build
@@ -80,6 +104,7 @@ runs:
         DEVICE: gpu
         METAL_DEVICE_WRAPPER_TYPE: 1
         METAL_DEBUG_ERROR_MODE: 0
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
           uv pip install -e . -v

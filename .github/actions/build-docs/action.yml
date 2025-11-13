@@ -7,6 +7,12 @@ runs:
     - name: Setup machine
       uses: ./.github/actions/setup-macos
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v6
+      with:
+          python-version: "3.10"
+          activate-environment: true
+
     - name: Install dependencies
       shell: sh
       run: |

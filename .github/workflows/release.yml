@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      dev_release:
+        description: "Do a dev release or regular release"
+        required: true
+        default: "false"
 
 permissions:
   contents: read
@@ -12,10 +17,6 @@ permissions:
 jobs:
   setup:
     runs-on: ubuntu-latest
-    outputs:
-      pypi_env: ${{ github.event_name == 'push' && 'pypi' || 'test-pypi' }}
-      pypi_url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
-      skip_duplicates: ${{ github.event_name == 'push' && 'false' || 'true' }}
     steps:
       - name: Set publishing variables
         run: echo "Publishing setup complete"
@@ -54,6 +55,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
@@ -83,22 +85,27 @@ jobs:
     runs-on: [self-hosted, macos]
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
+
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-macos
+      - uses: conda-incubator/setup-miniconda@v3
         with:
+          miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
+
       - name: Install dependencies
         shell: sh
         run: |
-          uv pip install --upgrade pip
-          uv pip install cmake setuptools nanobind==2.4.0
-          uv pip install -e . -v
+          pip install --upgrade pip
+          pip install cmake setuptools nanobind==2.4.0
+          pip install -e . -v
       - name: Generate package stubs
         shell: bash
         run: |
-          uv pip install typing_extensions
-          uv run --no-project setup.py generate_stubs
+          pip install typing_extensions
+          python setup.py generate_stubs
       - name: Build macOS 14 package
         uses: ./.github/actions/build-macos-release
         with:
@@ -126,6 +133,7 @@ jobs:
     runs-on: ubuntu-22-large
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
@@ -148,7 +156,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx
     steps:
       - uses: actions/download-artifact@v6
@@ -166,9 +174,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
-          print-hash: true
+          repository-url: https://upload.pypi.org/legacy/
   
   pypi-publish-cuda:
     name: Upload CUDA release to PyPI
@@ -177,7 +183,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-cuda
     steps:
       - uses: actions/download-artifact@v6
@@ -189,9 +195,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
-          print-hash: true
+          repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-cpu:
     name: Upload CPU release to PyPI
@@ -200,7 +204,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-cpu
     steps:
       - uses: actions/download-artifact@v6
@@ -212,9 +216,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
-          print-hash: true
+          repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-metal:
     name: Upload Metal release to PyPI
@@ -223,7 +225,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-metal
     steps:
       - uses: actions/download-artifact@v6
@@ -235,6 +237,4 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
-          skip-existing: ${{ needs.setup.outputs.skip_duplicates }}
-          print-hash: true
+          repository-url: https://upload.pypi.org/legacy/

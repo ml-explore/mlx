@@ -28,12 +28,17 @@ jobs:
 
   mac_build_and_test:
     if: github.repository == 'ml-explore/mlx'
+    strategy:
+      matrix:
+        macos-target: ["14.0", "15.0"]
     runs-on: [self-hosted, macos]
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
+        with:
+          macos-target: ${{ matrix.macos-target }}
 
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'
