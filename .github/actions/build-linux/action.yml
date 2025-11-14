@@ -15,7 +15,9 @@ runs:
       env:
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
         DEBUG: 1
-      run: uv pip install -e ".[dev]" -v
+      run: |
+        uv pip install cmake setuptools nanobind==2.4.0
+        uv pip install -e ".[dev]" -v
     
     - name: Generate package stubs
       shell: sh

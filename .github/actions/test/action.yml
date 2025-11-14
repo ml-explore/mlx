@@ -47,13 +47,24 @@ runs:
         echo "::endgroup::"
 
     - name: Run CPP tests - GPU
-      if: ${{ !(runner.os == 'Linux' && startsWith(runner.name, 'GitHub Actions') }}
+      if: ${{ !(runner.os == 'Linux' && (startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'gpu'))) }}
       shell: bash
       env:
         DEVICE: gpu
         METAL_DEBUG_ERROR_MODE: 0
         METAL_DEVICE_WRAPPER_TYPE: 1
       run: |
+        echo ${{ runner.name }}
         echo "::group::Run CPP tests - GPU"
         ./build/tests/tests
+        echo "::endgroup::"
+
+    - name: Run CPP tests - CUDA
+      if: ${{ startsWith(runner.name, 'gpu') }}
+      shell: bash
+      env:
+        DEVICE: gpu
+      run: |
+        echo "::group::Run CPP tests - CUDA"
+        ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
         echo "::endgroup::"
