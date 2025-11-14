@@ -76,18 +76,3 @@ runs:
           -DMLX_BUILD_GGUF=OFF \
           -DMLX_METAL_JIT=ON
         make -j $(sysctl -n hw.ncpu)
-    
-    - name: Run Python tests with JIT
-      shell: bash
-      env:
-        LOW_MEMORY: 1
-        DEVICE: gpu
-        METAL_DEVICE_WRAPPER_TYPE: 1
-        METAL_DEBUG_ERROR_MODE: 0
-        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
-      run: |
-        CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-          uv pip install -e . -v
-        uv run -m xmlrunner discover \
-            -v python/tests \
-            -o test-results/gpu_jit

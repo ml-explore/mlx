@@ -1,0 +1,21 @@
+name: 'Run mac-only tests'
+
+inputs:
+  macos-target:
+    description: 'macOS target to build and test for'
+    required: false
+    default: '14.0'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run Python tests with JIT
+      shell: bash
+      env:
+        DEVICE: gpu
+        METAL_DEBUG_ERROR_MODE: 0
+        METAL_DEVICE_WRAPPER_TYPE: 1
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      run: |
+        CMAKE_ARGS="-DMLX_METAL_JIT=ON" uv pip install -e . -v
+        uv run --no-project python -m tests discover python/tests -v

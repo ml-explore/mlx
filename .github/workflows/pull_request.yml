@@ -52,6 +52,7 @@ jobs:
         with:
           runner-type: 'cuda'
       - uses: ./.github/actions/build-cuda
+      - uses: ./.github/actions/test
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
