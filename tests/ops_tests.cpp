@@ -2453,9 +2453,9 @@ TEST_CASE("test masked_scatter") {
   {
     auto self = zeros({2, 2}, int32);
     auto mask = array({true, false});
-    auto source = array({5, 6, 7});
+    auto source = array({5, 6, 7, 8}, {2, 2});
     auto out = masked_scatter(self, mask, source);
-    CHECK(array_equal(out, array({5, 0, 6, 0}, {2, 2})).item<bool>());
+    CHECK(array_equal(out, array({5, 6, 0, 0}, {2, 2})).item<bool>());
   }
 }
 

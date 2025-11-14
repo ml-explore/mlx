@@ -4399,14 +4399,23 @@ std::vector<array> MaskedScatter::jvp(
   auto& s = stream();
   const array& dst = primals[0];
   const array& mask = primals[1];
-  const array mask_b = broadcast_to(mask, dst.shape(), s);
+  array mask_b = mask;
+  if (mask_b.ndim() < dst.ndim()) {
+    std::vector<int> axes(dst.ndim() - mask_b.ndim(), 0);
+    std::iota(axes.begin(), axes.end(), mask_b.ndim());
+    mask_b = expand_dims(mask_b, axes, s);
+  }
 
   array out = zeros_like(dst, s);
   for (int arg : argnums) {
     if (arg == 0) {
       out = where(mask_b, out, tangents[0], s);
     } else if (arg == 2) {
-      out = masked_scatter(out, mask_b, tangents[1], s);
+      out = array(
+          out.shape(),
+          out.dtype(),
+          std::make_shared<MaskedScatter>(s),
+          {out, mask, tangents[1]});
     } else {
       throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
     }
