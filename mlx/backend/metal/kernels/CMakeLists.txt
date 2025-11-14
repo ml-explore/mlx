@@ -9,9 +9,12 @@ set(BASE_HEADERS
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
-  set(METAL_FLAGS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
+  set(METAL_FLAGS -x metal -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
+  endif()
+  if(MLX_ENABLE_NAX)
+    set(METAL_FLAGS ${METAL_FLAGS} -Wno-c++20-extensions -std=metal4.0)
   endif()
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
     set(METAL_FLAGS ${METAL_FLAGS}
@@ -118,6 +121,22 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
+endif()
+
+if(MLX_ENABLE_NAX)
+
+  set(STEEL_NAX_HEADERS
+      steel/defines.h
+      steel/utils.h
+      steel/gemm/transforms.h
+      steel/gemm/nax.h
+      steel/gemm/gemm_nax.h
+      steel/utils/type_traits.h
+      steel/utils/integral_constant.h)
+
+  build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+
 endif()
 
 add_custom_command(

@@ -265,4 +265,15 @@ Device& device(mlx::core::Device);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
+#ifdef MLX_ENABLE_NAX
+
+inline bool is_nax_available() {
+  static bool is_nax_available_ =
+      /* __builtin_available(macOS 26.2, *) && */
+      metal::device(mlx::core::Device::gpu).get_architecture_gen() >= 17;
+  return is_nax_available_;
+}
+
+#endif // MLX_ENABLE_NAX
+
 } // namespace mlx::core::metal

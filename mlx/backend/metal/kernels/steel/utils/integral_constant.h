@@ -74,6 +74,44 @@ integral_const_binop(>=, operator>=);
 integral_const_binop(&&, operator&&);
 integral_const_binop(||, operator||);
 
+template <typename T, typename = metal::enable_if_t<!is_integral_v<T>>>
+METAL_FUNC constexpr auto operator||(true_type, T) {
+  return true_type{};
+}
+template <typename T, typename = metal::enable_if_t<!is_integral_v<T>>>
+METAL_FUNC constexpr auto operator||(T, true_type) {
+  return true_type{};
+}
+
+template <typename T, typename = metal::enable_if_t<!is_integral_v<T>>>
+METAL_FUNC constexpr auto operator&&(false_type, T) {
+  return false_type{};
+}
+
+template <typename T, typename = metal::enable_if_t<!is_integral_v<T>>>
+METAL_FUNC constexpr auto operator&&(T, false_type) {
+  return false_type{};
+}
+
+// Dispatch utilities
+template <typename F>
+void dispatch_bool(bool v, F f) {
+  if (v) {
+    f(true_type{});
+  } else {
+    f(false_type{});
+  }
+}
+
+template <int start, int stop, int step, typename F>
+constexpr void const_for_loop(F f) {
+  if constexpr (start < stop) {
+    constexpr auto idx = Int<start>{};
+    f(idx);
+    const_for_loop<start + step, stop, step, F>(f);
+  }
+}
+
 #undef integral_const_binop
 
 ///////////////////////////////////////////////////////////////////////////////
