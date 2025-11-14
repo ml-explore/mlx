@@ -131,7 +131,9 @@ class CommandEncoder {
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
+  size_t bytes_in_graph_{0};
   int max_ops_per_graph_;
+  int max_mb_per_graph_;
 };
 
 class Device {

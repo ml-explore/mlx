@@ -190,16 +190,18 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
   }
 }
 
-// Can be tuned with MLX_MAX_OPS_PER_BUFFER
-int get_max_ops_per_graph(Device& d) {
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER, MLX_MAX_MB_PER_BUFFER
+std::pair<int, int> get_graph_limits(Device& d) {
   auto cc = d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
-  int n = 20;
+  int ops = 20;
+  int mb = 100;
   switch (cc) {
     case 1000: // B200
-      n = 50;
+      ops = 50;
+      mb = 500;
       break;
   }
-  return env::max_ops_per_buffer(n);
+  return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
 }
 
 CommandEncoder::CommandEncoder(Device& d)
@@ -207,8 +209,10 @@ CommandEncoder::CommandEncoder(Device& d)
       stream_(d),
       graph_(d),
       worker_(d),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
-      max_ops_per_graph_(get_max_ops_per_graph(d)) { }
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400)
+      {
+    std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
@@ -218,6 +222,7 @@ void CommandEncoder::set_input_array(const array& arr) {
   if (!use_cuda_graphs()) {
     return;
   }
+  bytes_in_graph_ += arr.data_size();
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
 }
@@ -316,7 +321,8 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
 }
 
 bool CommandEncoder::needs_commit() {
-  return node_count_ > max_ops_per_graph_;
+  return (node_count_ > max_ops_per_graph_) ||
+      ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
 }
 
 void CommandEncoder::commit() {
@@ -379,6 +385,7 @@ void CommandEncoder::commit() {
   // Put completion handlers in a batch.
   worker_.commit(stream_);
   node_count_ = 0;
+  bytes_in_graph_ = 0;
 }
 
 void CommandEncoder::synchronize() {
