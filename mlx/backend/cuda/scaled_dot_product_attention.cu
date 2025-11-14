@@ -6,10 +6,6 @@
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
-#include "mlx/fast_primitives.h"
-#include "mlx/transforms_impl.h"
-
-#include <nvtx3/nvtx3.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -663,23 +659,13 @@ void sdpa_vector_fallback(
 
 } // namespace
 
-namespace fast {
-
-bool ScaledDotProductAttention::use_fallback(
+bool supports_sdpa_vector(
     const array& q,
     const array& k,
     const array& v,
     bool has_mask,
     bool has_arr_mask,
-    bool do_causal,
-    Stream s) {
-  if (detail::in_grad_tracing()) {
-    return true;
-  }
-  if (s.device == Device::cpu) {
-    return true;
-  }
-
+    bool do_causal) {
   const int value_head_dim = v.shape(-1);
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);
@@ -691,29 +677,24 @@ bool ScaledDotProductAttention::use_fallback(
   const bool supported_vector_config =
       sdpa_supported_head_dim && query_sequence_length < 4;
 
-  const bool supported_config = supported_vector_config;
-
-  return has_arr_mask || !supported_config;
+  return supported_vector_config && !has_arr_mask;
 }
 
-void ScaledDotProductAttention::eval_gpu(
-    const std::vector<array>& inputs,
-    array& out) {
-  nvtx3::scoped_range r("ScaledDotProductAttention::eval_gpu");
-
-  auto& s = stream();
+void sdpa_vector(
+    const array& q_pre,
+    const array& k_pre,
+    const array& v_pre,
+    float scale,
+    array& o,
+    bool do_causal,
+    const std::optional<array>& sinks_pre,
+    Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-
-  auto& q_pre = inputs[0];
-  auto& k_pre = inputs[1];
-  auto& v_pre = inputs[2];
-  auto& o = out;
-
   std::vector<array> copies;
 
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
-  copies.reserve(inputs.size());
+  copies.reserve(4);
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
@@ -731,8 +712,8 @@ void ScaledDotProductAttention::eval_gpu(
   };
 
   std::optional<array> sinks = std::nullopt;
-  if (has_sinks_) {
-    sinks = copy_unless(is_matrix_contiguous, inputs.back());
+  if (sinks_pre) {
+    sinks = copy_unless(is_matrix_contiguous, sinks_pre.value());
   }
 
   // We are in vector mode ie single query
@@ -798,8 +779,7 @@ void ScaledDotProductAttention::eval_gpu(
       encoder.add_temporary(cp);
     }
 
-    return sdpa_vector_fallback(
-        s, encoder, q, k, v, scale_, o, do_causal_, sinks);
+    sdpa_vector_fallback(s, encoder, q, k, v, scale, o, do_causal, sinks);
   }
 
   // Full attention mode should never reach here
@@ -807,7 +787,5 @@ void ScaledDotProductAttention::eval_gpu(
     throw std::runtime_error("Doesn't support matrix yet.");
   }
 }
-
-} // namespace fast
 
 } // namespace mlx::core

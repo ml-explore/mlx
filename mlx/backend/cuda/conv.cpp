@@ -281,7 +281,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   Dtype dtype = out.dtype();
 
   // Search cache.
-  ConvCacheKey cache_key{
+  BytesKey<ConvCacheKey> cache_key;
+  cache_key.pod = {
       encoder.device().cuda_device(),
       dtype_to_cudnn_type(dtype),
       vector_key(in.shape()),
