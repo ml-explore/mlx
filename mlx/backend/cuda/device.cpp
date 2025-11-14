@@ -46,6 +46,7 @@ Device::Device(int device) : device_(device) {
         "Device {} does not support synchronization in managed memory.",
         device_));
   }
+
   // The cublasLt handle is used by matmul.
   make_current();
   CHECK_CUBLAS_ERROR(cublasLtCreate(&lt_));
@@ -189,12 +190,25 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
   }
 }
 
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER
+int get_max_ops_per_graph(Device& d) {
+  auto cc = d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
+  int n = 20;
+  switch (cc) {
+    case 1000: // B200
+      n = 50;
+      break;
+  }
+  return env::max_ops_per_buffer(n);
+}
+
 CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
       worker_(d),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {}
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400),
+      max_ops_per_graph_(get_max_ops_per_graph(d)) { }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
@@ -301,8 +315,8 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   insert_graph_dependencies(GraphNode{node, 'G'});
 }
 
-int CommandEncoder::get_num_ops() {
-  return node_count_;
+bool CommandEncoder::needs_commit() {
+  return node_count_ > max_ops_per_graph_;
 }
 
 void CommandEncoder::commit() {
