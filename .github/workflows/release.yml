@@ -47,12 +47,8 @@ jobs:
     strategy:
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        include:
-          - runner: ubuntu-24.04
-            arch: x64
-          - runner: ubuntu-24.04-arm64
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
+        arch: ['x86_64', 'aarch64']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     env:
       PYPI_RELEASE: 1
       DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
@@ -90,19 +86,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-macos
-      - uses: conda-incubator/setup-miniconda@v3
         with:
-          miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        shell: sh
+        shell: bash -l {0}
         run: |
           pip install --upgrade pip
           pip install cmake setuptools nanobind==2.4.0
           pip install -e . -v
       - name: Generate package stubs
-        shell: bash
+        shell: bash -l {0}
         run: |
           pip install typing_extensions
           python setup.py generate_stubs

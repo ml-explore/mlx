@@ -16,21 +16,15 @@ runs:
   using: "composite"
   steps:
     - name: Build Python package
-      shell: bash
-      env:
-        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      shell: bash -l {0}
       run: |
-        conda activate env
         pip install build
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
 
     - name: Build backend package
       if: ${{ inputs.build-backend }}
-      shell: bash
-      env:
-        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      shell: bash -l {0}
       run: |
-        conda activate env
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
