@@ -146,6 +146,7 @@ NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)
 NO_GPU_MULTI(Eig)
 NO_GPU(View)
+NO_GPU(MaskedScatter)
 
 namespace fast {
 NO_GPU_USE_FALLBACK(LayerNorm)
