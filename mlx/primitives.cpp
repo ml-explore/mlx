@@ -4428,6 +4428,13 @@ std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
     const std::vector<int>& axes) {
   auto& s = stream();
 
+  // The inputs all had batching in the 0-th dim. So vectorization amounts to
+  //  - Move the vectorized axis first
+  //  - Expand and broadcast the unvectorized inputs
+  //  - Flatten the first two dims (the new and old batch axes)
+  //  - Masked scatter
+  //  - Unflatten the vectorized axis again
+
   // Find the batch dim if any
   int batch_dim = -1;
   for (int i = 0; i < axes.size(); i++) {
@@ -4438,7 +4445,13 @@ std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
 
   // Early exit if it's not vmapped
   if (batch_dim < 0) {
-    return {{masked_scatter(inputs[0], inputs[1], inputs[2], s)}, {-1}};
+    return {
+        {array(
+            inputs[0].shape(),
+            inputs[0].dtype(),
+            std::make_shared<MaskedScatter>(to_stream(s)),
+            inputs)},
+        {-1}};
   }
 
   // Move vmapped axis to 0-th dim and broadcast the non-vectorized ones
@@ -4454,13 +4467,22 @@ std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
     }
   }
 
-  const auto result_shape = Shape(v_in[0].shape());
+  // Flatten the first 2 dims
+  for (int i = 0; i < 3; i++) {
+    v_in[i] = flatten(v_in[i], 0, 1, s);
+  }
+
+  // Masked scatter
+  const auto result_shape = v_in[0].shape();
   const auto result_dtype = v_in[0].dtype();
   array result(
       result_shape,
       result_dtype,
       std::make_shared<MaskedScatter>(to_stream(s)),
       std::move(v_in));
+
+  // Now unflatten so the vectorized axis is nice and separate
+  result = unflatten(result, 0, {batch_dim, -1}, s);
 
   return {{result}, {0}};
 }

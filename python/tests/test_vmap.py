@@ -792,6 +792,24 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = vmap_scatter(a, mask, src)
         self.assertTrue(mx.array_equal(expected, out))
 
+        # Double vmap
+        a = mx.zeros((8, 8, 8))
+        mask = mx.random.normal((8, 8, 8)) > 0
+        src = mx.random.normal((8, 8))
+        expected = mx.stack(
+            [
+                mx.stack(
+                    [scatter_fn(a[i, j] + 0, mask[i, j], src[i]) for j in range(8)]
+                )
+                for i in range(8)
+            ]
+        )
+        double_scatter = mx.vmap(
+            mx.vmap(scatter_fn, in_axes=(0, 0, None)), in_axes=(0, 0, 0)
+        )
+        out = double_scatter(a + 0, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
