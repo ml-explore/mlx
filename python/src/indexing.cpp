@@ -914,9 +914,6 @@ void mlx_set_item(
 
   if (auto mask = extract_boolean_mask(obj)) {
     auto updates = to_array(v, src.dtype());
-    if (updates.size() == 1) {
-      updates = broadcast_to(updates, src.shape());
-    }
     auto result = masked_scatter(src, *mask, updates);
     src.overwrite_descriptor(result);
     return;

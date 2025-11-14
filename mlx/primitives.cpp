@@ -4418,44 +4418,40 @@ std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto& s = stream();
-  auto [dst, mask, src, to_ax] = vmap_ternary_op(inputs, axes, s);
-  if (to_ax == -1) {
-    return {{masked_scatter(dst, mask, src, s)}, {to_ax}};
+
+  // Find the batch dim if any
+  int batch_dim = -1;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] >= 0) {
+      batch_dim = inputs[i].shape(axes[i]);
+    }
   }
 
-  auto dst_front = moveaxis(dst, to_ax, 0, s);
-  auto mask_front = moveaxis(mask, to_ax, 0, s);
-  auto src_front = moveaxis(src, to_ax, 0, s);
+  // Early exit if it's not vmapped
+  if (batch_dim < 0) {
+    return {{masked_scatter(inputs[0], inputs[1], inputs[2], s)}, {-1}};
+  }
 
-  const size_t batch =
-      std::max({dst_front.shape(0), mask_front.shape(0), src_front.shape(0)});
-
-  auto align_front = [&](array x) {
-    if (static_cast<size_t>(x.shape(0)) == batch) {
-      return x;
+  // Move vmapped axis to 0-th dim and broadcast the non-vectorized ones
+  auto v_in = inputs;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] > 0) {
+      v_in[i] = moveaxis(v_in[i], axes[i], 0, s);
+    } else if (axes[i] < 0) {
+      v_in[i] = expand_dims(v_in[i], 0, s);
+      auto in_shape = v_in[i].shape();
+      in_shape[0] = batch_dim;
+      v_in[i] = broadcast_to(v_in[i], in_shape, s);
     }
-    if (batch > 1 && x.shape(0) == 1) {
-      auto shape = x.shape();
-      shape[0] = static_cast<int>(batch);
-      return broadcast_to(x, shape, s);
-    }
-    auto expanded = expand_dims(x, 0, s);
-    auto shape = expanded.shape();
-    shape[0] = static_cast<int>(batch);
-    return broadcast_to(expanded, shape, s);
-  };
+  }
 
-  dst_front = align_front(dst_front);
-  mask_front = align_front(mask_front);
-  src_front = align_front(src_front);
-  mask_front = broadcast_to(mask_front, dst_front.shape(), s);
-
-  auto scattered_front = array(
-      dst_front.shape(),
-      dst_front.dtype(),
+  array result(
+      v_in[0].shape(),
+      v_in[0].dtype(),
       std::make_shared<MaskedScatter>(to_stream(s)),
-      {dst_front, mask_front, src_front});
-  return {{moveaxis(scattered_front, 0, to_ax, s)}, {to_ax}};
+      std::move(v_in));
+
+  return {{result}, {0}};
 }
 
 std::vector<array> Sigmoid::vjp(

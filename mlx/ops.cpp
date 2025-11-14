@@ -3445,59 +3445,84 @@ array scatter_min(
 array masked_scatter(
     const array& a,
     const array& mask,
-    const array& src,
+    const array& value,
     StreamOrDevice s /* =  {} */) {
   if (mask.dtype() != bool_) {
-    throw std::invalid_argument(
-        "[masked_scatter] mask has to be boolean type.");
-  }
-  if (a.dtype() != src.dtype()) {
-    std::ostringstream msg;
-    msg << "[masked_scatter] dtype(a) " << a.dtype()
-        << " must match dtype(src) " << src.dtype() << ".";
-    throw std::invalid_argument(msg.str());
+    throw std::invalid_argument("[masked_scatter] The mask has to be boolean.");
   }
   if (mask.ndim() == 0) {
     throw std::invalid_argument(
-        "[masked_scatter] scalar boolean masks are not supported.");
+        "[masked_scatter] Scalar masks are not supported.");
   } else if (mask.ndim() > a.ndim()) {
     throw std::invalid_argument(
-        "[masked_scatter] mask cannot have more dimensions than target.");
+        "[masked_scatter] The mask cannot have more dimensions than the target.");
   }
 
-  const auto& a_shape = a.shape();
-  const auto& mask_shape = mask.shape();
-  array mask_aligned = mask;
+  int unmasked_dims = a.ndim() - mask.ndim();
 
-  if (mask.ndim() == a.ndim()) {
-    if (mask_shape != a_shape) {
-      throw std::invalid_argument(
-          "[masked_scatter] mask shape must exactly match the a shape.");
-    }
-  } else {
-    for (size_t i = 0; i < mask_shape.size(); ++i) {
-      if (mask_shape[i] != a_shape[i]) {
-        throw std::invalid_argument(
-            "[masked_scatter] mask must match leading dimensions of the a.");
-      }
-    }
-    Shape reshape_shape(mask_shape.begin(), mask_shape.end());
-    reshape_shape.insert(
-        reshape_shape.end(), a_shape.size() - mask_shape.size(), 1);
-    mask_aligned = reshape(mask_aligned, std::move(reshape_shape), s);
+  if (value.ndim() > unmasked_dims + 1) {
+    std::ostringstream msg;
+    msg << "[masked_scatter] Value array shape must be broadcastable with the last "
+        << unmasked_dims << " dimensions of the input.";
+    throw std::invalid_argument(msg.str());
   }
 
-  auto expanded_a = expand_dims(a, 0, s);
-  auto expanded_mask =
-      expand_dims(broadcast_to(mask_aligned, a.shape(), s), 0, s);
-  auto expanded_src = expand_dims(src, 0, s);
+  // Check if the start of the mask is compatible
+  if (!std::equal(
+          mask.shape().begin(), mask.shape().end(), a.shape().begin())) {
+    std::ostringstream msg;
+    msg << "[masked_scatter] The boolean mask should have the same shape as the "
+        << "beginning of the indexed array but the mask has shape "
+        << mask.shape() << " and the array has shape " << a.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  array expanded_mask = mask;
+  array expanded_value = astype(value, a.dtype(), s);
+
+  // Broadcast both the mask with the last unmasked_dims of a
+  if (unmasked_dims > 0) {
+    auto mask_shape = mask.shape();
+    while (mask_shape.size() < a.ndim()) {
+      mask_shape.push_back(1);
+    }
+    expanded_mask = broadcast_to(reshape(mask, mask_shape, s), a.shape(), s);
+  }
+
+  // Broadcast the value with the unmasked dims plus one extra dimension of
+  // size mask.size(). If that dim is already provided leave it as is.
+  if (value.ndim() < unmasked_dims + 1) {
+    Shape value_shape(unmasked_dims + 1 - value.ndim(), 1);
+    value_shape.insert(
+        value_shape.end(), value.shape().begin(), value.shape().end());
+    expanded_value = reshape(expanded_value, value_shape, s);
+
+    value_shape[0] = mask.size();
+    for (int i = 1; i < unmasked_dims + 1; i++) {
+      value_shape[i] = a.shape(i - unmasked_dims - 1);
+    }
+    expanded_value = broadcast_to(expanded_value, value_shape, s);
+  } else if (!std::equal(
+                 value.shape().begin() + 1,
+                 value.shape().end(),
+                 a.shape().end() - unmasked_dims)) {
+    auto value_shape = value.shape();
+    for (int i = 1; i < unmasked_dims + 1; i++) {
+      value_shape[i] = a.shape(i - unmasked_dims - 1);
+    }
+    expanded_value = broadcast_to(expanded_value, value_shape, s);
+  }
+
+  array expanded_a = expand_dims(a, 0, s);
+  expanded_mask = expand_dims(expanded_mask, 0, s);
+  expanded_value = expand_dims(expanded_value, 0, s);
 
   return squeeze(
       array(
           expanded_a.shape(),
-          a.dtype(),
+          expanded_a.dtype(),
           std::make_shared<MaskedScatter>(to_stream(s)),
-          {expanded_a, expanded_mask, expanded_src}),
+          {expanded_a, expanded_mask, expanded_value}),
       0,
       s);
 }
