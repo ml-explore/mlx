@@ -4,11 +4,14 @@
 #include "mlx/backend/gpu/available.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/thread_safey.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core::gpu {
+
+std::mutex metal_operation_mutex;
 
 bool is_available() {
   return true;
@@ -30,6 +33,7 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
 }
 
 void eval(array& arr) {
+  std::lock_guard<std::mutex> lock(metal_operation_mutex);
   auto pool = metal::new_scoped_memory_pool();
   auto s = arr.primitive().stream();
   auto& d = metal::device(s.device);
@@ -78,6 +82,7 @@ void eval(array& arr) {
 }
 
 void finalize(Stream s) {
+  std::lock_guard<std::mutex> lock(metal_operation_mutex);
   auto pool = metal::new_scoped_memory_pool();
   auto& d = metal::device(s.device);
   auto cb = d.get_command_buffer(s.index);
@@ -88,6 +93,7 @@ void finalize(Stream s) {
 }
 
 void synchronize(Stream s) {
+  std::lock_guard<std::mutex> lock(metal_operation_mutex);
   auto pool = metal::new_scoped_memory_pool();
   auto& d = metal::device(s.device);
   auto cb = d.get_command_buffer(s.index);
