@@ -716,7 +716,7 @@ void FunctionExporter::export_with_callback(
       if (arr.has_primitive() || input_set.find(arr.id()) != input_set.end()) {
         continue;
       }
-      if (constants.insert(arr.id()).second) {
+      if (constants.insert({arr.id(), arr}).second) {
         new_constants.emplace_back(namer.get_name(arr), arr);
       }
     }
@@ -848,7 +848,7 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
       if (input_set.find(arr.id()) == input_set.end()) {
         serialize(os, true);
         // Save constant data if not already saved
-        if (constants.insert(arr.id()).second) {
+        if (constants.insert({arr.id(), arr}).second) {
           serialize(os, arr.shape());
           serialize(os, arr.dtype());
           os.write(arr.data<char>(), arr.nbytes());

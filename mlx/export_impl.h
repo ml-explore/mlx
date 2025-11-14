@@ -72,7 +72,7 @@ struct FunctionExporter {
       const std::vector<array>& outputs,
       const std::vector<array>& tape,
       const std::vector<std::string>& kwarg_keys);
-  std::set<std::uintptr_t> constants;
+  std::unordered_map<std::uintptr_t, array> constants;
   int count{0};
   bool closed{false};
   std::shared_ptr<FunctionTable> ftable;
