@@ -51,6 +51,7 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
       - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test
 
   build_mac_release:
     if: github.repository == 'ml-explore/mlx'
