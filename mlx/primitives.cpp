@@ -4454,9 +4454,11 @@ std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
     }
   }
 
+  const auto result_shape = Shape(v_in[0].shape());
+  const auto result_dtype = v_in[0].dtype();
   array result(
-      v_in[0].shape(),
-      v_in[0].dtype(),
+      result_shape,
+      result_dtype,
       std::make_shared<MaskedScatter>(to_stream(s)),
       std::move(v_in));
 
