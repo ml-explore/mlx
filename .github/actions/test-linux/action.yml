@@ -30,7 +30,7 @@ runs:
         DEVICE: cpu
       run: |
         echo "::group::Python tests - CPU"
-        python -m tests discover python/tests -v
+        python -m unittest discover python/tests -v
         echo "::endgroup::"
 
     - name: Run Python tests - GPU
