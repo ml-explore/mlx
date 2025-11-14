@@ -40,6 +40,7 @@ jobs:
       - uses: ./.github/actions/build-macos
         with:
           macos-target: ${{ matrix.macos-target }}
+      - uses: ./.github/actions/test
 
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'

@@ -65,6 +65,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: ./.github/actions/build-macos
+      - uses: ./.github/actions/test
 
       - name: Build macOS 15 package
         uses: ./.github/actions/build-macos-release

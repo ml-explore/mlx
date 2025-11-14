@@ -4,18 +4,24 @@ description: 'Build and test MLX on Linux'
 runs:
   using: "composite"
   steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v6
+      with:
+          python-version: ${{ inputs.python-version }}
+          activate-environment: true
+
     - name: Install Python package
       shell: sh
       env:
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
         DEBUG: 1
-      run: pip install -e ".[dev]" -v
+      run: uv pip install -e ".[dev]" -v
     
     - name: Generate package stubs
       shell: sh
       run: |
-        pip install typing_extensions
-        python setup.py generate_stubs
+        uv pip install typing_extensions
+        uv run --no-project setup.py generate_stubs
     
     - name: Build CPP only
       shell: bash
