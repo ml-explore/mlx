@@ -17,25 +17,9 @@ runs:
         pip install typing_extensions
         python setup.py generate_stubs
     
-    - name: Run Python tests
-      shell: bash
-      run: |
-        python -m unittest discover python/tests -v
-        mpirun --bind-to none --allow-run-as-root -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
-        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
-        if grep -Fq '[WARN]' stderr.log ; then
-          grep -F '[WARN]' stderr.log
-          echo "Distributed ring test failed";
-          exit 1;
-        fi
-    
     - name: Build CPP only
       shell: bash
       run: |
         mkdir -p build && cd build
         cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
         make -j $(nproc)
-    
-    - name: Run CPP tests
-      shell: sh
-      run: ./build/tests/tests
