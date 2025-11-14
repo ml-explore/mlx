@@ -793,6 +793,10 @@ void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
       dst.flags().row_contiguous ? CopyType::Vector : CopyType::General;
   copy_cpu(dst, out, ctype, stream());
 
+  if (mask.size() == 0) {
+    return;
+  }
+
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(mask);
   encoder.set_input_array(src);
