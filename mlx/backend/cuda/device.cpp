@@ -192,13 +192,26 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
 
 // Can be tuned with MLX_MAX_OPS_PER_BUFFER, MLX_MAX_MB_PER_BUFFER
 std::pair<int, int> get_graph_limits(Device& d) {
-  auto cc = d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
+  auto cc =
+      d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
   int ops = 20;
   int mb = 100;
   switch (cc) {
+    case 800: // A100
+      ops = 20;
+      mb = 400;
+      break;
+    case 900: // H100
+      ops = 30;
+      mb = 400;
+      break;
     case 1000: // B200
       ops = 50;
       mb = 500;
+      break;
+    case 1210: // DGX Spark
+      ops = 20;
+      mb = 25;
       break;
   }
   return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
@@ -209,9 +222,8 @@ CommandEncoder::CommandEncoder(Device& d)
       stream_(d),
       graph_(d),
       worker_(d),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400)
-      {
-    std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+  std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
