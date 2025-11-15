@@ -5,6 +5,10 @@ on: pull_request
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check_lint:
     runs-on: ubuntu-22.04
@@ -35,13 +39,13 @@ jobs:
       matrix:
         macos-target: ["14.0", "15.0"]
     runs-on: [self-hosted, macos]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
-        with:
-          macos-target: ${{ matrix.macos-target }}
 
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'
