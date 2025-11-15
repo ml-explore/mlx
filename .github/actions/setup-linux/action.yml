@@ -22,6 +22,7 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2
       with:
         key: ccache-${{ inputs.runner-type }}-${{ runner.arch }}-py${{ inputs.python-version }}
+        max-size: 1GB
 
     - name: Install common dependencies
       shell: bash
