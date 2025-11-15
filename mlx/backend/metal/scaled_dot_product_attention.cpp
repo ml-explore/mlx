@@ -414,14 +414,14 @@ bool ScaledDotProductAttention::use_fallback(
 
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
-    array& out) {
+    std::vector<array>& outputs) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
   auto& q_pre = inputs[0];
   auto& k_pre = inputs[1];
   auto& v_pre = inputs[2];
-  auto& o = out;
+  auto& o = outputs[0];
 
   std::vector<array> copies;
 
@@ -551,6 +551,16 @@ void ScaledDotProductAttention::eval_gpu(
   }
 
   d.add_temporaries(std::move(copies), s.index);
+}
+
+bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+  return true;
+}
+
+void ScaledDotProductAttentionVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("NYI");
 }
 
 } // namespace mlx::core::fast

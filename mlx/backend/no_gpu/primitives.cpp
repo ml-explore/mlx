@@ -34,6 +34,12 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
+bool fast::ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    Stream s) {
+  return true;
+}
+
 NO_GPU(Abs)
 NO_GPU(Add)
 NO_GPU(AddMM)
@@ -153,7 +159,8 @@ NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_USE_FALLBACK(RoPE)
-NO_GPU(ScaledDotProductAttention)
+NO_GPU_MULTI(ScaledDotProductAttention)
+NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)
