@@ -250,7 +250,7 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
 std::vector<array>
 svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   check_cpu_stream(s, "[linalg::svd]");
-  check_float(a.dtype(), "[linalg::svd]");
+  check_float_or_complex(a.dtype(), "[linalg::svd]");
 
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -268,10 +268,12 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
   s_shape.pop_back();
   s_shape[rank - 2] = std::min(m, n);
 
+  auto s_dtype = a.dtype() == complex64 ? float32 : a.dtype();
+
   if (!compute_uv) {
     return {array(
         std::move(s_shape),
-        a.dtype(),
+        s_dtype,
         std::make_shared<SVD>(to_stream(s), compute_uv),
         {a})};
   }
@@ -286,7 +288,7 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
 
   return array::make_arrays(
       {u_shape, s_shape, vt_shape},
-      {a.dtype(), a.dtype(), a.dtype()},
+      {a.dtype(), s_dtype, a.dtype()},
       std::make_shared<SVD>(to_stream(s), compute_uv),
       {a});
 }
