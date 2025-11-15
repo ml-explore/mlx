@@ -51,6 +51,9 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
       - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test-linux
+        with:
+          cpu-only: true
 
   build_mac_release:
     if: github.repository == 'ml-explore/mlx'
@@ -85,6 +88,7 @@ jobs:
         with:
           runner-type: 'cuda'
       - uses: ./.github/actions/build-cuda
+      - uses: ./.github/actions/test-linux
 
   build_cuda_release:
     if: github.repository == 'ml-explore/mlx'

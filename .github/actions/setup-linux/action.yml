@@ -46,7 +46,6 @@ runs:
         pip install --upgrade pip cmake
 
     - name: Install MPI
-      if: inputs.runner-type == 'linux'
       shell: bash
       run: sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
 

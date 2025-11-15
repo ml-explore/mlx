@@ -25,6 +25,9 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test-linux
+        with:
+          cpu-only: true
 
   mac_build_and_test:
     if: github.repository == 'ml-explore/mlx'
@@ -50,6 +53,7 @@ jobs:
         with:
           runner-type: 'cuda'
       - uses: ./.github/actions/build-cuda
+      - uses: ./.github/actions/test-linux
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'

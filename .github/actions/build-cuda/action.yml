@@ -17,20 +17,6 @@ runs:
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
       run: pip install -e ".[dev]" -v
 
-    - name: Run Python tests - CPU
-      shell: bash
-      env:
-        LOW_MEMORY: 1
-        DEVICE: cpu
-      run: python -m unittest discover python/tests -v
-
-    - name: Run Python tests - GPU
-      shell: bash
-      env:
-        LOW_MEMORY: 1
-        DEVICE: gpu
-      run: python -m tests discover python/tests -v
-
     - name: Build CPP only
       shell: bash
       run: |
@@ -39,7 +25,3 @@ runs:
           -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }} \
           -DCMAKE_BUILD_TYPE=DEBUG
         cmake --build build -j $(nproc)
-    
-    - name: Run CPP tests
-      shell: bash
-      run: ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
