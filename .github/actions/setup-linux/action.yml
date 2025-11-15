@@ -40,8 +40,10 @@ runs:
       run: |
         python -m venv .venv
         source .venv/bin/activate
+        pip install --upgrade pip cmake nanobind==2.4.0
         echo PATH=$PATH >> $GITHUB_ENV
-        pip install --upgrade pip cmake
+        # Make cmake search .venv for nanobind
+        echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
 
     - name: Install MPI
       shell: bash
