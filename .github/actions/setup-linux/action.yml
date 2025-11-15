@@ -28,19 +28,19 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev tzdata zip
+        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev zip
 
     - uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
 
-    - name: setup python venv
+    - name: Setup Python venv
       shell: bash
       run: |
         python -m venv .venv
         source .venv/bin/activate
-        pip install --upgrade pip cmake nanobind==2.4.0
+        pip install cmake nanobind==2.4.0
         echo PATH=$PATH >> $GITHUB_ENV
         # Make cmake search .venv for nanobind
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
