@@ -9,8 +9,8 @@ runs:
       env:
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
         DEBUG: 1
-      run: pip install -e ".[dev]" -v
-    
+      run: pip install --no-build-isolation -e ".[dev]" -v
+
     - name: Generate package stubs
       shell: sh
       run: |

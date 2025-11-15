@@ -18,42 +18,39 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Free disk space
-      shell: sh
-      if: inputs.runner-type == 'linux'
-      run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Use ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ inputs.runner-type }}-${{ runner.arch }}-py${{ inputs.python-version }}
+        max-size: 1GB
 
     - name: Install common dependencies
-      env:
-        TZ: Etc/UTC
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev tzdata zip
-        sudo apt autoremove -y
+        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev zip
 
     - uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
 
-    - name: setup python venv
+    - name: Setup Python venv
       shell: bash
       run: |
         python -m venv .venv
         source .venv/bin/activate
+        pip install cmake nanobind==2.4.0
         echo PATH=$PATH >> $GITHUB_ENV
-        pip install --upgrade pip cmake
+        # Make cmake search .venv for nanobind
+        echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
 
     - name: Install MPI
       shell: bash
       run: sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
 
     - name: Network CUDA installation from packages
-      id: install-cuda
       if: inputs.runner-type == 'cuda'
-      env:
-        TZ: Etc/UTC
       shell: bash ## Specific to Ubuntu 22.04 & Architecture x86_64
       run: |
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
