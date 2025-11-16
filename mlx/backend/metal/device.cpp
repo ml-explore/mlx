@@ -382,11 +382,8 @@ MTL::CommandQueue* Device::get_queue(Stream stream) {
 
 bool Device::command_buffer_needs_commit(int index) {
   auto& stream = get_stream_(index);
-  if (stream.buffer_ops > max_ops_per_buffer_ ||
-      (stream.buffer_sizes >> 20) > max_mb_per_buffer_) {
-    return true;
-  }
-  return false;
+  return (stream.buffer_ops > max_ops_per_buffer_) ||
+      ((stream.buffer_sizes >> 20) > max_mb_per_buffer_);
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
