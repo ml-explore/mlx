@@ -45,14 +45,20 @@ jobs:
 
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'
+    strategy:
+      fail-fast: false
+      matrix:
+        toolkit: ['cuda-12.8', 'cuda-12.9']
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/build-cuda
+        with:
+          toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/test-linux
 
   build_documentation:

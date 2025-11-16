@@ -2,10 +2,9 @@ name: 'Build and Test with CUDA'
 description: 'Build and test MLX with CUDA'
 
 inputs:
-  nvcc-location:
-    description: 'Location of nvcc compiler'
+  toolkit:
+    description: 'The CUDA toolkit'
     required: true
-    default: '/usr/local/cuda-12.9/bin/nvcc'
 
 runs:
   using: "composite"
@@ -14,7 +13,7 @@ runs:
       shell: bash
       env:
         DEBUG: 1
-        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
+        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
       run: pip install --no-build-isolation -e ".[dev]" -v
 
     - name: Build CPP only
@@ -22,6 +21,6 @@ runs:
       run: |
         cmake . -B build \
           -DMLX_BUILD_CUDA=ON \
-          -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }} \
+          -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc \
           -DCMAKE_BUILD_TYPE=DEBUG
         cmake --build build -j $(nproc)
