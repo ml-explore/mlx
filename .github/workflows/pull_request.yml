@@ -21,13 +21,12 @@ jobs:
     strategy:
       matrix:
         runner:
+          - ubuntu-22.04
           - ubuntu-22.04-arm
       fail-fast: false
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
 

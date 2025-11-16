@@ -48,7 +48,7 @@ jobs:
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         arch: ['x86_64', 'aarch64']
-    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
     env:
       PYPI_RELEASE: 1
       DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
@@ -64,12 +64,14 @@ jobs:
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: linux-wheels-${{ matrix.python_version }}
           path: wheelhouse/mlx-*.whl
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mlx-cpu
           path: wheelhouse/mlx_cpu-*.whl
   
@@ -113,12 +115,14 @@ jobs:
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mac-wheels-${{ matrix.python-version }}
           path: dist/mlx-*.whl
       - name: Upload Metal artifacts
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mlx-metal
           path: dist/mlx_metal-*.whl
 
@@ -140,6 +144,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mlx-cuda
           path: wheelhouse/mlx_cuda-*.whl
 
