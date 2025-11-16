@@ -70,3 +70,7 @@ constexpr std::string_view scatter_kernels = R"(
       gid);
 }}
 )";
+
+constexpr std::string_view masked_assign_kernel = R"(
+template [[host_name("{0}")]] [[kernel]] decltype(masked_assign_impl<{1}, {2}>) masked_assign_impl<{1}, {2}>;
+)";

@@ -11,6 +11,7 @@ const char* ternary_ops();
 const char* reduce_utils();
 const char* gather();
 const char* scatter();
+const char* masked_scatter();
 
 const char* arange();
 const char* unary();
