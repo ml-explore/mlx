@@ -34,6 +34,10 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
+        cache-dependency-path: |
+          .github/actions/setup-linux/action.yml
+          pyproject.toml
+          setup.py
 
     - name: Setup Python venv
       shell: bash
