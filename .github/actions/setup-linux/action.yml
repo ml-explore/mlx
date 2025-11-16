@@ -33,7 +33,6 @@ runs:
     - uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
-        cache: 'pip'
 
     - name: Setup Python venv
       shell: bash
