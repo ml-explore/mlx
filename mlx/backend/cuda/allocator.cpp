@@ -119,7 +119,8 @@ void copy_to_managed(CudaBuffer& buf) {
   buf.data = new_data;
 }
 
-Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
+Buffer
+CudaAllocator::malloc_impl(size_t size, int device, cudaStream_t stream) {
   if (size == 0) {
     return Buffer{new CudaBuffer{nullptr, 0, -1}};
   }
@@ -134,11 +135,6 @@ Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
     size = page_size * ((size + page_size - 1) / page_size);
   }
 
-  int device = -1;
-  if (size > small_block_size && stream != nullptr) {
-    CHECK_CUDA_ERROR(cudaStreamGetDevice(stream, &device));
-  }
-
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
@@ -150,6 +146,7 @@ Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
 
     // Try the scalar pool first
     if (size <= small_block_size) {
+      device = -1;
       buf = scalar_pool_.malloc();
     }
     lock.unlock();
@@ -182,12 +179,13 @@ Buffer CudaAllocator::malloc_impl(size_t size, cudaStream_t stream) {
   return Buffer{buf};
 }
 
-Buffer CudaAllocator::malloc_async(size_t size, cudaStream_t stream) {
-  return malloc_impl(size, stream);
+Buffer
+CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
+  return malloc_impl(size, device, stream);
 }
 
 Buffer CudaAllocator::malloc(size_t size) {
-  return malloc_impl(size, nullptr);
+  return malloc_impl(size, -1, nullptr);
 }
 
 void CudaAllocator::free(Buffer buffer) {
@@ -277,8 +275,9 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-Buffer malloc_async(size_t size, cudaStream_t stream) {
-  auto buffer = allocator().malloc_async(size, stream);
+Buffer malloc_async(size_t size, CommandEncoder& encoder) {
+  auto buffer = allocator().malloc_async(
+      size, encoder.device().cuda_device(), encoder.stream());
   if (size && !buffer.ptr()) {
     std::ostringstream msg;
     msg << "[malloc_async] Unable to allocate " << size << " bytes.";

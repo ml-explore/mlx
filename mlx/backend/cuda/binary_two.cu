@@ -246,12 +246,10 @@ void binary_two_op_gpu_inplace(
   auto& out_b = outputs[1];
   auto bopt = get_binary_op_type(a, b);
   auto& encoder = cu::get_command_encoder(s);
-  set_binary_op_output_data(a, b, out_a, bopt, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
-  set_binary_op_output_data(a, b, out_b, bopt, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
+  set_binary_op_output_data(
+      a, b, out_a, bopt, [&](auto n) { return cu::malloc_async(n, encoder); });
+  set_binary_op_output_data(
+      a, b, out_b, bopt, [&](auto n) { return cu::malloc_async(n, encoder); });
 
   if (out_a.size() == 0) {
     return;

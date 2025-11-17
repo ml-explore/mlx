@@ -196,7 +196,7 @@ void sdpa_cudnn(
   auto& encoder = cu::get_command_encoder(s);
   // TODO: Handle donation.
   // TODO: Make O use same memory layout with Q.
-  o.set_data(cu::malloc_async(o.nbytes(), encoder.stream()));
+  o.set_data(cu::malloc_async(o.nbytes(), encoder));
 
   encoder.set_input_array(q);
   encoder.set_input_array(k);
@@ -240,7 +240,7 @@ void sdpa_cudnn(
   void* workspace_ptr = nullptr;
   if (workspace_size > 0) {
     array workspace(
-        cu::malloc_async(workspace_size, encoder.stream()),
+        cu::malloc_async(workspace_size, encoder),
         {static_cast<int>(workspace_size)},
         uint8);
     encoder.add_temporary(workspace);

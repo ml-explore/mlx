@@ -86,7 +86,7 @@ array unfold_inputs_nd(
     int mat_N,
     ConvParams<NDIM>& params) {
   array unfolded({mat_M, mat_K}, in.dtype(), nullptr, {});
-  unfolded.set_data(cu::malloc_async(unfolded.nbytes(), encoder.stream()));
+  unfolded.set_data(cu::malloc_async(unfolded.nbytes(), encoder));
   encoder.add_temporary(unfolded);
 
   int filter_size = params.C;

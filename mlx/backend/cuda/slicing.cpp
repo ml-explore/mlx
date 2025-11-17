@@ -24,7 +24,7 @@ void concatenate_gpu(
   std::partial_sum(sizes.cbegin(), sizes.cend(), sizes.begin());
 
   auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   auto strides = out.strides();
   auto flags = out.flags();
@@ -89,7 +89,7 @@ array compute_dynamic_offset(
   if (donate) {
     offset.copy_shared_buffer(indices);
   } else {
-    offset.set_data(cu::malloc_async(offset.itemsize(), encoder.stream()));
+    offset.set_data(cu::malloc_async(offset.itemsize(), encoder));
   }
 
   encoder.add_temporary(offset);

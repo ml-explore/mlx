@@ -257,9 +257,8 @@ void ternary_op_gpu(
   auto& c = inputs[2];
   auto topt = get_ternary_op_type(a, b, c);
   auto& encoder = cu::get_command_encoder(s);
-  set_ternary_op_output_data(a, b, c, out, topt, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
+  set_ternary_op_output_data(
+      a, b, c, out, topt, [&](auto n) { return cu::malloc_async(n, encoder); });
   ternary_op_gpu_inplace<Op>(inputs, out, s);
 }
 

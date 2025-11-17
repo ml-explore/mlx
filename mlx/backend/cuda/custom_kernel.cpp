@@ -289,7 +289,7 @@ void CustomKernel::eval_gpu(
       copies.emplace_back(init_value_.value(), out.dtype());
       fill_gpu(copies.back(), out, s);
     } else {
-      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
     }
   }
 

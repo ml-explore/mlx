@@ -118,7 +118,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            cu::malloc_async(x.data_size() * x.itemsize(), encoder.stream()),
+            cu::malloc_async(x.data_size() * x.itemsize(), encoder),
             x.data_size(),
             x.strides(),
             x.flags());

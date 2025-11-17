@@ -66,7 +66,7 @@ void all_reduce(
     Reduce::ReduceType reduce_type) {
   constexpr int N_READS = 8;
 
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   auto get_args = [](size_t size, int N) {
     int threads = std::min(512UL, (size + N - 1) / N);
@@ -107,8 +107,7 @@ void all_reduce(
   encoder.set_input_array(in);
   if (blocks > 1) {
     array intermediate({blocks}, out.dtype(), nullptr, {});
-    intermediate.set_data(
-        cu::malloc_async(intermediate.nbytes(), encoder.stream()));
+    intermediate.set_data(cu::malloc_async(intermediate.nbytes(), encoder));
     encoder.add_temporary(intermediate);
     encoder.set_output_array(intermediate);
     dispatch_all_types(dt, [&](auto type_tag) {
