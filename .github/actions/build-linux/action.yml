@@ -21,7 +21,7 @@ runs:
           -DMLX_BUILD_CUDA=ON
       run: |
         CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"
-        # FIXME: Unable to build tests without libnccl.
+        # FIXME: Unable to build tests without libnccl on arm64.
         if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
         fi
@@ -34,6 +34,8 @@ runs:
       run: pip install --no-build-isolation -e ".[dev]" -v
 
     - name: Generate package stubs
+      # FIXME: Unable to generate stubs without libnccl on arm64.
+      if: ${{ !(startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64') }}
       shell: sh
       run: |
         pip install typing_extensions
