@@ -64,9 +64,13 @@ runs:
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$ARCH/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get install -y \
-            libnccl2 libnccl-dev \
-            ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
+        sudo apt-get install -y ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
+
+    - name: Install NCCL
+      # For some reason NVIDIA did not provide arm64 package for libnccl2.
+      if: ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch != 'arm64' }}
+      shell: bash
+      run: sudo apt-get install -y libnccl2 libnccl-dev
 
     - name: CUDA packages and driver report
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}
