@@ -25,19 +25,32 @@ jobs:
   linux_build_and_test:
     needs: check_lint
     strategy:
-      matrix:
-        runner:
-          - ubuntu-22.04
-          - ubuntu-22.04-arm
       fail-fast: false
-    runs-on: ${{ matrix.runner }}
+      matrix:
+        arch: ['x86_64', 'aarch64']
+        toolkit: ['cpu', 'cuda-12.6', 'cuda-12.9']
+    # Use gpu runner for cuda/x86_64 builds, otherwise cpu runners.
+    runs-on: >-
+      ${{ (startsWith(matrix.toolkit, 'cuda') && matrix.arch == 'x86_64' && github.repository == 'ml-explore/mlx') &&
+          'gpu-t4-4-core' ||
+          (matrix.arch == 'aarch64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04') }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
-      - uses: ./.github/actions/build-linux
-      - uses: ./.github/actions/test-linux
         with:
-          cpu-only: true
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/build-linux
+        with:
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/test-linux
+        # Skip tests for CUDA if:
+        # 1. building for aarch64;
+        # 2. not on offical repo.
+        if: >-
+          ${{ !(startsWith(matrix.toolkit, 'cuda') &&
+                (matrix.arch == 'aarch64' || github.repository != 'ml-explore/mlx')) }}
+        with:
+          cpu-only: ${{ matrix.toolkit == 'cpu' }}
 
   mac_build_and_test:
     if: github.repository == 'ml-explore/mlx'
@@ -52,24 +65,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
-
-  cuda_build_and_test:
-    if: github.repository == 'ml-explore/mlx'
-    strategy:
-      fail-fast: false
-      matrix:
-        toolkit: ['cuda-12.6', 'cuda-12.9']
-    runs-on: gpu-t4-4-core
-    needs: check_lint
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-linux
-        with:
-          toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/build-linux
-        with:
-          toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/test-linux
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
