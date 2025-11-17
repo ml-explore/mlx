@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolkit: ['cuda-12.4', 'cuda-12.9']
+        toolkit: ['cuda-12.6', 'cuda-12.9']
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
