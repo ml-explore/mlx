@@ -20,7 +20,8 @@ constexpr int page_size = 16384;
 // Any allocations smaller than this will try to use the small pool
 constexpr int small_block_size = 8;
 
-// The small pool size in bytes. This should be a multiple of the host page // size and small_block_size.
+// The small pool size in bytes. This should be a multiple of the host page
+// size and small_block_size.
 constexpr int small_pool_size = 4 * page_size;
 
 SmallSizePool::SmallSizePool() {
