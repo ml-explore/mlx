@@ -20,7 +20,12 @@ runs:
           -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
           -DMLX_BUILD_CUDA=ON
       run: |
-        echo CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}" > $GITHUB_ENV
+        CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"
+        # FIXME: Unable to build tests without libnccl.
+        if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
+        fi
+        echo CMAKE_ARGS="$CMAKE_ARGS" > $GITHUB_ENV
 
     - name: Install Python package
       shell: sh
