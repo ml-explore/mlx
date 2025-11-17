@@ -957,6 +957,25 @@ inline array round(const array& a, StreamOrDevice s = {}) {
 /** Matrix-matrix multiplication. */
 array matmul(const array& a, const array& b, StreamOrDevice s = {});
 
+/** Sparse matrix-dense matrix multiplication using CSR format. */
+array sparse_matmul_csr(
+    const array& row_ptr,
+    const array& col_indices,
+    const array& values,
+    const array& dense_b,
+    int n_rows,
+    int n_cols,
+    StreamOrDevice s = {});
+
+/** Sparse matrix-vector multiplication using CSR format. */
+array sparse_matvec_csr(
+    const array& row_ptr,
+    const array& col_indices,
+    const array& values,
+    const array& vec,
+    int n_rows,
+    StreamOrDevice s = {});
+
 /** Gather array entries given indices and slices */
 array gather(
     const array& a,

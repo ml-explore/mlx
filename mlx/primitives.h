@@ -2481,4 +2481,26 @@ class LUF : public Primitive {
   DEFINE_NAME(LUF)
 };
 
+/* Sparse matrix operations using CSR format. */
+class SparseMatmulCSR : public UnaryPrimitive {
+ public:
+  explicit SparseMatmulCSR(Stream stream, int n_rows, int n_cols)
+      : UnaryPrimitive(stream), n_rows_(n_rows), n_cols_(n_cols) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(SparseMatmulCSR)
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {{n_rows_, n_cols_}};
+  }
+  auto state() const {
+    return std::make_pair(n_rows_, n_cols_);
+  }
+
+ private:
+  int n_rows_;
+  int n_cols_;
+};
+
 } // namespace mlx::core
