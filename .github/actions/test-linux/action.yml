@@ -30,6 +30,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run Python tests - CPU
+      if: ${{ inputs.cpu-only == 'true' }}
       shell: bash
       env:
         DEVICE: cpu
