@@ -12,10 +12,10 @@ runs:
     - name: Set cmake args
       shell: bash
       env:
-        CMAKE_ARGS_CPU: >
+        CMAKE_ARGS_CPU: >-
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           -DMLX_BUILD_CUDA=OFF
-        CMAKE_ARGS_CUDA: >
+        CMAKE_ARGS_CUDA: >-
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
           -DMLX_BUILD_CUDA=ON
