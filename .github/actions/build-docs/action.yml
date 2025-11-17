@@ -1,25 +1,19 @@
 name: 'Build Documentation'
-description: 'Build documentation on a mac'
+description: 'Build documentation'
 
 runs:
   using: "composite"
   steps:
     - name: Setup machine
-      uses: ./.github/actions/setup-macos
-
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v6
-      with:
-          python-version: "3.10"
-          activate-environment: true
+      uses: ./.github/actions/setup-linux
 
     - name: Install dependencies
-      shell: sh
+      shell: bash
       run: |
-        brew install doxygen
-        uv pip install --upgrade pip cmake
-        uv pip install -r docs/requirements.txt
-        uv pip install . -v
+        sudo apt-get install -y doxygen
+        source .venv/bin/activate
+        pip install -r docs/requirements.txt
+        pip install . -v
   
     - name: Build documentation
       shell: bash
@@ -30,8 +24,8 @@ runs:
         make html O=-W
     
     - name: Create artifact tar
-      shell: sh
-      run: tar -cf artifact.tar --cd docs --dereference build/html index.html
+      shell: bash
+      run: tar -cf artifact.tar -C docs --dereference build/html index.html
 
     # Do it manually because upload-pages-artifact requires gtar
     - name: Upload artifact
