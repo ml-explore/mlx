@@ -135,6 +135,10 @@ CudaAllocator::malloc_impl(size_t size, int device, cudaStream_t stream) {
     size = page_size * ((size + page_size - 1) / page_size);
   }
 
+  if (size <= small_block_size || stream == nullptr) {
+    device = -1;
+  }
+
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
@@ -146,7 +150,6 @@ CudaAllocator::malloc_impl(size_t size, int device, cudaStream_t stream) {
 
     // Try the scalar pool first
     if (size <= small_block_size) {
-      device = -1;
       buf = scalar_pool_.malloc();
     }
     lock.unlock();
