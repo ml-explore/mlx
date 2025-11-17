@@ -66,7 +66,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/build-cuda
+      - uses: ./.github/actions/build-linux
         with:
           toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/test-linux

@@ -1,13 +1,30 @@
 name: 'Build and Test on Linux'
-description: 'Build and test MLX on Linux'
+
+inputs:
+  toolkit:
+    description: 'The toolkit to build with'
+    required: false
+    default: 'cpu'
 
 runs:
   using: "composite"
   steps:
+    - name: Set cmake args
+      shell: bash
+      env:
+        CMAKE_ARGS_CPU: >
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          -DMLX_BUILD_CUDA=OFF
+        CMAKE_ARGS_CUDA: >
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
+          -DMLX_BUILD_CUDA=ON
+      run: |
+        echo CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}" > $GITHUB_ENV
+
     - name: Install Python package
       shell: sh
       env:
-        CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
         DEBUG: 1
       run: pip install --no-build-isolation -e ".[dev]" -v
 
@@ -16,10 +33,9 @@ runs:
       run: |
         pip install typing_extensions
         python setup.py generate_stubs
-    
+
     - name: Build CPP only
       shell: bash
       run: |
-        mkdir -p build && cd build
-        cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
-        make -j $(nproc)
+        cmake . -B build -DCMAKE_BUILD_TYPE=Debug ${{ env.CMAKE_ARGS }}
+        cmake --build build -j $(nproc)
