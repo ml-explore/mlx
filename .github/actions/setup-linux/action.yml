@@ -2,14 +2,10 @@ name: 'Setup Linux Environment'
 description: 'Install dependencies for Linux builds'
 
 inputs:
-  runner-type:
-    description: 'Whether to set this up as a linux or CUDA runner'
+  toolkit:
+    description: 'Which toolkit to install'
     required: false
-    default: 'linux'
-    type: choice
-    options:
-      - linux
-      - cuda
+    default: 'cpu'
   python-version:
     description: 'Version of python to set up'
     required: false
@@ -21,7 +17,7 @@ runs:
     - name: Use ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        key: ccache-${{ inputs.runner-type }}-${{ runner.arch }}-py${{ inputs.python-version }}
+        key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}-py${{ inputs.python-version }}
         max-size: 1GB
 
     - name: Install common dependencies
@@ -48,21 +44,33 @@ runs:
       shell: bash
       run: sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
 
-    - name: Network CUDA installation from packages
-      if: inputs.runner-type == 'cuda'
-      shell: bash ## Specific to Ubuntu 22.04 & Architecture x86_64
+    - name: Install CUDA toolkit
+      if: ${{ startsWith(inputs.toolkit, 'cuda') }}
+      shell: bash
+      env:
+        # Note: the CI machine does not meet CUDA 13's driver requirement.
+        # Compatibility matrix:
+        # https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
+        # The `nvcc` is installed into `/usr/local/cuda-VERSION/bin/nvcc` - but
+        # it's *not* on the default toolkit path.
+        PACKAGES: |
+          {
+            "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-toolkit-12-6",
+            "cuda-12.8": "libcudnn9-dev-cuda-12 cuda-toolkit-12-8",
+            "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-toolkit-12-9",
+            "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-toolkit-13-0"
+          }
       run: |
-        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        export ARCH=${{ runner.arch == 'arm64' && 'arm64' || 'x86_64' }}
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$ARCH/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get install -y libcudnn9-dev-cuda-12 libnccl2 libnccl-dev cuda-toolkit-12-9
-      # Note: This installs CUDA 12.9, which is the latest supported by cuDNN 9.x and works with the NVidia 570 drivers
-      # cuda-toolkit by itself installs version 13 (+) and requires updated drives (580+), which require a reboot to function properly.
-      # Compatibility matrix: https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
-      # This also drops `nvcc` into `/usr/local/cuda-12.9/bin/nvcc` - but it's *not* on the default PATH
+        sudo apt-get install -y \
+            libnccl2 libnccl-dev \
+            ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
 
-    - name: Package and Driver Report
-      if: inputs.runner-type == 'cuda'
+    - name: CUDA packages and driver report
+      if: ${{ startsWith(inputs.toolkit, 'cuda') }}
       shell: bash
       run: |
         sudo apt-get install -y ubuntu-drivers-common dkms

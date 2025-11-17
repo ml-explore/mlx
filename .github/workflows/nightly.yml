@@ -80,13 +80,19 @@ jobs:
 
   build_cuda_with_tests:
     if: github.repository == 'ml-explore/mlx'
+    strategy:
+      fail-fast: false
+      matrix:
+        toolkit: ['cuda-12.8', 'cuda-12.9']
     runs-on: gpu-t4-4-core
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/build-cuda
+        with:
+          toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/test-linux
 
   build_cuda_release:
@@ -96,11 +102,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: 'cuda-12.9'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:
-          nvcc-location: '/usr/local/cuda-12.9/bin/nvcc'
+          toolkit: 'cuda-12.9'
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
