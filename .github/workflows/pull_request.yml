@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-linux
       - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
+    needs: check_lint
     strategy:
       matrix:
         runner:
@@ -75,6 +75,7 @@ jobs:
 
   linux_fedora_build_cpp:
     name: Linux Fedora CPP Build (${{ matrix.arch }})
+    needs: check_lint
     strategy:
       fail-fast: false
       matrix:
