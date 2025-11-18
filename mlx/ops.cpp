@@ -70,6 +70,58 @@ array indices_or_default(
   return reshape(arange(total, uint32, s), std::move(shape), s);
 }
 
+void validate_quantized_input(
+    std::string_view tag,
+    const array& matrix,
+    const array& scales,
+    const std::string& matrix_name,
+    const std::string& scales_name,
+    int group_size,
+    int bits,
+    const std::optional<array>& biases = std::nullopt) {
+  // If matrix is quantized
+  if (matrix.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] The " << matrix_name << " should be uint32 "
+        << "but received " << matrix.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // If biases and scales have same shape if biases provided
+  if (biases && scales.shape() != biases->shape()) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Scales and biases should have the same shape. "
+        << "Received scales with shape " << scales.shape()
+        << " and biases with " << biases->shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Batch shapes match
+  if (!std::equal(
+          matrix.shape().begin(),
+          matrix.shape().end() - 2,
+          scales.shape().begin())) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] " << matrix_name << " and " << scales_name
+        << " should have the same batch shape. "
+        << "Received " << matrix_name << " with shape " << matrix.shape()
+        << ", " << scales_name << " with " << scales.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Shape compatibility based on bits and group_size
+  if (matrix.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] The shapes of the " << matrix_name << " and "
+        << scales_name << " are "
+        << "incompatible based on bits and group_size. " << matrix_name
+        << ".shape() == " << matrix.shape() << " and " << scales_name
+        << ".shape() == " << scales.shape() << " with group_size=" << group_size
+        << " and bits=" << bits;
+    throw std::invalid_argument(msg.str());
+  }
+}
+
 std::pair<int, int> extract_quantized_matmul_dims(
     std::string_view tag,
     const array& x,
@@ -79,39 +131,8 @@ std::pair<int, int> extract_quantized_matmul_dims(
     bool transpose,
     int group_size,
     int bits) {
-  if (w.dtype() != uint32) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] The weight matrix should be uint32 "
-        << "but received " << w.dtype();
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (biases && scales.shape() != biases->shape()) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] Scales and biases should have the same shape. "
-        << "Received scales with shape " << scales.shape()
-        << " and biases with " << biases->shape();
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (!std::equal(
-          w.shape().begin(), w.shape().end() - 2, scales.shape().begin())) {
-    std::ostringstream msg;
-    msg << "[" << tag
-        << "] Weight and scales should have the same batch shape. "
-        << "Received weight with shape " << w.shape() << ", scales with "
-        << scales.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (w.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] The shapes of the weight and scales are "
-        << "incompatible based on bits and group_size. w.shape() == "
-        << w.shape() << " and scales.shape() == " << scales.shape()
-        << " with group_size=" << group_size << " and bits=" << bits;
-    throw std::invalid_argument(msg.str());
-  }
+  validate_quantized_input(
+      tag, w, scales, "weight", "scales", group_size, bits, biases);
 
   int x_inner_dims = x.shape(-1);
 
@@ -131,6 +152,45 @@ std::pair<int, int> extract_quantized_matmul_dims(
   }
 
   return {w_inner_dims, w_outer_dims};
+}
+
+std::pair<std::pair<int, int>, std::pair<int, int>> extract_qqmm_dims(
+    std::string_view tag,
+    const array& x,
+    const array& w,
+    const array& scales_x,
+    const array& scales_w,
+    bool transpose,
+    int group_size,
+    int bits) {
+  // Validate x and scales_x
+  validate_quantized_input(
+      tag, x, scales_x, "x matrix", "scales_x", group_size, bits);
+
+  // Validate w and scales_w
+  validate_quantized_input(
+      tag, w, scales_w, "weight matrix", "scales_w", group_size, bits);
+
+  // For narrow precision types (mxfp4, nvfp4) the only supported layout is TN
+  // A is MxK, B is NxK (transposed)
+  int x_inner_dims = x.shape(-1); // K // (32 / bits)
+  int x_outer_dims = x.shape(-2); // M
+
+  // Calculate the expanded w's dimensions
+  int w_inner_dims = (transpose) ? w.shape(-1) : w.shape(-2);
+  int w_outer_dims = (transpose) ? w.shape(-2) : w.shape(-1);
+
+  if (w_inner_dims != x_inner_dims) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Last dimension of first quantized input with "
+        << "shape (..., " << x_inner_dims << ") does not match "
+        << "the quantized matrix (" << w_inner_dims << ", " << w_outer_dims
+        << ") computed with transpose=" << std::boolalpha << transpose;
+
+    throw std::invalid_argument(msg.str());
+  }
+
+  return {{x_inner_dims, x_outer_dims}, {w_inner_dims, w_outer_dims}};
 }
 
 } // namespace
@@ -4146,7 +4206,6 @@ array quantized_matmul(
   } else {
     inputs = {x, w, scales};
   }
-
   if (x.ndim() > 2 && w.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
@@ -4158,6 +4217,68 @@ array quantized_matmul(
       dtype,
       std::make_shared<QuantizedMatmul>(
           to_stream(s), group_size, bits, qmode, transpose),
+      std::move(inputs));
+}
+
+array qqmm(
+    array x,
+    array w,
+    array scales_x,
+    array scales_w,
+    bool transpose /* = true */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
+    const std::string& mode /* = "nvfp4" */,
+    bool quantize_output /* = false */,
+    StreamOrDevice s /* = {} */) {
+  // currently only simetric quantization is supported for qqmm
+  auto qmode = string_to_quantization_mode(mode, "qqmm");
+  // For narrow precision MMAs on B200 only TN layout is supported:
+  // https://docs.nvidia.com/cutlass/media/docs/cpp/blackwell_functionality.html
+  // TODO: handle it better
+  if ((qmode == QuantizationMode::Nvfp4 || qmode == QuantizationMode::Mxfp4) &&
+      !transpose) {
+    std::ostringstream msg;
+    msg << "[qqmm] transpose must be set to true with " << mode
+        << " quantization but "
+        << "transpose == false was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (qmode == QuantizationMode::Affine) {
+    std::ostringstream msg;
+    msg << "[qqmm] Affine quantization is not supported for qqmm.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+  // Check and extract the quantized matrix shape against x
+
+  auto [x_dims, w_dims] = extract_qqmm_dims(
+      "qqmm", x, w, scales_x, scales_w, transpose, group_size, bits);
+  auto [x_inner_dims, x_outer_dims] = x_dims;
+  auto [w_inner_dims, w_outer_dims] = w_dims;
+
+  std::vector<array> inputs = {x, w, scales_x, scales_w};
+
+  if (x.ndim() > 2 && w.ndim() > 2) {
+    inputs = broadcast_arrays(inputs, {-2, -1}, s);
+  }
+
+  auto out_shape = inputs[0].shape();
+  if (!quantize_output) {
+    out_shape.back() = w_outer_dims; // result should be the same shape (M, N)
+                                     // if not packed in uint32
+  } else {
+    out_shape.back() = w_outer_dims / (32 / bits); // packed output
+  }
+
+  // out dtype can be only bf16 if not quantized
+  auto dtype = quantize_output ? x.dtype() : bfloat16;
+  return array(
+      std::move(out_shape),
+      dtype,
+      std::make_shared<DualQuantizedMatmul>(
+          to_stream(s), group_size, bits, qmode, transpose, quantize_output),
       std::move(inputs));
 }
 

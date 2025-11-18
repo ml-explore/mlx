@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/matmul.h"
+#include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
@@ -97,7 +98,7 @@ void gemm_and_bias(
       throw std::runtime_error(
           "[gemm_and_bias] complex64 bias epilogue isn’t supported in cublasLtMatmul.");
     }
-    gemm.set_bias(encoder, *bias);
+    cublas_utils::set_bias(encoder, gemm.matmul_desc(), *bias);
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
