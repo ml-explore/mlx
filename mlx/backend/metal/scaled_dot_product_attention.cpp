@@ -378,8 +378,14 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool is_training,
     bool output_logsumexp,
     Stream s) {
+  if (is_training) {
+    // It's faster for training on Metal to use the unfused SDPA for both
+    // forward and backward.
+    return true;
+  }
   if (output_logsumexp) {
     return true;
   }

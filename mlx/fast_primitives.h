@@ -225,6 +225,7 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
+      bool is_training,
       bool output_logsumexp,
       Stream s);
 

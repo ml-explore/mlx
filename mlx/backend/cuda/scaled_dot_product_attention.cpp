@@ -460,6 +460,7 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool is_training,
     bool output_logsumexp,
     Stream s) {
   if (s.device == Device::cpu) {

@@ -795,6 +795,7 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
+          is_training,
           output_logsumexp,
           stream)) {
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
