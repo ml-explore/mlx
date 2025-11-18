@@ -145,7 +145,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   uint32_t bytes_per_key = out.itemsize() * elems_per_key;
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }

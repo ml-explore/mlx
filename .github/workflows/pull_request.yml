@@ -1,6 +1,12 @@
 name: Build and Test
 
-on: [pull_request, push]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # For testing CI without starting a pull request:
+      - test/*
 
 permissions:
   contents: read
@@ -14,10 +20,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-linux
       - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
+    needs: check_lint
     strategy:
       matrix:
         runner:
@@ -52,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolkit: ['cuda-12.8', 'cuda-12.9']
+        toolkit: ['cuda-12.6', 'cuda-12.9']
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
@@ -67,7 +73,7 @@ jobs:
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: ubuntu-22.04
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
@@ -75,6 +81,7 @@ jobs:
 
   linux_fedora_build_cpp:
     name: Linux Fedora CPP Build (${{ matrix.arch }})
+    needs: check_lint
     strategy:
       fail-fast: false
       matrix:

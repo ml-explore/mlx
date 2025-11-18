@@ -122,7 +122,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
@@ -164,7 +164,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   if (beta_ == 1 && a.dtype() != complex64 && c.strides(-1) == 1 &&
       c.data_size() == out.shape(-1)) {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
     gemm_and_bias(
         encoder,
         M,
@@ -188,10 +188,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto sty = c.strides()[c.ndim() - 1];
     if (sty == 1 && stx == c.shape(-1)) {
       ldc = stx;
-      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
     } else if (sty == 1 && stx == 0) {
       ldc = 0;
-      out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
     } else {
       // Copy C into out and set C to out
       ldc = c.shape(-1);

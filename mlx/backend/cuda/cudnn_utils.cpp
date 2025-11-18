@@ -135,9 +135,7 @@ bool prepare_cudnn_plan(
   void* workspace_ptr = nullptr;
   if (workspace_size > 0) {
     array workspace(
-        cu::malloc_async(workspace_size, encoder.stream()),
-        {workspace_size},
-        uint8);
+        cu::malloc_async(workspace_size, encoder), {workspace_size}, uint8);
     encoder.add_temporary(workspace);
     workspace_ptr = gpu_ptr<void>(workspace);
   }

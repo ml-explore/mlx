@@ -143,7 +143,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   // Prepare the shapes, strides and axis arguments.
   Shape shape = remove_index(in.shape(), axis_);

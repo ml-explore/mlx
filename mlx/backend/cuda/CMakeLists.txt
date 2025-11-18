@@ -145,6 +145,7 @@ FetchContent_Declare(
   URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx BEFORE PRIVATE "${cccl_SOURCE_DIR}/include")
+set_target_properties(mlx PROPERTIES CCCL_DIR "${cccl_SOURCE_DIR}/include")
 
 # Use fixed version of NVTX.
 FetchContent_Declare(

@@ -13,6 +13,8 @@
 
 namespace mlx::core::cu {
 
+class CommandEncoder;
+
 using allocator::Buffer;
 
 // Stores cuda-managed unified memory.
@@ -48,7 +50,7 @@ class SmallSizePool {
 class CudaAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
-  Buffer malloc_async(size_t size, cudaStream_t stream);
+  Buffer malloc_async(size_t size, int device, cudaStream_t stream);
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
@@ -62,7 +64,6 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
-  Buffer malloc_impl(size_t size, cudaStream_t stream);
   void cuda_free(CudaBuffer* buf);
 
   CudaAllocator();
@@ -80,6 +81,6 @@ class CudaAllocator : public allocator::Allocator {
 
 CudaAllocator& allocator();
 
-Buffer malloc_async(size_t size, cudaStream_t stream);
+Buffer malloc_async(size_t size, CommandEncoder& encoder);
 
 } // namespace mlx::core::cu
