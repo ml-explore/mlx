@@ -9,9 +9,10 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set cmake args
-      shell: bash
+    - name: Install Python package
+      shell: sh
       env:
+        DEBUG: 1
         CMAKE_ARGS_CPU: >-
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           -DMLX_BUILD_CUDA=OFF
@@ -20,22 +21,16 @@ runs:
           -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
           -DMLX_BUILD_CUDA=ON
       run: |
-        CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"
-        # FIXME: Unable to build tests without libnccl on arm64.
+        export CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"
         if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
+          # Can not build tests when the built executables can not run.
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
         fi
+        pip install --no-build-isolation -e ".[dev]" -v
+        # Pass the CMAKE_ARGS to following steps.
         echo CMAKE_ARGS="$CMAKE_ARGS" > $GITHUB_ENV
 
-    - name: Install Python package
-      shell: sh
-      env:
-        DEBUG: 1
-      run: pip install --no-build-isolation -e ".[dev]" -v
-
     - name: Generate package stubs
-      # FIXME: Unable to generate stubs without libnccl on arm64.
-      if: ${{ !(startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64') }}
       shell: sh
       run: |
         pip install typing_extensions
