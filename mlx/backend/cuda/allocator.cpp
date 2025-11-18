@@ -120,7 +120,7 @@ void copy_to_managed(CudaBuffer& buf) {
 }
 
 Buffer
-CudaAllocator::malloc_impl(size_t size, int device, cudaStream_t stream) {
+CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (size == 0) {
     return Buffer{new CudaBuffer{nullptr, 0, -1}};
   }
@@ -182,13 +182,8 @@ CudaAllocator::malloc_impl(size_t size, int device, cudaStream_t stream) {
   return Buffer{buf};
 }
 
-Buffer
-CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
-  return malloc_impl(size, device, stream);
-}
-
 Buffer CudaAllocator::malloc(size_t size) {
-  return malloc_impl(size, -1, nullptr);
+  return malloc_async(size, -1, nullptr);
 }
 
 void CudaAllocator::free(Buffer buffer) {

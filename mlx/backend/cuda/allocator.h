@@ -64,7 +64,6 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
-  Buffer malloc_impl(size_t size, int device, cudaStream_t stream);
   void cuda_free(CudaBuffer* buf);
 
   CudaAllocator();
