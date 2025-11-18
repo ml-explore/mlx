@@ -367,9 +367,8 @@ void binary_op_gpu(
   auto bopt = get_binary_op_type(a, b);
   auto& encoder = cu::get_command_encoder(s);
 
-  set_binary_op_output_data(a, b, out, bopt, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
+  set_binary_op_output_data(
+      a, b, out, bopt, [&](auto n) { return cu::malloc_async(n, encoder); });
   binary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 

@@ -277,7 +277,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   array in = inputs[0];
   array wt = inputs[1];
   array out = out_;
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   Dtype dtype = out.dtype();
 
   // Search cache.

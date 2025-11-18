@@ -374,7 +374,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          cu::malloc_async(in.data_size() * out.itemsize(), encoder.stream()),
+          cu::malloc_async(in.data_size() * out.itemsize(), encoder),
           in.data_size(),
           in.strides(),
           in.flags());

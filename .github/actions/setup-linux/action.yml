@@ -56,7 +56,6 @@ runs:
         PACKAGES: |
           {
             "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-toolkit-12-6",
-            "cuda-12.8": "libcudnn9-dev-cuda-12 cuda-toolkit-12-8",
             "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-toolkit-12-9",
             "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-toolkit-13-0"
           }

@@ -298,7 +298,7 @@ void Compiled::eval_gpu(
   // Put outputs.
   compiled_allocate_outputs(
       inputs, outputs, is_constant_, contiguous, [&](auto n) {
-        return cu::malloc_async(n, encoder.stream());
+        return cu::malloc_async(n, encoder);
       });
   for (auto& x : outputs) {
     args.append(x);

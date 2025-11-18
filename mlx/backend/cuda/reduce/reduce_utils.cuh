@@ -96,7 +96,7 @@ inline void allocate_same_layout(
     const std::vector<int>& axes,
     cu::CommandEncoder& encoder) {
   if (in.flags().row_contiguous) {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
     return;
   }
 
@@ -135,7 +135,7 @@ inline void allocate_same_layout(
   fl.col_contiguous = cc;
   fl.contiguous = true;
   out.set_data(
-      cu::malloc_async(out.nbytes(), encoder.stream()),
+      cu::malloc_async(out.nbytes(), encoder),
       data_size,
       final_strides,
       fl,

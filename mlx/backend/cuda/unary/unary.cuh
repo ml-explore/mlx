@@ -208,9 +208,8 @@ void unary_op_gpu(
     const char* op,
     const Stream& s) {
   auto& encoder = cu::get_command_encoder(s);
-  set_unary_output_data(inputs[0], out, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
+  set_unary_output_data(
+      inputs[0], out, [&](auto n) { return cu::malloc_async(n, encoder); });
   unary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
