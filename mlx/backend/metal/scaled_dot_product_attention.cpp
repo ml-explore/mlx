@@ -7,7 +7,6 @@
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
-#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
@@ -379,8 +378,15 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool is_training,
+    bool output_logsumexp,
     Stream s) {
-  if (detail::in_grad_tracing()) {
+  if (is_training) {
+    // It's faster for training on Metal to use the unfused SDPA for both
+    // forward and backward.
+    return true;
+  }
+  if (output_logsumexp) {
     return true;
   }
   if (s.device == Device::cpu) {
@@ -414,14 +420,14 @@ bool ScaledDotProductAttention::use_fallback(
 
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
-    array& out) {
+    std::vector<array>& outputs) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
   auto& q_pre = inputs[0];
   auto& k_pre = inputs[1];
   auto& v_pre = inputs[2];
-  auto& o = out;
+  auto& o = outputs[0];
 
   std::vector<array> copies;
 
@@ -551,6 +557,16 @@ void ScaledDotProductAttention::eval_gpu(
   }
 
   d.add_temporaries(std::move(copies), s.index);
+}
+
+bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+  return true;
+}
+
+void ScaledDotProductAttentionVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("NYI");
 }
 
 } // namespace mlx::core::fast

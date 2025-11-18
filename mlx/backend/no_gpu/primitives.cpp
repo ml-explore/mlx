@@ -30,6 +30,14 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool is_training,
+    bool output_logsumexp,
+    Stream s) {
+  return true;
+}
+
+bool fast::ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
     Stream s) {
   return true;
 }
@@ -153,7 +161,8 @@ NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_USE_FALLBACK(RoPE)
-NO_GPU(ScaledDotProductAttention)
+NO_GPU_MULTI(ScaledDotProductAttention)
+NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)

@@ -6,6 +6,7 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 
 namespace mlx::core::fast {
 
@@ -784,22 +785,88 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
+  bool is_training = detail::in_grad_tracing();
+  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
+  bool output_logsumexp = is_training && has_fast_vjp;
   if (!ScaledDotProductAttention::use_fallback(
-          q, k, v, has_mask, has_arr_mask, do_causal, stream)) {
-    auto out_shape = Shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
-    return array(
-        std::move(out_shape),
-        final_type,
-        std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, do_causal, has_sinks),
-        std::move(inputs));
+          q,
+          k,
+          v,
+          has_mask,
+          has_arr_mask,
+          do_causal,
+          is_training,
+          output_logsumexp,
+          stream)) {
+    Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
+    auto primitive = std::make_shared<ScaledDotProductAttention>(
+        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+    if (output_logsumexp) {
+      return array::make_arrays(
+          {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
+          {final_type, float32},
+          primitive,
+          std::move(inputs))[0];
+    } else {
+      return array(
+          std::move(out_shape), final_type, primitive, std::move(inputs));
+    }
   }
   return fallback(std::move(inputs))[0];
+}
+
+std::vector<array> ScaledDotProductAttention::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() >= 3);
+  assert(cotangents.size() == outputs.size());
+
+  auto s = stream();
+  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
+    assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
+    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
+    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
+    return vjps;
+  };
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < primals.size(); ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(primals[i].dtype());
+  }
+  auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
+      s, fallback, scale_, do_causal_, has_sinks_);
+  std::vector<array> inputs = primals;
+  inputs.push_back(outputs[0]);
+  inputs.push_back(outputs[1]);
+  inputs.push_back(cotangents[0]);
+  auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
 }
 
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      has_sinks_ == a_other.has_sinks_ &&
+      output_logsumexp_ == a_other.output_logsumexp_;
+}
+
+bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
+  const ScaledDotProductAttentionVJP& a_other =
+      static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
 }
