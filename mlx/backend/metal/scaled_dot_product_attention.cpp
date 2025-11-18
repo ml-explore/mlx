@@ -164,19 +164,21 @@ void sdpa_full_self_attention_metal(
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
 #ifdef MLX_ENABLE_NAX
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
-      (q.dtype() != float32 || env::enable_tf32())) {
-    return sdpa_full_self_attention_nax(
-        /* const Stream& s = */ s,
-        /* metal::Device& d = */ d,
-        /* const array& q = */ q,
-        /* const array& k = */ k,
-        /* const array& v = */ v,
-        /* const float scale = */ scale,
-        /* array& o = */ o,
-        /* bool do_causal_ = */ do_causal_,
-        /* const std::optional<array>& mask = */ mask,
-        /* const std::optional<array>& sinks = */ sinks);
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && q.shape(3) != 80 &&
+        (q.dtype() != float32 || env::enable_tf32())) {
+      return sdpa_full_self_attention_nax(
+          /* const Stream& s = */ s,
+          /* metal::Device& d = */ d,
+          /* const array& q = */ q,
+          /* const array& k = */ k,
+          /* const array& v = */ v,
+          /* const float scale = */ scale,
+          /* array& o = */ o,
+          /* bool do_causal_ = */ do_causal_,
+          /* const std::optional<array>& mask = */ mask,
+          /* const std::optional<array>& sinks = */ sinks);
+    }
   }
 #endif // MLX_ENABLE_NAX
 

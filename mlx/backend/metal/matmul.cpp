@@ -359,33 +359,35 @@ void steel_matmul_regular_axpby(
     float beta /* = 0.0f */) {
 #ifdef MLX_ENABLE_NAX
 
-  if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
-      (a.dtype() != float32 || env::enable_tf32())) {
-    return steel_matmul_regular_axpby_nax<CHECK_AB>(
-        /* const Stream& s = */ s,
-        /* metal::Device& d = */ d,
-        /* const array& a = */ a,
-        /* const array& b = */ b,
-        /* const array& c = */ c,
-        /* array& out = */ out,
-        /* int M = */ M,
-        /* int N = */ N,
-        /* int K = */ K,
-        /* int batch_size_out = */ batch_size_out,
-        /* int lda = */ lda,
-        /* int ldb = */ ldb,
-        /* int ldd = */ ldd,
-        /* bool transpose_a = */ transpose_a,
-        /* bool transpose_b = */ transpose_b,
-        /* std::vector<array>& copies = */ copies,
-        /* Shape batch_shape = */ batch_shape,
-        /* Strides batch_strides = */ batch_strides,
-        /* int64_t A_batch_stride = */ A_batch_stride,
-        /* int64_t B_batch_stride = */ B_batch_stride,
-        /* int64_t matrix_stride_out = */ matrix_stride_out,
-        /* int64_t C_batch_stride = */ C_batch_stride,
-        /* float alpha = */ alpha,
-        /* float beta = */ beta);
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
+        (a.dtype() != float32 || env::enable_tf32())) {
+      return steel_matmul_regular_axpby_nax<CHECK_AB>(
+          /* const Stream& s = */ s,
+          /* metal::Device& d = */ d,
+          /* const array& a = */ a,
+          /* const array& b = */ b,
+          /* const array& c = */ c,
+          /* array& out = */ out,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* int batch_size_out = */ batch_size_out,
+          /* int lda = */ lda,
+          /* int ldb = */ ldb,
+          /* int ldd = */ ldd,
+          /* bool transpose_a = */ transpose_a,
+          /* bool transpose_b = */ transpose_b,
+          /* std::vector<array>& copies = */ copies,
+          /* Shape batch_shape = */ batch_shape,
+          /* Strides batch_strides = */ batch_strides,
+          /* int64_t A_batch_stride = */ A_batch_stride,
+          /* int64_t B_batch_stride = */ B_batch_stride,
+          /* int64_t matrix_stride_out = */ matrix_stride_out,
+          /* int64_t C_batch_stride = */ C_batch_stride,
+          /* float alpha = */ alpha,
+          /* float beta = */ beta);
+    }
   }
 
 #endif // MLX_ENABLE_NAX
@@ -2196,8 +2198,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (M == 1 && right_sorted_ == true) {
 #ifdef MLX_ENABLE_NAX
 
-    if (metal::is_nax_available() && a.dtype() != float32) {
-      return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
+    if (__builtin_available(
+            macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+      if (metal::is_nax_available() && a.dtype() != float32) {
+        return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
+      }
     }
 
 #endif // MLX_ENABLE_NAX

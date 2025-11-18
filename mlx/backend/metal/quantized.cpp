@@ -451,6 +451,96 @@ void qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+#ifdef MLX_ENABLE_NAX
+
+void qmm_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 64;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 64 == 0;
+  bool batched = B > 1;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode + (transpose ? "_qmm_t_nax_" : "_qmm_n_nax_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
+      batched ? "_batch_1" : "_batch_0");
+  std::string template_def;
+  MTL::ComputePipelineState* kernel;
+  if (transpose) {
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "qmm_t_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        batched);
+  } else {
+    kernel = get_quantized_kernel_wrapped(
+        d, kname, "qmm_n_nax", mode, type_string, group_size, bits, batched);
+  }
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+#endif // MLX_ENABLE_NAX
+
 void qmm(
     const array& x,
     const array& w,
@@ -466,6 +556,31 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+#ifdef MLX_ENABLE_NAX
+
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && mode == "affine" && (group_size >= 64) &&
+        transpose && (M % 64 == 0) && (N % 64 == 0) && (K % 64 == 0)) {
+      return qmm_nax(
+          /* const array& x = */ x,
+          /* const array& w = */ w,
+          /* const array& scales = */ scales,
+          /* const std::optional<array>& biases = */ biases,
+          /* array& out = */ out,
+          /* bool transpose = */ transpose,
+          /* int group_size = */ group_size,
+          /* int bits = */ bits,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* metal::Device& d = */ d,
+          /* const Stream& s = */ s,
+          /* const std::string& mode = */ mode);
+    }
+  }
+
+#endif // MLX_ENABLE_NAX
+
   int B = out.size() / M / N;
 
   int wm = 2;
@@ -719,6 +834,141 @@ void gather_qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+#ifdef MLX_ENABLE_NAX
+
+void gather_qmm_rhs_nax(
+    const array& x_,
+    const array& w_,
+    const array& scales_,
+    const std::optional<array>& biases_,
+    const array& indices_,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string mode) {
+  // Start by normalizing the indices
+  array indices = ensure_row_contiguous(indices_, d, s);
+
+  // Broadcast x with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of x broadcasted
+  // with rhs_indices. We need only broadcast x and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+
+  // Normalize the input arrays
+  array x = broadcast_with_indices(x_);
+  array w = ensure_row_contiguous(w_, d, s);
+  array scales = ensure_row_contiguous(scales_, d, s);
+
+  // TODO: Tune the block sizes
+  int bm = 64, bn = 64, bk = 64;
+  int wm = 2, wn = 2;
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Make the kernel name
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode +
+          (transpose ? "_gather_qmm_rhs_nax_nt_" : "_gather_qmm_rhs_nax_nn_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm_",
+      bm,
+      "_bn_",
+      bn,
+      "_bk_",
+      bk,
+      "_wm_",
+      wm,
+      "_wn_",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      kname,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_gather_qmm_kernel(
+      d,
+      kname,
+      hash_name,
+      func_consts,
+      x,
+      group_size,
+      bits,
+      mode,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      transpose);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
+
+  int c = 0;
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases_) {
+    array biases = ensure_row_contiguous(*biases_, d, s);
+    compute_encoder.set_input_array(biases, c++);
+  }
+  compute_encoder.set_input_array(indices, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(M, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(K, c++);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+#endif // MLX_ENABLE_NAX
+
 void gather_qmm_rhs(
     const array& x_,
     const array& w_,
@@ -735,6 +985,31 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
+#ifdef MLX_ENABLE_NAX
+
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && mode == "affine" && (group_size >= 64)) {
+      return gather_qmm_rhs_nax(
+          /* const array& x_ = */ x_,
+          /* const array& w_ = */ w_,
+          /* const array& scales_ = */ scales_,
+          /* const std::optional<array>& biases_ = */ biases_,
+          /* const array& indices_ = */ indices_,
+          /* array& out = */ out,
+          /* bool transpose = */ transpose,
+          /* int group_size = */ group_size,
+          /* int bits = */ bits,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* metal::Device& d = */ d,
+          /* const Stream& s = */ s,
+          /* const std::string mode = */ mode);
+    }
+  }
+
+#endif // MLX_ENABLE_NAX
+
   // Start by normalizing the indices
   array indices = ensure_row_contiguous(indices_, d, s);
 

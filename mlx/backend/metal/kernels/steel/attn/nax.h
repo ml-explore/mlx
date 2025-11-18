@@ -40,9 +40,6 @@ struct BaseNAXFrag {
       "MMAFrag shape is not consistent with MMAFrag size");
 
   template <typename U>
-  using dtype_mat_t = typename metal::simdgroup_matrix<U, kFragRows, kFragCols>;
-
-  template <typename U>
   using dtype_frag_t = typename metal::vec<U, kElemsPerFrag>;
 
   METAL_FUNC static short2 get_coord() {

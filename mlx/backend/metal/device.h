@@ -269,7 +269,6 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
 inline bool is_nax_available() {
   static bool is_nax_available_ =
-      /* __builtin_available(macOS 26.2, *) && */
       metal::device(mlx::core::Device::gpu).get_architecture_gen() >= 17;
   return is_nax_available_;
 }

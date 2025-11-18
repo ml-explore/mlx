@@ -178,7 +178,7 @@ template <
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
-  const bool is_last_tq = int(simd_group_id) >= (params->qL_rem / UQ);
+  // const bool is_last_tq = int(simd_group_id) >= (params->qL_rem / UQ);
   const bool is_last_q = is_last_bq;
 
   const short lim_rows_q = params->qL_rem - (tm + sm);
