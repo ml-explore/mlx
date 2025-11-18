@@ -30,6 +30,7 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool output_logsumexp,
     Stream s) {
   return true;
 }

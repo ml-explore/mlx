@@ -7,7 +7,6 @@
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
-#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
@@ -379,8 +378,9 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool output_logsumexp,
     Stream s) {
-  if (detail::in_grad_tracing()) {
+  if (output_logsumexp) {
     return true;
   }
   if (s.device == Device::cpu) {

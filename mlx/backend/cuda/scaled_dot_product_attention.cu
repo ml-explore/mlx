@@ -6,7 +6,6 @@
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
-#include "mlx/transforms_impl.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -665,8 +664,9 @@ bool supports_sdpa_vector(
     const array& v,
     bool has_mask,
     bool has_arr_mask,
-    bool do_causal) {
-  if (detail::in_grad_tracing()) {
+    bool do_causal,
+    bool output_logsumexp) {
+  if (output_logsumexp) {
     return false;
   }
 

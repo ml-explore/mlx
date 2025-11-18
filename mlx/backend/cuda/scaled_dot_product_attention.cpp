@@ -75,7 +75,7 @@ struct SDPACacheKey {
   std::array<int64_t, QKV_NDIM> k_strides;
   std::array<int64_t, QKV_NDIM> v_strides;
   bool do_causal;
-  bool generate_stats;
+  bool output_logsumexp;
 };
 
 inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
@@ -84,7 +84,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     const array& k,
     const array& v,
     bool do_causal,
-    bool generate_stats = true) {
+    bool output_logsumexp = true) {
   BytesKey<SDPACacheKey> cache_key;
   cache_key.pod = {
       encoder.device().cuda_device(),
@@ -96,7 +96,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
       vector_key<QKV_NDIM>(k.strides()),
       vector_key<QKV_NDIM>(v.strides()),
       do_causal,
-      generate_stats,
+      output_logsumexp,
   };
   return cache_key;
 }
@@ -133,7 +133,7 @@ fe::graph::Graph build_sdpa_graph(
     const array& k,
     const array& v,
     bool do_causal,
-    bool generate_stats,
+    bool output_logsumexp,
     const array& o,
     const array& stats) {
   auto dtype = fe::DataType_t::HALF;
@@ -165,12 +165,12 @@ fe::graph::Graph build_sdpa_graph(
                      .set_name("sdpa_cudnn")
                      .set_attn_scale(scale)
                      .set_causal_mask(do_causal)
-                     .set_generate_stats(generate_stats);
+                     .set_generate_stats(output_logsumexp);
 
   auto [o_, stats_] = graph.sdpa(q_, k_, v_, options);
   o_->set_output(true);
   set_tensor_attrs(o_, O, o);
-  if (generate_stats) {
+  if (output_logsumexp) {
     stats_->set_output(true).set_data_type(fe::DataType_t::FLOAT);
     set_tensor_attrs(stats_, STATS, stats);
   }
@@ -333,7 +333,7 @@ void sdpa_cudnn(
     array& o,
     array& stats,
     bool do_causal,
-    bool generate_stats,
+    bool output_logsumexp,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
   auto handle = encoder.device().cudnn_handle();
@@ -347,18 +347,18 @@ void sdpa_cudnn(
   encoder.set_input_array(v);
   encoder.set_output_array(o);
 
-  if (generate_stats) {
+  if (output_logsumexp) {
     stats.set_data(cu::malloc_async(stats.nbytes(), encoder));
     encoder.set_output_array(stats);
   }
 
   // Search cache.
   auto cache_key =
-      build_sdpa_cache_key(encoder, q, k, v, do_causal, generate_stats);
+      build_sdpa_cache_key(encoder, q, k, v, do_causal, output_logsumexp);
   auto it = sdpa_cache().find(cache_key);
   if (it == sdpa_cache().end()) {
-    auto graph =
-        build_sdpa_graph(handle, q, k, v, do_causal, generate_stats, o, stats);
+    auto graph = build_sdpa_graph(
+        handle, q, k, v, do_causal, output_logsumexp, o, stats);
     it = sdpa_cache().emplace(cache_key, std::move(graph)).first;
   }
   auto& graph = it->second;
@@ -369,7 +369,7 @@ void sdpa_cudnn(
       {V, const_cast<void*>(gpu_ptr<void>(v))},
       {SCALE, &scale},
       {O, gpu_ptr<void>(o)}};
-  if (generate_stats) {
+  if (output_logsumexp) {
     variant_pack[STATS] = gpu_ptr<void>(stats);
   }
 
@@ -439,7 +439,8 @@ bool supports_sdpa_vector(
     const array& v,
     bool has_mask,
     bool has_arr_mask,
-    bool do_causal);
+    bool do_causal,
+    bool output_logsumexp);
 void sdpa_vector(
     const array& q,
     const array& k,
@@ -459,12 +460,14 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
+    bool output_logsumexp,
     Stream s) {
   if (s.device == Device::cpu) {
     return true;
   }
 
-  return !supports_sdpa_vector(q, k, v, has_mask, has_arr_mask, do_causal) &&
+  return !supports_sdpa_vector(
+             q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp) &&
       !supports_sdpa_cudnn(q, k, v, has_mask, do_causal, s);
 }
 
@@ -483,14 +486,15 @@ void ScaledDotProductAttention::eval_gpu(
   bool has_mask = inputs.size() - has_sinks_ > 3;
   bool has_arr_mask = has_mask && !do_causal_;
 
-  if (supports_sdpa_vector(q, k, v, has_mask, has_arr_mask, do_causal_)) {
+  if (supports_sdpa_vector(
+          q, k, v, has_mask, has_arr_mask, do_causal_, output_logsumexp_)) {
     if (has_sinks_) {
       sdpa_vector(q, k, v, scale_, out, do_causal_, inputs.back(), s);
     } else {
       sdpa_vector(q, k, v, scale_, out, do_causal_, std::nullopt, s);
     }
   } else {
-    sdpa_cudnn(q, k, v, scale_, out, stats, do_causal_, generate_stats_, s);
+    sdpa_cudnn(q, k, v, scale_, out, stats, do_causal_, output_logsumexp_, s);
   }
 }
 

@@ -785,18 +785,31 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
+  bool output_logsumexp = detail::in_grad_tracing();
   if (!ScaledDotProductAttention::use_fallback(
-          q, k, v, has_mask, has_arr_mask, do_causal, stream)) {
+          q,
+          k,
+          v,
+          has_mask,
+          has_arr_mask,
+          do_causal,
+          output_logsumexp,
+          stream)) {
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
-    Shape stats_shape{q.shape(0), q.shape(1), q.shape(2), 1};
-    bool generate_stats = detail::in_grad_tracing();
-    return array::make_arrays(
-        {out_shape, stats_shape},
-        {final_type, float32},
-        std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, do_causal, has_sinks, generate_stats),
-        std::move(inputs))[0];
+    auto primitive = std::make_shared<ScaledDotProductAttention>(
+        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+    if (output_logsumexp) {
+      return array::make_arrays(
+          {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
+          {final_type, float32},
+          primitive,
+          std::move(inputs))[0];
+    } else {
+      return array(
+          std::move(out_shape), final_type, primitive, std::move(inputs));
+    }
   }
+  assert(!output_logsumexp);
   return fallback(std::move(inputs))[0];
 }
 
@@ -846,7 +859,7 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_ &&
-      generate_stats_ == a_other.generate_stats_;
+      output_logsumexp_ == a_other.output_logsumexp_;
 }
 
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {

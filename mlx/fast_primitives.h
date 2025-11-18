@@ -211,12 +211,12 @@ class ScaledDotProductAttention : public Custom {
       float scale,
       bool do_causal,
       bool has_sinks,
-      bool generate_stats)
+      bool output_logsumexp)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
         has_sinks_(has_sinks),
-        generate_stats_(generate_stats) {}
+        output_logsumexp_(output_logsumexp) {}
 
   static bool use_fallback(
       const array& q,
@@ -225,6 +225,7 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
+      bool output_logsumexp,
       Stream s);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -247,14 +248,14 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(
-        nullptr, scale_, do_causal_, has_sinks_, generate_stats_);
+        nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
   }
 
  private:
   float scale_;
   bool do_causal_;
   bool has_sinks_;
-  bool generate_stats_;
+  bool output_logsumexp_;
 };
 
 class ScaledDotProductAttentionVJP : public Custom {
