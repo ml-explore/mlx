@@ -69,16 +69,16 @@ auto gemm_loop(
       if constexpr (kAlignedM) {
         Atile.load(A + A_offset, params->lda);
       } else {
-        const short rmax = transpose_a ? UK : sgp_sm;
-        const short cmax = transpose_a ? sgp_sm : UK;
+        const short rmax = transpose_a ? SK : sgp_sm;
+        const short cmax = transpose_a ? sgp_sm : SK;
         Atile.load_safe(A + A_offset, params->lda, short2(cmax, rmax));
       }
 
       if constexpr (kAlignedN) {
         Btile.load(B + B_offset, params->ldb);
       } else {
-        const short rmax = transpose_b ? sgp_sn : UK;
-        const short cmax = transpose_b ? UK : sgp_sn;
+        const short rmax = transpose_b ? sgp_sn : SK;
+        const short cmax = transpose_b ? SK : sgp_sn;
         Btile.load_safe(B + B_offset, params->ldb, short2(cmax, rmax));
       }
 
