@@ -48,7 +48,7 @@ void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
   // Ensure workspace is 256-byte aligned
   int nbytes = cuda::ceil_div(workspace_size, 256) * 256;
   array workspace(
-      cu::malloc_async(nbytes, encoder.stream()),
+      cu::malloc_async(nbytes, encoder),
       {static_cast<int>(workspace_size)},
       int8);
   encoder.add_temporary(workspace);
