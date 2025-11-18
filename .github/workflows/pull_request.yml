@@ -1,6 +1,12 @@
 name: Build and Test
 
-on: [pull_request, push]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # For testing CI without starting a pull request:
+      - test/*
 
 permissions:
   contents: read
@@ -11,9 +17,6 @@ concurrency:
 
 jobs:
   check_lint:
-    # Avoid duplicate runs when starting a pull request from upstream branch.
-    if: (github.event_name != 'pull_request') ||
-        (github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
