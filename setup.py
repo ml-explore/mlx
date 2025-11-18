@@ -24,21 +24,22 @@ def get_version():
             if "#define MLX_VERSION_PATCH" in l:
                 patch = l.split()[-1]
     version = f"{major}.{minor}.{patch}"
-    if os.environ.get("PYPI_RELEASE", False):
+    pypi_release = os.environ.get("PYPI_RELEASE", False)
+    dev_release = os.environ.get("DEV_RELEASE", False)
+    if not pypi_release or dev_release:
         today = datetime.date.today()
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
-
-        if os.environ.get("DEV_RELEASE", False):
-            git_hash = (
-                run(
-                    "git rev-parse --short HEAD".split(),
-                    capture_output=True,
-                    check=True,
-                )
-                .stdout.strip()
-                .decode()
+    if not pypi_release and not dev_release:
+        git_hash = (
+            run(
+                "git rev-parse --short HEAD".split(),
+                capture_output=True,
+                check=True,
             )
-            version = f"{version}+{git_hash}"
+            .stdout.strip()
+            .decode()
+        )
+        version = f"{version}+{git_hash}"
 
     return version
 
