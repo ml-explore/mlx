@@ -73,7 +73,7 @@ jobs:
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: ubuntu-22.04
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
