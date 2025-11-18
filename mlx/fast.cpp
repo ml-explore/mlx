@@ -785,7 +785,8 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
-  bool output_logsumexp = detail::in_grad_tracing();
+  bool output_logsumexp = detail::in_grad_tracing() &&
+      !ScaledDotProductAttentionVJP::use_fallback(q, stream);
   if (!ScaledDotProductAttention::use_fallback(
           q,
           k,
