@@ -860,9 +860,6 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
   const short tm = SM * (simd_gid / WN);
   const short tn = SN * (simd_gid % WN);
 
-  const short lda_tgp = BK_padded;
-  const short ldb_tgp = BK_padded;
-
   constexpr bool transpose_a = false;
   constexpr bool transpose_b = true;
 
@@ -898,7 +895,7 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
-#pragma clang loop unroll(disable)
+        STEEL_PRAGMA_NO_UNROLL
         for (int kk1 = 0; kk1 < BK; kk1 += SK) {
           NAXTile<T, TM, TK, ASubTile> Atile;
           NAXTile<T, TN, TK, BSubTile> Btile;
@@ -911,7 +908,7 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
             Atile.load_safe(x + kk1, K, short2(SK, sgp_sm));
           }
 
-          Btile.template load<T, BK_padded, 1>(Ws + tn * ldb_tgp + kk1);
+          Btile.template load<T, BK_padded, 1>(Ws + tn * BK_padded + kk1);
 
           tile_matmad_nax(
               Dtile,
@@ -964,6 +961,8 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)lid;
+
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
@@ -997,8 +996,8 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
   y += y_row * static_cast<int64_t>(N) + y_col;
 
   // Make the x loader and mma operation
-  const short num_els = min(BM, M - y_row);
-  const short num_outs = min(BN, N - y_col);
+  // const short num_els = min(BM, M - y_row);
+  // const short num_outs = min(BN, N - y_col);
   loader_w_t loader_w(wl, scales, biases, K, Ws, simd_gid, simd_lid);
 
   constexpr short UM = 16;
@@ -1037,7 +1036,7 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
     loader_w.load_unsafe();
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-#pragma clang loop unroll(disable)
+    STEEL_PRAGMA_NO_UNROLL
     for (int kk1 = 0; kk1 < BK; kk1 += SK) {
       NAXTile<T, TM, TK, ASubTile> Atile;
       NAXTile<T, TK, TN, BSubTile> Btile;
@@ -1408,9 +1407,16 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm = align_M ? SM : min(SM, short(M - (y_row + tm)));
+  const short sgp_sm =
+      align_M ? SM : min(SM, short(max(0, (M - (y_row + tm)))));
+  const short sgp_sn =
+      align_N ? SN : min(SN, short(max(0, (N - (y_col + tn)))));
+
   const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
   const bool is_unaligned_bn = align_N ? false : (tgp_bn != BN);
+
+  constexpr short BR = transpose ? TN : TK;
+  constexpr short BC = transpose ? TK : TN;
 
   using AccumType = float;
 
@@ -1467,11 +1473,10 @@ template <
 
           threadgroup_barrier(mem_flags::mem_threadgroup);
 
-#pragma clang loop unroll(disable)
+          STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
             NAXTile<T, TM, TK, ASubTile> Atile;
-            NAXTile<T, transpose ? TN : TK, transpose ? TK : TN, BSubTile>
-                Btile;
+            NAXTile<T, BR, BC, BSubTile> Btile;
 
             volatile int compiler_barrier;
 
@@ -1506,15 +1511,15 @@ template <
           loader_w.load_safe(tile_w);
           threadgroup_barrier(mem_flags::mem_threadgroup);
 
-#pragma clang loop unroll(disable)
+          STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
             NAXTile<T, TM, TK, ASubTile> Atile;
-            NAXTile<T, transpose ? TN : TK, transpose ? TK : TN, BSubTile>
-                Btile;
+            NAXTile<T, BR, BC, BSubTile> Btile;
 
             volatile int compiler_barrier;
 
-            Atile.load_safe(xn + kk1, K, short2((BK - kk1), sgp_sm));
+            const short psk = min(int(SK), max(0, (BK - kk1)));
+            Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
             if constexpr (transpose) {
               Btile.template load<T, BK_padded, 1>(Ws + tn * BK_padded + kk1);
@@ -1535,23 +1540,23 @@ template <
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
+        const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
+        const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
+
         // Store results to device memory
         if constexpr (kAlignedN.value) {
-          if ((offset_next - offset) == BM) {
+          if (m_lo_lim == 0 && m_hi_lim == SM) {
             Dtile.store(y + tm * N + tn, N);
           } else {
             Dtile.store_slice(
-                y + tm * N + tn,
-                N,
-                short2(0, min(int(sgp_sm), max(0, offset - tm))),
-                short2(BN, min(int(sgp_sm), max(0, offset_next - tm))));
+                y + tm * N + tn, N, short2(0, m_lo_lim), short2(SN, m_hi_lim));
           }
         } else {
           Dtile.store_slice(
               y + tm * N + tn,
               N,
-              short2(0, max(0, offset - tm)),
-              short2(max(0, tgp_bn - tn), max(0, offset_next - tm)));
+              short2(0, m_lo_lim),
+              short2(sgp_sn, m_hi_lim));
         }
       });
     });

@@ -539,6 +539,120 @@ void qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void gather_qmm_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 32;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 64 == 0;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode + (transpose ? "_gather_qmm_t_nax_" : "_gather_qmm_n_nax_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "");
+  MTL::ComputePipelineState* kernel;
+  if (transpose) {
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_t_nax_",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        "_bm",
+        bm,
+        "_bn",
+        bn,
+        "_bk",
+        bk,
+        "_wm",
+        wm,
+        "_wn",
+        wn,
+        aligned);
+  } else {
+    kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_n_nax_",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        "_bm",
+        bm,
+        "_bn",
+        bn,
+        "_bk",
+        bk,
+        "_wm",
+        wm,
+        "_wn",
+        wn);
+  }
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_input_array(lhs_indices, c++);
+  compute_encoder.set_input_array(rhs_indices, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  c = add_strides_and_shapes(compute_encoder, false, x, w, scales, biases, c);
+  add_gather_strides_and_shapes(compute_encoder, lhs_indices, rhs_indices, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 #endif // MLX_ENABLE_NAX
 
 void qmm(
@@ -559,8 +673,9 @@ void qmm(
 #ifdef MLX_ENABLE_NAX
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && mode == "affine" && (group_size >= 64) &&
-        transpose && (M % 64 == 0) && (N % 64 == 0) && (K % 64 == 0)) {
+    if (metal::is_nax_available() && transpose &&
+        (x.dtype() != float32 || env::enable_tf32()) && mode == "affine" &&
+        (group_size >= 64) && (K % 64 == 0)) {
       return qmm_nax(
           /* const array& x = */ x,
           /* const array& w = */ w,
@@ -658,6 +773,34 @@ void gather_qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+#ifdef MLX_ENABLE_NAX
+
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && transpose &&
+        (x.dtype() != float32 || env::enable_tf32()) && transpose &&
+        mode == "affine" && (group_size >= 64) && (K % 64 == 0)) {
+      return gather_qmm_nax(
+          /* const array& x = */ x,
+          /* const array& w = */ w,
+          /* const array& scales = */ scales,
+          /* const std::optional<array>& biases = */ biases,
+          /* const array& lhs_indices = */ lhs_indices,
+          /* const array& rhs_indices = */ rhs_indices,
+          /* array& out = */ out,
+          /* bool transpose = */ transpose,
+          /* int group_size = */ group_size,
+          /* int bits = */ bits,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* metal::Device& d = */ d,
+          /* const Stream& s = */ s,
+          /* const std::string& mode = */ mode);
+    }
+  }
+
+#endif // MLX_ENABLE_NAX
+
   int B = out.size() / M / N;
 
   int wm = 2;
@@ -988,7 +1131,9 @@ void gather_qmm_rhs(
 #ifdef MLX_ENABLE_NAX
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && mode == "affine" && (group_size >= 64)) {
+    if (metal::is_nax_available() &&
+        (x_.dtype() != float32 || env::enable_tf32()) && mode == "affine" &&
+        (group_size >= 64)) {
       return gather_qmm_rhs_nax(
           /* const array& x_ = */ x_,
           /* const array& w_ = */ w_,

@@ -1825,7 +1825,7 @@ void gather_mm_rhs_nax(
   base_name.reserve(64);
   concatenate(
       base_name,
-      "steel_gather_mm_rhs_mxu_n",
+      "steel_gather_mm_rhs_nax_n",
       transpose_b ? 't' : 'n',
       '_',
       type_to_name(a),
@@ -2200,7 +2200,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (__builtin_available(
             macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-      if (metal::is_nax_available() && a.dtype() != float32) {
+      if (metal::is_nax_available() &&
+          (a.dtype() != float32 || env::enable_tf32())) {
         return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
       }
     }
