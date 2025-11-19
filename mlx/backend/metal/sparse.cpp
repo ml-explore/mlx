@@ -25,9 +25,8 @@ void SparseMatmulCSR::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::string kernel_name = "sparse_mm_csr_" + type_to_name(values);
   auto kernel = get_sparse_kernel(d, kernel_name);
 
-  MTL::Size grid_dims = MTL::Size(n_cols_, n_rows_, 1);
-  MTL::Size group_dims =
-      MTL::Size(std::min(32, n_cols_), std::min(32, n_rows_), 1);
+  MTL::Size grid_dims = MTL::Size((n_cols_ + 3) / 4, n_rows_, 1);
+  MTL::Size group_dims = MTL::Size(32, 1, 1);
 
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(row_ptr, 0);
