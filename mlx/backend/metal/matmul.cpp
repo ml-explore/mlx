@@ -361,7 +361,7 @@ void steel_matmul_regular_axpby(
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
     if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
-        (a.dtype() != float32 || env::enable_tf32())) {
+        (env::enable_tf32() || a.dtype() != float32)) {
       return steel_matmul_regular_axpby_nax<CHECK_AB>(
           /* const Stream& s = */ s,
           /* metal::Device& d = */ d,
@@ -2201,7 +2201,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (__builtin_available(
             macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
       if (metal::is_nax_available() &&
-          (a.dtype() != float32 || env::enable_tf32())) {
+          !issubdtype(a.dtype(), complexfloating) &&
+          (env::enable_tf32() || a.dtype() != float32)) {
         return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
       }
     }

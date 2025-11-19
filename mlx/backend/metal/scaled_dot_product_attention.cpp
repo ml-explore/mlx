@@ -166,7 +166,7 @@ void sdpa_full_self_attention_metal(
 #ifdef MLX_ENABLE_NAX
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
     if (metal::is_nax_available() && q.shape(3) != 80 &&
-        (q.dtype() != float32 || env::enable_tf32())) {
+        (env::enable_tf32() || q.dtype() != float32)) {
       return sdpa_full_self_attention_nax(
           /* const Stream& s = */ s,
           /* metal::Device& d = */ d,
