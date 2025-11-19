@@ -60,7 +60,7 @@ array pad_and_repack_scales(
   // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
   // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
-      cu::malloc_async(pad_outer * pad_inner, encoder.stream()),
+      cu::malloc_async(pad_outer * pad_inner, encoder),
       Shape{pad_outer, pad_inner},
       scale.dtype());
   repack_scales(scale, scale_tiled, encoder, s);
@@ -149,13 +149,13 @@ void qqmm_impl(
       K,
       lda,
       b_transposed,
-      N,
       K,
+      N,
       ldb,
-      qmode,
       batch_shape.back(),
       a_batch_strides.back(),
-      b_batch_strides.back());
+      b_batch_strides.back(),
+      qmode);
 
   qqmm.run(
       encoder,
@@ -192,7 +192,7 @@ void DualQuantizedMatmul::eval_gpu(
     fill_gpu(zero, out, s);
     return;
   }
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = a.shape(-2);
   int N = b.shape(-2); // b always transposed

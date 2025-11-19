@@ -75,6 +75,7 @@ CublasGemm::CublasGemm(
       scale_type_,
       dtype_to_compute_type(dtype),
       dtype_to_cublas_type(dtype),
+      dtype_to_cublas_type(dtype),
       a_transposed,
       a_rows,
       a_cols,

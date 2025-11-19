@@ -98,6 +98,7 @@ void CublasMatmulBase::init_base(
     cudaDataType_t scale_type,
     cublasComputeType_t compute_type,
     cudaDataType_t data_type,
+    cudaDataType_t output_type,
     bool a_transposed,
     uint64_t a_rows,
     uint64_t a_cols,
@@ -163,7 +164,7 @@ void CublasMatmulBase::init_base(
       batch_count,
       a_batch_stride);
   out_desc_ = cublas_utils::create_matrix_layout(
-      data_type, b_cols, a_rows, false, b_cols, batch_count, a_rows * b_cols);
+      output_type, b_cols, a_rows, false, b_cols, batch_count, b_cols * a_rows);
 }
 
 void CublasMatmulBase::execute_matmul(
@@ -233,4 +234,5 @@ void CublasMatmulBase::set_bias(
       &bias_ptr,
       sizeof(bias_ptr)));
 }
+
 } // namespace mlx::core

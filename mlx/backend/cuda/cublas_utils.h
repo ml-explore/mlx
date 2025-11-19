@@ -33,6 +33,8 @@ class CublasMatmulBase {
     return matmul_desc_;
   }
 
+  void set_bias(cu::CommandEncoder& encoder, const array& bias);
+
  protected:
   CublasMatmulBase() = default;
 
@@ -54,6 +56,7 @@ class CublasMatmulBase {
       cudaDataType_t scale_type,
       cublasComputeType_t compute_type,
       cudaDataType_t data_type,
+      cudaDataType_t output_type,
       bool a_transposed,
       uint64_t a_rows,
       uint64_t a_cols,
@@ -66,7 +69,6 @@ class CublasMatmulBase {
       int64_t a_batch_stride,
       int64_t b_batch_stride);
 
-  // Execute matmul using the configured descriptors
   void execute_matmul(
       cu::CommandEncoder& encoder,
       void* out,
@@ -76,7 +78,5 @@ class CublasMatmulBase {
       const void* alpha_ptr,
       const void* beta_ptr);
 };
-
-void set_bias(cu::CommandEncoder& encoder, const array& bias);
 
 } // namespace mlx::core

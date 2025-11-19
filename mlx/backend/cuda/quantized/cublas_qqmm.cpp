@@ -65,6 +65,7 @@ CublasQQMM::CublasQQMM(
     int64_t b_batch_stride,
     std::string_view qmode) {
   cudaDataType_t scale_type = CUDA_R_32F;
+  cudaDataType_t output_type = CUDA_R_16BF; // always output in bf16
   cublasComputeType_t gemm_compute_type =
       CUBLAS_COMPUTE_32F; // always for narrow precision
   cudaDataType_t data_type = qmode_to_cublas_dtype(qmode);
@@ -76,6 +77,7 @@ CublasQQMM::CublasQQMM(
       scale_type,
       gemm_compute_type,
       data_type,
+      output_type,
       a_transposed,
       a_rows,
       a_cols,
@@ -101,15 +103,6 @@ CublasQQMM::CublasQQMM(
       CUBLASLT_MATMUL_DESC_A_SCALE_MODE,
       &b_scale_mode_,
       sizeof(b_scale_mode_)));
-
-  // out_desc_ = create_matrix_layout(
-  //     CUDA_R_16BF, // output in bf16
-  //     b_transposed ? b_rows : b_cols,
-  //     a_transposed ? a_cols : a_rows,
-  //     false,
-  //     b_transposed ? b_rows : b_cols,
-  //     batch_count,
-  //     (a_transposed ? a_cols : a_rows) * (b_transposed ? b_rows : b_cols));
 }
 
 CublasQQMM::CublasQQMM(
