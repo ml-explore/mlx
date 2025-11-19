@@ -92,7 +92,8 @@
 
 #define instantiate_quantized_groups(bits) \
   instantiate_quantized_types(128, bits)   \
-  instantiate_quantized_types(64, bits)    
+  instantiate_quantized_types(64, bits)    \
+  instantiate_quantized_types(32, bits)
 
 #define instantiate_quantized_all() \
   instantiate_quantized_groups(2) \
