@@ -10,8 +10,7 @@
 
 // Instantiate sparse matrix operations for common types
 #define instantiate_sparse_ops(tname, type)                              \
-  instantiate_kernel("sparse_mm_csr_" #tname, sparse_mm_csr, type)       \
-  instantiate_kernel("sparse_mv_csr_" #tname, sparse_mv_csr, type)       \
+  instantiate_kernel("sparse_mm_csr_" #tname, sparse_mm_csr, type)
 
 // Instantiate for floating point types
 instantiate_sparse_ops(float32, float)
