@@ -2,13 +2,14 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/device.h"
 
 #include <cublasLt.h>
 
 namespace mlx::core {
 
-class CublasQQMM {
+class CublasQQMM : public CublasMatmulBase {
  public:
   CublasQQMM(
       cu::Device& device,
@@ -20,12 +21,27 @@ class CublasQQMM {
       uint64_t b_rows,
       uint64_t b_cols,
       int64_t ldb,
-      std::string_view quantization_mode,
       int32_t batch_count,
       int64_t a_batch_stride,
-      int64_t b_batch_stride);
+      int64_t b_batch_stride,
+      std::string_view quantization_mode);
 
-  ~CublasQQMM();
+  CublasQQMM(
+      cu::Device& device,
+      bool a_transposed,
+      uint64_t a_rows,
+      uint64_t a_cols,
+      int64_t lda,
+      bool b_transposed,
+      uint64_t b_rows,
+      uint64_t b_cols,
+      int64_t ldb,
+      int64_t ldc,
+      int32_t batch_count,
+      int64_t a_batch_stride,
+      int64_t b_batch_stride,
+      int64_t c_batch_stride,
+      std::string_view quantization_mode);
 
   void run(
       cu::CommandEncoder& encoder,
@@ -87,22 +103,11 @@ class CublasQQMM {
       float alpha = 1,
       float beta = 0);
 
-  uint64_t M_;
-  uint64_t N_;
   std::string quantization_mode_;
-  cudaDataType_t scale_type_;
-  cublasLtMatmulPreference_t pref_{nullptr};
-  cublasLtHandle_t handle_{nullptr};
-  cublasLtMatmulDesc_t matmul_desc_{nullptr};
-  cublasLtMatrixLayout_t a_desc_{nullptr};
-  cublasLtMatrixLayout_t b_desc_{nullptr};
-  cublasLtMatrixLayout_t c_desc_{nullptr};
-  cublasLtMatrixLayout_t out_desc_{nullptr};
   cublasLtMatmulMatrixScale_t a_scale_mode_;
   cublasLtMatmulMatrixScale_t b_scale_mode_;
   cublasLtMatmulMatrixScale_t c_scale_mode_;
   cublasLtMatmulMatrixScale_t out_scale_mode_;
-  cublasLtMatmulHeuristicResult_t heuristic_;
 };
 
 } // namespace mlx::core

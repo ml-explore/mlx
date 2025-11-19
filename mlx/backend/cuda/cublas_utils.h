@@ -12,11 +12,8 @@ namespace cublas_utils {
 // Get the shared cublas preference for a device
 cublasLtMatmulPreference_t get_preference(cu::Device& device);
 
-// Allocate workspace for matmul if needed and return pointer
-// The workspace array is added to the encoder's temporaries
 void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size);
 
-// Create matrix layout
 cublasLtMatrixLayout_t create_matrix_layout(
     cudaDataType_t type,
     uint64_t rows,
@@ -26,30 +23,60 @@ cublasLtMatrixLayout_t create_matrix_layout(
     int32_t batch_count,
     int64_t batch_stride);
 
-// Execute matmul with pre-configured descriptors
-void execute_matmul(
-    cu::CommandEncoder& encoder,
-    cublasLtHandle_t handle,
-    cublasLtMatmulDesc_t matmul_desc,
-    cublasLtMatrixLayout_t a_desc,
-    cublasLtMatrixLayout_t b_desc,
-    cublasLtMatrixLayout_t c_desc,
-    cublasLtMatrixLayout_t out_desc,
-    cublasLtMatmulHeuristicResult_t& heuristic,
-    cublasLtMatmulPreference_t pref,
-    void* out,
-    const void* a,
-    const void* b,
-    const void* c,
-    const void* alpha_ptr,
-    const void* beta_ptr);
-
-// Set bias for matmul epilogue
-void set_bias(
-    cu::CommandEncoder& encoder,
-    cublasLtMatmulDesc_t matmul_desc,
-    const array& bias);
-
 } // namespace cublas_utils
+
+class CublasMatmulBase {
+ public:
+  virtual ~CublasMatmulBase();
+
+  cublasLtMatmulDesc_t matmul_desc() const {
+    return matmul_desc_;
+  }
+
+ protected:
+  CublasMatmulBase() = default;
+
+  // Common member variables shared by all matmul types
+  uint64_t M_;
+  uint64_t N_;
+  cudaDataType_t scale_type_;
+  cublasLtMatmulPreference_t pref_{nullptr};
+  cublasLtHandle_t handle_{nullptr};
+  cublasLtMatmulDesc_t matmul_desc_{nullptr};
+  cublasLtMatrixLayout_t a_desc_{nullptr};
+  cublasLtMatrixLayout_t b_desc_{nullptr};
+  cublasLtMatrixLayout_t c_desc_{nullptr};
+  cublasLtMatrixLayout_t out_desc_{nullptr};
+  cublasLtMatmulHeuristicResult_t heuristic_;
+
+  void init_base(
+      cu::Device& device,
+      cudaDataType_t scale_type,
+      cublasComputeType_t compute_type,
+      cudaDataType_t data_type,
+      bool a_transposed,
+      uint64_t a_rows,
+      uint64_t a_cols,
+      int64_t lda,
+      bool b_transposed,
+      uint64_t b_rows,
+      uint64_t b_cols,
+      int64_t ldb,
+      int32_t batch_count,
+      int64_t a_batch_stride,
+      int64_t b_batch_stride);
+
+  // Execute matmul using the configured descriptors
+  void execute_matmul(
+      cu::CommandEncoder& encoder,
+      void* out,
+      const void* a,
+      const void* b,
+      const void* c,
+      const void* alpha_ptr,
+      const void* beta_ptr);
+};
+
+void set_bias(cu::CommandEncoder& encoder, const array& bias);
 
 } // namespace mlx::core

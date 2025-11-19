@@ -60,44 +60,36 @@ CublasQQMM::CublasQQMM(
     uint64_t b_rows,
     uint64_t b_cols,
     int64_t ldb,
-    std::string_view qmode,
     int32_t batch_count,
     int64_t a_batch_stride,
-    int64_t b_batch_stride)
-    : handle_(device.lt_handle()),
-      pref_(cublas_utils::get_preference(device)),
-      M_(a_transposed ? a_cols : a_rows),
-      N_(b_transposed ? b_rows : b_cols) {
-  a_scale_mode_ = qmode_to_cublas_scale_mode(qmode);
-  b_scale_mode_ = qmode_to_cublas_scale_mode(qmode);
-
-  heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
-
+    int64_t b_batch_stride,
+    std::string_view qmode) {
+  cudaDataType_t scale_type = CUDA_R_32F;
   cublasComputeType_t gemm_compute_type =
       CUBLAS_COMPUTE_32F; // always for narrow precision
-  CHECK_CUBLAS_ERROR(
-      cublasLtMatmulDescCreate(&matmul_desc_, gemm_compute_type, CUDA_R_32F));
+  cudaDataType_t data_type = qmode_to_cublas_dtype(qmode);
 
-  cublasOperation_t a_op = b_transposed ? CUBLAS_OP_T : CUBLAS_OP_N;
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_,
-      CUBLASLT_MATMUL_DESC_TRANSA,
-      &a_op,
-      sizeof(cublasOperation_t)));
-  cublasOperation_t b_op = a_transposed ? CUBLAS_OP_T : CUBLAS_OP_N;
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_,
-      CUBLASLT_MATMUL_DESC_TRANSB,
-      &b_op,
-      sizeof(cublasOperation_t)));
+  quantization_mode_ = std::string(qmode);
 
-  // alpha, beta pointer mode set to host ? (TODO)
-  int32_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_,
-      CUBLASLT_MATMUL_DESC_POINTER_MODE,
-      &pointer_mode,
-      sizeof(int32_t)));
+  init_base(
+      device,
+      scale_type,
+      gemm_compute_type,
+      data_type,
+      a_transposed,
+      a_rows,
+      a_cols,
+      lda,
+      b_transposed,
+      b_rows,
+      b_cols,
+      ldb,
+      batch_count,
+      a_batch_stride,
+      b_batch_stride);
+
+  a_scale_mode_ = qmode_to_cublas_scale_mode(qmode);
+  b_scale_mode_ = qmode_to_cublas_scale_mode(qmode);
 
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
@@ -110,50 +102,55 @@ CublasQQMM::CublasQQMM(
       &b_scale_mode_,
       sizeof(b_scale_mode_)));
 
-  // a and b are swaped
-  a_desc_ = cublas_utils::create_matrix_layout(
-      qmode_to_cublas_dtype(qmode),
-      b_cols,
-      b_rows,
-      b_transposed,
-      ldb,
-      batch_count,
-      b_batch_stride);
-  b_desc_ = cublas_utils::create_matrix_layout(
-      qmode_to_cublas_dtype(qmode),
-      a_cols,
-      a_rows,
-      a_transposed,
-      lda,
-      batch_count,
-      a_batch_stride);
-  out_desc_ = cublas_utils::create_matrix_layout(
-      CUDA_R_16BF, // output in bf16 (TODO)
-      b_transposed ? b_rows : b_cols, // n
-      a_transposed ? a_cols : a_rows, // m
-      false,
-      b_transposed ? b_rows : b_cols,
-      batch_count,
-      a_rows * b_cols);
-
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutCreate(
-      &a_desc_, qmode_to_cublas_dtype(qmode), b_cols, b_rows, ldb));
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutCreate(
-      &b_desc_, qmode_to_cublas_dtype(qmode), a_cols, a_rows, lda));
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutCreate(
-      &out_desc_,
-      CUDA_R_16BF, // output in bf16
-      b_transposed ? b_rows : b_cols, // m
-      a_rows, // asume that never transposed (supported only TN layout)
-      b_transposed ? b_rows : b_cols));
+  // out_desc_ = create_matrix_layout(
+  //     CUDA_R_16BF, // output in bf16
+  //     b_transposed ? b_rows : b_cols,
+  //     a_transposed ? a_cols : a_rows,
+  //     false,
+  //     b_transposed ? b_rows : b_cols,
+  //     batch_count,
+  //     (a_transposed ? a_cols : a_rows) * (b_transposed ? b_rows : b_cols));
 }
 
-CublasQQMM::~CublasQQMM() {
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(a_desc_));
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(b_desc_));
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(c_desc_));
-  CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(out_desc_));
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescDestroy(matmul_desc_));
+CublasQQMM::CublasQQMM(
+    cu::Device& device,
+    bool a_transposed,
+    uint64_t a_rows,
+    uint64_t a_cols,
+    int64_t lda,
+    bool b_transposed,
+    uint64_t b_rows,
+    uint64_t b_cols,
+    int64_t ldb,
+    int64_t ldc,
+    int32_t batch_count,
+    int64_t a_batch_stride,
+    int64_t b_batch_stride,
+    int64_t c_batch_stride,
+    std::string_view qmode)
+    : CublasQQMM(
+          device,
+          a_transposed,
+          a_rows,
+          a_cols,
+          lda,
+          b_transposed,
+          b_rows,
+          b_cols,
+          ldb,
+          batch_count,
+          a_batch_stride,
+          b_batch_stride,
+          qmode) {
+  auto type = CUDA_R_16BF; // always c in bf16
+  c_desc_ = cublas_utils::create_matrix_layout(
+      type,
+      b_transposed ? b_rows : b_cols,
+      a_transposed ? a_cols : a_rows,
+      false,
+      ldc,
+      batch_count,
+      c_batch_stride);
 }
 
 void CublasQQMM::run(
@@ -222,22 +219,7 @@ void CublasQQMM::execute(
   const void* alpha_ptr = &alpha;
   const void* beta_ptr = &beta;
 
-  cublas_utils::execute_matmul(
-      encoder,
-      handle_,
-      matmul_desc_,
-      a_desc_,
-      b_desc_,
-      c_desc_,
-      out_desc_,
-      heuristic_,
-      pref_,
-      out,
-      a,
-      b,
-      c,
-      alpha_ptr,
-      beta_ptr);
+  execute_matmul(encoder, out, a, b, c, alpha_ptr, beta_ptr);
 }
 
 } // namespace mlx::core

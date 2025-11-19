@@ -4229,7 +4229,6 @@ array qqmm(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
-    bool quantize_output /* = false */,
     StreamOrDevice s /* = {} */) {
   // currently only simetric quantization is supported for qqmm
   auto qmode = string_to_quantization_mode(mode, "qqmm");
@@ -4265,20 +4264,15 @@ array qqmm(
   }
 
   auto out_shape = inputs[0].shape();
-  if (!quantize_output) {
-    out_shape.back() = w_outer_dims; // result should be the same shape (M, N)
-                                     // if not packed in uint32
-  } else {
-    out_shape.back() = w_outer_dims / (32 / bits); // packed output
-  }
+  out_shape.back() = w_outer_dims;
 
-  // out dtype can be only bf16 if not quantized
-  auto dtype = quantize_output ? x.dtype() : bfloat16;
+  // out dtype can be only bf16
+  auto dtype = bfloat16;
   return array(
       std::move(out_shape),
       dtype,
       std::make_shared<DualQuantizedMatmul>(
-          to_stream(s), group_size, bits, qmode, transpose, quantize_output),
+          to_stream(s), group_size, bits, qmode, transpose),
       std::move(inputs));
 }
 
