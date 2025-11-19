@@ -4222,8 +4222,7 @@ array quantized_matmul(
 
 array qqmm(
     array x,
-    array w,
-    array scales_x,
+    array w_q,
     array scales_w,
     bool transpose /* = true */,
     std::optional<int> group_size_ /* = std::nullopt */,
@@ -4248,18 +4247,21 @@ array qqmm(
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
     throw std::invalid_argument(msg.str());
   }
+  auto quantized_x = quantize(x, group_size_, bits, mode, s);
+  auto x_q = quantized_x[0];
+  auto scales_x = quantized_x[1];
+  encoder.add_temporary(x_q);
+  encoder.add_temporary(scales_x);
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   // Check and extract the quantized matrix shape against x
-
   auto [x_dims, w_dims] = extract_qqmm_dims(
-      "qqmm", x, w, scales_x, scales_w, transpose, group_size, bits);
+      "qqmm", x_q, w_q, scales_x, scales_w, transpose, group_size, bits);
   auto [x_inner_dims, x_outer_dims] = x_dims;
   auto [w_inner_dims, w_outer_dims] = w_dims;
 
-  std::vector<array> inputs = {x, w, scales_x, scales_w};
-
-  if (x.ndim() > 2 && w.ndim() > 2) {
+  std::vector<array> inputs = {x_q, w_q, scales_x, scales_w};
+  if (x_q.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
 

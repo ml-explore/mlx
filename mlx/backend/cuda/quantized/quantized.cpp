@@ -181,9 +181,15 @@ void DualQuantizedMatmul::eval_gpu(
   auto& encoder = cu::get_command_encoder(s);
 
   assert(inputs.size() == 4);
-  auto& a = inputs[0];
+  auto& a_pre = inputs[0]; // activations are not quantized, only weights are
   auto& b = inputs[1];
-  auto& scale_a_pre = inputs[2];
+
+  auto a_q = quantize(a_pre, group_size_, bits_, mode_, s);
+  encoder.add_temporary(a_q[0]);
+  encoder.add_temporary(a_q[1]);
+
+  auto& a = a_q[0];
+  auto& scale_a_pre = a_q[1];
   auto& scale_b_pre = inputs[3];
   // Return 0s if either input is empty.
   if (a.size() == 0 || b.size() == 0) {

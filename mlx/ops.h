@@ -1404,9 +1404,8 @@ std::vector<array> quantize(
     StreamOrDevice s = {});
 
 array qqmm(
-    const array x,
-    const array w,
-    const array x_scales,
+    const array x, // input activations
+    const array w_q, // quantized weights
     const array w_scales,
     bool transpose = true,
     std::optional<int> group_size = std::nullopt,
