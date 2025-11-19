@@ -34,7 +34,14 @@ void SparseMatmulCSR::eval_cpu(const std::vector<array>& inputs, array& out) {
   int n_cols = n_cols_;
   int dense_b_cols = dense_b.shape(1);
 
-  encoder.dispatch([row_ptr_data, col_indices_data, values_data, dense_b_data, out_data, n_rows, n_cols, dense_b_cols]() {
+  encoder.dispatch([row_ptr_data,
+                    col_indices_data,
+                    values_data,
+                    dense_b_data,
+                    out_data,
+                    n_rows,
+                    n_cols,
+                    dense_b_cols]() {
     for (int i = 0; i < n_rows * n_cols; i++) {
       out_data[i] = 0.0f;
     }

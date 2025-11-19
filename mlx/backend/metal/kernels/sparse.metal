@@ -17,4 +17,4 @@
 instantiate_sparse_ops(float32, float)
 instantiate_sparse_ops(float16, half)
 instantiate_sparse_ops(bfloat16, bfloat16_t)
-// clang-format on
+    // clang-format on

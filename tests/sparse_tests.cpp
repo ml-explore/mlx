@@ -19,9 +19,8 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   auto col_indices = array({0, 2, 1, 0, 2}, int32);
   auto values = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float32);
 
-  auto dense_a = array({1.0f, 0.0f, 2.0f,
-                        0.0f, 3.0f, 0.0f,
-                        4.0f, 0.0f, 5.0f}, {3, 3});
+  auto dense_a =
+      array({1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f, 4.0f, 0.0f, 5.0f}, {3, 3});
 
   CHECK_EQ(row_ptr.size(), 4);
   CHECK_EQ(col_indices.size(), 5);
@@ -34,9 +33,7 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   CHECK_EQ(row_ptr_data[2], 3);
   CHECK_EQ(row_ptr_data[3], 5);
 
-  auto dense_b = array({1.0f, 2.0f,
-                        3.0f, 4.0f,
-                        5.0f, 6.0f}, {3, 2});
+  auto dense_b = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {3, 2});
 
   // Expected result from dense @ dense:
   // [[1, 0, 2],    [[1, 2],      [[11, 14],
@@ -49,18 +46,19 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2, Device::cpu);
+  auto result_cpu = sparse_matmul_csr(
+      row_ptr, col_indices, values, dense_b, 3, 2, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
   // Verify CPU result matches expected values
   auto result_cpu_data = result_cpu.data<float>();
-  CHECK_EQ(result_cpu_data[0], 11.0f);  // [0,0]
-  CHECK_EQ(result_cpu_data[1], 14.0f);  // [0,1]
-  CHECK_EQ(result_cpu_data[2], 9.0f);   // [1,0]
-  CHECK_EQ(result_cpu_data[3], 12.0f);  // [1,1]
-  CHECK_EQ(result_cpu_data[4], 29.0f);  // [2,0]
-  CHECK_EQ(result_cpu_data[5], 38.0f);  // [2,1]
+  CHECK_EQ(result_cpu_data[0], 11.0f); // [0,0]
+  CHECK_EQ(result_cpu_data[1], 14.0f); // [0,1]
+  CHECK_EQ(result_cpu_data[2], 9.0f); // [1,0]
+  CHECK_EQ(result_cpu_data[3], 12.0f); // [1,1]
+  CHECK_EQ(result_cpu_data[4], 29.0f); // [2,0]
+  CHECK_EQ(result_cpu_data[5], 38.0f); // [2,1]
 }
 
 TEST_CASE("test sparse matrix-vector multiplication") {
@@ -72,9 +70,8 @@ TEST_CASE("test sparse matrix-vector multiplication") {
   auto col_indices = array({0, 1, 2}, int32);
   auto values = array({2.0f, 3.0f, 4.0f}, float32);
 
-  auto dense_a = array({2.0f, 0.0f, 0.0f,
-                        0.0f, 3.0f, 0.0f,
-                        0.0f, 0.0f, 4.0f}, {3, 3});
+  auto dense_a =
+      array({2.0f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, 4.0f}, {3, 3});
 
   auto dense_b = array({1.0f, 2.0f, 3.0f}, {3, 1});
 
@@ -85,15 +82,16 @@ TEST_CASE("test sparse matrix-vector multiplication") {
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 1, Device::cpu);
+  auto result_cpu = sparse_matmul_csr(
+      row_ptr, col_indices, values, dense_b, 3, 1, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
   // Verify CPU result values (diagonal matrix times vector)
   auto result_cpu_data = result_cpu.data<float>();
-  CHECK_EQ(result_cpu_data[0], 2.0f);   // 2 * 1 = 2
-  CHECK_EQ(result_cpu_data[1], 6.0f);   // 3 * 2 = 6
-  CHECK_EQ(result_cpu_data[2], 12.0f);  // 4 * 3 = 12
+  CHECK_EQ(result_cpu_data[0], 2.0f); // 2 * 1 = 2
+  CHECK_EQ(result_cpu_data[1], 6.0f); // 3 * 2 = 6
+  CHECK_EQ(result_cpu_data[2], 12.0f); // 4 * 3 = 12
 }
 
 TEST_CASE("test random sparse matrix") {
@@ -114,9 +112,14 @@ TEST_CASE("test random sparse matrix") {
     row_ptr_vec.push_back(col_indices_vec.size());
   }
 
-  auto row_ptr = array(row_ptr_vec.data(), {static_cast<int>(row_ptr_vec.size())}, int32);
-  auto col_indices = array(col_indices_vec.data(), {static_cast<int>(col_indices_vec.size())}, int32);
-  auto values = array(values_vec.data(), {static_cast<int>(values_vec.size())}, float32);
+  auto row_ptr =
+      array(row_ptr_vec.data(), {static_cast<int>(row_ptr_vec.size())}, int32);
+  auto col_indices = array(
+      col_indices_vec.data(),
+      {static_cast<int>(col_indices_vec.size())},
+      int32);
+  auto values =
+      array(values_vec.data(), {static_cast<int>(values_vec.size())}, float32);
 
   CHECK_EQ(row_ptr.size(), n_rows + 1);
   CHECK(col_indices.size() > 0);
@@ -124,8 +127,8 @@ TEST_CASE("test random sparse matrix") {
 
   auto dense_b = ones({n_cols, dense_cols});
 
-  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, n_rows, dense_cols);
+  auto result = sparse_matmul_csr(
+      row_ptr, col_indices, values, dense_b, n_rows, dense_cols);
   CHECK_EQ(result.shape(0), n_rows);
   CHECK_EQ(result.shape(1), dense_cols);
 }
-
