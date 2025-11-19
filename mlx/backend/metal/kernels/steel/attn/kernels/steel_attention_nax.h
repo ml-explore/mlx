@@ -91,6 +91,7 @@ template <
 
   // Pacifying compiler
   (void)lid;
+  (void)simd_lane_id;
 
   // Move to correct block
   ulong3 tidl{tid.x, tid.y, tid.z};
