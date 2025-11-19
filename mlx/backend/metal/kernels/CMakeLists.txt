@@ -138,6 +138,7 @@ if(MLX_ENABLE_NAX)
   build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
 
   build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
+  build_kernel(fp_quantized_nax fp_quantized_nax.h ${STEEL_NAX_HEADERS})
 
   set(STEEL_NAX_ATTN_HEADERS
       steel/defines.h steel/utils.h steel/attn/nax.h steel/utils/type_traits.h
