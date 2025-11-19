@@ -673,9 +673,8 @@ void qmm(
 #ifdef MLX_ENABLE_NAX
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && transpose &&
-        (x.dtype() != float32 || env::enable_tf32()) && mode == "affine" &&
-        (K % 64 == 0)) {
+    if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+        (x.dtype() != float32 || env::enable_tf32())) {
       return qmm_nax(
           /* const array& x = */ x,
           /* const array& w = */ w,
@@ -776,9 +775,8 @@ void gather_qmm(
 #ifdef MLX_ENABLE_NAX
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && transpose &&
-        (x.dtype() != float32 || env::enable_tf32()) && mode == "affine" &&
-        (K % 64 == 0)) {
+    if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+        (x.dtype() != float32 || env::enable_tf32())) {
       return gather_qmm_nax(
           /* const array& x = */ x,
           /* const array& w = */ w,
@@ -1131,9 +1129,8 @@ void gather_qmm_rhs(
 #ifdef MLX_ENABLE_NAX
 
   if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() &&
-        (x_.dtype() != float32 || env::enable_tf32()) && mode == "affine" &&
-        (group_size >= 64)) {
+    if (metal::is_nax_available() && transpose &&
+        (x_.dtype() != float32 || env::enable_tf32())) {
       return gather_qmm_rhs_nax(
           /* const array& x_ = */ x_,
           /* const array& w_ = */ w_,
