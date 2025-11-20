@@ -478,4 +478,150 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+namespace {
+
+template <typename T, typename IdxT>
+void search_sorted(
+    const array& a,
+    const array& v,
+    array& out,
+    int axis,
+    bool right) {
+  auto a_ptr = a.data<T>();
+  auto v_ptr = v.data<T>();
+  auto out_ptr = out.data<IdxT>();
+
+  auto common_shape = out.shape();
+  Strides a_strides = a.strides();
+  size_t axis_stride = a_strides[axis];
+  size_t axis_size = a.shape(axis);
+  a_strides.erase(a_strides.begin() + axis);
+
+  Strides a_broadcast_strides(common_shape.size(), 0);
+  Strides v_broadcast_strides(common_shape.size(), 0);
+
+  auto a_shape_no_axis = a.shape();
+  a_shape_no_axis.erase(a_shape_no_axis.begin() + axis);
+
+  for (int i = 0; i < common_shape.size(); ++i) {
+    int j = common_shape.size() - 1 - i;
+
+    // For v
+    int v_dim = v.ndim() - 1 - i;
+    if (v_dim >= 0) {
+      if (v.shape(v_dim) == 1) {
+        v_broadcast_strides[j] = 0;
+      } else {
+        v_broadcast_strides[j] = v.strides()[v_dim];
+      }
+    } else {
+      v_broadcast_strides[j] = 0;
+    }
+
+    // For a
+    int a_dim = a_shape_no_axis.size() - 1 - i;
+    if (a_dim >= 0) {
+      if (a_shape_no_axis[a_dim] == 1) {
+        a_broadcast_strides[j] = 0;
+      } else {
+        a_broadcast_strides[j] = a_strides[a_dim];
+      }
+    } else {
+      a_broadcast_strides[j] = 0;
+    }
+  }
+
+  ContiguousIterator a_it(
+      common_shape, a_broadcast_strides, common_shape.size());
+  ContiguousIterator v_it(
+      common_shape, v_broadcast_strides, common_shape.size());
+
+  for (size_t i = 0; i < out.size(); ++i) {
+    T val = v_ptr[v_it.loc];
+    size_t a_offset = a_it.loc;
+
+    auto start = StridedIterator<const T>(
+        a_ptr + a_offset, static_cast<int64_t>(axis_stride));
+    auto end = start + axis_size;
+
+    IdxT idx;
+    if (right) {
+      idx = std::upper_bound(start, end, val, nan_aware_less<const T>) - start;
+    } else {
+      idx = std::lower_bound(start, end, val, nan_aware_less<const T>) - start;
+    }
+    out_ptr[i] = idx;
+
+    a_it.step();
+    v_it.step();
+  }
+}
+
+} // namespace
+
+void SearchSorted::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+  auto& out = outputs[0];
+
+  if (out.size() == 0) {
+    return;
+  }
+
+  // Allocate output
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  int ax = axis_;
+  if (ax < 0) {
+    ax += a.ndim();
+  }
+
+  switch (a.dtype()) {
+    case bool_:
+      search_sorted<bool, uint32_t>(a, v, out, ax, right_);
+      break;
+    case uint8:
+      search_sorted<uint8_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case uint16:
+      search_sorted<uint16_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case uint32:
+      search_sorted<uint32_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case uint64:
+      search_sorted<uint64_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case int8:
+      search_sorted<int8_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case int16:
+      search_sorted<int16_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case int32:
+      search_sorted<int32_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case int64:
+      search_sorted<int64_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case float16:
+      search_sorted<float16_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case bfloat16:
+      search_sorted<bfloat16_t, uint32_t>(a, v, out, ax, right_);
+      break;
+    case float32:
+      search_sorted<float, uint32_t>(a, v, out, ax, right_);
+      break;
+    case float64:
+      search_sorted<double, uint32_t>(a, v, out, ax, right_);
+      break;
+    case complex64:
+      search_sorted<complex64_t, uint32_t>(a, v, out, ax, right_);
+      break;
+  }
+}
+
 } // namespace mlx::core
