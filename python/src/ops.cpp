@@ -2743,6 +2743,56 @@ void init_ops(nb::module_& m) {
             array: The ``uint32`` array containing indices that sort the input.
       )pbdoc");
   m.def(
+      "searchsorted",
+      [](const mx::array& a,
+         const ScalarOrArray& v,
+         const std::string& side,
+         std::optional<int> axis,
+         mx::StreamOrDevice s) {
+        bool right = false;
+        if (side == "left") {
+          right = false;
+        } else if (side == "right") {
+          right = true;
+        } else {
+          throw std::invalid_argument(
+              "[searchsorted] side must be either 'left' or 'right'");
+        }
+        auto stream = to_stream(s);
+        auto v_arr = to_array(v);
+
+        if (axis.has_value()) {
+          return mx::searchsorted(a, v_arr, *axis, right, stream);
+        } else {
+          return mx::searchsorted(a, v_arr, right, stream);
+        }
+      },
+      "a"_a,
+      "v"_a,
+      "side"_a = "left",
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def searchsorted(a: array, v: Union[scalar, array], *, side: str = 'left', axis: Optional[int] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Find indices where elements should be inserted to maintain order.
+
+        Args:
+            a (array): Input array.
+            v (array): Values to insert into ``a``.
+            side (str, optional): If 'left', the index of the first suitable
+                location found is given. If 'right', return the last such index.
+                If there is no suitable index, return either 0 or N (where N is the
+                length of the array).
+            axis (int, optional): Axis along which to search. If not provided, the
+                array is flattened.
+            stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+            array: Array of insertion points with the same shape as ``v``.
+      )pbdoc");
+  m.def(
       "partition",
       [](const mx::array& a,
          int kth,
