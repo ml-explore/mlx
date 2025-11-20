@@ -15,7 +15,7 @@ namespace mlx::core {
  * `wait` returns. The array passed to `wait` will not be read until all
  * previous calls to `update` have completed.
  *
- * Note, calls to `update` should always from the same thread or explicitly
+ * Note, calls to `update` should always be from the same thread or explicitly
  * synchronized so that they occur in sequence. Calls to `wait` can be on any
  * thread.
  *
@@ -29,7 +29,7 @@ class Fence {
   Fence() {};
   explicit Fence(Stream stream);
 
-  void update(Stream stream, const array& x);
+  void update(Stream stream, const array& x, bool cross_device);
   void wait(Stream stream, const array& x);
 
  private:

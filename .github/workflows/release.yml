@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      dev_release:
+        description: "Do a dev release or regular release"
+        required: true
+        default: "false"
 
 permissions:
   contents: read
@@ -12,16 +17,13 @@ permissions:
 jobs:
   setup:
     runs-on: ubuntu-latest
-    outputs:
-      pypi_env: ${{ github.event_name == 'push' && 'pypi' || 'test-pypi' }}
-      pypi_url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
     steps:
       - name: Set publishing variables
         run: echo "Publishing setup complete"
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/build-docs
@@ -45,28 +47,32 @@ jobs:
     strategy:
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-    runs-on: ubuntu-22.04
+        arch: ['x86_64', 'aarch64']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
           python-version: ${{ matrix.python_version }}
-      - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/build-linux-release
         with:
-          build-type: release
-          run-tests: false
+          build-backend: ${{ matrix.python-version == '3.10' }}
+          arch: ${{ matrix.arch }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: linux-wheels-${{ matrix.python_version }}
+          overwrite: true
+          name: linux-wheels-${{ matrix.python_version }}-${{ matrix.arch }}
           path: wheelhouse/mlx-*.whl
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
         uses: actions/upload-artifact@v5
         with:
-          name: mlx-cpu
+          overwrite: true
+          name: mlx-cpu-${{ matrix.arch }}
           path: wheelhouse/mlx_cpu-*.whl
   
   build_mac_release:
@@ -77,24 +83,46 @@ jobs:
     runs-on: [self-hosted, macos]
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
+
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-macos
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: ./.github/actions/build-macos
+
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          pip install --upgrade pip
+          pip install cmake setuptools nanobind==2.4.0
+          pip install -e . -v
+      - name: Generate package stubs
+        shell: bash -l {0}
+        run: |
+          pip install typing_extensions
+          python setup.py generate_stubs
+      - name: Build macOS 14 package
+        uses: ./.github/actions/build-macos-release
         with:
-          build-type: release
-          run-tests: false
+          macos-target: 14.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 15 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 15.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mac-wheels-${{ matrix.python-version }}
           path: dist/mlx-*.whl
       - name: Upload Metal artifacts
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mlx-metal
           path: dist/mlx_metal-*.whl
 
@@ -103,18 +131,20 @@ jobs:
     runs-on: ubuntu-22-large
     env:
       PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ github.event.inputs.dev_release == 'true' && 1 || 0 }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: 'cuda-12.9'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:
-          nvcc-location: '/usr/local/cuda-12.9/bin/nvcc'
+          toolkit: 'cuda-12.9'
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
+          overwrite: true
           name: mlx-cuda
           path: wheelhouse/mlx_cuda-*.whl
 
@@ -125,7 +155,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx
     steps:
       - uses: actions/download-artifact@v6
@@ -143,7 +173,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
+          repository-url: https://upload.pypi.org/legacy/
   
   pypi-publish-cuda:
     name: Upload CUDA release to PyPI
@@ -152,7 +182,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-cuda
     steps:
       - uses: actions/download-artifact@v6
@@ -164,7 +194,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
+          repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-cpu:
     name: Upload CPU release to PyPI
@@ -173,19 +203,20 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-cpu
     steps:
       - uses: actions/download-artifact@v6
         with:
-          name: mlx-cpu
+          pattern: mlx-cpu-*
+          merge-multiple: true
           path: dist
       - name: Display structure of downloaded files
         run: ls -R dist
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
+          repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-metal:
     name: Upload Metal release to PyPI
@@ -194,7 +225,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ needs.setup.outputs.pypi_env }}
+      name: pypi
       url: https://pypi.org/p/mlx-metal
     steps:
       - uses: actions/download-artifact@v6
@@ -206,5 +237,4 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.setup.outputs.pypi_url }}
-
+          repository-url: https://upload.pypi.org/legacy/

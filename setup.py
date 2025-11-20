@@ -24,21 +24,22 @@ def get_version():
             if "#define MLX_VERSION_PATCH" in l:
                 patch = l.split()[-1]
     version = f"{major}.{minor}.{patch}"
-    if "PYPI_RELEASE" not in os.environ:
+    pypi_release = int(os.environ.get("PYPI_RELEASE", 0))
+    dev_release = int(os.environ.get("DEV_RELEASE", 0))
+    if not pypi_release or dev_release:
         today = datetime.date.today()
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
-
-        if "DEV_RELEASE" not in os.environ:
-            git_hash = (
-                run(
-                    "git rev-parse --short HEAD".split(),
-                    capture_output=True,
-                    check=True,
-                )
-                .stdout.strip()
-                .decode()
+    if not pypi_release and not dev_release:
+        git_hash = (
+            run(
+                "git rev-parse --short HEAD".split(),
+                capture_output=True,
+                check=True,
             )
-            version = f"{version}+{git_hash}"
+            .stdout.strip()
+            .decode()
+        )
+        version = f"{version}+{git_hash}"
 
     return version
 
@@ -89,7 +90,16 @@ class CMakeBuild(build_ext):
         ]
         if build_stage == 2 and build_cuda:
             # Last arch is always real and virtual for forward-compatibility
-            cuda_archs = ";".join(("70-real", "80-real", "90-real", "100-real", "120"))
+            cuda_archs = ";".join(
+                (
+                    "75-real",
+                    "80-real",
+                    "90a-real",
+                    "100a-real",
+                    "120a-real",
+                    "120-virtual",
+                )
+            )
             cmake_args += [f"-DMLX_CUDA_ARCHITECTURES={cuda_archs}"]
 
         # Some generators require explcitly passing config when building.

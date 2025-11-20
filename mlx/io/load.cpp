@@ -13,6 +13,7 @@
 #include <windows.h>
 #endif // _WIN32
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -226,10 +227,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
     throw std::runtime_error("[load] Failed to open " + in_stream->label());
   }
 
-  auto stream = to_stream(s, Device::cpu);
-  if (stream.device != Device::cpu) {
-    throw std::runtime_error("[load] Must run on a CPU stream.");
-  }
+  auto stream = cu::is_available() ? to_stream(s) : to_stream(s, Device::cpu);
 
   ////////////////////////////////////////////////////////
   // Read header and prepare array details

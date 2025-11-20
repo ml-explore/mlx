@@ -31,7 +31,7 @@ struct KernelArgs {
   }
 
   void append(const array& a) {
-    append(reinterpret_cast<CUdeviceptr>(a.data<void>()));
+    append(reinterpret_cast<CUdeviceptr>(gpu_ptr<void>(a)));
   }
 
   template <typename T>

@@ -5,6 +5,7 @@ import base64
 import ipaddress
 import json
 import os
+import platform
 import shlex
 import shutil
 import sys
@@ -386,15 +387,40 @@ def launch_ring(parser, hosts, args, command):
         t.join()
 
 
+def get_mpi_libname():
+    try:
+        ompi_info = run(["which", "ompi_info"], check=True, capture_output=True)
+        ompi_info = ompi_info.stdout.strip().decode()
+
+        if platform.system() == "Darwin":
+            otool_output = run(
+                ["otool", "-L", ompi_info], check=True, capture_output=True
+            )
+        else:
+            otool_output = run(["ldd", ompi_info], check=True, capture_output=True)
+        otool_output = otool_output.stdout.decode()
+
+        # StopIteration if not found
+        libmpi_line = next(
+            filter(lambda line: "libmpi" in line, otool_output.splitlines())
+        )
+        return libmpi_line.strip().split()[0].removeprefix("@rpath/")
+    except:
+        return None
+
+
 def launch_mpi(parser, hosts, args, command):
     mpirun = run(["which", "mpirun"], check=True, capture_output=True)
     mpirun = mpirun.stdout.strip().decode()
 
-    # Homebrew libmpi doesn't work with anaconda python out of the box.
-    # TODO: Check if we should do this with every mpirun
-    if "homebrew" in mpirun:
+    # Compatibility with homebrew and pip installs
+    mpi_libname = get_mpi_libname()
+    if mpi_libname is not None:
         dyld = Path(mpirun).parent.parent / "lib"
-        args.env = [f"DYLD_LIBRARY_PATH={str(dyld)}"] + args.env
+        args.env = [
+            f"DYLD_LIBRARY_PATH={str(dyld)}",
+            f"MLX_MPI_LIBNAME={mpi_libname}",
+        ] + args.env
 
     log(args.verbose, f"Using '{mpirun}'")
     with tempfile.NamedTemporaryFile(mode="w") as f:

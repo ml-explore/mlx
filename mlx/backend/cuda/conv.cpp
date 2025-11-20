@@ -270,19 +270,19 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   if (out_.size() == 0) {
     return;
   }
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
 
   assert(inputs.size() == 2);
   array in = inputs[0];
   array wt = inputs[1];
   array out = out_;
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   Dtype dtype = out.dtype();
 
-  auto& s = stream();
-  auto& encoder = cu::get_command_encoder(s);
-
   // Search cache.
-  ConvCacheKey cache_key{
+  BytesKey<ConvCacheKey> cache_key;
+  cache_key.pod = {
       encoder.device().cuda_device(),
       dtype_to_cudnn_type(dtype),
       vector_key(in.shape()),

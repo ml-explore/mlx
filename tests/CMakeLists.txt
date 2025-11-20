@@ -37,11 +37,11 @@ target_sources(
           ${METAL_TEST_SOURCES})
 
 if(MLX_BUILD_CUDA)
-  # Find the CCCL headers in install dir.
-  target_compile_definitions(
-    mlx
-    PRIVATE
-      MLX_CCCL_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/cccl")
+  # C++ tests are always built from source, so we have to specify where to find
+  # CCCL headers for JIT as they are not installed in system.
+  get_target_property(MLX_CCCL_DIR mlx CCCL_DIR)
+  target_compile_definitions(mlx PRIVATE MLX_CCCL_DIR="${MLX_CCCL_DIR}")
+  message(STATUS MLX_CCCL_DIR="${MLX_CCCL_DIR}")
 endif()
 
 target_link_libraries(tests PRIVATE mlx doctest)

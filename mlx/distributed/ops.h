@@ -48,4 +48,9 @@ array all_min(
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
+array sum_scatter(
+    const array& x,
+    std::optional<Group> group = std::nullopt,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::distributed

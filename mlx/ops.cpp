@@ -280,16 +280,19 @@ array copy(array a, StreamOrDevice s /* = {} */) {
       {std::move(a)});
 }
 
+array full_impl(array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return array(
+      vals.shape(),
+      dtype,
+      std::make_shared<Full>(to_stream(s)),
+      {astype(vals, dtype, s)});
+}
+
 array full(Shape shape, array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
     throw std::invalid_argument("[full] Negative dimensions not allowed.");
   }
-  auto copied_shape = shape; // |shape| will be moved
-  return array(
-      std::move(copied_shape),
-      dtype,
-      std::make_shared<Full>(to_stream(s)),
-      {broadcast_to(astype(std::move(vals), dtype, s), std::move(shape), s)});
+  return full_impl(broadcast_to(vals, std::move(shape), s), dtype, s);
 }
 
 array full(Shape shape, array vals, StreamOrDevice s /* = {} */) {
@@ -297,12 +300,25 @@ array full(Shape shape, array vals, StreamOrDevice s /* = {} */) {
   return full(std::move(shape), std::move(vals), dtype, to_stream(s));
 }
 
+array full_like(
+    const array& a,
+    array vals,
+    Dtype dtype,
+    StreamOrDevice s /* = {} */) {
+  auto inputs = broadcast_arrays({a, std::move(vals)}, s);
+  return full_impl(std::move(inputs[1]), dtype, s);
+}
+
+array full_like(const array& a, array vals, StreamOrDevice s /* = {} */) {
+  return full_like(a, std::move(vals), a.dtype(), to_stream(s));
+}
+
 array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
   return full(shape, array(0, dtype), to_stream(s));
 }
 
 array zeros_like(const array& a, StreamOrDevice s /* = {} */) {
-  return zeros(a.shape(), a.dtype(), to_stream(s));
+  return full_like(a, 0, a.dtype(), to_stream(s));
 }
 
 array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -310,7 +326,7 @@ array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array ones_like(const array& a, StreamOrDevice s /* = {} */) {
-  return ones(a.shape(), a.dtype(), to_stream(s));
+  return full_like(a, 1, a.dtype(), to_stream(s));
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -3440,6 +3456,91 @@ array scatter_min(
     const std::vector<int>& axes,
     StreamOrDevice s /*= {}*/) {
   return scatter(a, indices, updates, axes, Scatter::Min, s);
+}
+
+array masked_scatter(
+    const array& a,
+    const array& mask,
+    const array& value,
+    StreamOrDevice s /* =  {} */) {
+  if (mask.dtype() != bool_) {
+    throw std::invalid_argument("[masked_scatter] The mask has to be boolean.");
+  }
+  if (mask.ndim() == 0) {
+    throw std::invalid_argument(
+        "[masked_scatter] Scalar masks are not supported.");
+  } else if (mask.ndim() > a.ndim()) {
+    throw std::invalid_argument(
+        "[masked_scatter] The mask cannot have more dimensions than the target.");
+  }
+
+  int unmasked_dims = a.ndim() - mask.ndim();
+
+  if (value.ndim() > unmasked_dims + 1) {
+    std::ostringstream msg;
+    msg << "[masked_scatter] Value array shape must be broadcastable with the last "
+        << unmasked_dims << " dimensions of the input.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Check if the start of the mask is compatible
+  if (!std::equal(
+          mask.shape().begin(), mask.shape().end(), a.shape().begin())) {
+    std::ostringstream msg;
+    msg << "[masked_scatter] The boolean mask should have the same shape as the "
+        << "beginning of the indexed array but the mask has shape "
+        << mask.shape() << " and the array has shape " << a.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  array expanded_mask = mask;
+  array expanded_value = astype(value, a.dtype(), s);
+
+  // Broadcast both the mask with the last unmasked_dims of a
+  if (unmasked_dims > 0) {
+    auto mask_shape = mask.shape();
+    while (mask_shape.size() < a.ndim()) {
+      mask_shape.push_back(1);
+    }
+    expanded_mask = broadcast_to(reshape(mask, mask_shape, s), a.shape(), s);
+  }
+
+  // Broadcast the value with the unmasked dims plus one extra dimension of
+  // size mask.size(). If that dim is already provided leave it as is.
+  if (value.ndim() < unmasked_dims + 1) {
+    Shape value_shape(unmasked_dims + 1 - value.ndim(), 1);
+    value_shape.insert(
+        value_shape.end(), value.shape().begin(), value.shape().end());
+    expanded_value = reshape(expanded_value, value_shape, s);
+
+    value_shape[0] = mask.size();
+    for (int i = 1; i < unmasked_dims + 1; i++) {
+      value_shape[i] = a.shape(i - unmasked_dims - 1);
+    }
+    expanded_value = broadcast_to(expanded_value, value_shape, s);
+  } else if (!std::equal(
+                 value.shape().begin() + 1,
+                 value.shape().end(),
+                 a.shape().end() - unmasked_dims)) {
+    auto value_shape = value.shape();
+    for (int i = 1; i < unmasked_dims + 1; i++) {
+      value_shape[i] = a.shape(i - unmasked_dims - 1);
+    }
+    expanded_value = broadcast_to(expanded_value, value_shape, s);
+  }
+
+  array expanded_a = expand_dims(a, 0, s);
+  expanded_mask = expand_dims(expanded_mask, 0, s);
+  expanded_value = expand_dims(expanded_value, 0, s);
+
+  return squeeze(
+      array(
+          expanded_a.shape(),
+          expanded_a.dtype(),
+          std::make_shared<MaskedScatter>(to_stream(s)),
+          {expanded_a, expanded_mask, expanded_value}),
+      0,
+      s);
 }
 
 array sqrt(const array& a, StreamOrDevice s /* = {} */) {

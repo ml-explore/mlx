@@ -296,8 +296,17 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error(
-        "[nccl] All gather not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclAllGather(
+          gpu_ptr<T>(input),
+          gpu_ptr<T>(output),
+          input.size(),
+          dt,
+          comm_,
+          encoder.stream()));
+    });
   }
 
   void send(const array& input, int dst, Stream stream) override {
@@ -309,11 +318,24 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All max not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMax);
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All min not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMin);
+    });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      reduce_scatter_impl<T>(input, output, stream, dt, ncclSum);
+    });
   }
 
   template <typename T>
@@ -326,9 +348,28 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclAllReduce(
-        input.data<T>(),
-        output.data<T>(),
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
         input.size(),
+        dt,
+        op,
+        comm_,
+        encoder.stream()));
+  }
+
+  template <typename T>
+  void reduce_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclReduceScatter(
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
+        output.size(),
         dt,
         op,
         comm_,

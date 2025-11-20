@@ -28,7 +28,6 @@ NO_GPU(FFT)
 NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
 NO_GPU(Hadamard)
-NO_GPU(Load)
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
@@ -38,9 +37,9 @@ NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
+NO_GPU(MaskedScatter)
 
 namespace distributed {
-NO_GPU_MULTI(AllGather)
 NO_GPU_MULTI(Send)
 NO_GPU_MULTI(Recv)
 } // namespace distributed

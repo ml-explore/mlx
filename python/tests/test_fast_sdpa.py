@@ -168,7 +168,7 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
         Dk = 64
 
-        if self.is_apple_silicon or mx.cuda.is_available():
+        if mx.is_available(mx.gpu):
             dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [63, 129, 400]:
@@ -240,7 +240,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         B = 1
         H = 32
         dtypes = [np.float32]
-        if self.is_apple_silicon or mx.cuda.is_available():
+        if mx.is_available(mx.gpu):
             dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [1, 7, 9, 32, 63, 67, 129, 400, 2000]:
@@ -549,12 +549,8 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
 
 class TestSDPA(mlx_tests.MLXTestCase):
-    @property
-    def dtypes(self):
-        return ["float32", "float16"] if mx.metal.is_available() else ["float32"]
-
     def test_sdpa(self):
-        if not mx.metal.is_available():
+        if not mx.is_available(mx.gpu):
             return
 
         # fmt: off
@@ -578,10 +574,11 @@ class TestSDPA(mlx_tests.MLXTestCase):
         # fmt: on
 
         shapes = shapes_64 + shapes_128
+        dtypes = ["float32", "float16"]
         masks = [None, "additive", "bool", "causal"]
         transposes = (False, True)
 
-        for dtype in self.dtypes:
+        for dtype in dtypes:
             for t in transposes:
                 for mask_str in masks:
                     for B, qL, kL, D, qH, kH in shapes:
@@ -740,6 +737,39 @@ class TestSDPA(mlx_tests.MLXTestCase):
                         q, k, v, scale=scale, sinks=sinks
                     )
                     self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
+    def test_sdpa_grad(self):
+        B, N_kv, T, D = (2, 8, 128, 64)
+        scale = D**-0.5
+
+        f1 = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+        f2 = lambda q, k, v: mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+
+        f3 = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale).sum()
+        f4 = lambda q, k, v: (
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        ).sum()
+
+        # High tolerance due to cuDNN SDPA kernel requiring tf32.
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        for N_q in (8, 32):
+            q = mx.random.normal(shape=(B, N_q, T, D), dtype=mx.float16)
+            k = mx.random.normal(shape=(B, N_kv, T, D), dtype=mx.float16)
+            v = mx.random.normal(shape=(B, N_kv, T, D), dtype=mx.float16)
+
+            cotan = mx.ones_like(q)
+            o1, vjp1 = mx.vjp(f1, [q, k, v], [cotan])
+            o2, vjp2 = mx.vjp(f2, [q, k, v], [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(mx.allclose(vjp1[i], vjp2[i], **tolerance))
+
+            g1 = mx.grad(f3)(q, k, v)
+            g2 = mx.grad(f4)(q, k, v)
+
+            self.assertTrue(mx.allclose(g1, g2, **tolerance))
 
 
 if __name__ == "__main__":

@@ -95,4 +95,9 @@ void Recv::eval_cpu(
   distributed::detail::recv(group(), outputs[0], src_, stream());
 }
 
+void ReduceScatter::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[ReduceScatter] Not implemented yet.");
+}
 } // namespace mlx::core::distributed

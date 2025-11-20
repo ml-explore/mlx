@@ -2,11 +2,6 @@ name: 'Setup macOS Environment'
 description: 'Install dependencies for macOS builds'
 
 inputs:
-  install-mpi:
-    description: 'Whether to install MPI'
-    required: false
-    default: 'true'
-    type: boolean
   python-version:
     description: 'Python version to use'
     required: false
@@ -17,15 +12,13 @@ runs:
   steps:
     - name: Install Homebrew packages
       shell: sh
-      if: inputs.install-mpi == 'true'
       run: /opt/homebrew/bin/brew install openmpi
     
     - name: Verify MetalToolchain installed
       shell: bash
       run: xcodebuild -showComponent MetalToolchain
-    
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v6
+
+    - uses: conda-incubator/setup-miniconda@v3
       with:
-          python-version: ${{ inputs.python-version }}
-          activate-environment: true
+        miniconda-version: "latest"
+        python-version: ${{ inputs.python-version }}

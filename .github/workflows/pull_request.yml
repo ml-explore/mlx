@@ -1,28 +1,52 @@
 name: Build and Test
 
-on: pull_request  
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # For testing CI without starting a pull request:
+      - test/*
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/head/main' }}
 
 jobs:
   check_lint:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-linux
       - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
-    runs-on: ubuntu-22.04
+    needs: check_lint
+    strategy:
+      matrix:
+        runner:
+          - ubuntu-22.04
+          - ubuntu-22.04-arm
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test-linux
+        with:
+          cpu-only: true
 
   mac_build_and_test:
     if: github.repository == 'ml-explore/mlx'
+    strategy:
+      matrix:
+        macos-target: ["14.0", "15.0"]
     runs-on: [self-hosted, macos]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
@@ -31,18 +55,25 @@ jobs:
 
   cuda_build_and_test:
     if: github.repository == 'ml-explore/mlx'
+    strategy:
+      fail-fast: false
+      matrix:
+        toolkit: ['cuda-12.6', 'cuda-12.9']
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/build-cuda
+        with:
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/test-linux
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: ubuntu-22.04
     needs: check_lint
     steps:
       - uses: actions/checkout@v5
@@ -50,6 +81,7 @@ jobs:
 
   linux_fedora_build_cpp:
     name: Linux Fedora CPP Build (${{ matrix.arch }})
+    needs: check_lint
     strategy:
       fail-fast: false
       matrix:

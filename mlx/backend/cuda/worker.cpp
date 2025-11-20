@@ -44,7 +44,7 @@ void Worker::commit(cudaStream_t stream) {
   }
   signal_event_.record(stream);
   signal_event_.wait(signal_stream_);
-  cudaLaunchHostFunc(signal_stream_, signal, this);
+  CHECK_CUDA_ERROR(cudaLaunchHostFunc(signal_stream_, signal, this));
 }
 
 void Worker::thread_fn() {

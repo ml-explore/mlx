@@ -46,7 +46,8 @@ inline void set_ternary_op_output_data(
     const array& b,
     const array& c,
     array& out,
-    TernaryOpType topt) {
+    TernaryOpType topt,
+    std::function<allocator::Buffer(size_t)> mallocfn = allocator::malloc) {
   auto maybe_donate = [&out](const array& x) {
     if (is_donatable(x, out)) {
       out.copy_shared_buffer(x);
@@ -57,13 +58,12 @@ inline void set_ternary_op_output_data(
 
   switch (topt) {
     case TernaryOpType::ScalarScalarScalar:
-      out.set_data(
-          allocator::malloc(out.itemsize()), 1, b.strides(), b.flags());
+      out.set_data(mallocfn(out.itemsize()), 1, b.strides(), b.flags());
       break;
     case TernaryOpType::VectorVectorVector:
       if (!(maybe_donate(a) || maybe_donate(b) || maybe_donate(c))) {
         out.set_data(
-            allocator::malloc(out.itemsize() * b.data_size()),
+            mallocfn(out.itemsize() * b.data_size()),
             b.data_size(),
             b.strides(),
             b.flags());
@@ -76,7 +76,7 @@ inline void set_ternary_op_output_data(
       if (!((a.flags().row_contiguous && maybe_donate(a)) ||
             (b.flags().row_contiguous && maybe_donate(b)) ||
             (c.flags().row_contiguous && maybe_donate(c)))) {
-        out.set_data(allocator::malloc(out.nbytes()));
+        out.set_data(mallocfn(out.nbytes()));
       }
       break;
   }

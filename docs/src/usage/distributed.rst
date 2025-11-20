@@ -7,12 +7,13 @@ Distributed Communication
 
 MLX supports distributed communication operations that allow the computational cost
 of training or inference to be shared across many physical machines. At the
-moment we support two different communication backends:
+moment we support three different communication backends:
 
 * `MPI <https://en.wikipedia.org/wiki/Message_Passing_Interface>`_ a
   full-featured and mature distributed communications library
-* A **ring** backend of our own that uses native TCP sockets and should be
-  faster for thunderbolt connections.
+* A **ring** backend of our own that uses native TCP sockets. It should be
+  faster for thunderbolt connections, but it also works over Ethernet.
+* `nccl <https://developer.nvidia.com/nccl>`_, for use in CUDA environments.
 
 The list of all currently supported operations and their documentation can be
 seen in the :ref:`API docs<distributed>`.
@@ -84,9 +85,8 @@ Selecting Backend
 ^^^^^^^^^^^^^^^^^
 
 You can select the backend you want to use when calling :func:`init` by passing
-one of ``{'any', 'ring', 'mpi'}``. When passing ``any``, MLX will try to
-initialize the ``ring`` backend and if it fails the ``mpi`` backend. If they
-both fail then a singleton group is created.
+one of ``{'any', 'ring', 'mpi', 'nccl'}``. When passing ``any``, MLX will try all
+available backends. If they all fail then a singleton group is created.
 
 .. note::
    After a distributed backend is successfully initialized :func:`init` will
@@ -220,7 +220,7 @@ print 4 etc.
 Installing MPI
 ^^^^^^^^^^^^^^
 
-MPI can be installed with Homebrew, using the Anaconda package manager or
+MPI can be installed with Homebrew, pip, using the Anaconda package manager, or
 compiled from source. Most of our testing is done using ``openmpi`` installed
 with the Anaconda package manager as follows:
 
@@ -228,14 +228,16 @@ with the Anaconda package manager as follows:
 
     $ conda install conda-forge::openmpi
 
-Installing with Homebrew may require specifying the location of ``libmpi.dyld``
+Installing with Homebrew or pip requires specifying the location of ``libmpi.dyld``
 so that MLX can find it and load it at runtime. This can simply be achieved by
 passing the ``DYLD_LIBRARY_PATH`` environment variable to ``mpirun`` and it is
-done automatically by ``mlx.launch``.
+done automatically by ``mlx.launch``. Some environments use a non-standard
+library filename that can be specified using the ``MPI_LIBNAME`` environment
+variable. This is automatically taken care of by ``mlx.launch`` as well.
 
 .. code:: shell
 
-    $ mpirun -np 2 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python test.py
+    $ mpirun -np 2 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ -x MPI_LIBNAME=libmpi.40.dylib python test.py
     $ # or simply
     $ mlx.launch -n 2 test.py
 

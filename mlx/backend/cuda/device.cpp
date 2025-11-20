@@ -46,6 +46,7 @@ Device::Device(int device) : device_(device) {
         "Device {} does not support synchronization in managed memory.",
         device_));
   }
+
   // The cublasLt handle is used by matmul.
   make_current();
   CHECK_CUBLAS_ERROR(cublasLtCreate(&lt_));
@@ -189,12 +190,41 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
   }
 }
 
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER, MLX_MAX_MB_PER_BUFFER
+std::pair<int, int> get_graph_limits(Device& d) {
+  auto cc =
+      d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
+  int ops = 20;
+  int mb = 100;
+  switch (cc) {
+    case 800: // A100
+      ops = 20;
+      mb = 400;
+      break;
+    case 900: // H100
+      ops = 30;
+      mb = 400;
+      break;
+    case 1000: // B200
+      ops = 50;
+      mb = 500;
+      break;
+    case 1210: // DGX Spark
+      ops = 20;
+      mb = 25;
+      break;
+  }
+  return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
+}
+
 CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
       worker_(d),
-      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {}
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+  std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
@@ -204,6 +234,7 @@ void CommandEncoder::set_input_array(const array& arr) {
   if (!use_cuda_graphs()) {
     return;
   }
+  bytes_in_graph_ += arr.data_size();
   auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
   active_deps_.push_back(id);
 }
@@ -301,8 +332,9 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   insert_graph_dependencies(GraphNode{node, 'G'});
 }
 
-int CommandEncoder::get_num_ops() {
-  return node_count_;
+bool CommandEncoder::needs_commit() {
+  return (node_count_ > max_ops_per_graph_) ||
+      ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
 }
 
 void CommandEncoder::commit() {
@@ -365,10 +397,11 @@ void CommandEncoder::commit() {
   // Put completion handlers in a batch.
   worker_.commit(stream_);
   node_count_ = 0;
+  bytes_in_graph_ = 0;
 }
 
 void CommandEncoder::synchronize() {
-  cudaStreamSynchronize(stream_);
+  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
   add_completed_handler([p = std::move(p)]() { p->set_value(); });

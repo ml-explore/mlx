@@ -32,6 +32,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
@@ -43,6 +44,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/rope.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/scan.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
@@ -124,7 +126,11 @@ endif()
 # Compute capability >= 7.0 is required for synchronization between CPU/GPU with
 # managed memory.
 if(NOT DEFINED MLX_CUDA_ARCHITECTURES)
-  set(MLX_CUDA_ARCHITECTURES "native")
+  execute_process(
+    COMMAND bash detect_cuda_arch.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE MLX_CUDA_ARCHITECTURES
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
@@ -136,6 +142,7 @@ FetchContent_Declare(
   URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx BEFORE PRIVATE "${cccl_SOURCE_DIR}/include")
+set_target_properties(mlx PROPERTIES CCCL_DIR "${cccl_SOURCE_DIR}/include")
 
 # Use fixed version of NVTX.
 FetchContent_Declare(
@@ -161,7 +168,7 @@ target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
 FetchContent_Declare(
   cudnn
   GIT_REPOSITORY https://github.com/NVIDIA/cudnn-frontend.git
-  GIT_TAG v1.14.0
+  GIT_TAG v1.16.0
   GIT_SHALLOW TRUE
   EXCLUDE_FROM_ALL)
 set(CUDNN_FRONTEND_SKIP_JSON_LIB ON)

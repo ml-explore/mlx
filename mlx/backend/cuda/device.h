@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/lru_cache.h"
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/stream.h"
@@ -83,7 +84,7 @@ class CommandEncoder {
   }
 
   void add_completed_handler(std::function<void()> task);
-  int get_num_ops();
+  bool needs_commit();
   void commit();
 
   Device& device() {
@@ -130,6 +131,9 @@ class CommandEncoder {
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
+  size_t bytes_in_graph_{0};
+  int max_ops_per_graph_;
+  int max_mb_per_graph_;
 };
 
 class Device {
@@ -165,6 +169,7 @@ class Device {
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
+  std::string device_name_;
   cublasLtHandle_t lt_;
   cudnnHandle_t cudnn_;
   std::unordered_map<int, CommandEncoder> encoders_;

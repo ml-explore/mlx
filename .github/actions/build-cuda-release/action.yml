@@ -2,8 +2,8 @@ name: 'Build CUDA wheel'
 description: 'Build CUDA wheel'
 
 inputs:
-  nvcc-location:
-    description: 'Location of nvcc compiler'
+  toolkit:
+    description: 'The CUDA toolkit'
     required: true
 
 runs:
@@ -12,13 +12,9 @@ runs:
     - name: Build package
       shell: bash
       env:
-        MLX_BUILD_STAGE: 2
-        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
+        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
       run: |
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
-        python -m build -w
-
-        if [ -f "python/scripts/repair_cuda.sh" ]; then
-          bash python/scripts/repair_cuda.sh
-        fi
+        MLX_BUILD_STAGE=2 python -m build -w
+        bash python/scripts/repair_cuda.sh

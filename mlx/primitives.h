@@ -1146,6 +1146,7 @@ class Full : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(Full)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
 class Gather : public UnaryPrimitive {
@@ -1925,6 +1926,20 @@ class ScatterAxis : public UnaryPrimitive {
  private:
   ReduceType reduce_type_;
   int axis_;
+};
+
+class MaskedScatter : public UnaryPrimitive {
+ public:
+  explicit MaskedScatter(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP();
+  DEFINE_GRADS();
+  DEFINE_NAME(MaskedScatter);
+  DEFINE_DEFAULT_IS_EQUIVALENT();
+  DEFINE_INPUT_OUTPUT_SHAPE();
 };
 
 class Sigmoid : public UnaryPrimitive {

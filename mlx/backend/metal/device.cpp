@@ -261,10 +261,7 @@ void CommandEncoder::set_input_array(
   needs_barrier_ =
       needs_barrier_ | (prev_outputs_.find(r_buf) != prev_outputs_.end());
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-  auto base_offset = a.data<char>() -
-      static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
-  base_offset += offset;
-  enc_->setBuffer(a_buf, base_offset, idx);
+  enc_->setBuffer(a_buf, a.offset() + offset, idx);
 }
 
 void CommandEncoder::set_output_array(
@@ -385,11 +382,8 @@ MTL::CommandQueue* Device::get_queue(Stream stream) {
 
 bool Device::command_buffer_needs_commit(int index) {
   auto& stream = get_stream_(index);
-  if (stream.buffer_ops > max_ops_per_buffer_ ||
-      (stream.buffer_sizes >> 20) > max_mb_per_buffer_) {
-    return true;
-  }
-  return false;
+  return (stream.buffer_ops > max_ops_per_buffer_) ||
+      ((stream.buffer_sizes >> 20) > max_mb_per_buffer_);
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
@@ -448,10 +442,8 @@ void Device::end_encoding(int index) {
     auto& enc = *stream.encoder;
     // Remove temporaries from inputs and outputs
     for (auto& t : stream.temporaries) {
-      if (t.data<void>() != nullptr) {
-        enc.outputs().erase(t.buffer().ptr());
-        enc.inputs().erase(t.buffer().ptr());
-      }
+      enc.outputs().erase(t.buffer().ptr());
+      enc.inputs().erase(t.buffer().ptr());
     }
 
     // Keep references to the fences we waited on and put them

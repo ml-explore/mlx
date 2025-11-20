@@ -149,13 +149,13 @@ void gemv(
     auto vec_strides = const_param(b_batch_strides);
 
     if (M == 1) {
-      mat = b.data<DataType>();
-      vec = a.data<DataType>();
+      mat = gpu_ptr<DataType>(b);
+      vec = gpu_ptr<DataType>(a);
       rows = N;
       std::swap(mat_strides, vec_strides);
     } else {
-      mat = a.data<DataType>();
-      vec = b.data<DataType>();
+      mat = gpu_ptr<DataType>(a);
+      vec = gpu_ptr<DataType>(b);
       rows = M;
     }
     uint32_t num_blocks_x = (rows + rows_per_block - 1) / rows_per_block;
@@ -177,7 +177,7 @@ void gemv(
             0,
             mat,
             vec,
-            out.data<DataType>(),
+            gpu_ptr<DataType>(out),
             rows,
             cols);
       } else {
@@ -189,7 +189,7 @@ void gemv(
             0,
             mat,
             vec,
-            out.data<DataType>(),
+            gpu_ptr<DataType>(out),
             rows,
             cols,
             const_param(batch_shape),

@@ -87,6 +87,7 @@ NO_CPU(LogSumExp)
 NO_CPU_MULTI(LUF)
 NO_CPU(Matmul)
 NO_CPU(Maximum)
+NO_CPU(MaskedScatter)
 NO_CPU(Minimum)
 NO_CPU(Multiply)
 NO_CPU(Negative)
@@ -138,6 +139,7 @@ NO_CPU_MULTI(AllReduce)
 NO_CPU_MULTI(AllGather)
 NO_CPU_MULTI(Send)
 NO_CPU_MULTI(Recv)
+NO_CPU_MULTI(ReduceScatter)
 } // namespace distributed
 
 } // namespace mlx::core
