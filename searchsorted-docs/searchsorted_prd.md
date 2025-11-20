@@ -182,10 +182,10 @@ When `axis` is specified:
 
 ### 5.1 Implementation Approach
 
-**Python API Layer** (`python/mlx/array.py` or `python/mlx/_funcs.py`):
-- Input validation and type checking
-- Axis normalization
-- Dispatch to C++ backend
+**Python API Layer** (`python/src/ops.cpp`):
+- Expose `searchsorted` to Python via `nanobind`
+- Bind to C++ `mlx::core::searchsorted`
+- Handle argument parsing (array, side, etc.)
 
 **C++ Core** (`mlx/ops.h`, `mlx/ops.cpp`):
 - Define `searchsorted` operation
