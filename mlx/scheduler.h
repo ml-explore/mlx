@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <atomic>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -83,25 +81,20 @@ class Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   Stream new_stream(const Device& d) {
-    std::unique_ptr<StreamThread> stream_thread;
-    if (d != Device::gpu) {
-      stream_thread = std::make_unique<StreamThread>();
-    }
+    // Lock the mutex to ensure that the stream is created in a thread-safe manner
+    // This is necessary because the stream creation is not thread-safe
+    std::lock_guard<std::mutex> lk(stream_creation_mutex());
+    const auto new_stream_index = static_cast<int>(streams_.size());
+    Stream stream(new_stream_index, d);
+    streams_.push_back(stream);
 
-    Stream stream;
-    {
-      std::lock_guard<std::mutex> lk(stream_creation_mutex());
-      streams_.emplace_back(streams_.size(), d);
-      stream = streams_.back();
-      if (d == Device::gpu) {
-        threads_.push_back(nullptr);
-      } else {
-        threads_.push_back(stream_thread.release());
-      }
-    }
-
+    // Create the stream (GPU) or thread (CPU)
     if (d == Device::gpu) {
+      threads_.push_back(nullptr);
       gpu::new_stream(stream);
+    } else {
+      auto stream_thread = std::make_unique<StreamThread>();
+      threads_.push_back(stream_thread.release());
     }
     return stream;
   }
