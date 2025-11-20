@@ -1088,7 +1088,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   const char* rank_str = std::getenv("MLX_RANK");
   const char* ring_verbose = std::getenv("MLX_IBV_VERBOSE");
 
-  if (!dev_file || !coordinator || !rank_str) {
+  if (!is_available() || !dev_file || !coordinator || !rank_str) {
     if (strict) {
       std::ostringstream msg;
       msg << "[ibv] You need to provide via environment variables a rank (MLX_RANK), "
