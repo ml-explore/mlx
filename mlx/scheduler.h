@@ -4,6 +4,8 @@
 
 #include <atomic>
 #include <future>
+#include <memory>
+#include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
@@ -13,6 +15,8 @@
 #include "mlx/stream.h"
 
 namespace mlx::core::scheduler {
+
+std::mutex& stream_creation_mutex();
 
 struct StreamThread {
   std::mutex mtx;
@@ -79,14 +83,27 @@ class Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   Stream new_stream(const Device& d) {
-    streams_.emplace_back(streams_.size(), d);
-    if (d == Device::gpu) {
-      threads_.push_back(nullptr);
-      gpu::new_stream(streams_.back());
-    } else {
-      threads_.push_back(new StreamThread{});
+    std::unique_ptr<StreamThread> stream_thread;
+    if (d != Device::gpu) {
+      stream_thread = std::make_unique<StreamThread>();
     }
-    return streams_.back();
+
+    Stream stream;
+    {
+      std::lock_guard<std::mutex> lk(stream_creation_mutex());
+      streams_.emplace_back(streams_.size(), d);
+      stream = streams_.back();
+      if (d == Device::gpu) {
+        threads_.push_back(nullptr);
+      } else {
+        threads_.push_back(stream_thread.release());
+      }
+    }
+
+    if (d == Device::gpu) {
+      gpu::new_stream(stream);
+    }
+    return stream;
   }
 
   template <typename F>
