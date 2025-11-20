@@ -366,8 +366,7 @@ Device::~Device() {
 DeviceStream& Device::get_stream_nolock(int index) {
   auto it = stream_map_.find(index);
   if (it == stream_map_.end()) {
-    throw std::out_of_range(
-        "[metal::Device] Invalid stream index requested.");
+    throw std::out_of_range("[metal::Device] Invalid stream index requested.");
   }
   return *it->second;
 }
@@ -489,23 +488,23 @@ void Device::end_encoding(int index) {
       }
     }
     enc.update_fence(stream->fence->fence);
-    stream->buffer->addCompletedHandler(
-        [stream,
-         waiting_on = std::move(waiting_on),
-         fence = std::move(stream->fence),
-         outputs = std::move(enc.outputs()),
-         temporaries =
-             std::move(stream->temporaries)](MTL::CommandBuffer*) mutable {
-          temporaries.clear();
-          std::lock_guard<std::mutex> lk(stream->fence_mtx);
-          for (auto o : outputs) {
-            if (auto it = stream->outputs.find(o); it != stream->outputs.end()) {
-              if (it->second == fence) {
-                stream->outputs.erase(it);
-              }
-            }
+    stream->buffer->addCompletedHandler([stream,
+                                         waiting_on = std::move(waiting_on),
+                                         fence = std::move(stream->fence),
+                                         outputs = std::move(enc.outputs()),
+                                         temporaries =
+                                             std::move(stream->temporaries)](
+                                            MTL::CommandBuffer*) mutable {
+      temporaries.clear();
+      std::lock_guard<std::mutex> lk(stream->fence_mtx);
+      for (auto o : outputs) {
+        if (auto it = stream->outputs.find(o); it != stream->outputs.end()) {
+          if (it->second == fence) {
+            stream->outputs.erase(it);
           }
-        });
+        }
+      }
+    });
   }
   stream->encoder = nullptr;
 }

@@ -81,8 +81,8 @@ class Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   Stream new_stream(const Device& d) {
-    // Lock the mutex to ensure that the stream is created in a thread-safe manner
-    // This is necessary because the stream creation is not thread-safe
+    // Lock the mutex to ensure that the stream is created in a thread-safe
+    // manner This is necessary because the stream creation is not thread-safe
     std::lock_guard<std::mutex> lk(stream_creation_mutex());
     const auto new_stream_index = static_cast<int>(streams_.size());
     Stream stream(new_stream_index, d);
