@@ -188,7 +188,7 @@ std::pair<int, int> extract_qqmm_dims(
 
   return {
     w_inner_dims, w_outer_dims
-  }
+  };
 }
 
 } // namespace
@@ -4246,7 +4246,6 @@ array qqmm(
   }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  //
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims("qqmm", x, w_q, scales_w, transpose, group_size, bits);
 

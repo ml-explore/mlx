@@ -21,28 +21,24 @@ int main() {
   mx::array a = mx::random::uniform({M, K}, mx::bfloat16); // (M, K)
   mx::array b = mx::random::uniform({N, K}, mx::bfloat16); // (N, K)
 
-  auto scaled_a = mx::quantize(a, group_size, bits, quantization_mode);
   auto scaled_b = mx::quantize(b, group_size, bits, quantization_mode);
-
-  mx::array a_quantized = scaled_a[0];
-  mx::array a_scale = scaled_a[1];
   mx::array b_quantized = scaled_b[0];
   mx::array b_scale = scaled_b[1];
 
   mx::array out = mx::qqmm(
-      a_quantized,
+      a,
       b_quantized,
-      a_scale,
       b_scale,
       true,
       group_size,
       bits,
       quantization_mode);
 
+  auto aq = mx::quantize(a, group_size, bits, quantization_mode);
   mx::array a_dequantized =
-      mx::dequantize(a_quantized, a_scale, {}, 16, 4, "nvfp4");
+      mx::dequantize(aq[0], aq[1], {}, group_size, bits, quantization_mode);
   mx::array b_dequantized =
-      mx::dequantize(b_quantized, b_scale, {}, 16, 4, "nvfp4");
+      mx::dequantize(b_quantized, b_scale, {}, group_size, bits, quantization_mode);
 
   mx::array reference_deq =
       mx::matmul(a_dequantized, mx::transpose(b_dequantized));

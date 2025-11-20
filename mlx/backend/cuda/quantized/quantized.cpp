@@ -179,43 +179,41 @@ void DualQuantizedMatmul::eval_gpu(
   // TODO: for now minimalistic implementation without batching support
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-
+  
   assert(inputs.size() == 3);
-  auto& a_pre = inputs[0]; // activations are not quantized, only weights are
-  auto& b = inputs[1];
+  auto& x = inputs[0]; // activations should be quantized on the fly
+  auto& w_q = inputs[1]; // quantized weights
 
-  auto a_q = fp_quantize(
-      a_pre,
-      group_size_,
-      bits_,
-      mode_,
-      s); // here i assume that ist is only for nvfp4/mxfp8
-  encoder.add_temporary(a_q[0]);
-  encoder.add_temporary(a_q[1]);
+  auto quantize_activation = [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
+      auto x = ensure_row_contiguous(input, encoder, s);
+      auto xq_shape = x.shape();
+      xq_shape.back() = x.shape(-1) * bits_ / 32;
+      auto sshape = x.shape();
+      sshape.back() = x.shape(-1) / group_size_; 
+      array x_q(cu::malloc_async(x.size() * bits_ / 8, encoder), xq_shape, uint32);
+      array scales_x(cu::malloc_async(x.size() / group_size_ * sizeof(uint8), encoder), sshape, uint8);
+      fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
+      encoder.add_temporary(scales_x);
+      encoder.add_temporary(x_q);
+      return std::make_pair(x_q, scales_x);
+  };
 
-  auto& a = a_q[0];
-  auto& scale_a_pre = a_q[1];
-  auto& scale_b_pre = inputs[3];
-  // Return 0s if either input is empty.
-  if (a.size() == 0 || b.size() == 0) {
-    array zero(0, a.dtype());
-    encoder.add_temporary(zero);
-    fill_gpu(zero, out, s);
-    return;
-  }
+  auto [x_q, scale_x_pre] = quantize_activation(inputs[0], encoder, s);
+  auto& scale_w_pre = inputs[2];
+  
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
-  int M = a.shape(-2);
-  int N = b.shape(-2); // b always transposed
-  int K_packed = a.shape(-1);
+  int M = x_q.shape(-2);
+  int N = w_q.shape(-2); // b always transposed
+  int K_packed = x_q.shape(-1);
   int K = K_packed * (32 / bits_);
 
   // Repack scales from linear to tiled layout for tensor cores
-  array scale_a_tiled = pad_and_repack_scales(scale_a_pre, encoder, s);
-  array scale_b_tiled = pad_and_repack_scales(scale_b_pre, encoder, s);
+  array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
+  array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
 
-  bool a_transposed = false; // a is normal (M x K)
-  bool b_transposed = true; // b is transposed (N x K -> K x N)
+  bool x_transposed = false; // a is normal (M x K)
+  bool w_transposed = true; // b is transposed (N x K -> K x N)
   int64_t lda = K; // Leading dimension of a (packed)
   int64_t ldb = K; // Leading dimension of b (packed)
 
@@ -224,15 +222,15 @@ void DualQuantizedMatmul::eval_gpu(
       M,
       N,
       K,
-      a_transposed,
+      x_transposed,
       lda,
-      b_transposed,
+      w_transposed,
       ldb,
       out,
-      a,
-      b,
-      scale_a_tiled,
-      scale_b_tiled,
+      x_q,
+      w_q,
+      scale_x,
+      scale_w,
       mode_);
 }
 
