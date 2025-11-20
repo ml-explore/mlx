@@ -1,2 +1,8 @@
-target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ibv.cpp)
-target_link_libraries(mlx PRIVATE rdma)
+if(MLX_BUILD_CPU
+   AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
+   AND MACOS_SDK_VERSION GREATER_EQUAL 26.2)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ibv.cpp)
+  target_link_libraries(mlx PRIVATE rdma)
+else()
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_ibv.cpp)
+endif()
