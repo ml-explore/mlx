@@ -741,7 +741,8 @@ std::vector<array> AsStrided::vjp(
   // Reshape the cotangentsgent for use with scatter
   auto flat_cotangents = reshape(cotangents[0], {cotangents_size, 1}, stream());
 
-  // Finally accumulate the gradients and reshape them to look like the input
+  // Finally accumulate the gradients and reshape them to look like the
+  // input
   grad = scatter_add(grad, idx, flat_cotangents, 0, stream());
   grad = reshape(grad, primals[0].shape(), stream());
 
@@ -2182,7 +2183,8 @@ std::vector<array> FFT::vjp(
   auto& in = primals[0];
   std::vector<int> axes(axes_.begin(), axes_.end());
 
-  // TODO: Add it as an option to do an unnormalized or scaled fft so that this
+  // TODO: Add it as an option to do an unnormalized or scaled fft so that
+  // this
   //       isn't part of the graph.
   double n_elements = 1;
   for (auto ax : axes) {
@@ -3782,10 +3784,10 @@ std::vector<array> Reduce::vjp(
           return multiply(exclusive_prod, cotan, s);
         };
 
-    // To compute a numerically stable gradient for prod we need an exclusive
-    // product of all elements in axes_ . To achieve that we move axes_ to the
-    // last dim and perform two exclusive cumprods. Afterwards we move
-    // everything back to the original axes.
+    // To compute a numerically stable gradient for prod we need an
+    // exclusive product of all elements in axes_ . To achieve that we move
+    // axes_ to the last dim and perform two exclusive cumprods. Afterwards
+    // we move everything back to the original axes.
     if (axes_.size() > 1) {
       std::vector<int> transpose_to;
       std::vector<int> transpose_back;
@@ -4034,7 +4036,8 @@ std::vector<array> Scan::vjp(
         where(eq_zero, z, grad, stream()),
         stream())};
   } else {
-    // Can probably be implemented by equals and then cummax to make the mask
+    // Can probably be implemented by equals and then cummax to make the
+    // mask
     throw std::runtime_error("VJP is not implemented for cumulative min/max");
   }
 }
@@ -4197,7 +4200,8 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
         inputs[i] =
             repeat(expand_dims(inputs[i], 0, stream()), vmap_size, 0, stream());
       }
-      // Adjust non-vmapped index axes to account for the extra vmap dimension.
+      // Adjust non-vmapped index axes to account for the extra vmap
+      // dimension.
       if (scatter_axes[i - 1] >= src_ax) {
         scatter_axes[i - 1]++;
       }
@@ -5110,14 +5114,18 @@ std::vector<array> BlockMaskedMM::vjp(
   //    - dB_m = A_m.T [..., K, M] @ dC [..., M, N]
   //    - dA = dA_m * mask_b_lhs [..., MP, KP]
   //    - dB = dB_m * mask_b_rhs [..., KP, MP]
-  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP, KP]
-  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP, NP]
+  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP,
+  //    KP]
+  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP,
+  //    NP]
   //
   // Observations:
-  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as a
-  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing to
-  //    materialize the intermediate dA_m. Similar for dB.
-  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and then
+  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as
+  //  a
+  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing
+  //    to materialize the intermediate dA_m. Similar for dB.
+  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and
+  //  then
   //    point-wise multiply with A. But the output needs to be padded
 
   std::vector<array> vjps;
