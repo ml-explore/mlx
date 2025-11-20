@@ -652,6 +652,41 @@ std::vector<array> ArgReduce::jvp(
   return {zeros(shape, uint32, stream())};
 }
 
+std::vector<Shape> SearchSorted::output_shapes(
+    const std::vector<array>& inputs) {
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+  int ax = axis_;
+  if (ax < 0) {
+    ax += a.ndim();
+  }
+  auto a_shape = a.shape();
+  a_shape.erase(a_shape.begin() + ax);
+  return {broadcast_shapes(a_shape, v.shape())};
+}
+
+bool SearchSorted::is_equivalent(const Primitive& other) const {
+  const SearchSorted& s_other = static_cast<const SearchSorted&>(other);
+  return axis_ == s_other.axis_ && right_ == s_other.right_;
+}
+
+void SearchSorted::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("SearchSorted::eval_gpu is not yet implemented.");
+}
+
+std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, v, to_ax] = vmap_binary_op(inputs, axes, stream());
+  int axis = axis_;
+  if (to_ax != -1 && to_ax <= axis) {
+    axis++;
+  }
+  return {{searchsorted(a, v, right_, axis, stream())}, {to_ax}};
+}
+
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
