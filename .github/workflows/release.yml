@@ -23,7 +23,7 @@ jobs:
 
   build_documentation:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: [self-hosted, macos]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/build-docs
@@ -65,14 +65,14 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           overwrite: true
-          name: linux-wheels-${{ matrix.python_version }}
+          name: linux-wheels-${{ matrix.python_version }}-${{ matrix.arch }}
           path: wheelhouse/mlx-*.whl
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
         uses: actions/upload-artifact@v5
         with:
           overwrite: true
-          name: mlx-cpu
+          name: mlx-cpu-${{ matrix.arch }}
           path: wheelhouse/mlx_cpu-*.whl
   
   build_mac_release:
@@ -208,7 +208,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v6
         with:
-          name: mlx-cpu
+          pattern: mlx-cpu-*
+          merge-multiple: true
           path: dist
       - name: Display structure of downloaded files
         run: ls -R dist

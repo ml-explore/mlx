@@ -6,52 +6,40 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
-void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-
-  auto& s = stream();
+void scan_gpu_inplace(
+    array in,
+    array& out,
+    Scan::ReduceType reduce_type,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    const Stream& s) {
   auto& d = metal::device(s.device);
 
-  bool donate = inputs[0].is_donatable();
-  auto in = inputs[0];
-  if (in.flags().contiguous && in.strides()[axis_] != 0) {
-    if (donate && in.itemsize() == out.itemsize()) {
-      out.copy_shared_buffer(in);
-    } else {
-      out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
-          in.data_size(),
-          in.strides(),
-          in.flags());
-    }
-  } else {
-    in = contiguous_copy_gpu(in, s);
-    out.copy_shared_buffer(in);
-  }
+  bool contiguous = in.strides()[axis] == 1;
 
-  bool contiguous = in.strides()[axis_] == 1;
-
-  std::string reduce_type;
-  switch (reduce_type_) {
+  std::string reduce_type_str;
+  switch (reduce_type) {
     case Scan::Sum:
-      reduce_type = "sum";
+      reduce_type_str = "sum";
       break;
     case Scan::Prod:
-      reduce_type = "prod";
+      reduce_type_str = "prod";
       break;
     case Scan::Max:
-      reduce_type = "max";
+      reduce_type_str = "max";
       break;
     case Scan::Min:
-      reduce_type = "min";
+      reduce_type_str = "min";
       break;
     case Scan::LogAddExp:
-      reduce_type = "logaddexp";
+      reduce_type_str = "logaddexp";
       break;
   }
 
@@ -60,23 +48,23 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       kname,
       contiguous ? "contig_" : "strided_",
       "scan_",
-      reverse_ ? "reverse_" : "",
-      (inclusive_) ? "inclusive_" : "exclusive_",
-      reduce_type,
+      reverse ? "reverse_" : "",
+      inclusive ? "inclusive_" : "exclusive_",
+      reduce_type_str,
       "_",
       type_to_name(in),
       "_",
       type_to_name(out));
 
   auto kernel =
-      get_scan_kernel(d, kname, reverse_, inclusive_, reduce_type, in, out);
+      get_scan_kernel(d, kname, reverse, inclusive, reduce_type_str, in, out);
 
   if (contiguous) {
     auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
-    size_t size = in.shape(axis_);
+    size_t size = in.shape(axis);
     compute_encoder.set_bytes(size, 2);
 
     // Compute the thread grid
@@ -95,7 +83,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
         thread_group_size,
         static_cast<int>(kernel->maxTotalThreadsPerThreadgroup()));
     auto tmp_grid_dims =
-        get_2d_grid_dims(in.shape(), in.strides(), /** divisor= */ size);
+        get_2d_grid_dims(in.shape(), in.strides(), /*divisor=*/size);
     MTL::Size grid_dims(
         thread_group_size, tmp_grid_dims.width, tmp_grid_dims.height);
     MTL::Size group_dims(thread_group_size, 1, 1);
@@ -106,8 +94,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_input_array(
         in.data_shared_ptr() == nullptr ? out : in, 0);
     compute_encoder.set_output_array(out, 1);
-    size_t size = in.shape(axis_);
-    size_t stride = in.strides()[axis_];
+    size_t size = in.shape(axis);
+    size_t stride = in.strides()[axis];
     int bn = 32;
     size_t stride_blocks = (stride + bn - 1) / bn;
     compute_encoder.set_bytes(size, 2);
@@ -118,8 +106,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     int n_reads = (in.itemsize() <= 4) ? 4 : 2;
     int n_simdgroups = bn / n_reads;
     int thread_group_size = n_simdgroups * 32;
-    auto tmp_grid_dims = get_2d_grid_dims(
-        in.shape(), in.strides(), /** divisor= */ size * stride);
+    auto tmp_grid_dims =
+        get_2d_grid_dims(in.shape(), in.strides(), /*divisor=*/size * stride);
     if (tmp_grid_dims.width * stride_blocks <= UINT_MAX) {
       tmp_grid_dims.width *= stride_blocks;
     } else {
@@ -130,6 +118,29 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims(thread_group_size, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
+}
+
+void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+
+  auto in = inputs[0];
+  if (in.flags().contiguous && in.strides()[axis_] != 0) {
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
+  } else {
+    in = contiguous_copy_gpu(in, stream());
+    out.copy_shared_buffer(in);
+  }
+
+  scan_gpu_inplace(
+      in, out, reduce_type_, axis_, reverse_, inclusive_, stream());
 }
 
 } // namespace mlx::core

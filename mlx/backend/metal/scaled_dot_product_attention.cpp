@@ -12,6 +12,146 @@
 namespace mlx::core::fast {
 
 namespace {
+
+#ifdef MLX_ENABLE_NAX
+
+void sdpa_full_self_attention_nax(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const float scale,
+    array& o,
+    bool do_causal_,
+    const std::optional<array>& mask,
+    const std::optional<array>& sinks) {
+  using namespace mlx::steel;
+
+  int wm = 4;
+  int wn = 1;
+
+  int bd = q.shape(-1);
+  int bq = 64;
+  int bk = 32;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
+  const bool align_Q = (qL % bq) == 0;
+  const bool align_K = (kL % bk) == 0;
+  const bool has_mask = mask.has_value();
+  const bool do_causal = do_causal_;
+  const bool has_sinks = sinks.has_value();
+
+  metal::MTLFCList func_consts = {
+      {&align_Q, MTL::DataType::DataTypeBool, 200},
+      {&align_K, MTL::DataType::DataTypeBool, 201},
+      {&has_mask, MTL::DataType::DataTypeBool, 300},
+      {&do_causal, MTL::DataType::DataTypeBool, 301},
+      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+
+  std::string base_name;
+  concatenate(
+      base_name,
+      "steel_attention_",
+      type_to_name(q),
+      "_bq",
+      bq,
+      "_bk",
+      bk,
+      "_bd",
+      bd,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      "_mask",
+      type_to_name(has_mask ? *mask : q));
+
+  std::string hash_name;
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_Q_",
+      (align_Q ? 't' : 'n'),
+      "_align_K_",
+      (align_K ? 't' : 'n'),
+      "_has_mask_",
+      (has_mask ? 't' : 'n'),
+      "_do_causal_",
+      (do_causal ? 't' : 'n'),
+      "_has_sinks_",
+      (has_sinks ? 't' : 'n'));
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, hash_name, func_consts);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  const int NQ = (qL + bq - 1) / bq;
+  const int NK = (kL + bk - 1) / bk;
+
+  const int NQ_aligned = qL / bq;
+  const int NK_aligned = kL / bk;
+
+  AttnParams params{
+      /* int B = */ B,
+      /* int H = */ H,
+      /* int D = */ D,
+
+      /* int qL = */ qL,
+      /* int kL = */ kL,
+
+      /* int gqa_factor = */ gqa_factor,
+      /* float scale = */ scale,
+
+      /* int NQ = */ NQ,
+      /* int NK = */ NK,
+
+      /* int NQ_aligned = */ NQ_aligned,
+      /* int NK_aligned = */ NK_aligned,
+
+      /* int qL_rem = */ (qL - NQ_aligned * bq),
+      /* int kL_rem = */ (kL - NK_aligned * bk),
+      /* int qL_off = */ (kL - qL),
+
+      /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
+      /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
+      /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
+      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
+
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_output_array(o, 3);
+  compute_encoder.set_bytes(params, 4);
+
+  if (has_mask) {
+    auto& m = *mask;
+
+    AttnMaskParams mask_params{/* int64_t M_strides[3] = */ {
+        m.strides(0), m.strides(1), m.strides(2)}};
+
+    compute_encoder.set_bytes(mask_params, 5);
+    compute_encoder.set_input_array(m, 6);
+  }
+  if (has_sinks) {
+    compute_encoder.set_input_array(*sinks, 7);
+  }
+
+  MTL::Size grid_dims = MTL::Size(NQ, H, B);
+  MTL::Size group_dims = MTL::Size(32, wm, wn);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+#endif // MLX_ENABLE_NAX
+
 void sdpa_full_self_attention_metal(
     const Stream& s,
     metal::Device& d,
@@ -23,6 +163,25 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
+#ifdef MLX_ENABLE_NAX
+  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+    if (metal::is_nax_available() && q.shape(3) != 80 &&
+        (env::enable_tf32() || q.dtype() != float32)) {
+      return sdpa_full_self_attention_nax(
+          /* const Stream& s = */ s,
+          /* metal::Device& d = */ d,
+          /* const array& q = */ q,
+          /* const array& k = */ k,
+          /* const array& v = */ v,
+          /* const float scale = */ scale,
+          /* array& o = */ o,
+          /* bool do_causal_ = */ do_causal_,
+          /* const std::optional<array>& mask = */ mask,
+          /* const std::optional<array>& sinks = */ sinks);
+    }
+  }
+#endif // MLX_ENABLE_NAX
+
   using namespace mlx::steel;
 
   int wm = 4;
