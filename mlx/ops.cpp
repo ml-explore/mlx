@@ -12,7 +12,6 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
