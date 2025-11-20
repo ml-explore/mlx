@@ -5,6 +5,7 @@
 #include "mlx/dtype_utils.h"
 
 #include <fmt/format.h>
+#include <vector>
 
 namespace mlx::core {
 
@@ -74,6 +75,39 @@ CudaGraph::CudaGraph(cu::Device& device) {
 void CudaGraph::end_capture(cudaStream_t stream) {
   assert(handle_ == nullptr);
   CHECK_CUDA_ERROR(cudaStreamEndCapture(stream, &handle_));
+}
+
+static bool cuda_graph_uses_clusters(cudaGraph_t graph) {
+  size_t num_nodes = 0;
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
+  if (num_nodes == 0)
+    return false;
+  std::vector<cudaGraphNode_t> nodes(num_nodes);
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nodes.data(), &num_nodes));
+
+  for (const auto& node : nodes) {
+    cudaGraphNodeType type;
+    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
+    if (type == cudaGraphNodeTypeGraph) {
+      cudaGraph_t subgraph;
+      CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &subgraph));
+      if (cuda_graph_uses_clusters(subgraph))
+        return true;
+    } else if (type == cudaGraphNodeTypeKernel) {
+      cudaLaunchAttributeValue cluster_dim;
+      CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+          node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+      if (cluster_dim.clusterDim.x || cluster_dim.clusterDim.y ||
+          cluster_dim.clusterDim.z) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool CudaGraph::uses_clusters() {
+  return cuda_graph_uses_clusters(handle_);
 }
 
 void CudaGraphExec::instantiate(cudaGraph_t graph) {

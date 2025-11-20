@@ -361,7 +361,17 @@ void CommandEncoder::commit() {
     graph_key_ += ".";
     graph_key_ += std::to_string(empty_node_count_);
 
-    CudaGraphExec& graph_exec = graph_cache_[graph_key_];
+    const bool graph_uses_clusters = graph_.uses_clusters();
+    auto& [graph_exec, graph_exec_uses_clusters] = graph_cache_[graph_key_];
+    // CUDA graphs do not get updated correctly if a kernel node in
+    // the original graph (represented by graph_exec here) or its
+    // corresponding node in the updated graph (graph_) uses
+    // non-default cluster shapes. We track at the graph level whether
+    // clusters are used and in those cases force reinstantiation by
+    // resetting the graph_exec.
+    if (graph_uses_clusters || graph_exec_uses_clusters) {
+      graph_exec.reset();
+    }
 
     if (graph_exec != nullptr) {
       cudaGraphExecUpdateResult update_result;
@@ -381,6 +391,7 @@ void CommandEncoder::commit() {
     if (graph_exec == nullptr) {
       graph_exec.instantiate(graph_);
     }
+    graph_exec_uses_clusters = graph_uses_clusters;
     device_.make_current();
     CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
 
