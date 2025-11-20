@@ -23,7 +23,9 @@ if(NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{VIRTUAL_ENV})
   endif()
   if(EXISTS ${_venv_py})
     message(STATUS "Using Python from virtualenv: ${_venv_py}")
-    set(Python_EXECUTABLE ${_venv_py} CACHE FILEPATH "Python executable" FORCE)
+    set(Python_EXECUTABLE
+        ${_venv_py}
+        CACHE FILEPATH "Python executable" FORCE)
   endif()
 endif()
 

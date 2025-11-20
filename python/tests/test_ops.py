@@ -2264,21 +2264,21 @@ class TestOps(mlx_tests.MLXTestCase):
         def searchsorted_numpy(a, v, side="left", axis=None):
             if axis is None:
                 return np.searchsorted(a.flatten(), v, side=side)
-            
+
             if axis < 0:
                 axis += a.ndim
-            
+
             shape_no_axis = list(a.shape)
             shape_no_axis.pop(axis)
-            
+
             try:
                 out_shape = np.broadcast_shapes(shape_no_axis, v.shape)
             except ValueError:
                 raise
-            
-            it = np.nditer(np.zeros(out_shape), flags=['multi_index'])
+
+            it = np.nditer(np.zeros(out_shape), flags=["multi_index"])
             res = np.empty(out_shape, dtype=np.int32)
-            
+
             def map_idx(full_idx, target_shape):
                 mapped = []
                 offset = len(full_idx) - len(target_shape)
@@ -2288,20 +2288,20 @@ class TestOps(mlx_tests.MLXTestCase):
                     else:
                         mapped.append(full_idx[i + offset])
                 return tuple(mapped)
-            
+
             for _ in it:
                 idx = it.multi_index
                 v_idx = map_idx(idx, v.shape)
                 val = v[v_idx]
-                
+
                 a_idx_no_axis = map_idx(idx, shape_no_axis)
                 a_idx = list(a_idx_no_axis)
                 a_idx.insert(axis, slice(None))
                 a_idx = tuple(a_idx)
-                
+
                 arr_1d = a[a_idx]
                 res[idx] = np.searchsorted(arr_1d, val, side=side)
-                
+
             return res
 
         # Test multi-dimensional with different axes
