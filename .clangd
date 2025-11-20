@@ -3,21 +3,3 @@ CompileFlags:
 
 Index:
   Background: Build
-
-Diagnostics:
-  UnusedIncludes: Strict
-  MissingIncludes: Strict
-  ClangTidy:
-    Add: [performance-*, modernize-*, readability-*]
-    Remove: [modernize-use-trailing-return-type]
-
-InlayHints:
-  Enabled: Yes
-  ParameterNames: Yes
-  DeducedTypes: Yes
-
-Completion:
-  AllScopes: Yes
-
-Hover:
-  ShowAKA: Yes
