@@ -179,28 +179,33 @@ void DualQuantizedMatmul::eval_gpu(
   // TODO: for now minimalistic implementation without batching support
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  
+
   assert(inputs.size() == 3);
   auto& x = inputs[0]; // activations should be quantized on the fly
   auto& w_q = inputs[1]; // quantized weights
 
-  auto quantize_activation = [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
-      auto x = ensure_row_contiguous(input, encoder, s);
-      auto xq_shape = x.shape();
-      xq_shape.back() = x.shape(-1) * bits_ / 32;
-      auto sshape = x.shape();
-      sshape.back() = x.shape(-1) / group_size_; 
-      array x_q(cu::malloc_async(x.size() * bits_ / 8, encoder), xq_shape, uint32);
-      array scales_x(cu::malloc_async(x.size() / group_size_ * sizeof(uint8), encoder), sshape, uint8);
-      fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
-      encoder.add_temporary(scales_x);
-      encoder.add_temporary(x_q);
-      return std::make_pair(x_q, scales_x);
-  };
+  auto quantize_activation =
+      [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
+        auto x = ensure_row_contiguous(input, encoder, s);
+        auto xq_shape = x.shape();
+        xq_shape.back() = x.shape(-1) * bits_ / 32;
+        auto sshape = x.shape();
+        sshape.back() = x.shape(-1) / group_size_;
+        array x_q(
+            cu::malloc_async(x.size() * bits_ / 8, encoder), xq_shape, uint32);
+        array scales_x(
+            cu::malloc_async(x.size() / group_size_ * sizeof(uint8), encoder),
+            sshape,
+            uint8);
+        fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
+        encoder.add_temporary(scales_x);
+        encoder.add_temporary(x_q);
+        return std::make_pair(x_q, scales_x);
+      };
 
   auto [x_q, scale_x_pre] = quantize_activation(inputs[0], encoder, s);
   auto& scale_w_pre = inputs[2];
-  
+
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = x_q.shape(-2);

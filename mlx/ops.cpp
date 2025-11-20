@@ -186,9 +186,7 @@ std::pair<int, int> extract_qqmm_dims(
     throw std::invalid_argument(msg.str());
   }
 
-  return {
-    w_inner_dims, w_outer_dims
-  };
+  return {w_inner_dims, w_outer_dims};
 }
 
 } // namespace
