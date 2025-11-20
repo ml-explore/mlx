@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
 #include <cassert>
+#include <future>
 #include <numeric>
 #include <sstream>
 
@@ -11,9 +12,29 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/io/load.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
+
+namespace {
+
+template <const uint8_t scalar_size>
+void swap_endianness(uint8_t* data_bytes, size_t N) {
+  struct Elem {
+    uint8_t bytes[scalar_size];
+  };
+
+  auto* data = reinterpret_cast<Elem*>(data_bytes);
+
+  for (size_t i = 0; i < N; i++) {
+    for (size_t j = 0; j < (scalar_size / 2); j++) {
+      std::swap(data[i].bytes[j], data[i].bytes[scalar_size - j - 1]);
+    }
+  }
+}
+
+} // namespace
 
 namespace mlx::core {
 
@@ -153,7 +174,29 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("[Load::eval_gpu] Not implemented.");
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto read_task = [out_ptr = out.data<char>(),
+                    size = out.size(),
+                    itemsize = out.itemsize(),
+                    offset = offset_,
+                    reader = reader_,
+                    swap_endianness_ = swap_endianness_]() mutable {
+    reader->read(out_ptr, size * itemsize, offset);
+    if (swap_endianness_) {
+      switch (itemsize) {
+        case 2:
+          swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
+        case 4:
+          swap_endianness<4>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
+        case 8:
+          swap_endianness<8>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
+      }
+    }
+  };
+  io::thread_pool().enqueue(std::move(read_task)).wait();
 }
 
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
