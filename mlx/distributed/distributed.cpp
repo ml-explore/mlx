@@ -107,6 +107,25 @@ bool is_available() {
       ibv::is_available();
 }
 
+bool is_available(const std::string& bk) {
+  if (bk == "any") {
+    return is_available();
+  }
+  if (bk == "mpi") {
+    return mpi::is_available();
+  }
+  if (bk == "ring") {
+    return ring::is_available();
+  }
+  if (bk == "nccl") {
+    return nccl::is_available();
+  }
+  if (bk == "ibv") {
+    return ibv::is_available();
+  }
+  return false;
+}
+
 int Group::rank() const {
   return group_->rank();
 }
