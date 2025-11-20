@@ -1077,7 +1077,9 @@ class IBVGroup : public GroupImpl {
 };
 
 bool is_available() {
-  return true;
+  if (__builtin_available(macOS 26.2, *)) {
+    return true;
+  }
 }
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
