@@ -2339,6 +2339,49 @@ array argsort(const array& a, int axis, StreamOrDevice s /* = {} */) {
       a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), axis), {a});
 }
 
+array searchsorted(
+    const array& a,
+    const array& v,
+    bool right /* = false */,
+    StreamOrDevice s /* = {} */) {
+  auto stream = to_stream(s);
+  return searchsorted(reshape(a, {-1}, stream), v, 0, right, stream);
+}
+
+array searchsorted(
+    const array& a,
+    const array& v,
+    int axis,
+    bool right /* = false */,
+    StreamOrDevice s /* = {} */) {
+  auto stream = to_stream(s);
+  int ax = axis;
+  if (ax < 0) {
+    ax += a.ndim();
+  }
+
+  if (ax < 0 || ax >= a.ndim()) {
+    std::ostringstream msg;
+    msg << "[searchsorted] Received invalid axis " << axis << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto common_dtype = promote_types(a.dtype(), v.dtype());
+  auto a_promoted = astype(a, common_dtype, stream);
+  auto v_promoted = astype(v, common_dtype, stream);
+
+  auto shape = a.shape();
+  shape.erase(shape.begin() + ax);
+  auto out_shape = broadcast_shapes(shape, v.shape());
+
+  return array(
+      out_shape,
+      uint32,
+      std::make_shared<SearchSorted>(stream, ax, right),
+      {a_promoted, v_promoted});
+}
+
 /**
  * Returns a partitioned copy of the flattened array
  * such that the smaller kth elements are first.

@@ -717,6 +717,25 @@ array argsort(const array& a, StreamOrDevice s = {});
 array argsort(const array& a, int axis, StreamOrDevice s = {});
 
 /**
+ * Find indices where elements should be inserted to maintain order.
+ */
+array searchsorted(
+    const array& a,
+    const array& v,
+    bool right = false,
+    StreamOrDevice s = {});
+
+/**
+ * Find indices where elements should be inserted to maintain order.
+ */
+array searchsorted(
+    const array& a,
+    const array& v,
+    int axis,
+    bool right = false,
+    StreamOrDevice s = {});
+
+/**
  * Returns a partitioned copy of the flattened array
  * such that the smaller kth elements are first.
  **/
