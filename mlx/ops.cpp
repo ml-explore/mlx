@@ -154,21 +154,27 @@ std::pair<int, int> extract_quantized_matmul_dims(
   return {w_inner_dims, w_outer_dims};
 }
 
-std::pair<int, int> extract_qqmm_dims(
+std::pair<std::pair<int, int>, std::pair<int, int>> extract_qqmm_dims(
     std::string_view tag,
     const array& x,
     const array& w,
+    const array& scales_x,
     const array& scales_w,
     bool transpose,
     int group_size,
     int bits) {
+  // Validate x and scales_x
+  validate_quantized_input(
+      tag, x, scales_x, "x matrix", "scales_x", group_size, bits);
+
   // Validate w and scales_w
   validate_quantized_input(
       tag, w, scales_w, "weight matrix", "scales_w", group_size, bits);
 
   // For narrow precision types (mxfp4, nvfp4) the only supported layout is TN
   // A is MxK, B is NxK (transposed)
-  int x_inner_dims = x.shape(-1) / (32 / bits); // K
+  int x_inner_dims = x.shape(-1); // K // (32 / bits)
+  int x_outer_dims = x.shape(-2); // M
 
   // Calculate the expanded w's dimensions
   int w_inner_dims = (transpose) ? w.shape(-1) : w.shape(-2);
@@ -176,19 +182,15 @@ std::pair<int, int> extract_qqmm_dims(
 
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
-    msg << "[" << tag << "] Inner dimension of second input with "
-        << "shape (" << w_inner_dims << ", " << w_outer_dims << ")"
-        << " computed with transpose=" << std::boolalpha << transpose
-        << " does not match the packed inner dimension of the first"
-        << "input (...," << x_inner_dims << ") computed with bits=" << bits
-        << " and transpose=" << std::boolalpha << transpose;
+    msg << "[" << tag << "] Last dimension of first quantized input with "
+        << "shape (..., " << x_inner_dims << ") does not match "
+        << "the quantized matrix (" << w_inner_dims << ", " << w_outer_dims
+        << ") computed with transpose=" << std::boolalpha << transpose;
 
     throw std::invalid_argument(msg.str());
   }
 
-  return {
-    w_inner_dims, w_outer_dims
-  }
+  return {{x_inner_dims, x_outer_dims}, {w_inner_dims, w_outer_dims}};
 }
 
 } // namespace
@@ -4229,8 +4231,9 @@ array qqmm(
     StreamOrDevice s /* = {} */) {
   // currently only simetric quantization is supported for qqmm
   auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // here we need to check that inputs and otputs will be quantized in the same
-  // way...
+  // For narrow precision MMAs on B200 only TN layout is supported:
+  // https://docs.nvidia.com/cutlass/media/docs/cpp/blackwell_functionality.html
+  // TODO: handle it better
   if ((qmode == QuantizationMode::Nvfp4 || qmode == QuantizationMode::Mxfp4) &&
       !transpose) {
     std::ostringstream msg;
@@ -4244,14 +4247,21 @@ array qqmm(
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
     throw std::invalid_argument(msg.str());
   }
+  auto quantized_x = quantize(x, group_size_, bits, mode, s);
+  auto x_q = quantized_x[0];
+  auto scales_x = quantized_x[1];
+  encoder.add_temporary(x_q);
+  encoder.add_temporary(scales_x);
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  //
-  auto [w_inner_dims, w_outer_dims] =
-      extract_qqmm_dims("qqmm", x, w_q, scales_w, transpose, group_size, bits);
+  // Check and extract the quantized matrix shape against x
+  auto [x_dims, w_dims] = extract_qqmm_dims(
+      "qqmm", x_q, w_q, scales_x, scales_w, transpose, group_size, bits);
+  auto [x_inner_dims, x_outer_dims] = x_dims;
+  auto [w_inner_dims, w_outer_dims] = w_dims;
 
-  std::vector<array> inputs = {x, w_q, scales_w};
-  if (x.ndim() > 2 && w_q.ndim() > 2) {
+  std::vector<array> inputs = {x_q, w_q, scales_x, scales_w};
+  if (x_q.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
 

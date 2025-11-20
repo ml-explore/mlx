@@ -180,16 +180,11 @@ void DualQuantizedMatmul::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  assert(inputs.size() == 3);
+  assert(inputs.size() == 4);
   auto& a_pre = inputs[0]; // activations are not quantized, only weights are
   auto& b = inputs[1];
 
-  auto a_q = fp_quantize(
-      a_pre,
-      group_size_,
-      bits_,
-      mode_,
-      s); // here i assume that ist is only for nvfp4/mxfp8
+  auto a_q = quantize(a_pre, group_size_, bits_, mode_, s);
   encoder.add_temporary(a_q[0]);
   encoder.add_temporary(a_q[1]);
 
