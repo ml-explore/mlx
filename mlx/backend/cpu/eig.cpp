@@ -13,22 +13,8 @@ namespace mlx::core {
 namespace {
 
 template <typename T>
-struct EigOutputType {
-  using type = std::complex<T>;
-};
-
-template <>
-struct EigOutputType<double> {
-  using type = complex64_t;
-};
-
-template <typename From, typename To>
-inline To convert_complex(const From& val) {
-  if constexpr (std::is_same_v<From, To>) {
-    return val;
-  } else {
-    return To(static_cast<float>(val.real()), static_cast<float>(val.imag()));
-  }
+complex64_t to_complex(T r, T i) {
+  return {static_cast<float>(r), static_cast<float>(i)};
 }
 
 template <typename T, class Enable = void>
@@ -38,8 +24,7 @@ template <typename T>
 struct EigWork<
     T,
     typename std::enable_if<std::is_floating_point<T>::value>::type> {
-  using R = std::complex<T>;
-  using O = typename EigOutputType<T>::type;
+  using O = complex64_t;
 
   char jobl;
   char jobr;
@@ -83,7 +68,7 @@ struct EigWork<
     if (vectors) {
       vec_tmp = static_cast<T*>(buffers[1].buffer.raw_ptr());
     }
-    auto work = static_cast<T*>(buffers[vectors ? 2 : 1].buffer.raw_ptr());
+    auto work = static_cast<T*>(buffers.back().buffer.raw_ptr());
 
     int n_vecs_l = vectors ? N : 1;
     int n_vecs_r = 1;
@@ -104,24 +89,22 @@ struct EigWork<
         &info);
 
     for (int i = 0; i < N; ++i) {
-      R val = {eig_tmp[i], eig_tmp[N + i]};
-      values[i] = convert_complex<R, O>(val);
+      values[i] = to_complex(eig_tmp[i], eig_tmp[N + i]);
     }
 
     if (vectors) {
       for (int i = 0; i < N; ++i) {
         if (values[i].imag() != 0) {
           for (int j = 0; j < N; ++j) {
-            R v1 = {vec_tmp[i * N + j], -vec_tmp[(i + 1) * N + j]};
-            R v2 = {vec_tmp[i * N + j], vec_tmp[(i + 1) * N + j]};
-            vectors[i * N + j] = convert_complex<R, O>(v1);
-            vectors[(i + 1) * N + j] = convert_complex<R, O>(v2);
+            vectors[i * N + j] =
+                to_complex(vec_tmp[i * N + j], -vec_tmp[(i + 1) * N + j]);
+            vectors[(i + 1) * N + j] =
+                to_complex(vec_tmp[i * N + j], vec_tmp[(i + 1) * N + j]);
           }
           i += 1;
         } else {
           for (int j = 0; j < N; ++j) {
-            R v = {vec_tmp[i * N + j], 0};
-            vectors[i * N + j] = convert_complex<R, O>(v);
+            vectors[i * N + j] = to_complex(vec_tmp[i * N + j], T(0.0));
           }
         }
       }
@@ -149,7 +132,7 @@ struct EigWork<std::complex<float>> {
     R rwork;
     int n_vecs_l = compute_eigenvectors ? N_ : 1;
     int n_vecs_r = 1;
-    cgeev_wrapper(
+    geev<T>(
         &jobl,
         &jobr,
         &N,
@@ -172,7 +155,7 @@ struct EigWork<std::complex<float>> {
   void run(T* a, T* values, T* vectors) {
     int n_vecs_l = vectors ? N : 1;
     int n_vecs_r = 1;
-    cgeev_wrapper(
+    geev<T>(
         &jobl,
         &jobr,
         &N,
@@ -197,18 +180,16 @@ void eig_impl(
     array& values,
     bool compute_eigenvectors,
     Stream stream) {
-  using O = typename EigWork<T>::O;
-
   auto a_ptr = a.data<T>();
-  auto val_ptr = values.data<O>();
+  auto val_ptr = values.data<complex64_t>();
 
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(a);
   encoder.set_output_array(values);
-  O* vec_ptr = nullptr;
+  complex64_t* vec_ptr = nullptr;
   if (compute_eigenvectors) {
     encoder.set_output_array(vectors);
-    vec_ptr = vectors.data<O>();
+    vec_ptr = vectors.data<complex64_t>();
   }
   encoder.dispatch([a_ptr,
                     val_ptr,
