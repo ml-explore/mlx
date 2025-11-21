@@ -49,7 +49,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::string& mask_mode = "",
-    std::optional<array> mask_arr = {},
+    const std::vector<array>& mask_arrs = {},
     const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 

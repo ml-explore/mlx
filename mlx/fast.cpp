@@ -797,14 +797,25 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
+  constexpr bool is_training = false;
+  constexpr bool output_logsumexp = false;
+
   if (!ScaledDotProductAttention::use_fallback(
-          q, k, v, has_mask, has_arr_mask, do_causal, stream)) {
+          q,
+          k,
+          v,
+          has_mask,
+          has_arr_mask,
+          do_causal,
+          is_training,
+          output_logsumexp,
+          stream)) {
     auto out_shape = Shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     return array(
         std::move(out_shape),
         final_type,
         std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, do_causal, has_sinks),
+            stream, fallback, scale, do_causal, has_sinks, output_logsumexp),
         std::move(inputs));
   }
   return fallback(std::move(inputs))[0];
@@ -936,9 +947,23 @@ array paged_attention_impl(
   return out;
 }
 
+std::vector<array> ScaledDotProductAttention::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  return Custom::vjp(primals, cotangents, argnums, outputs);
+}
+
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      has_sinks_ == a_other.has_sinks_;
+}
+
+bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
+  const auto& a_other = static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
 }
