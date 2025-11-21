@@ -2260,49 +2260,6 @@ class TestOps(mlx_tests.MLXTestCase):
                 result_mx = mx.searchsorted(a_mx, 2, side=side)
                 self.assertEqual(result_np, result_mx.item())
 
-        def searchsorted_numpy(a, v, side="left", axis=None):
-            if axis is None:
-                return np.searchsorted(a.flatten(), v, side=side)
-
-            if axis < 0:
-                axis += a.ndim
-
-            shape_no_axis = list(a.shape)
-            shape_no_axis.pop(axis)
-
-            try:
-                out_shape = np.broadcast_shapes(shape_no_axis, v.shape)
-            except ValueError:
-                raise
-
-            it = np.nditer(np.zeros(out_shape), flags=["multi_index"])
-            res = np.empty(out_shape, dtype=np.int32)
-
-            def map_idx(full_idx, target_shape):
-                mapped = []
-                offset = len(full_idx) - len(target_shape)
-                for i in range(len(target_shape)):
-                    if target_shape[i] == 1:
-                        mapped.append(0)
-                    else:
-                        mapped.append(full_idx[i + offset])
-                return tuple(mapped)
-
-            for _ in it:
-                idx = it.multi_index
-                v_idx = map_idx(idx, v.shape)
-                val = v[v_idx]
-
-                a_idx_no_axis = map_idx(idx, shape_no_axis)
-                a_idx = list(a_idx_no_axis)
-                a_idx.insert(axis, slice(None))
-                a_idx = tuple(a_idx)
-
-                arr_1d = a[a_idx]
-                res[idx] = np.searchsorted(arr_1d, val, side=side)
-
-            return res
-
         # Test multi-dimensional with different axes
         # shape = (3, 4, 5)
         # for dtype in ("int32", "float32"):
@@ -2340,6 +2297,23 @@ class TestOps(mlx_tests.MLXTestCase):
         result_np = np.searchsorted(a_np, v_np)
         result_mx = mx.searchsorted(a_mx, v_mx)
         self.assertTrue(np.array_equal(result_np, result_mx))
+
+    def test_searchsorted_int64_promotion(self):
+        # Regression test for int64 type promotion bug
+        # See https://github.com/ml-explore/mlx/issues/1255
+        
+        # Case 1: int64 array + Python int scalar (promoted to int64)
+        a = mx.array([1, 2, 2, 2, 5], dtype=mx.int64)
+        v = 2
+        idx = mx.searchsorted(a, v)
+        self.assertEqual(idx.item(), 1)
+        
+        # Case 2: int32 array + int64 scalar (both promoted to int64)
+        a = mx.array([1, 2, 2, 2, 5], dtype=mx.int32)
+        v = mx.array(2, dtype=mx.int64)
+        idx = mx.searchsorted(a, v)
+        self.assertEqual(idx.item(), 1)
+
 
         # Single element
         a_np = np.array([5])
