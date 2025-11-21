@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <iostream>
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
@@ -2366,7 +2368,6 @@ array searchsorted(
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-
   auto common_dtype = promote_types(a.dtype(), v.dtype());
   auto a_promoted = astype(a, common_dtype, stream);
   auto v_promoted = astype(v, common_dtype, stream);
