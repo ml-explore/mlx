@@ -2,6 +2,7 @@
 
 #include <netdb.h>
 #include <unistd.h>
+#include <cstring>
 #include <sstream>
 #include <thread>
 
@@ -14,7 +15,7 @@ namespace mlx::core::distributed::detail {
  */
 address_t parse_address(const std::string& ip, const std::string& port) {
   struct addrinfo hints, *res;
-  memset(&hints, 0, sizeof(hints));
+  std::memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
 
