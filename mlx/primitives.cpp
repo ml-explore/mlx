@@ -673,7 +673,7 @@ bool SearchSorted::is_equivalent(const Primitive& other) const {
 void SearchSorted::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("SearchSorted::eval_gpu is not yet implemented.");
+  return eval_cpu(inputs, outputs);
 }
 
 std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
