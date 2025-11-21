@@ -95,7 +95,7 @@ void init_distributed(nb::module_& parent_module) {
             in case ``mx.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
           backend (str, optional): Which distributed backend to initialize.
-            Possible values ``mpi``, ``ring``, ``nccl``, ``ibv``, ``any``. If
+            Possible values ``mpi``, ``ring``, ``nccl``, ``jaccl``, ``any``. If
             set to ``any`` all available backends are tried and the first one
             that succeeds becomes the global group which will be returned in
             subsequent calls. Default: ``any``

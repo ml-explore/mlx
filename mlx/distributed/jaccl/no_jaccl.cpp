@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/distributed/ibv/ibv.h"
+#include "mlx/distributed/jaccl/jaccl.h"
 
-namespace mlx::core::distributed::ibv {
+namespace mlx::core::distributed::jaccl {
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 
@@ -12,9 +12,9 @@ bool is_available() {
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   if (strict) {
-    throw std::runtime_error("Cannot initialize ibv distributed backend.");
+    throw std::runtime_error("Cannot initialize jaccl distributed backend.");
   }
   return nullptr;
 }
 
-} // namespace mlx::core::distributed::ibv
+} // namespace mlx::core::distributed::jaccl
