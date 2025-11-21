@@ -481,6 +481,40 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 namespace {
 
+// Forward declaration
+template <typename T, typename IdxT>
+void search_sorted(
+    const array& a,
+    const array& v,
+    array& out,
+    int axis,
+    bool right);
+
+template <typename T, typename IdxT>
+void search_sorted_impl(
+
+    const array& a,
+    const array& v,
+    array& out,
+    int axis,
+    bool right,
+    Stream stream) {
+  // Allocate output
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // Get the CPU command encoder and register input and output arrays
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+
+  // Launch the CPU kernel
+  encoder.dispatch([a, v, out, axis, right]() mutable {
+    // Call the existing search_sorted function inside the dispatched lambda
+    search_sorted<T, IdxT>(a, v, out, axis, right);
+  });
+}
+
 template <typename T, typename IdxT>
 void search_sorted(
     const array& a,
@@ -580,9 +614,6 @@ void SearchSorted::eval_cpu(
     return;
   }
 
-  // Allocate output
-  out.set_data(allocator::malloc(out.nbytes()));
-
   int ax = axis_;
   if (ax < 0) {
     ax += a.ndim();
@@ -590,46 +621,47 @@ void SearchSorted::eval_cpu(
 
   switch (a.dtype()) {
     case bool_:
-      search_sorted<bool, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<bool, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case uint8:
-      search_sorted<uint8_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<uint8_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case uint16:
-      search_sorted<uint16_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<uint16_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case uint32:
-      search_sorted<uint32_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<uint32_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case uint64:
-      search_sorted<uint64_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<uint64_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case int8:
-      search_sorted<int8_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<int8_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case int16:
-      search_sorted<int16_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<int16_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case int32:
-      search_sorted<int32_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<int32_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case int64:
-      search_sorted<int64_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<int64_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case float16:
-      search_sorted<float16_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<float16_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case bfloat16:
-      search_sorted<bfloat16_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<bfloat16_t, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case float32:
-      search_sorted<float, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<float, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case float64:
-      search_sorted<double, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<double, uint32_t>(a, v, out, ax, right_, stream());
       break;
     case complex64:
-      search_sorted<complex64_t, uint32_t>(a, v, out, ax, right_);
+      search_sorted_impl<complex64_t, uint32_t>(
+          a, v, out, ax, right_, stream());
       break;
   }
 }
