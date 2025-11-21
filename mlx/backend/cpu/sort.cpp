@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <numeric>
+#include <vector>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
@@ -540,15 +541,24 @@ void search_sorted(
     T val = v_ptr[v_it.loc];
     size_t a_offset = a_it.loc;
 
-    auto start = StridedIterator<const T>(
-        a_ptr + a_offset, static_cast<int64_t>(axis_stride));
-    auto end = start + axis_size;
+    const T* base_ptr = a_ptr + a_offset;
+    std::vector<T> axis_vals(axis_size);
+    auto axis_iter = StridedIterator<const T>(
+        base_ptr, static_cast<int64_t>(axis_stride), 0);
+    for (size_t k = 0; k < axis_size; ++k) {
+      axis_vals[k] = *axis_iter;
+      axis_iter += 1;
+    }
 
     IdxT idx;
     if (right) {
-      idx = std::upper_bound(start, end, val, nan_aware_less<const T>) - start;
+      auto it = std::upper_bound(
+          axis_vals.begin(), axis_vals.end(), val, nan_aware_less<T>);
+      idx = static_cast<IdxT>(std::distance(axis_vals.begin(), it));
     } else {
-      idx = std::lower_bound(start, end, val, nan_aware_less<const T>) - start;
+      auto it = std::lower_bound(
+          axis_vals.begin(), axis_vals.end(), val, nan_aware_less<T>);
+      idx = static_cast<IdxT>(std::distance(axis_vals.begin(), it));
     }
     out_ptr[i] = idx;
 
