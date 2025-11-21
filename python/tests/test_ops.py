@@ -2301,19 +2301,18 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_searchsorted_int64_promotion(self):
         # Regression test for int64 type promotion bug
         # See https://github.com/ml-explore/mlx/issues/1255
-        
+
         # Case 1: int64 array + Python int scalar (promoted to int64)
         a = mx.array([1, 2, 2, 2, 5], dtype=mx.int64)
         v = 2
         idx = mx.searchsorted(a, v)
         self.assertEqual(idx.item(), 1)
-        
+
         # Case 2: int32 array + int64 scalar (both promoted to int64)
         a = mx.array([1, 2, 2, 2, 5], dtype=mx.int32)
         v = mx.array(2, dtype=mx.int64)
         idx = mx.searchsorted(a, v)
         self.assertEqual(idx.item(), 1)
-
 
         # Single element
         a_np = np.array([5])
