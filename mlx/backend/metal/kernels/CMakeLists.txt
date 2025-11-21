@@ -9,12 +9,16 @@ set(BASE_HEADERS
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
-  set(METAL_FLAGS -x metal -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
+  set(METAL_FLAGS
+      -x
+      metal
+      -Wall
+      -Wextra
+      -fno-fast-math
+      -Wno-c++17-extensions
+      -Wno-c++20-extensions)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
-  endif()
-  if(MLX_ENABLE_NAX)
-    set(METAL_FLAGS ${METAL_FLAGS} -Wno-c++20-extensions -std=metal4.0)
   endif()
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
     set(METAL_FLAGS ${METAL_FLAGS}
@@ -123,8 +127,8 @@ if(NOT MLX_METAL_JIT)
   build_kernel(gemv_masked steel/utils.h)
 endif()
 
-if(MLX_ENABLE_NAX)
-
+if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
+                                              26.2))
   set(STEEL_NAX_HEADERS
       steel/defines.h
       steel/utils.h

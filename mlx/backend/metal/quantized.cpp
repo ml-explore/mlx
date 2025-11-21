@@ -451,8 +451,6 @@ void qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-#ifdef MLX_ENABLE_NAX
-
 void qmm_nax(
     const array& x,
     const array& w,
@@ -653,8 +651,6 @@ void gather_qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-#endif // MLX_ENABLE_NAX
-
 void qmm(
     const array& x,
     const array& w,
@@ -670,30 +666,24 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-#ifdef MLX_ENABLE_NAX
-
-  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-        (env::enable_tf32() || x.dtype() != float32)) {
-      return qmm_nax(
-          /* const array& x = */ x,
-          /* const array& w = */ w,
-          /* const array& scales = */ scales,
-          /* const std::optional<array>& biases = */ biases,
-          /* array& out = */ out,
-          /* bool transpose = */ transpose,
-          /* int group_size = */ group_size,
-          /* int bits = */ bits,
-          /* int M = */ M,
-          /* int N = */ N,
-          /* int K = */ K,
-          /* metal::Device& d = */ d,
-          /* const Stream& s = */ s,
-          /* const std::string& mode = */ mode);
-    }
+  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
+    return qmm_nax(
+        /* const array& x = */ x,
+        /* const array& w = */ w,
+        /* const array& scales = */ scales,
+        /* const std::optional<array>& biases = */ biases,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string& mode = */ mode);
   }
-
-#endif // MLX_ENABLE_NAX
 
   int B = out.size() / M / N;
 
@@ -772,32 +762,26 @@ void gather_qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-#ifdef MLX_ENABLE_NAX
-
-  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-        (env::enable_tf32() || x.dtype() != float32)) {
-      return gather_qmm_nax(
-          /* const array& x = */ x,
-          /* const array& w = */ w,
-          /* const array& scales = */ scales,
-          /* const std::optional<array>& biases = */ biases,
-          /* const array& lhs_indices = */ lhs_indices,
-          /* const array& rhs_indices = */ rhs_indices,
-          /* array& out = */ out,
-          /* bool transpose = */ transpose,
-          /* int group_size = */ group_size,
-          /* int bits = */ bits,
-          /* int M = */ M,
-          /* int N = */ N,
-          /* int K = */ K,
-          /* metal::Device& d = */ d,
-          /* const Stream& s = */ s,
-          /* const std::string& mode = */ mode);
-    }
+  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
+    return gather_qmm_nax(
+        /* const array& x = */ x,
+        /* const array& w = */ w,
+        /* const array& scales = */ scales,
+        /* const std::optional<array>& biases = */ biases,
+        /* const array& lhs_indices = */ lhs_indices,
+        /* const array& rhs_indices = */ rhs_indices,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string& mode = */ mode);
   }
-
-#endif // MLX_ENABLE_NAX
 
   int B = out.size() / M / N;
 
@@ -975,8 +959,6 @@ void gather_qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-#ifdef MLX_ENABLE_NAX
-
 void gather_qmm_rhs_nax(
     const array& x_,
     const array& w_,
@@ -1108,8 +1090,6 @@ void gather_qmm_rhs_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-#endif // MLX_ENABLE_NAX
-
 void gather_qmm_rhs(
     const array& x_,
     const array& w_,
@@ -1126,31 +1106,25 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
-#ifdef MLX_ENABLE_NAX
-
-  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && transpose &&
-        (env::enable_tf32() || x_.dtype() != float32)) {
-      return gather_qmm_rhs_nax(
-          /* const array& x_ = */ x_,
-          /* const array& w_ = */ w_,
-          /* const array& scales_ = */ scales_,
-          /* const std::optional<array>& biases_ = */ biases_,
-          /* const array& indices_ = */ indices_,
-          /* array& out = */ out,
-          /* bool transpose = */ transpose,
-          /* int group_size = */ group_size,
-          /* int bits = */ bits,
-          /* int M = */ M,
-          /* int N = */ N,
-          /* int K = */ K,
-          /* metal::Device& d = */ d,
-          /* const Stream& s = */ s,
-          /* const std::string mode = */ mode);
-    }
+  if (metal::is_nax_available() && transpose &&
+      (env::enable_tf32() || x_.dtype() != float32)) {
+    return gather_qmm_rhs_nax(
+        /* const array& x_ = */ x_,
+        /* const array& w_ = */ w_,
+        /* const array& scales_ = */ scales_,
+        /* const std::optional<array>& biases_ = */ biases_,
+        /* const array& indices_ = */ indices_,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string mode = */ mode);
   }
-
-#endif // MLX_ENABLE_NAX
 
   // Start by normalizing the indices
   array indices = ensure_row_contiguous(indices_, d, s);
