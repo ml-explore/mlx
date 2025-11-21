@@ -1079,6 +1079,8 @@ class IBVGroup : public GroupImpl {
 bool is_available() {
   if (__builtin_available(macOS 26.2, *)) {
     return true;
+  } else {
+    return false;
   }
 }
 
