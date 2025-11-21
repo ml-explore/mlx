@@ -3,6 +3,8 @@
 #pragma once
 
 #include <sys/socket.h>
+#include <functional>
+#include <string>
 
 namespace mlx::core::distributed::detail {
 
