@@ -172,8 +172,6 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
 // Regular steel matmul dispatch
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifdef MLX_ENABLE_NAX
-
 template <bool CHECK_AB>
 void steel_matmul_regular_axpby_nax(
     const Stream& s,
@@ -210,11 +208,11 @@ void steel_matmul_regular_axpby_nax(
   std::ostringstream kname;
 
   // clang-format off
-  kname << "steel_gemm_fused_nax_" 
+  kname << "steel_gemm_fused_nax_"
         << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') 
-        << "_" << type_to_name(a) 
-        << "_" << type_to_name(out) 
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(out)
         << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn; // clang-format on
 
@@ -329,8 +327,6 @@ void steel_matmul_regular_axpby_nax(
   d.add_temporaries(std::move(copies), s.index);
 }
 
-#endif // MLX_ENABLE_NAX
-
 template <bool CHECK_AB>
 void steel_matmul_regular_axpby(
     const Stream& s,
@@ -357,40 +353,34 @@ void steel_matmul_regular_axpby(
     int64_t C_batch_stride /* = 0*/,
     float alpha /* = 1.0f */,
     float beta /* = 0.0f */) {
-#ifdef MLX_ENABLE_NAX
-
-  if (__builtin_available(macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-    if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
-        (env::enable_tf32() || a.dtype() != float32)) {
-      return steel_matmul_regular_axpby_nax<CHECK_AB>(
-          /* const Stream& s = */ s,
-          /* metal::Device& d = */ d,
-          /* const array& a = */ a,
-          /* const array& b = */ b,
-          /* const array& c = */ c,
-          /* array& out = */ out,
-          /* int M = */ M,
-          /* int N = */ N,
-          /* int K = */ K,
-          /* int batch_size_out = */ batch_size_out,
-          /* int lda = */ lda,
-          /* int ldb = */ ldb,
-          /* int ldd = */ ldd,
-          /* bool transpose_a = */ transpose_a,
-          /* bool transpose_b = */ transpose_b,
-          /* std::vector<array>& copies = */ copies,
-          /* Shape batch_shape = */ batch_shape,
-          /* Strides batch_strides = */ batch_strides,
-          /* int64_t A_batch_stride = */ A_batch_stride,
-          /* int64_t B_batch_stride = */ B_batch_stride,
-          /* int64_t matrix_stride_out = */ matrix_stride_out,
-          /* int64_t C_batch_stride = */ C_batch_stride,
-          /* float alpha = */ alpha,
-          /* float beta = */ beta);
-    }
+  if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
+      (env::enable_tf32() || a.dtype() != float32)) {
+    return steel_matmul_regular_axpby_nax<CHECK_AB>(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ batch_size_out,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* int ldd = */ ldd,
+        /* bool transpose_a = */ transpose_a,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ batch_shape,
+        /* Strides batch_strides = */ batch_strides,
+        /* int64_t A_batch_stride = */ A_batch_stride,
+        /* int64_t B_batch_stride = */ B_batch_stride,
+        /* int64_t matrix_stride_out = */ matrix_stride_out,
+        /* int64_t C_batch_stride = */ C_batch_stride,
+        /* float alpha = */ alpha,
+        /* float beta = */ beta);
   }
-
-#endif // MLX_ENABLE_NAX
 
   using namespace mlx::steel;
 
@@ -405,11 +395,11 @@ void steel_matmul_regular_axpby(
   std::ostringstream kname;
 
   // clang-format off
-  kname << "steel_gemm_fused_" 
+  kname << "steel_gemm_fused_"
         << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') 
-        << "_" << type_to_name(a) 
-        << "_" << type_to_name(out) 
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(out)
         << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn; // clang-format on
 
@@ -574,14 +564,14 @@ void steel_gemm_splitk_axpby(
   std::ostringstream kname;
 
   // clang-format off
-  kname << "steel_gemm_splitk_" 
+  kname << "steel_gemm_splitk_"
         << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') 
-        << "_" << type_to_name(a) 
-        << "_" << type_to_name(C_split) 
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(C_split)
         << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn 
-        << "_MN_" << (mn_aligned ? "t" : "n") << "aligned" 
+        << "_wm" << wm << "_wn" << wn
+        << "_MN_" << (mn_aligned ? "t" : "n") << "aligned"
         << "_K_" << (k_aligned ? "t" : "n") << "aligned"; // clang-format on
 
   // Encode and dispatch gemm kernel
@@ -915,10 +905,10 @@ void gemv_axbpy(
   const bool do_axpby = CHECK_AB && (alpha != 1.0f || beta != 0.0f);
 
   // clang-format off
-  kname << "_bm" << bm << "_bn" << bn 
-        << "_sm" << sm << "_sn" << sn 
+  kname << "_bm" << bm << "_bn" << bn
+        << "_sm" << sm << "_sn" << sn
         << "_tm" << tm << "_tn" << tn
-        << "_nc" << !contiguous_kernel 
+        << "_nc" << !contiguous_kernel
         << "_axpby" << do_axpby; // clang-format on
 
   // Encode and dispatch kernel
@@ -1766,8 +1756,6 @@ void gather_mm_rhs(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-#ifdef MLX_ENABLE_NAX
-
 void gather_mm_rhs_nax(
     const array& a_,
     const array& b_,
@@ -1910,8 +1898,6 @@ void gather_mm_rhs_nax(
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
-
-#endif // MLX_ENABLE_NAX
 
 void gather_mv(
     const array& mat_,
@@ -2196,19 +2182,10 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // We are walking a in order and b is also in order so we can batch up the
   // matmuls and reuse reading a and b.
   if (M == 1 && right_sorted_ == true) {
-#ifdef MLX_ENABLE_NAX
-
-    if (__builtin_available(
-            macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-      if (metal::is_nax_available() &&
-          !issubdtype(a.dtype(), complexfloating) &&
-          (env::enable_tf32() || a.dtype() != float32)) {
-        return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
-      }
+    if (metal::is_nax_available() &&
+        (env::enable_tf32() || a.dtype() != float32)) {
+      return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
     }
-
-#endif // MLX_ENABLE_NAX
-
     gather_mm_rhs(a, b, rhs_indices, out, d, s);
     return;
   }
