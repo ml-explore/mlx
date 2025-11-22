@@ -13,15 +13,13 @@ runs:
       shell: sh
       env:
         DEBUG: 1
-        CMAKE_ARGS_CPU: >-
+        CMAKE_ARGS: >-
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
-          -DMLX_BUILD_CUDA=OFF
-        CMAKE_ARGS_CUDA: >-
-          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
-          -DMLX_BUILD_CUDA=ON
+          -DMLX_BUILD_CUDA=${{ startsWith(inputs.toolkit, 'cuda') && 'ON' || 'OFF' }}
       run: |
-        export CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"
         if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
+          # There is no GPU in arm64 runner.
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_CUDA_ARCHITECTURES=90a"
           # Can not build tests when the built executables can not run.
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
         fi
