@@ -64,6 +64,10 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
     const std::string& kernel_name,
     const array& out);
 
+MTL::ComputePipelineState* get_sparse_kernel(
+    metal::Device& d,
+    const std::string& kernel_name);
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,
