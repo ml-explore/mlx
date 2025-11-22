@@ -67,7 +67,6 @@ class CudaGraph : public CudaHandle<cudaGraph_t, cudaGraphDestroy> {
   using CudaHandle::CudaHandle;
   explicit CudaGraph(cu::Device& device);
   void end_capture(cudaStream_t stream);
-  bool uses_clusters();
 };
 
 class CudaGraphExec : public CudaHandle<cudaGraphExec_t, cudaGraphExecDestroy> {
