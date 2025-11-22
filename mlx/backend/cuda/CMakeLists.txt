@@ -123,19 +123,18 @@ if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0)
     mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--compress-mode=size>")
 endif()
 
-# Use the native CUDA arch for current device when there is no one specified.
+# Use native CUDA arch by default.
 if(NOT DEFINED MLX_CUDA_ARCHITECTURES)
   execute_process(
     COMMAND __nvcc_device_query
     OUTPUT_VARIABLE MLX_CUDA_ARCHITECTURES
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-  message(STATUS "__nvcc_device_query: ${MLX_CUDA_ARCHITECTURES}")
-  set(UPGRADABLE_COMPUTE_COMPATIBILITIES "90;100;121")
+  set(UPGRADABLE_ARCHITECTURES "90;100;121")
   if(MLX_CUDA_ARCHITECTURES STREQUAL "")
     message(
       FATAL_ERROR
         "Can not get native CUDA arch, must set MLX_CUDA_ARCHITECTURES")
-  elseif(MLX_CUDA_ARCHITECTURES IN_LIST UPGRADABLE_COMPUTE_COMPATIBILITIES)
+  elseif(MLX_CUDA_ARCHITECTURES IN_LIST UPGRADABLE_ARCHITECTURES)
     # Use arch-specific compute capability whenever possible.
     set(MLX_CUDA_ARCHITECTURES "${MLX_CUDA_ARCHITECTURES}a")
   else()
