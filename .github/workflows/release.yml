@@ -139,8 +139,6 @@ jobs:
           toolkit: 'cuda-12.9'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
-        with:
-          toolkit: 'cuda-12.9'
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
