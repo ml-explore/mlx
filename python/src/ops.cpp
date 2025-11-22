@@ -1445,7 +1445,7 @@ void init_ops(nb::module_& m) {
       "dtype"_a.none() = mx::float32,
       "stream"_a = nb::none(),
       nb::sig(
-          "def linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
+          "def linspace(start: scalar, stop: scalar, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
