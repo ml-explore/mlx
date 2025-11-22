@@ -4021,7 +4021,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def load(file: Union[file, str, pathlib.Path], /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, dict[str, array]]"),
+          "def load(file: Union[file, str, pathlib.Path], /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, dict[str, array], Tuple[dict[str, array], dict[str, Any]]]"),
       R"pbdoc(
         Load array(s) from a binary file.
 
@@ -4037,11 +4037,12 @@ void init_ops(nb::module_& m) {
               which support matadata. The metadata will be returned as an
               additional dictionary. Default: ``False``.
         Returns:
-            array or dict:
+            array, dict, or tuple:
                 A single array if loading from a ``.npy`` file or a dict
                 mapping names to arrays if loading from a ``.npz`` or
-                ``.safetensors`` file. If ``return_metadata`` is ``True`` an
-                additional dictionary of metadata will be returned.
+                ``.safetensors`` file. If ``return_metadata`` is ``True`` a
+                tuple ``(arrays, metadata)`` will be returned where the second
+                element is a dictionary containing the metadata.
 
         Warning:
 
