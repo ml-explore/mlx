@@ -800,6 +800,15 @@ array scaled_dot_product_attention(
           is_training,
           output_logsumexp,
           stream)) {
+    if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
+      // Convert bool mask to additive mask.
+      float inf = std::numeric_limits<float>::infinity();
+      array& mask = inputs[3];
+      mask = where(
+          mask,
+          full_like(mask, 0, final_type, s),
+          full_like(mask, -inf, final_type, s));
+    }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
         stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
@@ -839,7 +848,7 @@ std::vector<array> ScaledDotProductAttention::vjp(
 
   std::vector<Shape> shapes;
   std::vector<Dtype> dtypes;
-  for (int i = 0; i < primals.size(); ++i) {
+  for (int i = 0; i < /* outputs size */ 3; ++i) {
     shapes.push_back(primals[i].shape());
     dtypes.push_back(primals[i].dtype());
   }
