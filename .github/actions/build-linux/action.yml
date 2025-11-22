@@ -18,7 +18,6 @@ runs:
           -DMLX_BUILD_CUDA=OFF
         CMAKE_ARGS_CUDA: >-
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
-          -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
           -DMLX_BUILD_CUDA=ON
       run: |
         export CMAKE_ARGS="$CMAKE_ARGS_${{ startsWith(inputs.toolkit, 'cuda') && 'CUDA' || 'CPU' }}"

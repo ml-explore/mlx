@@ -51,8 +51,6 @@ runs:
         # Note: the CI machine does not meet CUDA 13's driver requirement.
         # Compatibility matrix:
         # https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
-        # The `nvcc` is installed into `/usr/local/cuda-VERSION/bin/nvcc` - but
-        # it's *not* on the default toolkit path.
         PACKAGES: |
           {
             "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-toolkit-12-6",
@@ -67,6 +65,7 @@ runs:
         sudo apt-get install -y \
             libnccl2 libnccl-dev \
             ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
+        echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
 
     - name: CUDA packages and driver report
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}

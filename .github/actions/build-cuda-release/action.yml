@@ -1,18 +1,13 @@
 name: 'Build CUDA wheel'
 description: 'Build CUDA wheel'
 
-inputs:
-  toolkit:
-    description: 'The CUDA toolkit'
-    required: true
-
 runs:
   using: "composite"
   steps:
     - name: Build package
       shell: bash
       env:
-        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/${{ inputs.toolkit }}/bin/nvcc
+        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON
       run: |
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
