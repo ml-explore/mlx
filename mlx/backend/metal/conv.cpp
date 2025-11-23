@@ -201,9 +201,19 @@ void implicit_gemm_conv_2D_gpu(
   int bk = 16;
 
   if (implicit_N <= 16) {
-    bn = 8;
-    wm = 4;
-    wn = 1;
+    // For large M with many groups, use bigger blocks for better parallelism
+    if (implicit_M >= 8192 && groups >= 8) {
+      // Use 64x8 blocks to maximize M-dimension parallelism while keeping N
+      // small
+      bm = 64;
+      bn = 8;
+      wm = 4;
+      wn = 1;
+    } else {
+      bn = 8;
+      wm = 4;
+      wn = 1;
+    }
   }
 
   int tn = (implicit_N + bn - 1) / bn;
