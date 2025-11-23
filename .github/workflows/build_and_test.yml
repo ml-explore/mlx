@@ -1,0 +1,123 @@
+name: Build and Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # For testing CI without starting a pull request:
+      - test/*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  prepare:
+    name: Lint and Prepare
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.generator.outputs.matrix }}
+      runner: ${{ steps.generator.outputs.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check lint
+        uses: pre-commit/action@v3.0.1
+      - name: Generate build matrix
+        id: generator
+        uses: actions/github-script@v8
+        with:
+          script: | # javascript
+            let matrix = {
+              'arch': ['x86_64', 'aarch64'],
+              'toolkit': ['cpu']
+            }
+            let runner = {
+              'cpu': {
+                'x86_64': 'ubuntu-22.04',
+                'aarch64': 'ubuntu-22.04-arm'
+              }
+            }
+            if (${{ github.repository == 'ml-explore/mlx' }}) {
+              let cuda_toolkits = ['cuda-12.6', 'cuda-12.9']
+              let cuda_runner = {
+                'x86_64': 'gpu-t4-4-core',
+                'aarch64': 'ubuntu-22.04-arm'
+              }
+              for (let toolkit of cuda_toolkits) {
+                matrix.toolkit.push(toolkit)
+                runner[toolkit] = cuda_runner
+              }
+            }
+            core.setOutput('matrix', JSON.stringify(matrix))
+            core.setOutput('runner', JSON.stringify(runner))
+
+  linux_build_and_test:
+    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ fromJson(needs.prepare.outputs.runner)[matrix.toolkit][matrix.arch] }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-linux
+        with:
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/build-linux
+        with:
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/test-linux
+        if: matrix.toolkit == 'cpu' || matrix.arch != 'aarch64'
+        with:
+          cpu-only: ${{ matrix.toolkit == 'cpu' }}
+
+  mac_build_and_test:
+    name: macOS (${{ matrix.macos-target }})
+    if: github.repository == 'ml-explore/mlx'
+    strategy:
+      matrix:
+        macos-target: ["14.0", "15.0"]
+    runs-on: [self-hosted, macos]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-macos
+      - uses: ./.github/actions/build-macos
+
+  build_documentation:
+    name: Build Documentation
+    if: github.repository == 'ml-explore/mlx'
+    runs-on: ubuntu-22.04
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/build-docs
+
+  linux_fedora_build_cpp:
+    name: Linux Fedora (${{ matrix.arch }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-22.04
+            arch: x86_64
+          - host: ubuntu-22.04-arm
+            arch: aarch64
+
+    runs-on: ${{ matrix.host }}
+    container:
+      image: fedora:42
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: CPP Build Test - No Release
+        run: |
+          bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh
