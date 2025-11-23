@@ -454,7 +454,8 @@ void steel_matmul_regular_axpby(
   int tm = (M + bm - 1) / bm;
 
   // TODO: Explore device-based tuning for swizzle
-  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+  // Use swizzle for batched operations with larger tile grids
+  int swizzle_log = (batch_size_out > 1 && tm >= 8 && tn >= 8) ? 1 : 0;
 
   // Prepare steel matmul params
   GEMMParams params{
