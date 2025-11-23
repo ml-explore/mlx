@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   prepare:
+    name: Lint and Prepare
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.generator.outputs.matrix }}
@@ -55,6 +56,7 @@ jobs:
             core.setOutput('runner', JSON.stringify(runner))
 
   linux_build_and_test:
+    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
     needs: prepare
     strategy:
       fail-fast: false
@@ -74,6 +76,7 @@ jobs:
           cpu-only: ${{ matrix.toolkit == 'cpu' }}
 
   mac_build_and_test:
+    name: macOS (${{ matrix.macos-target }})
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
@@ -88,6 +91,7 @@ jobs:
       - uses: ./.github/actions/build-macos
 
   build_documentation:
+    name: Build Documentation
     if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     needs: prepare
@@ -96,7 +100,7 @@ jobs:
       - uses: ./.github/actions/build-docs
 
   linux_fedora_build_cpp:
-    name: Linux Fedora CPP Build (${{ matrix.arch }})
+    name: Linux Fedora (${{ matrix.arch }})
     needs: prepare
     strategy:
       fail-fast: false
