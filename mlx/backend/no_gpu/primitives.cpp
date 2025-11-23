@@ -36,6 +36,10 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
+bool fast::ScaledDotProductAttention::supports_bool_mask() {
+  return false;
+}
+
 bool fast::ScaledDotProductAttentionVJP::use_fallback(
     const array& q,
     Stream s) {

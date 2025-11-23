@@ -569,6 +569,10 @@ bool ScaledDotProductAttention::use_fallback(
   return !(supports_sdpa_full || supports_sdpa_vector);
 }
 
+bool ScaledDotProductAttention::supports_bool_mask() {
+  return true;
+}
+
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

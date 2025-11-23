@@ -228,6 +228,7 @@ class ScaledDotProductAttention : public Custom {
       bool is_training,
       bool output_logsumexp,
       Stream s);
+  static bool supports_bool_mask();
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
