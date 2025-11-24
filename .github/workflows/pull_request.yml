@@ -19,7 +19,7 @@ jobs:
   check_lint:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
       - uses: ./.github/actions/test-linux
@@ -49,7 +49,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
     needs: check_lint
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
 
@@ -62,7 +62,7 @@ jobs:
     runs-on: gpu-t4-4-core
     needs: check_lint
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
         with:
           toolkit: ${{ matrix.toolkit }}
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/build-docs
 
   linux_fedora_build_cpp:
@@ -96,7 +96,7 @@ jobs:
       image: fedora:42
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: CPP Build Test - No Release
         run: |
