@@ -5432,5 +5432,44 @@ void init_ops(nb::module_& m) {
         Returns:
             array or Sequence[array]: The outputs which depend on dependencies.
       )pbdoc");
-  m.def("qqmm", &mx::qqmm, nb::arg(), nb::arg(), nb::kw_only(), )
+  m.def(
+      "qqmm",
+      &mx::qqmm,
+      nb::arg(), // x
+      nb::arg(), // w_q
+      "scales"_a, // scales w
+      "w"_a = nb::none(), // bf16 weights
+      "transpose"_a = true,
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "affine",
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def qqmm(x: array, w_q: array, /, scales: array, w: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform the matrix multiplication with the quantized matrix ``w_q`` and x that is
+        quantized on-the-fly using provided group size, bits and mode which must be the same
+        as used to quantize ``w_q``. ``w`` must be provided during training for correct
+        gradient computation, but optional for the inference.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``group_size`` elements of ``w_q``
+          w (array, optional): bf16 or float32 weights used during training for
+            correct gradient computation. Default: ``None``.
+          transpose (bool, optional): Defines whether to multiply with the
+            transposed ``w_q`` or not, namely whether we are performing
+            ``x @ w_q.T`` or ``x @ w_q``. Default: ``True``.
+          group_size (int, optional): The size of the group in ``w_q`` that shares a
+            scale and bias. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          bits (int, optional): The number of bits occupied by each element of
+            ``w_q`` in the quantized array. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
+        Returns:
+          array: The result of the multiplication of quantized ``x`` with ``w_q``.
+      )pbdoc");
 }

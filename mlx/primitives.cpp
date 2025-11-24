@@ -3517,7 +3517,7 @@ std::vector<array> DualQuantizedMatmul::vjp(
           cotan, //  M X N
           wtq[0], //  K X N_packed
           wtq[1], // scales
-          // primals[3], // bf16 weights (for compatability)
+          std::nullopt,
           true,
           group_size_,
           bits_,
@@ -3531,9 +3531,9 @@ std::vector<array> DualQuantizedMatmul::vjp(
                           s); // (N, M_packed)
       vjps.push_back(qqmm(
           transpose(cotan, reorder, s), // (N, M)
-          // xt, // (K, M)
           xtq[0], // (N, M_packed)
           xtq[1], // scales
+          std::nullopt,
           true,
           group_size_,
           bits_,

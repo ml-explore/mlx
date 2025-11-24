@@ -169,12 +169,12 @@ std::pair<int, int> extract_qqmm_dims(
   // Calculate the expanded w's dimensions
 
   if (w &&
-      (w.shape(-1) != w_q.shape(-1) * 32 / bits ||
-       w.shape(-2) != w_q.shape(-2))) {
+      (w->shape(-1) != w_q.shape(-1) * 32 / bits ||
+       w->shape(-2) != w_q.shape(-2))) {
     std::ostringstream msg;
     msg << "[" << tag << "] The shape of the weight matrix and its "
         << "quantized version are incompatible. Received weight matrix "
-        << "with shape " << w.shape() << " and quantized weight matrix "
+        << "with shape " << w->shape() << " and quantized weight matrix "
         << "with shape " << w_q.shape() << " with bits=" << bits;
     throw std::invalid_argument(msg.str());
   }
