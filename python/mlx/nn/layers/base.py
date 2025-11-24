@@ -407,7 +407,7 @@ class Module(dict):
         instance).
 
         Args:
-            apply_fn (Callable): The function to apply to the modules. It takes two parameters. 
+            apply_fn (Callable): The function to apply to the modules. It takes two parameters.
             The first parameter is a string representing the path of the module in the hierarchy (e.g. "transformer.layers.0").
             The second parameter is the actual module object
 
