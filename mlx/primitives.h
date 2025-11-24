@@ -1660,7 +1660,7 @@ class DualQuantizedMatmul : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   // DEFINE_VMAP()
-  // DEFINE_GRADS()
+  DEFINE_GRADS()
   DEFINE_NAME(DualQuantizedMatmul)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;

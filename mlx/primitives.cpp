@@ -3502,6 +3502,7 @@ std::vector<array> DualQuantizedMatmul::vjp(
   // primal[3] -- scales_w
   // primal[0] -- bf16 activations (M, K)
   // cotan -- bf16 activation grads (M, N)
+  auto qmode = quantization_mode_to_string(mode_);
   for (auto arg : argnums) {
     if (arg == 0) { // gradient wrt to x
       // We transpose weights -> quantize along N -> qqmm (cotan quantized in
@@ -3510,7 +3511,7 @@ std::vector<array> DualQuantizedMatmul::vjp(
           transpose(primals[1], reorder, s),
           group_size_,
           bits_,
-          mode_,
+          qmode,
           s); // (K, N_packed), scales
       vjps.push_back(qqmm(
           cotan, //  M X N
@@ -3520,30 +3521,34 @@ std::vector<array> DualQuantizedMatmul::vjp(
           true,
           group_size_,
           bits_,
-          mode_,
+          qmode,
           s));
     } else if (arg == 1) { // gradient wrt to weights
       // it is a bit complicated -- we need to quantize along M but cotan is
       // (M,N) so we transpose cotan -> quantize along M -> qqmm
-      auto ctq = quantize(
-          transpose(cotan, reorder, s),
-          group_size_,
-          bits_,
-          mode_,
-          s); // (N, M_packed)
+      auto xt = transpose(primals[0], reorder, s); // (K, M)
+      auto xtq = quantize(xt, group_size_, bits_, qmode,
+                          s); // (N, M_packed)
       vjps.push_back(qqmm(
-          transpose(primals[0], reorder, s), //
-          cotan, // (M, N)
-          ctq[0], // (N, M_packed)
-          ctq[1], // scales
+          transpose(cotan, reorder, s), // (N, M)
+          xt, // (K, M)
+          xtq[0], // (N, M_packed)
+          xtq[1], // scales
           true,
           group_size_,
           bits_,
-          mode_,
+          qmode,
           s)); // (K, M), (N, M_packed)
     }
   }
   return vjps;
+}
+
+std::vector<array> DualQuantizedMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("DualQuantizedMatmul::jvp NYI");
 }
 
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(

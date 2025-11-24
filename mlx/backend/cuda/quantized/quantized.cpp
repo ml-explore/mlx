@@ -175,7 +175,7 @@ void DualQuantizedMatmul::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
   nvtx3::scoped_range r("DualQuantizedMatmul::eval_gpu");
-  // for now it is size of 4: bf16 x, bf16 w, w_q, scale_w, <- this is like this
+  // for now it is size of 4: bf16 x, bf16 w, w_q, scale_w
   // for the inference & vjp
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
@@ -206,8 +206,6 @@ void DualQuantizedMatmul::eval_gpu(
       };
 
   auto [x_q, scale_x_pre] = quantize_activation(inputs[0], encoder, s);
-  auto& scale_w_pre = inputs[2];
-
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = x_q.shape(-2);
@@ -221,8 +219,8 @@ void DualQuantizedMatmul::eval_gpu(
 
   bool x_transposed = false; // a is normal (M x K)
   bool w_transposed = true; // b is transposed (N x K -> K x N)
-  int64_t lda = K; // Leading dimension of a (packed)
-  int64_t ldb = K; // Leading dimension of b (packed)
+  int64_t lda = K; // Leading dimension of a
+  int64_t ldb = K; // Leading dimension of b
 
   qqmm_impl(
       encoder,

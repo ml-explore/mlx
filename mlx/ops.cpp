@@ -4257,7 +4257,12 @@ array qqmm(
   auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
       "qqmm", x, w, w_q, scales_w, transpose, group_size, bits);
 
-  std::vector<array> inputs = {x, w, w_q, scales_w};
+  std::vector<array> inputs = {
+      x,
+      w,
+      stop_gradient(w_q),
+      stop_gradient(
+          scales_w)}; // we don't backprope through qunatized w and scales
   if (x.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
