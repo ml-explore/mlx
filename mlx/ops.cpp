@@ -158,21 +158,31 @@ std::pair<int, int> extract_qqmm_dims(
     std::string_view tag,
     const array& x,
     const array& w,
+    const array& w_q,
     const array& scales_w,
     bool transpose,
     int group_size,
     int bits) {
-  // Validate w and scales_w
+  // Validate w_q and scales_w
   validate_quantized_input(
-      tag, w, scales_w, "weight matrix", "scales_w", group_size, bits);
-
+      tag, w_q, scales_w, "weight matrix", "scales_w", group_size, bits);
+  // Calculate the expanded w's dimensions
+  if (w.shape(-1) != w_q.shape(-1) * 32 / bits ||
+      w.shape(-2) != w_q.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] The shape of the weight matrix and its "
+        << "quantized version are incompatible. Received weight matrix "
+        << "with shape " << w.shape() << " and quantized weight matrix "
+        << "with shape " << w_q.shape() << " with bits=" << bits;
+    throw std::invalid_argument(msg.str());
+  }
   // For narrow precision types (mxfp4, nvfp4) the only supported layout is TN
   // A is MxK, B is NxK (transposed)
   int x_inner_dims = x.shape(-1) / (32 / bits); // K
 
   // Calculate the expanded w's dimensions
-  int w_inner_dims = (transpose) ? w.shape(-1) : w.shape(-2);
-  int w_outer_dims = (transpose) ? w.shape(-2) : w.shape(-1);
+  int w_inner_dims = (transpose) ? w_q.shape(-1) : w_q.shape(-2);
+  int w_outer_dims = (transpose) ? w_q.shape(-2) : w_q.shape(-1);
 
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
@@ -4218,6 +4228,7 @@ array quantized_matmul(
 
 array qqmm(
     array x,
+    array w,
     array w_q,
     array scales_w,
     bool transpose /* = true */,
@@ -4227,8 +4238,7 @@ array qqmm(
     StreamOrDevice s /* = {} */) {
   // currently only simetric quantization is supported for qqmm
   auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // here we need to check that inputs and otputs will be quantized in the same
-  // way...
+  // here we need to check that w_q, w and scales_w are compatible with
   if ((qmode == QuantizationMode::Nvfp4 || qmode == QuantizationMode::Mxfp4) &&
       !transpose) {
     std::ostringstream msg;
@@ -4244,10 +4254,10 @@ array qqmm(
   }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  auto [w_inner_dims, w_outer_dims] =
-      extract_qqmm_dims("qqmm", x, w_q, scales_w, transpose, group_size, bits);
+  auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
+      "qqmm", x, w, w_q, scales_w, transpose, group_size, bits);
 
-  std::vector<array> inputs = {x, w_q, scales_w};
+  std::vector<array> inputs = {x, w, w_q, scales_w};
   if (x.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }

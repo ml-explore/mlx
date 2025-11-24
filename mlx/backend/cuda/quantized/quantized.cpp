@@ -175,14 +175,16 @@ void DualQuantizedMatmul::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
   nvtx3::scoped_range r("DualQuantizedMatmul::eval_gpu");
-  // WIP need to add primitive
-  // TODO: for now minimalistic implementation without batching support
+  // for now it is size of 4: bf16 x, bf16 w, w_q, scale_w, <- this is like this
+  // for the inference & vjp
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  assert(inputs.size() == 3);
-  auto& x = inputs[0]; // activations should be quantized on the fly
-  auto& w_q = inputs[1]; // quantized weights
+  assert(inputs.size() == 4);
+  auto& x = inputs[0]; // activations bf16
+  auto& w = inputs[1]; // weights bf16
+  auto& w_q = inputs[2]; // quantized weights
+  auto& scale_w_pre = inputs[3];
 
   auto quantize_activation =
       [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
