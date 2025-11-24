@@ -305,6 +305,7 @@ void Event::wait() {
   } else {
     event->atomic->wait(value());
   }
+  CHECK_CUDA_ERROR(cudaPeekAtLastError());
 }
 
 void Event::wait(Stream s) {

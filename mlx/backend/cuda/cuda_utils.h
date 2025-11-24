@@ -29,6 +29,9 @@ class CudaHandle {
   }
 
   ~CudaHandle() {
+    if (cudaPeekAtLastError() != cudaSuccess) {
+      return;
+    }
     reset();
   }
 
