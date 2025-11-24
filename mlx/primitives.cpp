@@ -3497,10 +3497,10 @@ std::vector<array> DualQuantizedMatmul::vjp(
   std::iota(reorder.begin(), reorder.end(), 0);
   std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   auto& s = stream();
-  // primal[1] -- bf16 weights
-  // primal[2] -- quantized weights (row wise)
-  // primal[3] -- scales_w
+  // primal[1] -- quantized weights (row wise)
+  // primal[2] -- scales_w
   // primal[0] -- bf16 activations (M, K)
+  // primal[3] -- bf16 weights (N, K)
   // cotan -- bf16 activation grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
   for (auto arg : argnums) {
@@ -3508,22 +3508,22 @@ std::vector<array> DualQuantizedMatmul::vjp(
       // We transpose weights -> quantize along N -> qqmm (cotan quantized in
       // eval_gpu)
       auto wtq = quantize(
-          transpose(primals[1], reorder, s),
+          transpose(primals[3], reorder, s),
           group_size_,
           bits_,
           qmode,
           s); // (K, N_packed), scales
       vjps.push_back(qqmm(
           cotan, //  M X N
-          primals[1], // bf16 weights (for compatability)
           wtq[0], //  K X N_packed
           wtq[1], // scales
+          // primals[3], // bf16 weights (for compatability)
           true,
           group_size_,
           bits_,
           qmode,
           s));
-    } else if (arg == 1) { // gradient wrt to weights
+    } else if (arg == 3) { // gradient wrt to weights
       // it is a bit complicated -- we need to quantize along M but cotan is
       // (M,N) so we transpose cotan -> quantize along M -> qqmm
       auto xt = transpose(primals[0], reorder, s); // (K, M)
@@ -3531,7 +3531,7 @@ std::vector<array> DualQuantizedMatmul::vjp(
                           s); // (N, M_packed)
       vjps.push_back(qqmm(
           transpose(cotan, reorder, s), // (N, M)
-          xt, // (K, M)
+          // xt, // (K, M)
           xtq[0], // (N, M_packed)
           xtq[1], // scales
           true,

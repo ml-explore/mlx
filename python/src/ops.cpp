@@ -5432,4 +5432,5 @@ void init_ops(nb::module_& m) {
         Returns:
             array or Sequence[array]: The outputs which depend on dependencies.
       )pbdoc");
+  m.def("qqmm", &mx::qqmm, nb::arg(), nb::arg(), nb::kw_only(), )
 }

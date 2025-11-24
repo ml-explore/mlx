@@ -157,9 +157,9 @@ std::pair<int, int> extract_quantized_matmul_dims(
 std::pair<int, int> extract_qqmm_dims(
     std::string_view tag,
     const array& x,
-    const array& w,
     const array& w_q,
     const array& scales_w,
+    const std::optional<array>& w,
     bool transpose,
     int group_size,
     int bits) {
@@ -167,8 +167,10 @@ std::pair<int, int> extract_qqmm_dims(
   validate_quantized_input(
       tag, w_q, scales_w, "weight matrix", "scales_w", group_size, bits);
   // Calculate the expanded w's dimensions
-  if (w.shape(-1) != w_q.shape(-1) * 32 / bits ||
-      w.shape(-2) != w_q.shape(-2)) {
+
+  if (w &&
+      (w.shape(-1) != w_q.shape(-1) * 32 / bits ||
+       w.shape(-2) != w_q.shape(-2))) {
     std::ostringstream msg;
     msg << "[" << tag << "] The shape of the weight matrix and its "
         << "quantized version are incompatible. Received weight matrix "
@@ -4228,9 +4230,9 @@ array quantized_matmul(
 
 array qqmm(
     array x,
-    array w,
     array w_q,
     array scales_w,
+    std::optional<array> w /* = std::nullopt */,
     bool transpose /* = true */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
@@ -4255,14 +4257,16 @@ array qqmm(
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
-      "qqmm", x, w, w_q, scales_w, transpose, group_size, bits);
+      "qqmm", x, w_q, scales_w, w, transpose, group_size, bits);
 
   std::vector<array> inputs = {
       x,
-      w,
       stop_gradient(w_q),
-      stop_gradient(
-          scales_w)}; // we don't backprope through qunatized w and scales
+      stop_gradient(scales_w),
+  }; // we don't backprope through qunatized w and scales,
+  if (w) {
+    inputs.push_back(w);
+  }
   if (x.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }

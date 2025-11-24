@@ -1405,9 +1405,9 @@ std::vector<array> quantize(
 
 array qqmm(
     array x, // input activations
-    array w,
     array w_q, // quantized weights
     array w_scales,
+    std::optional<array> w = std::nullopt, // optional bf16 weights for vjp
     bool transpose = true,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
