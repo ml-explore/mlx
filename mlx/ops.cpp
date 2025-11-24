@@ -4264,8 +4264,8 @@ array qqmm(
       stop_gradient(w_q),
       stop_gradient(scales_w),
   }; // we don't backprope through qunatized w and scales,
-  if (w) {
-    inputs.push_back(w);
+  if (w.has_value()) {
+    inputs.push_back(*w);
   }
   if (x.ndim() > 2 && w_q.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);

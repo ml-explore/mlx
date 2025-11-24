@@ -180,11 +180,10 @@ void DualQuantizedMatmul::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  assert(inputs.size() == 4);
+  assert(inputs.size() == 4 || inputs.size() == 3);
   auto& x = inputs[0]; // activations bf16
-  auto& w = inputs[1]; // weights bf16
-  auto& w_q = inputs[2]; // quantized weights
-  auto& scale_w_pre = inputs[3];
+  auto& w_q = inputs[1]; // quantized weights
+  auto& scale_w_pre = inputs[2];
 
   auto quantize_activation =
       [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
