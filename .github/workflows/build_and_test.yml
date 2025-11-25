@@ -16,52 +16,37 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  prepare:
-    name: Lint and Prepare
+  check_lint:
+    name: Check Lint
     runs-on: ubuntu-22.04
-    outputs:
-      matrix: ${{ steps.generator.outputs.matrix }}
-      runner: ${{ steps.generator.outputs.runner }}
     steps:
       - uses: actions/checkout@v6
-      - name: Check lint
-        uses: pre-commit/action@v3.0.1
-      - name: Generate build matrix
-        id: generator
-        uses: actions/github-script@v8
-        with:
-          script: | # javascript
-            let matrix = {
-              'arch': ['x86_64', 'aarch64'],
-              'toolkit': ['cpu']
-            }
-            let runner = {
-              'cpu': {
-                'x86_64': 'ubuntu-22.04',
-                'aarch64': 'ubuntu-22.04-arm'
-              }
-            }
-            if (${{ github.repository == 'ml-explore/mlx' }}) {
-              let cuda_toolkits = ['cuda-12.6', 'cuda-12.9']
-              let cuda_runner = {
-                'x86_64': 'gpu-t4-4-core',
-                'aarch64': 'ubuntu-22.04-arm'
-              }
-              for (let toolkit of cuda_toolkits) {
-                matrix.toolkit.push(toolkit)
-                runner[toolkit] = cuda_runner
-              }
-            }
-            core.setOutput('matrix', JSON.stringify(matrix))
-            core.setOutput('runner', JSON.stringify(runner))
+      - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
-    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
-    needs: prepare
+    name: Linux (cpu, ${{ matrix.arch }})
+    needs: check_lint
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    runs-on: ${{ fromJson(needs.prepare.outputs.runner)[matrix.toolkit][matrix.arch] }}
+      matrix:
+        arch: ['x86_64', 'aarch64']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-linux
+      - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test-linux
+
+  cuda_build_and_test:
+    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
+    if: github.repository == 'ml-explore/mlx'
+    needs: check_lint
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ['x86_64', 'aarch64']
+        toolkit: ['cuda-12.6', 'cuda-12.9']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'gpu-t4-4-core' || 'ubuntu-22.04-arm' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
@@ -71,9 +56,9 @@ jobs:
         with:
           toolkit: ${{ matrix.toolkit }}
       - uses: ./.github/actions/test-linux
-        if: matrix.toolkit == 'cpu' || matrix.arch != 'aarch64'
+        if: matrix.arch == 'x86_64'
         with:
-          cpu-only: ${{ matrix.toolkit == 'cpu' }}
+          has-gpu: true
 
   mac_build_and_test:
     name: macOS (${{ matrix.macos-target }})
@@ -84,7 +69,7 @@ jobs:
     runs-on: [self-hosted, macos]
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
-    needs: prepare
+    needs: check_lint
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-macos
@@ -94,14 +79,14 @@ jobs:
     name: Build Documentation
     if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
-    needs: prepare
+    needs: check_lint
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/build-docs
 
   linux_fedora_build_cpp:
     name: Linux Fedora (${{ matrix.arch }})
-    needs: prepare
+    needs: check_lint
     strategy:
       fail-fast: false
       matrix:
