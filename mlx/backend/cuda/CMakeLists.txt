@@ -123,14 +123,21 @@ if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0)
     mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--compress-mode=size>")
 endif()
 
-# Compute capability >= 7.0 is required for synchronization between CPU/GPU with
-# managed memory.
+# Use native CUDA arch by default.
 if(NOT DEFINED MLX_CUDA_ARCHITECTURES)
   execute_process(
-    COMMAND bash detect_cuda_arch.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND __nvcc_device_query
     OUTPUT_VARIABLE MLX_CUDA_ARCHITECTURES
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+  set(UPGRADABLE_ARCHITECTURES "90;100;121")
+  if(MLX_CUDA_ARCHITECTURES STREQUAL "")
+    message(
+      FATAL_ERROR
+        "Can not get native CUDA arch, must set MLX_CUDA_ARCHITECTURES")
+  elseif(MLX_CUDA_ARCHITECTURES IN_LIST UPGRADABLE_ARCHITECTURES)
+    # Use arch-specific compute capability whenever possible.
+    set(MLX_CUDA_ARCHITECTURES "${MLX_CUDA_ARCHITECTURES}a")
+  endif()
 endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES

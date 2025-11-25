@@ -17,29 +17,51 @@ concurrency:
 
 jobs:
   check_lint:
+    name: Check Lint
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
       - uses: pre-commit/action@v3.0.1
 
   linux_build_and_test:
+    name: Linux (cpu, ${{ matrix.arch }})
     needs: check_lint
     strategy:
-      matrix:
-        runner:
-          - ubuntu-22.04
-          - ubuntu-22.04-arm
       fail-fast: false
-    runs-on: ${{ matrix.runner }}
+      matrix:
+        arch: ['x86_64', 'aarch64']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
       - uses: ./.github/actions/test-linux
+
+  cuda_build_and_test:
+    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
+    if: github.repository == 'ml-explore/mlx'
+    needs: check_lint
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ['x86_64', 'aarch64']
+        toolkit: ['cuda-12.6', 'cuda-12.9']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'gpu-t4-4-core' || 'ubuntu-22.04-arm' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-linux
         with:
-          cpu-only: true
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/build-linux
+        with:
+          toolkit: ${{ matrix.toolkit }}
+      - uses: ./.github/actions/test-linux
+        if: matrix.arch == 'x86_64'
+        with:
+          has-gpu: true
 
   mac_build_and_test:
+    name: macOS (${{ matrix.macos-target }})
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
@@ -53,25 +75,8 @@ jobs:
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
 
-  cuda_build_and_test:
-    if: github.repository == 'ml-explore/mlx'
-    strategy:
-      fail-fast: false
-      matrix:
-        toolkit: ['cuda-12.6', 'cuda-12.9']
-    runs-on: gpu-t4-4-core
-    needs: check_lint
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-linux
-        with:
-          toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/build-cuda
-        with:
-          toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/test-linux
-
   build_documentation:
+    name: Build Documentation
     if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     needs: check_lint
@@ -80,7 +85,7 @@ jobs:
       - uses: ./.github/actions/build-docs
 
   linux_fedora_build_cpp:
-    name: Linux Fedora CPP Build (${{ matrix.arch }})
+    name: Linux Fedora (${{ matrix.arch }})
     needs: check_lint
     strategy:
       fail-fast: false
