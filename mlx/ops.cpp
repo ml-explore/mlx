@@ -4238,11 +4238,25 @@ array qqmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
-  // currently only simetric quantization is supported for qqmm
+// currently only simetric quantization is supported for qqmm
+#if defined(MLX_USE_CUDA) && CUDART_VERSION < 12080
+  throw std::runtime_error(
+      "[qqmm] Requires CUDA >= 12.8.0 for cuBLAS block-scaled matmul support. "
+      "Please upgrade your CUDA toolkit.");
+#endif
   auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // here we need to check that w_q, w and scales_w are compatible with
-  if ((qmode == QuantizationMode::Nvfp4 || qmode == QuantizationMode::Mxfp4) &&
-      !transpose) {
+  // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
+  if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
+    std::ostringstream msg;
+    msg << "[qqmm] only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
+        << mode << "' was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+  // for fp4 block scaling the only supported layout is TN
+  // https://docs.nvidia.com/cutlass/4.2.1/media/docs/cpp/blackwell_functionality.html
+  // because cublaslt is column major we need the second argument to be
+  // transposed, not the first one
+  if ((qmode == QuantizationMode::Nvfp4) && !transpose) {
     std::ostringstream msg;
     msg << "[qqmm] transpose must be set to true with " << mode
         << " quantization but "
@@ -4259,11 +4273,13 @@ array qqmm(
   auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
       "qqmm", x, w_q, scales_w, w, transpose, group_size, bits);
 
+  // we don't backprope through qunatized w and scales
   std::vector<array> inputs = {
       x,
       stop_gradient(w_q),
       stop_gradient(scales_w),
-  }; // we don't backprope through qunatized w and scales,
+  };
+  // if bf16 w is provided, add it to inputs for vjps
   if (w.has_value()) {
     inputs.push_back(*w);
   }

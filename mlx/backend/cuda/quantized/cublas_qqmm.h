@@ -68,16 +68,18 @@ class CublasQQMM : public CublasMatmulBase {
   //       float alpha,
   //       float beta);
 
-  //  private:
-  //   void run_batched(
-  //       cu::CommandEncoder& encoder,
-  //       array& out,
-  //       const array& a,
-  //       const array& b,
-  //       const Shape& batch_shape,
-  //       const Strides& a_batch_strides,
-  //       const Strides& b_batch_strides,
-  //       float alpha);
+ private:
+  void run_batched(
+      cu::CommandEncoder& encoder,
+      array& out,
+      const array& a,
+      const array& b,
+      const array& a_scale,
+      const array& b_scale,
+      const Shape& batch_shape,
+      const Strides& a_batch_strides,
+      const Strides& b_batch_strides,
+      float alpha);
 
   //   void run_batched(
   //       cu::CommandEncoder& encoder,

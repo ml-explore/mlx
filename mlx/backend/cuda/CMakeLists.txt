@@ -56,9 +56,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
@@ -67,6 +65,13 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+else()
+  target_sources(mlx
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
+  target_sources(mlx
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
+  target_sources(
+    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm_batched.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)

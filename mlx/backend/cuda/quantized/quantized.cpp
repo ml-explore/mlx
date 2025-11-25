@@ -53,6 +53,18 @@ array pad_and_repack_scales(
   // Compute padded dimensions for full tiles (128 rows × 4 cols)
   auto [pad_outer, pad_inner] =
       get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
+
+  // Calculate batch size (all dimensions except last 2)
+  size_t batch_size = scale.size() / (scale.shape(-2) * scale.shape(-1));
+
+  // Build output shape preserving batch dimensions
+  Shape out_shape;
+  for (int i = 0; i < scale.ndim() - 2; ++i) {
+    out_shape.push_back(scale.shape(i));
+  }
+  out_shape.push_back(pad_outer);
+  out_shape.push_back(pad_inner);
+
   // cuBLAS requirements for scale factor layout:
   // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
   // 2. Out-of-bounds values must be filled with zeros
@@ -60,8 +72,8 @@ array pad_and_repack_scales(
   // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
   // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
-      cu::malloc_async(pad_outer * pad_inner, encoder),
-      Shape{pad_outer, pad_inner},
+      cu::malloc_async(batch_size * pad_outer * pad_inner, encoder),
+      out_shape,
       scale.dtype());
   repack_scales(scale, scale_tiled, encoder, s);
 
@@ -215,6 +227,26 @@ void DualQuantizedMatmul::eval_gpu(
   // Repack scales from linear to tiled layout for tensor cores
   array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
   array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
+
+  // Debug: print scale shapes after repacking
+  std::cerr << "[DEBUG] scale_x_pre shape: [";
+  for (int i = 0; i < scale_x_pre.ndim(); ++i) {
+    std::cerr << scale_x_pre.shape(i)
+              << (i < scale_x_pre.ndim() - 1 ? ", " : "");
+  }
+  std::cerr << "]" << std::endl;
+
+  std::cerr << "[DEBUG] scale_x (repacked) shape: [";
+  for (int i = 0; i < scale_x.ndim(); ++i) {
+    std::cerr << scale_x.shape(i) << (i < scale_x.ndim() - 1 ? ", " : "");
+  }
+  std::cerr << "], size: " << scale_x.size() << std::endl;
+
+  std::cerr << "[DEBUG] scale_w (repacked) shape: [";
+  for (int i = 0; i < scale_w.ndim(); ++i) {
+    std::cerr << scale_w.shape(i) << (i < scale_w.ndim() - 1 ? ", " : "");
+  }
+  std::cerr << "], size: " << scale_w.size() << std::endl;
 
   bool x_transposed = false; // a is normal (M x K)
   bool w_transposed = true; // b is transposed (N x K -> K x N)

@@ -158,18 +158,20 @@ void CublasQQMM::run(
     const Strides& b_batch_strides,
     float alpha) {
   int batch_count = out.size() / (M_ * N_);
-  //   if (batch_count / batch_shape.back() > 1) {
-  //     run_batched(
-  //         encoder,
-  //         out,
-  //         a,
-  //         b,
-  //         batch_shape,
-  //         a_batch_strides,
-  //         b_batch_strides,
-  //         alpha);
-  //     return;
-  //   }
+  if (batch_count / batch_shape.back() > 1) {
+    run_batched(
+        encoder,
+        out,
+        a,
+        b,
+        a_scale,
+        b_scale,
+        batch_shape,
+        a_batch_strides,
+        b_batch_strides,
+        alpha);
+    return;
+  }
 
   encoder.set_input_array(a);
   encoder.set_input_array(b);
