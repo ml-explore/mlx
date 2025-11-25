@@ -444,6 +444,34 @@ TEST_CASE("test gpu matmul") {
   }
 }
 
+TEST_CASE("test gpu gather_mm sorted matches unsorted for m=1") {
+  // Deterministic inputs that route M==1 sorted gather through the Metal GEMM
+  // path.
+  auto x_key = random::key(42);
+  auto w_key = random::key(7);
+  auto x = random::normal({16, 1, 1024}, float32, x_key, Device::gpu);
+  auto w = random::normal({4, 1024, 256}, float32, w_key, Device::gpu);
+
+  array rhs_indices =
+      astype(array({0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}), uint32);
+
+  auto unsorted =
+      gather_mm(x, w, std::nullopt, rhs_indices, false, Device::gpu);
+  auto sorted = gather_mm(x, w, std::nullopt, rhs_indices, true, Device::gpu);
+
+  eval(unsorted, sorted);
+
+  auto max_diff = max(abs(unsorted - sorted));
+  CHECK_LT(max_diff.item<float>(), 1e-7f);
+
+  // Baseline: token 0 matches a direct matmul against expert 0.
+  auto x0 = squeeze(slice(x, {0}, {1}), 0);
+  auto w0 = squeeze(slice(w, {0}, {1}), 0);
+  auto ref = matmul(x0, w0, Device::gpu);
+  auto unsorted_token0 = squeeze(slice(unsorted, {0}, {1}), 0);
+  CHECK(array_equal(unsorted_token0, ref, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu validation") {
   // Run this test with Metal validation enabled
   // METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./tests/tests \
