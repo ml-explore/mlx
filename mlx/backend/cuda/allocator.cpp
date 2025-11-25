@@ -155,7 +155,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     lock.unlock();
     if (!buf) {
       cudaError_t err;
-      void* data;
+      void* data = nullptr;
       if (device == -1) {
         err = cudaMallocManaged(&data, size);
       } else {
