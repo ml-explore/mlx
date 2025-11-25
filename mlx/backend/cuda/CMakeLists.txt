@@ -137,8 +137,6 @@ if(NOT DEFINED MLX_CUDA_ARCHITECTURES)
   elseif(MLX_CUDA_ARCHITECTURES IN_LIST UPGRADABLE_ARCHITECTURES)
     # Use arch-specific compute capability whenever possible.
     set(MLX_CUDA_ARCHITECTURES "${MLX_CUDA_ARCHITECTURES}a")
-  else()
-    set(MLX_CUDA_ARCHITECTURES "native")
   endif()
 endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
