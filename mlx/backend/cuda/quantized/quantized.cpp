@@ -50,15 +50,9 @@ array pad_and_repack_scales(
     const array& scale,
     cu::CommandEncoder& encoder,
     const Stream& s) {
-  // Calculate batch size (all dimensions except last 2)
-  size_t batch_size = scale.size() / (scale.shape(-2) * scale.shape(-1));
-  size_t collapsed_outer = batch_size * scale.shape(-2);
-
+  // Compute padded dimensions for full tiles (128 rows × 4 cols)
   auto [pad_outer, pad_inner] =
-      get_padded_scale_dims(collapsed_outer, scale.shape(-1));
-
-  Shape out_shape = {pad_outer, pad_inner};
-
+      get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
   // cuBLAS requirements for scale factor layout:
   // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
   // 2. Out-of-bounds values must be filled with zeros
@@ -67,7 +61,7 @@ array pad_and_repack_scales(
   // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
       cu::malloc_async(pad_outer * pad_inner, encoder),
-      out_shape,
+      Shape{pad_outer, pad_inner},
       scale.dtype());
   repack_scales(scale, scale_tiled, encoder, s);
 
@@ -134,7 +128,10 @@ void qqmm_impl(
     float alpha = 1.0f) {
   // Invoke CublasQQMM
   std::string qmode = quantization_mode_to_string(mode);
-  
+
+  // Currently only supports non-batched QQMM operations
+  // that covers all use cases for training, we will just collapse (batch,
+  // seq_len) into (tokens)
   CublasQQMM qqmm(
       encoder.device(),
       a_transposed,
@@ -158,15 +155,12 @@ void DualQuantizedMatmul::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
   nvtx3::scoped_range r("DualQuantizedMatmul::eval_gpu");
-  // for now it is size of 4: bf16 x, bf16 w, w_q, scale_w
-  // for the inference & vjp
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-
   assert(inputs.size() == 4 || inputs.size() == 3);
   auto& x = inputs[0]; // activations bf16
   auto& w_q = inputs[1]; // quantized weights
-  auto& scale_w_pre = inputs[2];
+  auto& scale_w_pre = inputs[2]; // weight scales
 
   auto quantize_activation =
       [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {

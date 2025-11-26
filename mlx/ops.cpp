@@ -4263,6 +4263,13 @@ array qqmm(
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
     throw std::invalid_argument(msg.str());
   }
+  if (x.ndim() > 2 || w_q.ndim() > 2) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only 2D inputs are supported but "
+        << "x.ndim() == " << x.ndim() << " and "
+        << "w_q.ndim() == " << w_q.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(

@@ -3508,7 +3508,7 @@ std::vector<array> DualQuantizedMatmul::vjp(
       // We transpose weights -> quantize along N -> qqmm (cotan quantized in
       // eval_gpu)
       auto wtq = quantize(
-          transpose(primals[3], reorder, s),
+          transpose(primals[3], {1, 0}, s), // we assume that weights are 2D
           group_size_,
           bits_,
           qmode,
