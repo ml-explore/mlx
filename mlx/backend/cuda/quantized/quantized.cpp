@@ -185,7 +185,7 @@ void DualQuantizedMatmul::eval_gpu(
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = x_q.shape(-2);
-  int N = transpose_ ? w_q.shape(-2) : w_q.shape(-1);
+  int N = w_q.shape(-2); // always transposed
   int K_packed = x_q.shape(-1);
   int K = K_packed * (32 / bits_);
 
@@ -194,9 +194,9 @@ void DualQuantizedMatmul::eval_gpu(
   array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
 
   bool x_transposed = false;
-  bool w_transposed = transpose_;
+  bool w_transposed = true; // always transposed
   int64_t lda = K;
-  int64_t ldb = transpose_ ? K : N;
+  int64_t ldb = K;
 
   qqmm_impl(
       encoder,

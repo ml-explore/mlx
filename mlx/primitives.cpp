@@ -3473,14 +3473,13 @@ bool DualQuantizedMatmul::is_equivalent(const Primitive& other) const {
   const DualQuantizedMatmul& qm_other =
       static_cast<const DualQuantizedMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_;
 }
 
 std::vector<Shape> DualQuantizedMatmul::output_shapes(
     const std::vector<array>& inputs) {
   auto out_shape = inputs[0].shape();
-  auto& w_q = inputs[2];
-  int w_outer_dims = (transpose_) ? w_q.shape(-2) : w_q.shape(-1);
+  int w_outer_dims = inputs[2].shape(-2);
   out_shape.back() = w_outer_dims;
   std::cout << "DualQuantizedMatmul output shape: " << out_shape << std::endl;
   return {std::move(out_shape)};
@@ -3518,7 +3517,6 @@ std::vector<array> DualQuantizedMatmul::vjp(
           wtq[0], //  K X N_packed
           wtq[1], // scales
           std::nullopt,
-          true,
           group_size_,
           bits_,
           qmode,
@@ -3534,7 +3532,6 @@ std::vector<array> DualQuantizedMatmul::vjp(
           xtq[0], // (N, M_packed)
           xtq[1], // scales
           std::nullopt,
-          true,
           group_size_,
           bits_,
           qmode,

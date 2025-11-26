@@ -160,7 +160,6 @@ std::pair<int, int> extract_qqmm_dims(
     const array& w_q,
     const array& scales_w,
     const std::optional<array>& w,
-    bool transpose,
     int group_size,
     int bits) {
   // Validate w_q and scales_w
@@ -178,13 +177,10 @@ std::pair<int, int> extract_qqmm_dims(
         << "with shape " << w_q.shape() << " with bits=" << bits;
     throw std::invalid_argument(msg.str());
   }
-  // For narrow precision types (mxfp4, nvfp4) the only supported layout is TN
-  // A is MxK, B is NxK (transposed)
   int x_inner_dims = x.shape(-1) / (32 / bits); // K
 
-  // Calculate the expanded w's dimensions
-  int w_inner_dims = (transpose) ? w_q.shape(-1) : w_q.shape(-2);
-  int w_outer_dims = (transpose) ? w_q.shape(-2) : w_q.shape(-1);
+  int w_inner_dims = w_q.shape(-1);
+  int w_outer_dims = w_q.shape(-2);
 
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
@@ -4233,7 +4229,6 @@ array qqmm(
     array w_q,
     array scales_w,
     std::optional<array> w /* = std::nullopt */,
-    bool transpose /* = true */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
@@ -4249,15 +4244,10 @@ array qqmm(
   }
   // for fp4 block scaling the only supported layout is TN
   // https://docs.nvidia.com/cutlass/4.2.1/media/docs/cpp/blackwell_functionality.html
-  // because cublaslt is column major we need the second argument to be
-  // transposed, not the first one
-  if ((qmode == QuantizationMode::Nvfp4) && !transpose) {
-    std::ostringstream msg;
-    msg << "[qqmm] transpose must be set to true with " << mode
-        << " quantization but "
-        << "transpose == false was provided.";
-    throw std::invalid_argument(msg.str());
-  }
+  // because w_q should always be quantized along the reduction dimension
+  // and we quantize so that the last dim is packed, we enforce transpose = true
+  // always here
+
   if (qmode == QuantizationMode::Affine) {
     std::ostringstream msg;
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
@@ -4272,8 +4262,8 @@ array qqmm(
   }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
-      "qqmm", x, w_q, scales_w, w, transpose, group_size, bits);
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims("qqmm", x, w_q, scales_w, w, group_size, bits);
 
   // we don't backprope through qunatized w and scales
   std::vector<array> inputs = {
@@ -4298,7 +4288,7 @@ array qqmm(
       std::move(out_shape),
       dtype,
       std::make_shared<DualQuantizedMatmul>(
-          to_stream(s), group_size, bits, qmode, transpose),
+          to_stream(s), group_size, bits, qmode),
       std::move(inputs));
 }
 
