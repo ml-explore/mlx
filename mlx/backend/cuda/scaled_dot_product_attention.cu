@@ -115,7 +115,7 @@ __global__ void kernel_sdpav_1pass(
   for (int i = kv_seq_idx; i < params.kL; i += BN) {
     bool use_key = true;
     if constexpr (do_causal) {
-      use_key = i <= (params.kL - params.qL + q_seq_idx);
+      use_key = i <= q_seq_idx;
     }
 
     if (use_key) {
@@ -280,7 +280,7 @@ __global__ void kernel_sdpav_2pass_1(
   for (int i = kv_seq_idx; i < params.kL; i += blocks * BN) {
     bool use_key = true;
     if constexpr (do_causal) {
-      use_key = i <= (params.kL - params.qL + q_seq_idx);
+      use_key = i <= q_seq_idx;
     }
 
     if (use_key) {

@@ -173,7 +173,7 @@ template <
   int kb_lim = params->NK;
 
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
+    int q_max = (tid.x + 1) * BQ;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
   }
@@ -299,7 +299,7 @@ template <
     if (do_causal && kb >= (kb_lim - ((BQ + BK - 1) / BK) - int(!align_K))) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
-      const int base_row = tid.x * BQ + params->qL_off + tm;
+      const int base_row = tid.x * BQ + tm;
       const int base_col = kb * BK;
 
       STEEL_PRAGMA_UNROLL

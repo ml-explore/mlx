@@ -245,7 +245,7 @@ template <
   int kb_lim = params->NK;
 
   if (do_causal) {
-    int q_max = (tid.x + 1) * BQ + params->qL_off;
+    int q_max = (tid.x + 1) * BQ;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
   }
@@ -308,8 +308,7 @@ template <
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < stile_t::kTileRows; i++) {
-        const int row_pos =
-            tid.x * BQ + params->qL_off + tm + sm + (i * stile_t::kFragRows);
+        const int row_pos = tid.x * BQ + tm + sm + (i * stile_t::kFragRows);
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < stile_t::kTileCols; j++) {
           const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);

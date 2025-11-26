@@ -702,8 +702,7 @@ array scaled_dot_product_attention(
         if (do_causal) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
-          int q_off = (kL - qL) < 0 ? 0 : (kL - qL);
-          auto q_idx = arange(q_off, q_off + qL, s);
+          auto q_idx = arange(0, qL, s);
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);

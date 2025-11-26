@@ -98,7 +98,7 @@ template <typename T, int D, int V = D>
   for (int i = simd_gid; i < N; i += BN) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+      use_key = i <= int(q_seq_idx);
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {
@@ -271,7 +271,7 @@ template <typename T, int D, int V = D>
   for (int i = block_idx * BN + simd_gid; i < N; i += blocks * BN) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+      use_key = i <= int(q_seq_idx);
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {

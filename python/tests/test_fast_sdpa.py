@@ -26,8 +26,7 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     if mask is not None:
 
         if mask == "causal":
-            q_offset = max(0, kL - L)
-            q_indices = mx.arange(q_offset, q_offset + L)
+            q_indices = mx.arange(L)
             k_indices = mx.arange(kL)
             mask = q_indices[:, None] >= k_indices[None]
 
@@ -106,8 +105,7 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
     p = (q * scale) @ k.transpose(0, 1, 3, 2)
     if mask is not None:
         if mask == "causal":
-            q_offset = max(0, k.shape[2] - q.shape[2])
-            q_indices = mx.arange(q_offset, q_offset + q.shape[2])
+            q_indices = mx.arange(q.shape[2])
             k_indices = mx.arange(k.shape[2])
             mask = q_indices[:, None] >= k_indices[None]
             p = mx.where(mask, p, mx.finfo(mx.float32).min)
