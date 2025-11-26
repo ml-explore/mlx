@@ -1648,8 +1648,7 @@ class DualQuantizedMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      QuantizationMode mode,
-      bool transpose)
+      QuantizationMode mode)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),

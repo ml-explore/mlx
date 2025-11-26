@@ -165,7 +165,6 @@ std::pair<int, int> extract_qqmm_dims(
   // Validate w_q and scales_w
   validate_quantized_input(
       tag, w_q, scales_w, "weight matrix", "scales_w", group_size, bits);
-  // Calculate the expanded w's dimensions
 
   if (w &&
       (w->shape(-1) != w_q.shape(-1) * 32 / bits ||
@@ -186,10 +185,8 @@ std::pair<int, int> extract_qqmm_dims(
     std::ostringstream msg;
     msg << "[" << tag << "] Inner dimension of second input with "
         << "shape (" << w_inner_dims << ", " << w_outer_dims << ")"
-        << " computed with transpose=" << std::boolalpha << transpose
         << " does not match the packed inner dimension of the first"
-        << "input (...," << x_inner_dims << ") computed with bits=" << bits
-        << " and transpose=" << std::boolalpha << transpose;
+        << "input (...," << x_inner_dims << ") computed with bits=" << bits;
 
     throw std::invalid_argument(msg.str());
   }
@@ -4245,9 +4242,9 @@ array qqmm(
   // for fp4 block scaling the only supported layout is TN
   // https://docs.nvidia.com/cutlass/4.2.1/media/docs/cpp/blackwell_functionality.html
   // because w_q should always be quantized along the reduction dimension
-  // and we quantize so that the last dim is packed, we enforce transpose = true
-  // always here
-
+  // and we quantize so that the last dim is packed, we assume that the last dim
+  // always the reduction dim so the firat argument in cubals column major is
+  // (the second argument in qqmm) always transposed
   if (qmode == QuantizationMode::Affine) {
     std::ostringstream msg;
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
@@ -4281,9 +4278,8 @@ array qqmm(
 
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
-
-  // out dtype can be only bf16
   auto dtype = bfloat16;
+  // out dtype can be only bf16 for now
   return array(
       std::move(out_shape),
       dtype,
