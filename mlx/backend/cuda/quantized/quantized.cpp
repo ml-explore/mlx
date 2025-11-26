@@ -50,20 +50,14 @@ array pad_and_repack_scales(
     const array& scale,
     cu::CommandEncoder& encoder,
     const Stream& s) {
-  // Compute padded dimensions for full tiles (128 rows × 4 cols)
-  auto [pad_outer, pad_inner] =
-      get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
-
   // Calculate batch size (all dimensions except last 2)
   size_t batch_size = scale.size() / (scale.shape(-2) * scale.shape(-1));
+  size_t collapsed_outer = batch_size * scale.shape(-2);
 
-  // Build output shape preserving batch dimensions
-  Shape out_shape;
-  for (int i = 0; i < scale.ndim() - 2; ++i) {
-    out_shape.push_back(scale.shape(i));
-  }
-  out_shape.push_back(pad_outer);
-  out_shape.push_back(pad_inner);
+  auto [pad_outer, pad_inner] =
+      get_padded_scale_dims(collapsed_outer, scale.shape(-1));
+
+  Shape out_shape = {pad_outer, pad_inner};
 
   // cuBLAS requirements for scale factor layout:
   // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
@@ -72,7 +66,7 @@ array pad_and_repack_scales(
   // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
   // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
-      cu::malloc_async(batch_size * pad_outer * pad_inner, encoder),
+      cu::malloc_async(pad_outer * pad_inner, encoder),
       out_shape,
       scale.dtype());
   repack_scales(scale, scale_tiled, encoder, s);
@@ -139,20 +133,7 @@ void qqmm_impl(
     QuantizationMode mode,
     float alpha = 1.0f) {
   // Invoke CublasQQMM
-  auto [batch_shape, a_batch_strides, b_batch_strides] = collapse_batches(a, b);
-  auto batch_count = out.size() / (M * N);
-
   std::string_view qmode = quantization_mode_to_string(mode);
-  if (batch_count > 1 && !a_transposed && batch_shape.size() == 1 &&
-      a.strides()[a.ndim() - 2] == K && a_batch_strides.back() == M * K &&
-      b_batch_strides.back() == 0) {
-    M *= batch_shape.back();
-    batch_count = 1;
-
-    a_batch_strides = {0};
-    b_batch_strides = {0};
-    batch_shape = {1};
-  }
 
   CublasQQMM qqmm(
       encoder.device(),
@@ -164,22 +145,12 @@ void qqmm_impl(
       K,
       N,
       ldb,
-      batch_shape.back(),
-      a_batch_strides.back(),
-      b_batch_strides.back(),
+      1, // batch_count
+      0, // a_batch_stride
+      0, // b_batch_stride
       qmode);
 
-  qqmm.run(
-      encoder,
-      out,
-      a,
-      b,
-      a_scale,
-      b_scale,
-      batch_shape,
-      a_batch_strides,
-      b_batch_strides,
-      alpha);
+  qqmm.run(encoder, out, a, b, a_scale, b_scale, alpha);
 }
 } // namespace
 
@@ -220,7 +191,7 @@ void DualQuantizedMatmul::eval_gpu(
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = x_q.shape(-2);
-  int N = w_q.shape(-2); // b always transposed
+  int N = transpose_ ? w_q.shape(-2) : w_q.shape(-1);
   int K_packed = x_q.shape(-1);
   int K = K_packed * (32 / bits_);
 
@@ -228,30 +199,10 @@ void DualQuantizedMatmul::eval_gpu(
   array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
   array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
 
-  // Debug: print scale shapes after repacking
-  std::cerr << "[DEBUG] scale_x_pre shape: [";
-  for (int i = 0; i < scale_x_pre.ndim(); ++i) {
-    std::cerr << scale_x_pre.shape(i)
-              << (i < scale_x_pre.ndim() - 1 ? ", " : "");
-  }
-  std::cerr << "]" << std::endl;
-
-  std::cerr << "[DEBUG] scale_x (repacked) shape: [";
-  for (int i = 0; i < scale_x.ndim(); ++i) {
-    std::cerr << scale_x.shape(i) << (i < scale_x.ndim() - 1 ? ", " : "");
-  }
-  std::cerr << "], size: " << scale_x.size() << std::endl;
-
-  std::cerr << "[DEBUG] scale_w (repacked) shape: [";
-  for (int i = 0; i < scale_w.ndim(); ++i) {
-    std::cerr << scale_w.shape(i) << (i < scale_w.ndim() - 1 ? ", " : "");
-  }
-  std::cerr << "], size: " << scale_w.size() << std::endl;
-
-  bool x_transposed = false; // a is normal (M x K)
-  bool w_transposed = true; // b is transposed (N x K -> K x N)
-  int64_t lda = K; // Leading dimension of a
-  int64_t ldb = K; // Leading dimension of b
+  bool x_transposed = false;
+  bool w_transposed = transpose_;
+  int64_t lda = K;
+  int64_t ldb = transpose_ ? K : N;
 
   qqmm_impl(
       encoder,

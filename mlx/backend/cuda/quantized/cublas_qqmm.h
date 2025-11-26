@@ -50,9 +50,6 @@ class CublasQQMM : public CublasMatmulBase {
       const array& b,
       const array& a_scale,
       const array& b_scale,
-      const Shape& batch_shape,
-      const Strides& a_batch_strides,
-      const Strides& b_batch_strides,
       float alpha = 1.0f);
 
   //   void run(

@@ -70,8 +70,6 @@ else()
                  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
   target_sources(mlx
                  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
-  target_sources(
-    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm_batched.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)

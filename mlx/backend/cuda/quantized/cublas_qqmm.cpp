@@ -69,7 +69,6 @@ CublasQQMM::CublasQQMM(
   cublasComputeType_t gemm_compute_type =
       CUBLAS_COMPUTE_32F; // always for narrow precision
   cudaDataType_t data_type = qmode_to_cublas_dtype(qmode);
-
   quantization_mode_ = std::string(qmode);
 
   init_base(
@@ -153,26 +152,7 @@ void CublasQQMM::run(
     const array& b,
     const array& a_scale,
     const array& b_scale,
-    const Shape& batch_shape,
-    const Strides& a_batch_strides,
-    const Strides& b_batch_strides,
     float alpha) {
-  int batch_count = out.size() / (M_ * N_);
-  if (batch_count / batch_shape.back() > 1) {
-    run_batched(
-        encoder,
-        out,
-        a,
-        b,
-        a_scale,
-        b_scale,
-        batch_shape,
-        a_batch_strides,
-        b_batch_strides,
-        alpha);
-    return;
-  }
-
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_input_array(a_scale);
