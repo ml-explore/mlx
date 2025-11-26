@@ -133,8 +133,8 @@ void qqmm_impl(
     QuantizationMode mode,
     float alpha = 1.0f) {
   // Invoke CublasQQMM
-  std::string_view qmode = quantization_mode_to_string(mode);
-
+  std::string qmode = quantization_mode_to_string(mode);
+  
   CublasQQMM qqmm(
       encoder.device(),
       a_transposed,

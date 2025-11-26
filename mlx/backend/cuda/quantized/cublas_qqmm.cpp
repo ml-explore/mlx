@@ -15,7 +15,7 @@ namespace {
 
 // Currently cublas supports only mxfp8 and nvfp4
 // quantization modes for block scaled quantization
-cudaDataType_t qmode_to_cublas_scale_dtype(std::string_view mode) {
+cudaDataType_t qmode_to_cublas_scale_dtype(std::string mode) {
   if (mode == "mxfp8") {
     return CUDA_R_8F_UE8M0;
   } else if (mode == "nvfp4") {
@@ -26,7 +26,7 @@ cudaDataType_t qmode_to_cublas_scale_dtype(std::string_view mode) {
   }
 }
 
-cudaDataType_t qmode_to_cublas_dtype(std::string_view mode) {
+cudaDataType_t qmode_to_cublas_dtype(std::string mode) {
   if (mode == "mxfp8") {
     return CUDA_R_8F_E4M3;
   } else if (mode == "nvfp4") {
@@ -37,7 +37,7 @@ cudaDataType_t qmode_to_cublas_dtype(std::string_view mode) {
   }
 }
 
-cublasLtMatmulMatrixScale_t qmode_to_cublas_scale_mode(std::string_view mode) {
+cublasLtMatmulMatrixScale_t qmode_to_cublas_scale_mode(std::string mode) {
   if (mode == "mxfp8") {
     return CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0;
   } else if (mode == "nvfp4") {
@@ -63,7 +63,7 @@ CublasQQMM::CublasQQMM(
     int32_t batch_count,
     int64_t a_batch_stride,
     int64_t b_batch_stride,
-    std::string_view qmode) {
+    std::string qmode) {
   cudaDataType_t scale_type = CUDA_R_32F;
   cudaDataType_t output_type = CUDA_R_16BF; // always output in bf16
   cublasComputeType_t gemm_compute_type =
@@ -119,7 +119,7 @@ CublasQQMM::CublasQQMM(
     int64_t a_batch_stride,
     int64_t b_batch_stride,
     int64_t c_batch_stride,
-    std::string_view qmode)
+    std::string qmode)
     : CublasQQMM(
           device,
           a_transposed,

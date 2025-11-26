@@ -24,7 +24,7 @@ class CublasQQMM : public CublasMatmulBase {
       int32_t batch_count,
       int64_t a_batch_stride,
       int64_t b_batch_stride,
-      std::string_view quantization_mode);
+      std::string quantization_mode);
 
   CublasQQMM(
       cu::Device& device,
@@ -41,7 +41,7 @@ class CublasQQMM : public CublasMatmulBase {
       int64_t a_batch_stride,
       int64_t b_batch_stride,
       int64_t c_batch_stride,
-      std::string_view quantization_mode);
+      std::string quantization_mode);
 
   void run(
       cu::CommandEncoder& encoder,
