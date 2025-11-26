@@ -49,6 +49,50 @@ struct BlockBroadcastReduce {
   }
 };
 
+template <typename T, int REDUCE_DIM, int N_READS = 4>
+__global__ void rms_norm_small(
+    const T* x,
+    const T* w,
+    T* out,
+    float eps,
+    uint32_t axis_size,
+    uint32_t n_rows,
+    int64_t w_stride) {
+  auto grid = cg::this_grid();
+  auto block = cg::this_thread_block();
+
+  auto row =
+      (grid.block_rank() * block.dim_threads().y) + block.thread_index().y;
+  if (row >= n_rows) {
+    return;
+  }
+  x += row * axis_size;
+  out += row * axis_size;
+
+  // Normalizer.
+  float normalizer = 0;
+  auto index = block.thread_index().x;
+  auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    float t = static_cast<float>(xn[i]);
+    normalizer += t * t;
+  }
+
+  auto group = cg::tiled_partition<REDUCE_DIM>(block);
+  normalizer = cg::reduce(group, normalizer, cg::plus<float>{});
+  normalizer = rsqrt(normalizer / axis_size + eps);
+
+  // Outputs.
+  auto wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    float y = static_cast<float>(xn[i]) * normalizer;
+    xn[i] = wn[i] * static_cast<T>(y);
+  }
+  store_vector<N_READS>(out, index, xn, axis_size);
+}
+
 template <typename T, int BLOCK_DIM, int N_READS = 4>
 __global__ void rms_norm(
     const T* x,
@@ -169,6 +213,15 @@ bool RMSNorm::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+template <typename F>
+void dispatch_group_dim(int axis_size, int n_per_thread, F&& f) {
+  if (axis_size <= n_per_thread * 8) {
+    f(std::integral_constant<int, 8>{});
+  } else {
+    f(std::integral_constant<int, 16>{});
+  }
+}
+
 // TODO: There are duplicate code with backend/metal/normalization.cpp
 void RMSNorm::eval_gpu(
     const std::vector<array>& inputs,
@@ -216,20 +269,41 @@ void RMSNorm::eval_gpu(
   dispatch_float_types(out.dtype(), "rms_norm", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     constexpr int N_READS = 16 / sizeof(DataType);
-    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-      auto kernel = cu::rms_norm<DataType, block_dim(), N_READS>;
-      encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          block_dim(),
-          0,
-          gpu_ptr<DataType>(x),
-          gpu_ptr<DataType>(w),
-          gpu_ptr<DataType>(out),
-          eps_,
-          axis_size,
-          w_stride);
-    });
+    if (axis_size <= N_READS * 16) {
+      dispatch_group_dim(axis_size, N_READS, [&](auto group_dim) {
+        auto kernel = cu::rms_norm_small<DataType, group_dim(), N_READS>;
+        constexpr int groups_per_block = 16;
+        auto n_blocks = (n_rows + groups_per_block - 1) / groups_per_block;
+        encoder.add_kernel_node(
+            kernel,
+            n_blocks,
+            {group_dim(), groups_per_block},
+            0,
+            gpu_ptr<DataType>(x),
+            gpu_ptr<DataType>(w),
+            gpu_ptr<DataType>(out),
+            eps_,
+            axis_size,
+            n_rows,
+            w_stride);
+      });
+    } else {
+      dispatch_block_dim(
+          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+            auto kernel = cu::rms_norm<DataType, block_dim(), N_READS>;
+            encoder.add_kernel_node(
+                kernel,
+                n_rows,
+                block_dim(),
+                0,
+                gpu_ptr<DataType>(x),
+                gpu_ptr<DataType>(w),
+                gpu_ptr<DataType>(out),
+                eps_,
+                axis_size,
+                w_stride);
+          });
+    }
   });
 }
 
