@@ -144,13 +144,13 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
 
 auto& sdpa_cache() {
   static LRUBytesKeyCache<SDPACacheKey, fe::graph::Graph> cache(
-      "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 16);
+      "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 64);
   return cache;
 }
 
 auto& sdpa_backward_cache() {
   static LRUBytesKeyCache<SDPACacheKey, fe::graph::Graph> cache(
-      "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 16);
+      "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
   return cache;
 }
 
@@ -207,8 +207,14 @@ fe::graph::Graph build_sdpa_graph(
   auto options = fe::graph::SDPA_attributes()
                      .set_name("sdpa_cudnn")
                      .set_attn_scale(scale)
-                     .set_causal_mask(do_causal)
                      .set_generate_stats(output_logsumexp);
+  if (do_causal) {
+    if (q.shape(2) > k.shape(2)) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
+  }
   if (mask_arr) {
     auto bias_ = graph.tensor(fe::graph::Tensor_attributes().set_name("BIAS"));
     set_tensor_attrs(bias_, BIAS, *mask_arr);
@@ -282,7 +288,14 @@ fe::graph::Graph build_sdpa_backward_graph(
   auto options = fe::graph::SDPA_backward_attributes()
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(scale)
-                     .set_causal_mask(do_causal);
+                     .set_attn_scale(scale);
+  if (do_causal) {
+    if (q.shape(2) > k.shape(2)) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
+  }
   if (mask_arr) {
     auto bias_ = graph.tensor(fe::graph::Tensor_attributes().set_name("BIAS"));
     set_tensor_attrs(bias_, BIAS, *mask_arr);
@@ -340,6 +353,7 @@ bool supports_sdpa_cudnn(
     const array& q,
     const array& k,
     const array& v,
+    bool do_causal,
     Stream s) {
   static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SPDA", 1);
   if (!enabled) {
@@ -351,8 +365,8 @@ bool supports_sdpa_cudnn(
     return false;
   }
 
-  // Only use cuDNN for prefilling and training.
-  if (q.shape(2) != k.shape(2)) {
+  // Only use cuDNN for prefilling (T_q > 1) and training (T_q == T_kv).
+  if ((q.shape(2) == 1) && (q.shape(2) != k.shape(2))) {
     return false;
   }
 
@@ -520,7 +534,7 @@ bool ScaledDotProductAttention::use_fallback(
 
   return !supports_sdpa_vector(
              q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp) &&
-      !supports_sdpa_cudnn(q, k, v, s);
+      !supports_sdpa_cudnn(q, k, v, do_causal, s);
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {
