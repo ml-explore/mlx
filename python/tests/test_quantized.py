@@ -975,6 +975,87 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
             ds = mx.grad(gmm)(s, x, wq)
 
+    def test_qqmm(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.bfloat16
+
+        tests = (
+            (16, "nvfp4", 4),
+            (32, "mxfp8", 8),
+        )
+        shapes = (
+            [64, 65, 33, 128, 256, 1024, 1024 * 8],  # M
+            [64, 128, 256, 1024, 1024 * 8],  # N
+            [64, 128, 256, 1024, 1024 * 8],  # K
+        )
+        for group_size, mode, bits in tests:
+            for M, N, K in product(*shapes):
+                with self.subTest(
+                    shape=(M, N, K),
+                    group_size=group_size,
+                    bits=bits,
+                    mode=mode,
+                ):
+                    x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
+                    w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
+                    w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
+                    w_dq = mx.dequantize(
+                        w_q, scales_w, group_size=group_size, bits=bits, mode=mode
+                    )
+                    y_q = mx.qqmm(
+                        x, w_q, scales_w, group_size=group_size, bits=bits, mode=mode
+                    )
+                    x_q, scales_x = mx.quantize(
+                        x, group_size=group_size, bits=bits, mode=mode
+                    )
+                    x_dq = mx.dequantize(
+                        x_q, scales_x, group_size=group_size, bits=bits, mode=mode
+                    )
+                    y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_qqmm_vjp(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.bfloat16
+        M = 64
+        N = 1024
+        K = 512
+        tests = (
+            (16, "nvfp4", 4),
+            (32, "mxfp8", 8),
+        )
+        x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
+        c = mx.ones(shape=(M, N), dtype=dtype)
+
+        for group_size, mode, bits in tests:
+            with self.subTest(
+                shape=(M, N, K),
+                group_size=group_size,
+                bits=bits,
+                mode=mode,
+            ):
+                w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
+                w_q, scales_w = mx.quantize(
+                    w, group_size=group_size, bits=bits, mode=mode
+                )
+
+                def fn(x):
+                    return mx.qqmm(
+                        x, w_q, scales_w, w, group_size=group_size, bits=bits, mode=mode
+                    )
+
+                _, vjp_out = mx.vjp(fn, primals=(x,), cotangents=(c,))
+                w_tq, scales_wt = mx.quantize(
+                    mx.transpose(w), group_size=group_size, bits=bits, mode=mode
+                )
+                expected_out = mx.qqmm(
+                    c, w_tq, scales_wt, group_size=group_size, bits=bits, mode=mode
+                )
+                self.assertTrue(mx.allclose(vjp_out[0], expected_out))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -94,8 +94,7 @@ __global__ void repack_scales(
     size_t input_rows,
     size_t input_cols,
     size_t output_rows,
-    size_t output_cols,
-    size_t batch_size) {
+    size_t output_cols) {
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -106,25 +105,15 @@ __global__ void repack_scales(
   auto grid_dim_x =
       cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
 
-  size_t global_index = tidx + grid_dim_x * size_t(tidy);
-  size_t total_output_size = batch_size * output_rows * output_cols;
+  size_t output_index = tidx + grid_dim_x * size_t(tidy);
+  size_t output_size = output_rows * output_cols;
 
-  if (global_index >= total_output_size) {
+  if (output_index >= output_size) {
     return;
   }
 
-  // Compute batch strides from shape (scales are contiguous from fp_quantize)
-  size_t input_batch_stride = input_rows * input_cols;
-  size_t output_batch_stride = output_rows * output_cols;
-
-  // Determine which batch and position within batch
-  size_t batch_idx = global_index / output_batch_stride;
-  size_t output_index = global_index % output_batch_stride;
-
   size_t tiled_offset =
       scale_tiled_offset(output_index, output_rows, output_cols);
-  // Add batch offset for output
-  tiled_offset += batch_idx * output_batch_stride;
 
   size_t row = output_index / output_cols;
   size_t col = output_index % output_cols;
@@ -132,9 +121,7 @@ __global__ void repack_scales(
   // Probably this can be done better with 2 separated paths for valid and
   // padding
   if (row < input_rows && col < input_cols) {
-    // Compute input index with batch offset
-    size_t input_index =
-        batch_idx * input_batch_stride + row * input_cols + col;
+    size_t input_index = row * input_cols + col;
     scales_tiled[tiled_offset] = scales_linear[input_index];
   } else {
     // Zero-fill padding region
@@ -160,16 +147,11 @@ void repack_scales(
 
   size_t output_rows = scales_tiled.shape(-2);
   size_t output_cols = scales_tiled.shape(-1);
+  size_t output_size = output_rows * output_cols;
 
-  // Calculate batch size (all dimensions except last 2)
-  size_t batch_size = scales.size() / (input_rows * input_cols);
-
-  // Total output size across all batches
-  size_t total_output_size = batch_size * output_rows * output_cols;
-
-  bool large = total_output_size > UINT_MAX;
+  bool large = output_size > UINT_MAX;
   auto [num_blocks, block_dims] = get_launch_args(
-      total_output_size, scales_tiled.shape(), scales_tiled.strides(), large);
+      output_size, scales_tiled.shape(), scales_tiled.strides(), large);
 
   enc.add_kernel_node(
       cu::repack_scales,
@@ -181,8 +163,7 @@ void repack_scales(
       input_rows,
       input_cols,
       output_rows,
-      output_cols,
-      batch_size);
+      output_cols);
 }
 
 } // namespace mlx::core

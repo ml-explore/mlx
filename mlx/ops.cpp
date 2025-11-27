@@ -163,6 +163,7 @@ std::pair<int, int> extract_qqmm_dims(
     int group_size,
     int bits) {
   // Validate w_q and scales_w
+  // https://docs.nvidia.com/cuda/cublas/#d-block-scaling-for-fp8-and-fp4-data-types
   validate_quantized_input(
       tag, w_q, scales_w, "weight matrix", "scales_w", group_size, bits);
 

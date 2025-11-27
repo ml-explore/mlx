@@ -5439,7 +5439,6 @@ void init_ops(nb::module_& m) {
       nb::arg(), // w_q
       "scales"_a, // scales w
       "w"_a = nb::none(), // bf16 weights
-      "transpose"_a = true,
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
@@ -5455,7 +5454,7 @@ void init_ops(nb::module_& m) {
 
         Args:
           x (array): Input array
-          w (array): Quantized matrix packed in unsigned integers
+          w_q (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w_q``
           w (array, optional): bf16 or float32 weights used during training for
             correct gradient computation. Default: ``None``.
