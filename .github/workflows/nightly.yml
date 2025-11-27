@@ -16,7 +16,7 @@ jobs:
         python_version: ["3.10", "3.14"]
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux-release
         with:
@@ -35,22 +35,23 @@ jobs:
           name: mlx-cpu
           path: wheelhouse/mlx_cpu-*.whl
           retention-days: 7
-  
+
   build_linux_with_tests:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python_version: ["3.11", "3.12", "3.13", "3.14"]
         runner:
           - ubuntu-22.04
           - ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
         with:
           python-version: ${{ matrix.python_version }}
       - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/test-linux
 
   build_mac_release:
     if: github.repository == 'ml-explore/mlx'
@@ -59,12 +60,11 @@ jobs:
         python-version: ["3.10", "3.13"]
     runs-on: [self-hosted, macos]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-macos
         with:
           python-version: ${{ matrix.python-version }}
       - uses: ./.github/actions/build-macos
-
       - name: Build macOS 15 package
         uses: ./.github/actions/build-macos-release
         with:
@@ -76,53 +76,21 @@ jobs:
           macos-target: 14.0
           build-backend: ${{ matrix.python-version == '3.10' }}
 
-  build_cuda_with_tests:
-    if: github.repository == 'ml-explore/mlx'
-    runs-on: gpu-t4-4-core
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-linux
-        with:
-          runner-type: 'cuda'
-      - uses: ./.github/actions/build-cuda
-
   build_cuda_release:
     if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22-large
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
         with:
-          runner-type: 'cuda'
+          toolkit: 'cuda-12.9'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:
-          nvcc-location: '/usr/local/cuda-12.9/bin/nvcc'
+          toolkit: 'cuda-12.9'
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
           name: mlx-cuda
           path: wheelhouse/mlx_cuda-*.whl
           retention-days: 7
-
-  linux_fedora_build_cpp:
-    name: Linux Fedora CPP Build (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - host: ubuntu-22.04
-            arch: x86_64
-          - host: ubuntu-22.04-arm
-            arch: aarch64
-
-    runs-on: ${{ matrix.host }}
-    container:
-      image: fedora:42
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: CPP Build Test - No Release
-        run: |
-          bash ./.github/scripts/setup+build-cpp-linux-fedora-container.sh

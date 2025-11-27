@@ -32,7 +32,7 @@ std::string write_signature(
     const std::vector<Dtype>& output_dtypes,
     const std::vector<std::pair<std::string, TemplateArg>>& template_args,
     const std::vector<std::string>& attributes,
-    const std::vector<CustomKernelShapeInfo>& shape_infos,
+    const std::vector<std::tuple<bool, bool, bool>>& shape_infos,
     bool atomic_outputs) {
   std::string kernel_source;
   kernel_source.reserve(header.size() + source.size() + 16384);
@@ -88,19 +88,19 @@ std::string write_signature(
     index++;
     // Add input shape, strides and ndim if present in the source
     if (arr.ndim() > 0) {
-      if (shape_infos[i].shape) {
+      if (std::get<0>(shape_infos[i])) {
         kernel_source +=
             ("  const constant int* " + name + "_shape [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
-      if (shape_infos[i].strides) {
+      if (std::get<1>(shape_infos[i])) {
         kernel_source +=
             ("  const constant int64_t* " + name + "_strides [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
-      if (shape_infos[i].ndim) {
+      if (std::get<2>(shape_infos[i])) {
         kernel_source +=
             ("  const constant int& " + name + "_ndim [[buffer(" +
              std::to_string(index) + ")]],\n");
@@ -184,12 +184,12 @@ CustomKernelFunction metal_kernel(
     throw std::invalid_argument(
         "[metal_kernel] Must specify at least one output.");
   }
-  std::vector<CustomKernelShapeInfo> shape_infos;
+  std::vector<std::tuple<bool, bool, bool>> shape_infos;
   for (auto& n : input_names) {
-    CustomKernelShapeInfo shape_info;
-    shape_info.shape = source.find(n + "_shape") != std::string::npos;
-    shape_info.strides = source.find(n + "_strides") != std::string::npos;
-    shape_info.ndim = source.find(n + "_ndim") != std::string::npos;
+    std::tuple<bool, bool, bool> shape_info;
+    std::get<0>(shape_info) = source.find(n + "_shape") != std::string::npos;
+    std::get<1>(shape_info) = source.find(n + "_strides") != std::string::npos;
+    std::get<2>(shape_info) = source.find(n + "_ndim") != std::string::npos;
     shape_infos.push_back(shape_info);
   }
   const std::vector<std::pair<std::string, std::string>> metal_attributes = {
@@ -388,15 +388,15 @@ void CustomKernel::eval_gpu(
     index++;
     if (in.ndim() > 0) {
       int ndim = in.ndim();
-      if (shape_info.shape) {
+      if (std::get<0>(shape_info)) {
         compute_encoder.set_vector_bytes(in.shape(), ndim, index);
         index++;
       }
-      if (shape_info.strides) {
+      if (std::get<1>(shape_info)) {
         compute_encoder.set_vector_bytes(in.strides(), ndim, index);
         index++;
       }
-      if (shape_info.ndim) {
+      if (std::get<2>(shape_info)) {
         compute_encoder.set_bytes(ndim, index);
         index++;
       }

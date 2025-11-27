@@ -7,9 +7,8 @@ namespace mlx::core {
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   auto& encoder = cu::get_command_encoder(s);
-  bool donated = set_copy_output_data(in, out, ctype, [&](auto n) {
-    return cu::malloc_async(n, encoder.stream());
-  });
+  bool donated = set_copy_output_data(
+      in, out, ctype, [&](auto n) { return cu::malloc_async(n, encoder); });
   if (donated && in.dtype() == out.dtype()) {
     // If the output has the same type as the input then there is nothing to
     // copy, just use the buffer.
@@ -104,7 +103,7 @@ void fill_gpu(const array& in, array& out, const Stream& s) {
     return;
   }
   auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);
@@ -114,7 +113,7 @@ void reshape_gpu(const array& in, array& out, Stream s) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
     auto& encoder = cu::get_command_encoder(s);
-    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
     copy_gpu_inplace(
         in,
         out,

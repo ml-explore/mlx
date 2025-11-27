@@ -173,7 +173,7 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
 ///////////////////////////////////////////////////////////////////////////////
 
 template <bool CHECK_AB>
-void steel_matmul_regular_axpby(
+void steel_matmul_regular_axpby_nax(
     const Stream& s,
     metal::Device& d,
     const array& a,
@@ -201,6 +201,190 @@ void steel_matmul_regular_axpby(
   using namespace mlx::steel;
 
   // Determine dispatch kernel
+  int bm = 128, bn = 128, bk = 512;
+  int wm = 4, wn = 4;
+
+  // Prepare kernel name
+  std::ostringstream kname;
+
+  // clang-format off
+  kname << "steel_gemm_fused_nax_"
+        << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(out)
+        << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn; // clang-format on
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = (batch_shape.size() > 1);
+  const bool use_out_source = CHECK_AB && (alpha != 0.0f || beta != 1.0f);
+  const bool do_axpby = use_out_source && (alpha != 1.0f || beta != 1.0f);
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n')
+        << "_use_out_source_" << (use_out_source ? 't' : 'n')
+        << "_do_axpby_" << (do_axpby ? 't' : 'n')
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_fused_kernel(
+      /* metal::Device& d = */ d,
+      /* const std::string& kernel_name = */ base_name,
+      /* const std::string& hash_name = */ hash_name,
+      /* const metal::MTLFCList& func_consts = */ func_consts,
+      /* const array& out = */ out,
+      /* bool transpose_a = */ transpose_a,
+      /* bool transpose_b = */ transpose_b,
+      /* int bm = */ bm,
+      /* int bn = */ bn,
+      /* int bk = */ bk,
+      /* int wm = */ wm,
+      /* int wn = */ wn);
+
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Use problem size to determine threadblock swizzle
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = tm <= 3 ? 0 : 1;
+
+  // Prepare steel matmul params
+  GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ ldd,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int64_t batch_stride_a = */ A_batch_stride,
+      /* const int64_t batch_stride_b = */ B_batch_stride,
+      /* const int64_t batch_stride_d = */ matrix_stride_out,
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ int(batch_shape.size())};
+
+  // Prepare launch grid params
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
+
+  compute_encoder.set_bytes(params, 4);
+
+  if (has_batch) {
+    compute_encoder.set_vector_bytes(batch_shape, 6);
+    compute_encoder.set_vector_bytes(batch_strides, 7);
+  }
+
+  if (use_out_source) {
+    int ldc = c.strides()[c.ndim() - 2];
+    int fdc = c.strides()[c.ndim() - 1];
+
+    GEMMAddMMParams params{
+        /* const int ldc = */ ldc,
+        /* const int fdc = */ fdc,
+        /* const int64_t batch_stride_c = */ C_batch_stride,
+        /* const float alpha = */ alpha,
+        /* const float beta = */ beta};
+
+    compute_encoder.set_input_array(c, 2);
+    compute_encoder.set_bytes(params, 5);
+  }
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  // Record copies
+  d.add_temporaries(std::move(copies), s.index);
+}
+
+template <bool CHECK_AB>
+void steel_matmul_regular_axpby(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    const array& c,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int batch_size_out,
+    int lda,
+    int ldb,
+    int ldd,
+    bool transpose_a,
+    bool transpose_b,
+    std::vector<array>& copies,
+    Shape batch_shape,
+    Strides batch_strides,
+    int64_t A_batch_stride,
+    int64_t B_batch_stride,
+    int64_t matrix_stride_out,
+    int64_t C_batch_stride /* = 0*/,
+    float alpha /* = 1.0f */,
+    float beta /* = 0.0f */) {
+  if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
+      (env::enable_tf32() || a.dtype() != float32)) {
+    return steel_matmul_regular_axpby_nax<CHECK_AB>(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ batch_size_out,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* int ldd = */ ldd,
+        /* bool transpose_a = */ transpose_a,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ batch_shape,
+        /* Strides batch_strides = */ batch_strides,
+        /* int64_t A_batch_stride = */ A_batch_stride,
+        /* int64_t B_batch_stride = */ B_batch_stride,
+        /* int64_t matrix_stride_out = */ matrix_stride_out,
+        /* int64_t C_batch_stride = */ C_batch_stride,
+        /* float alpha = */ alpha,
+        /* float beta = */ beta);
+  }
+
+  using namespace mlx::steel;
+
+  // Determine dispatch kernel
   int bm = 64, bn = 64, bk = 16;
   int wm = 2, wn = 2;
 
@@ -211,11 +395,11 @@ void steel_matmul_regular_axpby(
   std::ostringstream kname;
 
   // clang-format off
-  kname << "steel_gemm_fused_" 
+  kname << "steel_gemm_fused_"
         << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') 
-        << "_" << type_to_name(a) 
-        << "_" << type_to_name(out) 
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(out)
         << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn; // clang-format on
 
@@ -380,14 +564,14 @@ void steel_gemm_splitk_axpby(
   std::ostringstream kname;
 
   // clang-format off
-  kname << "steel_gemm_splitk_" 
+  kname << "steel_gemm_splitk_"
         << (transpose_a ? 't' : 'n')
-        << (transpose_b ? 't' : 'n') 
-        << "_" << type_to_name(a) 
-        << "_" << type_to_name(C_split) 
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(C_split)
         << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn 
-        << "_MN_" << (mn_aligned ? "t" : "n") << "aligned" 
+        << "_wm" << wm << "_wn" << wn
+        << "_MN_" << (mn_aligned ? "t" : "n") << "aligned"
         << "_K_" << (k_aligned ? "t" : "n") << "aligned"; // clang-format on
 
   // Encode and dispatch gemm kernel
@@ -721,10 +905,10 @@ void gemv_axbpy(
   const bool do_axpby = CHECK_AB && (alpha != 1.0f || beta != 0.0f);
 
   // clang-format off
-  kname << "_bm" << bm << "_bn" << bn 
-        << "_sm" << sm << "_sn" << sn 
+  kname << "_bm" << bm << "_bn" << bn
+        << "_sm" << sm << "_sn" << sn
         << "_tm" << tm << "_tn" << tn
-        << "_nc" << !contiguous_kernel 
+        << "_nc" << !contiguous_kernel
         << "_axpby" << do_axpby; // clang-format on
 
   // Encode and dispatch kernel
@@ -1572,6 +1756,149 @@ void gather_mm_rhs(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void gather_mm_rhs_nax(
+    const array& a_,
+    const array& b_,
+    const array& indices_,
+    array& out,
+    metal::Device& d,
+    const Stream& s) {
+  array indices = ensure_row_contiguous(indices_, d, s);
+  auto [transpose_b, ldb, b] = ensure_batch_contiguous(b_, d, s);
+
+  // Broadcast a with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of a broadcasted
+  // with rhs_indices. We need only broadcast a and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+  array a = broadcast_with_indices(a_);
+
+  // Extract the matmul shapes
+  int K = a.shape(-1);
+  int M = a.size() / K;
+  int N = b.shape(-1);
+  int lda = a.strides()[a.ndim() - 2]; // should be K
+  int E = b.shape(0);
+
+  // Define the dispatch blocks
+  int bm, bn = 128, bk = 128, wm, wn = 4;
+  if (M / E > 48) {
+    bm = 64;
+    wm = 2;
+  } else if (M / E > 24) {
+    bm = 32l;
+    wm = 1;
+  } else {
+    bm = 16;
+    wm = 1;
+  }
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Define the kernel name
+  std::string base_name;
+  base_name.reserve(64);
+  concatenate(
+      base_name,
+      "steel_gather_mm_rhs_nax_n",
+      transpose_b ? 't' : 'n',
+      '_',
+      type_to_name(a),
+      '_',
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      base_name,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_gather_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      out,
+      false,
+      transpose_b,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      true);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Prepare the matmul params
+  auto batch_stride_b = b.ndim() > 2 ? b.strides()[b.ndim() - 3] : b.size();
+  steel::GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ static_cast<int>(ldb),
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ (N + bn - 1) / bn,
+      /* const int tiles_m = */ (M + bm - 1) / bm,
+      /* const int64_t batch_stride_a = */ 0,
+      /* const int64_t batch_stride_b = */ static_cast<int64_t>(batch_stride_b),
+      /* const int64_t batch_stride_d = */ 0,
+      /* const int swizzle_log = */ 0,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ 0};
+
+  // Prepare the grid
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(params.tiles_n, params.tiles_m, 1);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(indices, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(params, 4);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void gather_mv(
     const array& mat_,
     const array& vec_,
@@ -1855,6 +2182,10 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // We are walking a in order and b is also in order so we can batch up the
   // matmuls and reuse reading a and b.
   if (M == 1 && right_sorted_ == true) {
+    if (metal::is_nax_available() &&
+        (env::enable_tf32() || a.dtype() != float32)) {
+      return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
+    }
     gather_mm_rhs(a, b, rhs_indices, out, d, s);
     return;
   }

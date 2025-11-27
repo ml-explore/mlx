@@ -17,9 +17,8 @@ runs:
     - name: Verify MetalToolchain installed
       shell: bash
       run: xcodebuild -showComponent MetalToolchain
-    
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v6
+
+    - uses: conda-incubator/setup-miniconda@v3
       with:
-          python-version: ${{ inputs.python-version }}
-          activate-environment: true
+        miniconda-version: "latest"
+        python-version: ${{ inputs.python-version }}

@@ -163,7 +163,7 @@ void CublasGemm::run_batched(
 
   // Launch kernel to set device offsets
   auto pointers = array(
-      cu::malloc_async(batch_count * sizeof(void*) * 3, encoder.stream()),
+      cu::malloc_async(batch_count * sizeof(void*) * 3, encoder),
       {batch_count * 3},
       uint64);
 
@@ -251,7 +251,7 @@ void CublasGemm::run_batched(
 
   // Launch kernel to set device offsets
   auto pointers = array(
-      cu::malloc_async(batch_count * sizeof(uint64_t) * 4, encoder.stream()),
+      cu::malloc_async(batch_count * sizeof(uint64_t) * 4, encoder),
       {batch_count * 4},
       uint64);
 

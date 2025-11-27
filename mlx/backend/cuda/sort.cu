@@ -49,14 +49,12 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     array trans = swapaxes_in_eval(in, axis, last_dim);
     in = contiguous_copy_gpu(trans, s);
     encoder.add_temporary(in);
-    out = array(
-        cu::malloc_async(out.nbytes(), encoder.stream()),
-        in.shape(),
-        out.dtype());
+    out =
+        array(cu::malloc_async(out.nbytes(), encoder), in.shape(), out.dtype());
     encoder.add_temporary(out);
   } else {
     out.set_data(
-        cu::malloc_async(in.data_size() * out.itemsize(), encoder.stream()),
+        cu::malloc_async(in.data_size() * out.itemsize(), encoder),
         in.data_size(),
         in.strides(),
         in.flags());
@@ -74,17 +72,13 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
       if (argsort) {
         // Indices in the sorted dimension.
         array indices(
-            cu::malloc_async(out.nbytes(), encoder.stream()),
-            in.shape(),
-            out.dtype());
+            cu::malloc_async(out.nbytes(), encoder), in.shape(), out.dtype());
         encoder.add_temporary(indices);
 
         // In argsort though we don't need the result of sorted values, the
         // API requires us to provide an array to store it.
         array discard(
-            cu::malloc_async(in.nbytes(), encoder.stream()),
-            in.shape(),
-            in.dtype());
+            cu::malloc_async(in.nbytes(), encoder), in.shape(), in.dtype());
         encoder.add_temporary(discard);
 
         size_t size;
@@ -104,9 +98,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             stream));
 
         array temp(
-            cu::malloc_async(size, encoder.stream()),
-            {static_cast<int>(size)},
-            uint8);
+            cu::malloc_async(size, encoder), {static_cast<int>(size)}, uint8);
         encoder.add_temporary(temp);
 
         // Start capturing after allocations
@@ -148,9 +140,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             stream));
 
         array temp(
-            cu::malloc_async(size, encoder.stream()),
-            {static_cast<int>(size)},
-            uint8);
+            cu::malloc_async(size, encoder), {static_cast<int>(size)}, uint8);
         encoder.add_temporary(temp);
 
         // Start capturing after allocations

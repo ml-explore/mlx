@@ -16,18 +16,19 @@ runs:
   using: "composite"
   steps:
     - name: Build Python package
-      shell: bash
+      shell: bash -l {0}
       env:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
-        uv pip install build
-        uv run --no-project setup.py clean --all
-        MLX_BUILD_STAGE=1 uv run -m build -w
+        pip install build
+        python setup.py clean --all
+        MLX_BUILD_STAGE=1 python -m build -w
+
     - name: Build backend package
       if: ${{ inputs.build-backend }}
-      shell: bash
+      shell: bash -l {0}
       env:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
-        uv run --no-project setup.py clean --all
-        MLX_BUILD_STAGE=2 uv run -m build -w
+        python setup.py clean --all
+        MLX_BUILD_STAGE=2 python -m build -w

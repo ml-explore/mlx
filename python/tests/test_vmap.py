@@ -778,6 +778,93 @@ class TestVmap(mlx_tests.MLXTestCase):
         mx.vmap(mx.grad(fun))(arrs)
         self.assertEqual(init_id, id(arrs[0]))
 
+    def test_vmap_masked_scatter(self):
+        def scatter_fn(x, m, src):
+            x[m] = src
+            return x
+
+        # Batched sources
+        a = mx.array([[10, 20, 30, 40], [50, 60, 70, 80]])
+        mask = mx.array([[False, True, True, True], [True, False, True, True]])
+        src = mx.array([[1, 2, 3], [4, 5, 6]])
+
+        expected = mx.array([[10, 1, 2, 3], [4, 60, 5, 6]])
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, 0))
+        out = vmap_scatter(a, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Shared source across batch (matching mask populations)
+        a = mx.array([[0, 0, 0], [5, 5, 5]])
+        mask = mx.array([[True, False, True], [False, True, True]])
+        src = mx.array([9, 8])
+
+        expected = mx.array([[9, 0, 8], [5, 9, 8]])
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, None))
+        out = vmap_scatter(a, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Shared destination with batched mask and sources
+        a = mx.array([10, 20, 30, 40])
+        mask = mx.array([[True, False, False, True], [False, True, True, False]])
+        src = mx.array([[1, 2], [3, 4]])
+
+        expected = mx.array([[1, 20, 30, 2], [10, 3, 4, 40]])
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(None, 0, 0))
+        out = vmap_scatter(a, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Shared mask across batch with batched sources
+        a = mx.array([[0, 0, 0, 0], [10, 20, 30, 40]])
+        mask = mx.array([True, False, True, False])
+        src = mx.array([[7, 8], [9, 10]])
+
+        expected = mx.array([[7, 0, 8, 0], [9, 20, 10, 40]])
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, None, 0))
+        out = vmap_scatter(a, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Uneven mask populations with scalar broadcast
+        a = mx.array([[0.0, 0.0, 0.0, 0.0], [10.0, 20.0, 30.0, 40.0]])
+        mask = mx.array([[True, False, True, True], [False, True, False, False]])
+        shared_src = mx.array(1.5)
+
+        expected = mx.array(
+            [[1.5, 0.0, 1.5, 1.5], [10.0, 1.5, 30.0, 40.0]], dtype=a.dtype
+        )
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, None))
+        out = vmap_scatter(a, mask, shared_src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Shared src with identical masks must restart for each batch
+        a = mx.array([[0, 0, 0, 0, 0], [10, 20, 30, 40, 50]])
+        mask = mx.array(
+            [[True, True, True, False, False], [True, True, True, False, False]]
+        )
+        src = mx.array([1, 2, 3, 4, 5])
+
+        expected = mx.array([[1, 2, 3, 0, 0], [1, 2, 3, 40, 50]])
+        vmap_scatter = mx.vmap(scatter_fn, in_axes=(0, 0, None))
+        out = vmap_scatter(a, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
+        # Double vmap
+        a = mx.zeros((8, 8, 8))
+        mask = mx.random.normal((8, 8, 8)) > 0
+        src = mx.random.normal((8, 8))
+        expected = mx.stack(
+            [
+                mx.stack(
+                    [scatter_fn(a[i, j] + 0, mask[i, j], src[i]) for j in range(8)]
+                )
+                for i in range(8)
+            ]
+        )
+        double_scatter = mx.vmap(
+            mx.vmap(scatter_fn, in_axes=(0, 0, None)), in_axes=(0, 0, 0)
+        )
+        out = double_scatter(a + 0, mask, src)
+        self.assertTrue(mx.array_equal(expected, out))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

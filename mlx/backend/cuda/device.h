@@ -84,7 +84,7 @@ class CommandEncoder {
   }
 
   void add_completed_handler(std::function<void()> task);
-  int get_num_ops();
+  bool needs_commit();
   void commit();
 
   Device& device() {
@@ -106,8 +106,9 @@ class CommandEncoder {
     cudaGraphNode_t node;
     // K = kernel
     // E = empty
-    // G = subgraph
-    char node_type;
+    // G* = subgraph (with metadata)
+    // Symbols ':', '-' are reserved as separators
+    std::string node_type;
     std::string id;
   };
 
@@ -119,18 +120,21 @@ class CommandEncoder {
   CudaGraph graph_;
   Worker worker_;
   char node_count_{0};
-  char graph_node_count_{0};
-  char empty_node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
   std::vector<cudaGraphNode_t> to_nodes_;
-  std::string graph_key_;
+  std::string graph_nodes_key_;
+  std::string graph_deps_key_;
   std::vector<GraphNode> concurrent_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   LRUCache<std::string, CudaGraphExec> graph_cache_;
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
+  size_t bytes_in_graph_{0};
+  bool is_graph_updatable_{true};
+  int max_ops_per_graph_;
+  int max_mb_per_graph_;
 };
 
 class Device {
@@ -166,6 +170,7 @@ class Device {
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
+  std::string device_name_;
   cublasLtHandle_t lt_;
   cudnnHandle_t cudnn_;
   std::unordered_map<int, CommandEncoder> encoders_;

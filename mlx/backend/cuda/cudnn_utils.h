@@ -44,13 +44,13 @@ inline SmallVector<T> convert_vector(const Vec& vec) {
 // There are 2 differences from the const_param util from kernel_utils.cuh:
 // 1. The rest of array is filled with 0.
 // 2. This util can be used in .cpp files.
-template <typename T, template <typename U> class Vec>
-inline std::array<T, MAX_NDIM> vector_key(const Vec<T>& vec) {
-  if (vec.size() > MAX_NDIM) {
+template <int NDIM = MAX_NDIM, typename T, template <typename U> class Vec>
+inline std::array<T, NDIM> vector_key(const Vec<T>& vec) {
+  if (vec.size() > NDIM) {
     throw std::runtime_error(
-        fmt::format("ndim can not be larger than {}.", MAX_NDIM));
+        fmt::format("ndim can not be larger than {}.", NDIM));
   }
-  std::array<T, MAX_NDIM> result = {};
+  std::array<T, NDIM> result = {};
   std::copy_n(vec.begin(), vec.size(), result.begin());
   return result;
 }

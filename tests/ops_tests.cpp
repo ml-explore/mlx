@@ -7,6 +7,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -292,7 +293,7 @@ TEST_CASE("test slice") {
 
   out = slice(x, {0}, {4}, {2});
   eval(out);
-  CHECK_EQ(out.data_size(), 4);
+  CHECK_EQ(out.data_size(), 3);
 
   x = ones({4, 4});
   out = slice(x, {0, 0}, {2, 4});
@@ -325,6 +326,20 @@ TEST_CASE("test slice") {
   out = slice(x, {2, 2, 2}, {3, 4, 3});
   eval(out);
   CHECK_EQ(out.data_size(), 5);
+
+  x = ones({8});
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  x = ones({4, 2});
+  out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
 }
 
 TEST_CASE("test slice update") {
@@ -2418,6 +2433,49 @@ TEST_CASE("test scatter") {
     auto expected =
         reshape(array({0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 3, 4}), {3, 4});
     CHECK(array_equal(out, expected).item<bool>());
+  }
+}
+
+TEST_CASE("test masked_scatter") {
+  if (cu::is_available()) {
+    INFO("Skipping masked_scatter cuda ops tests");
+    return;
+  }
+
+  // Wrong mask dtype
+  CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
+
+  // Mask must be broadcastable to self array
+  CHECK_THROWS(masked_scatter(
+      array({1, 2, 3, 4}, {2, 2}),
+      array({false, true, true, false}, {4, 1}),
+      array({1, 2})));
+
+  // 1D mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({true, true, false, true});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({1, 2, 0, 4})).item<bool>());
+  }
+
+  // Empty mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({false, false, false, false});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, self).item<bool>());
+  }
+
+  // Broadcasted mask
+  {
+    auto self = zeros({2, 2}, int32);
+    auto mask = array({true, false});
+    auto source = array({5, 6, 7, 8}, {2, 2});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({5, 6, 0, 0}, {2, 2})).item<bool>());
   }
 }
 

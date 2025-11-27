@@ -6,6 +6,7 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 
 namespace mlx::core::fast {
 
@@ -415,23 +416,25 @@ array rope(
     if (offset.size() > 1) {
       offset = expand_dims(offset, {-1, -2}, s);
     }
-    auto positions =
-        multiply(add(arange(x.shape(2), t, s), offset, s), array(scale, t), s);
+    auto positions = multiply(
+        add(arange(x.shape(2), float32, s), offset, s),
+        array(scale, float32),
+        s);
 
-    auto default_inv_freqs = [&s, &t, base, half_dims]() {
+    auto default_inv_freqs = [&s, base, half_dims]() {
       return exp(
           multiply(
-              arange(0, -half_dims, -1, t, s),
-              array(std::log(base) / half_dims, t),
+              arange(0, -half_dims, -1, float32, s),
+              array(std::log(base) / half_dims, float32),
               s),
           s);
     };
 
-    auto inv_freqs = inputs.size() == 3 ? astype(reciprocal(inputs[2], s), t, s)
-                                        : default_inv_freqs();
+    auto inv_freqs =
+        inputs.size() == 3 ? reciprocal(inputs[2], s) : default_inv_freqs();
     auto theta = multiply(expand_dims(positions, -1, s), inv_freqs, s);
-    auto coss = cos(theta, s);
-    auto sins = sin(theta, s);
+    auto coss = astype(cos(theta, s), t, s);
+    auto sins = astype(sin(theta, s), t, s);
 
     auto apply_rope = [forward, s](
                           const array& x1,
@@ -578,7 +581,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::string& mask_mode /* = "" */,
-    const std::vector<array>& mask_arrs /* = {} */,
+    std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
@@ -606,32 +609,22 @@ array scaled_dot_product_attention(
     has_mask = true;
     do_causal = true;
 
-    if (!mask_arrs.empty()) {
+    if (mask_arr) {
       std::ostringstream msg;
-      msg << "[scaled_dot_product_attention] Invalid mask_arrs for mask_mode "
-          << "'casusal'. No array masks supported.";
+      msg << "[scaled_dot_product_attention] Invalid mask_arr for mask_mode "
+          << "'casusal'. No array mask should be passed.";
       throw std::invalid_argument(msg.str());
     }
-  }
-
-  if (mask_mode == "array" || (mask_mode == "" && !mask_arrs.empty())) {
-    if (mask_arrs.size() != 1) {
-      std::ostringstream msg;
-      msg << "[scaled_dot_product_attention] Invalid mask_arrs for mask_mode "
-          << "'" << mask_mode << "'. Only 1 mask array is supported, got "
-          << mask_arrs.size() << "arrays.";
-      throw std::invalid_argument(msg.str());
-    }
-
+  } else if (mask_arr) {
     has_mask = true;
     has_arr_mask = true;
-    has_bool_mask = mask_arrs[0].dtype() == bool_;
+    has_bool_mask = mask_arr->dtype() == bool_;
   }
 
-  if (has_arr_mask && (mask_arrs[0]).ndim() > 4) {
+  if (has_arr_mask && mask_arr->ndim() > 4) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] the mask with shape "
-        << mask_arrs[0].shape() << " expected to have at most rank 4.";
+        << mask_arr->shape() << " expected to have at most rank 4.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -764,20 +757,19 @@ array scaled_dot_product_attention(
   std::vector<array> inputs = {q, k, v};
   if (has_arr_mask) {
     // Check type
-    auto mask_arr = mask_arrs[0];
-    has_bool_mask = mask_arr.dtype() == bool_;
-    if (promote_types(mask_arr.dtype(), final_type) != final_type) {
+    has_bool_mask = mask_arr->dtype() == bool_;
+    if (promote_types(mask_arr->dtype(), final_type) != final_type) {
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] Mask type must promote to output type "
           << final_type << ".";
       throw std::invalid_argument(msg.str());
     } else if (!has_bool_mask) {
-      mask_arr = astype(mask_arr, final_type, stream);
+      mask_arr = astype(*mask_arr, final_type, stream);
     }
     // Broadcast mask
     auto mask_shape = queries.shape();
     mask_shape.back() = keys.shape(-2);
-    inputs.push_back(broadcast_to(mask_arr, mask_shape, stream));
+    inputs.push_back(broadcast_to(*mask_arr, mask_shape, stream));
   }
   if (has_sinks) {
     if (promote_types(sinks->dtype(), final_type) != final_type) {
@@ -795,22 +787,97 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
+  bool is_training = detail::in_grad_tracing();
+  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
+  bool output_logsumexp = is_training && has_fast_vjp;
   if (!ScaledDotProductAttention::use_fallback(
-          q, k, v, has_mask, has_arr_mask, do_causal, stream)) {
-    auto out_shape = Shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
-    return array(
-        std::move(out_shape),
-        final_type,
-        std::make_shared<ScaledDotProductAttention>(
-            stream, fallback, scale, do_causal, has_sinks),
-        std::move(inputs));
+          q,
+          k,
+          v,
+          has_mask,
+          has_arr_mask,
+          do_causal,
+          is_training,
+          output_logsumexp,
+          stream)) {
+    if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
+      // Convert bool mask to additive mask.
+      float inf = std::numeric_limits<float>::infinity();
+      array& mask = inputs[3];
+      mask = where(
+          mask,
+          full_like(mask, 0, final_type, s),
+          full_like(mask, -inf, final_type, s));
+    }
+    Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
+    auto primitive = std::make_shared<ScaledDotProductAttention>(
+        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+    if (output_logsumexp) {
+      return array::make_arrays(
+          {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
+          {final_type, float32},
+          primitive,
+          std::move(inputs))[0];
+    } else {
+      return array(
+          std::move(out_shape), final_type, primitive, std::move(inputs));
+    }
   }
   return fallback(std::move(inputs))[0];
+}
+
+std::vector<array> ScaledDotProductAttention::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() >= 3);
+  assert(cotangents.size() == outputs.size());
+
+  auto s = stream();
+  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
+    assert(outputs.size() == 1);
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
+    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
+    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
+    return vjps;
+  };
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < /* outputs size */ 3; ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(primals[i].dtype());
+  }
+  auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
+      s, fallback, scale_, do_causal_, has_sinks_);
+  std::vector<array> inputs = primals;
+  inputs.push_back(outputs[0]);
+  inputs.push_back(outputs[1]);
+  inputs.push_back(cotangents[0]);
+  auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
 }
 
 bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      has_sinks_ == a_other.has_sinks_ &&
+      output_logsumexp_ == a_other.output_logsumexp_;
+}
+
+bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
+  const ScaledDotProductAttentionVJP& a_other =
+      static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_;
 }

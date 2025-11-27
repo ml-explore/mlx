@@ -28,7 +28,7 @@ void init_reduce(
     Reduce::ReduceType reduce_type) {
   // Allocate if needed
   if (out.data_shared_ptr() == nullptr) {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder.stream()));
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
   }
 
   encoder.set_output_array(out);

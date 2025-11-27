@@ -75,6 +75,14 @@ constexpr bool is_pair = is_specialization_of<std::pair, std::decay_t<T>>;
 template <typename T>
 constexpr bool is_tuple = is_specialization_of<std::tuple, std::decay_t<T>>;
 
+template <typename T>
+inline constexpr bool is_optional =
+    is_specialization_of<std::optional, std::decay_t<T>>;
+
+template <typename T>
+inline constexpr bool is_variant =
+    is_specialization_of<std::variant, std::decay_t<T>>;
+
 template <typename>
 constexpr bool dependent_false = false;
 
@@ -97,6 +105,12 @@ void reverse_bytes(T& data) {
 }
 
 template <typename T>
+void serialize_variant(Writer& os, T v);
+
+template <typename T>
+T deserialize_variant(Reader& is);
+
+template <typename T>
 void serialize(Writer& os, T v) {
   if constexpr (std::is_arithmetic_v<T>) {
     if (is_big_endian()) {
@@ -113,6 +127,13 @@ void serialize(Writer& os, T v) {
     }
   } else if constexpr (is_pair<T> || is_tuple<T>) {
     std::apply([&os](auto&... x) { (..., serialize(os, x)); }, v);
+  } else if constexpr (is_variant<T>) {
+    serialize_variant(os, v);
+  } else if constexpr (is_optional<T>) {
+    serialize(os, v.has_value());
+    if (v.has_value()) {
+      serialize(os, *v);
+    }
   } else {
     NotSerializable<T>();
   }
@@ -145,8 +166,55 @@ T deserialize(Reader& is) {
   } else if constexpr (is_pair<T> || is_tuple<T>) {
     return deserialize_tuple<T>(
         is, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>{});
+  } else if constexpr (is_optional<T>) {
+    auto has_value = deserialize<bool>(is);
+    if (has_value) {
+      return deserialize<T>(is);
+    } else {
+      return std::nullopt;
+    }
+  } else if constexpr (is_variant<T>) {
+    return deserialize_variant<T>(is);
   } else {
     NotDeserializable<T>();
+  }
+}
+
+enum class VariantType { Int = 0, Float = 1, Bool = 2 };
+
+template <typename T>
+void serialize_variant(Writer& os, T v) {
+  std::visit(
+      [&](auto&& x) {
+        using ElemT = std::decay_t<decltype(x)>;
+        if constexpr (std::is_same_v<ElemT, int>) {
+          serialize(os, VariantType::Int);
+        } else if constexpr (std::is_same_v<ElemT, float>) {
+          serialize(os, VariantType::Float);
+        } else if constexpr (std::is_same_v<ElemT, bool>) {
+          serialize(os, VariantType::Bool);
+        } else {
+          static_assert(
+              std::is_same_v<ElemT, void>, "Can't serialize variant type.");
+        }
+        serialize(os, x);
+      },
+      v);
+}
+
+template <typename T>
+T deserialize_variant(Reader& is) {
+  auto vt = deserialize<VariantType>(is);
+  switch (vt) {
+    case VariantType::Int:
+      return deserialize<int>(is);
+    case VariantType::Float:
+      return deserialize<float>(is);
+    case VariantType::Bool:
+      return deserialize<bool>(is);
+    default:
+      throw std::runtime_error(
+          "[deserialize_variant] Unknonw variant type tag.");
   }
 }
 
@@ -374,7 +442,8 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(LayerNorm),
       SERIALIZE_PRIMITIVE(LayerNormVJP),
       SERIALIZE_PRIMITIVE(RoPE),
-      SERIALIZE_PRIMITIVE(ScaledDotProductAttention)};
+      SERIALIZE_PRIMITIVE(ScaledDotProductAttention),
+      SERIALIZE_PRIMITIVE(CustomKernel)};
   std::unordered_map<std::string, std::string> name_remap;
 
   PrimitiveFactory() {
@@ -647,7 +716,7 @@ void FunctionExporter::export_with_callback(
       if (arr.has_primitive() || input_set.find(arr.id()) != input_set.end()) {
         continue;
       }
-      if (constants.insert(arr.id()).second) {
+      if (constants.insert({arr.id(), arr}).second) {
         new_constants.emplace_back(namer.get_name(arr), arr);
       }
     }
@@ -779,7 +848,7 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
       if (input_set.find(arr.id()) == input_set.end()) {
         serialize(os, true);
         // Save constant data if not already saved
-        if (constants.insert(arr.id()).second) {
+        if (constants.insert({arr.id(), arr}).second) {
           serialize(os, arr.shape());
           serialize(os, arr.dtype());
           os.write(arr.data<char>(), arr.nbytes());

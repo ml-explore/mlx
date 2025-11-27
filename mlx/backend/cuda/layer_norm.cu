@@ -244,7 +244,7 @@ void LayerNorm::eval_gpu(
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            cu::malloc_async(x.data_size() * x.itemsize(), encoder.stream()),
+            cu::malloc_async(x.data_size() * x.itemsize(), encoder),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -335,7 +335,7 @@ void LayerNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(cu::malloc_async(gx.nbytes(), encoder.stream()));
+    gx.set_data(cu::malloc_async(gx.nbytes(), encoder));
   }
   if (g_copied && !g_in_gx) {
     encoder.add_temporary(g);
@@ -355,7 +355,7 @@ void LayerNormVJP::eval_gpu(
       g_in_gw = true;
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(cu::malloc_async(gw_temp.nbytes(), encoder.stream()));
+      gw_temp.set_data(cu::malloc_async(gw_temp.nbytes(), encoder));
       encoder.add_temporary(gw_temp);
     }
   }

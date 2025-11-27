@@ -213,11 +213,11 @@ void init_fast(nb::module_& parent_module) {
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, mask_str, {}, sinks, s);
+                queries, keys, values, scale, mask_str, std::nullopt, sinks, s);
           } else {
             auto mask_arr = std::get<mx::array>(mask);
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, "", {mask_arr}, sinks, s);
+                queries, keys, values, scale, "", mask_arr, sinks, s);
           }
 
         } else {
