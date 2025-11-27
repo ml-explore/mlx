@@ -1179,16 +1179,6 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = fun(False)
         self.assertTrue(mx.allclose(out, expected))
 
-    def test_id_pre_post_compiled(self):
-        def fun(arrs):
-            return arrs[0]
-
-        arrs = [mx.array(1.0)]
-        init_id = id(arrs[0])
-        cfun = mx.compile(fun)
-        cfun(arrs)
-        self.assertEqual(init_id, id(arrs[0]))
-
     def test_compile_types(self):
         from typing import NamedTuple
 

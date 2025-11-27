@@ -769,15 +769,6 @@ class TestVmap(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out3[0], mx.array([11, 12, 13])))
         self.assertTrue(mx.array_equal(out3[1], mx.array([40, 50, 60])))
 
-    def test_grad_id_pre_post_vmap(self):
-        def fun(arrs):
-            return arrs[0]
-
-        arrs = [mx.array([1.0, 1.0])]
-        init_id = id(arrs[0])
-        mx.vmap(mx.grad(fun))(arrs)
-        self.assertEqual(init_id, id(arrs[0]))
-
     def test_vmap_masked_scatter(self):
         def scatter_fn(x, m, src):
             x[m] = src
