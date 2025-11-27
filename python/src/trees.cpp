@@ -52,9 +52,15 @@ nb::object tree_map(
         }
         l.append(recurse(items));
       }
-      return type.is(nb::handle((PyObject*)&PyTuple_Type))
-          ? nb::cast<nb::object>(nb::tuple(l))
-          : type(*nb::tuple(l));
+      if (PyTuple_CheckExact(subtrees[0].ptr())) {
+        return nb::cast<nb::object>(nb::tuple(l));
+      }
+
+      bool is_named_tuple = PyObject_HasAttrString(type.ptr(), "_fields") == 1;
+      if (PyErr_Occurred()) {
+        PyErr_Clear();
+      }
+      return is_named_tuple ? type(*l) : type(l);
     } else if (nb::isinstance<nb::dict>(subtrees[0])) {
       std::vector<nb::object> items(subtrees.size());
       validate_subtrees<nb::dict, nb::list, nb::tuple>(subtrees);
@@ -186,9 +192,15 @@ void tree_visit_update(
       for (int i = 0; i < l.size(); ++i) {
         l[i] = recurse(l[i]);
       }
-      return type.is(nb::handle((PyObject*)&PyTuple_Type))
-          ? nb::cast<nb::object>(nb::tuple(l))
-          : type(*nb::tuple(l));
+      if (PyTuple_CheckExact(subtree.ptr())) {
+        return nb::cast<nb::object>(nb::tuple(l));
+      }
+
+      bool is_named_tuple = PyObject_HasAttrString(type.ptr(), "_fields") == 1;
+      if (PyErr_Occurred()) {
+        PyErr_Clear();
+      }
+      return is_named_tuple ? type(*l) : type(l);
     } else if (nb::isinstance<nb::dict>(subtree)) {
       auto d = nb::cast<nb::dict>(subtree);
       for (auto item : d) {
