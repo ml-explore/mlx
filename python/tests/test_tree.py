@@ -46,6 +46,51 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
             self.assertEqual(k1, k2)
             self.assertTrue(mx.array_equal(v1, v2))
 
+    def test_supported_trees(self):
+
+        from typing import NamedTuple
+
+        class Vector(tuple):
+            pass
+
+        class Params(NamedTuple):
+            m: mx.array
+            b: mx.array
+
+        list1 = [mx.array([0, 1]), mx.array(2)]
+        tuple1 = (mx.array([0, 1]), mx.array(2))
+        vector1 = Vector([mx.array([0, 1]), mx.array(2)])
+        params1 = Params(m=mx.array([0, 1]), b=mx.array(2))
+        dict1 = {"m": mx.array([0, 1]), "b": mx.array(2)}
+
+        add_one = lambda x: x + 1
+
+        list2 = mlx.utils.tree_map(add_one, list1)
+        tuple2 = mlx.utils.tree_map(add_one, tuple1)
+        vector2 = mlx.utils.tree_map(add_one, vector1)
+        params2 = mlx.utils.tree_map(add_one, params1)
+        dict2 = mlx.utils.tree_map(add_one, dict1)
+
+        self.assertTrue(isinstance(list2, list))
+        self.assertTrue(mx.array_equal(list2[0], mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(list2[1], mx.array(3)))
+
+        self.assertTrue(isinstance(tuple2, tuple))
+        self.assertTrue(mx.array_equal(tuple2[0], mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(tuple2[1], mx.array(3)))
+
+        self.assertTrue(isinstance(vector2, Vector))
+        self.assertTrue(mx.array_equal(vector2[0], mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(vector2[1], mx.array(3)))
+
+        self.assertTrue(isinstance(dict2, dict))
+        self.assertTrue(mx.array_equal(dict2["m"], mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(dict2["b"], mx.array(3)))
+
+        self.assertTrue(isinstance(params2, Params))
+        self.assertTrue(mx.array_equal(params2.m, mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(params2.b, mx.array(3)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
