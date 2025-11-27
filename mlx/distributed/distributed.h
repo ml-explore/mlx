@@ -16,6 +16,7 @@ class GroupImpl;
 
 /* Check if a communication backend is available */
 bool is_available();
+bool is_available(const std::string& bk);
 
 /**
  * A distributed::Group represents a group of independent mlx processes that
