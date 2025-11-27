@@ -3466,10 +3466,8 @@ array masked_scatter(
   if (mask.dtype() != bool_) {
     throw std::invalid_argument("[masked_scatter] The mask has to be boolean.");
   }
-  if (mask.ndim() == 0) {
-    throw std::invalid_argument(
-        "[masked_scatter] Scalar masks are not supported.");
-  } else if (mask.ndim() > a.ndim()) {
+
+  if (mask.ndim() > a.ndim()) {
     throw std::invalid_argument(
         "[masked_scatter] The mask cannot have more dimensions than the target.");
   }

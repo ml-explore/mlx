@@ -179,8 +179,8 @@ assignments, ``updates`` must provide at least as many elements as there are
 
 Boolean masks follow NumPy semantics:
 
-- The mask shape must match the shape of the axes it indexes exactly. No mask
-  broadcasting occurs.
+- The mask shape must match the shape of the axes it indexes exactly. The only
+  exception is a scalar boolean mask, which broadcasts to the full array.
 - Any axes not covered by the mask are taken in full.
 
 .. code-block:: shell
