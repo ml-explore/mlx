@@ -7,32 +7,26 @@ namespace mlx::core {
 
 namespace {
 
-// Create a cudnn tensor descriptor.
-template <typename Vec>
-inline cudnn_frontend::Tensor build_cudnn_tensor(
-    int64_t id,
-    const array& x,
-    const Vec& shape,
-    const Vec& strides) {
-  return cudnn_frontend::TensorBuilder()
-      .setDim(shape.size(), shape.data())
-      .setStrides(strides.size(), strides.data())
-      .setId(id)
-      .setAlignment(get_alignment(x))
-      .setDataType(dtype_to_cudnn_type(x.dtype()))
-      .build();
-}
+#define RETURN_IF_ERROR(cmd)          \
+  if (auto ret = cmd; ret.is_bad()) { \
+    return ret;                       \
+  }
 
 // In MLX a singleton dim (shape[dim] == 1) can have any stride, but in cuDNN
 // whether a tensor is contiguous is determined with:
 // shape[dim] == shape[dim + 1] * strides[dim + 1]
 // So a contiguous array with singleton dims in MLX may be mistakenly treated
 // as strided in cuDNN, and we work around it by normalizing the strides.
-Strides normalized_strides(const array& x) {
-  if (!x.flags().row_contiguous || x.ndim() < 2) {
-    return x.strides();
+std::vector<int64_t> normalized_strides(const array& x) {
+  std::vector<int64_t> strides(x.strides().begin(), x.strides().end());
+  if (std::all_of(
+          strides.begin(), strides.end(), [](int64_t s) { return s == 0; })) {
+    strides.back() = 1;
+    return strides;
   }
-  Strides strides = x.strides();
+  if (!x.flags().row_contiguous || x.ndim() < 2) {
+    return strides;
+  }
   for (int i = x.ndim() - 2; i >= 0; --i) {
     if (x.shape(i) == 1) {
       strides[i] = x.shape(i + 1) * strides[i + 1];
@@ -42,7 +36,9 @@ Strides normalized_strides(const array& x) {
 }
 
 // Return the shape and strides after transposing from NHWC to NCHW.
-auto nhwc_to_nchw(SmallVector<int64_t> shape, SmallVector<int64_t> strides) {
+inline auto nhwc_to_nchw(const array& x) {
+  auto shape = convert_vector<int64_t>(x.shape());
+  auto strides = normalized_strides(x);
   assert(shape.size() >= 3);
   shape.insert(shape.begin() + 1, shape.back());
   shape.erase(shape.end() - 1);
@@ -51,226 +47,95 @@ auto nhwc_to_nchw(SmallVector<int64_t> shape, SmallVector<int64_t> strides) {
   return std::make_tuple(std::move(shape), std::move(strides));
 }
 
-inline auto nhwc_to_nchw(const array& x) {
-  return nhwc_to_nchw(
-      convert_vector<int64_t>(x.shape()), normalized_strides(x));
-}
-
-// Return available engines for a |op_graph|.
-cudnn_frontend::EngineConfigList get_cudnn_engine_configs(
-    cudnnBackendDescriptorType_t backend_type,
-    Dtype dtype,
-    cudnn_frontend::OperationGraph& op_graph,
-    bool use_fallback = true) {
-  SmallVector<cudnn_frontend::GeneratorSource, 2> sources;
-  sources.push_back([](auto& op_graph) {
-    auto heuristics = cudnn_frontend::EngineHeuristicsBuilder()
-                          .setOperationGraph(op_graph)
-                          .setHeurMode(CUDNN_HEUR_MODE_A)
-                          .build();
-    return heuristics.getEngineConfig(heuristics.getEngineConfigCount());
-  });
-  if (use_fallback) {
-    sources.push_back([&backend_type](auto& op_graph) {
-      auto fallback = cudnn_frontend::EngineFallbackListBuilder()
-                          .setOperationGraph(op_graph)
-                          .setOperation(backend_type)
-                          .build();
-      return fallback.getFallbackList();
-    });
-  }
-
-  auto configs =
-      cudnn_frontend::EngineConfigGenerator(sources.size(), sources.data())
-          .generate_engine_config(op_graph);
-
-  cudnn_frontend::EngineConfigList filtered_configs;
-  cudnn_frontend::filter(configs, filtered_configs, [dtype](auto c) {
-    if (cudnn_frontend::hasNumericalNote<
-            CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(c)) {
-      return true;
-    }
-    if (cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_TENSOR_CORE>(c) &&
-        dtype == float32 && !env::enable_tf32()) {
-      return true;
-    }
-    return false;
-  });
-  return filtered_configs;
-}
-
-// Take |engine_configs| and |op_graph| and find a working execution plans
-// from them.
-std::optional<cudnn_frontend::ExecutionPlan>
-find_cudnn_plan_from_engine_configs(
-    cudnnHandle_t handle,
-    const cudnn_frontend::EngineConfigList& engine_configs,
-    const cudnn_frontend::OperationGraph& op_graph) {
-  auto op_graph_tag = op_graph.getTag();
-  for (const auto& config : engine_configs) {
-    try {
-      return cudnn_frontend::ExecutionPlanBuilder()
-          .setHandle(handle)
-          .setEngineConfig(config, op_graph_tag)
-          .build();
-    } catch (cudnn_frontend::cudnnException& error) {
-      if (error.getCudnnStatus() != CUDNN_STATUS_NOT_SUPPORTED) {
-        throw;
-      }
-    }
-  }
-  return std::nullopt;
-}
-
-// Prepare workspace and args to execute plan.
-template <typename F>
-bool prepare_cudnn_plan(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    int num_args,
-    const int64_t* uids,
-    void** data_ptrs,
-    F&& execute) {
-  int workspace_size = plan.getWorkspaceSize();
-  void* workspace_ptr = nullptr;
-  if (workspace_size > 0) {
-    array workspace(
-        cu::malloc_async(workspace_size, encoder), {workspace_size}, uint8);
-    encoder.add_temporary(workspace);
-    workspace_ptr = gpu_ptr<void>(workspace);
-  }
-
-  auto args = cudnn_frontend::VariantPackBuilder()
-                  .setWorkspacePointer(workspace_ptr)
-                  .setDataPointers(num_args, data_ptrs)
-                  .setUids(num_args, uids)
-                  .build();
-
-  auto handle = encoder.device().cudnn_handle();
-  cudnnSetStream(handle, encoder.stream());
-
-  if (!execute(handle, plan.get_raw_desc(), args.get_raw_desc())) {
-    return false;
-  }
-
-  return true;
-}
-
 } // namespace
 
-cudnn_frontend::Tensor build_cudnn_tensor(int64_t id, const array& x) {
-  auto shape = convert_vector<int64_t>(x.shape());
-  return build_cudnn_tensor(id, x, shape, normalized_strides(x));
+fe::error_t DnnGraph::prepare() {
+  RETURN_IF_ERROR(validate());
+  try {
+    RETURN_IF_ERROR(build_operation_graph(handle_));
+  } catch (cudnn_frontend::cudnnException& error) {
+    // cuDNN bug: they did not catch all exceptions in the API.
+    return {fe::error_code_t::CUDNN_BACKEND_API_FAILED, error.what()};
+  }
+  RETURN_IF_ERROR(create_execution_plans({fe::HeurMode_t::A}));
+  return {};
 }
 
-cudnn_frontend::Tensor build_cudnn_tensor_nchw(int64_t id, const array& x) {
+fe::error_t DnnGraph::build() {
+  RETURN_IF_ERROR(check_support(handle_));
+  RETURN_IF_ERROR(build_plans(handle_));
+  return {};
+}
+
+fe::error_t DnnGraph::encode_graph(
+    cu::CommandEncoder& encoder,
+    std::unordered_map<int64_t, void*> variant_pack) {
+  cudnnSetStream(handle_, encoder.stream());
+  CudaGraph cuda_graph(encoder.device());
+  RETURN_IF_ERROR(populate_cuda_graph(
+      handle_, variant_pack, prepare_workspace(encoder), cuda_graph));
+  encoder.add_graph_node(cuda_graph);
+  return {};
+}
+
+fe::error_t DnnGraph::encode_capturing(
+    cu::CommandEncoder& encoder,
+    std::unordered_map<int64_t, void*> variant_pack) {
+  auto* workspace_ptr = prepare_workspace(encoder);
+  auto capture = encoder.capture_context();
+  cudnnSetStream(handle_, encoder.stream());
+  auto ret = execute(handle_, variant_pack, workspace_ptr);
+  if (ret.is_bad()) {
+    capture.discard = true;
+  }
+  return ret;
+}
+
+void* DnnGraph::prepare_workspace(cu::CommandEncoder& encoder) {
+  int64_t workspace_size = 0;
+  CHECK_CUDNN_FE_ERROR(get_workspace_size(workspace_size));
+  if (workspace_size > 0) {
+    array workspace(
+        cu::malloc_async(workspace_size, encoder),
+        {static_cast<int>(workspace_size)},
+        uint8);
+    encoder.add_temporary(workspace);
+    return gpu_ptr<void>(workspace);
+  }
+  return nullptr;
+}
+
+void DnnGraph::set_tensor_attrs(
+    std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+    int64_t uid,
+    const array& x,
+    const std::vector<int64_t>& shape,
+    const std::vector<int64_t>& strides) {
+  tensor->set_uid(uid)
+      .set_alignment(get_alignment(x))
+      .set_data_type(dtype_to_cudnn_type(x.dtype()))
+      .set_dim(shape)
+      .set_stride(strides);
+}
+
+void DnnGraph::set_tensor_attrs(
+    std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+    int64_t uid,
+    const array& x) {
+  set_tensor_attrs(
+      tensor,
+      uid,
+      x,
+      convert_vector<int64_t>(x.shape()),
+      normalized_strides(x));
+}
+
+void DnnGraph::set_tensor_attrs_nchw(
+    std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+    int64_t uid,
+    const array& x) {
   auto [shape, strides] = nhwc_to_nchw(x);
-  return build_cudnn_tensor(id, x, shape, strides);
+  set_tensor_attrs(tensor, uid, x, shape, strides);
 }
-
-cudnn_frontend::Tensor build_cudnn_tensor_4d_nchw(int64_t id, const array& x) {
-  if (x.ndim() == 0) {
-    SmallVector<int64_t, 4> scalar_dims = {1, 1, 1, 1};
-    return build_cudnn_tensor(id, x, scalar_dims, scalar_dims);
-  }
-  if (x.ndim() == 1) {
-    int64_t s = x.shape(0);
-    SmallVector<int64_t, 4> shape = {1, x.shape(0), 1, 1};
-    SmallVector<int64_t, 4> strides = {s, 1, s, s};
-    return build_cudnn_tensor(id, x, shape, strides);
-  }
-  if (x.ndim() == 2) {
-    int64_t s =
-        x.flags().row_contiguous ? x.shape(1) * x.strides(1) : x.strides(0);
-    SmallVector<int64_t, 4> shape = {x.shape(0), x.shape(1), 1, 1};
-    SmallVector<int64_t, 4> strides = {s, x.strides(1), s, s};
-    return build_cudnn_tensor(id, x, shape, strides);
-  }
-  if (x.ndim() == 3 || x.ndim() == 4) {
-    return build_cudnn_tensor_nchw(id, x);
-  }
-  throw std::runtime_error(
-      fmt::format("Unsupported array with {} dims.", x.ndim()));
-}
-
-cudnn_frontend::Tensor build_cudnn_scalar_4d(int64_t id, Dtype dtype) {
-  SmallVector<int64_t, 4> scalar_dims = {1, 1, 1, 1};
-  return cudnn_frontend::TensorBuilder()
-      .setDim(scalar_dims.size(), scalar_dims.data())
-      .setStrides(scalar_dims.size(), scalar_dims.data())
-      .setId(id)
-      .setAlignment(16)
-      .setDataType(dtype_to_cudnn_type(dtype))
-      .setByValue(true)
-      .build();
-}
-
-std::optional<cudnn_frontend::ExecutionPlan> find_cudnn_plan_from_op_graph(
-    cudnnHandle_t handle,
-    cudnnBackendDescriptorType_t backend_type,
-    Dtype dtype,
-    cudnn_frontend::OperationGraph& op_graph) {
-  auto engine_configs = get_cudnn_engine_configs(backend_type, dtype, op_graph);
-  if (engine_configs.empty()) {
-    return std::nullopt;
-  }
-  return find_cudnn_plan_from_engine_configs(handle, engine_configs, op_graph);
-}
-
-bool encode_cudnn_plan_with_capturing(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    int num_args,
-    const int64_t* uids,
-    void** data_ptrs) {
-  return prepare_cudnn_plan(
-      encoder,
-      plan,
-      num_args,
-      uids,
-      data_ptrs,
-      [&](auto handle, auto plan, auto args) {
-        auto capture = encoder.capture_context();
-        if (cudnnBackendExecute(handle, plan, args) != CUDNN_STATUS_SUCCESS) {
-          // Discard the captured graph when failed.
-          capture.discard = true;
-          return false;
-        }
-        return true;
-      });
-}
-
-#if CUDNN_VERSION >= 90500
-bool encode_cudnn_plan_with_graph_api(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    CudaGraph& graph,
-    int num_args,
-    const int64_t* uids,
-    void** data_ptrs) {
-  return prepare_cudnn_plan(
-      encoder,
-      plan,
-      num_args,
-      uids,
-      data_ptrs,
-      [&](auto handle, auto plan, auto args) {
-        if (!graph) {
-          graph = CudaGraph(encoder.device());
-          if (cudnnBackendPopulateCudaGraph(handle, plan, args, graph) !=
-              CUDNN_STATUS_SUCCESS) {
-            return false;
-          }
-        } else {
-          if (cudnnBackendUpdateCudaGraph(handle, plan, args, graph) !=
-              CUDNN_STATUS_SUCCESS) {
-            return false;
-          }
-        }
-        encoder.add_graph_node(graph);
-        return true;
-      });
-}
-#endif
 
 } // namespace mlx::core

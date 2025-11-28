@@ -32,6 +32,13 @@ void check_cuda_error(const char* name, CUresult err) {
   }
 }
 
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
+  }
+}
+
 const char* dtype_to_cuda_type(const Dtype& dtype) {
   switch (dtype) {
     case bool_:

@@ -10,45 +10,7 @@
 
 namespace mlx::core {
 
-namespace fe = cudnn_frontend;
-
 namespace {
-
-#define CHECK_CUDNN_FE_ERROR(cmd)                                    \
-  do {                                                               \
-    auto error = cmd;                                                \
-    if (!error.is_good()) {                                          \
-      throw std::runtime_error(                                      \
-          fmt::format("{} failed: {}.", #cmd, error.get_message())); \
-    }                                                                \
-  } while (0)
-
-std::vector<int64_t> normalized_strides(const array& x) {
-  std::vector<int64_t> strides(x.strides().begin(), x.strides().end());
-  if (std::all_of(
-          strides.begin(), strides.end(), [](int64_t s) { return s == 0; })) {
-    strides.back() = 1;
-    return strides;
-  }
-  if (!x.flags().row_contiguous || x.ndim() < 2) {
-    return strides;
-  }
-  for (int i = x.ndim() - 2; i >= 0; --i) {
-    if (x.shape(i) == 1) {
-      strides[i] = x.shape(i + 1) * strides[i + 1];
-    }
-  }
-  return strides;
-}
-
-void set_tensor_attrs(
-    std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
-    int64_t uid,
-    const array& x) {
-  tensor->set_uid(uid)
-      .set_dim({x.shape().begin(), x.shape().end()})
-      .set_stride(normalized_strides(x));
-}
 
 array prepare_sdpa_input(const array& x, Stream s) {
   // SDPA kernel's requirements on inputs:
@@ -99,7 +61,7 @@ constexpr int QKV_NDIM = 4;
 
 struct SDPACacheKey {
   int device_id;
-  cudnnDataType_t cudnn_dtype;
+  fe::DataType_t cudnn_dtype;
   std::array<int, QKV_NDIM> q_shape;
   std::array<int, QKV_NDIM> k_shape;
   std::array<int, QKV_NDIM> v_shape;
@@ -143,13 +105,13 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
 }
 
 auto& sdpa_cache() {
-  static LRUBytesKeyCache<SDPACacheKey, fe::graph::Graph> cache(
+  static LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 64);
   return cache;
 }
 
 auto& sdpa_backward_cache() {
-  static LRUBytesKeyCache<SDPACacheKey, fe::graph::Graph> cache(
+  static LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
   return cache;
 }
@@ -169,7 +131,7 @@ enum UIDS {
   D_O,
 };
 
-fe::graph::Graph build_sdpa_graph(
+DnnGraph build_sdpa_graph(
     cudnnHandle_t handle,
     const array& q,
     const array& k,
@@ -179,34 +141,15 @@ fe::graph::Graph build_sdpa_graph(
     bool output_logsumexp,
     const array& o,
     const array& stats) {
-  auto dtype = fe::DataType_t::HALF;
-  if (q.dtype() == bfloat16) {
-    dtype = fe::DataType_t::BFLOAT16;
-  }
+  DnnGraph graph(handle, q.dtype());
 
-  fe::graph::Graph graph;
-  graph.set_io_data_type(dtype)
-      .set_intermediate_data_type(fe::DataType_t::FLOAT)
-      .set_compute_data_type(fe::DataType_t::FLOAT);
-
-  auto q_ = graph.tensor(fe::graph::Tensor_attributes().set_name("Q"));
-  auto k_ = graph.tensor(fe::graph::Tensor_attributes().set_name("K"));
-  auto v_ = graph.tensor(fe::graph::Tensor_attributes().set_name("V"));
-  set_tensor_attrs(q_, Q, q);
-  set_tensor_attrs(k_, K, k);
-  set_tensor_attrs(v_, V, v);
-
-  auto scale = graph.tensor(fe::graph::Tensor_attributes()
-                                .set_name("Scale")
-                                .set_uid(SCALE)
-                                .set_dim({1, 1, 1, 1})
-                                .set_stride({1, 1, 1, 1})
-                                .set_is_pass_by_value(true)
-                                .set_data_type(fe::DataType_t::FLOAT));
+  auto q_ = graph.tensor("Q", Q, q);
+  auto k_ = graph.tensor("K", K, k);
+  auto v_ = graph.tensor("V", V, v);
 
   auto options = fe::graph::SDPA_attributes()
                      .set_name("sdpa_cudnn")
-                     .set_attn_scale(scale)
+                     .set_attn_scale(graph.scalar("Scale", SCALE, float32))
                      .set_generate_stats(output_logsumexp);
   if (do_causal) {
     if (q.shape(2) > k.shape(2)) {
@@ -216,31 +159,23 @@ fe::graph::Graph build_sdpa_graph(
     }
   }
   if (mask_arr) {
-    auto bias_ = graph.tensor(fe::graph::Tensor_attributes().set_name("BIAS"));
-    set_tensor_attrs(bias_, BIAS, *mask_arr);
-    options.set_bias(bias_);
+    options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
   }
 
   auto [o_, stats_] = graph.sdpa(q_, k_, v_, options);
-  o_->set_output(true);
-  set_tensor_attrs(o_, O, o);
+  graph.tensor(o_, O, o)->set_output(true);
   if (output_logsumexp) {
-    stats_->set_output(true).set_data_type(fe::DataType_t::FLOAT);
-    set_tensor_attrs(stats_, STATS, stats);
+    graph.tensor(stats_, STATS, stats)->set_output(true);
   }
 
-  CHECK_CUDNN_FE_ERROR(graph.validate());
-  CHECK_CUDNN_FE_ERROR(graph.build_operation_graph(handle));
-  CHECK_CUDNN_FE_ERROR(graph.create_execution_plans({fe::HeurMode_t::A}));
+  CHECK_CUDNN_FE_ERROR(graph.prepare());
   graph.select_behavior_notes(
       {fe::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
-  CHECK_CUDNN_FE_ERROR(graph.check_support(handle));
-  CHECK_CUDNN_FE_ERROR(graph.build_plans(handle));
-
+  CHECK_CUDNN_FE_ERROR(graph.build());
   return graph;
 }
 
-fe::graph::Graph build_sdpa_backward_graph(
+DnnGraph build_sdpa_backward_graph(
     cudnnHandle_t handle,
     const array& q,
     const array& k,
@@ -253,42 +188,18 @@ fe::graph::Graph build_sdpa_backward_graph(
     array& d_q,
     array& d_k,
     array& d_v) {
-  auto dtype = fe::DataType_t::HALF;
-  if (q.dtype() == bfloat16) {
-    dtype = fe::DataType_t::BFLOAT16;
-  }
+  DnnGraph graph(handle, q.dtype());
 
-  fe::graph::Graph graph;
-  graph.set_io_data_type(dtype)
-      .set_intermediate_data_type(fe::DataType_t::FLOAT)
-      .set_compute_data_type(fe::DataType_t::FLOAT);
-
-  auto q_ = graph.tensor(fe::graph::Tensor_attributes().set_name("Q"));
-  auto k_ = graph.tensor(fe::graph::Tensor_attributes().set_name("K"));
-  auto v_ = graph.tensor(fe::graph::Tensor_attributes().set_name("V"));
-  auto o_ = graph.tensor(fe::graph::Tensor_attributes().set_name("O"));
-  auto d_o_ = graph.tensor(fe::graph::Tensor_attributes().set_name("D_O"));
-  auto stats_ = graph.tensor(fe::graph::Tensor_attributes().set_name("STATS"));
-  set_tensor_attrs(q_, Q, q);
-  set_tensor_attrs(k_, K, k);
-  set_tensor_attrs(v_, V, v);
-  set_tensor_attrs(o_, O, o);
-  set_tensor_attrs(d_o_, D_O, d_o);
-  set_tensor_attrs(stats_, STATS, stats);
-  stats_->set_data_type(fe::DataType_t::FLOAT);
-
-  auto scale = graph.tensor(fe::graph::Tensor_attributes()
-                                .set_name("Scale")
-                                .set_uid(SCALE)
-                                .set_dim({1, 1, 1, 1})
-                                .set_stride({1, 1, 1, 1})
-                                .set_is_pass_by_value(true)
-                                .set_data_type(fe::DataType_t::FLOAT));
+  auto q_ = graph.tensor("Q", Q, q);
+  auto k_ = graph.tensor("K", K, k);
+  auto v_ = graph.tensor("V", V, v);
+  auto o_ = graph.tensor("O", O, o);
+  auto d_o_ = graph.tensor("D_O", D_O, d_o);
+  auto stats_ = graph.tensor("STATS", STATS, stats);
 
   auto options = fe::graph::SDPA_backward_attributes()
                      .set_name("sdpa_backward_cudnn")
-                     .set_attn_scale(scale)
-                     .set_attn_scale(scale);
+                     .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
     if (q.shape(2) > k.shape(2)) {
       options.set_causal_mask(do_causal);
@@ -297,54 +208,20 @@ fe::graph::Graph build_sdpa_backward_graph(
     }
   }
   if (mask_arr) {
-    auto bias_ = graph.tensor(fe::graph::Tensor_attributes().set_name("BIAS"));
-    set_tensor_attrs(bias_, BIAS, *mask_arr);
-    options.set_bias(bias_);
+    options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
   }
 
   auto [d_q_, d_k_, d_v_] =
       graph.sdpa_backward(q_, k_, v_, o_, d_o_, stats_, options);
-  d_q_->set_output(true);
-  d_k_->set_output(true);
-  d_v_->set_output(true);
-  set_tensor_attrs(d_q_, D_Q, d_q);
-  set_tensor_attrs(d_k_, D_K, d_k);
-  set_tensor_attrs(d_v_, D_V, d_v);
+  graph.tensor(d_q_, D_Q, d_q)->set_output(true);
+  graph.tensor(d_k_, D_K, d_k)->set_output(true);
+  graph.tensor(d_v_, D_V, d_v)->set_output(true);
 
-  CHECK_CUDNN_FE_ERROR(graph.validate());
-  CHECK_CUDNN_FE_ERROR(graph.build_operation_graph(handle));
-  CHECK_CUDNN_FE_ERROR(graph.create_execution_plans({fe::HeurMode_t::A}));
+  CHECK_CUDNN_FE_ERROR(graph.prepare());
   graph.select_behavior_notes(
       {fe::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
-  CHECK_CUDNN_FE_ERROR(graph.check_support(handle));
-  CHECK_CUDNN_FE_ERROR(graph.build_plans(handle));
-
+  CHECK_CUDNN_FE_ERROR(graph.build());
   return graph;
-}
-
-void execute_graph(
-    cu::CommandEncoder& encoder,
-    cudnnHandle_t handle,
-    fe::graph::Graph& graph,
-    std::unordered_map<int64_t, void*>& variant_pack) {
-  int64_t workspace_size = 0;
-  CHECK_CUDNN_FE_ERROR(graph.get_workspace_size(workspace_size));
-  void* workspace_ptr = nullptr;
-  if (workspace_size > 0) {
-    array workspace(
-        cu::malloc_async(workspace_size, encoder),
-        {static_cast<int>(workspace_size)},
-        uint8);
-    encoder.add_temporary(workspace);
-    workspace_ptr = gpu_ptr<void>(workspace);
-  }
-
-  cudnnSetStream(handle, encoder.stream());
-
-  CudaGraph cuda_graph(encoder.device());
-  CHECK_CUDNN_FE_ERROR(graph.populate_cuda_graph(
-      handle, variant_pack, workspace_ptr, cuda_graph));
-  encoder.add_graph_node(cuda_graph);
 }
 
 } // namespace
@@ -420,19 +297,19 @@ void sdpa_cudnn(
   auto& graph = it->second;
 
   std::unordered_map<int64_t, void*> variant_pack{
-      {Q, const_cast<void*>(gpu_ptr<void>(q))},
-      {K, const_cast<void*>(gpu_ptr<void>(k))},
-      {V, const_cast<void*>(gpu_ptr<void>(v))},
+      {Q, gpu_ptr<void>(q)},
+      {K, gpu_ptr<void>(k)},
+      {V, gpu_ptr<void>(v)},
       {SCALE, &scale},
       {O, gpu_ptr<void>(o)}};
   if (mask_arr) {
-    variant_pack[BIAS] = const_cast<void*>(gpu_ptr<void>(*mask_arr));
+    variant_pack[BIAS] = gpu_ptr<void>(*mask_arr);
   }
   if (output_logsumexp) {
     variant_pack[STATS] = gpu_ptr<void>(stats);
   }
 
-  execute_graph(encoder, handle, graph, variant_pack);
+  CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
 
 void sdpa_backward_cudnn(
@@ -480,21 +357,21 @@ void sdpa_backward_cudnn(
   auto& graph = it->second;
 
   std::unordered_map<int64_t, void*> variant_pack{
-      {Q, const_cast<void*>(gpu_ptr<void>(q))},
-      {K, const_cast<void*>(gpu_ptr<void>(k))},
-      {V, const_cast<void*>(gpu_ptr<void>(v))},
+      {Q, gpu_ptr<void>(q)},
+      {K, gpu_ptr<void>(k)},
+      {V, gpu_ptr<void>(v)},
       {SCALE, &scale},
-      {O, const_cast<void*>(gpu_ptr<void>(o))},
-      {STATS, const_cast<void*>(gpu_ptr<void>(stats))},
-      {D_O, const_cast<void*>(gpu_ptr<void>(d_o))},
+      {O, gpu_ptr<void>(o)},
+      {STATS, gpu_ptr<void>(stats)},
+      {D_O, gpu_ptr<void>(d_o)},
       {D_Q, gpu_ptr<void>(d_q)},
       {D_K, gpu_ptr<void>(d_k)},
       {D_V, gpu_ptr<void>(d_v)}};
   if (mask_arr) {
-    variant_pack[BIAS] = const_cast<void*>(gpu_ptr<void>(*mask_arr));
+    variant_pack[BIAS] = gpu_ptr<void>(*mask_arr);
   }
 
-  execute_graph(encoder, handle, graph, variant_pack);
+  CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
 
 // Defined in scaled_dot_product_attention.cu file.

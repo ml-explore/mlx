@@ -14,15 +14,6 @@ namespace mlx::core::cu {
 
 namespace {
 
-#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
-
-void check_cudnn_error(const char* name, cudnnStatus_t err) {
-  if (err != CUDNN_STATUS_SUCCESS) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
-  }
-}
-
 bool use_cuda_graphs() {
   static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;

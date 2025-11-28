@@ -31,8 +31,10 @@ inline T* gpu_ptr(array& arr) {
       arr.offset());
 }
 
+// For const array, keep constness in pointer unless it is untyped.
 template <typename T>
-inline const T* gpu_ptr(const array& arr) {
+inline std::conditional_t<std::is_same_v<T, void>, void*, const T*> gpu_ptr(
+    const array& arr) {
   return gpu_ptr<T>(const_cast<array&>(arr));
 }
 
