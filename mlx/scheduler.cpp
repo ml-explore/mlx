@@ -55,6 +55,11 @@ void synchronize() {
 
 namespace scheduler {
 
+std::mutex& stream_creation_mutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
 /** A singleton scheduler to manage devices, streams, and task execution. */
 Scheduler& scheduler() {
   // Leak the scheduler on Windows to avoid joining threads on exit, can be
