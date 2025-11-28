@@ -16,6 +16,7 @@ Common Optimizers
    AdaDelta
    Adam
    AdamW
+   AdaBelief
    Adamax
    Lion
    MultiOptimizer
