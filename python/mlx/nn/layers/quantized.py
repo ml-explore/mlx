@@ -268,3 +268,106 @@ class QuantizedLinear(Module):
             ql.bias = linear_layer.bias
 
         return ql
+
+
+class QQLinear(Module):
+    """Quantizes the input and applies an affine transformation using a quantized weight matrix.
+
+    Currently, bias is not implemented for this layer.
+    It is equivalent to :class:`mlx.nn.QuantizedLinear` but both input and weight are quantized.
+    Note: QQLinear supported only `nvfp4` and `mxfp8` quantization modes.
+    For training, parameter `train` should be set to `True`.
+
+    :obj:`QQLinear` also provides a classmethod :meth:`from_linear` to
+    convert linear layers to :obj:`QQLinear` layers.
+
+    Args:
+        input_dims (int): The dimensionality of the input features.
+        output_dims (int): The dimensionality of the output features.
+        group_size (int, optional): The group size to use for the quantized
+            weight. See :func:`~mlx.core.quantize`. Default: ``16``.
+        bits (int, optional): The bit width to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``4``.
+        mode (str): The quantization method to use (see
+           :func:`mlx.core.quantize`). Default: ``"nvfp4"``.
+    """
+
+    def __init__(
+        self,
+        input_dims: int,
+        output_dims: int,
+        bias: bool = False,
+        group_size: int = 16,
+        bits: int = 4,
+        mode: str = "nvfp4",
+        train: bool = False,
+    ):
+        super().__init__()
+        if bias:
+            raise NotImplementedError("Bias not implemented for QQLinear yet.")
+        # Quantization config
+        self.group_size = group_size
+        self.bits = bits
+        self.mode = mode
+
+        # Initialize the quantized weight
+        scale = math.sqrt(1 / input_dims)
+        weight = mx.random.uniform(
+            low=-scale,
+            high=scale,
+            shape=(output_dims, input_dims),
+        )
+        # if vjp:
+        if train:
+            self.weight = weight
+        self.weight_quantized, self.scales = mx.quantize(
+            weight, group_size, bits, mode=mode
+        )
+
+    def _extra_repr(self):
+        out_dims, in_dims = self.weight_quantized.shape
+        in_dims *= 32 // self.bits
+        return (
+            f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
+            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
+        )
+
+    def __call__(self, x):
+        x = mx.qqmm(
+            x,
+            self["weight_quantized"],
+            scales=self["scales"],
+            w=self.get("weight"),
+            group_size=self.group_size,
+            bits=self.bits,
+            mode=self.mode,
+        )
+        return x
+
+    @classmethod
+    def from_linear(
+        cls,
+        linear_layer: Module,
+        group_size: int = 16,
+        bits: int = 4,
+        mode: str = "nvfp4",
+        train: bool = False,
+    ):
+        """Create a :obj:`QQLinear` layer from a :obj:`Linear` layer."""
+        output_dims, input_dims = linear_layer.weight.shape
+        ql = cls(
+            input_dims, output_dims, False, group_size, bits, mode=mode, train=train
+        )
+        ql.weight_quantized, ql.scales = mx.quantize(
+            linear_layer.weight,
+            group_size,
+            bits,
+            mode=mode,
+        )
+        if train:
+            ql.weight = linear_layer.weight
+
+        if "bias" in linear_layer:
+            ql.bias = linear_layer.bias
+
+        return ql

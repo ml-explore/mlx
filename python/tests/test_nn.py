@@ -1948,6 +1948,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         out = attn(x, x, x)
         self.assertEqual(out.shape, x.shape)
 
+    def test_qqlinear(self):
+        model = nn.Sequential(
+            nn.QQLinear(512, 256, bits=4, group_size=16, mode="nvfp4"),
+            nn.ReLU(),
+            nn.QQLinear(256, 128, bits=4, group_size=16, mode="nvfp4"),
+            nn.ReLU(),
+            nn.QQLinear(128, 256, bits=4, group_size=16, mode="nvfp4"),
+        )
+        x = mx.random.normal(shape=(128, 512))
+        out = model(x)
+        self.assertEqual(out.shape, (128, 256))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
