@@ -984,14 +984,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
             ds = mx.grad(gmm)(s, x, wq)
 
     def test_qqmm(self):
-        # for mxfp8 mode the results does not match exactly
-        # for less then 1 percent of elements in the output
-        # this is not systematic error
-        # the error can be larger than 1 ULP for very small elements
-        # and always less than 1 ULP for large elements
-        # for nvfp4 results match precisely
-        # therefore I suspect that potential cause of the difference
-        # is in the implementation of mxfp8 matmul in cuBLASlt
+        # In mxfp8 mode, the results do not match exactly:
+        # fewer than 1% of output elements differ.
+        # This does not appear to be a systematic error.
+        # The error can exceed 1 ULP for very small values,
+        # and is always below 1 ULP for larger values.
+        # For nvfp4, the results match exactly.
+        # therefore I suspect that the discrepancy comes from
+        # the mxfp8 matmul implementation in cuBLASLt..
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         dtype = mx.bfloat16

@@ -5441,33 +5441,30 @@ void init_ops(nb::module_& m) {
       "w"_a = nb::none(), // bf16 weights
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
-      "mode"_a = "affine",
+      "mode"_a = "nvfp4",
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def qqmm(x: array, w_q: array, /, scales: array, w: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Perform the matrix multiplication with the quantized matrix ``w_q`` and x that is
-        quantized on-the-fly using provided group size, bits and mode which must be the same
-        as used to quantize ``w_q``. ``w`` must be provided during training for correct
-        gradient computation, but optional for the inference.
+        Perform the matrix multiplication with the quantized matrix ``w_q`` and ``x`` that is
+        quantized on-the-fly using provided group size, bits and mode. Group size, bits and mode 
+        must match those used to quantize ``w_q``. High precision ``w`` must be provided 
+        for gradient computation and should match ``w_q`` before quantization.
 
         Args:
           x (array): Input array
           w_q (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w_q``
           w (array, optional): bf16 or float32 weights used during training for
-            correct gradient computation. Default: ``None``.
-          transpose (bool, optional): Defines whether to multiply with the
-            transposed ``w_q`` or not, namely whether we are performing
-            ``x @ w_q.T`` or ``x @ w_q``. Default: ``True``.
+           gradient computation. Must be provided for vjp. Default: ``None``.
           group_size (int, optional): The size of the group in ``w_q`` that shares a
-            scale and bias. See supported values and defaults in the
+            scale. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           bits (int, optional): The number of bits occupied by each element of
             ``w_q`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
-          mode (str, optional): The quantization mode. Default: ``"affine"``.
+          mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
         Returns:
           array: The result of the multiplication of quantized ``x`` with ``w_q``.
       )pbdoc");
