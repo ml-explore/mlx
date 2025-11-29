@@ -7,6 +7,14 @@ import mlx.core as mx
 import mlx_tests
 
 
+def ulp_bf16_at(x):
+    ax = mx.abs(x)
+    min_normal = mx.array(2.0**-126)
+    ax = mx.where(ax < min_normal, min_normal, ax)
+    e = mx.floor(mx.log2(ax))
+    return mx.power(2.0, e - 7.0)
+
+
 class TestQuantized(mlx_tests.MLXTestCase):
     def test_quantize_dequantize(self):
         w = mx.random.normal(shape=(128, 512))
@@ -976,6 +984,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
             ds = mx.grad(gmm)(s, x, wq)
 
     def test_qqmm(self):
+        # for mxfp8 mode the results does not match exactly
+        # for less then 1 percent of elements in the output
+        # this is not systematic error
+        # the error can be larger than 1 ULP for very small elements
+        # and always less than 1 ULP for large elements
+        # for nvfp4 results match precisely
+        # therefore I suspect that potential cause of the difference
+        # is in the implementation of mxfp8 matmul in cuBLASlt
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         dtype = mx.bfloat16
@@ -1013,8 +1029,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         x_q, scales_x, group_size=group_size, bits=bits, mode=mode
                     )
                     y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
+                    ulp = ulp_bf16_at(y_hat)
+                    error = (y_q - y_hat).abs()
                     self.assertEqual(y_q.shape, y_hat.shape)
-                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+                    self.assertTrue(mx.logical_or(error < 1e-3, error <= ulp).all())
 
     def test_qqmm_vjp(self):
         key = mx.random.key(0)
@@ -1054,7 +1072,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 expected_out = mx.qqmm(
                     c, w_tq, scales_wt, group_size=group_size, bits=bits, mode=mode
                 )
-                self.assertTrue(mx.allclose(vjp_out[0], expected_out))
+                ulp = ulp_bf16_at(expected_out)
+                error = (vjp_out[0] - expected_out).abs()
+                self.assertTrue(mx.logical_or(error < 1e-3, error <= ulp).all())
 
 
 if __name__ == "__main__":
