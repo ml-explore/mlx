@@ -92,7 +92,7 @@ CudaAllocator::CudaAllocator()
           [this](CudaBuffer* buf) { cuda_free(buf); }) {
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-  memory_limit_ = total * 0.95;
+  memory_limit_ = total * 0.9;
   max_pool_size_ = memory_limit_;
 
   int device_count = 0;
@@ -154,17 +154,21 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     }
     lock.unlock();
     if (!buf) {
-      buf = new CudaBuffer{nullptr, size, device};
       cudaError_t err;
+      void* data = nullptr;
       if (device == -1) {
-        err = cudaMallocManaged(&buf->data, size);
+        err = cudaMallocManaged(&data, size);
       } else {
-        err = cudaMallocAsync(&buf->data, size, stream);
+        err = cudaMallocAsync(&data, size, stream);
       }
       if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
         throw std::runtime_error(fmt::format(
             "cudaMallocManaged failed: {}.", cudaGetErrorString(err)));
       }
+      if (!data) {
+        return Buffer{nullptr};
+      }
+      buf = new CudaBuffer{data, size, device};
     }
     lock.lock();
   }
@@ -176,7 +180,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
   // Copy to managed here if the buffer is not on the right device
-  if (buf->device != device) {
+  if (buf->device >= 0 && buf->device != device) {
     copy_to_managed(*buf);
   }
   return Buffer{buf};
@@ -219,9 +223,9 @@ void CudaAllocator::cuda_free(CudaBuffer* buf) {
     scalar_pool_.free(buf);
   } else {
     if (buf->device >= 0) {
-      cudaFreeAsync(buf->data, free_streams_[buf->device]);
+      CHECK_CUDA_ERROR(cudaFreeAsync(buf->data, free_streams_[buf->device]));
     } else {
-      cudaFree(buf->data);
+      CHECK_CUDA_ERROR(cudaFree(buf->data));
     }
     delete buf;
   }

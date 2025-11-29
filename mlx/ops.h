@@ -1198,6 +1198,12 @@ inline array scatter_min(
   return scatter_min(a, {indices}, updates, std::vector<int>{axis}, s);
 }
 
+array masked_scatter(
+    const array& a,
+    const array& mask,
+    const array& src,
+    StreamOrDevice s = {});
+
 /** Square root the elements of an array. */
 array sqrt(const array& a, StreamOrDevice s = {});
 

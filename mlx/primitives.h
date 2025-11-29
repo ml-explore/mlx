@@ -1959,6 +1959,20 @@ class ScatterAxis : public UnaryPrimitive {
   int axis_;
 };
 
+class MaskedScatter : public UnaryPrimitive {
+ public:
+  explicit MaskedScatter(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP();
+  DEFINE_GRADS();
+  DEFINE_NAME(MaskedScatter);
+  DEFINE_DEFAULT_IS_EQUIVALENT();
+  DEFINE_INPUT_OUTPUT_SHAPE();
+};
+
 class Sigmoid : public UnaryPrimitive {
  public:
   explicit Sigmoid(Stream stream) : UnaryPrimitive(stream) {}

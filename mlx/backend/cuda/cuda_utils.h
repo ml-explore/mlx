@@ -29,6 +29,10 @@ class CudaHandle {
   }
 
   ~CudaHandle() {
+    // Skip if there was an error to avoid throwing in the destructors
+    if (cudaPeekAtLastError() != cudaSuccess) {
+      return;
+    }
     reset();
   }
 

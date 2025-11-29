@@ -1317,15 +1317,15 @@ Shape Convolution::conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
+      msg << "[conv] Padding sizes must be non-negative. Got padding "
           << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
     if (strides[i - 1] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive." << " Got strides "
-          << strides << ".";
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -4427,6 +4427,145 @@ bool ScatterAxis::is_equivalent(const Primitive& other) const {
   return reduce_type_ == s_other.reduce_type_ && axis_ == s_other.axis_;
 }
 
+std::vector<array> MaskedScatter::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  const array& src = primals[2];
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
+  const array& cotan = cotangents[0];
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+
+  for (int arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(where(mask_b, zeros_like(cotan, s), cotan, s));
+    } else if (arg == 2) {
+      const array mask_flat = flatten(mask_b, s);
+      const array cotan_flat = flatten(cotan, s);
+
+      const array idx_src =
+          cumsum(astype(mask_flat, int32, s), 0, false, false, s);
+      const array cotan_src =
+          where(mask_flat, cotan_flat, array(0, cotan_flat.dtype()), s);
+
+      array gsrc_flat =
+          zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
+      if (src.size() > 0) {
+        const array cotan_updates =
+            reshape(cotan_src, {static_cast<int>(idx_src.size()), 1}, s);
+        gsrc_flat = scatter_add(gsrc_flat, idx_src, cotan_updates, 0, s);
+      }
+
+      vjps.push_back(reshape(gsrc_flat, src.shape(), s));
+    } else {
+      throw std::invalid_argument(
+          "[masked_scatter] Cannot calculate VJP with respect to mask.");
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> MaskedScatter::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  array mask_b = mask;
+  if (mask_b.ndim() < dst.ndim()) {
+    std::vector<int> axes(dst.ndim() - mask_b.ndim(), 0);
+    std::iota(axes.begin(), axes.end(), mask_b.ndim());
+    mask_b = expand_dims(mask_b, axes, s);
+  }
+
+  array out = zeros_like(dst, s);
+  for (int arg : argnums) {
+    if (arg == 0) {
+      out = where(mask_b, out, tangents[0], s);
+    } else if (arg == 2) {
+      out = array(
+          out.shape(),
+          out.dtype(),
+          std::make_shared<MaskedScatter>(s),
+          {out, mask, tangents[1]});
+    } else {
+      throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
+    }
+  }
+  return {out};
+}
+
+std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto& s = stream();
+
+  // The inputs all had batching in the 0-th dim. So vectorization amounts to
+  //  - Move the vectorized axis first
+  //  - Expand and broadcast the unvectorized inputs
+  //  - Flatten the first two dims (the new and old batch axes)
+  //  - Masked scatter
+  //  - Unflatten the vectorized axis again
+
+  // Find the batch dim if any
+  int batch_dim = -1;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] >= 0) {
+      batch_dim = inputs[i].shape(axes[i]);
+    }
+  }
+
+  // Early exit if it's not vmapped
+  if (batch_dim < 0) {
+    return {
+        {array(
+            inputs[0].shape(),
+            inputs[0].dtype(),
+            std::make_shared<MaskedScatter>(to_stream(s)),
+            inputs)},
+        {-1}};
+  }
+
+  // Move vmapped axis to 0-th dim and broadcast the non-vectorized ones
+  auto v_in = inputs;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] > 0) {
+      v_in[i] = moveaxis(v_in[i], axes[i], 0, s);
+    } else if (axes[i] < 0) {
+      v_in[i] = expand_dims(v_in[i], 0, s);
+      auto in_shape = v_in[i].shape();
+      in_shape[0] = batch_dim;
+      v_in[i] = broadcast_to(v_in[i], in_shape, s);
+    }
+  }
+
+  // Flatten the first 2 dims
+  for (int i = 0; i < 3; i++) {
+    v_in[i] = flatten(v_in[i], 0, 1, s);
+  }
+
+  // Masked scatter
+  const auto result_shape = v_in[0].shape();
+  const auto result_dtype = v_in[0].dtype();
+  array result(
+      result_shape,
+      result_dtype,
+      std::make_shared<MaskedScatter>(to_stream(s)),
+      std::move(v_in));
+
+  // Now unflatten so the vectorized axis is nice and separate
+  result = unflatten(result, 0, {batch_dim, -1}, s);
+
+  return {{result}, {0}};
+}
+
 std::vector<array> Sigmoid::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -5190,14 +5329,18 @@ std::vector<array> BlockMaskedMM::vjp(
   //    - dB_m = A_m.T [..., K, M] @ dC [..., M, N]
   //    - dA = dA_m * mask_b_lhs [..., MP, KP]
   //    - dB = dB_m * mask_b_rhs [..., KP, MP]
-  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP, KP]
-  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP, NP]
+  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP,
+  //    KP]
+  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP,
+  //    NP]
   //
   // Observations:
-  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as a
-  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing to
-  //    materialize the intermediate dA_m. Similar for dB.
-  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and then
+  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as
+  //  a
+  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing
+  //    to materialize the intermediate dA_m. Similar for dB.
+  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and
+  //  then
   //    point-wise multiply with A. But the output needs to be padded
 
   std::vector<array> vjps;

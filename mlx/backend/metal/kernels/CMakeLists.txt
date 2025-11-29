@@ -9,7 +9,14 @@ set(BASE_HEADERS
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
-  set(METAL_FLAGS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions)
+  set(METAL_FLAGS
+      -x
+      metal
+      -Wall
+      -Wextra
+      -fno-fast-math
+      -Wno-c++17-extensions
+      -Wno-c++20-extensions)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()
@@ -118,6 +125,30 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
+endif()
+
+if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
+                                              26.2))
+  set(STEEL_NAX_HEADERS
+      steel/defines.h
+      steel/utils.h
+      steel/gemm/transforms.h
+      steel/gemm/nax.h
+      steel/gemm/gemm_nax.h
+      steel/utils/type_traits.h
+      steel/utils/integral_constant.h)
+
+  build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+
+  build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
+  build_kernel(fp_quantized_nax fp_quantized_nax.h ${STEEL_NAX_HEADERS})
+
+  set(STEEL_NAX_ATTN_HEADERS
+      steel/defines.h steel/utils.h steel/attn/nax.h steel/utils/type_traits.h
+      steel/utils/integral_constant.h)
+
+  build_kernel(steel/attn/kernels/steel_attention_nax ${STEEL_NAX_ATTN_HEADERS})
 endif()
 
 add_custom_command(

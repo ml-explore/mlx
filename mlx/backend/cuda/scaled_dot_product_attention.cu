@@ -664,7 +664,12 @@ bool supports_sdpa_vector(
     const array& v,
     bool has_mask,
     bool has_arr_mask,
-    bool do_causal) {
+    bool do_causal,
+    bool output_logsumexp) {
+  if (output_logsumexp) {
+    return false;
+  }
+
   const int value_head_dim = v.shape(-1);
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);

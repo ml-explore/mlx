@@ -1,25 +1,41 @@
 name: 'Build and Test on Linux'
-description: 'Build and test MLX on Linux'
+
+inputs:
+  toolkit:
+    description: 'The toolkit to build with'
+    required: false
+    default: 'cpu'
 
 runs:
   using: "composite"
   steps:
     - name: Install Python package
+      id: python_build
       shell: sh
       env:
-        CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
         DEBUG: 1
-      run: pip install --no-build-isolation -e ".[dev]" -v
+        CMAKE_ARGS: >-
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          -DMLX_BUILD_CUDA=${{ startsWith(inputs.toolkit, 'cuda') && 'ON' || 'OFF' }}
+      run: |
+        if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
+          # There is no GPU in arm64 runner, use a common arch.
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_CUDA_ARCHITECTURES=90a"
+          # Can not build tests when the built executables can not run.
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
+        fi
+        pip install --no-build-isolation -e ".[dev]" -v
+        # Pass the CMAKE_ARGS to following steps.
+        echo CMAKE_ARGS="$CMAKE_ARGS" >> $GITHUB_OUTPUT
 
     - name: Generate package stubs
       shell: sh
       run: |
         pip install typing_extensions
         python setup.py generate_stubs
-    
+
     - name: Build CPP only
       shell: bash
       run: |
-        mkdir -p build && cd build
-        cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
-        make -j $(nproc)
+        cmake . -B build -DCMAKE_BUILD_TYPE=Debug ${{ steps.python_build.outputs.CMAKE_ARGS }}
+        cmake --build build -j $(nproc)

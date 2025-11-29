@@ -106,8 +106,9 @@ class CommandEncoder {
     cudaGraphNode_t node;
     // K = kernel
     // E = empty
-    // G = subgraph
-    char node_type;
+    // G* = subgraph (with metadata)
+    // Symbols ':', '-' are reserved as separators
+    std::string node_type;
     std::string id;
   };
 
@@ -119,12 +120,11 @@ class CommandEncoder {
   CudaGraph graph_;
   Worker worker_;
   char node_count_{0};
-  char graph_node_count_{0};
-  char empty_node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
   std::vector<cudaGraphNode_t> to_nodes_;
-  std::string graph_key_;
+  std::string graph_nodes_key_;
+  std::string graph_deps_key_;
   std::vector<GraphNode> concurrent_nodes_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   LRUCache<std::string, CudaGraphExec> graph_cache_;
@@ -132,6 +132,7 @@ class CommandEncoder {
   std::vector<std::uintptr_t> active_outputs_;
   std::unordered_map<std::uintptr_t, GraphNode> node_map_;
   size_t bytes_in_graph_{0};
+  bool is_graph_updatable_{true};
   int max_ops_per_graph_;
   int max_mb_per_graph_;
 };

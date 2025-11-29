@@ -51,8 +51,6 @@ runs:
         # Note: the CI machine does not meet CUDA 13's driver requirement.
         # Compatibility matrix:
         # https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
-        # The `nvcc` is installed into `/usr/local/cuda-VERSION/bin/nvcc` - but
-        # it's *not* on the default toolkit path.
         PACKAGES: |
           {
             "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-toolkit-12-6",
@@ -60,13 +58,16 @@ runs:
             "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-toolkit-13-0"
           }
       run: |
-        export ARCH=${{ runner.arch == 'arm64' && 'arm64' || 'x86_64' }}
+        # The CUDA binaries are hosted in the "sbsa" repo, the "arm64" repo is
+        # Jetson specific. SBSA means Arm Server Base System Architecture.
+        ARCH=${{ runner.arch == 'arm64' && 'sbsa' || 'x86_64' }}
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$ARCH/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
         sudo apt-get install -y \
             libnccl2 libnccl-dev \
             ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
+        echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
 
     - name: CUDA packages and driver report
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}

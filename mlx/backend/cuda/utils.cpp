@@ -5,6 +5,7 @@
 #include "mlx/dtype_utils.h"
 
 #include <fmt/format.h>
+#include <vector>
 
 namespace mlx::core {
 

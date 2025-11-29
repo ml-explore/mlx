@@ -135,7 +135,11 @@ class Scheduler {
 
   ~Scheduler() {
     for (auto s : streams_) {
-      synchronize(s);
+      try {
+        synchronize(s);
+      } catch (const std::runtime_error&) {
+        // ignore errors if synch fails
+      }
     }
     for (auto t : threads_) {
       if (t != nullptr) {

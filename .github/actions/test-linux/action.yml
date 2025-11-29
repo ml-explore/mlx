@@ -1,8 +1,8 @@
 name: 'Run Linux tests'
 
 inputs:
-  cpu-only:
-    description: 'Skip GPU tests'
+  has-gpu:
+    description: 'Run GPU tests'
     required: false
     default: false
 
@@ -17,7 +17,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run distributed tests
-      if: ${{ inputs.cpu-only == 'true' }}
+      if: ${{ inputs.has-gpu == 'false' }}
       shell: bash
       run: |
         echo "::group::Distributed tests"
@@ -30,7 +30,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run Python tests - CPU
-      if: ${{ inputs.cpu-only == 'true' }}
+      if: ${{ inputs.has-gpu == 'false' }}
       shell: bash
       env:
         DEVICE: cpu
@@ -40,7 +40,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run Python tests - GPU
-      if: ${{ inputs.cpu-only == 'false' }}
+      if: ${{ inputs.has-gpu == 'true' }}
       shell: bash
       env:
         DEVICE: gpu
@@ -59,7 +59,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run CPP tests - GPU
-      if: ${{ inputs.cpu-only == 'false' }}
+      if: ${{ inputs.has-gpu == 'true' }}
       shell: bash
       env:
         DEVICE: gpu
