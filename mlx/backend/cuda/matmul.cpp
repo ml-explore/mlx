@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/matmul.h"
-#include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
