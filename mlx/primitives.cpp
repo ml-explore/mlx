@@ -3480,7 +3480,6 @@ std::vector<Shape> DualQuantizedMatmul::output_shapes(
   auto out_shape = inputs[0].shape();
   int w_outer_dims = inputs[2].shape(-2);
   out_shape.back() = w_outer_dims;
-  std::cout << "DualQuantizedMatmul output shape: " << out_shape << std::endl;
   return {std::move(out_shape)};
 }
 
