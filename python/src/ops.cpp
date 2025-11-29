@@ -5447,17 +5447,18 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def qqmm(x: array, w_q: array, /, scales: array, w: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Perform the matrix multiplication with the quantized matrix ``w_q`` and ``x`` that is
-        quantized on-the-fly using provided group size, bits and mode. Group size, bits and mode 
-        must match those used to quantize ``w_q``. High precision ``w`` must be provided 
-        for gradient computation and should match ``w_q`` before quantization.
+          Perform matrix multiplication using the quantized weight matrix ``w_q`` and the input ``x``, 
+          which is quantized on the fly using the provided group size, bit width, and mode. 
+          The group size, bit width, and mode must match those used to quantize ``w_q``.
+          The high-precision weight matrix ``w`` must be provided for gradient computation 
+          and must match ``w_q`` before quantization.
 
         Args:
           x (array): Input array
           w_q (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w_q``
           w (array, optional): bf16 or float32 weights used during training for
-           gradient computation. Must be provided for vjp. Default: ``None``.
+           gradient computation. Default: ``None``.
           group_size (int, optional): The size of the group in ``w_q`` that shares a
             scale. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.

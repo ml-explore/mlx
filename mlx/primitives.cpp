@@ -10,7 +10,6 @@
 #include <sstream>
 #include <stdexcept>
 
-#include <iostream>
 #include "mlx/backend/common/utils.h"
 #include "mlx/fft.h"
 #include "mlx/linalg.h"
