@@ -1,13 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include <nvtx3/nvtx3.hpp>
-#include "mlx/backend/common/matmul.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/quantized/cublas_qqmm.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/fast_primitives.h"
+
+#include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
 

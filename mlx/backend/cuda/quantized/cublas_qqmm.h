@@ -52,19 +52,6 @@ class CublasQQMM : public CublasMatmulBase {
       const array& b_scale,
       float alpha = 1.0f);
 
-  //   void run(
-  //       cu::CommandEncoder& encoder,
-  //       array& out,
-  //       const array& a,
-  //       const array& b,
-  //       const array& c,
-  //       const Shape& batch_shape,
-  //       const Strides& a_batch_strides,
-  //       const Strides& b_batch_strides,
-  //       const Strides& c_batch_strides,
-  //       float alpha,
-  //       float beta);
-
  private:
   void run_batched(
       cu::CommandEncoder& encoder,
@@ -77,19 +64,6 @@ class CublasQQMM : public CublasMatmulBase {
       const Strides& a_batch_strides,
       const Strides& b_batch_strides,
       float alpha);
-
-  //   void run_batched(
-  //       cu::CommandEncoder& encoder,
-  //       array& out,
-  //       const array& a,
-  //       const array& b,
-  //       const array& c,
-  //       const Shape& batch_shape,
-  //       const Strides& a_batch_strides,
-  //       const Strides& b_batch_strides,
-  //       const Strides& c_batch_strides,
-  //       float alpha,
-  //       float beta);
 
   void execute(
       cu::CommandEncoder& encoder,

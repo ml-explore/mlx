@@ -29,10 +29,6 @@ class CublasMatmulBase {
  public:
   virtual ~CublasMatmulBase();
 
-  cublasLtMatmulDesc_t matmul_desc() const {
-    return matmul_desc_;
-  }
-
   void set_bias(cu::CommandEncoder& encoder, const array& bias);
 
  protected:
