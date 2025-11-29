@@ -1,7 +1,5 @@
 // Copyright © 2025 Apple Inc.
 
-#include <cassert>
-
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
 
