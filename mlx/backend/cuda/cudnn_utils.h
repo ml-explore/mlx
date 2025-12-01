@@ -2,24 +2,29 @@
 
 #pragma once
 
-#include "mlx/array.h"
-#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/dtype_utils.h"
 
 #include <cudnn_frontend.h>
-#include <cudnn_frontend_find_plan.h>
 #include <fmt/format.h>
-
-#include <algorithm>
-#include <array>
 
 namespace mlx::core {
 
 namespace cu {
 class CommandEncoder;
 }
+
+namespace fe = cudnn_frontend;
+
+#define CHECK_CUDNN_FE_ERROR(cmd)                                    \
+  do {                                                               \
+    auto error = cmd;                                                \
+    if (!error.is_good()) {                                          \
+      throw std::runtime_error(                                      \
+          fmt::format("{} failed: {}.", #cmd, error.get_message())); \
+    }                                                                \
+  } while (0)
 
 // Return pointer alignment of |x|'s data.
 inline uint8_t get_alignment(const array& x) {
@@ -35,8 +40,31 @@ inline uint8_t get_alignment(const array& x) {
 
 // Convert the type of elements in |vec| to |T|.
 template <typename T, typename Vec>
-inline SmallVector<T> convert_vector(const Vec& vec) {
-  return SmallVector<T>(vec.begin(), vec.end());
+inline std::vector<T> convert_vector(const Vec& vec) {
+  return std::vector<T>(vec.begin(), vec.end());
+}
+
+// Map dtype to cudnn data type.
+inline fe::DataType_t dtype_to_cudnn_type(Dtype dtype) {
+  switch (dtype) {
+    case int8:
+      return fe::DataType_t::INT8;
+    case int32:
+      return fe::DataType_t::INT32;
+    case uint8:
+      return fe::DataType_t::UINT8;
+    case float16:
+      return fe::DataType_t::HALF;
+    case bfloat16:
+      return fe::DataType_t::BFLOAT16;
+    case float32:
+      return fe::DataType_t::FLOAT;
+    case float64:
+      return fe::DataType_t::DOUBLE;
+    default:
+      throw std::runtime_error(fmt::format(
+          "Unsupported dtype in cuDNN: {}.", dtype_to_string(dtype)));
+  }
 }
 
 // Return an array that can be used as map key for |vec| with size <= MAX_NDIM.
@@ -55,111 +83,89 @@ inline std::array<T, NDIM> vector_key(const Vec<T>& vec) {
   return result;
 }
 
-// Helpers used by get_data_ptrs to get pointers.
-inline void* get_data_ptr(const array& arr) {
-  return const_cast<void*>(gpu_ptr<void>(arr));
-}
-
-template <typename T, typename = std::enable_if_t<std::is_scalar_v<T>>>
-inline void* get_data_ptr(T& scalar) {
-  return &scalar;
-}
-
-// Return an array filled with data pointers of args.
-template <typename... Args>
-inline std::array<void*, sizeof...(Args)> get_data_ptrs(Args&... args) {
-  return {get_data_ptr(args)...};
-}
-
-// Map dtype to cudnn data type.
-inline cudnnDataType_t dtype_to_cudnn_type(Dtype dtype) {
-  switch (dtype) {
-    case int8:
-      return CUDNN_DATA_INT8;
-    case int32:
-      return CUDNN_DATA_INT32;
-    case uint8:
-      return CUDNN_DATA_UINT8;
-    case float16:
-      return CUDNN_DATA_HALF;
-    case bfloat16:
-      return CUDNN_DATA_BFLOAT16;
-    case float32:
-      return CUDNN_DATA_FLOAT;
-    case float64:
-      return CUDNN_DATA_DOUBLE;
-    default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in Convolution: {}.", dtype_to_string(dtype)));
+// Extends cuDNN graph with helpers.
+class DnnGraph : public fe::graph::Graph {
+ public:
+  DnnGraph(cudnnHandle_t handle, Dtype io_dtype, Dtype compute_dtype = float32)
+      : handle_(handle) {
+    set_io_data_type(dtype_to_cudnn_type(io_dtype));
+    set_intermediate_data_type(dtype_to_cudnn_type(compute_dtype));
+    set_compute_data_type(dtype_to_cudnn_type(compute_dtype));
   }
-}
 
-// Create a tensor descriptor from |x|.
-cudnn_frontend::Tensor build_cudnn_tensor(int64_t id, const array& x);
+  // Create a cuDNN tensor description from MLX array |x|.
+  auto& tensor(
+      std::shared_ptr<fe::graph::Tensor_attributes>& attrs,
+      int64_t uid,
+      const array& x) {
+    set_tensor_attrs(attrs, uid, x);
+    return attrs;
+  }
+  auto tensor(const char* name, int64_t uid, const array& x) {
+    auto attrs = Graph::tensor(fe::graph::Tensor_attributes().set_name(name));
+    tensor(attrs, uid, x);
+    return attrs;
+  }
 
-// Create a tensor descriptor from |x|, and transpose from NHWC to NCHW.
-cudnn_frontend::Tensor build_cudnn_tensor_nchw(int64_t id, const array& x);
+  // Create a cuDNN tensor description from MLX array |x|, and transpose it from
+  // NHWC layout to NCHW.
+  auto& tensor_nchw(
+      std::shared_ptr<fe::graph::Tensor_attributes>& attrs,
+      int64_t uid,
+      const array& x) {
+    set_tensor_attrs_nchw(attrs, uid, x);
+    return attrs;
+  }
+  auto tensor_nchw(const char* name, int64_t uid, const array& x) {
+    auto attrs = Graph::tensor(fe::graph::Tensor_attributes().set_name(name));
+    tensor_nchw(attrs, uid, x);
+    return attrs;
+  }
 
-// Create a tensor descriptor from |x|, make sure it is 4D, and transpose it
-// from NHWC to NCHW.
-cudnn_frontend::Tensor build_cudnn_tensor_4d_nchw(int64_t id, const array& x);
+  // Create a cuDNN tensor for scalar.
+  auto scalar(const char* name, int64_t uid, Dtype dtype) {
+    return Graph::tensor(fe::graph::Tensor_attributes()
+                             .set_name(name)
+                             .set_uid(uid)
+                             .set_dim({1, 1, 1, 1})
+                             .set_stride({1, 1, 1, 1})
+                             .set_is_pass_by_value(true)
+                             .set_data_type(dtype_to_cudnn_type(dtype)));
+  }
 
-// Create a 4D scalar tensor descriptor, which is passed by value.
-cudnn_frontend::Tensor build_cudnn_scalar_4d(int64_t id, Dtype dtype);
+  // Call this before setting notes.
+  fe::error_t prepare();
+  // Call this after setting notes.
+  fe::error_t build();
 
-// Find a working plan for |op_graph|.
-std::optional<cudnn_frontend::ExecutionPlan> find_cudnn_plan_from_op_graph(
-    cudnnHandle_t handle,
-    cudnnBackendDescriptorType_t backend_type,
-    Dtype dtype,
-    cudnn_frontend::OperationGraph& op_graph);
+  // Add cuDNN graph to CUDA graph, using native CUDA graph API.
+  fe::error_t encode_graph(
+      cu::CommandEncoder& encoder,
+      std::unordered_map<int64_t, void*> variant_pack);
+  // Add cuDNN graph to CUDA graph, using stream capture.
+  fe::error_t encode_capturing(
+      cu::CommandEncoder& encoder,
+      std::unordered_map<int64_t, void*> variant_pack);
 
-// Encode the plan to command buffer by capturing.
-bool encode_cudnn_plan_with_capturing(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    int num_args,
-    const int64_t* uids,
-    void** data_ptrs);
+ private:
+  void* prepare_workspace(cu::CommandEncoder& encoder);
 
-#if CUDNN_VERSION >= 90500
-// Encode the plan to command buffer by using native graph api of cudnn. If the
-// |graph| is empty it will be populated, otherwise it will be updated.
-bool encode_cudnn_plan_with_graph_api(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    CudaGraph& graph,
-    int num_args,
-    const int64_t* uids,
-    void** data_ptrs);
-#endif
+  void set_tensor_attrs(
+      std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+      int64_t uid,
+      const array& x,
+      const std::vector<int64_t>& shape,
+      const std::vector<int64_t>& strides);
+  void set_tensor_attrs(
+      std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+      int64_t uid,
+      const array& x);
+  void set_tensor_attrs_nchw(
+      std::shared_ptr<fe::graph::Tensor_attributes>& tensor,
+      int64_t uid,
+      const array& x);
 
-// Helpers to make calls like encode_cudnn_plan(..., {'x', 'y', 'z'}, x, y, z).
-template <typename... Args>
-bool encode_cudnn_plan(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    std::initializer_list<int64_t> uids,
-    Args&... args) {
-  assert(uids.size() == sizeof...(args));
-  auto data_ptrs = get_data_ptrs(args...);
-  return encode_cudnn_plan_with_capturing(
-      encoder, plan, uids.size(), uids.begin(), data_ptrs.data());
-}
-
-#if CUDNN_VERSION >= 90500
-template <typename... Args>
-bool encode_cudnn_plan(
-    cu::CommandEncoder& encoder,
-    cudnn_frontend::ExecutionPlan& plan,
-    CudaGraph& graph,
-    std::initializer_list<int64_t> uids,
-    Args&... args) {
-  assert(uids.size() == sizeof...(args));
-  auto data_ptrs = get_data_ptrs(args...);
-  return encode_cudnn_plan_with_graph_api(
-      encoder, plan, graph, uids.size(), uids.begin(), data_ptrs.data());
-}
-#endif
+  cudnnHandle_t handle_;
+};
 
 } // namespace mlx::core
