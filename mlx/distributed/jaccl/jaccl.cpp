@@ -1086,18 +1086,17 @@ bool is_available() {
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   const char* dev_file = std::getenv("MLX_IBV_DEVICES");
-  const char* coordinator = std::getenv("MLX_IBV_COORDINATOR");
+  const char* coordinator = std::getenv("MLX_JACCL_COORDINATOR");
   const char* rank_str = std::getenv("MLX_RANK");
-  const char* ring_verbose = std::getenv("MLX_IBV_VERBOSE");
 
   if (!is_available() || !dev_file || !coordinator || !rank_str) {
     if (strict) {
       std::ostringstream msg;
       msg << "[jaccl] You need to provide via environment variables a rank (MLX_RANK), "
-          << "a device file (MLX_IBV_DEVICES) and a coordinator ip/port (MLX_IBV_COORDINATOR) "
+          << "a device file (MLX_IBV_DEVICES) and a coordinator ip/port (MLX_JACCL_COORDINATOR) "
           << "but provided MLX_RANK=\"" << ((rank_str) ? rank_str : "")
           << "\", MLX_IBV_DEVICES=\"" << ((dev_file) ? dev_file : "")
-          << "\" and MLX_IBV_COORDINATOR=\""
+          << "\" and MLX_JACCL_COORDINATOR=\""
           << ((coordinator) ? coordinator : "");
       throw std::runtime_error(msg.str());
     }
