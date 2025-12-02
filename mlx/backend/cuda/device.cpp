@@ -87,7 +87,7 @@ CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
     return;
   }
   CHECK_CUDA_ERROR(
-      cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeGlobal));
+      cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeThreadLocal));
 }
 
 CommandEncoder::CaptureContext::~CaptureContext() {
