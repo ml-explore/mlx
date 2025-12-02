@@ -1751,12 +1751,7 @@ class Reduce : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
-
-  std::vector<array> vjp(
-      const std::vector<array>& primals,
-      const std::vector<array>& cotangents,
-      const std::vector<int>& argnums,
-      const std::vector<array>& outputs) override;
+  DEFINE_GRADS();
 
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 

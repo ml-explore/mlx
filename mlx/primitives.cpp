@@ -3846,6 +3846,62 @@ std::vector<array> Reduce::vjp(
   }
 }
 
+std::vector<array> Reduce::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto in = primals[0];
+  auto s = stream();
+
+  auto grad_op = [&s, reduce_type = reduce_type_](
+                     const array& x, const array& tan, int axis) {
+    if (reduce_type == Reduce::Min) {
+      auto idx = argmin(x, axis, true, s);
+      return take_along_axis(tan, idx, axis, s);
+    } else if (reduce_type == Reduce::Max) {
+      auto idx = argmax(x, axis, true, s);
+      return take_along_axis(tan, idx, axis, s);
+    } else {
+      auto p1 = cumprod(x, axis, /*reverse=*/false, /*inclusive=*/false, s);
+      auto p2 = cumprod(x, axis, /*reverse=*/true, /*inclusive=*/false, s);
+      auto out = multiply(multiply(p1, p2, s), tan, s);
+      return sum(out, axis, true, s);
+    }
+  };
+
+  auto tan = tangents[0];
+  if (reduce_type_ == Reduce::Sum) {
+    return {sum(tan, axes_, true, s)};
+  } else {
+    if (axes_.size() > 1) {
+      std::vector<int> transpose_to;
+      {
+        // Find the transpose needed to move axes_ to the back.
+        int j = 0;
+        for (int i = 0; i < in.ndim(); i++) {
+          if (j < axes_.size() && axes_[j] == i) {
+            j++;
+          } else {
+            transpose_to.push_back(i);
+          }
+        }
+        for (auto ax : axes_) {
+          transpose_to.push_back(ax);
+        }
+      }
+
+      int start_ax = in.ndim() - axes_.size();
+      in = flatten(transpose(in, transpose_to, s), start_ax, -1, s);
+      tan = flatten(transpose(tan, transpose_to, s), start_ax, -1, s);
+
+      auto grad = squeeze(grad_op(in, tan, -1), -1, s);
+      return {expand_dims(grad, axes_, s)};
+    } else {
+      return {grad_op(in, tan, axes_[0])};
+    }
+  }
+}
+
 std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
