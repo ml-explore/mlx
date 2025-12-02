@@ -832,7 +832,7 @@ def main():
     parser.add_argument("--hostfile", help="The file containing the hosts")
     parser.add_argument(
         "--backend",
-        choices=["ring", "mpi", "nccl"],
+        choices=["ring", "mpi", "nccl", "jaccl"],
         default="nccl" if mx.cuda.is_available() else "ring",
         help="Which distributed backend to launch",
     )
@@ -903,6 +903,8 @@ def main():
         launch_mpi(parser, hosts, args, rest)
     if args.backend == "nccl":
         launch_nccl(parser, hosts, args, rest)
+    if args.backend == "jaccl":
+        launch_jaccl(parser, hosts, args, rest)
 
 
 if __name__ == "__main__":
