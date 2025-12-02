@@ -596,6 +596,19 @@ class TestExportImport(mlx_tests.MLXTestCase):
         for y in ys:
             self.assertEqual(imported(y)[0].item(), fun(y).item())
 
+    def test_export_import_scatter_sum(self):
+        def fun(x, y, z):
+            return x.at[y].add(z)
+
+        x = mx.array([1, 2, 3])
+        y = mx.array([0, 0, 1])
+        z = mx.array([1, 1, 1])
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+        mx.export_function(path, fun, x, y, z)
+
+        imported = mx.import_function(path)
+        self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
