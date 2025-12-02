@@ -798,6 +798,28 @@ class TestAutograd(mlx_tests.MLXTestCase):
         grad_fn(model)
         self.assertEqual(model[1].item(), 2.0)
 
+    def test_grad_with_container_reuse(self):
+        container = [mx.array(1.0)]
+
+        def fn(p, x):
+            container[0] = p
+            return x.sum()
+
+        x = mx.ones(shape=(128,))
+        grad_fn = mx.grad(fn)
+
+        mx.synchronize()
+        gc.collect()
+        mem_pre = mx.get_active_memory()
+
+        for _ in range(20):
+            mx.eval(grad_fn(container[0], x))
+            gc.collect()
+
+        mx.synchronize()
+        mem_post = mx.get_active_memory()
+        self.assertLess(mem_post - mem_pre, 1024 * 1024)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
