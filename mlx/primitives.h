@@ -1871,13 +1871,13 @@ class Scatter : public UnaryPrimitive {
   const char* name() const override {
     switch (reduce_type_) {
       case Sum:
-        return "ScatterSum";
+        return "Scatter Sum";
       case Prod:
-        return "ScatterProd";
+        return "Scatter Prod";
       case Min:
-        return "ScatterMin";
+        return "Scatter Min";
       case Max:
-        return "ScatterMax";
+        return "Scatter Max";
       case None:
         return "Scatter";
     }
@@ -1910,7 +1910,7 @@ class ScatterAxis : public UnaryPrimitive {
   const char* name() const override {
     switch (reduce_type_) {
       case Sum:
-        return "ScatterAxisSum";
+        return "ScatterAxis Sum";
       case None:
         return "ScatterAxis";
     }
