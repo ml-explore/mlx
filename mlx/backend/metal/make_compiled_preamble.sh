@@ -77,6 +77,8 @@ do
   echo "///////////////////////////////////////////////////////////////////////////////"
   echo ""
 
+  echo "#line 1 \"${header}\""
+
   grep -h -v -G -e "#include \".*.h\"" -e "#pragma once" "${SRC_DIR}/${header}" 
   
   echo ""
