@@ -92,7 +92,8 @@ CudaAllocator::CudaAllocator()
           [this](CudaBuffer* buf) { cuda_free(buf); }) {
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-  memory_limit_ = total * 0.9;
+  memory_limit_ = total * 0.95;
+  free_limit_ = total - memory_limit_;
   max_pool_size_ = memory_limit_;
 
   int device_count = 0;
@@ -152,14 +153,26 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     if (size <= small_block_size) {
       buf = scalar_pool_.malloc();
     }
-    lock.unlock();
     if (!buf) {
-      cudaError_t err;
       void* data = nullptr;
-      if (device == -1) {
-        CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
-      } else {
-        CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+      while (!data) {
+        lock.unlock();
+
+        if (device == -1) {
+          CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
+        } else {
+          CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+        }
+
+        if (!data) {
+          // Try to release memory from the cache to defrag
+          if (get_cache_memory() == 0) {
+            break;
+          } else {
+            buffer_cache_.release_cached_buffers(size);
+          }
+        }
+        lock.lock();
       }
       if (!data) {
         std::ostringstream msg;
@@ -168,10 +181,17 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
       }
       buf = new CudaBuffer{data, size, device};
     }
-    lock.lock();
   }
   active_memory_ += buf->size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
+
+  // If the OS reports that not enough memory is free, try to clear some memory
+  // from the cache. This prevents graph / kernel execution failing from OOM
+  size_t free, total;
+  CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
+  if (free < free_limit_ && get_cache_memory() > 0) {
+    buffer_cache_.release_cached_buffers(free_limit_);
+  }
 
   // Maintain the cache below the requested limit.
   if (get_cache_memory() > max_pool_size_) {
