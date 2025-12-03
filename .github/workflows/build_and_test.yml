@@ -84,6 +84,37 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/build-docs
 
+  linux_sanitizer_build_and_test:
+    name: Linux Sanitizer Tests (${{ matrix.sanitizer }})
+    needs: check_lint
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [ASAN, UBSAN, TSAN]
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential \
+            libblas-dev \
+            liblapacke-dev \
+            libopenblas-dev \
+            cmake \
+            clang \
+            git
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Linux Build and Test with ${{ matrix.sanitizer }}
+        run: |
+          bash .github/scripts/build-sanitizer-tests.sh ${{ matrix.sanitizer }}
+
   linux_fedora_build_cpp:
     name: Linux Fedora (${{ matrix.arch }})
     needs: check_lint
