@@ -22,6 +22,8 @@ CCC="xcrun -sdk macosx metal -x metal"
 
 HDRS=$( $CCC -I"$SRC_DIR" -I"$JIT_INCLUDES" -DMLX_METAL_JIT -E -P -CC -C -H "$INPUT_FILE" $CFLAGS -w 2>&1 1>/dev/null )
 
+HDRS=$(echo "$HDRS" | grep -v "Xcode")
+
 declare -a HDRS_LIST=($HDRS)
 declare -a HDRS_STACK=()
 declare -a HDRS_SORTED=()

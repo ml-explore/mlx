@@ -79,6 +79,17 @@ if(MLX_METAL_JIT)
   make_jit_source(fp_quantized kernels/quantized_utils.h kernels/fp8.h
                   kernels/fp4.h)
   make_jit_source(gemv_masked)
+
+  make_jit_source(
+    steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
+    kernels/steel/gemm/params.h kernels/steel/gemm/transforms.h)
+  make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
+  make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
+
+  make_jit_source(quantized_nax kernels/quantized_utils.h)
+  make_jit_source(fp_quantized_nax kernels/quantized_utils.h kernels/fp8.h
+                  kernels/fp4.h)
+
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)
 endif()

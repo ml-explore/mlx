@@ -67,6 +67,7 @@ set(STEEL_HEADERS
     steel/gemm/gemm.h
     steel/gemm/mma.h
     steel/gemm/loader.h
+    steel/gemm/params.h
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_gather.h
@@ -92,7 +93,38 @@ set(STEEL_ATTN_HEADERS
     steel/attn/transforms.h
     steel/attn/kernels/steel_attention.h)
 
+set(STEEL_NAX_HEADERS
+    steel/defines.h
+    steel/utils.h
+    steel/gemm/params.h
+    steel/gemm/transforms.h
+    steel/gemm/nax.h
+    steel/gemm/gemm_nax.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h
+    steel/gemm/kernels/steel_gemm_fused_nax.h
+    steel/gemm/kernels/steel_gemm_gather_nax.h)
+
+set(STEEL_NAX_ATTN_HEADERS
+    steel/defines.h
+    steel/utils.h
+    steel/attn/nax.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h
+    steel/attn/params.h
+    steel/attn/kernels/steel_attention_nax.h)
+
 build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
+
+if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
+                                              26.2))
+
+  build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
+  build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
+               ${STEEL_NAX_HEADERS})
+
+  build_kernel(steel/attn/kernels/steel_attention_nax ${STEEL_NAX_ATTN_HEADERS})
+endif()
 
 if(NOT MLX_METAL_JIT)
   build_kernel(arange arange.h)
@@ -109,7 +141,7 @@ if(NOT MLX_METAL_JIT)
     reduction/reduce_col.h
     reduction/reduce_row.h)
   build_kernel(quantized quantized.h quantized_utils.h ${STEEL_HEADERS})
-  build_kernel(fp_quantized fp4.h fp_quantized.h quantized_utils.h
+  build_kernel(fp_quantized fp4.h fp8.h fp_quantized.h quantized_utils.h
                ${STEEL_HEADERS})
   build_kernel(scan scan.h)
   build_kernel(softmax softmax.h)
@@ -125,30 +157,14 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
-endif()
 
-if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
-                                              26.2))
-  set(STEEL_NAX_HEADERS
-      steel/defines.h
-      steel/utils.h
-      steel/gemm/transforms.h
-      steel/gemm/nax.h
-      steel/gemm/gemm_nax.h
-      steel/utils/type_traits.h
-      steel/utils/integral_constant.h)
+  if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
+                                                26.2))
 
-  build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
-  build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+    build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
+    build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+  endif()
 
-  build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
-  build_kernel(fp_quantized_nax fp_quantized_nax.h ${STEEL_NAX_HEADERS})
-
-  set(STEEL_NAX_ATTN_HEADERS
-      steel/defines.h steel/utils.h steel/attn/nax.h steel/utils/type_traits.h
-      steel/utils/integral_constant.h)
-
-  build_kernel(steel/attn/kernels/steel_attention_nax ${STEEL_NAX_ATTN_HEADERS})
 endif()
 
 add_custom_command(
