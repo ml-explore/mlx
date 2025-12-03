@@ -373,7 +373,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def gumbel(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Union[None, Stream, Device] = None, stream: Optional[array] = None) -> array"),
+          "def gumbel(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Sample from the standard Gumbel distribution.
 
