@@ -798,7 +798,6 @@ class TestAutograd(mlx_tests.MLXTestCase):
         grad_fn(model)
         self.assertEqual(model[1].item(), 2.0)
 
-<<<<<<< HEAD
     def test_autograd_types(self):
         from typing import NamedTuple
 
