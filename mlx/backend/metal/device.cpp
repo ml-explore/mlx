@@ -409,8 +409,10 @@ void Device::commit_command_buffer(int index) {
   stream.buffer_sizes = 0;
 }
 
-void Device::add_temporary(array arr, int index) {
-  get_stream_(index).temporaries.push_back(std::move(arr));
+array& Device::add_temporary(array arr, int index) {
+  auto& temporaries = get_stream_(index).temporaries;
+  temporaries.push_back(std::move(arr));
+  return temporaries.back();
 }
 
 void Device::add_temporaries(std::vector<array> arrays, int index) {

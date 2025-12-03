@@ -33,18 +33,16 @@ auto get_quantized_kernel_wrapped(
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
-inline array
+inline const array&
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
-    return x_copy;
+    return d.add_temporary(contiguous_copy_gpu(x, s), s.index);
   } else {
     return x;
   }
 }
 
-inline array ensure_row_contiguous_matrix(
+inline const array& ensure_row_contiguous_matrix(
     const array& x,
     metal::Device& d,
     const Stream& s) {
@@ -59,9 +57,7 @@ inline array ensure_row_contiguous_matrix(
       return x;
     }
   }
-  array x_copy = contiguous_copy_gpu(x, s);
-  d.add_temporary(x_copy, s.index);
-  return x_copy;
+  return d.add_temporary(contiguous_copy_gpu(x, s), s.index);
 }
 
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
@@ -976,7 +972,7 @@ void gather_qmm_rhs_nax(
     const Stream& s,
     const std::string mode) {
   // Start by normalizing the indices
-  array indices = ensure_row_contiguous(indices_, d, s);
+  const array& indices = ensure_row_contiguous(indices_, d, s);
 
   // Broadcast x with indices. If we are here that means lhs_indices were not
   // provided so the lhs_indices are implied to be the shape of x broadcasted
@@ -996,9 +992,9 @@ void gather_qmm_rhs_nax(
   };
 
   // Normalize the input arrays
-  array x = broadcast_with_indices(x_);
-  array w = ensure_row_contiguous(w_, d, s);
-  array scales = ensure_row_contiguous(scales_, d, s);
+  const array& x = broadcast_with_indices(x_);
+  const array& w = ensure_row_contiguous(w_, d, s);
+  const array& scales = ensure_row_contiguous(scales_, d, s);
 
   // TODO: Tune the block sizes
   int bm = 64, bn = 64, bk = 64;
@@ -1078,7 +1074,7 @@ void gather_qmm_rhs_nax(
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
   if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
+    const array& biases = ensure_row_contiguous(*biases_, d, s);
     compute_encoder.set_input_array(biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
@@ -1127,7 +1123,7 @@ void gather_qmm_rhs(
   }
 
   // Start by normalizing the indices
-  array indices = ensure_row_contiguous(indices_, d, s);
+  const array& indices = ensure_row_contiguous(indices_, d, s);
 
   // Broadcast x with indices. If we are here that means lhs_indices were not
   // provided so the lhs_indices are implied to be the shape of x broadcasted
@@ -1147,9 +1143,9 @@ void gather_qmm_rhs(
   };
 
   // Normalize the input arrays
-  array x = broadcast_with_indices(x_);
-  array w = ensure_row_contiguous(w_, d, s);
-  array scales = ensure_row_contiguous(scales_, d, s);
+  const array& x = broadcast_with_indices(x_);
+  const array& w = ensure_row_contiguous(w_, d, s);
+  const array& scales = ensure_row_contiguous(scales_, d, s);
 
   // TODO: Tune the block sizes
   int bm = 16, bn = 32, bk = 32;
@@ -1228,7 +1224,7 @@ void gather_qmm_rhs(
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
   if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
+    const array& biases = ensure_row_contiguous(*biases_, d, s);
     compute_encoder.set_input_array(biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
@@ -1248,9 +1244,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Make sure the last two dims of x and w, s, b are contiguous. This should
   // be relaxed for x.
-  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
-  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
-  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  const array& x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  const array& w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  const array& scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
   if (inputs.size() == 4) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
@@ -1314,9 +1310,9 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
-  array x = ensure_row_contiguous_matrix(inputs[0], d, s);
-  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
-  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  const array& x = ensure_row_contiguous_matrix(inputs[0], d, s);
+  const array& w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  const array& scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
   if (inputs.size() == 6) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
@@ -1419,7 +1415,6 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto& w_pre = inputs[0];
   auto& out = outputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -1427,14 +1422,14 @@ void fast::Quantize::eval_gpu(
   auto& d = metal::device(s.device);
   auto& compute_encoder = d.get_command_encoder(s.index);
 
-  auto w = ensure_row_contiguous(w_pre, d, s);
+  const array& w = ensure_row_contiguous(inputs[0], d, s);
   compute_encoder.set_input_array(w, 0);
   if (dequantize_) {
-    auto scales = ensure_row_contiguous(inputs[1], d, s);
+    const array& scales = ensure_row_contiguous(inputs[1], d, s);
     compute_encoder.set_input_array(scales, 1);
     compute_encoder.set_output_array(out, 3);
     if (mode_ == QuantizationMode::Affine) {
-      auto biases = ensure_row_contiguous(inputs[2], d, s);
+      const array& biases = ensure_row_contiguous(inputs[2], d, s);
       compute_encoder.set_input_array(biases, 2);
     }
   } else {
@@ -1449,8 +1444,8 @@ void fast::Quantize::eval_gpu(
     }
   }
 
-  auto type_string = dequantize_ ? get_type_string(out.dtype())
-                                 : get_type_string(w_pre.dtype());
+  auto type_string =
+      dequantize_ ? get_type_string(out.dtype()) : get_type_string(w.dtype());
   auto mode = quantization_mode_to_string(mode_);
   std::string kname;
   concatenate(

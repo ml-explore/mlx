@@ -63,17 +63,15 @@ void AllGather::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
+  auto ensure_contiguous = [&s, &encoder](const array& x) -> const array& {
     if (x.flags().row_contiguous) {
       return x;
     } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
+      return encoder.add_temporary(contiguous_copy_gpu(x, s));
     }
   };
 
-  auto input = ensure_contiguous(inputs[0]);
+  const array& input = ensure_contiguous(inputs[0]);
   outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);
@@ -92,17 +90,15 @@ void ReduceScatter::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
+  auto ensure_contiguous = [&s, &encoder](const array& x) -> const array& {
     if (x.flags().row_contiguous) {
       return x;
     } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
+      return encoder.add_temporary(contiguous_copy_gpu(x, s));
     }
   };
 
-  auto input = ensure_contiguous(inputs[0]);
+  const array& input = ensure_contiguous(inputs[0]);
   outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);

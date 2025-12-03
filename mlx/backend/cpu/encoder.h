@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <deque>
 #include <unordered_map>
 
 #include "mlx/array.h"
@@ -25,8 +26,9 @@ struct CommandEncoder {
 
   // Hold onto a temporary until any already scheduled tasks which use it as
   // an input are complete.
-  void add_temporary(array arr) {
+  array& add_temporary(array arr) {
     temporaries_.push_back(std::move(arr));
+    return temporaries_.back();
   }
 
   void add_temporaries(std::vector<array> arrays) {
@@ -36,7 +38,7 @@ struct CommandEncoder {
         std::make_move_iterator(arrays.end()));
   }
 
-  std::vector<array>& temporaries() {
+  std::deque<array>& temporaries() {
     return temporaries_;
   }
 
@@ -58,7 +60,7 @@ struct CommandEncoder {
 
  private:
   Stream stream_;
-  std::vector<array> temporaries_;
+  std::deque<array> temporaries_;
   int num_ops_{0};
 };
 

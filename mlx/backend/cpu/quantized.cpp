@@ -837,25 +837,20 @@ void mxfp4_bs_qmm_dispatch(
 } // namespace
 
 void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
-  auto& x_pre = inputs[0];
-  auto& w_pre = inputs[1];
-  auto& scales_pre = inputs[2];
-
-  auto& encoder = cpu::get_command_encoder(stream());
-  auto ensure_row_contiguous = [s = stream(), &encoder](const array& arr) {
-    if (arr.flags().row_contiguous) {
+  auto s = stream();
+  auto& encoder = cpu::get_command_encoder(s);
+  auto ensure_row_contiguous = [&s,
+                                &encoder](const array& arr) -> const array& {
+    if (arr.flags().contiguous) {
       return arr;
     } else {
-      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
-      copy_cpu(arr, arr_cpy, CopyType::General, s);
-      encoder.add_temporary(arr_cpy);
-      return arr_cpy;
+      return encoder.add_temporary(contiguous_copy_cpu(arr, s));
     }
   };
 
-  auto x = ensure_row_contiguous(x_pre);
-  auto w = ensure_row_contiguous(w_pre);
-  auto scales = ensure_row_contiguous(scales_pre);
+  const auto& x = ensure_row_contiguous(inputs[0]);
+  const auto& w = ensure_row_contiguous(inputs[1]);
+  const auto& scales = ensure_row_contiguous(inputs[2]);
 
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -888,30 +883,24 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
-  auto& x_pre = inputs[0];
-  auto& w_pre = inputs[1];
-  auto& scales_pre = inputs[2];
-  auto& lhs_indices = inputs[inputs.size() - 2];
-  auto& rhs_indices = inputs[inputs.size() - 1];
-
-  auto& encoder = cpu::get_command_encoder(stream());
-  auto ensure_row_contiguous_last_dims = [s = stream(),
-                                          &encoder](const array& arr) {
+  auto s = stream();
+  auto& encoder = cpu::get_command_encoder(s);
+  auto ensure_row_contiguous_last_dims =
+      [&s, &encoder](const array& arr) -> const array& {
     auto stride_0 = arr.strides()[arr.ndim() - 2];
     auto stride_1 = arr.strides()[arr.ndim() - 1];
     if (stride_0 == arr.shape(-1) && stride_1 == 1) {
       return arr;
     } else {
-      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
-      copy_cpu(arr, arr_cpy, CopyType::General, s);
-      encoder.add_temporary(arr_cpy);
-      return arr_cpy;
+      return encoder.add_temporary(contiguous_copy_cpu(arr, s));
     }
   };
 
-  auto x = ensure_row_contiguous_last_dims(x_pre);
-  auto w = ensure_row_contiguous_last_dims(w_pre);
-  auto scales = ensure_row_contiguous_last_dims(scales_pre);
+  const array& x = ensure_row_contiguous_last_dims(inputs[0]);
+  const array& w = ensure_row_contiguous_last_dims(inputs[1]);
+  const array& scales = ensure_row_contiguous_last_dims(inputs[2]);
+  const array& lhs_indices = inputs[inputs.size() - 2];
+  const array& rhs_indices = inputs[inputs.size() - 1];
 
   out.set_data(allocator::malloc(out.nbytes()));
 

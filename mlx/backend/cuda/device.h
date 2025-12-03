@@ -13,6 +13,7 @@
 #include <cudnn.h>
 #include <thrust/execution_policy.h>
 
+#include <deque>
 #include <unordered_map>
 
 namespace mlx::core::cu {
@@ -79,8 +80,9 @@ class CommandEncoder {
 
   void add_graph_node(cudaGraph_t child);
 
-  void add_temporary(const array& arr) {
-    temporaries_.push_back(arr.data_shared_ptr());
+  array& add_temporary(array arr) {
+    temporaries_.push_back(std::move(arr));
+    return temporaries_.back();
   }
 
   void add_completed_handler(std::function<void()> task);
@@ -126,7 +128,7 @@ class CommandEncoder {
   std::string graph_nodes_key_;
   std::string graph_deps_key_;
   std::vector<GraphNode> concurrent_nodes_;
-  std::vector<std::shared_ptr<array::Data>> temporaries_;
+  std::deque<array> temporaries_;
   LRUCache<std::string, CudaGraphExec> graph_cache_;
   std::vector<std::uintptr_t> active_deps_;
   std::vector<std::uintptr_t> active_outputs_;

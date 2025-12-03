@@ -9,11 +9,12 @@
 
 namespace mlx::core::distributed {
 
-std::pair<array, bool> ensure_row_contiguous(const array& arr, Stream stream) {
+const array& ensure_row_contiguous(const array& arr, Stream stream) {
   if (arr.flags().row_contiguous) {
-    return {arr, false};
+    return arr;
   } else {
-    return {contiguous_copy_cpu(arr, stream), true};
+    auto& encoder = cpu::get_command_encoder(stream);
+    return encoder.add_temporary(contiguous_copy_cpu(arr, stream));
   }
 };
 
@@ -61,13 +62,9 @@ void AllGather::eval_cpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
+  const array& in = ensure_row_contiguous(inputs[0], stream());
   outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
   distributed::detail::all_gather(group(), in, outputs[0], stream());
-  if (copied) {
-    auto& enc = cpu::get_command_encoder(stream());
-    enc.add_temporary(in);
-  }
 }
 
 void Send::eval_cpu(
@@ -76,13 +73,9 @@ void Send::eval_cpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
+  const array& in = ensure_row_contiguous(inputs[0], stream());
   distributed::detail::send(group(), in, dst_, stream());
   outputs[0].copy_shared_buffer(inputs[0]);
-  if (copied) {
-    auto& enc = cpu::get_command_encoder(stream());
-    enc.add_temporary(in);
-  }
 }
 
 void Recv::eval_cpu(

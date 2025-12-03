@@ -103,17 +103,15 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
 
   // Make sure that the last dimension is contiguous.
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
+  auto ensure_contiguous = [&s, &encoder](const array& x) -> const array& {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
+      return encoder.add_temporary(contiguous_copy_gpu(x, s));
     }
   };
 
-  auto in = ensure_contiguous(inputs[0]);
+  const array& in = ensure_contiguous(inputs[0]);
   if (in.flags().row_contiguous) {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
   } else {

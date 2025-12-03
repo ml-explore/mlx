@@ -12,15 +12,13 @@ namespace mlx::core {
 
 namespace {
 
-array prepare_sdpa_input(const array& x, Stream s) {
+const array& prepare_sdpa_input(const array& x, Stream s) {
   // SDPA kernel's requirements on inputs:
   // 1. last dim's stride be 1;
   // 2. pointer be aligned.
   if (x.strides(-1) != 1 || get_alignment(x) < 16) {
-    array x_copy = contiguous_copy_gpu(x, s);
     auto& encoder = cu::get_command_encoder(s);
-    encoder.add_temporary(x_copy);
-    return x_copy;
+    return encoder.add_temporary(contiguous_copy_gpu(x, s));
   }
   return x;
 }
@@ -425,9 +423,9 @@ void ScaledDotProductAttention::eval_gpu(
 
   auto& s = stream();
 
-  array q = prepare_sdpa_input(inputs[0], s);
-  array k = prepare_sdpa_input(inputs[1], s);
-  array v = prepare_sdpa_input(inputs[2], s);
+  const array& q = prepare_sdpa_input(inputs[0], s);
+  const array& k = prepare_sdpa_input(inputs[1], s);
+  const array& v = prepare_sdpa_input(inputs[2], s);
   auto& out = outputs[0];
   auto& stats = outputs[1];
   bool has_mask = inputs.size() - has_sinks_ > 3;
@@ -480,12 +478,12 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   int primals_size = inputs.size() - 3;
   bool has_arr_mask = primals_size > 3 + has_sinks_;
 
-  array q = prepare_sdpa_input(inputs[0], s);
-  array k = prepare_sdpa_input(inputs[1], s);
-  array v = prepare_sdpa_input(inputs[2], s);
-  array o = prepare_sdpa_input(inputs[primals_size], s);
-  array stats = prepare_sdpa_input(inputs[primals_size + 1], s);
-  array d_o = prepare_sdpa_input(inputs[primals_size + 2], s);
+  const array& q = prepare_sdpa_input(inputs[0], s);
+  const array& k = prepare_sdpa_input(inputs[1], s);
+  const array& v = prepare_sdpa_input(inputs[2], s);
+  const array& o = prepare_sdpa_input(inputs[primals_size], s);
+  const array& stats = prepare_sdpa_input(inputs[primals_size + 1], s);
+  const array& d_o = prepare_sdpa_input(inputs[primals_size + 2], s);
 
   std::optional<array> mask_arr;
   if (has_arr_mask) {

@@ -40,12 +40,10 @@ std::tuple<bool, int64_t, array> check_transpose(
   }
 };
 
-inline array
+inline const array&
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
-    return x_copy;
+    return d.add_temporary(contiguous_copy_gpu(x, s), s.index);
   } else {
     return x;
   }
@@ -1630,7 +1628,7 @@ void gather_mm_rhs(
     array& out,
     metal::Device& d,
     const Stream& s) {
-  array indices = ensure_row_contiguous(indices_, d, s);
+  const array& indices = ensure_row_contiguous(indices_, d, s);
   auto [transpose_b, ldb, b] = ensure_batch_contiguous(b_, d, s);
 
   // Broadcast a with indices. If we are here that means lhs_indices were not
@@ -1649,7 +1647,7 @@ void gather_mm_rhs(
     broadcast(x, new_x);
     return ensure_row_contiguous(new_x, d, s);
   };
-  array a = broadcast_with_indices(a_);
+  const array& a = broadcast_with_indices(a_);
 
   // Extract the matmul shapes
   int K = a.shape(-1);
@@ -1763,7 +1761,7 @@ void gather_mm_rhs_nax(
     array& out,
     metal::Device& d,
     const Stream& s) {
-  array indices = ensure_row_contiguous(indices_, d, s);
+  const array& indices = ensure_row_contiguous(indices_, d, s);
   auto [transpose_b, ldb, b] = ensure_batch_contiguous(b_, d, s);
 
   // Broadcast a with indices. If we are here that means lhs_indices were not
@@ -1782,7 +1780,7 @@ void gather_mm_rhs_nax(
     broadcast(x, new_x);
     return ensure_row_contiguous(new_x, d, s);
   };
-  array a = broadcast_with_indices(a_);
+  const array& a = broadcast_with_indices(a_);
 
   // Extract the matmul shapes
   int K = a.shape(-1);

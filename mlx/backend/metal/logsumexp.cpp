@@ -21,17 +21,15 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
 
   // Make sure that the last dimension is contiguous
-  auto ensure_contiguous = [&s, &d](const array& x) {
+  auto ensure_contiguous = [&s, &d](const array& x) -> const array& {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      d.add_temporary(x_copy, s.index);
-      return x_copy;
+      return d.add_temporary(contiguous_copy_gpu(x, s), s.index);
     }
   };
 
-  auto in = ensure_contiguous(inputs[0]);
+  const array& in = ensure_contiguous(inputs[0]);
   if (in.flags().row_contiguous) {
     out.set_data(allocator::malloc(out.nbytes()));
   } else {

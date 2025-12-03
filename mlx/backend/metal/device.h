@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -143,7 +144,7 @@ struct DeviceStream {
   // encoders
   std::unique_ptr<CommandEncoder> encoder{nullptr};
   std::shared_ptr<Fence> fence;
-  std::vector<array> temporaries;
+  std::deque<array> temporaries;
 };
 
 class Device {
@@ -202,7 +203,7 @@ class Device {
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
   // Record temporary arrays for the given stream index
-  void add_temporary(array arr, int index);
+  array& add_temporary(array arr, int index);
   void add_temporaries(std::vector<array> arrays, int index);
 
   void set_residency_set(const MTL::ResidencySet* residency_set);

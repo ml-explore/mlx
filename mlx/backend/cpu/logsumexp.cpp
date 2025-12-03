@@ -83,17 +83,15 @@ void LogSumExp::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Make sure that the last dimension is contiguous
   auto s = stream();
   auto& encoder = cpu::get_command_encoder(s);
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
+  auto ensure_contiguous = [&s, &encoder](const array& x) -> const array& {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
-      array x_copy = contiguous_copy_cpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
+      return encoder.add_temporary(contiguous_copy_cpu(x, s));
     }
   };
 
-  auto in = ensure_contiguous(inputs[0]);
+  const array& in = ensure_contiguous(inputs[0]);
   if (in.flags().row_contiguous) {
     out.set_data(allocator::malloc(out.nbytes()));
   } else {

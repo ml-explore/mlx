@@ -11,20 +11,18 @@ namespace mlx::core {
 
 namespace {
 
-inline array ensure_row_contiguous(
+inline const array& ensure_row_contiguous(
     const array& x,
     cu::CommandEncoder& enc,
     const Stream& s) {
   if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    enc.add_temporary(x_copy);
-    return x_copy;
+    return enc.add_temporary(contiguous_copy_gpu(x, s));
   } else {
     return x;
   }
 }
 
-inline array ensure_row_contiguous_matrix(
+inline const array& ensure_row_contiguous_matrix(
     const array& x,
     cu::CommandEncoder& enc,
     const Stream& s) {
@@ -39,9 +37,7 @@ inline array ensure_row_contiguous_matrix(
       return x;
     }
   }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
+  return enc.add_temporary(contiguous_copy_gpu(x, s));
 }
 
 } // namespace
@@ -55,20 +51,20 @@ void fast::Quantize::eval_gpu(
   auto& enc = d.get_command_encoder(s);
 
   if (dequantize_) {
-    auto wq = ensure_row_contiguous(inputs[0], enc, s);
-    auto scales = ensure_row_contiguous(inputs[1], enc, s);
+    const array& wq = ensure_row_contiguous(inputs[0], enc, s);
+    const array& scales = ensure_row_contiguous(inputs[1], enc, s);
     auto& w = outputs[0];
 
     w.set_data(cu::malloc_async(w.nbytes(), enc));
 
     if (mode_ == QuantizationMode::Affine) {
-      auto biases = ensure_row_contiguous(inputs[2], enc, s);
+      const array& biases = ensure_row_contiguous(inputs[2], enc, s);
       affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
     } else {
       fp_dequantize(wq, scales, w, group_size_, bits_, enc, s);
     }
   } else {
-    auto w = ensure_row_contiguous(inputs[0], enc, s);
+    const array& w = ensure_row_contiguous(inputs[0], enc, s);
     auto& wq = outputs[0];
     auto& scales = outputs[1];
 
