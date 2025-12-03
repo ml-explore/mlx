@@ -1,7 +1,7 @@
 #!/bin/bash
 
 auditwheel repair dist/* \
-  --plat manylinux_2_35_x86_64 \
+  --plat manylinux_2_35_${1} \
   --exclude libcublas* \
   --exclude libnvrtc* \
   --exclude libcuda* \

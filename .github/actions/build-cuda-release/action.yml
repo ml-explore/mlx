@@ -1,6 +1,15 @@
 name: 'Build CUDA wheel'
 description: 'Build CUDA wheel'
 
+inputs:
+  arch:
+    description: 'Platform architecture tag'
+    required: true
+    type: choice
+    options:
+      - x86_64
+      - aarch64
+
 runs:
   using: "composite"
   steps:
@@ -12,4 +21,4 @@ runs:
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
-        bash python/scripts/repair_cuda.sh
+        bash python/scripts/repair_cuda.sh ${{ inputs.arch }}
