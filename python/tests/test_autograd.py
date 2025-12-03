@@ -819,6 +819,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
         mx.synchronize()
         mem_post = mx.get_active_memory()
         self.assertLess(mem_post - mem_pre, 1024 * 1024)
+        
+    def test_reduce_jvp(self):
+        a = mx.arange(4)
+        b = mx.array([3, 2, 1, 0])
+
+        out, jout = mx.jvp(mx.sum, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 6)
+
+        out, jout = mx.jvp(mx.prod, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 18)
+
+        out, jout = mx.jvp(mx.min, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 3)
+
+        out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 0)
 
 
 if __name__ == "__main__":

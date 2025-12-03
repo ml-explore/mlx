@@ -332,21 +332,30 @@ bool is_graph_updatable(cudaGraph_t graph, int& cluster_dim_x) {
   for (const auto& node : nodes) {
     cudaGraphNodeType type;
     CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
-    if (type != cudaGraphNodeTypeKernel) {
+    if (type == cudaGraphNodeTypeGraph) {
+      // Try to be updatable for a structure like graph -> graph -> kernel
+      if (num_nodes > 1) {
+        return false;
+      }
+      cudaGraph_t child;
+      CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+      return is_graph_updatable(child, cluster_dim_x);
+    } else if (type != cudaGraphNodeTypeKernel) {
       return false;
+    } else {
+      cudaLaunchAttributeValue cluster_dim;
+      CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+          node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+      // Only dim.x can be greater than 1
+      if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+        return false;
+      }
+      // Only one child node allowed when subgraph uses clusters
+      if (cluster_dim.clusterDim.x > 0 && num_nodes > 1) {
+        return false;
+      }
+      cluster_dim_x = cluster_dim.clusterDim.x;
     }
-    cudaLaunchAttributeValue cluster_dim;
-    CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
-        node, cudaLaunchAttributeClusterDimension, &cluster_dim));
-    // Only dim.x can be greater than 1
-    if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
-      return false;
-    }
-    // Only one child node allowed when subgraph uses clusters
-    if (cluster_dim.clusterDim.x > 0 && num_nodes > 1) {
-      return false;
-    }
-    cluster_dim_x = cluster_dim.clusterDim.x;
   }
   return true;
 }
@@ -362,7 +371,7 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   }
   cudaGraphNode_t node;
   int cluster_dim_x = 0;
-  is_graph_updatable_ = is_graph_updatable(child, cluster_dim_x);
+  is_graph_updatable_ &= is_graph_updatable(child, cluster_dim_x);
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
   insert_graph_dependencies(
       GraphNode{node, "G" + std::to_string(cluster_dim_x)});
