@@ -45,6 +45,9 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
+option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
+option(USE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan)" OFF)
+option(USE_TSAN "Enable ThreadSanitizer (TSan)" OFF)
 
 # --------------------- Processor tests -------------------------
 message(
