@@ -434,6 +434,14 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([0, 4294967295], dtype=mx.float32)
         self.assertTrue(np.array_equal(x, xnp))
 
+    def test_double_keeps_precision(self):
+        x = 39.14223403241
+        out = mx.array(x, dtype=mx.float64).item()
+        self.assertEqual(out, x)
+
+        out = mx.array([x], dtype=mx.float64).item()
+        self.assertEqual(out, x)
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
