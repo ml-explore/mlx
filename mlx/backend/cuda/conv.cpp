@@ -15,19 +15,16 @@ namespace mlx::core {
 
 namespace {
 
-// Alias for better readability.
-#define CONV_FORWARD CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR
-#define CONV_BACKWARD_INPUT \
-  CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR
-#define CONV_BACKWARD_WEIGHT \
-  CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR
-
-// Custom placeholder representing fallback kernel.
-#define CONV_FALLBACK static_cast<cudnnBackendDescriptorType_t>(-1)
+enum ConvBackendType {
+  CONV_FALLBACK,
+  CONV_FORWARD,
+  CONV_BACKWARD_INPUT,
+  CONV_BACKWARD_WEIGHT,
+};
 
 struct ConvCacheKey {
   int device_id;
-  cudnnDataType_t cudnn_dtype;
+  fe::DataType_t cudnn_dtype;
   std::array<int, MAX_NDIM> input_shape;
   std::array<int, MAX_NDIM> weight_shape;
   std::array<int, MAX_NDIM> stride;
@@ -44,15 +41,13 @@ struct ConvCacheKey {
 auto& conv_cache() {
   static LRUBytesKeyCache<
       ConvCacheKey,
-      std::pair<
-          cudnnBackendDescriptorType_t,
-          std::optional<cudnn_frontend::ExecutionPlan>>>
+      std::pair<ConvBackendType, std::optional<DnnGraph>>>
       cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
   return cache;
 }
 
-auto get_conv_op_settings(
-    cudnnBackendDescriptorType_t backend_type,
+auto get_conv_settings(
+    ConvBackendType backend_type,
     array& x,
     array& w,
     array& y,
@@ -68,8 +63,8 @@ auto get_conv_op_settings(
     for (int i = 0; i < padding_lo.size(); ++i) {
       int wt_size = 1 + kernel_dilation[i] * (w.shape(1 + i) - 1);
       padding_lo[i] = wt_size - padding_lo[i] - 1;
-      int in_size = 1 + kernel_strides[i] * (x.shape(1 + i) - 1);
-      int out_size = 1 + input_dilation[i] * (y.shape(1 + i) - 1);
+      int in_size = 1 + kernel_strides[i] * (y.shape(1 + i) - 1);
+      int out_size = 1 + input_dilation[i] * (x.shape(1 + i) - 1);
       padding_hi[i] = out_size - in_size + padding_hi[i];
     }
     return std::make_tuple(
@@ -95,49 +90,57 @@ auto get_conv_op_settings(
   }
 }
 
-std::optional<cudnn_frontend::OperationGraph> build_conv_op_graph(
+std::optional<DnnGraph> build_conv_graph(
     cu::CommandEncoder& encoder,
-    cudnnBackendDescriptorType_t backend_type,
+    ConvBackendType backend_type,
     Dtype dtype,
     array& x,
     array& w,
     array& y,
-    const SmallVector<int64_t>& stride,
-    const SmallVector<int64_t>& padding_lo,
-    const SmallVector<int64_t>& padding_hi,
-    const SmallVector<int64_t>& dilation) {
-  try {
-    auto compute_dtype = (dtype == float16 || dtype == bfloat16)
-        ? CUDNN_DATA_FLOAT
-        : dtype_to_cudnn_type(dtype);
-    auto conv_desc = cudnn_frontend::ConvDescBuilder()
-                         .setDataType(compute_dtype)
-                         .setMathMode(CUDNN_CROSS_CORRELATION)
-                         .setNDims(stride.size())
-                         .setStrides(stride.size(), stride.data())
-                         .setPrePadding(padding_lo.size(), padding_lo.data())
-                         .setPostPadding(padding_hi.size(), padding_hi.data())
-                         .setDilation(dilation.size(), dilation.data())
-                         .build();
+    const std::vector<int64_t>& stride,
+    const std::vector<int64_t>& padding_lo,
+    const std::vector<int64_t>& padding_hi,
+    const std::vector<int64_t>& dilation) {
+  auto compute_dtype =
+      (dtype == float16 || dtype == bfloat16) ? float32 : dtype;
+  DnnGraph graph(encoder.device().cudnn_handle(), dtype, compute_dtype);
+  auto x_ = graph.tensor_nchw("X", 'x', x);
+  auto w_ = graph.tensor_nchw("W", 'w', w);
 
-    auto op = cudnn_frontend::OperationBuilder(backend_type)
-                  .setxDesc(build_cudnn_tensor_nchw('x', x))
-                  .setwDesc(build_cudnn_tensor_nchw('w', w))
-                  .setyDesc(build_cudnn_tensor_nchw('y', y))
-                  .setcDesc(conv_desc)
-                  .build();
+  auto set_options = [&](auto& options) {
+    options.set_compute_data_type(dtype_to_cudnn_type(compute_dtype))
+        .set_convolution_mode(fe::ConvolutionMode_t::CROSS_CORRELATION)
+        .set_stride(stride)
+        .set_pre_padding(padding_lo)
+        .set_post_padding(padding_hi)
+        .set_dilation(dilation);
+  };
 
-    std::array<cudnn_frontend::Operation const*, 1> ops = {&op};
-    return cudnn_frontend::OperationGraphBuilder()
-        .setHandle(encoder.device().cudnn_handle())
-        .setOperationGraph(ops.size(), ops.data())
-        .build();
-  } catch (cudnn_frontend::cudnnException& error) {
-    if (error.getCudnnStatus() != CUDNN_STATUS_BAD_PARAM) {
-      throw;
-    }
+  std::shared_ptr<fe::graph::Tensor_attributes> y_;
+  if (backend_type == CONV_FORWARD) {
+    auto options = fe::graph::Conv_fprop_attributes();
+    set_options(options);
+    y_ = graph.conv_fprop(x_, w_, options);
+  } else if (backend_type == CONV_BACKWARD_INPUT) {
+    auto options = fe::graph::Conv_dgrad_attributes();
+    set_options(options);
+    y_ = graph.conv_dgrad(x_, w_, options);
+  } else if (backend_type == CONV_BACKWARD_WEIGHT) {
+    auto options = fe::graph::Conv_wgrad_attributes();
+    set_options(options);
+    y_ = graph.conv_wgrad(w_, x_, options);
+  }
+  graph.tensor_nchw(y_, 'y', y)->set_output(true);
+
+  if (graph.prepare().is_bad()) {
     return std::nullopt;
   }
+  graph.deselect_numeric_notes({fe::NumericalNote_t::DOWN_CONVERT_INPUTS});
+  if (dtype == float32 && !env::enable_tf32()) {
+    graph.deselect_numeric_notes({fe::NumericalNote_t::TENSOR_CORE});
+  }
+  CHECK_CUDNN_FE_ERROR(graph.build());
+  return graph;
 }
 
 // Transpose from (C_out, H, W, C_in / groups) to (C_in, H, W, C_out / groups).
@@ -181,7 +184,7 @@ array group_transpose(
 // eval_gpu, with cost of possible redundant copies.
 std::tuple<array, array, array> prepare_args(
     cu::CommandEncoder& encoder,
-    cudnnBackendDescriptorType_t backend_type,
+    ConvBackendType backend_type,
     array in,
     array wt,
     array out,
@@ -221,27 +224,11 @@ std::tuple<array, array, array> prepare_args(
   return {std::move(in), std::move(wt), std::move(out)};
 }
 
-// Get the x/w/y args from the in/wt/out args depending on backend type.
-inline std::tuple<array&, array&, array&> dispatch_args(
-    cudnnBackendDescriptorType_t backend_type,
-    array& in,
-    array& wt,
-    array& out) {
-  switch (backend_type) {
-    case CONV_BACKWARD_INPUT:
-      return {out, wt, in};
-    case CONV_BACKWARD_WEIGHT:
-      return {in, out, wt};
-    default:
-      return {in, wt, out};
-  }
-}
-
 // Register inputs and outputs before actually running conv op. Can only be
 // called once per eval_gpu.
 void register_args(
     cu::CommandEncoder& encoder,
-    cudnnBackendDescriptorType_t backend_type,
+    ConvBackendType backend_type,
     array& in,
     array& wt,
     array& intermediate_out,
@@ -297,16 +284,19 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
       get_alignment(wt),
       get_alignment(out)};
   if (auto it = conv_cache().find(cache_key); it != conv_cache().end()) {
-    auto& [backend_type, plan] = it->second;
-    if (plan) {
-      // Run cached plan.
+    auto& [backend_type, graph] = it->second;
+    if (graph) {
+      // Run cached graph.
       std::tie(in, wt, out) =
           prepare_args(encoder, backend_type, in, wt, out, groups_, s);
       register_args(encoder, backend_type, in, wt, out, out_);
-      auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
-      if (!encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
-        throw std::runtime_error("[conv] Cached plan failed to execute.");
-      }
+      CHECK_CUDNN_FE_ERROR(graph->encode_capturing(
+          encoder,
+          {
+              {'x', gpu_ptr<void>(in)},
+              {'w', gpu_ptr<void>(wt)},
+              {'y', gpu_ptr<void>(out)},
+          }));
     } else {
       // Run fallback kernel.
       gemm_conv(
@@ -327,7 +317,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
 
   // There is no reliable way to deduce the proper cuDNN backend for the
   // convolution, so we make a best guess and then try.
-  SmallVector<cudnnBackendDescriptorType_t, 2> try_backends;
+  SmallVector<ConvBackendType, 2> try_backends;
   if (flip_) {
     // When weight is flipped, we assume it is backward input convolution.
     try_backends.push_back(CONV_BACKWARD_INPUT);
@@ -345,13 +335,12 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   }
 
   // Try to build op graph.
-  cudnnBackendDescriptorType_t backend_type;
-  std::optional<cudnn_frontend::OperationGraph> op_graph;
+  ConvBackendType backend_type;
+  std::optional<DnnGraph> graph;
   for (auto try_backend : try_backends) {
-    auto [in_copy, wt_copy, out_copy] =
+    auto [x, w, y] =
         prepare_args(encoder, try_backend, in, wt, out, groups_, s);
-    auto [x, w, y] = dispatch_args(try_backend, in_copy, wt_copy, out_copy);
-    auto [stride, padding_lo, padding_hi, dilation] = get_conv_op_settings(
+    auto [stride, padding_lo, padding_hi, dilation] = get_conv_settings(
         try_backend,
         x,
         w,
@@ -361,7 +350,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
         padding_hi_,
         kernel_dilation_,
         input_dilation_);
-    op_graph = build_conv_op_graph(
+    graph = build_conv_graph(
         encoder,
         try_backend,
         dtype,
@@ -372,30 +361,27 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
         padding_lo,
         padding_hi,
         dilation);
-    if (op_graph) {
+    if (graph) {
       backend_type = try_backend;
-      in = std::move(in_copy);
-      wt = std::move(wt_copy);
-      out = std::move(out_copy);
+      in = std::move(x);
+      wt = std::move(w);
+      out = std::move(y);
       break;
     }
   }
 
-  if (op_graph) {
-    // Find a plan for the graph and execute it.
-    auto plan = find_cudnn_plan_from_op_graph(
-        encoder.device().cudnn_handle(), backend_type, dtype, *op_graph);
-    if (plan) {
-      // Setup inputs and outputs.
-      register_args(encoder, backend_type, in, wt, out, out_);
-
-      auto [x, w, y] = dispatch_args(backend_type, in, wt, out);
-      if (encode_cudnn_plan(encoder, *plan, {'x', 'w', 'y'}, x, w, y)) {
-        conv_cache().emplace(
-            cache_key, std::make_pair(backend_type, std::move(*plan)));
-        return;
-      }
-    }
+  if (graph) {
+    register_args(encoder, backend_type, in, wt, out, out_);
+    CHECK_CUDNN_FE_ERROR(graph->encode_capturing(
+        encoder,
+        {
+            {'x', gpu_ptr<void>(in)},
+            {'w', gpu_ptr<void>(wt)},
+            {'y', gpu_ptr<void>(out)},
+        }));
+    conv_cache().emplace(
+        cache_key, std::make_pair(backend_type, std::move(*graph)));
+    return;
   }
 
   // Use fallback kernel for settings not supported by cuDNN.

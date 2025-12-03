@@ -1751,12 +1751,7 @@ class Reduce : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
-
-  std::vector<array> vjp(
-      const std::vector<array>& primals,
-      const std::vector<array>& cotangents,
-      const std::vector<int>& argnums,
-      const std::vector<array>& outputs) override;
+  DEFINE_GRADS();
 
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
 
@@ -1871,13 +1866,13 @@ class Scatter : public UnaryPrimitive {
   const char* name() const override {
     switch (reduce_type_) {
       case Sum:
-        return "ScatterSum";
+        return "Scatter Sum";
       case Prod:
-        return "ScatterProd";
+        return "Scatter Prod";
       case Min:
-        return "ScatterMin";
+        return "Scatter Min";
       case Max:
-        return "ScatterMax";
+        return "Scatter Max";
       case None:
         return "Scatter";
     }
@@ -1910,7 +1905,7 @@ class ScatterAxis : public UnaryPrimitive {
   const char* name() const override {
     switch (reduce_type_) {
       case Sum:
-        return "ScatterAxisSum";
+        return "ScatterAxis Sum";
       case None:
         return "ScatterAxis";
     }
