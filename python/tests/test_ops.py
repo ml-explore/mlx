@@ -5,9 +5,10 @@ import os
 import unittest
 from itertools import permutations, product
 
-import mlx.core as mx
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
 
 
 def np_wrap_between(x, a):
@@ -1881,6 +1882,23 @@ class TestOps(mlx_tests.MLXTestCase):
 
                 b_npy = np.pad(a_npy, pw, mode="edge")
                 b_mlx = mx.pad(a_mlx, pw, mode="edge")
+
+                self.assertEqual(list(b_npy.shape), list(b_mlx.shape))
+                self.assertTrue(np.allclose(b_npy, b_mlx, atol=1e-6))
+
+                b_npy = np.pad(a_npy, pw, mode="reflect")
+                b_mlx = mx.pad(a_mlx, pw, mode="reflect")
+
+                self.assertEqual(list(b_npy.shape), list(b_mlx.shape))
+                self.assertTrue(np.allclose(b_npy, b_mlx, atol=1e-6))
+
+                b_npy = np.pad(a_npy, pw, mode="symmetric")
+                b_mlx = mx.pad(a_mlx, pw, mode="symmetric")
+
+                if not np.allclose(b_npy, b_mlx, atol=1e-6):
+                    print(f"\nSymmetric test failed for pad_width: {pw}")
+                    print(f"NumPy result (first 20):", b_npy.flat[:20])
+                    print(f"MLX result (first 20):", np.array(b_mlx).flat[:20])
 
                 self.assertEqual(list(b_npy.shape), list(b_mlx.shape))
                 self.assertTrue(np.allclose(b_npy, b_mlx, atol=1e-6))
