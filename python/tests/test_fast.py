@@ -103,9 +103,6 @@ class TestFast(mlx_tests.MLXTestCase):
             dims, _, base, scale, offset, _ = defaults
             for dtype in dtypes:
                 x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-                ry = rope_orig(
-                    x.astype(mx.float32), dims, traditional, base, scale, offset
-                )
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_fast = mx.fast.rope(
                     x,
@@ -116,9 +113,10 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 if dtype != mx.float32:
-                    self.assertLessEqual(
-                        mx.abs(ry - rx_fast).max(), mx.abs(ry - rx).max()
+                    ry = rope_orig(
+                        x.astype(mx.float32), dims, traditional, base, scale, offset
                     )
+                    self.assertLess(mx.abs(ry - rx_fast).max(), tolerances[dtype])
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
             dims, dtype, base, scale, _, _ = defaults
@@ -454,6 +452,17 @@ class TestFast(mlx_tests.MLXTestCase):
         gx2, gw2 = mx.grad(gf(f2), argnums=(0, 1))(x, w, y)
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
+    def test_layer_norm_dim_check(self):
+        with self.assertRaises(ValueError):
+            weight = mx.ones((129,))
+            x = mx.random.randint(low=0, high=10, shape=(4, 128))
+            mx.fast.layer_norm(x, weight, None, 1e-3)
+
+        with self.assertRaises(ValueError):
+            bias = mx.ones((129,))
+            x = mx.random.randint(low=0, high=10, shape=(4, 128))
+            mx.fast.layer_norm(x, None, bias, 1e-3)
 
     def test_layer_norm(self):
         # Per dtype absolute tolerance
