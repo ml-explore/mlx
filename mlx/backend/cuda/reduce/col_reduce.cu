@@ -129,7 +129,7 @@ __global__ void col_reduce_looped(
   if constexpr (BLOCKS > 1) {
     per_block = (total + BLOCKS - 1) / BLOCKS;
     start = tile_out * per_block + thread_y;
-    end = (tile_out < BLOCKS - 1) ? (tile_out + 1) * per_block : total;
+    end = min((tile_out + 1) * per_block, total);
   } else {
     per_block = total;
     start = thread_y;
