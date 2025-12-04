@@ -20,6 +20,19 @@ constexpr int page_size = 16384;
 // Any allocations smaller than this will try to use the small pool
 constexpr int small_block_size = 8;
 
+#if CUDART_VERSION >= 13000
+cudaMemLocation cuda_mem_loc(int i) {
+  cudaMemLocation loc;
+  loc.type = cudaMemLocationTypeDevice;
+  loc.id = i;
+  return loc;
+}
+#else
+int cuda_mem_loc(int i) {
+  return i;
+}
+#endif // CUDART_VERSION >= 13000
+
 // The small pool size in bytes. This should be a multiple of the host page
 // size and small_block_size.
 constexpr int small_pool_size = 4 * page_size;
@@ -35,13 +48,7 @@ SmallSizePool::SmallSizePool() {
   int device_count = 0;
   CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
   for (int i = 0; i < device_count; ++i) {
-#if CUDART_VERSION >= 13000
-    cudaMemLocation loc;
-    loc.type = cudaMemLocationTypeDevice;
-    loc.id = i;
-#else
-    int loc = i;
-#endif // CUDART_VERSION >= 13000
+    auto loc = cuda_mem_loc(i);
     CHECK_CUDA_ERROR(
         cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
   }
@@ -90,10 +97,10 @@ CudaAllocator::CudaAllocator()
           page_size,
           [](CudaBuffer* buf) { return buf->size; },
           [this](CudaBuffer* buf) { cuda_free(buf); }) {
-  size_t free, total;
-  CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-  memory_limit_ = total * 0.95;
-  free_limit_ = total - memory_limit_;
+  size_t free;
+  CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total_memory_));
+  memory_limit_ = total_memory_ * 0.95;
+  free_limit_ = total_memory_ - memory_limit_;
   max_pool_size_ = memory_limit_;
 
   int device_count = 0;
@@ -105,6 +112,10 @@ CudaAllocator::CudaAllocator()
     cudaStream_t s;
     CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
     free_streams_.push_back(s);
+
+    cudaMemPool_t mem_pool;
+    CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pool, i));
+    mem_pools_.push_back(mem_pool);
   }
   CHECK_CUDA_ERROR(cudaSetDevice(curr));
 }
@@ -153,26 +164,13 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     if (size <= small_block_size) {
       buf = scalar_pool_.malloc();
     }
+    lock.unlock();
     if (!buf) {
       void* data = nullptr;
-      while (!data) {
-        lock.unlock();
-
-        if (device == -1) {
-          CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
-        } else {
-          CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
-        }
-
-        if (!data) {
-          // Try to release memory from the cache to defrag
-          if (get_cache_memory() == 0) {
-            break;
-          } else {
-            buffer_cache_.release_cached_buffers(size);
-          }
-        }
-        lock.lock();
+      if (device == -1) {
+        CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
+      } else {
+        CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
       }
       if (!data) {
         std::ostringstream msg;
@@ -181,17 +179,25 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
       }
       buf = new CudaBuffer{data, size, device};
     }
+    lock.lock();
+
+    // If any cuda memory pool has too much reserved memory, clear some
+    // memory from the cache. This prevents graph / kernel execution failing
+    // from OOM
+    if (get_cache_memory() > 0) {
+      for (auto p : mem_pools_) {
+        size_t used = 0;
+        CHECK_CUDA_ERROR(cudaMemPoolGetAttribute(
+            p, cudaMemPoolAttrReservedMemCurrent, &used));
+        if (used > (total_memory_ - free_limit_)) {
+          buffer_cache_.release_cached_buffers(free_limit_);
+          break;
+        }
+      }
+    }
   }
   active_memory_ += buf->size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
-
-  // If the OS reports that not enough memory is free, try to clear some memory
-  // from the cache. This prevents graph / kernel execution failing from OOM
-  size_t free, total;
-  CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
-  if (free < free_limit_ && get_cache_memory() > 0) {
-    buffer_cache_.release_cached_buffers(free_limit_);
-  }
 
   // Maintain the cache below the requested limit.
   if (get_cache_memory() > max_pool_size_) {
