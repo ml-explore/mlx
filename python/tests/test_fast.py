@@ -103,9 +103,6 @@ class TestFast(mlx_tests.MLXTestCase):
             dims, _, base, scale, offset, _ = defaults
             for dtype in dtypes:
                 x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-                ry = rope_orig(
-                    x.astype(mx.float32), dims, traditional, base, scale, offset
-                )
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_fast = mx.fast.rope(
                     x,
@@ -116,9 +113,10 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 if dtype != mx.float32:
-                    self.assertLessEqual(
-                        mx.abs(ry - rx_fast).max(), mx.abs(ry - rx).max()
+                    ry = rope_orig(
+                        x.astype(mx.float32), dims, traditional, base, scale, offset
                     )
+                    self.assertLess(mx.abs(ry - rx_fast).max(), tolerances[dtype])
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
             dims, dtype, base, scale, _, _ = defaults
