@@ -202,17 +202,35 @@ array layer_norm(
            "0 dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (has_weight && (*weight).ndim() != 1) {
-    std::ostringstream msg;
-    msg << "[layer_norm] weight must have 1 dimension but has "
-        << (*weight).ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
+  if (has_weight) {
+    if ((*weight).ndim() != 1) {
+      std::ostringstream msg;
+      msg << "[layer_norm] weight must have 1 dimension but has "
+          << (*weight).ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if ((*weight).size() != x.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[layer_norm] weight must have the same size as the last dimension of"
+             " x but has "
+          << (*weight).size() << " elements.";
+      throw std::invalid_argument(msg.str());
+    }
   }
-  if (has_bias && (*bias).ndim() != 1) {
-    std::ostringstream msg;
-    msg << "[layer_norm] bias must have 1 dimension but has " << (*bias).ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
+  if (has_bias) {
+    if ((*bias).ndim() != 1) {
+      std::ostringstream msg;
+      msg << "[layer_norm] bias must have 1 dimension but has "
+          << (*bias).ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if ((*bias).size() != x.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[layer_norm] bias must have the same size as the last dimension of"
+             " x but has "
+          << (*bias).size() << " elements.";
+      throw std::invalid_argument(msg.str());
+    }
   }
 
   auto out_type = (has_weight)

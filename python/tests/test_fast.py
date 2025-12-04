@@ -455,6 +455,17 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+    def test_layer_norm_dim_check(self):
+        with self.assertRaises(ValueError):
+            weight = mx.ones((129,))
+            x = mx.random.randint(low=0, high=10, shape=(4, 128))
+            mx.fast.layer_norm(x, weight, None, 1e-3)
+
+        with self.assertRaises(ValueError):
+            bias = mx.ones((129,))
+            x = mx.random.randint(low=0, high=10, shape=(4, 128))
+            mx.fast.layer_norm(x, None, bias, 1e-3)
+
     def test_layer_norm(self):
         # Per dtype absolute tolerance
         tolerances = {mx.float32: 1e-5, mx.float16: 5e-3, mx.bfloat16: 5e-2}
