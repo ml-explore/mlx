@@ -467,6 +467,10 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
   for (auto& o : outputs) {
     old_to_new.insert({o.id(), o});
     io_set.insert(o.id());
+    for (auto& s : o.siblings()) {
+      old_to_new.insert({s.id(), s});
+      io_set.insert(s.id());
+    }
   }
   for (auto& i : inputs) {
     io_set.insert(i.id());
@@ -514,6 +518,12 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     for (auto& i : o.inputs()) {
       i = old_to_new.find(i.id())->second;
     }
+    for (auto& s : o.siblings()) {
+      io_set.insert(s.id());
+      for (auto& i : s.inputs()) {
+        i = old_to_new.find(i.id())->second;
+      }
+    }
   }
   tape = std::move(new_tape);
 
@@ -526,7 +536,6 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     new_parents_map[old_to_new.find(id)->second.id()] = std::move(vec);
   }
   parents_map = std::move(new_parents_map);
-
   return {tape, parents_map};
 }
 
