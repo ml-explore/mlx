@@ -337,7 +337,15 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   for (auto& p : primals) {
     auto s = p.has_primitive() ? p.primitive().stream()
                                : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
+    array source = p;
+    if (!p.is_tracer()) {
+      while (source.has_primitive() &&
+             typeid(source.primitive()) == typeid(Copy) &&
+             !source.inputs().empty()) {
+        source = source.inputs()[0];
+      }
+    }
+    primals_.push_back(copy(source, s)); // Does not do a deep copy
     primals_.back().set_tracer(true);
   }
 
@@ -545,7 +553,15 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   for (auto& p : primals) {
     auto s = p.has_primitive() ? p.primitive().stream()
                                : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
+    array source = p;
+    if (!p.is_tracer()) {
+      while (source.has_primitive() &&
+             typeid(source.primitive()) == typeid(Copy) &&
+             !source.inputs().empty()) {
+        source = source.inputs()[0];
+      }
+    }
+    primals_.push_back(copy(source, s)); // Does not do a deep copy
     primals_.back().set_tracer(true);
   }
   auto outputs = fun(primals_);
