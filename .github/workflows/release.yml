@@ -131,6 +131,7 @@ jobs:
     strategy:
       matrix:
         arch: ['x86_64', 'aarch64']
+        toolkit: ['12.9', '13.0']
     runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22-large' || 'ubuntu-22-large-arm' }}
     env:
       PYPI_RELEASE: 1
@@ -139,7 +140,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
         with:
-          toolkit: 'cuda-12.9'
+          toolkit: ${{ matrix.toolkit }}
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:

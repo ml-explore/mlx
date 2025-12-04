@@ -29,17 +29,20 @@ MLX has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
-    pip install mlx[cuda]
+    pip install mlx[cuda12]
+
 
 To install the CUDA package from PyPi your system must meet the following
 requirements:
 
-- Nvidia architecture >= SM 7.0 (Volta)
+- Nvidia architecture >= SM 7.5
 - Nvidia driver >= 550.54.14
 - CUDA toolkit >= 12.0
 - Linux distribution with glibc >= 2.35
 - Python >= 3.10
 
+For CUDA 13 use ``pip install mlx[cuda13]``. The CUDA 13 package requires
+an Nvidia driver >= 580 or an appropriate CUDA compatibility package.
 
 CPU-only (Linux)
 ^^^^^^^^^^^^^^^^
