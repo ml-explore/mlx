@@ -44,7 +44,7 @@ def tree_map(
         return fn(tree, *rest)
     elif isinstance(tree, (list, tuple)):
         TreeType = type(tree)
-        subtrees = ( 
+        subtrees = (
             tree_map(fn, child, *(r[i] for r in rest), is_leaf=is_leaf)
             for i, child in enumerate(tree)
         )
