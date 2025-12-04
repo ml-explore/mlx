@@ -15,6 +15,7 @@ runs:
   using: "composite"
   steps:
     - name: Use ccache
+      if: ${{ runner.arch == 'x86_64' }}
       uses: hendrikmuhs/ccache-action@v1.2
       with:
         key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}-py${{ inputs.python-version }}
