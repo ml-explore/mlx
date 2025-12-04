@@ -84,6 +84,63 @@ if(MLX_USE_CCACHE)
   endif()
 endif()
 
+if(USE_ASAN AND USE_TSAN)
+  message(
+    FATAL_ERROR
+      "AddressSanitizer (ASan) and ThreadSanitizer (TSan) are mutually exclusive and cannot be enabled at the same time."
+  )
+endif()
+
+set(SANITIZER_COMPILE_FLAGS "")
+set(SANITIZER_LINK_FLAGS "")
+
+if(USE_ASAN)
+  if(WIN32 AND MSVC)
+    list(APPEND SANITIZER_COMPILE_FLAGS /fsanitize=address)
+    list(APPEND SANITIZER_LINK_FLAGS /fsanitize=address)
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=address)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=address)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      list(APPEND SANITIZER_LINK_FLAGS -lpthread)
+    endif()
+  endif()
+endif()
+
+if(USE_UBSAN)
+  if(WIN32 AND MSVC)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=undefined)
+      list(APPEND SANITIZER_LINK_FLAGS -fsanitize=undefined)
+    else()
+      message(
+        WARNING
+          "UndefinedBehaviorSanitizer (UBSan) is not directly supported via a simple flag in MSVC."
+      )
+    endif()
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=undefined)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=undefined)
+  endif()
+endif()
+
+if(USE_TSAN)
+  if(WIN32 AND MSVC)
+    message(
+      FATAL_ERROR
+        "ThreadSanitizer (TSan) is not supported by the MSVC compiler. Please use Clang or GCC."
+    )
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    message(FATAL_ERROR "ThreadSanitizer (TSan) is not supported on macOS.")
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=thread)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=thread)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      list(APPEND SANITIZER_LINK_FLAGS -lpthread)
+    endif()
+  endif()
+endif()
+
 # ----------------------------- Lib -----------------------------
 
 include(FetchContent)
@@ -96,6 +153,8 @@ add_library(mlx)
 # ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
 # 10.1
 target_compile_options(mlx PRIVATE -Wno-psabi)
+target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
+target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
