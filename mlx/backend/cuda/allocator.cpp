@@ -157,16 +157,14 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
       cudaError_t err;
       void* data = nullptr;
       if (device == -1) {
-        err = cudaMallocManaged(&data, size);
+        CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
       } else {
-        err = cudaMallocAsync(&data, size, stream);
-      }
-      if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
-        throw std::runtime_error(fmt::format(
-            "cudaMallocManaged failed: {}.", cudaGetErrorString(err)));
+        CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
       }
       if (!data) {
-        return Buffer{nullptr};
+        std::ostringstream msg;
+        msg << "[malloc] Unable to allocate " << size << " bytes.";
+        throw std::runtime_error(msg.str());
       }
       buf = new CudaBuffer{data, size, device};
     }

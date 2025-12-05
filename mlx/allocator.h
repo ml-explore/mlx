@@ -28,10 +28,6 @@ class Buffer {
   };
 };
 
-Buffer malloc(size_t size);
-
-void free(Buffer buffer);
-
 class Allocator {
   /** Abstract base class for a memory allocator. */
  public:
@@ -48,5 +44,13 @@ class Allocator {
 };
 
 Allocator& allocator();
+
+inline Buffer malloc(size_t size) {
+  return allocator().malloc(size);
+}
+
+inline void free(Buffer buffer) {
+  allocator().free(buffer);
+}
 
 } // namespace mlx::core::allocator
