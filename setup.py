@@ -7,7 +7,6 @@ import re
 import subprocess
 from functools import partial
 from pathlib import Path
-from subprocess import check_output, run
 
 from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.bdist_wheel import bdist_wheel
@@ -40,7 +39,7 @@ def get_version():
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
     if not pypi_release and not dev_release:
         git_hash = (
-            run(
+            subprocess.run(
                 "git rev-parse --short HEAD".split(),
                 capture_output=True,
                 check=True,
@@ -313,13 +312,13 @@ if __name__ == "__main__":
             name = "mlx-metal"
         elif build_cuda:
             toolkit = cuda_toolkit_major_version()
-            name = "mlx-cuda-{toolkit}"
-            if toolkit == "12":
+            name = f"mlx-cuda-{toolkit}"
+            if toolkit == 12:
                 install_requires += [
                     "nvidia-cublas-cu12==12.9.*",
                     "nvidia-cuda-nvrtc-cu12==12.9.*",
                 ]
-            elif toolkit == "13":
+            elif toolkit == 13:
                 install_requires += [
                     "nvidia-cublas-cu13",
                     "nvidia-cuda-nvrtc-cu13",

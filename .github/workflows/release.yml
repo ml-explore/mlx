@@ -131,7 +131,7 @@ jobs:
     strategy:
       matrix:
         arch: ['x86_64', 'aarch64']
-        toolkit: ['12.9', '13.0']
+        toolkit: ['cuda-12.9', 'cuda-13.0']
     runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22-large' || 'ubuntu-22-large-arm' }}
     env:
       PYPI_RELEASE: 1
