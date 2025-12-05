@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <climits>
 
 #include "doctest/doctest.h"
@@ -607,4 +606,25 @@ TEST_CASE("test make empty array") {
   a = array({}, bool_);
   CHECK_EQ(a.size(), 0);
   CHECK_EQ(a.dtype(), bool_);
+}
+
+TEST_CASE("test make array from user buffer") {
+  int size = 4096;
+  std::vector<int> buffer(size, 0);
+
+  int count = 0;
+  auto deleter = [&count](void*) { count++; };
+
+  {
+    auto a = array(buffer.data(), Shape{size}, int32, deleter);
+    if (metal::is_available()) {
+      CHECK_EQ(buffer.data(), a.data<int>());
+    }
+    auto b = a + array(1);
+    eval(b);
+    auto expected = ones({4096});
+    CHECK(array_equal(b, expected).item<bool>());
+  }
+  // deleter should always get called
+  CHECK_EQ(count, 1);
 }
