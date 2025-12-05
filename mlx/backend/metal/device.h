@@ -4,6 +4,7 @@
 
 #include <Metal/Metal.hpp>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -209,7 +210,7 @@ class Device {
 
  private:
   DeviceStream& get_stream_(int index) {
-    return stream_map_.find(index)->second;
+    return *stream_map_.find(index)->second;
   }
   MTL::Library* get_library_cache_(const std::string& name);
 
@@ -243,8 +244,13 @@ class Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
+  DeviceStream& get_stream_nolock(int index);
+  DeviceStream* get_stream_ptr(int index);
+  MTL::CommandBuffer* ensure_command_buffer(DeviceStream& stream);
+
   MTL::Device* device_;
-  std::unordered_map<int32_t, DeviceStream> stream_map_;
+  mutable std::shared_mutex stream_map_mtx_;
+  std::unordered_map<int32_t, std::unique_ptr<DeviceStream>> stream_map_;
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;
