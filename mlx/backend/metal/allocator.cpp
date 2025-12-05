@@ -149,7 +149,9 @@ Buffer MetalAllocator::malloc(size_t size) {
       buf = device_->newBuffer(size, resource_options);
     }
     if (!buf) {
-      return Buffer{nullptr};
+      std::ostringstream msg;
+      msg << "[malloc] Unable to allocate " << size << " bytes.";
+      throw std::runtime_error(msg.str());
     }
     lk.lock();
     num_resources_++;

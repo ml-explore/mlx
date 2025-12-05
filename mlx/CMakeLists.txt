@@ -1,7 +1,6 @@
 target_sources(
   mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
