@@ -7,11 +7,19 @@ import re
 import subprocess
 from functools import partial
 from pathlib import Path
-from subprocess import run
 
 from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.bdist_wheel import bdist_wheel
 from setuptools.command.build_ext import build_ext
+
+
+def cuda_toolkit_major_version():
+    out = subprocess.check_output(["nvcc", "--version"], stderr=subprocess.STDOUT)
+    text = out.decode()
+    m = re.search(r"release (\d+)", text)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 def get_version():
@@ -31,7 +39,7 @@ def get_version():
         version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
     if not pypi_release and not dev_release:
         git_hash = (
-            run(
+            subprocess.run(
                 "git rev-parse --short HEAD".split(),
                 capture_output=True,
                 check=True,
@@ -284,7 +292,11 @@ if __name__ == "__main__":
             install_requires.append(
                 f'mlx-metal=={version}; platform_system == "Darwin"'
             )
-            extras["cuda"] = [f'mlx-cuda=={version}; platform_system == "Linux"']
+            extras["cuda"] = [f'mlx-cuda-12=={version}; platform_system == "Linux"']
+            for toolkit in [12, 13]:
+                extras[f"cuda{toolkit}"] = [
+                    f'mlx-cuda-{toolkit}=={version}; platform_system == "Linux"'
+                ]
             extras["cpu"] = [f'mlx-cpu=={version}; platform_system == "Linux"']
 
         _setup(
@@ -299,13 +311,25 @@ if __name__ == "__main__":
         if build_macos:
             name = "mlx-metal"
         elif build_cuda:
-            name = "mlx-cuda"
+            toolkit = cuda_toolkit_major_version()
+            name = f"mlx-cuda-{toolkit}"
+            if toolkit == 12:
+                install_requires += [
+                    "nvidia-cublas-cu12==12.9.*",
+                    "nvidia-cuda-nvrtc-cu12==12.9.*",
+                ]
+            elif toolkit == 13:
+                install_requires += [
+                    "nvidia-cublas-cu13",
+                    "nvidia-cuda-nvrtc-cu13",
+                ]
+            else:
+                raise ValueError(f"Unknown toolkit {toolkit}")
             install_requires += [
-                "nvidia-cublas-cu12==12.9.*",
-                "nvidia-cuda-nvrtc-cu12==12.9.*",
-                "nvidia-cudnn-cu12==9.*",
-                "nvidia-nccl-cu12",
+                f"nvidia-cudnn-cu{toolkit}==9.*",
+                f"nvidia-nccl-cu{toolkit}",
             ]
+
         else:
             name = "mlx-cpu"
         _setup(
