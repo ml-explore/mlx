@@ -25,6 +25,7 @@ class CommonAllocator : public Allocator {
   virtual Buffer malloc(size_t size) override;
   virtual void free(Buffer buffer) override;
   virtual size_t size(Buffer buffer) const override;
+
   size_t get_active_memory() const {
     return active_memory_;
   };

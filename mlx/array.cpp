@@ -82,6 +82,28 @@ array::array(std::initializer_list<int> data, Dtype dtype)
   init(data.begin());
 }
 
+array::array(
+    void* data,
+    Shape shape,
+    Dtype dtype,
+    const std::function<void(void*)>& deleter)
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
+  auto buffer = allocator::make_buffer(data, nbytes());
+  if (buffer.ptr() == nullptr) {
+    set_data(allocator::malloc(nbytes()));
+    auto ptr = static_cast<char*>(data);
+    std::copy(ptr, ptr + nbytes(), this->data<char>());
+    deleter(data);
+  } else {
+    auto wrapped_deleter = [deleter](allocator::Buffer buffer) {
+      auto ptr = buffer.ptr();
+      allocator::release(buffer);
+      return deleter(ptr);
+    };
+    set_data(buffer, std::move(wrapped_deleter));
+  }
+}
+
 /* Build an array from a shared buffer */
 array::array(allocator::Buffer data, Shape shape, Dtype dtype, Deleter deleter)
     : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {

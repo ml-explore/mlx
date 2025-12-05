@@ -57,6 +57,13 @@ class array {
       Shape shape,
       Dtype dtype = TypeToDtype<T>());
 
+  /* Build an array from a raw pointer without a copy */
+  explicit array(
+      void* data,
+      Shape shape,
+      Dtype dtype,
+      const std::function<void(void*)>& deleter);
+
   /* Build an array from a buffer */
   explicit array(
       allocator::Buffer data,
