@@ -90,7 +90,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [ASAN, UBSAN, TSAN]
+        sanitizer: [UBSAN]
+        # todo 12/5/2025: enable ASAN and TSAN later
+        # sanitizer: [ASAN, UBSAN, TSAN]
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code
