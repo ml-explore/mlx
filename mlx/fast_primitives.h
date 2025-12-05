@@ -3,6 +3,7 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/array.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
