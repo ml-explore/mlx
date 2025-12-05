@@ -3142,7 +3142,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def pad(a: array, pad_width: Union[int, tuple[int], tuple[int, int], list[tuple[int, int]]], mode: Literal['constant', 'edge'] = 'constant', constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def pad(a: array, pad_width: Union[int, tuple[int], tuple[int, int], list[tuple[int, int]]], mode: Literal['constant', 'edge', 'reflect', 'symmetric'] = 'constant', constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Pad an array with a constant value
 
@@ -3157,6 +3157,8 @@ void init_ops(nb::module_& m) {
             mode: Padding mode. One of the following strings:
               "constant" (default): Pads with a constant value.
               "edge": Pads with the edge values of array.
+              "reflect": Pads with the reflection of the array mirrored along the edge, excluding the edge value.
+              "symmetric": Pads with the reflection of the array mirrored along the edge, including the edge value.
             constant_value (array or scalar, optional): Optional constant value
               to pad the edges of the array with.
 
