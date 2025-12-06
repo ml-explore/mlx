@@ -3468,6 +3468,84 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
   return {std::move(out_shape)};
 }
 
+bool DualQuantizedMatmul::is_equivalent(const Primitive& other) const {
+  const DualQuantizedMatmul& qm_other =
+      static_cast<const DualQuantizedMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_;
+}
+
+std::vector<Shape> DualQuantizedMatmul::output_shapes(
+    const std::vector<array>& inputs) {
+  auto out_shape = inputs[0].shape();
+  int w_outer_dims = inputs[2].shape(-2);
+  out_shape.back() = w_outer_dims;
+  return {std::move(out_shape)};
+}
+
+std::vector<array> DualQuantizedMatmul::vjp(
+    const std::vector<array>& primals, // bf16 x, quantized weights
+    const std::vector<array>& cotangents, // bf16 grads
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+  auto& s = stream();
+  // primal[1] -- quantized weights (row wise)
+  // primal[2] -- scales_w
+  // primal[0] -- bf16 activations (M, K)
+  // primal[3] -- bf16 weights (N, K)
+  // cotan -- bf16 activation grads (M, N)
+  auto qmode = quantization_mode_to_string(mode_);
+  for (auto arg : argnums) {
+    if (arg == 0) { // gradient wrt to x
+      // We transpose weights -> quantize along N -> qqmm (cotan quantized in
+      // eval_gpu)
+      auto wtq = quantize(
+          transpose(primals[3], {1, 0}, s), // we assume that weights are 2D
+          group_size_,
+          bits_,
+          qmode,
+          s); // (K, N_packed), scales
+      vjps.push_back(qqmm(
+          cotan, //  M X N
+          wtq[0], //  K X N_packed
+          wtq[1], // scales
+          std::nullopt,
+          group_size_,
+          bits_,
+          qmode,
+          s));
+    } else if (arg == 3) { // gradient wrt to weights
+      // it is a bit complicated -- we need to quantize along M but cotan is
+      // (M,N) so we transpose cotan -> quantize along M -> qqmm
+      auto xt = transpose(primals[0], reorder, s); // (K, M)
+      auto xtq = quantize(xt, group_size_, bits_, qmode,
+                          s); // (N, M_packed)
+      vjps.push_back(qqmm(
+          transpose(cotan, reorder, s), // (N, M)
+          xtq[0], // (N, M_packed)
+          xtq[1], // scales
+          std::nullopt,
+          group_size_,
+          bits_,
+          qmode,
+          s)); // (K, M), (N, M_packed)
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> DualQuantizedMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("DualQuantizedMatmul::jvp NYI");
+}
+
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
