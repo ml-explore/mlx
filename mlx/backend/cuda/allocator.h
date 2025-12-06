@@ -71,11 +71,14 @@ class CudaAllocator : public allocator::Allocator {
 
   std::mutex mutex_;
   size_t memory_limit_;
+  size_t free_limit_;
+  size_t total_memory_;
   size_t max_pool_size_;
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
   std::vector<cudaStream_t> free_streams_;
+  std::vector<cudaMemPool_t> mem_pools_;
   SmallSizePool scalar_pool_;
 };
 
