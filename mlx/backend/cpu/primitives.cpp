@@ -310,18 +310,29 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
       if (count.first < half_size) {
         auto rb = random::threefry2x32_hash(key, count);
         ptr[count.first++] = rb.first;
-        if (bytes_per_key % 4 > 0) {
+        size_t offset = 4 * count.second;
+        if (offset < bytes_per_key) {
+          size_t remaining_bytes = bytes_per_key - offset;
           std::copy(
               reinterpret_cast<char*>(&rb.second),
-              reinterpret_cast<char*>(&rb.second) + bytes_per_key % 4,
-              cptr + 4 * count.second);
-        } else {
-          ptr[count.second] = rb.second;
+              reinterpret_cast<char*>(&rb.second) +
+                  std::min(remaining_bytes, sizeof(uint32_t)),
+              cptr + offset);
         }
       }
       if (!even) {
         count.second = 0;
-        ptr[half_size] = random::threefry2x32_hash(key, count).first;
+        // Need a new random pair, buy we throw rb.second away
+        auto rb = random::threefry2x32_hash(key, count);
+        size_t offset = 4 * half_size;
+        if (offset < bytes_per_key) {
+          size_t remaining_bytes = bytes_per_key - offset;
+          std::copy(
+              reinterpret_cast<char*>(&rb.first),
+              reinterpret_cast<char*>(&rb.first) +
+                  std::min(remaining_bytes, sizeof(uint32_t)),
+              cptr + offset);
+        }
       }
     }
   });
