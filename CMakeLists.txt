@@ -37,6 +37,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_BUILD_CUDA "Build cuda backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
+option(MLX_METAL_LOG_ENABLED "Enable metal shader logging" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
@@ -114,6 +115,10 @@ if(MLX_BUILD_METAL)
     add_compile_definitions(MLX_METAL_DEBUG)
   endif()
 
+  if(MLX_METAL_LOG_ENABLED)
+    add_compile_definitions(MLX_METAL_LOG_ENABLED)
+  endif()
+
   # Throw an error if xcrun not found
   execute_process(
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
@@ -124,6 +129,11 @@ if(MLX_BUILD_METAL)
     message(
       FATAL_ERROR
         "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
+  endif()
+  if(MLX_METAL_LOG_ENABLED AND ${MACOS_SDK_VERSION} LESS 15.0)
+    message(
+      FATAL_ERROR
+        "MLX_METAL_LOG_ENABLED requires macOS SDK >= 15.0 for shader logging")
   endif()
   message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 

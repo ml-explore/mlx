@@ -9,6 +9,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/logger.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
@@ -224,7 +225,8 @@ MTL::Library* load_library(
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
       << "We attempted to load it from <" << current_binary_dir() << "/"
-      << lib_name << ".metallib" << ">";
+      << lib_name << ".metallib"
+      << ">";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";
 #endif
@@ -319,6 +321,9 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   default_library_ = load_default_library(device_);
+#ifdef MLX_METAL_LOG_ENABLED
+  logger_ = std::make_unique<MetalLogger>();
+#endif
   arch_ = std::string(device_->architecture()->name()->utf8String());
   int ag_tens = arch_[arch_.size() - 3] - '0';
   int ag_ones = arch_[arch_.size() - 2] - '0';
@@ -389,7 +394,16 @@ bool Device::command_buffer_needs_commit(int index) {
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
   auto& stream = get_stream_(index);
   if (stream.buffer == nullptr) {
-    stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
+    MTL::CommandBuffer* buffer = nullptr;
+#ifdef MLX_METAL_LOG_ENABLED
+    if (logger_) {
+      buffer = logger_->make_buffer_with_logging(stream.queue, device_);
+    }
+#endif
+    if (buffer == nullptr) {
+      buffer = stream.queue->commandBufferWithUnretainedReferences();
+    }
+    stream.buffer = buffer;
     if (!stream.buffer) {
       throw std::runtime_error(
           "[metal::Device] Unable to create new command buffer");
@@ -402,6 +416,9 @@ MTL::CommandBuffer* Device::get_command_buffer(int index) {
 
 void Device::commit_command_buffer(int index) {
   auto& stream = get_stream_(index);
+#ifdef MLX_METAL_LOG_ENABLED
+  logger_->register_completion(stream.buffer);
+#endif
   stream.buffer->commit();
   stream.buffer->release();
   stream.buffer = nullptr;
@@ -529,6 +546,9 @@ MTL::Library* Device::build_library_(const std::string& source_string) {
   auto options = MTL::CompileOptions::alloc()->init();
   options->setFastMathEnabled(false);
   options->setLanguageVersion(get_metal_version());
+#ifdef MLX_METAL_LOG_ENABLED
+  options->setEnableLogging(true);
+#endif
   auto mtl_lib = device_->newLibrary(ns_code, options, &error);
   options->release();
 

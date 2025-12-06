@@ -4,6 +4,7 @@
 
 #include <Metal/Metal.hpp>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -17,6 +18,8 @@ namespace mlx::core::metal {
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
+
+class MetalLogger;
 
 struct DeviceStream;
 
@@ -243,6 +246,9 @@ class Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
+#ifdef MLX_METAL_LOG_ENABLED
+  std::unique_ptr<MetalLogger> logger_;
+#endif
   MTL::Device* device_;
   std::unordered_map<int32_t, DeviceStream> stream_map_;
 

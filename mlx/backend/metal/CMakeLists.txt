@@ -9,12 +9,16 @@ function(make_jit_source SRC_FILE)
   # Additional arguments to this function are treated as dependencies in the
   # Cmake build system.
   get_filename_component(SRC_NAME ${SRC_FILE} NAME)
+  set(JIT_FLAGS "")
+  if(MLX_METAL_LOG_ENABLED)
+    set(JIT_FLAGS "-DMLX_METAL_LOG_ENABLED")
+  endif()
   add_custom_command(
     OUTPUT jit/${SRC_NAME}.cpp
     COMMAND
       bash ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
       ${CMAKE_CURRENT_BINARY_DIR}/jit ${CMAKE_C_COMPILER} ${PROJECT_SOURCE_DIR}
-      ${SRC_FILE}
+      ${SRC_FILE} ${JIT_FLAGS}
     DEPENDS make_compiled_preamble.sh kernels/${SRC_FILE}.h ${ARGN})
   add_custom_target(${SRC_NAME} DEPENDS jit/${SRC_NAME}.cpp)
   add_dependencies(mlx ${SRC_NAME})
@@ -95,6 +99,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/logger.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp

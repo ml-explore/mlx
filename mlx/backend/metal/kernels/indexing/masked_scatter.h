@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "mlx/backend/metal/kernels/logging.h"
+
 template <typename T, bool src_contiguous>
 [[kernel]] void masked_assign_impl(
     const device bool* mask [[buffer(0)]],
@@ -21,6 +23,7 @@ template <typename T, bool src_contiguous>
 
   const uint src_index = scatter_offsets[idx];
   if (src_index >= src_batch_size) {
+    MLX_METAL_KERNEL_LOG_FAULT("Out of bound access of src!");
     return;
   }
 
