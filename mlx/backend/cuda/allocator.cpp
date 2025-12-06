@@ -21,14 +21,14 @@ constexpr int page_size = 16384;
 constexpr int small_block_size = 8;
 
 #if CUDART_VERSION >= 13000
-cudaMemLocation cuda_mem_loc(int i) {
+inline cudaMemLocation cuda_mem_loc(int i) {
   cudaMemLocation loc;
   loc.type = cudaMemLocationTypeDevice;
   loc.id = i;
   return loc;
 }
 #else
-int cuda_mem_loc(int i) {
+inline int cuda_mem_loc(int i) {
   return i;
 }
 #endif // CUDART_VERSION >= 13000
