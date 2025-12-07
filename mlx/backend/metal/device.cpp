@@ -394,16 +394,11 @@ bool Device::command_buffer_needs_commit(int index) {
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
   auto& stream = get_stream_(index);
   if (stream.buffer == nullptr) {
-    MTL::CommandBuffer* buffer = nullptr;
 #ifdef MLX_METAL_LOG_ENABLED
-    if (logger_) {
-      buffer = logger_->make_buffer_with_logging(stream.queue, device_);
-    }
+    stream.buffer = logger_->create_logged_command_buffer(stream.queue);
+#else
+    stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
 #endif
-    if (buffer == nullptr) {
-      buffer = stream.queue->commandBufferWithUnretainedReferences();
-    }
-    stream.buffer = buffer;
     if (!stream.buffer) {
       throw std::runtime_error(
           "[metal::Device] Unable to create new command buffer");
@@ -417,7 +412,7 @@ MTL::CommandBuffer* Device::get_command_buffer(int index) {
 void Device::commit_command_buffer(int index) {
   auto& stream = get_stream_(index);
 #ifdef MLX_METAL_LOG_ENABLED
-  logger_->register_completion(stream.buffer);
+  logger_->install_completion_handler(stream.buffer);
 #endif
   stream.buffer->commit();
   stream.buffer->release();

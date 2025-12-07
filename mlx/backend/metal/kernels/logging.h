@@ -6,7 +6,7 @@
 #include <metal_logging>
 
 #define MLX_METAL_KERNEL_LOG_DEBUG(fmt, ...) \
-  os_log_default.log_debugg(fmt, ##__VA_ARGS__)
+  os_log_default.log_debug(fmt, ##__VA_ARGS__)
 #define MLX_METAL_KERNEL_LOG_INFO(fmt, ...) \
   os_log_default.log_info(fmt, ##__VA_ARGS__)
 #define MLX_METAL_KERNEL_LOG_ERROR(fmt, ...) \
