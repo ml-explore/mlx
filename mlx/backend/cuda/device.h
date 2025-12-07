@@ -106,7 +106,7 @@ class CommandEncoder {
     cudaGraphNode_t node;
     // K = kernel
     // E = empty
-    // G* = subgraph (with metadata)
+    // () = subgraph (with metadata)
     // Symbols ':', '-' are reserved as separators
     std::string node_type;
     std::string id;
