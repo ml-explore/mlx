@@ -36,4 +36,11 @@ struct Vector2<__nv_bfloat16> {
 template <typename T>
 using Vector2_t = typename Vector2<T>::type;
 
+template <typename T>
+struct Vector4 {
+  T x, y, z, w;
+};
+
+template <typename T>
+using Vector4_t = Vector4<T>;
 } // namespace mlx::core::cu

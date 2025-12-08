@@ -1,38 +1,33 @@
+#pragma once
+
 #include <cuda.h>
 #include <cuda_fp4.h>
 #include <cuda_runtime.h>
 #include "mlx/backend/cuda/quantized/quantized_utils.cuh"
+#include "mlx/backend/cuda/vector_types.cuh"
 
 namespace mlx::core::cu {
 
-template <typename T>
-struct alignas(4 * sizeof(T)) Vector4 {
-  T x;
-  T y;
-  T z;
-  T w;
-};
-
-using bf16x4 = Vector4<__nv_bfloat16>;
-using fp16x4 = Vector4<__half>;
-using f32x4 = Vector4<float>;
+using bf16x4 = Vector4_t<__nv_bfloat16>;
+using fp16x4 = Vector4_t<__half>;
+using f32x4 = Vector4_t<float>;
 
 template <typename T>
 __device__ __forceinline__ uint16_t
-scale_cvt_Tx4_to_fp4x4_fallback(const Vector4<T> input, const float scale) {
+scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T> input, const float scale) {
   // Fallback implementation for architectures that do not support the
   // instruction and for cuda versions with no fp4 support (< 12.8) -> scalar
   // conversion __nvfp4e2m1
   uint16_t out_fp4x4 = 0;
-  Vector4<float> scaled;
+  Vector4_t<float> scaled;
   scaled.x = static_cast<float>(input.x) * scale;
   scaled.y = static_cast<float>(input.y) * scale;
   scaled.z = static_cast<float>(input.z) * scale;
   scaled.w = static_cast<float>(input.w) * scale;
-  uint8_t q0 = __nv_fp4_e2m1(scaled.x);
-  uint8_t q1 = __nv_fp4_e2m1(scaled.y);
-  uint8_t q2 = __nv_fp4_e2m1(scaled.z);
-  uint8_t q3 = __nv_fp4_e2m1(scaled.w);
+  uint8_t q0 = __nv_fp4_e2m1(scaled.x).__x;
+  uint8_t q1 = __nv_fp4_e2m1(scaled.y).__x;
+  uint8_t q2 = __nv_fp4_e2m1(scaled.z).__x;
+  uint8_t q3 = __nv_fp4_e2m1(scaled.w).__x;
   out_fp4x4 = (static_cast<uint16_t>(q3) << 12) |
       (static_cast<uint16_t>(q2) << 8) | (static_cast<uint16_t>(q1) << 4) |
       static_cast<uint16_t>(q0);
@@ -124,7 +119,7 @@ __device__ __forceinline__ uint16_t scale_cvt_bf16x4_to_fp4x4_rs(
   return out_fp4x4;
 }
 
-__device__ __forceinline__ uint16_t scale_cvt_32x4_to_fp4x4_rn(
+__device__ __forceinline__ uint16_t scale_cvt_fp32x4_to_fp4x4_rn(
     const float2 input_fp32x2_0,
     const float2 input_fp32x2_1,
     const float2 scale) {
@@ -160,7 +155,7 @@ __device__ __forceinline__ uint16_t scale_cvt_32x4_to_fp4x4_rn(
   return out_fp4x4;
 }
 
-__device__ __forceinline__ uint16_t scale_cvt_32x4_to_fp4x4_rs(
+__device__ __forceinline__ uint16_t scale_cvt_fp32x4_to_fp4x4_rs(
     const float2 input_fp32x2_0,
     const float2 input_fp32x2_1,
     const float2 scale,
@@ -196,7 +191,7 @@ __device__ __forceinline__ uint16_t scale_cvt_32x4_to_fp4x4_rs(
 }
 
 __device__ __forceinline__ uint16_t
-scale_cvt_fp16x4_to_fp4x4_rn(const uint64_t input_fp16x4, const float2 scale) {
+scale_cvt_fp16x4_to_fp4x4_rn(const fp16x4 input_fp16x4, const float2 scale) {
   uint16_t out_fp4x4 = 0;
   asm volatile(
       "{\n"
@@ -231,7 +226,7 @@ scale_cvt_fp16x4_to_fp4x4_rn(const uint64_t input_fp16x4, const float2 scale) {
       "mov.b16 %0, {q0, q1}; \n\t" // pack to output
       "}"
       : "=h"(out_fp4x4)
-      : "l"(input_fp16x4),
+      : "l"(reinterpret_cast<const uint64_t&>(input_fp16x4)),
         "l"(reinterpret_cast<const uint64_t&>(
             scale))); // here cast is needed becuase an asm operand must have
                       // scalar type
@@ -239,7 +234,7 @@ scale_cvt_fp16x4_to_fp4x4_rn(const uint64_t input_fp16x4, const float2 scale) {
 }
 
 __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4_rs(
-    const uint64_t input_fp16x4,
+    const fp16x4 input_fp16x4,
     const float2 scale,
     uint32_t rbits) {
   uint16_t out_fp4x4 = 0;
@@ -272,7 +267,7 @@ __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4_rs(
                                                                    // fp4x4
       "}"
       : "=h"(out_fp4x4)
-      : "l"(input_fp16x4),
+      : "l"(reinterpret_cast<const uint64_t&>(input_fp16x4)),
         "l"(reinterpret_cast<const uint64_t&>(scale)),
         "r"(rbits)); // here cast is needed becuase an asm operand must have
                      // scalar type
@@ -315,35 +310,35 @@ scale_cvt_f32x4_to_fp4x4(const f32x4 input, const float scale, uint32_t rbits) {
   float2 input_fp32x2_1 = make_float2(input.z, input.w);
 
   if constexpr (USE_SR) {
-    return scale_cvt_32x4_to_fp4x4_rs(
+    return scale_cvt_fp32x4_to_fp4x4_rs(
         input_fp32x2_0, input_fp32x2_1, scale_fp32x2, rbits);
   } else {
-    return scale_cvt_32x4_to_fp4x4_rn(
+    return scale_cvt_fp32x4_to_fp4x4_rn(
         input_fp32x2_0, input_fp32x2_1, scale_fp32x2);
   }
 }
 
 template <typename T, bool USE_SR>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4_fast(
-    const Vector4<T> input,
+    const Vector4_t<T> input,
     const float scale,
     uint32_t rbits) {
   if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-    return scale_cvt_bf16x4_to_fp4x4(input, scale, rbits);
+    return scale_cvt_bf16x4_to_fp4x4<USE_SR>(input, scale, rbits);
   } else if constexpr (std::is_same<T, __half>::value) {
-    return scale_cvt_fp16x4_to_fp4x4(input, scale, rbits);
+    return scale_cvt_fp16x4_to_fp4x4<USE_SR>(input, scale, rbits);
   } else {
-    return scale_cvt_f32x4_to_fp4x4(input, scale, rbits);
+    return scale_cvt_f32x4_to_fp4x4<USE_SR>(input, scale, rbits);
   }
 }
 #endif
 
 template <typename T, bool USE_SR>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4(
-    const Vector4<T> input,
+    const Vector4_t<T> input,
     const float scale,
     uint32_t rbits) {
-#ifdef CUDA_FP4_FP8_CVT_PTX_SUPPORT
+#if CUDA_FP4_FP8_CVT_PTX_SUPPORT
   return scale_cvt_Tx4_to_fp4x4_fast<T, USE_SR>(input, scale, rbits);
 #else
   static_assert(
