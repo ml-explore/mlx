@@ -80,7 +80,6 @@ CudaGraph::CudaGraph(cu::Device& device) {
 }
 
 void CudaGraph::end_capture(cudaStream_t stream) {
-  assert(handle_ == nullptr);
   CHECK_CUDA_ERROR(cudaStreamEndCapture(stream, &handle_));
 }
 
