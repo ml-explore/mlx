@@ -11,9 +11,9 @@ namespace mlx::core {
 // these cvt instructions are supported for FP4/FP8. If the macro is not set,
 // those headers fall back to emulation (manual double -> FP4/FP8 conversion).
 // Below, the same logic is copied with a different macro name for transparency.
-#if (                                                     \
-    (defined __CUDA_ARCH__) && (__CUDA_ARCH__ >= 1000) && \
-    (defined __CUDA_ARCH_FAMILY_SPECIFIC__))
+#if (                                                       \
+    ((CUDART_VERSION >= 12800)&&)(defined __CUDA_ARCH__) && \
+    (__CUDA_ARCH__ >= 1000) && (defined __CUDA_ARCH_FAMILY_SPECIFIC__))
 #if (                                           \
     ((__CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000) && \
      (__CUDA_ARCH_FAMILY_SPECIFIC__ < 1100)) || \
