@@ -287,8 +287,6 @@ __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4(
 template <bool USE_SR>
 __device__ __forceinline__ uint16_t
 scale_cvt_f32x4_to_fp4x4(const f32x4 input, const float scale, uint32_t rbits) {
-  // Stochastic rounding requires PTX support - compile-time error if not
-  // available
   float2 scale_fp32x2 = make_float2(scale, scale);
   float2 input_fp32x2_0 = make_float2(input.x, input.y);
   float2 input_fp32x2_1 = make_float2(input.z, input.w);

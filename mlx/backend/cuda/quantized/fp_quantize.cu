@@ -291,6 +291,8 @@ void fp_quantize(
   //
   //   This kernel is used for bigger size (). Each thread processes a
   //   group_size of elements.
+  // Note: stochastic rounding is not supported yet, USE_SR is set to false 
+  // and used only as a placeholder for future implementation.
   size_t size = w.size();
   if (size <= 1024 * 512) {
     fp_quantize_small(w, wq, scales, group_size, bits, enc, s);
