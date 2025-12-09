@@ -1,5 +1,6 @@
 # Copyright © 2025 Apple Inc.
 
+import argparse
 import ipaddress
 import json
 import sys
@@ -14,6 +15,14 @@ class Host:
     ssh_hostname: str
     ips: list[str]
     rdma: list[Optional[str]]
+
+
+class OptionalBoolAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string.startswith("--no-"):
+            setattr(namespace, self.dest, False)
+        else:
+            setattr(namespace, self.dest, True)
 
 
 def positive_number(x):
@@ -50,7 +59,7 @@ def parse_hostlist(parser, hostlist, repeats):
         except ValueError:
             ips = []
         for i in range(repeats):
-            hosts.append(Host(i, h, ips))
+            hosts.append(Host(i, h, ips, []))
     return hosts
 
 

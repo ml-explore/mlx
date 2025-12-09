@@ -45,11 +45,13 @@ class CommandProcess:
 
 
 class RemoteProcess(CommandProcess):
-    def __init__(self, rank, host, cwd, files, env, command):
+    def __init__(self, rank, host, python, cwd, files, env, command):
         is_local = host == "127.0.0.1"
         script = RemoteProcess.make_monitor_script(rank, cwd, files, env, command)
         script_b64 = base64.b64encode(script.encode()).decode()
-        cmd = f'{sys.executable} -c "import base64; exec(base64.b64decode(\\"{script_b64}\\"));"'
+        cmd = (
+            f'{python} -c "import base64; exec(base64.b64decode(\\"{script_b64}\\"));"'
+        )
         if not is_local:
             cmd = f"ssh {host} '{cmd}'"
 
@@ -309,7 +311,7 @@ def launch_ring(parser, hosts, args, command):
     _launch_with_io(
         RemoteProcess,
         [
-            ((rank, h.ssh_hostname, cwd, files, env, command), {})
+            ((rank, h.ssh_hostname, args.python, cwd, files, env, command), {})
             for rank, h in enumerate(hosts)
         ],
         args.verbose,
@@ -341,6 +343,7 @@ def launch_nccl(parser, hosts, args, command):
                 (
                     rank,
                     h.ssh_hostname,
+                    args.python,
                     cwd,
                     {},
                     env + [f"CUDA_VISIBLE_DEVICES={rank % args.repeat_hosts}"],
@@ -374,7 +377,7 @@ def launch_jaccl(parser, hosts, args, command):
     _launch_with_io(
         RemoteProcess,
         [
-            ((rank, h.ssh_hostname, cwd, files, env, command), {})
+            ((rank, h.ssh_hostname, args.python, cwd, files, env, command), {})
             for rank, h in enumerate(hosts)
         ],
         args.verbose,
@@ -503,11 +506,20 @@ def main():
         default=12345,
         help="The port to use for the NCCL communication (only for nccl backend)",
     )
+    parser.add_argument(
+        "--no-verify-script",
+        action="store_false",
+        dest="verify_script",
+        help="Do not verify that the script exists",
+    )
+    parser.add_argument(
+        "--python", default=sys.executable, help="Use this python on the remote hosts"
+    )
 
     args, rest = parser.parse_known_args()
 
     if args.print_python:
-        print(sys.executable)
+        print(args.python)
         return
 
     if len(rest) == 0:
@@ -523,10 +535,10 @@ def main():
 
     # Check if the script is a file and convert it to a full path
     if (script := Path(rest[0])).exists() and script.is_file():
-        rest[0:1] = [sys.executable, str(script.resolve())]
+        rest[0:1] = [args.python, str(script.resolve())]
     elif (command := shutil.which(rest[0])) is not None:
         rest[0] = command
-    else:
+    elif args.verify_script:
         raise ValueError(f"Invalid script or command {rest[0]}")
 
     # Launch
