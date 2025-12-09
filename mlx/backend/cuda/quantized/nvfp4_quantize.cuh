@@ -14,9 +14,8 @@ using f32x4 = Vector4_t<float>;
 template <typename T>
 __device__ __forceinline__ uint16_t
 scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T> input, const float scale) {
-  // Fallback implementation for architectures that do not support the
-  // instruction and for cuda versions with no fp4 support (< 12.8) -> scalar
-  // conversion __nvfp4e2m1
+  // Fallback implementation for architectures that do not support cvt
+  // instructions or for cuda versions with no fp4 support (< 12.8) -> scalar
   uint16_t out_fp4x4 = 0;
   fp32x4 scaled;
   scaled.x = static_cast<float>(input.x) * scale;
@@ -188,20 +187,19 @@ scale_cvt_fp16x4_to_fp4x4_rn(const fp16x4 input_fp16x4, const float2 scale) {
   uint16_t out_fp4x4 = 0;
   asm volatile(
       "{\n"
-      ".reg.b16 x0_fp16; \n\t" // first fp16
-      ".reg.b16 x1_fp16; \n\t" // second fp16
-      ".reg.b16 x2_fp16; \n\t" // third fp16
-      ".reg.b16 x3_fp16; \n\t" // fourth fp16
-      ".reg.b32 x0; \n\t" // scaled first
-      ".reg.b32 x1; \n\t" // scaled second
-      ".reg.b32 x2; \n\t" // scaled third
-      ".reg.b32 x3; \n\t" // scaled fourth
+      ".reg.b16 x0_fp16; \n\t" 
+      ".reg.b16 x1_fp16; \n\t" 
+      ".reg.b16 x2_fp16; \n\t" 
+      ".reg.b16 x3_fp16; \n\t" 
+      ".reg.b32 x0; \n\t" 
+      ".reg.b32 x1; \n\t" 
+      ".reg.b32 x2; \n\t" 
+      ".reg.b32 x3; \n\t" 
       ".reg.b64 x01; \n\t"
-      ".reg.b64 x23; \n\t" // to do vector mul
-      ".reg.b8 q0; \n\t" // output byte fp4x2 (first pair)
-      ".reg.b8 q1; \n\t" // output byte fp4x2 (second pair)
-      "mov.b64 {x0_fp16, x1_fp16, x2_fp16, x3_fp16} , %1; \n\t" // unpack fp16
-                                                                // 2x
+      ".reg.b64 x23; \n\t" 
+      ".reg.b8 q0; \n\t" 
+      ".reg.b8 q1; \n\t" 
+      "mov.b64 {x0_fp16, x1_fp16, x2_fp16, x3_fp16} , %1; \n\t"
       "cvt.f32.f16 x0, x0_fp16; \n\t"
       "cvt.f32.f16 x1, x1_fp16; \n\t"
       "cvt.f32.f16 x2, x2_fp16; \n\t"

@@ -147,6 +147,8 @@ void fp_quantize(
     int bits,
     cu::CommandEncoder& enc,
     const Stream& s) {
+  // USE_SR is set to false always for now
+  // used here for future support of stochastic rounding
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
