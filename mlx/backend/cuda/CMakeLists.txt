@@ -29,6 +29,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/grouped_gemm_unaligned.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
@@ -226,3 +227,14 @@ target_link_libraries(mlx PRIVATE cudnn_frontend)
 # Link with the actual cuDNN libraries.
 include(${cudnn_frontend_SOURCE_DIR}/cmake/cuDNN.cmake)
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
+
+# Use header-only CUTLASS.
+FetchContent_Declare(
+  cutlass
+  GIT_REPOSITORY https://github.com/NVIDIA/cutlass.git
+  GIT_TAG v4.3.2
+  GIT_SHALLOW TRUE
+  SOURCE_SUBDIR include EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(cutlass)
+target_include_directories(
+  mlx PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)

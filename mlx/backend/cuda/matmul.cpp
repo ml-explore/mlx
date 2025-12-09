@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
+#include "mlx/backend/cuda/gemms/grouped_gemm.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
@@ -26,6 +27,38 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
     array arr_copy = contiguous_copy_gpu(arr, s);
     enc.add_temporary(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
+  }
+}
+
+std::tuple<bool, int64_t, array>
+ensure_batch_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
+  if (x.flags().row_contiguous) {
+    return std::make_tuple(false, x.strides(-2), x);
+  }
+
+  bool rc = true;
+  for (int i = 0; i < x.ndim() - 3; i++) {
+    rc &= (x.strides(i + 1) * x.shape(i)) == x.strides(i);
+  }
+  if (rc) {
+    return check_transpose(encoder, s, x);
+  }
+
+  array x_copy = contiguous_copy_gpu(x, s);
+  encoder.add_temporary(x_copy);
+  return std::make_tuple(false, x_copy.strides(-2), x_copy);
+}
+
+array ensure_row_contiguous(
+    const array& x,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    encoder.add_temporary(x_copy);
+    return x_copy;
+  } else {
+    return x;
   }
 }
 
@@ -101,6 +134,40 @@ void gemm_and_bias(
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
+}
+
+void gather_mm_rhs(
+    const array& a_,
+    const array& b_,
+    const array& indices_,
+    array& out,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  if (a_.size() / a_.shape(-2) / a_.shape(-1) != indices_.size()) {
+    throw std::runtime_error("[gather_mm] Broadcasting lhs is not supported.");
+  }
+
+  int group_count = b_.size() / b_.shape(-1) / b_.shape(-2);
+  if (group_count > 1024) {
+    throw std::runtime_error(
+        "[gather_mm] Group count can not be larger than 1024.");
+  }
+
+  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_, encoder, s);
+  auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_, encoder, s);
+  auto indices = ensure_row_contiguous(indices_, encoder, s);
+
+  cutlass_grouped_gemm_unaligned(
+      a_transposed,
+      lda,
+      b_transposed,
+      ldb,
+      group_count,
+      a,
+      b,
+      indices,
+      out,
+      encoder);
 }
 
 } // namespace
@@ -252,6 +319,42 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       c_batch_strides,
       alpha_,
       beta_);
+}
+
+void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GatherMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 4);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  // Return 0s if either input is empty.
+  if (a.size() == 0 || b.size() == 0) {
+    array zero(0, a.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  // Extract shapes from inputs.
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  // We are walking a in order and b is also in order so we can batch up the
+  // matmuls and reuse reading a and b.
+  if (M == 1 && right_sorted_ == true) {
+    gather_mm_rhs(a, b, rhs_indices, out, encoder, s);
+    return;
+  }
+
+  throw std::runtime_error("NYI");
 }
 
 } // namespace mlx::core
