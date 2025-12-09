@@ -3,7 +3,6 @@
 #include <cuda.h>
 #include <cuda_fp4.h>
 #include <cuda_runtime.h>
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/backend/cuda/vector_types.cuh"
 
 namespace mlx::core::cu {
@@ -34,7 +33,8 @@ scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T> input, const float scale) {
   return out_fp4x4;
 }
 
-#ifdef CUDA_FP4_FP8_CVT_PTX_SUPPORT
+// #if CUDART_VERSION >= 12800 && __CUDA_ARCH__ >= 1000 &&
+// __CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000
 
 __device__ __forceinline__ uint16_t
 scale_cvt_bf16x4_to_fp4x4_rn(const bf16x4 input_bf16x4, const float2 scale) {
@@ -64,9 +64,9 @@ scale_cvt_bf16x4_to_fp4x4_rn(const bf16x4 input_bf16x4, const float2 scale) {
       "mul.f32x2 x23, x23, %2; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rn.satfinite.e2m1x2.f32 q0, x0, x1; \n\t" // convert to fp4x2 first
+      "cvt.rn.satfinite.e2m1x2.f32 q0, x1, x0; \n\t" // convert to fp4x2 first
                                                      // pair
-      "cvt.rn.satfinite.e2m1x2.f32 q1, x2, x3; \n\t" // convert to fp4x2 second
+      "cvt.rn.satfinite.e2m1x2.f32 q1, x3, x2; \n\t" // convert to fp4x2 second
                                                      // pair
       "mov.b16 %0, {q0, q1}; \n\t" // pack to output
       "}"
@@ -108,7 +108,7 @@ __device__ __forceinline__ uint16_t scale_cvt_bf16x4_to_fp4x4_rs(
       "mul.f32x2 x23, x23, %2; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rs.satfinite.e2m1x4.f32 q0, {x0, x1, x2, x3}, %3; \n\t" // convert to
+      "cvt.rs.satfinite.e2m1x4.f32 q0, {x3, x2, x1, x0}, %3; \n\t" // convert to
                                                                    // fp4x4
       "}"
       : "=h"(out_fp4x4)
@@ -140,8 +140,8 @@ __device__ __forceinline__ uint16_t scale_cvt_fp32x4_to_fp4x4_rn(
       "mul.f32x2 x23, x23, %5; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rn.satfinite.e2m1x2.f32 q0, x0, x1; \n\t" // convert to fp4x2
-      "cvt.rn.satfinite.e2m1x2.f32 q1, x2, x3; \n\t" // convert to fp4x2
+      "cvt.rn.satfinite.e2m1x2.f32 q0, x1, x0; \n\t" // convert to fp4x2
+      "cvt.rn.satfinite.e2m1x2.f32 q1, x3, x2; \n\t" // convert to fp4x2
       "mov.b16 %0, {q0, q1}; \n\t" // pack to output
       "}"
       : "=h"(out_fp4x4)
@@ -176,7 +176,7 @@ __device__ __forceinline__ uint16_t scale_cvt_fp32x4_to_fp4x4_rs(
       "mul.f32x2 x23, x23, %5; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rs.satfinite.e2m1x4.f32 q0, {x0, x1, x2, x3}, %6; \n\t" // convert to
+      "cvt.rs.satfinite.e2m1x4.f32 q0, {x3, x2, x1, x0}, %6; \n\t" // convert to
                                                                    // fp4x4
       "}"
       : "=h"(out_fp4x4)
@@ -209,19 +209,19 @@ scale_cvt_fp16x4_to_fp4x4_rn(const fp16x4 input_fp16x4, const float2 scale) {
       ".reg.b8 q1; \n\t" // output byte fp4x2 (second pair)
       "mov.b64 {x0_fp16, x1_fp16, x2_fp16, x3_fp16} , %1; \n\t" // unpack fp16
                                                                 // 2x
-      "cvt.f32.fp16 x0, x0_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x1, x1_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x2, x2_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x3, x3_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x0, x0_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x1, x1_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x2, x2_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x3, x3_fp16; \n\t" // convert to f32
       "mov.b64 x01, {x0, x1}; \n\t" // move to 64 bit reg to do vector mul
       "mul.f32x2 x01, x01, %2; \n\t" // scale multiplication
       "mov.b64 x23, {x2, x3}; \n\t" // move to 64 bit reg to do vector mul
       "mul.f32x2 x23, x23, %2; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rn.satfinite.e2m1x2.f32 q0, x0, x1; \n\t" // convert to fp4x2 first
+      "cvt.rn.satfinite.e2m1x2.f32 q0, x1, x0; \n\t" // convert to fp4x2 first
                                                      // pair
-      "cvt.rn.satfinite.e2m1x2.f32 q1, x2, x3; \n\t" // convert to fp4x2 second
+      "cvt.rn.satfinite.e2m1x2.f32 q1, x3, x2; \n\t" // convert to fp4x2 second
                                                      // pair
       "mov.b16 %0, {q0, q1}; \n\t" // pack to output
       "}"
@@ -253,17 +253,17 @@ __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4_rs(
       ".reg.b16 q0; \n\t" // output byte fp4x4
       "mov.b64 {x0_fp16, x1_fp16, x2_fp16, x3_fp16} , %1; \n\t" // unpack fp16
                                                                 // 2x
-      "cvt.f32.fp16 x0, x0_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x1, x1_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x2, x2_fp16; \n\t" // convert to f32
-      "cvt.f32.fp16 x3, x3_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x0, x0_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x1, x1_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x2, x2_fp16; \n\t" // convert to f32
+      "cvt.f32.f16 x3, x3_fp16; \n\t" // convert to f32
       "mov.b64 x01, {x0, x1}; \n\t" // move to 64 bit reg to do vector mul
       "mul.f32x2 x01, x01, %2; \n\t" // scale multiplication
       "mov.b64 x23, {x2, x3}; \n\t" // move to 64 bit reg to do vector mul
       "mul.f32x2 x23, x23, %2; \n\t" // scale multiplication
       "mov.b64 {x0, x1}, x01; \n\t" // unpack back to 2 f32
       "mov.b64 {x2, x3}, x23; \n\t" // unpack back to 2 f32
-      "cvt.rs.satfinite.e2m1x4.f32 q0, {x0, x1, x2, x3}, %3; \n\t" // convert to
+      "cvt.rs.satfinite.e2m1x4.f32 q0, {x3, x2, x1, x0}, %3; \n\t" // convert to
                                                                    // fp4x4
       "}"
       : "=h"(out_fp4x4)
@@ -331,20 +331,23 @@ __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4_fast(
     return scale_cvt_f32x4_to_fp4x4<USE_SR>(input, scale, rbits);
   }
 }
-#endif
+// #endif // CUDART_VERSION >= 12800 && __CUDA_ARCH__ >= 1000 &&
+// __CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000
 
 template <typename T, bool USE_SR>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4(
     const Vector4_t<T> input,
     const float scale,
     uint32_t rbits) {
-#if CUDA_FP4_FP8_CVT_PTX_SUPPORT
+  // #if CUDART_VERSION >= 12800 && __CUDA_ARCH__ >= 1000 &&
+  // __CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000
   return scale_cvt_Tx4_to_fp4x4_fast<T, USE_SR>(input, scale, rbits);
-#else
-  static_assert(
-      !USE_SR,
-      "Stochastic rounding (USE_SR=true) requires CUDA_FP4_FP8_CVT_PTX_SUPPORT");
-  return scale_cvt_Tx4_to_fp4x4_fallback(input, scale);
-#endif
+  // #else
+  //   static_assert(
+  //       !USE_SR,
+  //       "Stochastic rounding (USE_SR=true) requires
+  //       CUDA_FP4_FP8_CVT_PTX_SUPPORT");
+  //   return scale_cvt_Tx4_to_fp4x4_fallback(input, scale);
+  // #endif
 }
 } // namespace mlx::core::cu
