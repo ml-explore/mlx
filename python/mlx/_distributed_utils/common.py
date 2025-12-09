@@ -35,6 +35,7 @@ def positive_number(x):
 def log(verbose, *args, **kwargs):
     if not verbose:
         return
+    kwargs["file"] = sys.stderr
     print("\033[32m[INFO]", *args, "\033[0m", **kwargs)
 
 
