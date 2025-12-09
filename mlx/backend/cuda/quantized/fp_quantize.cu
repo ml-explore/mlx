@@ -40,8 +40,9 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   auto idx_in_block = cg::this_thread_block().thread_index();
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
-  size_t thread_idx = block_idx.x * block_size.x + idx_in_block.x;
+  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
   size_t base_idx = thread_idx * group_size;
 
   if (base_idx >= size) {
