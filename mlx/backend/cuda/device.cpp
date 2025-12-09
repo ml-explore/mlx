@@ -338,28 +338,40 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
     }
     cudaGraphNodeType type;
     CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
-    if (type == cudaGraphNodeTypeGraph) {
-      // Try to be updatable for a structure like graph -> graph -> kernel
-      cudaGraph_t child;
-      CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
-      auto [subkey, sub_is_updatable] = subgraph_to_key(child);
-      is_updatable &= sub_is_updatable;
-      key += subkey;
-    } else if (type == cudaGraphNodeTypeMemset) {
-      key += "M";
-    } else if (type != cudaGraphNodeTypeKernel) {
-      is_updatable = false;
-    } else {
-      cudaLaunchAttributeValue cluster_dim;
-      CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
-          node, cudaLaunchAttributeClusterDimension, &cluster_dim));
-      // Only allow dim.x to be greater than 1
-      if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
-        is_updatable = false;
-      } else {
-        key += "K";
-        key += std::to_string(cluster_dim.clusterDim.x);
+    switch (type) {
+      case cudaGraphNodeTypeGraph: {
+        // Try to be updatable for a structure like graph -> graph -> kernel
+        cudaGraph_t child;
+        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
+        is_updatable &= sub_is_updatable;
+        key += subkey;
+        break;
       }
+      case cudaGraphNodeTypeMemset:
+        key += "M";
+        break;
+      case cudaGraphNodeTypeKernel: {
+        cudaLaunchAttributeValue cluster_dim;
+        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+        // Only allow dim.x to be greater than 1
+        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+          is_updatable = false;
+        } else {
+          key += "K";
+          key += std::to_string(cluster_dim.clusterDim.x);
+        }
+        break;
+      }
+      case cudaGraphNodeTypeWaitEvent:
+        key += "W";
+        break;
+      case cudaGraphNodeTypeEventRecord:
+        key += "R";
+        break;
+      default:
+        is_updatable = false;
     }
   }
   key += ")";
