@@ -16,26 +16,23 @@ inline constexpr __device__ short get_bytes_per_pack() {
 }
 
 template <typename T>
-__device__ __forceinline__ void abs_max_x2(T& dst, const T& p1, const T& p2) {
-  uint32_t a = *reinterpret_cast<const uint32_t*>(&p1);
-  uint32_t b = *reinterpret_cast<const uint32_t*>(&p2);
-  uint32_t d;
-
+__device__ __forceinline__ void abs_max_x2(T& out, const T& x1, const T& x2) {
   if constexpr (std::is_same<T, __nv_bfloat162>::value) {
     asm volatile("max.xorsign.abs.bf16x2 %0, %1, %2;\n"
-                 : "=r"(d)
-                 : "r"(a), "r"(b));
+                 : "=r"(reinterpret_cast<uint32_t&>(out))
+                 : "r"(reinterpret_cast<const uint32_t&>(x1)),
+                   "r"(reinterpret_cast<const uint32_t&>(x2)));
   } else if constexpr (std::is_same<T, __half2>::value) {
     asm volatile("max.xorsign.abs.f16x2 %0, %1, %2;\n"
-                 : "=r"(d)
-                 : "r"(a), "r"(b));
+                 : "=r"(reinterpret_cast<uint32_t&>(out))
+                 : "r"(reinterpret_cast<const uint32_t&>(x1)),
+                   "r"(reinterpret_cast<const uint32_t&>(x2)));
   } else if constexpr (std::is_same<T, float2>::value) {
-    float2 a = p1;
-    float2 b = p2;
-    dst.x = fmaxf(fabsf(a.x), fabsf(b.x));
-    dst.y = fmaxf(fabsf(a.y), fabsf(b.y));
+    float2 a = x1;
+    float2 b = x2;
+    out.x = fmaxf(fabsf(a.x), fabsf(b.x));
+    out.y = fmaxf(fabsf(a.y), fabsf(b.y));
   }
-  *reinterpret_cast<uint32_t*>(&dst) = d;
 }
 
 } // namespace cu

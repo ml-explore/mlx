@@ -7,9 +7,6 @@
 
 namespace mlx::core::cu {
 
-// Maps scalar types to their corresponding CUDA vector types
-// float -> float2, double -> double2, __half -> __half2, __nv_bfloat16 ->
-// __nv_bfloat162
 template <typename T>
 struct Vector2;
 
@@ -43,4 +40,9 @@ struct Vector4 {
 
 template <typename T>
 using Vector4_t = Vector4<T>;
+
+using bf16x4 = Vector4_t<__nv_bfloat16>;
+using fp16x4 = Vector4_t<__half>;
+using fp32x4 = Vector4_t<float>;
+
 } // namespace mlx::core::cu

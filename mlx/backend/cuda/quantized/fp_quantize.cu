@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
 #include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.cuh"
@@ -33,10 +34,12 @@ template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
 __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
-
+  uint32_t rbits = 0; // reserved bits for future use
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
+  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
+  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
   size_t thread_idx = block_idx.x * block_size.x + idx_in_block.x;
   size_t base_idx = thread_idx * group_size;
@@ -71,23 +74,24 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   scales[thread_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;
   AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
-  size_t output_offset = thread_idx * (group_size / 2);
+
 #pragma unroll
   for (int i = 0; i < group_size / 4; i++) {
     Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
     if constexpr (bits == 8) {
-      // uint32_t quantized_val = mx::cu::scale_cvt_Tx4_to_fp8x4<T,
-      // USE_SR>(w_Tx4, scale, 0); quantized[i*4] =
-      // *reinterpret_cast<uint8_t*>(&quantized_val);
-      // TODO
+      uint32_t quantized_val =
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      quantized[i * 4] = quantized_val & 0xFF;
+      quantized[i * 4 + 1] = (quantized_val >> 8) & 0xFF;
+      quantized[i * 4 + 2] = (quantized_val >> 16) & 0xFF;
+      quantized[i * 4 + 3] = (quantized_val >> 24) & 0xFF;
     } else {
       uint16_t quantized_val =
-          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, 0);
-      quantized[i * 2] = quantized_val & 0xFF; // lower byte
-      quantized[i * 2 + 1] = (quantized_val >> 8) & 0xFF; // upper byte
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      quantized[i * 2] = quantized_val & 0xFF;
+      quantized[i * 2 + 1] = (quantized_val >> 8) & 0xFF;
     }
   }
-
   store_vector<group_size / elem_per_byte>(out, thread_idx, quantized);
 }
 
