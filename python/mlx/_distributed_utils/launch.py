@@ -57,6 +57,7 @@ class RemoteProcess(CommandProcess):
         self._process = Popen(
             cmd,
             shell=True,
+            executable="/bin/bash",
             stdin=PIPE,
             stdout=PIPE,
             stderr=PIPE,
@@ -91,7 +92,14 @@ class RemoteProcess(CommandProcess):
         cmd = RemoteProcess.make_kill_script(self._pidfile)
         if not self._is_local:
             cmd = f"ssh {self._host} {shlex.quote(cmd)}"
-        c = run(cmd, check=True, shell=True, capture_output=True, text=True)
+        c = run(
+            cmd,
+            check=True,
+            shell=True,
+            executable="/bin/bash",
+            capture_output=True,
+            text=True,
+        )
 
         self._killed = c.stdout.strip() == "1"
 
