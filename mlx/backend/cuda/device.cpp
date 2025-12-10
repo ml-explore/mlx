@@ -336,24 +336,24 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
     if (!is_updatable) {
       break;
     }
-    cudaGraphNodeType type;
-    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
-    switch (type) {
-      case cudaGraphNodeTypeGraph: {
-        // Try to be updatable for a structure like graph -> graph -> kernel
+//    cudaGraphNodeType type;
+//    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
+//    switch (type) {
+//      case cudaGraphNodeTypeGraph: {
+//        // Try to be updatable for a structure like graph -> graph -> kernel
 //        cudaGraph_t child;
 //        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
 //        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
 //        is_updatable &= sub_is_updatable;
 //        key += subkey;
 //        break;
-          key += "()";
-          break;
-      }
-      case cudaGraphNodeTypeMemset:
-        key += "M";
-        break;
-      case cudaGraphNodeTypeKernel: {
+//          key += "()";
+//          break;
+//      }
+//      case cudaGraphNodeTypeMemset:
+//        key += "M";
+//        break;
+//      case cudaGraphNodeTypeKernel: {
 //        cudaLaunchAttributeValue cluster_dim;
 //        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
 //            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
@@ -364,18 +364,18 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
 //          key += "K";
 //          key += std::to_string(cluster_dim.clusterDim.x);
 //        }
-        key += "K";
-        break;
-      }
-      case cudaGraphNodeTypeWaitEvent:
-        key += "W";
-        break;
-      case cudaGraphNodeTypeEventRecord:
-        key += "R";
-        break;
-      default:
-        is_updatable = false;
-    }
+//        key += "K";
+//        break;
+//      }
+//      case cudaGraphNodeTypeWaitEvent:
+//        key += "W";
+//        break;
+//      case cudaGraphNodeTypeEventRecord:
+//        key += "R";
+//        break;
+//      default:
+//        is_updatable = false;
+//    }
   }
   key += ")";
   return {key, is_updatable};
