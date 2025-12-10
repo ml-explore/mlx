@@ -341,12 +341,14 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
     switch (type) {
       case cudaGraphNodeTypeGraph: {
         // Try to be updatable for a structure like graph -> graph -> kernel
-        cudaGraph_t child;
-        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
-        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
-        is_updatable &= sub_is_updatable;
-        key += subkey;
-        break;
+//        cudaGraph_t child;
+//        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+//        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
+//        is_updatable &= sub_is_updatable;
+//        key += subkey;
+//        break;
+          key += "()";
+          break;
       }
       case cudaGraphNodeTypeMemset:
         key += "M";
