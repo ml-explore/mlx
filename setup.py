@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
     extras = {
         "dev": [
-            "nanobind==2.4.0",
+            "nanobind==2.10.2",
             "numpy",
             "pre-commit",
             "setuptools>=80",
