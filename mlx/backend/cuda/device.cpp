@@ -352,16 +352,17 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
         key += "M";
         break;
       case cudaGraphNodeTypeKernel: {
-        cudaLaunchAttributeValue cluster_dim;
-        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
-            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
-        // Only allow dim.x to be greater than 1
-        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
-          is_updatable = false;
-        } else {
-          key += "K";
-          key += std::to_string(cluster_dim.clusterDim.x);
-        }
+//        cudaLaunchAttributeValue cluster_dim;
+//        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+//            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+//        // Only allow dim.x to be greater than 1
+//        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+//          is_updatable = false;
+//        } else {
+//          key += "K";
+//          key += std::to_string(cluster_dim.clusterDim.x);
+//        }
+        key += "K";
         break;
       }
       case cudaGraphNodeTypeWaitEvent:
@@ -391,7 +392,7 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   auto [sub_graph_key, is_updatable] = subgraph_to_key(child);
   is_graph_updatable_ &= is_updatable;
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
-  insert_graph_dependencies(GraphNode{node, sub_graph_key});
+  insert_graph_dependencies(GraphNode{node, "G"});
 }
 
 bool CommandEncoder::needs_commit() {
