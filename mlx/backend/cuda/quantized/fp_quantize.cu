@@ -279,20 +279,21 @@ void fp_quantize(
     int bits,
     cu::CommandEncoder& enc,
     const Stream& s) {
-  // Current quantiation options
+  // Current quantization options:
   //
   // - fp_quantize_small
   //
-  //   This kernel is used for small arrays, when the total number of elements
-  //   is less than or equal to 1024 * 512 (imperically chosen).
-  //    Each thread processes one element.
+  //   Used for small arrays, when the total number of elements is
+  //   less than or equal to 1024 * 512 (empirically chosen).
+  //   Each thread processes a single element.
   //
   // - fp_quantize_vectorized
   //
-  //   This kernel is used for bigger size (). Each thread processes a
-  //   group_size of elements.
-  // Note: stochastic rounding is not supported yet, USE_SR is set to false 
-  // and used only as a placeholder for future implementation.
+  //   Used for larger arrays. Each thread processes group_size elements.
+  //
+  // Note: stochastic rounding is not supported yet. The USE_SR template
+  //       parameter is always instantiated as false and currently serves
+  //       only as a placeholder for a future implementation.
   size_t size = w.size();
   if (size <= 1024 * 512) {
     fp_quantize_small(w, wq, scales, group_size, bits, enc, s);
