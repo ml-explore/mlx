@@ -780,9 +780,21 @@ class TestAutograd(mlx_tests.MLXTestCase):
             return arrs[0]
 
         arrs = [mx.array(1.0)]
-        init_id = id(arrs[0])
+        arr = arrs[0]
         mx.grad(fun)(arrs)
-        self.assertEqual(init_id, id(arrs[0]))
+        self.assertEqual(id(arr), id(arrs[0]))
+
+        def fun(arrs):
+            arrs[1] = sum(arrs)
+            return arrs[1]
+
+        arrs = [mx.array(1.0), mx.array(1.0), mx.array(1.0)]
+        a_0, a_1, a_2 = arrs
+
+        mx.grad(fun)(arrs)
+        self.assertEqual(id(a_0), id(arrs[0]))
+        self.assertNotEqual(id(a_1), id(arrs[1]))
+        self.assertEqual(id(a_2), id(arrs[2]))
 
     def test_grad_with_inplace_update(self):
         def loss_fn(model):
