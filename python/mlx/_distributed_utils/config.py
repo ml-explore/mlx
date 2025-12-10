@@ -106,6 +106,8 @@ class IPConfigurator:
             for src_port, p in enumerate(h.ports):
                 if not p.connected_to:
                     continue
+                if p.connected_to not in uuid_reverse_index:
+                    continue
                 if (src_node, src_port) in assigned:
                     continue
 
@@ -241,7 +243,7 @@ def make_connectivity_matrix(tb_hosts, uuid_reverse_index):
     for i, h in enumerate(tb_hosts):
         c = [0] * len(tb_hosts)
         for p in h.ports:
-            if p.connected_to is not None:
+            if p.connected_to in uuid_reverse_index:
                 j, _ = uuid_reverse_index[p.connected_to]
                 c[j] += 1
         connectivity.append(c)
