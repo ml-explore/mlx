@@ -16,8 +16,7 @@ struct type_caster<mlx::core::SmallVector<Type, Size, Alloc>> {
 
   NB_TYPE_CASTER(
       List,
-      const_name(NB_TYPING_TUPLE "[") + make_caster<Type>::Name +
-          const_name(", ...]"))
+      const_name("tuple[") + make_caster<Type>::Name + const_name(", ...]"))
 
   bool from_python(handle src, uint8_t flags, cleanup_list* cleanup) noexcept {
     size_t size;
