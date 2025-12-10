@@ -130,7 +130,7 @@ void compiled_allocate_outputs(
       // - Donatable
       // - Not a constant
       if (in.itemsize() == outputs[o].itemsize() && !is_scalar(in) &&
-          in.is_donatable() && is_constant(i)) {
+          in.is_donatable() && !is_constant(i)) {
         outputs[o++].copy_shared_buffer(in);
       }
       // Get representative input flags to properly set non-donated outputs
@@ -158,7 +158,7 @@ void compiled_allocate_outputs(
       // - Not a constant
       if (in.flags().row_contiguous && in.size() == outputs[o].size() &&
           in.itemsize() == outputs[o].itemsize() && in.is_donatable() &&
-          is_constant(i)) {
+          !is_constant(i)) {
         outputs[o].copy_shared_buffer(
             in, outputs[o].strides(), in.flags(), in.data_size());
         o++;
