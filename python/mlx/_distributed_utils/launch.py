@@ -49,7 +49,7 @@ class RemoteProcess(CommandProcess):
         is_local = host == "127.0.0.1"
         cmd = RemoteProcess.make_launch_script(rank, cwd, files, env, command)
         if not is_local:
-            cmd = f"ssh {host} {shlex.quote(cmd)}"
+            cmd = f"ssh -tt -o LogLevel=QUIET {host} {shlex.quote(cmd)}"
 
         self._host = host
         self._pidfile = None
@@ -110,7 +110,7 @@ class RemoteProcess(CommandProcess):
         # Write the PID to a file so we can kill the process if needed
         script += "pidfile=$(mktemp); "
         script += "echo $$ > $pidfile; "
-        script += "echo $pidfile; "
+        script += 'printf "%s\\n" $pidfile; '
 
         # Change the working directory if one was requested. Otherwise attempt to
         # change to the current one but don't fail if it wasn't possible.
