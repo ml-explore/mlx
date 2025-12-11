@@ -33,7 +33,7 @@ scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T> input, const float scale) {
 }
 
 #if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
-    (__CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000)
+    defined(__CUDA_ARCH_SPECIFIC__)
 
 __device__ __forceinline__ uint16_t
 scale_cvt_bf16x4_to_fp4x4_rn(const bf16x4 input_bf16x4, const float2 scale) {

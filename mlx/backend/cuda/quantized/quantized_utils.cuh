@@ -17,16 +17,12 @@ inline constexpr __device__ short get_bytes_per_pack() {
 
 template <typename T>
 __device__ __forceinline__ void abs_max_x2(T& out, const T& x1, const T& x2) {
-  if constexpr (std::is_same<T, __nv_bfloat162>::value) {
-    asm volatile("max.xorsign.abs.bf16x2 %0, %1, %2;\n"
-                 : "=r"(reinterpret_cast<uint32_t&>(out))
-                 : "r"(reinterpret_cast<const uint32_t&>(x1)),
-                   "r"(reinterpret_cast<const uint32_t&>(x2)));
-  } else if constexpr (std::is_same<T, __half2>::value) {
-    asm volatile("max.xorsign.abs.f16x2 %0, %1, %2;\n"
-                 : "=r"(reinterpret_cast<uint32_t&>(out))
-                 : "r"(reinterpret_cast<const uint32_t&>(x1)),
-                   "r"(reinterpret_cast<const uint32_t&>(x2)));
+  if constexpr (
+      (std::is_same<T, __nv_bfloat162>::value) ||
+      (std::is_same<T, __half2>::value)) {
+    T a = x1;
+    T b = x2;
+    out = __hmax2(__habs2(a), __habs2(b));
   } else if constexpr (std::is_same<T, float2>::value) {
     float2 a = x1;
     float2 b = x2;

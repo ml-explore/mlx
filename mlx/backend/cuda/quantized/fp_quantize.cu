@@ -18,17 +18,6 @@ namespace mlx::core {
 namespace cu {
 
 template <int bits>
-struct Quantize {
-  __device__ uint8_t operator()(float x) {
-    if constexpr (bits == 8) {
-      return __nv_fp8_e4m3(x).__x;
-    } else {
-      return __nv_fp4_e2m1(x).__x;
-    }
-  }
-};
-
-template <int bits>
 struct Dequantize {
   __device__ float operator()(uint8_t x) {
     if constexpr (bits == 8) {
@@ -41,53 +30,8 @@ struct Dequantize {
 
 namespace cg = cooperative_groups;
 
-template <typename T, int group_size, int bits, bool use_mx_scale>
-__global__ void
-fp_quantize_small(const T* w, uint8_t* out, uint8_t* scales, size_t size) {
-  auto block_size = cg::this_thread_block().dim_threads();
-  auto block_idx = cg::this_thread_block().group_index();
-  auto idx_in_block = cg::this_thread_block().thread_index();
-
-  size_t index = block_idx.x * block_size.x + idx_in_block.x;
-
-  if (index >= size) {
-    return;
-  }
-
-  float w_thread = w[index];
-
-  cg::greater<float> max_op;
-  auto warp = cg::tiled_partition<group_size>(cg::this_thread_block());
-
-  float scale = cg::reduce(warp, abs(w_thread), max_op);
-  scale /= bits == 4 ? 6.0f : 448.0f;
-  // Convert to mx scale or nv scale
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
-  auto s = ScaleType(scale);
-  uint8_t q_scale = s.__x;
-  scale = float(s);
-
-  // Write out the scales
-  size_t gindex = index / group_size;
-  if (index % group_size == 0) {
-    scales[gindex] = q_scale;
-  }
-
-  uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
-  if (bits == 4) {
-    uint8_t sval = warp.shfl_down(output, 1);
-    output |= sval << bits;
-  }
-  constexpr int pack_factor = bits == 8 ? 1 : 2;
-  if (index % pack_factor == 0) {
-    out[index / pack_factor] = output;
-  }
-}
-
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void
-fp_quantize_vectorized(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+__global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -191,7 +135,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
 
 } // namespace cu
 
-void fp_quantize_vectorized(
+void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
@@ -202,14 +146,14 @@ void fp_quantize_vectorized(
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize_vectorized", [&](auto type_tag) {
+  dispatch_float_types(w.dtype(), "fp_quantize", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize_vectorized<T, 32, 4, true, false>;
+      auto kernel = cu::fp_quantize<T, 32, 4, true, false>;
       if (bits == 8) {
-        kernel = cu::fp_quantize_vectorized<T, 32, 8, true, false>;
+        kernel = cu::fp_quantize<T, 32, 8, true, false>;
       } else if (group_size == 16) {
-        kernel = cu::fp_quantize_vectorized<T, 16, 4, false, false>;
+        kernel = cu::fp_quantize<T, 16, 4, false, false>;
       }
       bool large = w.size() > UINT_MAX;
       auto [num_blocks, block_dims] =
@@ -229,77 +173,6 @@ void fp_quantize_vectorized(
           "[Quantize::eval_gpu] Can not quantize input with type float64.");
     }
   });
-}
-
-void fp_quantize_small(
-    const array& w,
-    array& wq,
-    array& scales,
-    int group_size,
-    int bits,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  enc.set_input_array(w);
-  enc.set_output_array(wq);
-  enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize_small", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize_small<T, 32, 4, true>;
-      if (bits == 8) {
-        kernel = cu::fp_quantize_small<T, 32, 8, true>;
-      } else if (group_size == 16) {
-        kernel = cu::fp_quantize_small<T, 16, 4, false>;
-      }
-      bool large = w.size() > UINT_MAX;
-      auto [num_blocks, block_dims] =
-          get_launch_args(w.size(), w.shape(), w.strides(), false, group_size);
-
-      enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<T>(w),
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          w.size());
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not quantize input with type float64.");
-    }
-  });
-}
-
-void fp_quantize(
-    const array& w,
-    array& wq,
-    array& scales,
-    int group_size,
-    int bits,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  // Current quantization options:
-  //
-  // - fp_quantize_small
-  //
-  //   Used for small arrays, when the total number of elements is
-  //   less than or equal to 1024 * 512 (empirically chosen).
-  //   Each thread processes a single element.
-  //
-  // - fp_quantize_vectorized
-  //
-  //   Used for larger arrays. Each thread processes group_size elements.
-  //
-  // Note: stochastic rounding is not supported yet. The USE_SR template
-  //       parameter is always instantiated as false and currently serves
-  //       only as a placeholder for a future implementation.
-  size_t size = w.size();
-  if (size <= 1024 * 512) {
-    fp_quantize_small(w, wq, scales, group_size, bits, enc, s);
-  } else {
-    fp_quantize_vectorized(w, wq, scales, group_size, bits, enc, s);
-  }
 }
 
 void fp_dequantize(
