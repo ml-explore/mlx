@@ -318,6 +318,50 @@ void CommandEncoder::add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params) {
   insert_graph_dependencies(GraphNode{node, "K"});
 }
 
+cudaGraphNodeType get_node_type(cudaGraphNode_t n) {
+  {
+    CUDA_KERNEL_NODE_PARAMS p;
+    if (cuGraphKernelNodeGetParams(n, &p) == CUDA_SUCCESS) {
+      return cudaGraphNodeTypeKernel;
+    } else {
+      cudaGetLastError();
+    }
+  }
+  {
+    cudaGraph_t child;
+    if (cudaGraphChildGraphNodeGetGraph(n, &child) == cudaSuccess) {
+      return cudaGraphNodeTypeGraph;
+    } else {
+      cudaGetLastError();
+    }
+  }
+  {
+    cudaEvent_t ev;
+    if (cudaGraphEventRecordNodeGetEvent(n, &ev) == cudaSuccess) {
+      return cudaGraphNodeTypeEventRecord;
+    } else {
+      cudaGetLastError();
+    }
+  }
+  {
+    cudaEvent_t ev;
+    if (cudaGraphEventWaitNodeGetEvent(n, &ev) == cudaSuccess) {
+      return cudaGraphNodeTypeWaitEvent;
+    } else {
+      cudaGetLastError();
+    }
+  }
+  {
+    cudaMemsetParams p;
+    if (cudaGraphMemsetNodeGetParams(n, &p) == cudaSuccess) {
+      return cudaGraphNodeTypeMemset;
+    } else {
+      cudaGetLastError();
+    }
+  }
+  return cudaGraphNodeTypeEmpty;
+}
+
 std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Constructs a key representing the nodes of a sub-graph.
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
@@ -336,46 +380,45 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
     if (!is_updatable) {
       break;
     }
-//    cudaGraphNodeType type;
-//    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
-//    switch (type) {
-//      case cudaGraphNodeTypeGraph: {
-//        // Try to be updatable for a structure like graph -> graph -> kernel
-//        cudaGraph_t child;
-//        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
-//        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
-//        is_updatable &= sub_is_updatable;
-//        key += subkey;
-//        break;
-//          key += "()";
-//          break;
-//      }
-//      case cudaGraphNodeTypeMemset:
-//        key += "M";
-//        break;
-//      case cudaGraphNodeTypeKernel: {
-//        cudaLaunchAttributeValue cluster_dim;
-//        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
-//            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
-//        // Only allow dim.x to be greater than 1
-//        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
-//          is_updatable = false;
-//        } else {
-//          key += "K";
-//          key += std::to_string(cluster_dim.clusterDim.x);
-//        }
-//        key += "K";
-//        break;
-//      }
-//      case cudaGraphNodeTypeWaitEvent:
-//        key += "W";
-//        break;
-//      case cudaGraphNodeTypeEventRecord:
-//        key += "R";
-//        break;
-//      default:
-//        is_updatable = false;
-//    }
+    cudaGraphNodeType type = get_node_type(node);
+    switch (type) {
+      case cudaGraphNodeTypeGraph: {
+        // Try to be updatable for a structure like graph -> graph -> kernel
+        cudaGraph_t child;
+        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
+        is_updatable &= sub_is_updatable;
+        key += subkey;
+        break;
+          key += "()";
+          break;
+      }
+      case cudaGraphNodeTypeMemset:
+        key += "M";
+        break;
+      case cudaGraphNodeTypeKernel: {
+        cudaLaunchAttributeValue cluster_dim;
+        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+        // Only allow dim.x to be greater than 1
+        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+          is_updatable = false;
+        } else {
+          key += "K";
+          key += std::to_string(cluster_dim.clusterDim.x);
+        }
+        key += "K";
+        break;
+      }
+      case cudaGraphNodeTypeWaitEvent:
+        key += "W";
+        break;
+      case cudaGraphNodeTypeEventRecord:
+        key += "R";
+        break;
+      default:
+        is_updatable = false;
+    }
   }
   key += ")";
   return {key, is_updatable};
@@ -394,7 +437,7 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   auto [sub_graph_key, is_updatable] = subgraph_to_key(child);
   is_graph_updatable_ &= is_updatable;
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
-  insert_graph_dependencies(GraphNode{node, "G"});
+  insert_graph_dependencies(GraphNode{node, sub_graph_key});
 }
 
 bool CommandEncoder::needs_commit() {
