@@ -89,7 +89,8 @@ static PyType_Spec gc_func_spec = {
     /* .name = */ "mlx.gc_func",
     /* .basicsize = */ (int)sizeof(gc_func),
     /* .itemsize = */ 0,
-    /* .flags = */ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | NB_HAVE_VECTORCALL,
+    /* .flags = */ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_HAVE_VECTORCALL,
     /* .slots = */ gc_func_slots};
 
 static PyTypeObject* gc_func_tp = nullptr;

@@ -2,7 +2,11 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
+#include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
+#include "mlx/backend/cuda/vector_types.cuh"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
@@ -12,17 +16,6 @@
 
 namespace mlx::core {
 namespace cu {
-
-template <int bits>
-struct Quantize {
-  __device__ uint8_t operator()(float x) {
-    if constexpr (bits == 8) {
-      return __nv_fp8_e4m3(x).__x;
-    } else {
-      return __nv_fp4_e2m1(x).__x;
-    }
-  }
-};
 
 template <int bits>
 struct Dequantize {
@@ -37,29 +30,40 @@ struct Dequantize {
 
 namespace cg = cooperative_groups;
 
-template <typename T, int group_size, int bits, bool use_mx_scale>
-__global__ void
-fp_quantize(const T* w, uint8_t* out, uint8_t* scales, size_t size) {
+template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
+__global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+  using Tx2 = Vector2_t<T>;
+  using Tx4 = Vector4_t<T>;
+  uint32_t rbits = 0; // reserved bits for future use
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
-
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
-  size_t index = tidx + grid_dim_x * size_t(tidy);
-  if (index >= size) {
+  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+  size_t base_idx = thread_idx * group_size;
+
+  if (base_idx >= size) {
     return;
   }
 
-  float w_thread = w[index];
+  auto w_tile = load_vector<group_size, T>(w, thread_idx);
+  float scale = 0.0f;
 
-  cg::greater<float> max_op;
-  auto warp = cg::tiled_partition<group_size>(cg::this_thread_block());
+  Tx2 amax_2x = Tx2{0.0f, 0.0f};
 
-  float scale = cg::reduce(warp, abs(w_thread), max_op);
+#pragma unroll
+  for (int i = 0; i < group_size; i += 2) {
+    auto pair = Tx2{w_tile[i], w_tile[i + 1]};
+    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+  }
+
+  scale = static_cast<float>(
+      max(fabsf(static_cast<float>(amax_2x.x)),
+          fabsf(static_cast<float>(amax_2x.y))));
+
   scale /= bits == 4 ? 6.0f : 448.0f;
   // Convert to mx scale or nv scale
   using ScaleType =
@@ -68,21 +72,24 @@ fp_quantize(const T* w, uint8_t* out, uint8_t* scales, size_t size) {
   uint8_t q_scale = s.__x;
   scale = float(s);
 
-  // Write out the scales
-  size_t gindex = index / group_size;
-  if (index % group_size == 0) {
-    scales[gindex] = q_scale;
-  }
+  scales[thread_idx] = q_scale;
+  constexpr int elem_per_byte = bits == 8 ? 1 : 2;
+  AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
 
-  uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
-  if (bits == 4) {
-    uint8_t sval = warp.shfl_down(output, 1);
-    output |= sval << bits;
+#pragma unroll
+  for (int i = 0; i < group_size / 4; i++) {
+    Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
+    if constexpr (bits == 8) {
+      uint32_t quantized_val =
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      *reinterpret_cast<uint32_t*>(&quantized[i * 4]) = quantized_val;
+    } else {
+      uint16_t quantized_val =
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      *reinterpret_cast<uint16_t*>(&quantized[i * 2]) = quantized_val;
+    }
   }
-  constexpr int pack_factor = bits == 8 ? 1 : 2;
-  if (index % pack_factor == 0) {
-    out[index / pack_factor] = output;
-  }
+  store_vector<group_size / elem_per_byte>(out, thread_idx, quantized);
 }
 
 template <typename T, int group_size, int bits, bool use_mx_scale>
@@ -142,15 +149,16 @@ void fp_quantize(
   dispatch_float_types(w.dtype(), "fp_quantize", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize<T, 32, 4, true>;
+      auto kernel = cu::fp_quantize<T, 32, 4, true, false>;
       if (bits == 8) {
-        kernel = cu::fp_quantize<T, 32, 8, true>;
+        kernel = cu::fp_quantize<T, 32, 8, true, false>;
       } else if (group_size == 16) {
-        kernel = cu::fp_quantize<T, 16, 4, false>;
+        kernel = cu::fp_quantize<T, 16, 4, false, false>;
       }
       bool large = w.size() > UINT_MAX;
       auto [num_blocks, block_dims] =
-          get_launch_args(w.size(), w.shape(), w.strides(), large);
+          get_launch_args(w.size(), w.shape(), w.strides(), large, group_size);
+
       enc.add_kernel_node(
           kernel,
           num_blocks,

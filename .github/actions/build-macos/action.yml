@@ -11,7 +11,7 @@ runs:
       shell: bash -l {0}
       run: |
         pip install --upgrade pip
-        pip install cmake setuptools nanobind==2.4.0
+        pip install cmake setuptools nanobind==2.10.2
         pip install -e . -v
 
     - name: Generate package stubs

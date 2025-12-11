@@ -273,7 +273,7 @@ target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 if(MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
   find_package(
-    Python 3.8
+    Python 3.10
     COMPONENTS Interpreter Development.Module
     REQUIRED)
   execute_process(
