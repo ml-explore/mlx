@@ -124,14 +124,13 @@ auto py_value_and_grad(
 
     // Collect the arrays
     std::vector<mx::array> arrays;
-    std::vector<nb::handle> array_objects;
-
+    std::vector<nb::object> array_objects;
     auto flatten_with_objects = [&arrays, &array_objects](
                                     auto tree, bool strict) {
       tree_visit(tree, [&](nb::handle obj) {
         if (nb::isinstance<mx::array>(obj)) {
           arrays.push_back(nb::cast<mx::array>(obj));
-          array_objects.push_back(obj);
+          array_objects.push_back(nb::borrow<nb::object>(obj));
         } else if (strict) {
           throw std::invalid_argument(
               "[tree_flatten] The argument should contain only arrays");
@@ -200,7 +199,7 @@ auto py_value_and_grad(
           tree_visit_update(tree, [&](nb::handle node) {
             auto replace_arr = nb::cast<mx::array>(node);
             if (replace_arr.id() == a[index].id()) {
-              return nb::borrow<nb::object>(array_objects[index++]);
+              return array_objects[index++];
             } else {
               index++;
               return nb::cast(replace_arr);

@@ -744,7 +744,6 @@ class TestVmap(mlx_tests.MLXTestCase):
             return Vector([t[0] + 10, t[1] * 10])
 
         x = State(mx.array(1), mx.array(2))
-        print(f"{transform(x)=}")
 
         vmap_transform = mx.vmap(transform)
         vmap_transform_tuple = mx.vmap(transform_tuple)
