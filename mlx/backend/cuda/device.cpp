@@ -14,15 +14,6 @@ namespace mlx::core::cu {
 
 namespace {
 
-#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
-
-void check_cudnn_error(const char* name, cudnnStatus_t err) {
-  if (err != CUDNN_STATUS_SUCCESS) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
-  }
-}
-
 bool use_cuda_graphs() {
   static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;
@@ -96,7 +87,7 @@ CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
     return;
   }
   CHECK_CUDA_ERROR(
-      cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeGlobal));
+      cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeThreadLocal));
 }
 
 CommandEncoder::CaptureContext::~CaptureContext() {
@@ -327,37 +318,64 @@ void CommandEncoder::add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params) {
   insert_graph_dependencies(GraphNode{node, "K"});
 }
 
-bool is_graph_updatable(cudaGraph_t graph, int& cluster_dim_x) {
-  // CUDA graphs do not get updated correctly if a kernel node getting updated
-  // has a different cluster shape than the node it's being updated with.
+std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
+  // Constructs a key representing the nodes of a sub-graph.
+  // Also checks if the sub-graph is updatable as CUDA graphs do not get
+  // updated correctly if a kernel node getting updated has a different cluster
+  // shape than the node it's being updated with.
+  std::string key = "(";
   size_t num_nodes = 0;
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
   if (num_nodes == 0) {
-    return true;
+    return {key + ")", true};
   }
-
+  bool is_updatable = true;
   std::vector<cudaGraphNode_t> nodes(num_nodes);
   CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nodes.data(), &num_nodes));
   for (const auto& node : nodes) {
+    if (!is_updatable) {
+      break;
+    }
     cudaGraphNodeType type;
     CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
-    if (type != cudaGraphNodeTypeKernel) {
-      return false;
+    switch (type) {
+      case cudaGraphNodeTypeGraph: {
+        // Try to be updatable for a structure like graph -> graph -> kernel
+        cudaGraph_t child;
+        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
+        is_updatable &= sub_is_updatable;
+        key += subkey;
+        break;
+      }
+      case cudaGraphNodeTypeMemset:
+        key += "M";
+        break;
+      case cudaGraphNodeTypeKernel: {
+        cudaLaunchAttributeValue cluster_dim;
+        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+        // Only allow dim.x to be greater than 1
+        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+          is_updatable = false;
+        } else {
+          key += "K";
+          key += std::to_string(cluster_dim.clusterDim.x);
+        }
+        break;
+      }
+      case cudaGraphNodeTypeWaitEvent:
+        key += "W";
+        break;
+      case cudaGraphNodeTypeEventRecord:
+        key += "R";
+        break;
+      default:
+        is_updatable = false;
     }
-    cudaLaunchAttributeValue cluster_dim;
-    CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
-        node, cudaLaunchAttributeClusterDimension, &cluster_dim));
-    // Only dim.x can be greater than 1
-    if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
-      return false;
-    }
-    // Only one child node allowed when subgraph uses clusters
-    if (cluster_dim.clusterDim.x > 0 && num_nodes > 1) {
-      return false;
-    }
-    cluster_dim_x = cluster_dim.clusterDim.x;
   }
-  return true;
+  key += ")";
+  return {key, is_updatable};
 }
 
 void CommandEncoder::add_graph_node(cudaGraph_t child) {
@@ -370,11 +388,10 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
     return;
   }
   cudaGraphNode_t node;
-  int cluster_dim_x = 0;
-  is_graph_updatable_ = is_graph_updatable(child, cluster_dim_x);
+  auto [sub_graph_key, is_updatable] = subgraph_to_key(child);
+  is_graph_updatable_ &= is_updatable;
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
-  insert_graph_dependencies(
-      GraphNode{node, "G" + std::to_string(cluster_dim_x)});
+  insert_graph_dependencies(GraphNode{node, sub_graph_key});
 }
 
 bool CommandEncoder::needs_commit() {

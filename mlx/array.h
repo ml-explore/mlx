@@ -57,6 +57,16 @@ class array {
       Shape shape,
       Dtype dtype = TypeToDtype<T>());
 
+  /* Build an array from a raw pointer. The constructor will attempt to use the
+   * input data without a copy. The deleter will be called when the array no
+   * longer needs the underlying memory - after the array is destroyed in the
+   * no-copy case and after the copy otherwise. */
+  explicit array(
+      void* data,
+      Shape shape,
+      Dtype dtype,
+      const std::function<void(void*)>& deleter);
+
   /* Build an array from a buffer */
   explicit array(
       allocator::Buffer data,

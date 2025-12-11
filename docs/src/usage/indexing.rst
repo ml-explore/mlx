@@ -179,14 +179,14 @@ assignments, ``updates`` must provide at least as many elements as there are
 
 Boolean masks follow NumPy semantics:
 
-- The mask shape must match the shape of the axes it indexes exactly. No mask
-  broadcasting occurs.
+- The mask shape must match the shape of the axes it indexes exactly. The only
+  exception is a scalar boolean mask, which broadcasts to the full array.
 - Any axes not covered by the mask are taken in full.
 
 .. code-block:: shell
 
    >>> a = mx.arange(1000).reshape(10, 10, 10)
-   >>> a[mx.random.randn(10, 10) > 0.0] = 0  # valid: mask covers axes 0 and 1
+   >>> a[mx.random.normal((10, 10)) > 0.0] = 0  # valid: mask covers axes 0 and 1
 
 The mask of shape ``(10, 10)`` applies to the first two axes, so ``a[mask]``
 selects the 1-D slices ``a[i, j, :]`` where ``mask[i, j]`` is ``True``.

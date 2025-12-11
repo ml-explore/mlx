@@ -149,7 +149,9 @@ Buffer MetalAllocator::malloc(size_t size) {
       buf = device_->newBuffer(size, resource_options);
     }
     if (!buf) {
-      return Buffer{nullptr};
+      std::ostringstream msg;
+      msg << "[malloc] Unable to allocate " << size << " bytes.";
+      throw std::runtime_error(msg.str());
     }
     lk.lock();
     num_resources_++;
@@ -199,6 +201,32 @@ void MetalAllocator::free(Buffer buffer) {
 
 size_t MetalAllocator::size(Buffer buffer) const {
   return static_cast<MTL::Buffer*>(buffer.ptr())->length();
+}
+
+Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
+  auto buf = device_->newBuffer(ptr, size, resource_options, nullptr);
+  if (!buf) {
+    return Buffer{nullptr};
+  }
+  std::unique_lock lk(mutex_);
+  residency_set_.insert(buf);
+  active_memory_ += buf->length();
+  peak_memory_ = std::max(peak_memory_, active_memory_);
+  num_resources_++;
+  return Buffer{static_cast<void*>(buf)};
+}
+
+void MetalAllocator::release(Buffer buffer) {
+  auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
+  if (buf == nullptr) {
+    return;
+  }
+  std::unique_lock lk(mutex_);
+  active_memory_ -= buf->length();
+  num_resources_--;
+  lk.unlock();
+  auto pool = metal::new_scoped_memory_pool();
+  buf->release();
 }
 
 MetalAllocator& allocator() {

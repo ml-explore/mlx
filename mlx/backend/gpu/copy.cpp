@@ -7,8 +7,6 @@
 
 namespace mlx::core {
 
-void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s);
-
 void copy_gpu(const array& in, array& out, CopyType ctype) {
   copy_gpu(in, out, ctype, out.primitive().stream());
 }

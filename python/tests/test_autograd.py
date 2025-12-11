@@ -798,6 +798,71 @@ class TestAutograd(mlx_tests.MLXTestCase):
         grad_fn(model)
         self.assertEqual(model[1].item(), 2.0)
 
+    def test_autograd_types(self):
+        from typing import NamedTuple
+
+        class Vector(tuple):
+            pass
+
+        class State(NamedTuple):
+            a: mx.array
+            b: mx.array
+
+        def transform(x: State):
+            return State(x.a + 10, x.b * 10)
+
+        def transform_tuple(t):
+            return (t[0] + 10, t[1] * 10)
+
+        def transform_vector(t):
+            return Vector([t[0] + 10, t[1] * 10])
+
+        def loss_fn(x):
+            out = transform(x)
+            return out.a.sum() + out.b.sum()
+
+        def loss_fn_tuple(x):
+            out = transform_tuple(x)
+            return out[0].sum() + out[1].sum()
+
+        def loss_fn_vector(x):
+            out = transform_vector(x)
+            return out[0].sum() + out[1].sum()
+
+        x_batch = State(mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        grads = mx.grad(loss_fn)(x_batch)
+        self.assertTrue(isinstance(grads, State))
+        self.assertTrue(mx.array_equal(grads.a, mx.ones(3)))
+        self.assertTrue(mx.array_equal(grads.b, mx.ones(3) * 10))
+
+        x_batch_tuple = (mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        grads = mx.grad(loss_fn_tuple)(x_batch_tuple)
+        self.assertTrue(isinstance(grads, tuple))
+        self.assertTrue(mx.array_equal(grads[0], mx.ones(3)))
+        self.assertTrue(mx.array_equal(grads[1], mx.ones(3) * 10))
+
+        x_batch_vector = Vector([mx.array([1, 2, 3]), mx.array([4, 5, 6])])
+        grads = mx.grad(loss_fn_vector)(x_batch_vector)
+        self.assertTrue(isinstance(grads, Vector))
+        self.assertTrue(mx.array_equal(grads[0], mx.ones(3)))
+        self.assertTrue(mx.array_equal(grads[1], mx.ones(3) * 10))
+
+    def test_reduce_jvp(self):
+        a = mx.arange(4)
+        b = mx.array([3, 2, 1, 0])
+
+        out, jout = mx.jvp(mx.sum, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 6)
+
+        out, jout = mx.jvp(mx.prod, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 18)
+
+        out, jout = mx.jvp(mx.min, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 3)
+
+        out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
+        self.assertEqual(jout[0].item(), 0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

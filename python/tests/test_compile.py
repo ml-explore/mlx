@@ -1179,6 +1179,79 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = fun(False)
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_compile_types(self):
+        from typing import NamedTuple
+
+        class Vector(tuple):
+            pass
+
+        class State(NamedTuple):
+            a: mx.array
+            b: mx.array
+
+        def transform(x: State):
+            return State(x.a + 10, x.b * 10)
+
+        def transform_tuple(t):
+            return (t[0] + 10, t[1] * 10)
+
+        def transform_vector(t):
+            return Vector([t[0] + 10, t[1] * 10])
+
+        x = State(mx.array(1), mx.array(2))
+
+        compiled_transform = mx.compile(transform)
+        compiled_transform_tuple = mx.compile(transform_tuple)
+        compiled_transform_vector = mx.compile(transform_vector)
+
+        x_batch_tuple = (mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        out1 = compiled_transform_tuple(x_batch_tuple)
+
+        self.assertTrue(isinstance(out1, tuple))
+        self.assertTrue(mx.array_equal(out1[0], mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out1[1], mx.array([40, 50, 60])))
+
+        x_batch = State(mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        out2 = compiled_transform(x_batch)
+        self.assertTrue(isinstance(out2, State))
+        self.assertTrue(mx.array_equal(out2.a, mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out2.b, mx.array([40, 50, 60])))
+
+        x_batch_vector = Vector([mx.array([1, 2, 3]), mx.array([4, 5, 6])])
+        out3 = compiled_transform_vector(x_batch_vector)
+        self.assertTrue(isinstance(out3, Vector))
+        self.assertTrue(mx.array_equal(out3[0], mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out3[1], mx.array([40, 50, 60])))
+
+    def test_compile_output_with_siblings(self):
+        @mx.compile
+        def fun(x, y):
+            return mx.divmod(mx.abs(x), mx.abs(y))[0]
+
+        out = fun(mx.array(1.0), mx.array(1.0))
+        self.assertEqual(out.item(), 1.0)
+
+        # Make sure the following compiles without issue
+        def loss_fn(params, x):
+            emb, w = params
+            return mx.fast.layer_norm(emb[x], w, None, 1e-4).sum()
+
+        emb = mx.zeros((10, 32))
+        w = mx.zeros((32,))
+
+        loss_and_grad_fn = mx.value_and_grad(loss_fn)
+
+        x = mx.zeros(shape=(4, 32), dtype=mx.int32)
+        mx.eval(x, emb, w)
+
+        @mx.compile
+        def step(emb, w, x):
+            loss, grads = loss_and_grad_fn((emb, w), x)
+            return loss, grads
+
+        loss, grads = step(emb, w, x)
+        mx.eval(loss, grads)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

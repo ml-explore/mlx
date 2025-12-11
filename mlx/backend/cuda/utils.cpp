@@ -32,6 +32,13 @@ void check_cuda_error(const char* name, CUresult err) {
   }
 }
 
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
+  }
+}
+
 const char* dtype_to_cuda_type(const Dtype& dtype) {
   switch (dtype) {
     case bool_:
@@ -73,7 +80,6 @@ CudaGraph::CudaGraph(cu::Device& device) {
 }
 
 void CudaGraph::end_capture(cudaStream_t stream) {
-  assert(handle_ == nullptr);
   CHECK_CUDA_ERROR(cudaStreamEndCapture(stream, &handle_));
 }
 
