@@ -1145,9 +1145,7 @@ void fast::ConvertFP8::eval_cpu(
   });
 }
 
-void DualQuantizedMatmul::eval_cpu(
-    const std::vector<array>& inputs,
-    array& out) {
-  throw std::runtime_error("DualQuantizedMatmul not implemented on CPU.");
+void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("QQMatmul not implemented on CPU.");
 }
 } // namespace mlx::core

@@ -151,16 +151,14 @@ void qqmm_impl(
 }
 } // namespace
 
-void DualQuantizedMatmul::eval_gpu(
-    const std::vector<array>& inputs,
-    array& out) {
-  nvtx3::scoped_range r("DualQuantizedMatmul::eval_gpu");
+void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("QQMatmul::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   assert(inputs.size() == 4 || inputs.size() == 3);
-  auto& x = inputs[0]; // activations bf16
-  auto& w_q = inputs[1]; // quantized weights
-  auto& scale_w_pre = inputs[2]; // weight scales
+  auto& x = inputs[0];
+  auto& w_q = inputs[1];
+  auto& scale_w_pre = inputs[2];
 
   auto quantize_activation =
       [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {

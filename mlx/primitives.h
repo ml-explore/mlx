@@ -1642,9 +1642,9 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool transpose_;
 };
 
-class DualQuantizedMatmul : public UnaryPrimitive {
+class QQMatmul : public UnaryPrimitive {
  public:
-  explicit DualQuantizedMatmul(
+  explicit QQMatmul(
       Stream stream,
       int group_size,
       int bits,
@@ -1659,7 +1659,7 @@ class DualQuantizedMatmul : public UnaryPrimitive {
 
   // DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_NAME(DualQuantizedMatmul)
+  DEFINE_NAME(QQMatmul)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
@@ -1670,7 +1670,6 @@ class DualQuantizedMatmul : public UnaryPrimitive {
   int group_size_;
   int bits_;
   QuantizationMode mode_;
-  bool transpose_;
 };
 
 class GatherQMM : public UnaryPrimitive {

@@ -150,47 +150,6 @@ std::pair<int, int> extract_quantized_matmul_dims(
         << " and transpose=" << std::boolalpha << transpose;
     throw std::invalid_argument(msg.str());
   }
-
-  return {w_inner_dims, w_outer_dims};
-}
-
-std::pair<int, int> extract_qqmm_dims(
-    std::string_view tag,
-    const array& x,
-    const array& w_q,
-    const array& scales_w,
-    const std::optional<array>& w,
-    int group_size,
-    int bits) {
-  // Validate w_q and scales_w
-  validate_quantized_input(
-      tag, w_q, scales_w, "weight matrix", "scales_w", group_size, bits);
-
-  if (w &&
-      (w->shape(-1) != w_q.shape(-1) * 32 / bits ||
-       w->shape(-2) != w_q.shape(-2))) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] The shape of the weight matrix and its "
-        << "quantized version are incompatible. Received weight matrix "
-        << "with shape " << w->shape() << " and quantized weight matrix "
-        << "with shape " << w_q.shape() << " with bits=" << bits;
-    throw std::invalid_argument(msg.str());
-  }
-  int x_inner_dims = x.shape(-1) / (32 / bits); // K
-
-  int w_inner_dims = w_q.shape(-1);
-  int w_outer_dims = w_q.shape(-2);
-
-  if (w_inner_dims != x_inner_dims) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] Inner dimension of second input with "
-        << "shape (" << w_inner_dims << ", " << w_outer_dims << ")"
-        << " does not match the packed inner dimension of the first"
-        << "input (...," << x_inner_dims << ") computed with bits=" << bits;
-
-    throw std::invalid_argument(msg.str());
-  }
-
   return {w_inner_dims, w_outer_dims};
 }
 
@@ -4307,14 +4266,15 @@ array quantized_matmul(
 
 array qqmm(
     array x,
-    array w_q,
-    array scales_w,
-    std::optional<array> w /* = std::nullopt */,
+    array w,
+    std::optional<array> scales_w,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
-  // currently only simetric quantization is supported for qqmm
+  // we need t ocheck 2 cases:
+  // 1. w is quantized, scales is provided
+  // 2. w is not quantized, scales is not provided
   auto qmode = string_to_quantization_mode(mode, "qqmm");
   // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
   if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
@@ -4323,41 +4283,42 @@ array qqmm(
         << mode << "' was provided.";
     throw std::invalid_argument(msg.str());
   }
-  // for fp4 block scaling the only supported layout is TN
-  // https://docs.nvidia.com/cutlass/4.2.1/media/docs/cpp/blackwell_functionality.html
-  // because w_q should always be quantized along the reduction dimension
-  // and we quantize so that the last dim is packed, we assume that the last dim
-  // always the reduction dim so the firat argument in cubals column major is
-  // (the second argument in qqmm) always transposed
   if (qmode == QuantizationMode::Affine) {
     std::ostringstream msg;
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
     throw std::invalid_argument(msg.str());
   }
-  if (x.ndim() > 2 || w_q.ndim() > 2) {
+  if (x.ndim() > 2 || w.ndim() > 2) {
     std::ostringstream msg;
     msg << "[qqmm] Only 2D inputs are supported but "
         << "x.ndim() == " << x.ndim() << " and "
-        << "w_q.ndim() == " << w_q.ndim() << ".";
+        << "w.ndim() == " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
+  // check quantiation parameters
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  auto [w_inner_dims, w_outer_dims] =
-      extract_qqmm_dims("qqmm", x, w_q, scales_w, w, group_size, bits);
-
-  // we don't backprope through qunatized w and scales
+  // if w is not quantized, the last dims must match
+  if (!scales_w.has_value()) {
+    if (x.shape(-1) != w.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[matmul] Last dimension of first input with shape " << x.shape()
+          << " must match last dimension of"
+          << " second input with shape " << w.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  // if w is quantized, check that w expended dim match x last dim
+  else {
+    auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
+        "qqmm", x, w, scales_w, std::nullopt, false, group_size, bits)
+  }
   std::vector<array> inputs = {
       x,
-      stop_gradient(w_q),
-      stop_gradient(scales_w),
+      w,
   };
-  // if bf16 w is provided, add it to inputs for vjps
-  if (w.has_value()) {
-    inputs.push_back(*w);
-  }
-  if (x.ndim() > 2 && w_q.ndim() > 2) {
-    inputs = broadcast_arrays(inputs, {-2, -1}, s);
+  if (scales_w.has_value()) {
+    inputs.push_back(*scales_w);
   }
 
   auto out_shape = inputs[0].shape();
@@ -4367,8 +4328,7 @@ array qqmm(
   return array(
       std::move(out_shape),
       dtype,
-      std::make_shared<DualQuantizedMatmul>(
-          to_stream(s), group_size, bits, qmode),
+      std::make_shared<QQMatmul>(to_stream(s), group_size, bits, qmode),
       std::move(inputs));
 }
 
