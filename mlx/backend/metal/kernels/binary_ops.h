@@ -3,7 +3,10 @@
 #pragma once
 
 #include <metal_integer>
+#include <metal_logging>
 #include <metal_math>
+
+constant os_log logger("mlx", "binary_ops");
 
 struct Add {
   template <typename T>
@@ -225,6 +228,8 @@ struct Power {
     T res = 1;
     // Undefined to raise integer to negative power
     if (exp < 0) {
+      logger.log_debug(
+          "int pow exp<0 (base=%ld exp=%ld)", (long)base, (long)exp);
       return 0;
     }
 
