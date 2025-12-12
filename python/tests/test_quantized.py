@@ -1096,14 +1096,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 mode=mode,
             ):
                 w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
-                w_q, scales_w = mx.quantize(
-                    w, group_size=group_size, bits=bits, mode=mode
-                )
 
                 def fn(x):
-                    return mx.qqmm(
-                        x, w_q, scales_w, w, group_size=group_size, bits=bits, mode=mode
-                    )
+                    return mx.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)
 
                 _, vjp_out = mx.vjp(fn, primals=(x,), cotangents=(c,))
                 w_tq, scales_wt = mx.quantize(

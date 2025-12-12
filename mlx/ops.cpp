@@ -6096,4 +6096,5 @@ array contiguous(
       std::make_shared<Contiguous>(to_stream(s), allow_col_major),
       {a});
 }
+
 } // namespace mlx::core
