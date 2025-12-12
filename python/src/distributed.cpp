@@ -67,7 +67,7 @@ void init_distributed(nb::module_& parent_module) {
 
       Args:
         backend (str, optional): The name of the backend to check for availability.
-          It takes the same values as ``init()``. Default: ``any``.
+          It takes the same values as :func:`init()`. Default: ``"any"``.
 
       Returns:
         bool: Whether the distributed backend is available.
