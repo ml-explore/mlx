@@ -28,6 +28,11 @@ bool nan_aware_less(T a, T b) {
   return a < b;
 }
 
+// Threshold for switching to linear scan for small axis sizes
+constexpr size_t SMALL_LINEAR_THRESHOLD = 32;
+// Threshold for using exponential search for large axis sizes
+constexpr size_t LARGE_EXP_THRESHOLD = 10000;
+
 template <typename T>
 struct StridedIterator {
   using iterator_category = std::random_access_iterator_tag;
@@ -532,6 +537,80 @@ void search_sorted(
   size_t axis_size = a.shape(axis);
   a_strides.erase(a_strides.begin() + axis);
 
+  // Contiguous fast-path: when `a` is fully contiguous, the axis has unit
+  // stride (innermost dimension), `v` is contiguous and there is a 1:1
+  // correspondence between output elements and rows of `a` (no broadcasting).
+  // This avoids per-output allocation/copy and strided iterator overhead.
+  if (a.flags().contiguous && axis_stride == 1 && v.flags().contiguous &&
+      a.size() == out.size() * axis_size && v.size() == out.size()) {
+    for (size_t i = 0; i < out.size(); ++i) {
+      const T* axis_begin = a_ptr + i * axis_size;
+      const T* axis_end = axis_begin + axis_size;
+
+      T val = v_ptr[i];
+
+      IdxT idx;
+
+      // Small arrays: linear scan is often faster due to better cache
+      if (axis_size <= SMALL_LINEAR_THRESHOLD) {
+        if (right) {
+          size_t j = 0;
+          for (; j < axis_size; ++j) {
+            if (nan_aware_less<T>(val, axis_begin[j]))
+              break;
+          }
+          idx = static_cast<IdxT>(j);
+        } else {
+          size_t j = 0;
+          for (; j < axis_size; ++j) {
+            if (!nan_aware_less<T>(axis_begin[j], val))
+              break;
+          }
+          idx = static_cast<IdxT>(j);
+        }
+      } else if (axis_size > LARGE_EXP_THRESHOLD) {
+        // Large arrays: exponential search to reduce binary-search range
+        size_t bound = 1;
+        if (right) {
+          // Expand while value >= a[bound]
+          while (bound < axis_size &&
+                 !nan_aware_less<T>(val, axis_begin[bound]))
+            bound <<= 1;
+        } else {
+          // Expand while a[bound] < value
+          while (bound < axis_size && nan_aware_less<T>(axis_begin[bound], val))
+            bound <<= 1;
+        }
+
+        size_t left = bound >> 1;
+        size_t rightb = std::min(bound, axis_size);
+
+        if (right) {
+          auto it = std::upper_bound(
+              axis_begin + left, axis_begin + rightb, val, nan_aware_less<T>);
+          idx = static_cast<IdxT>(it - axis_begin);
+        } else {
+          auto it = std::lower_bound(
+              axis_begin + left, axis_begin + rightb, val, nan_aware_less<T>);
+          idx = static_cast<IdxT>(it - axis_begin);
+        }
+      } else {
+        if (right) {
+          auto it =
+              std::upper_bound(axis_begin, axis_end, val, nan_aware_less<T>);
+          idx = static_cast<IdxT>(it - axis_begin);
+        } else {
+          auto it =
+              std::lower_bound(axis_begin, axis_end, val, nan_aware_less<T>);
+          idx = static_cast<IdxT>(it - axis_begin);
+        }
+      }
+
+      out_ptr[i] = idx;
+    }
+    return;
+  }
+
   Strides a_broadcast_strides(common_shape.size(), 0);
   Strides v_broadcast_strides(common_shape.size(), 0);
 
@@ -576,23 +655,68 @@ void search_sorted(
     size_t a_offset = a_it.loc;
 
     const T* base_ptr = a_ptr + a_offset;
-    std::vector<T> axis_vals(axis_size);
-    auto axis_iter = StridedIterator<const T>(
+
+    // Use strided iterators directly to avoid per-output heap allocation and
+    // copying of the axis slice.
+    StridedIterator<const T> axis_begin(
         base_ptr, static_cast<int64_t>(axis_stride), 0);
-    for (size_t k = 0; k < axis_size; ++k) {
-      axis_vals[k] = *axis_iter;
-      axis_iter += 1;
-    }
+    StridedIterator<const T> axis_end(
+        base_ptr, static_cast<int64_t>(axis_stride), axis_size);
 
     IdxT idx;
-    if (right) {
-      auto it = std::upper_bound(
-          axis_vals.begin(), axis_vals.end(), val, nan_aware_less<T>);
-      idx = static_cast<IdxT>(std::distance(axis_vals.begin(), it));
+
+    // Small arrays: use linear scan over strided axis
+    if (axis_size <= SMALL_LINEAR_THRESHOLD) {
+      if (right) {
+        size_t j = 0;
+        for (; j < axis_size; ++j) {
+          const T& aelem = axis_begin[j];
+          if (nan_aware_less<T>(val, aelem))
+            break;
+        }
+        idx = static_cast<IdxT>(j);
+      } else {
+        size_t j = 0;
+        for (; j < axis_size; ++j) {
+          const T& aelem = axis_begin[j];
+          if (!nan_aware_less<T>(aelem, val))
+            break;
+        }
+        idx = static_cast<IdxT>(j);
+      }
+    } else if (axis_size > LARGE_EXP_THRESHOLD) {
+      // Large arrays: exponential search over strided axis
+      size_t bound = 1;
+      if (right) {
+        while (bound < axis_size && !nan_aware_less<T>(val, axis_begin[bound]))
+          bound <<= 1;
+      } else {
+        while (bound < axis_size && nan_aware_less<T>(axis_begin[bound], val))
+          bound <<= 1;
+      }
+
+      size_t left = bound >> 1;
+      size_t rightb = std::min(bound, axis_size);
+
+      if (right) {
+        auto it = std::upper_bound(
+            axis_begin + left, axis_begin + rightb, val, nan_aware_less<T>);
+        idx = static_cast<IdxT>(it - axis_begin);
+      } else {
+        auto it = std::lower_bound(
+            axis_begin + left, axis_begin + rightb, val, nan_aware_less<T>);
+        idx = static_cast<IdxT>(it - axis_begin);
+      }
     } else {
-      auto it = std::lower_bound(
-          axis_vals.begin(), axis_vals.end(), val, nan_aware_less<T>);
-      idx = static_cast<IdxT>(std::distance(axis_vals.begin(), it));
+      if (right) {
+        auto it =
+            std::upper_bound(axis_begin, axis_end, val, nan_aware_less<T>);
+        idx = static_cast<IdxT>(it - axis_begin);
+      } else {
+        auto it =
+            std::lower_bound(axis_begin, axis_end, val, nan_aware_less<T>);
+        idx = static_cast<IdxT>(it - axis_begin);
+      }
     }
     out_ptr[i] = idx;
 
