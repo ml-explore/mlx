@@ -318,50 +318,6 @@ void CommandEncoder::add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params) {
   insert_graph_dependencies(GraphNode{node, "K"});
 }
 
-cudaGraphNodeType get_node_type(cudaGraphNode_t n) {
-  {
-    CUDA_KERNEL_NODE_PARAMS p;
-    if (cuGraphKernelNodeGetParams(n, &p) == CUDA_SUCCESS) {
-      return cudaGraphNodeTypeKernel;
-    } else {
-      cudaGetLastError();
-    }
-  }
-  {
-    cudaGraph_t child;
-    if (cudaGraphChildGraphNodeGetGraph(n, &child) == cudaSuccess) {
-      return cudaGraphNodeTypeGraph;
-    } else {
-      cudaGetLastError();
-    }
-  }
-  {
-    cudaEvent_t ev;
-    if (cudaGraphEventRecordNodeGetEvent(n, &ev) == cudaSuccess) {
-      return cudaGraphNodeTypeEventRecord;
-    } else {
-      cudaGetLastError();
-    }
-  }
-  {
-    cudaEvent_t ev;
-    if (cudaGraphEventWaitNodeGetEvent(n, &ev) == cudaSuccess) {
-      return cudaGraphNodeTypeWaitEvent;
-    } else {
-      cudaGetLastError();
-    }
-  }
-  {
-    cudaMemsetParams p;
-    if (cudaGraphMemsetNodeGetParams(n, &p) == cudaSuccess) {
-      return cudaGraphNodeTypeMemset;
-    } else {
-      cudaGetLastError();
-    }
-  }
-  return cudaGraphNodeTypeEmpty;
-}
-
 std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
   // Constructs a key representing the nodes of a sub-graph.
   // Also checks if the sub-graph is updatable as CUDA graphs do not get
@@ -380,7 +336,8 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
     if (!is_updatable) {
       break;
     }
-    cudaGraphNodeType type = get_node_type(node);
+    cudaGraphNodeType type;
+    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
     switch (type) {
       case cudaGraphNodeTypeGraph: {
         // Try to be updatable for a structure like graph -> graph -> kernel
@@ -390,9 +347,10 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
         is_updatable &= sub_is_updatable;
         key += subkey;
         break;
-          key += "()";
-          break;
       }
+      case cudaGraphNodeTypeHost:
+        key += "H";
+        break;
       case cudaGraphNodeTypeMemset:
         key += "M";
         break;
@@ -407,7 +365,6 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
           key += "K";
           key += std::to_string(cluster_dim.clusterDim.x);
         }
-        key += "K";
         break;
       }
       case cudaGraphNodeTypeWaitEvent:
