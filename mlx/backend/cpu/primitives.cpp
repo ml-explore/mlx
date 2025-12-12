@@ -291,6 +291,17 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
                     num_keys,
                     kshape = keys.shape(),
                     kstrides = keys.strides()]() mutable {
+    auto copy_remaining = [&](char* cptr, size_t loc, uint32_t v) {
+      if (4 * loc + 4 <= bytes_per_key) {
+        reinterpret_cast<uint32_t*>(cptr)[loc] = v;
+      } else {
+        std::copy(
+            reinterpret_cast<char*>(&v),
+            reinterpret_cast<char*>(&v) + bytes_per_key - 4 * loc,
+            cptr + 4 * loc);
+      }
+    };
+
     size_t out_skip = (bytes_per_key + 4 - 1) / 4;
     auto half_size = out_skip / 2;
     bool even = out_skip % 2 == 0;
@@ -310,29 +321,12 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
       if (count.first < half_size) {
         auto rb = random::threefry2x32_hash(key, count);
         ptr[count.first++] = rb.first;
-        size_t offset = 4 * count.second;
-        if (offset < bytes_per_key) {
-          size_t remaining_bytes = bytes_per_key - offset;
-          std::copy(
-              reinterpret_cast<char*>(&rb.second),
-              reinterpret_cast<char*>(&rb.second) +
-                  std::min(remaining_bytes, sizeof(uint32_t)),
-              cptr + offset);
-        }
+        copy_remaining(cptr, count.second, rb.second);
       }
       if (!even) {
         count.second = 0;
-        // Need a new random pair, buy we throw rb.second away
-        auto rb = random::threefry2x32_hash(key, count);
-        size_t offset = 4 * half_size;
-        if (offset < bytes_per_key) {
-          size_t remaining_bytes = bytes_per_key - offset;
-          std::copy(
-              reinterpret_cast<char*>(&rb.first),
-              reinterpret_cast<char*>(&rb.first) +
-                  std::min(remaining_bytes, sizeof(uint32_t)),
-              cptr + offset);
-        }
+        copy_remaining(
+            cptr, half_size, random::threefry2x32_hash(key, count).first);
       }
     }
   });
