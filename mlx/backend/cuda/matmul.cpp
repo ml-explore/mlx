@@ -153,7 +153,7 @@ void gather_mm_rhs(
         "[gather_mm] Group count can not be larger than 1024.");
   }
 
-  auto a = ensure_row_contiguous(a_, encoder, s);
+  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_, encoder, s);
   auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_, encoder, s);
   auto indices = ensure_row_contiguous(indices_, encoder, s);
 

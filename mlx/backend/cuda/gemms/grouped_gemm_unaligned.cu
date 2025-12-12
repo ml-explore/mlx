@@ -27,6 +27,7 @@ __global__ void prepare_grouped_mm_data(
     int group_count,
     int K,
     int N,
+    int lda,
     int ldb,
     int item_size,
     int8_t* a_start,
@@ -80,7 +81,7 @@ __global__ void prepare_grouped_mm_data(
     int delta =
         group == 0 ? cum_histo[0] : cum_histo[group] - cum_histo[group - 1];
     problem_sizes[group] = {delta, N, K};
-    a_lds[group] = K;
+    a_lds[group] = lda;
     b_lds[group] = ldb;
     out_lds[group] = N;
     // Fill pointers.
@@ -210,7 +211,8 @@ void cutlass_grouped_gemm_unaligned(
       group_count,
       a.shape(-1), // K
       b.shape(-1), // N,
-      b.strides(-1) == 1 ? b.shape(-2) : b.shape(-1), // ldb
+      a.strides(-1) == 1 ? a.shape(-1) : a.shape(-2), // lda
+      b.strides(-1) == 1 ? b.shape(-1) : b.shape(-2), // ldb
       out.itemsize(),
       gpu_ptr<int8_t>(a),
       gpu_ptr<int8_t>(b),
