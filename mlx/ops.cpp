@@ -74,15 +74,13 @@ void validate_quantized_input(
     std::string_view tag,
     const array& matrix,
     const array& scales,
-    const std::string& matrix_name,
-    const std::string& scales_name,
     int group_size,
     int bits,
     const std::optional<array>& biases = std::nullopt) {
   // If matrix is quantized
   if (matrix.dtype() != uint32) {
     std::ostringstream msg;
-    msg << "[" << tag << "] The " << matrix_name << " should be uint32 "
+    msg << "[" << tag << "] The quantized matrix should be uint32 "
         << "but received " << matrix.dtype();
     throw std::invalid_argument(msg.str());
   }
@@ -102,20 +100,19 @@ void validate_quantized_input(
           matrix.shape().end() - 2,
           scales.shape().begin())) {
     std::ostringstream msg;
-    msg << "[" << tag << "] " << matrix_name << " and " << scales_name
-        << " should have the same batch shape. "
-        << "Received " << matrix_name << " with shape " << matrix.shape()
-        << ", " << scales_name << " with " << scales.shape() << ".";
+    msg << "[" << tag
+        << "] Quantized matrix and scales should have the same batch shape. "
+        << "Received matrix with shape " << matrix.shape() << ", scales with "
+        << scales.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
   // Shape compatibility based on bits and group_size
   if (matrix.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
     std::ostringstream msg;
-    msg << "[" << tag << "] The shapes of the " << matrix_name << " and "
-        << scales_name << " are "
-        << "incompatible based on bits and group_size. " << matrix_name
-        << ".shape() == " << matrix.shape() << " and " << scales_name
+    msg << "[" << tag << "] The shapes of the quantized matrix and scales are "
+        << "incompatible based on bits and group_size. " << "matrix"
+        << "matrix.shape() == " << matrix.shape() << " and " << "scales"
         << ".shape() == " << scales.shape() << " with group_size=" << group_size
         << " and bits=" << bits;
     throw std::invalid_argument(msg.str());
@@ -131,8 +128,7 @@ std::pair<int, int> extract_quantized_matmul_dims(
     bool transpose,
     int group_size,
     int bits) {
-  validate_quantized_input(
-      tag, w, scales, "weight", "scales", group_size, bits, biases);
+  validate_quantized_input(tag, w, scales, group_size, bits, biases);
 
   int x_inner_dims = x.shape(-1);
 
@@ -151,6 +147,18 @@ std::pair<int, int> extract_quantized_matmul_dims(
     throw std::invalid_argument(msg.str());
   }
   return {w_inner_dims, w_outer_dims};
+}
+
+std::pair<int, int> get_padded_scale_dims(int num_rows, int num_cols) {
+  constexpr int rows_per_tile = 128;
+  constexpr int cols_per_tile = 4;
+
+  int padded_rows =
+      ((num_rows + rows_per_tile - 1) / rows_per_tile) * rows_per_tile;
+  int padded_cols =
+      ((num_cols + cols_per_tile - 1) / cols_per_tile) * cols_per_tile;
+
+  return {padded_rows, padded_cols};
 }
 
 } // namespace
@@ -4264,6 +4272,70 @@ array quantized_matmul(
       std::move(inputs));
 }
 
+void validate_qqmm_inputs(array x, array w, std::optional<array> scales_w, ) {
+  // check 2D (for now)
+  if (x.ndim() > 2 || w.ndim() > 2) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only 2D inputs are supported but "
+        << "x.ndim() == " << x.ndim() << " and "
+        << "w.ndim() == " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.dtype() == uint32) {
+    // if w is quantized, scales are provided
+    if (!scales_w.has_value()) {
+      std::ostringstream msg;
+      msg << "[qqmm] Scales must be provided if second argument is quantized.";
+      throw std::invalid_argument(msg.str());
+    }
+    // if scales are provided, check compatibility with quantized w
+    else {
+      validate_quantized_input("qqmm", w, *scales_w, group_size_, bits_);
+    }
+  }
+  // if w is not quantized, dtype must be in {f16, bf16, fp32}
+  else {
+    if (!issubdtype(w.dtype(), floating) || dtype == float64) {
+      std::ostringstream msg;
+      msg << "[qqmm] Only real floating types except float64 are supported but "
+          << "second argument dtype == " << w.dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  // x dtype must be in {f16, bf16, fp32}
+  if (!issubdtype(x.dtype(), floating) || dtype == float64) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only real floating types except float64 are supported but "
+        << "first argument dtype == " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+std::pair<int, int> extract_qqmm_dims(
+    array x,
+    array w,
+    std::optional<array> scales_w,
+    int group_size,
+    int bits) {
+  // if w is not quantized, check that last dim match
+  if (w.dtype() != uint32) {
+    if (x.shape(-1) != w.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[qqmm] Last dimension of first input with shape " << x.shape()
+          << " must match last dimension of"
+          << " second input with shape " << w.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    auto [w_inner_dims, w_outer_dims] = {w.shape(-1), w.shape(-2)};
+  }
+  // if w is quantized, check that w expended dim match x last dim
+  else {
+    auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
+        "qqmm", x, w, *scales_w, std::nullopt, false, group_size, bits);
+  }
+  return {w_inner_dims, w_outer_dims};
+}
+
 array qqmm(
     array x,
     array w,
@@ -4271,6 +4343,7 @@ array qqmm(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
+    std::optional<Dtype> dtype /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   // we need t ocheck 2 cases:
   // 1. w is quantized, scales is provided
@@ -4279,7 +4352,7 @@ array qqmm(
   // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
   if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
     std::ostringstream msg;
-    msg << "[qqmm] only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
+    msg << "[qqmm] Only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
         << mode << "' was provided.";
     throw std::invalid_argument(msg.str());
   }
@@ -4288,31 +4361,22 @@ array qqmm(
     msg << "[qqmm] Affine quantization is not supported for qqmm.";
     throw std::invalid_argument(msg.str());
   }
-  if (x.ndim() > 2 || w.ndim() > 2) {
-    std::ostringstream msg;
-    msg << "[qqmm] Only 2D inputs are supported but "
-        << "x.ndim() == " << x.ndim() << " and "
-        << "w.ndim() == " << w.ndim() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-  // check quantiation parameters
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  // if w is not quantized, the last dims must match
-  if (!scales_w.has_value()) {
-    if (x.shape(-1) != w.shape(-1)) {
-      std::ostringstream msg;
-      msg << "[matmul] Last dimension of first input with shape " << x.shape()
-          << " must match last dimension of"
-          << " second input with shape " << w.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
+  // validate output dtype
+  if (dtype.has_value() && (!issubdtype(*dtype, floating)) ||
+      dtype == float64) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only real floating types except float64 are supported but "
+        << "output dtype == " << *dtype << ".";
+    throw std::invalid_argument(msg.str());
   }
-  // if w is quantized, check that w expended dim match x last dim
-  else {
-    auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-        "qqmm", x, w, scales_w, std::nullopt, false, group_size, bits)
-  }
+  auto out_type = dtype.has_value() ? *dtype : bfloat16;
+  // validate inputs
+  validate_qqmm_inputs(x, w, scales_w);
+  // validate and extract shapes
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims(x, w, scales_w, group_size, bits);
   std::vector<array> inputs = {
       x,
       w,
@@ -4320,14 +4384,12 @@ array qqmm(
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
-
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
-  auto dtype = bfloat16;
-  // out dtype can be only bf16 for now
+
   return array(
       std::move(out_shape),
-      dtype,
+      out_type,
       std::make_shared<QQMatmul>(to_stream(s), group_size, bits, qmode),
       std::move(inputs));
 }
@@ -4352,8 +4414,11 @@ array pack_and_quantize(
   if (is_power_of_2(bits)) {
     array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
     packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-    packed_w = sum(
-        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+    packed_w =
+        sum(multiply(packed_w, shifts, s),
+            /* axis= */ 2,
+            /* keepdims= */ false,
+            s);
   } else {
     // This is slow but we have fast GPU/CPU versions of this function so we
     // shouldn't be here often.
@@ -4525,8 +4590,12 @@ std::vector<array> fp_quantize(
   if (s.device == Device::gpu) {
     auto wq_shape = w.shape();
     wq_shape.back() = w.shape(-1) * bits / 32;
+    // Get padded scale shape for swizzled layout
+    auto [padded_rows, padded_cols] =
+        get_padded_scale_dims(w.shape(-2), w.shape(-1) / group_size);
     auto sshape = w.shape();
-    sshape.back() = w.shape(-1) / group_size;
+    sshape[w.ndim() - 2] = padded_rows;
+    sshape.back() = padded_cols;
     return array::make_arrays(
         {std::move(wq_shape), std::move(sshape)},
         {uint32, uint8},

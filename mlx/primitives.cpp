@@ -3471,7 +3471,7 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
 bool QQMatmul::is_equivalent(const Primitive& other) const {
   const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_;
+      mode_ == qm_other.mode_ && dtype_ == qm_other.dtype_;
 }
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
@@ -3513,10 +3513,10 @@ std::vector<array> QQMatmul::vjp(
           cotan, //  M X N
           wtq[0], //  K X N_packed
           wtq[1], // scales
-          std::nullopt,
           group_size_,
           bits_,
           qmode,
+
           s));
     } else if (arg == 1) { // gradient wrt to weights
       // we need to quantize along M but cotan is
@@ -3526,7 +3526,7 @@ std::vector<array> QQMatmul::vjp(
           transpose(primals[0], reorder, s),
           group_size_,
           bits_,
-          qmode,
+          qmode dtype_,
           s); // (N, M_packed)
       vjps.push_back(qqmm(
           transpose(cotan, reorder, s), // (N, M)
@@ -3535,13 +3535,14 @@ std::vector<array> QQMatmul::vjp(
           group_size_,
           bits_,
           qmode,
+          dtype_,
           s)); // (K, M), (N, M_packed)
     }
   }
   return vjps;
 }
 
-std::vector<array> QQMM::jvp(
+std::vector<array> QQMatmul::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {

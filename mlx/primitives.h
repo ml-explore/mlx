@@ -1648,11 +1648,13 @@ class QQMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      QuantizationMode mode)
+      QuantizationMode mode,
+      Dtype dtype)
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        mode_(mode) {}
+        mode_(mode),
+        dtype_(dtype) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1669,6 +1671,7 @@ class QQMatmul : public UnaryPrimitive {
  private:
   int group_size_;
   int bits_;
+  Dtype dtype_;
   QuantizationMode mode_;
 };
 

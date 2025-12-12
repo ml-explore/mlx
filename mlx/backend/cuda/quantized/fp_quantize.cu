@@ -71,8 +71,12 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   auto s = ScaleType(scale);
   uint8_t q_scale = s.__x;
   scale = float(s);
+  auto swizzled_idx = scale_tiled_offset(
+      thread_idx,
+      w.shape(-2),
+      w.shape(-1) / (group_size / (bits == 8 ? 1 : 2)));
 
-  scales[thread_idx] = q_scale;
+  scales[swizzled_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;
   AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
 
