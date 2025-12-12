@@ -107,6 +107,9 @@ class RemoteProcess(CommandProcess):
     def make_launch_script(rank, cwd, files, env, command):
         script = ""
 
+        # Disable echo
+        script = "stty -echo; "
+
         # Write the PID to a file so we can kill the process if needed
         script += "pidfile=$(mktemp); "
         script += "echo $$ > $pidfile; "
