@@ -71,12 +71,8 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   auto s = ScaleType(scale);
   uint8_t q_scale = s.__x;
   scale = float(s);
-  auto swizzled_idx = scale_tiled_offset(
-      thread_idx,
-      w.shape(-2),
-      w.shape(-1) / (group_size / (bits == 8 ? 1 : 2)));
 
-  scales[swizzled_idx] = q_scale;
+  scales[thread_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;
   AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
 
@@ -106,8 +102,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = bits == 8 ? 1 : 2;
   size_t offset = tidx + grid_dim_x * size_t(tidy);
@@ -116,7 +111,6 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   if (oindex >= size) {
     return;
   }
-
   size_t gindex = oindex / group_size;
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;

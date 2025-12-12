@@ -4272,7 +4272,12 @@ array quantized_matmul(
       std::move(inputs));
 }
 
-void validate_qqmm_inputs(array x, array w, std::optional<array> scales_w, ) {
+void validate_qqmm_inputs(
+    array x,
+    array w,
+    std::optional<array> scales_w,
+    int group_size,
+    int bits) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
     std::ostringstream msg;
@@ -4290,12 +4295,12 @@ void validate_qqmm_inputs(array x, array w, std::optional<array> scales_w, ) {
     }
     // if scales are provided, check compatibility with quantized w
     else {
-      validate_quantized_input("qqmm", w, *scales_w, group_size_, bits_);
+      validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
     }
   }
   // if w is not quantized, dtype must be in {f16, bf16, fp32}
   else {
-    if (!issubdtype(w.dtype(), floating) || dtype == float64) {
+    if (!issubdtype(w.dtype(), floating) || w.dtype() == float64) {
       std::ostringstream msg;
       msg << "[qqmm] Only real floating types except float64 are supported but "
           << "second argument dtype == " << w.dtype() << ".";
@@ -4303,7 +4308,7 @@ void validate_qqmm_inputs(array x, array w, std::optional<array> scales_w, ) {
     }
   }
   // x dtype must be in {f16, bf16, fp32}
-  if (!issubdtype(x.dtype(), floating) || dtype == float64) {
+  if (!issubdtype(x.dtype(), floating) || x.dtype() == float64) {
     std::ostringstream msg;
     msg << "[qqmm] Only real floating types except float64 are supported but "
         << "first argument dtype == " << x.dtype() << ".";
@@ -4318,6 +4323,7 @@ std::pair<int, int> extract_qqmm_dims(
     int group_size,
     int bits) {
   // if w is not quantized, check that last dim match
+  int w_inner_dims, w_outer_dims;
   if (w.dtype() != uint32) {
     if (x.shape(-1) != w.shape(-1)) {
       std::ostringstream msg;
@@ -4326,12 +4332,14 @@ std::pair<int, int> extract_qqmm_dims(
           << " second input with shape " << w.shape() << ".";
       throw std::invalid_argument(msg.str());
     }
-    auto [w_inner_dims, w_outer_dims] = {w.shape(-1), w.shape(-2)};
+    std::tie(w_inner_dims, w_outer_dims) =
+        std::make_pair(w.shape(-1), w.shape(-2));
   }
-  // if w is quantized, check that w expended dim match x last dim
+  // if w is quantized, check that w expended dim match x last dim (always
+  // transposed)
   else {
-    auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-        "qqmm", x, w, *scales_w, std::nullopt, false, group_size, bits);
+    std::tie(w_inner_dims, w_outer_dims) = extract_quantized_matmul_dims(
+        "qqmm", x, w, *scales_w, std::nullopt, true, group_size, bits);
   }
   return {w_inner_dims, w_outer_dims};
 }
@@ -4373,7 +4381,7 @@ array qqmm(
   }
   auto out_type = dtype.has_value() ? *dtype : bfloat16;
   // validate inputs
-  validate_qqmm_inputs(x, w, scales_w);
+  validate_qqmm_inputs(x, w, scales_w, group_size, bits);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);
@@ -4390,7 +4398,8 @@ array qqmm(
   return array(
       std::move(out_shape),
       out_type,
-      std::make_shared<QQMatmul>(to_stream(s), group_size, bits, qmode),
+      std::make_shared<QQMatmul>(
+          to_stream(s), group_size, bits, qmode, out_type),
       std::move(inputs));
 }
 
@@ -4590,12 +4599,8 @@ std::vector<array> fp_quantize(
   if (s.device == Device::gpu) {
     auto wq_shape = w.shape();
     wq_shape.back() = w.shape(-1) * bits / 32;
-    // Get padded scale shape for swizzled layout
-    auto [padded_rows, padded_cols] =
-        get_padded_scale_dims(w.shape(-2), w.shape(-1) / group_size);
     auto sshape = w.shape();
-    sshape[w.ndim() - 2] = padded_rows;
-    sshape.back() = padded_cols;
+    sshape.back() = w.shape(-1) / group_size;
     return array::make_arrays(
         {std::move(wq_shape), std::move(sshape)},
         {uint32, uint8},

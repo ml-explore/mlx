@@ -46,30 +46,30 @@ inline array ensure_row_contiguous_matrix(
   return x_copy;
 }
 
-// array pad_and_repack_scales(
-//     const array& scale,
-//     cu::CommandEncoder& encoder,
-//     const Stream& s) {
-//   // Compute padded dimensions for full tiles (128 rows × 4 cols)
-//   auto [pad_outer, pad_inner] =
-//       get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
-//   // cuBLAS requirements for scale factor layout:
-//   // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
-//   // 2. Out-of-bounds values must be filled with zeros
-//   // 3. Starting addresses must be 16-byte aligned
-//   //
-//   https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
-//   // Note: cu::malloc_async already provides 256-byte alignment
-//   array scale_tiled(
-//       cu::malloc_async(pad_outer * pad_inner, encoder),
-//       Shape{pad_outer, pad_inner},
-//       scale.dtype());
-//   repack_scales(scale, scale_tiled, encoder, s);
+array pad_and_repack_scales(
+    const array& scale,
+    cu::CommandEncoder& encoder,
+    const Stream& s) {
+  // Compute padded dimensions for full tiles (128 rows × 4 cols)
+  auto [pad_outer, pad_inner] =
+      get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
+// cuBLAS requirements for scale factor layout:
+// 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
+// 2. Out-of-bounds values must be filled with zeros
+// 3. Starting addresses must be 16-byte aligned
+//
+https: // docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
+  // Note: cu::malloc_async already provides 256-byte alignment
+  array scale_tiled(
+      cu::malloc_async(pad_outer * pad_inner, encoder),
+      Shape{pad_outer, pad_inner},
+      scale.dtype());
+  repack_scales(scale, scale_tiled, encoder, s);
 
-//   encoder.add_temporary(scale_tiled);
-//   return scale_tiled;
-// }
-// } // namespace
+  encoder.add_temporary(scale_tiled);
+  return scale_tiled;
+}
+} // namespace
 
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
@@ -167,11 +167,11 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         auto xq_shape = x.shape();
         xq_shape.back() = x.shape(-1) * bits_ / 32;
         auto sshape = x.shape();
-        std::tie(sshape[-2], sshape[-1]) =
+        std::tie(sshape[x.ndim() - 2], sshape[x.ndim() - 1]) =
             get_padded_scale_dims(x.shape(-2), x.shape(-1) / group_size_);
-        // sshape.back() = x.shape(-1) / group_size_;
-        auto scales_size =
-            x.size() / (x.shape(-1) * x.shape(-2)) * (sshape[-2] * sshape[-1]);
+        sshape.back() = x.shape(-1) / group_size_;
+        auto scales_size = x.size() / (x.shape(-1) * x.shape(-2)) *
+            (sshape[x.ndim() - 2] * sshape[x.ndim() - 1]);
         auto xq_size = x.size() * bits_ / 8;
         array x_q(cu::malloc_async(xq_size, encoder), xq_shape, uint32);
         array scales_x(cu::malloc_async(scales_size, encoder), sshape, uint8);
@@ -180,11 +180,10 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         encoder.add_temporary(x_q);
         return std::make_pair(x_q, scales_x);
       };
-  auto [x_q, scale_x] = quantize(inputs[0], encoder, s);
+  auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
+  auto [w_q, scale_w_pre] = std::make_pair(inputs[1], inputs[2]);
   if (inputs[1].dtype() != uint32) {
-    auto [w_q, scale_w] = quantize(inputs[1], encoder, s);
-  } else {
-    auto [w_q, scale_w] = std::make_pair(inputs[1], inputs[2]);
+    auto [w_q, scale_w_pre] = quantize(inputs[1], encoder, s);
   }
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
@@ -194,8 +193,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = K_packed * (32 / bits_);
 
   // // Repack scales from linear to tiled layout for tensor cores
-  // array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
-  // array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
+  array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
+  array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
 
   bool x_transposed = false;
   bool w_transposed = true; // always transposed
