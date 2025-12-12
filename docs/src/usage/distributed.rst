@@ -384,7 +384,7 @@ script will
 - generate the hostfile to be used with ``mlx.launch``
 
 Putting it All Together
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 For example launching a distributed MLX script that uses JACCL is fairly simple
 if the nodes are reachable via ssh and have password-less sudo.
