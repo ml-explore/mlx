@@ -1243,7 +1243,19 @@ class TestBlas(mlx_tests.MLXTestCase):
         c2 = gather_mm_test(a, b, rhs)
         self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
 
-        cotan = mx.random.normal(c1.shape)
+    def test_gather_mm_sorted_vjp(self):
+        def gather_mm_ref(a, b, rhs):
+            b = b[rhs]
+            return a @ b
+
+        def gather_mm_test(a, b, rhs):
+            return mx.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
+
+        a = mx.random.normal((100, 1, 100))
+        b = mx.random.normal((8, 100, 100))
+        rhs = mx.sort(mx.random.randint(0, 8, shape=(100,)))
+
+        cotan = mx.random.normal((100, 1, 100))
         c1, dc1 = mx.vjp(
             lambda a, b: gather_mm_ref(a, b, rhs),
             [a, b],
