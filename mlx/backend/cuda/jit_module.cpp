@@ -27,55 +27,47 @@ void check_nvrtc_error(const char* name, nvrtcResult err) {
   }
 }
 
-// Return the location of the CUDA toolkit.
-const std::string& cuda_home() {
-  static std::string home = []() -> std::string {
-    const char* home = std::getenv("CUDA_HOME");
-    if (home) {
-      return home;
-    }
-    home = std::getenv("CUDA_PATH");
-    if (home) {
-      return home;
-    }
-#if defined(__linux__)
-    home = "/usr/local/cuda";
-    if (std::filesystem::exists(home)) {
-      return home;
-    }
-#endif
-    throw std::runtime_error(
-        "Environment variable CUDA_HOME or CUDA_PATH is not set.");
-  }();
-  return home;
-}
-
-// Return the location of CCCL headers shipped with the distribution.
-const std::string& cccl_dir() {
-  static std::string dir = []() {
-    std::filesystem::path path;
+// Return the --include-path args used for invoking NVRTC.
+const std::vector<std::string>& include_path_args() {
+  static std::vector<std::string> cached_args = []() {
+    std::vector<std::string> args;
+    // Add path to bundled CCCL headers.
+    auto root_dir = current_binary_dir().parent_path();
+    auto path = root_dir / "include" / "cccl";
 #if defined(MLX_CCCL_DIR)
-    // First search the install dir if defined.
-    path = MLX_CCCL_DIR;
-    if (std::filesystem::exists(path)) {
-      return path.string();
+    if (!std::filesystem::exists(path)) {
+      path = MLX_CCCL_DIR;
     }
 #endif
-    // Then search dynamically from the dir of libmlx.so file.
-    path = current_binary_dir().parent_path() / "include" / "cccl";
     if (std::filesystem::exists(path)) {
-      return path.string();
+      args.push_back(fmt::format("--include-path={}", path.string()));
     }
-    // Finally check the environment variable.
-    if (const char* env = std::getenv("MLX_CCCL_DIR"); env) {
-      path = env;
-      if (!path.empty() && std::filesystem::exists(path)) {
-        return path.string();
+    // Add path to CUDA runtime headers, try local-installed python package
+    // first and then system-installed headers.
+    path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
+    if (std::filesystem::exists(path)) {
+      args.push_back(fmt::format("--include-path={}", path.string()));
+    } else {
+      const char* home = std::getenv("CUDA_HOME");
+      if (!home) {
+        home = std::getenv("CUDA_PATH");
+      }
+#if defined(__linux__)
+      if (!home) {
+        home = "/usr/local/cuda";
+      }
+#endif
+      if (home && std::filesystem::exists(home)) {
+        args.push_back(fmt::format("--include-path={}/include", home));
+      } else {
+        throw std::runtime_error(
+            "Can not find locations of CUDA headers, please set environment "
+            "variable CUDA_HOME or CUDA_PATH.");
       }
     }
-    return std::string();
+    return args;
   }();
-  return dir;
+  return cached_args;
 }
 
 // Get the cache directory for storing compiled results.
@@ -288,14 +280,9 @@ void compile(
       device.compute_capability_minor(),
       arch_tag);
   args.push_back(compute.c_str());
-  std::string cccl_include = cccl_dir();
-  if (!cccl_include.empty()) {
-    cccl_include = fmt::format("--include-path={}", cccl_include);
-    args.push_back(cccl_include.c_str());
+  for (const auto& include : include_path_args()) {
+    args.push_back(include.c_str());
   }
-  std::string cuda_include =
-      fmt::format("--include-path={}/include", cuda_home());
-  args.push_back(cuda_include.c_str());
   nvrtcResult compile_result =
       nvrtcCompileProgram(prog, args.size(), args.data());
   if (compile_result != NVRTC_SUCCESS) {
