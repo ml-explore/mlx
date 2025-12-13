@@ -880,6 +880,11 @@ std::vector<array> ScaledDotProductAttention::vjp(
 
   std::vector<array> returned_vjps;
   for (int arg : argnums) {
+    if (arg >= 3) {
+      throw std::invalid_argument(
+          "[scale_dot_product_attention] Does not support VJP with respect "
+          " to mask or attention sinks.");
+    }
     returned_vjps.push_back(std::move(vjps[arg]));
   }
   return returned_vjps;
