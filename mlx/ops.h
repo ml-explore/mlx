@@ -1420,6 +1420,17 @@ array dequantize(
     std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
 
+array qqmm(
+    array x, // input activations
+    array w, // may be quantized weights
+    std::optional<array> w_scales = std::nullopt, // optional scales if w is
+                                                  // quantized
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
+    const std::string& mode = "nvfp4",
+    std::optional<Dtype> dtype = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Convert an E4M3 float8 to the given floating point dtype. */
 array from_fp8(array x, Dtype dtype, StreamOrDevice s = {});
 

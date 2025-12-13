@@ -5433,4 +5433,52 @@ void init_ops(nb::module_& m) {
         Returns:
             array or Sequence[array]: The outputs which depend on dependencies.
       )pbdoc");
+  m.def(
+      "qqmm",
+      &mx::qqmm,
+      nb::arg(), // x
+      nb::arg(), // w_q
+      "scales"_a = nb::none(), // scales w
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "nvfp4",
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', dtype: Optional[dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Perform a matrix multiplication using a possibly quantized weight matrix
+      ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
+      fly. The weight matrix ``w`` is used as-is if it is already quantized;
+      otherwise, it is quantized on the fly.
+
+      If ``w`` is quantized, ``scales`` must be provided, and ``group_size``,
+      ``bits``, and ``mode`` must match the parameters that were used to quantize
+      ``w``.
+
+      Notes:
+        If ``w`` is expected to receive gradients, it must be provided in
+        non-quantized form.
+
+      Args:
+        x (array): Input array.
+        w (array): Weight matrix. If quantized, it is packed in unsigned integers.
+        scales (array, optional): The scales to use per ``group_size`` elements of
+          ``w`` if ``w`` is quantized. Default: ``None``.
+        group_size (int, optional): Number of elements in ``x`` and ``w`` that
+          share a scale. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        bits (int, optional): Number of bits used to represent each element of
+          ``x`` and ``w``. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+        dtype (dtype, optional): The output data type. If set, can be ``float32``,
+          ``float16``, or ``bfloat16``. If ``None``, the return type is
+          ``bfloat16``.
+
+      Returns:
+        array: The result of ``x @ w`` (with internal on-the-fly quantization as
+        needed).
+  )pbdoc");
 }

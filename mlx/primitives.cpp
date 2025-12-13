@@ -3468,6 +3468,87 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
   return {std::move(out_shape)};
 }
 
+bool QQMatmul::is_equivalent(const Primitive& other) const {
+  const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_ && dtype_ == qm_other.dtype_;
+}
+
+std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
+  auto out_shape = inputs[0].shape();
+  int w_outer_dims = inputs[2].shape(-2);
+  out_shape.back() = w_outer_dims;
+  return {std::move(out_shape)};
+}
+
+std::vector<array> QQMatmul::vjp(
+    const std::vector<array>& primals, // bf16 x, quantized weights
+    const std::vector<array>& cotangents, // bf16 grads
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+  auto& s = stream();
+  // primal[1] -- non quantized / quantized weights (N, K || K_packed)
+  // primal[2] -- scales_w (optional) (N, K / group_size)
+  // primal[0] -- non quantized activations (M, K)
+  // cotan -- non quantized grads (M, N)
+  // first argument is quantized inside eval_gpu (activations, activation
+  // gradients) second argument is (weights) quantized in vjp
+  auto qmode = quantization_mode_to_string(mode_);
+  for (auto arg : argnums) {
+    if (arg == 0) { // gradient wrt to x
+      // We transpose weights -> quantize along N -> qqmm (cotan quantized in
+      // eval_gpu)
+      auto wtq = quantize(
+          transpose(primals[1], {1, 0}, s), // we assume that weights are 2D
+          group_size_,
+          bits_,
+          qmode,
+          s); // (K, N_packed), scales
+      vjps.push_back(qqmm(
+          cotan, //  M X N
+          wtq[0], //  K X N_packed
+          wtq[1], // scales
+          group_size_,
+          bits_,
+          qmode,
+          dtype_,
+          s));
+    } else if (arg == 1) { // gradient wrt to weights
+      // we need to quantize along M but cotan is
+      // (M,N) so we transpose cotan -> quantize along M -> qqmm
+      // TODO: quantize column wise (without transpose)
+      auto xtq = quantize(
+          transpose(primals[0], reorder, s),
+          group_size_,
+          bits_,
+          qmode,
+          s); // (N, M_packed)
+      vjps.push_back(qqmm(
+          transpose(cotan, reorder, s), // (N, M)
+          xtq[0], // (N, M_packed)
+          xtq[1], // scales
+          group_size_,
+          bits_,
+          qmode,
+          dtype_,
+          s)); // (K, M), (N, M_packed)
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> QQMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QQMM::jvp NYI");
+}
+
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

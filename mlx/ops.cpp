@@ -70,15 +70,13 @@ array indices_or_default(
   return reshape(arange(total, uint32, s), std::move(shape), s);
 }
 
-std::pair<int, int> extract_quantized_matmul_dims(
+void validate_quantized_input(
     std::string_view tag,
-    const array& x,
     const array& w,
     const array& scales,
-    const std::optional<array>& biases,
-    bool transpose,
     int group_size,
-    int bits) {
+    int bits,
+    const std::optional<array>& biases = std::nullopt) {
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[" << tag << "] The weight matrix should be uint32 "
@@ -112,6 +110,18 @@ std::pair<int, int> extract_quantized_matmul_dims(
         << " with group_size=" << group_size << " and bits=" << bits;
     throw std::invalid_argument(msg.str());
   }
+}
+
+std::pair<int, int> extract_quantized_matmul_dims(
+    std::string_view tag,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    bool transpose,
+    int group_size,
+    int bits) {
+  validate_quantized_input(tag, w, scales, group_size, bits, biases);
 
   int x_inner_dims = x.shape(-1);
 
@@ -4244,6 +4254,132 @@ array quantized_matmul(
       std::move(inputs));
 }
 
+void validate_qqmm_inputs(
+    array x,
+    array w,
+    std::optional<array> scales_w,
+    int group_size,
+    int bits) {
+  // check 2D (for now)
+  if (x.ndim() > 2 || w.ndim() > 2) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only 2D inputs are supported but "
+        << "x.ndim() == " << x.ndim() << " and "
+        << "w.ndim() == " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.dtype() == uint32) {
+    // if w is quantized, scales are provided
+    if (!scales_w.has_value()) {
+      std::ostringstream msg;
+      msg << "[qqmm] Scales must be provided if second argument is quantized.";
+      throw std::invalid_argument(msg.str());
+    }
+    // if scales are provided, check compatibility with quantized w
+    else {
+      validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
+    }
+  }
+  // if w is not quantized, dtype must be in {f16, bf16, fp32}
+  else {
+    if (!issubdtype(w.dtype(), floating) || w.dtype() == float64) {
+      std::ostringstream msg;
+      msg << "[qqmm] Only real floating types except float64 are supported but "
+          << "second argument dtype == " << w.dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  // x dtype must be in {f16, bf16, fp32}
+  if (!issubdtype(x.dtype(), floating) || x.dtype() == float64) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only real floating types except float64 are supported but "
+        << "first argument dtype == " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+std::pair<int, int> extract_qqmm_dims(
+    array x,
+    array w,
+    std::optional<array> scales_w,
+    int group_size,
+    int bits) {
+  // if w is not quantized, check that last dim match
+  int w_inner_dims, w_outer_dims;
+  if (w.dtype() != uint32) {
+    if (x.shape(-1) != w.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[qqmm] Last dimension of first input with shape " << x.shape()
+          << " must match last dimension of"
+          << " second input with shape " << w.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    std::tie(w_inner_dims, w_outer_dims) =
+        std::make_pair(w.shape(-1), w.shape(-2));
+  }
+  // if w is quantized, check that w expended dim match x last dim (always
+  // transposed)
+  else {
+    std::tie(w_inner_dims, w_outer_dims) = extract_quantized_matmul_dims(
+        "qqmm", x, w, *scales_w, std::nullopt, true, group_size, bits);
+  }
+  return {w_inner_dims, w_outer_dims};
+}
+
+array qqmm(
+    array x,
+    array w,
+    std::optional<array> scales_w,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
+    const std::string& mode /* = "nvfp4" */,
+    std::optional<Dtype> dtype /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  // we need t ocheck 2 cases:
+  // 1. w is quantized, scales is provided
+  // 2. w is not quantized, scales is not provided
+  auto qmode = string_to_quantization_mode(mode, "qqmm");
+  // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
+  if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
+        << mode << "' was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+  // validate output dtype
+  if (dtype.has_value() && (!issubdtype(*dtype, floating)) ||
+      dtype == float64) {
+    std::ostringstream msg;
+    msg << "[qqmm] Only real floating types except float64 are supported but "
+        << "output dtype == " << *dtype << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  auto out_type = dtype.has_value() ? *dtype : bfloat16;
+  // validate inputs
+  validate_qqmm_inputs(x, w, scales_w, group_size, bits);
+  // validate and extract shapes
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+  std::vector<array> inputs = {
+      x,
+      w,
+  };
+  if (scales_w.has_value()) {
+    inputs.push_back(*scales_w);
+  }
+  auto out_shape = inputs[0].shape();
+  out_shape.back() = w_outer_dims;
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<QQMatmul>(
+          to_stream(s), group_size, bits, qmode, out_type),
+      std::move(inputs));
+}
+
 array pack_and_quantize(
     array& packed_w,
     const array& scales,
@@ -4264,8 +4400,11 @@ array pack_and_quantize(
   if (is_power_of_2(bits)) {
     array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
     packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-    packed_w = sum(
-        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+    packed_w =
+        sum(multiply(packed_w, shifts, s),
+            /* axis= */ 2,
+            /* keepdims= */ false,
+            s);
   } else {
     // This is slow but we have fast GPU/CPU versions of this function so we
     // shouldn't be here often.

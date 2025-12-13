@@ -102,8 +102,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = bits == 8 ? 1 : 2;
   size_t offset = tidx + grid_dim_x * size_t(tidy);
