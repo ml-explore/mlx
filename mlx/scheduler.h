@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include <atomic>
-#include <future>
+#include <memory>
+#include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
@@ -13,6 +13,8 @@
 #include "mlx/stream.h"
 
 namespace mlx::core::scheduler {
+
+std::mutex& stream_creation_mutex();
 
 struct StreamThread {
   std::mutex mtx;
@@ -79,14 +81,22 @@ class Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   Stream new_stream(const Device& d) {
-    streams_.emplace_back(streams_.size(), d);
+    // Lock the mutex to ensure that the stream is created in a thread-safe
+    // manner This is necessary because the stream creation is not thread-safe
+    std::lock_guard<std::mutex> lk(stream_creation_mutex());
+    const auto new_stream_index = static_cast<int>(streams_.size());
+    Stream stream(new_stream_index, d);
+    streams_.push_back(stream);
+
+    // Create the stream (GPU) or thread (CPU)
     if (d == Device::gpu) {
       threads_.push_back(nullptr);
-      gpu::new_stream(streams_.back());
+      gpu::new_stream(stream);
     } else {
-      threads_.push_back(new StreamThread{});
+      auto stream_thread = std::make_unique<StreamThread>();
+      threads_.push_back(stream_thread.release());
     }
-    return streams_.back();
+    return stream;
   }
 
   template <typename F>
