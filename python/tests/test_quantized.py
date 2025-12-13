@@ -1023,6 +1023,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
             ds = mx.grad(gmm)(s, x, wq)
 
+    @unittest.skipIf(
+        not mx.cuda.is_available() or getattr(mx, "qqmm", None) is None,
+        "[qqmm] Skipped because either CUDA is not available or qqmm is not implemented.",
+    )
     def test_qqmm(self):
         # In mxfp8 mode, the results do not match exactly:
         # fewer than 1% of output elements differ.
@@ -1034,7 +1038,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         # the mxfp8 matmul implementation in cuBLASLt..
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
-        dtype = mx.bfloat16
+        dtypes = [mx.bfloat16, mx.float32, mx.float16]
 
         tests = (
             (16, "nvfp4", 4),
@@ -1047,37 +1051,57 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
         for group_size, mode, bits in tests:
             for M, N, K in product(*shapes):
-                with self.subTest(
-                    shape=(M, N, K),
-                    group_size=group_size,
-                    bits=bits,
-                    mode=mode,
-                ):
-                    x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
-                    w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
-                    w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
-                    w_dq = mx.dequantize(
-                        w_q, scales_w, group_size=group_size, bits=bits, mode=mode
-                    )
-                    y_q = mx.qqmm(
-                        x, w_q, scales_w, group_size=group_size, bits=bits, mode=mode
-                    )
-                    x_q, scales_x = mx.quantize(
-                        x, group_size=group_size, bits=bits, mode=mode
-                    )
-                    x_dq = mx.dequantize(
-                        x_q, scales_x, group_size=group_size, bits=bits, mode=mode
-                    )
-                    y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
-                    ulp = ulp_bf16_at(y_hat)
-                    error = (y_q - y_hat).abs()
-                    self.assertEqual(y_q.shape, y_hat.shape)
-                    self.assertTrue(mx.logical_or(error < 1e-3, error <= ulp).all())
+                for dtype in dtypes:
+                    with self.subTest(
+                        shape=(M, N, K),
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                        dtype=dtype,
+                    ):
+                        x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
+                        w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
+                        w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
+                        w_dq = mx.dequantize(
+                            w_q,
+                            scales_w,
+                            group_size=group_size,
+                            bits=bits,
+                            mode=mode,
+                            dtype=dtype,
+                        )
+                        y_q = mx.qqmm(
+                            x,
+                            w_q,
+                            scales_w,
+                            group_size=group_size,
+                            bits=bits,
+                            mode=mode,
+                        )
+                        x_q, scales_x = mx.quantize(
+                            x, group_size=group_size, bits=bits, mode=mode
+                        )
+                        x_dq = mx.dequantize(
+                            x_q,
+                            scales_x,
+                            group_size=group_size,
+                            bits=bits,
+                            mode=mode,
+                            dtype=dtype,
+                        )
+                        y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
+                        ulp = ulp_bf16_at(y_hat)
+                        error = (y_q - y_hat).abs()
+                        self.assertEqual(y_q.shape, y_hat.shape)
+                        self.assertTrue(mx.logical_or(error < 1e-3, error <= ulp).all())
 
+    @unittest.skipIf(
+        not mx.cuda.is_available() or getattr(mx, "qqmm", None) is None,
+        "[qqmm] Skipped because either CUDA is not available or qqmm is not implemented.",
+    )
     def test_qqmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
-        dtype = mx.bfloat16
         M = 64
         N = 1024
         K = 512
@@ -1085,8 +1109,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             (16, "nvfp4", 4),
             (32, "mxfp8", 8),
         )
-        x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
-        c = mx.ones(shape=(M, N), dtype=dtype)
+        x = mx.random.normal(shape=(M, K), key=k1)
+        c = mx.ones(shape=(M, N))
 
         for group_size, mode, bits in tests:
             with self.subTest(
@@ -1095,7 +1119,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 bits=bits,
                 mode=mode,
             ):
-                w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
+                w = mx.random.normal(shape=(N, K), key=k2)
 
                 def fn(x):
                     return mx.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)

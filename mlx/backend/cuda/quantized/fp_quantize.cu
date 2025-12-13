@@ -111,8 +111,8 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   if (oindex >= size) {
     return;
   }
-  size_t gindex = oindex / group_size;
 
+  size_t gindex = oindex / group_size;
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
   auto scale = float(((ScaleType*)(scales))[gindex]);
