@@ -1,9 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
-#include <arpa/inet.h>
 #include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,6 +19,8 @@
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/distributed/reduction_ops.h"
+#include "mlx/distributed/utils.h"
 #include "mlx/threadpool.h"
 
 #ifndef SOL_TCP
@@ -94,6 +93,7 @@ constexpr const size_t ALL_SUM_SIZE = 8 * 1024 * 1024;
 constexpr const size_t ALL_SUM_BUFFERS = 2;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
+constexpr const char* RING_TAG = "[ring]";
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -296,55 +296,6 @@ class CommunicationThreads {
   std::unordered_map<int, SocketThread> threads_;
 };
 
-struct address_t {
-  sockaddr_storage addr;
-  socklen_t len;
-
-  const sockaddr* get() const {
-    return (struct sockaddr*)&addr;
-  }
-};
-
-/**
- * Parse a sockaddr from an ip and port provided as strings.
- */
-address_t parse_address(const std::string& ip, const std::string& port) {
-  struct addrinfo hints, *res;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-
-  int status = getaddrinfo(ip.c_str(), port.c_str(), &hints, &res);
-  if (status != 0) {
-    std::ostringstream msg;
-    msg << "Can't parse address " << ip << ":" << port;
-    throw std::runtime_error(msg.str());
-  }
-
-  address_t result;
-  memcpy(&result.addr, res->ai_addr, res->ai_addrlen);
-  result.len = res->ai_addrlen;
-  freeaddrinfo(res);
-
-  return result;
-}
-
-/**
- * Parse a sockaddr provided as an <ip>:<port> string.
- */
-address_t parse_address(const std::string& ip_port) {
-  auto colon = ip_port.find(":");
-  if (colon == std::string::npos) {
-    std::ostringstream msg;
-    msg << "Can't parse address " << ip_port;
-    throw std::runtime_error(msg.str());
-  }
-  std::string ip(ip_port.begin(), ip_port.begin() + colon);
-  std::string port(ip_port.begin() + colon + 1, ip_port.end());
-
-  return parse_address(ip, port);
-}
-
 /**
  * Load all addresses from the json hostfile. The hostfile is a list of
  * addresses in order of rank. For each rank there can be many addresses so
@@ -357,15 +308,15 @@ address_t parse_address(const std::string& ip_port) {
  *    ["ip3:5000", "ip3:5001"],
  *  ]
  */
-std::vector<std::vector<address_t>> load_nodes(const char* hostfile) {
-  std::vector<std::vector<address_t>> nodes;
+std::vector<std::vector<detail::address_t>> load_nodes(const char* hostfile) {
+  std::vector<std::vector<detail::address_t>> nodes;
   std::ifstream f(hostfile);
 
   json hosts = json::parse(f);
   for (auto& h : hosts) {
-    std::vector<address_t> host;
+    std::vector<detail::address_t> host;
     for (auto& ips : h) {
-      host.push_back(parse_address(ips.get<std::string>()));
+      host.push_back(std::move(detail::parse_address(ips.get<std::string>())));
     }
     nodes.push_back(std::move(host));
   }
@@ -377,73 +328,15 @@ std::vector<std::vector<address_t>> load_nodes(const char* hostfile) {
  * Create a socket and accept one connection for each of the provided
  * addresses.
  */
-std::vector<int> accept_connections(const std::vector<address_t>& addresses) {
+std::vector<int> accept_connections(
+    const std::vector<detail::address_t>& addresses) {
   std::vector<int> sockets;
   int success;
 
   for (auto& address : addresses) {
-    // Create the socket to wait for connections from the peers
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-      std::ostringstream msg;
-      msg << "[ring] Couldn't create socket (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    // Make sure we can launch immediately after shutdown by setting the
-    // reuseaddr option so that we don't get address already in use errors
-    int enable = 1;
-    success = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
-    if (success < 0) {
-      shutdown(sock, 2);
-      close(sock);
-      std::ostringstream msg;
-      msg << "[ring] Couldn't enable reuseaddr (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-    success = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int));
-    if (success < 0) {
-      shutdown(sock, 2);
-      close(sock);
-      std::ostringstream msg;
-      msg << "[ring] Couldn't enable reuseport (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    // Bind the socket to the address and port
-    success = bind(sock, address.get(), address.len);
-    if (success < 0) {
-      shutdown(sock, 2);
-      close(sock);
-      std::ostringstream msg;
-      msg << "[ring] Couldn't bind socket (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    // Wait for connections
-    success = listen(sock, 0);
-    if (success < 0) {
-      shutdown(sock, 2);
-      close(sock);
-      std::ostringstream msg;
-      msg << "[ring] Couldn't listen (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    int peer_socket = accept(sock, nullptr, nullptr);
-    if (peer_socket < 0) {
-      shutdown(sock, 2);
-      close(sock);
-      std::ostringstream msg;
-      msg << "[ring] Accept failed (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    // Close the listening socket
-    shutdown(sock, 2);
-    close(sock);
-
-    sockets.push_back(peer_socket);
+    detail::TCPSocket socket(RING_TAG);
+    socket.listen(RING_TAG, address);
+    sockets.push_back(socket.accept(RING_TAG).detach());
   }
 
   return sockets;
@@ -454,93 +347,42 @@ std::vector<int> accept_connections(const std::vector<address_t>& addresses) {
  * provided addresses.
  */
 std::vector<int> make_connections(
-    const std::vector<address_t>& addresses,
+    const std::vector<detail::address_t>& addresses,
     bool verbose) {
   std::vector<int> sockets;
   int success;
 
   for (auto& address : addresses) {
-    int sock;
-
-    // Attempt to connect to the peer CONN_ATTEMPTS times with exponential
-    // backoff. TODO: Do we need that?
-    for (int attempt = 0; attempt < CONN_ATTEMPTS; attempt++) {
-      // Create the socket
-      sock = socket(AF_INET, SOCK_STREAM, 0);
-      if (sock < 0) {
-        std::ostringstream msg;
-        msg << "[ring] Couldn't create socket (error: " << errno << ")";
-        throw std::runtime_error(msg.str());
-      }
-
-      if (attempt > 0) {
-        int wait = (1 << (attempt - 1)) * CONN_WAIT;
-        log_info(
-            verbose,
-            "Attempt",
-            attempt,
-            "wait",
-            wait,
-            "ms (error:",
-            errno,
-            ")");
-        std::this_thread::sleep_for(std::chrono::milliseconds(wait));
-      }
-
-      success = connect(sock, address.get(), address.len);
-      if (success == 0) {
-        break;
-      }
-    }
-    if (success < 0) {
-      std::ostringstream msg;
-      msg << "[ring] Couldn't connect (error: " << errno << ")";
-      throw std::runtime_error(msg.str());
-    }
-
-    sockets.push_back(sock);
+    sockets.push_back(detail::TCPSocket::connect(
+                          RING_TAG,
+                          address,
+                          CONN_ATTEMPTS,
+                          CONN_WAIT,
+                          [verbose](int attempt, int wait) {
+                            log_info(
+                                verbose,
+                                "Attempt",
+                                attempt,
+                                "waiting",
+                                wait,
+                                "ms (error:",
+                                errno,
+                                ")");
+                          })
+                          .detach());
   }
 
   return sockets;
 }
-template <typename T>
-struct SumOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output += *input;
-      input++;
-      output++;
-    }
-  }
-};
-
-template <typename T>
-struct MaxOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output = std::max(*output, *input);
-      input++;
-      output++;
-    }
-  }
-};
-
-template <typename T>
-struct MinOp {
-  void operator()(const T* input, T* output, size_t N) {
-    while (N-- > 0) {
-      *output = std::min(*output, *input);
-      input++;
-      output++;
-    }
-  }
-};
 
 } // namespace
 
 class RingGroup : public GroupImpl {
  public:
-  RingGroup(int rank, std::vector<std::vector<address_t>> nodes, bool verbose)
+  RingGroup(
+      int rank,
+      std::vector<std::vector<detail::address_t>> nodes,
+      bool verbose)
       : rank_(rank), verbose_(verbose), pool_(0) {
     if (rank_ > 0 && rank_ >= nodes.size()) {
       throw std::runtime_error(
@@ -633,17 +475,17 @@ class RingGroup : public GroupImpl {
 
   void all_sum(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, SumOp<T>>(input, output, stream, SumOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::SumOp<T>()));
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, MaxOp<T>>(input, output, stream, MaxOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::MaxOp<T>()));
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
     SWITCH_TYPE(
-        output, all_reduce<T, MinOp<T>>(input, output, stream, MinOp<T>()));
+        output, all_reduce<T>(input, output, stream, detail::MinOp<T>()));
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {

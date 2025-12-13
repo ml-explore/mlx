@@ -52,9 +52,25 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "is_available",
-      &mx::distributed::is_available,
+      [](const std::string& backend) {
+        return mx::distributed::is_available(backend);
+      },
+      "backend"_a = "any",
+      nb::sig("def is_available(backend: str = 'any') -> bool"),
       R"pbdoc(
       Check if a communication backend is available.
+
+      Note, this function returns whether MLX has the capability of
+      instantiating that distributed backend not whether it is possible to
+      create a communication group. For that purpose one should use
+      ``init(strict=True)``.
+
+      Args:
+        backend (str, optional): The name of the backend to check for availability.
+          It takes the same values as :func:`init()`. Default: ``"any"``.
+
+      Returns:
+        bool: Whether the distributed backend is available.
       )pbdoc");
 
   m.def(
@@ -79,10 +95,10 @@ void init_distributed(nb::module_& parent_module) {
             in case ``mx.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
           backend (str, optional): Which distributed backend to initialize.
-            Possible values ``mpi``, ``ring``, ``nccl``, ``any``. If set to ``any`` all
-            available backends are tried and the first one that succeeds
-            becomes the global group which will be returned in subsequent
-            calls. Default: ``any``
+            Possible values ``mpi``, ``ring``, ``nccl``, ``jaccl``, ``any``. If
+            set to ``any`` all available backends are tried and the first one
+            that succeeds becomes the global group which will be returned in
+            subsequent calls. Default: ``any``
 
         Returns:
           Group: The group representing all the launched processes.
