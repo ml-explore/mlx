@@ -83,6 +83,24 @@ cublasLtMatrixLayout_t create_matrix_layout(
   return desc;
 }
 
+cudaDataType_t dtype_to_cublas_type(Dtype dtype, string_view tag) {
+  switch (dtype) {
+    case float16:
+      return CUDA_R_16F;
+    case bfloat16:
+      return CUDA_R_16BF;
+    case float32:
+      return CUDA_R_32F;
+    case float64:
+      return CUDA_R_64F;
+    case complex64:
+      return CUDA_C_32F;
+    default:
+      throw std::runtime_error(fmt::format(
+          "Unsupported dtype in {}: {}.", tag, dtype_to_string(dtype)));
+  }
+}
+
 } // namespace cublas_utils
 
 CublasMatmulBase::~CublasMatmulBase() {

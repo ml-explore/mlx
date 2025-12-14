@@ -63,11 +63,14 @@ CublasQQMM::CublasQQMM(
     int32_t batch_count,
     int64_t a_batch_stride,
     int64_t b_batch_stride,
+    Dtype out_dtype,
     std::string qmode) {
+  // The compute type must be CUBLAS_COMPUTE_32F.
+  // The scale type must be CUDA_R_32F.
   cudaDataType_t scale_type = CUDA_R_32F;
-  cudaDataType_t output_type = CUDA_R_16BF; // always output in bf16
-  cublasComputeType_t gemm_compute_type =
-      CUBLAS_COMPUTE_32F; // always for narrow precision
+  cublasComputeType_t gemm_compute_type = CUBLAS_COMPUTE_32F;
+  cudaDataType_t output_type =
+      cublas_utils::dtype_to_cublas_type(out_dtype, "CublasQQMM");
   cudaDataType_t data_type = qmode_to_cublas_dtype(qmode);
   quantization_mode_ = std::string(qmode);
 
@@ -119,6 +122,7 @@ CublasQQMM::CublasQQMM(
     int64_t a_batch_stride,
     int64_t b_batch_stride,
     int64_t c_batch_stride,
+    Dtype out_dtype,
     std::string qmode)
     : CublasQQMM(
           device,
@@ -133,8 +137,10 @@ CublasQQMM::CublasQQMM(
           batch_count,
           a_batch_stride,
           b_batch_stride,
+
           qmode) {
-  auto type = CUDA_R_16BF; // always c in bf16
+  auto type = cublas_utils::dtype_to_cublas_type(
+      out_dtype, "CublasQQMM"); // must match the output type
   c_desc_ = cublas_utils::create_matrix_layout(
       type,
       b_transposed ? b_rows : b_cols,

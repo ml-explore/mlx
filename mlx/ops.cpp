@@ -4333,7 +4333,6 @@ array qqmm(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
-    std::optional<Dtype> dtype /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   // we need t ocheck 2 cases:
   // 1. w is quantized, scales is provided
@@ -4348,15 +4347,6 @@ array qqmm(
   }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
-  // validate output dtype
-  if (dtype.has_value() && (!issubdtype(*dtype, floating)) ||
-      dtype == float64) {
-    std::ostringstream msg;
-    msg << "[qqmm] Only real floating types except float64 are supported but "
-        << "output dtype == " << *dtype << ".";
-    throw std::invalid_argument(msg.str());
-  }
-  auto out_type = dtype.has_value() ? *dtype : bfloat16;
   // validate inputs
   validate_qqmm_inputs(x, w, scales_w, group_size, bits);
   // validate and extract shapes
@@ -4371,12 +4361,10 @@ array qqmm(
   }
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
-
   return array(
       std::move(out_shape),
-      out_type,
-      std::make_shared<QQMatmul>(
-          to_stream(s), group_size, bits, qmode, out_type),
+      x.dtype(), // output dtype is the same as x dtype
+      std::make_shared<QQMatmul>(to_stream(s), group_size, bits, qmode),
       std::move(inputs));
 }
 

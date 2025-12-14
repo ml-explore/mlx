@@ -125,6 +125,7 @@ void qqmm_impl(
     const array& a_scale,
     const array& b_scale,
     QuantizationMode mode,
+    Dtype out_dtype,
     float alpha = 1.0f) {
   // Invoke CublasQQMM
   std::string qmode = quantization_mode_to_string(mode);
@@ -145,6 +146,7 @@ void qqmm_impl(
       1, // batch_count
       0, // a_batch_stride
       0, // b_batch_stride
+      out_dtype_,
       qmode);
 
   qqmm.run(encoder, out, a, b, a_scale, b_scale, alpha);
@@ -181,11 +183,12 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         return std::make_pair(x_q, scales_x);
       };
   auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
-  auto [w_q, scale_w_pre] = std::make_pair(inputs[1], inputs[2]);
   if (inputs[1].dtype() != uint32) {
     auto [w_q, scale_w_pre] = quantize(inputs[1], encoder, s);
-  }
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  } else
+    (auto [w_q, scale_w_pre] = std::make_pair(inputs[1], inputs[2]);)
+        out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  auto out_dtype = out.dtype();
 
   int M = x_q.shape(-2);
   int N = w_q.shape(-2); // always transposed
@@ -215,6 +218,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       w_q,
       scale_x,
       scale_w,
+      out_dtype,
       mode_);
 }
 

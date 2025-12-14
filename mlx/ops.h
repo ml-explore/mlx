@@ -1428,7 +1428,6 @@ array qqmm(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "nvfp4",
-    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */

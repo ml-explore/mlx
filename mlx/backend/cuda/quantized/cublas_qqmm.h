@@ -24,6 +24,7 @@ class CublasQQMM : public CublasMatmulBase {
       int32_t batch_count,
       int64_t a_batch_stride,
       int64_t b_batch_stride,
+      Dtype out_dtype,
       std::string quantization_mode);
 
   CublasQQMM(
@@ -41,6 +42,7 @@ class CublasQQMM : public CublasMatmulBase {
       int64_t a_batch_stride,
       int64_t b_batch_stride,
       int64_t c_batch_stride,
+      Dtype out_dtype,
       std::string quantization_mode);
 
   void run(

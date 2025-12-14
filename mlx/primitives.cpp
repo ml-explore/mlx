@@ -3471,7 +3471,7 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
 bool QQMatmul::is_equivalent(const Primitive& other) const {
   const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_ && dtype_ == qm_other.dtype_;
+      mode_ == qm_other.mode_;
 }
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {

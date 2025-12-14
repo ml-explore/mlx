@@ -32,24 +32,6 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
   }
 }
 
-cudaDataType_t dtype_to_cublas_type(Dtype dtype) {
-  switch (dtype) {
-    case float16:
-      return CUDA_R_16F;
-    case bfloat16:
-      return CUDA_R_16BF;
-    case float32:
-      return CUDA_R_32F;
-    case float64:
-      return CUDA_R_64F;
-    case complex64:
-      return CUDA_C_32F;
-    default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in CublasGemm: {}.", dtype_to_string(dtype)));
-  }
-}
-
 } // namespace
 
 CublasGemm::CublasGemm(
@@ -66,16 +48,19 @@ CublasGemm::CublasGemm(
     int32_t batch_count,
     int64_t a_batch_stride,
     int64_t b_batch_stride) {
-  scale_type_ = dtype_to_cublas_type(dtype);
+  scale_type_ = cublas_utils::dtype_to_cublas_type(dtype, "CublasGemm");
   if (dtype == bfloat16 || dtype == float16) {
     scale_type_ = CUDA_R_32F;
   }
+  cudaDataType_t cublas_dtype =
+      cublas_utils::dtype_to_cublas_type(dtype, "CublasGemm");
+
   init_base(
       device,
       scale_type_,
       dtype_to_compute_type(dtype),
-      dtype_to_cublas_type(dtype),
-      dtype_to_cublas_type(dtype),
+      cublas_dtype,
+      cublas_dtype,
       a_transposed,
       a_rows,
       a_cols,
@@ -134,7 +119,7 @@ void CublasGemm::set_out(
     int64_t batch_stride) {
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(out_desc_));
   out_desc_ = cublas_utils::create_matrix_layout(
-      dtype_to_cublas_type(dtype),
+      cublas_utils::dtype_to_cublas_type(dtype, "CublasGemm"),
       cols,
       rows,
       transposed,

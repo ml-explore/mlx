@@ -5442,7 +5442,6 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "nvfp4",
-      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -5461,6 +5460,10 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
+        ``x`` and `w`` if not-quantized must have float32, float16, or bfloat16
+        data types.
+        If quantized, ``w`` must be packed in uint32 data type with.
+        
       Args:
         x (array): Input array.
         w (array): Weight matrix. If quantized, it is packed in unsigned integers.
@@ -5473,9 +5476,6 @@ void init_ops(nb::module_& m) {
           ``x`` and ``w``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
-        dtype (dtype, optional): The output data type. If set, can be ``float32``,
-          ``float16``, or ``bfloat16``. If ``None``, the return type is
-          ``bfloat16``.
 
       Returns:
         array: The result of ``x @ w`` (with internal on-the-fly quantization as
