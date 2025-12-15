@@ -23,7 +23,7 @@ cublasLtMatrixLayout_t create_matrix_layout(
     int32_t batch_count,
     int64_t batch_stride);
 
-cudaDataType_t dtype_to_cublas_type(Dtype dtype, std::string_view tag) {
+inline cudaDataType_t dtype_to_cublas_type(Dtype dtype, std::string_view tag) {
   switch (dtype) {
     case float16:
       return CUDA_R_16F;
