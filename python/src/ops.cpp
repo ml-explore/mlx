@@ -5445,7 +5445,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', dtype: Optional[dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Perform a matrix multiplication using a possibly quantized weight matrix
       ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
