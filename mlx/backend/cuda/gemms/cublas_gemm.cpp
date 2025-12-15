@@ -104,7 +104,7 @@ CublasGemm::CublasGemm(
           batch_count,
           a_batch_stride,
           b_batch_stride) {
-  auto type = dtype_to_cublas_type(dtype);
+  auto type = cublas_utils::dtype_to_cublas_type(dtype, "CublasGemm");
   c_desc_ = cublas_utils::create_matrix_layout(
       type, b_cols, a_rows, false, ldc, batch_count, c_batch_stride);
 }

@@ -1,10 +1,10 @@
 // Copyright © 2025 Apple Inc.
 #pragma once
 
+#include <cublasLt.h>
 #include "mlx/array.h"
 #include "mlx/backend/cuda/device.h"
-
-#include <cublasLt.h>
+#include "mlx/dtype_utils.h"
 
 namespace mlx::core {
 namespace cublas_utils {
@@ -23,8 +23,23 @@ cublasLtMatrixLayout_t create_matrix_layout(
     int32_t batch_count,
     int64_t batch_stride);
 
-// todo add dtype_utils include
-cudaDataType_t dtype_to_cublas_type(Dtype dtype, std::string_view tag) {}
+cudaDataType_t dtype_to_cublas_type(Dtype dtype, std::string_view tag) {
+  switch (dtype) {
+    case float16:
+      return CUDA_R_16F;
+    case bfloat16:
+      return CUDA_R_16BF;
+    case float32:
+      return CUDA_R_32F;
+    case float64:
+      return CUDA_R_64F;
+    case complex64:
+      return CUDA_C_32F;
+    default:
+      throw std::runtime_error(fmt::format(
+          "Unsupported dtype in {}: {}.", tag, dtype_to_string(dtype)));
+  }
+}
 
 } // namespace cublas_utils
 
