@@ -65,10 +65,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
-else()
-  target_sources(
-    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu
-                ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
@@ -147,6 +143,27 @@ endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
+
+set(MLX_CUDA_HAS_SM100 OFF)
+foreach(_arch IN LISTS MLX_CUDA_ARCHITECTURES)
+  string(REGEX MATCH "^[0-9]+" _n "${_arch}")
+  if(_n AND _n GREATER_EQUAL 100)
+    set(MLX_CUDA_HAS_SM100 ON)
+    break()
+  endif()
+endforeach()
+
+if(MLX_CUDA_HAS_SM100 AND CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL
+                          12.8.0)
+  target_sources(
+    mlx
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
+else()
+  target_sources(mlx
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_stub.cpp)
+endif()
 
 # Use fixed version of CCCL.
 FetchContent_Declare(

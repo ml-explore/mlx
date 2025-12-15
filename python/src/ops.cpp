@@ -5476,9 +5476,11 @@ void init_ops(nb::module_& m) {
           ``x`` and ``w``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+          See supported values and defaults in the :ref:`table of quantization 
+          modes <quantize-modes>`.
 
       Returns:
-        array: The result of ``x @ w`` (with internal on-the-fly quantization as
+        array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).
   )pbdoc");
 }

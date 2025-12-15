@@ -137,7 +137,7 @@ CublasQQMM::CublasQQMM(
           batch_count,
           a_batch_stride,
           b_batch_stride,
-
+          out_dtype,
           qmode) {
   auto type = cublas_utils::dtype_to_cublas_type(
       out_dtype, "CublasQQMM"); // must match the output type

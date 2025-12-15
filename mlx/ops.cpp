@@ -4334,9 +4334,12 @@ array qqmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
-  // we need t ocheck 2 cases:
-  // 1. w is quantized, scales is provided
-  // 2. w is not quantized, scales is not provided
+// we need t ocheck 2 cases:
+// 1. w is quantized, scales is provided
+// 2. w is not quantized, scales is not provided
+#ifndef MLX_USE_CUDA
+  throw std::invalid_argument("[qqmm] QQMM is only supported on CUDA backend.");
+#endif
   auto qmode = string_to_quantization_mode(mode, "qqmm");
   // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
   if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {

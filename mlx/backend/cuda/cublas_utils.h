@@ -23,6 +23,9 @@ cublasLtMatrixLayout_t create_matrix_layout(
     int32_t batch_count,
     int64_t batch_stride);
 
+// todo add dtype_utils include
+cudaDataType_t dtype_to_cublas_type(Dtype dtype, std::string_view tag) {}
+
 } // namespace cublas_utils
 
 class CublasMatmulBase {

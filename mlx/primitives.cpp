@@ -3516,7 +3516,6 @@ std::vector<array> QQMatmul::vjp(
           group_size_,
           bits_,
           qmode,
-          dtype_,
           s));
     } else if (arg == 1) { // gradient wrt to weights
       // we need to quantize along M but cotan is
@@ -3535,7 +3534,6 @@ std::vector<array> QQMatmul::vjp(
           group_size_,
           bits_,
           qmode,
-          dtype_,
           s)); // (K, M), (N, M_packed)
     }
   }

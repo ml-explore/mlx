@@ -1023,10 +1023,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
             ds = mx.grad(gmm)(s, x, wq)
 
-    @unittest.skipIf(
-        not mx.cuda.is_available() or getattr(mx, "qqmm", None) is None,
-        "[qqmm] Skipped because either CUDA is not available or qqmm is not implemented.",
-    )
     def test_qqmm(self):
         # In mxfp8 mode, the results do not match exactly:
         # fewer than 1% of output elements differ.
@@ -1095,10 +1091,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         self.assertEqual(y_q.shape, y_hat.shape)
                         self.assertTrue(mx.logical_or(error < 1e-3, error <= ulp).all())
 
-    @unittest.skipIf(
-        not mx.cuda.is_available() or getattr(mx, "qqmm", None) is None,
-        "[qqmm] Skipped because either CUDA is not available or qqmm is not implemented.",
-    )
     def test_qqmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

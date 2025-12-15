@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
