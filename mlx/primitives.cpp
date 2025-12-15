@@ -3482,8 +3482,8 @@ std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
 }
 
 std::vector<array> QQMatmul::vjp(
-    const std::vector<array>& primals, // bf16 x, quantized weights
-    const std::vector<array>& cotangents, // bf16 grads
+    const std::vector<array>& primals, // non quantized x, non quantized w
+    const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
@@ -3492,49 +3492,31 @@ std::vector<array> QQMatmul::vjp(
   std::iota(reorder.begin(), reorder.end(), 0);
   std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   auto& s = stream();
-  // primal[1] -- non quantized / quantized weights (N, K || K_packed)
-  // primal[2] -- scales_w (optional) (N, K / group_size)
+  // primal[1] -- non quantized w (N, K)
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
-  // first argument is quantized inside eval_gpu (activations, activation
-  // gradients) second argument is (weights) quantized in vjp
   auto qmode = quantization_mode_to_string(mode_);
   for (auto arg : argnums) {
+    // TODO: we need a kernel that will quantize columnwise + transpose
     if (arg == 0) { // gradient wrt to x
-      // We transpose weights -> quantize along N -> qqmm (cotan quantized in
-      // eval_gpu)
-      auto wtq = quantize(
-          transpose(primals[1], {1, 0}, s), // we assume that weights are 2D
-          group_size_,
-          bits_,
-          qmode,
-          s); // (K, N_packed), scales
+      // We transpose weights -> quantize along N
       vjps.push_back(qqmm(
           cotan, //  M X N
-          wtq[0], //  K X N_packed
-          wtq[1], // scales
+          transpose(primals[1], {1, 0}, s), // assuming that w is 2D
+          {},
           group_size_,
           bits_,
           qmode,
           s));
     } else if (arg == 1) { // gradient wrt to weights
-      // we need to quantize along M but cotan is
-      // (M,N) so we transpose cotan -> quantize along M -> qqmm
-      // TODO: quantize column wise (without transpose)
-      auto xtq = quantize(
-          transpose(primals[0], reorder, s),
-          group_size_,
-          bits_,
-          qmode,
-          s); // (N, M_packed)
       vjps.push_back(qqmm(
           transpose(cotan, reorder, s), // (N, M)
-          xtq[0], // (N, M_packed)
-          xtq[1], // scales
+          transpose(primals[0], reorder, s), // (K, M)
+          {},
           group_size_,
           bits_,
           qmode,
-          s)); // (K, M), (N, M_packed)
+          s));
     }
   }
   return vjps;
