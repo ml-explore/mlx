@@ -57,6 +57,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           python-version: ${{ matrix.python_version }}
+          use-ccache: false
       - uses: ./.github/actions/build-linux-release
         with:
           build-backend: ${{ matrix.python-version == '3.10' }}
@@ -141,6 +142,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           toolkit: ${{ matrix.toolkit }}
+          use-ccache: false
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:

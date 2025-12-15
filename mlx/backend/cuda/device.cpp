@@ -348,6 +348,9 @@ std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
         key += subkey;
         break;
       }
+      case cudaGraphNodeTypeHost:
+        key += "H";
+        break;
       case cudaGraphNodeTypeMemset:
         key += "M";
         break;

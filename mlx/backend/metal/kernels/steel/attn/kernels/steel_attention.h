@@ -347,7 +347,7 @@ template <
           MMAFrag_mask_t::load_safe(
               mfrag,
               mask,
-              int(mask_params->M_strides[2]),
+              int64_t(mask_params->M_strides[2]),
               Int<1>{},
               params->qL,
               params->kL,

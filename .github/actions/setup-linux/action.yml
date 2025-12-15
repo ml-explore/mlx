@@ -10,22 +10,28 @@ inputs:
     description: 'Version of python to set up'
     required: false
     default: '3.10'
+  use-ccache:
+    description: 'Whether to enable ccache'
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
   steps:
-    - name: Use ccache
-      if: ${{ runner.arch == 'x86_64' }}
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}-py${{ inputs.python-version }}
-        max-size: 1GB
-
     - name: Install common dependencies
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev zip
+
+    - name: Use ccache
+      if: ${{ inputs.use-ccache == 'true' }}
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}
+        max-size: 1GB
+        # ccache-action bug: running "apt-get update" fails on large arm runner.
+        update-package-index: false
 
     - uses: actions/setup-python@v6
       with:

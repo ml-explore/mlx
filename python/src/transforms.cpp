@@ -124,37 +124,53 @@ auto py_value_and_grad(
 
     // Collect the arrays
     std::vector<mx::array> arrays;
+    std::vector<nb::object> array_objects;
+    auto flatten_with_objects = [&arrays, &array_objects](
+                                    auto tree, bool strict) {
+      tree_visit(tree, [&](nb::handle obj) {
+        if (nb::isinstance<mx::array>(obj)) {
+          arrays.push_back(nb::cast<mx::array>(obj));
+          array_objects.push_back(nb::borrow<nb::object>(obj));
+        } else if (strict) {
+          throw std::invalid_argument(
+              "[tree_flatten] The argument should contain only arrays");
+        }
+      });
+    };
+
     std::vector<int> counts(1, 0);
     std::vector<int> gradient_indices;
     for (int i = 0, j = 0; i < args.size(); ++i) {
       bool needs_grad = (j < argnums.size() && argnums[j] == i);
-      auto argsi = tree_flatten(args[i], /* strict = */ needs_grad);
+      auto pre_size = arrays.size();
+      flatten_with_objects(args[i], /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
-        gradient_indices.resize(old_size + argsi.size());
+        auto delta_size = arrays.size() - pre_size;
+        gradient_indices.resize(old_size + delta_size);
         std::iota(
             gradient_indices.begin() + old_size,
             gradient_indices.end(),
-            arrays.size());
+            pre_size);
         j++;
-        counts.push_back(argsi.size());
+        counts.push_back(delta_size);
       }
-      arrays.insert(arrays.end(), argsi.begin(), argsi.end());
     }
     for (auto item : kwargs) {
       bool needs_grad =
           (argnames.find(nb::cast<std::string>(item.first)) != argnames.end());
-      auto argsk = tree_flatten(item.second, /* strict = */ needs_grad);
+      auto pre_size = arrays.size();
+      flatten_with_objects(item.second, /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
-        gradient_indices.resize(old_size + argsk.size());
+        auto delta_size = arrays.size() - pre_size;
+        gradient_indices.resize(old_size + delta_size);
         std::iota(
             gradient_indices.begin() + old_size,
             gradient_indices.end(),
-            arrays.size());
-        counts.push_back(argsk.size());
+            pre_size);
+        counts.push_back(delta_size);
       }
-      arrays.insert(arrays.end(), argsk.begin(), argsk.end());
     }
     std::partial_sum(counts.cbegin(), counts.cend(), counts.begin());
 
@@ -163,7 +179,7 @@ auto py_value_and_grad(
     nb::object py_value_out;
     auto value_and_grads = mx::value_and_grad(
         [&fun,
-         &arrays,
+         &array_objects,
          &args,
          &kwargs,
          &py_value_out,
@@ -183,8 +199,9 @@ auto py_value_and_grad(
           tree_visit_update(tree, [&](nb::handle node) {
             auto replace_arr = nb::cast<mx::array>(node);
             if (replace_arr.id() == a[index].id()) {
-              return nb::cast(arrays[index++]);
+              return array_objects[index++];
             } else {
+              index++;
               return nb::cast(replace_arr);
             }
           });
