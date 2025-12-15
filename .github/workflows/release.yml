@@ -164,12 +164,12 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: linux-wheels-*
           merge-multiple: true
           path: dist
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: mac-wheels-*
           merge-multiple: true
@@ -191,7 +191,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-cuda
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: mlx-cuda
           path: dist
@@ -212,7 +212,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-cpu
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: mlx-cpu-*
           merge-multiple: true
@@ -234,7 +234,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-metal
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: mlx-metal
           path: dist
