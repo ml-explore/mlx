@@ -53,12 +53,12 @@ array pad_and_repack_scales(
   // Compute padded dimensions for full tiles (128 rows × 4 cols)
   auto [pad_outer, pad_inner] =
       get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
-// cuBLAS requirements for scale factor layout:
-// 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
-// 2. Out-of-bounds values must be filled with zeros
-// 3. Starting addresses must be 16-byte aligned
-//
-https: // docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
+  // cuBLAS requirements for scale factor layout:
+  // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
+  // 2. Out-of-bounds values must be filled with zeros
+  // 3. Starting addresses must be 16-byte aligned
+  //
+  // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
   // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
       cu::malloc_async(pad_outer * pad_inner, encoder),
@@ -119,28 +119,40 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-  assert(inputs.size() == 2 || inputs.size() == 3);
+  assert(
+      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
+      (inputs.size() == 2));
 
-  auto quantize =
-      [&](const array& input, cu::CommandEncoder& encoder, const Stream& s) {
-        auto x = ensure_row_contiguous(input, encoder, s);
-        auto xq_shape = x.shape();
-        xq_shape.back() = x.shape(-1) * bits_ / 32;
-        auto sshape = x.shape();
-        std::tie(sshape[x.ndim() - 2], sshape[x.ndim() - 1]) =
-            get_padded_scale_dims(x.shape(-2), x.shape(-1) / group_size_);
-        sshape.back() = x.shape(-1) / group_size_;
-        auto scales_size = x.size() / (x.shape(-1) * x.shape(-2)) *
-            (sshape[x.ndim() - 2] * sshape[x.ndim() - 1]);
-        auto xq_size = x.size() * bits_ / 8;
-        array x_q(cu::malloc_async(xq_size, encoder), xq_shape, uint32);
-        array scales_x(cu::malloc_async(scales_size, encoder), sshape, uint8);
-        fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
-        encoder.add_temporary(scales_x);
-        encoder.add_temporary(x_q);
-        return std::make_pair(x_q, scales_x);
-      };
-  // todo declare wq and scales_pre
+  auto quantize = [&](const array& input,
+                      cu::CommandEncoder& encoder,
+                      const Stream& s) -> std::pair<array, array> {
+    const array x = ensure_row_contiguous(input, encoder, s);
+
+    auto xq_shape = x.shape();
+    xq_shape.back() = x.shape(-1) * bits_ / 32;
+
+    auto sshape = x.shape();
+    const int64_t scales_inner = x.shape(-1) / group_size_;
+    auto [pad_outer, pad_inner] =
+        get_padded_scale_dims(x.shape(-2), scales_inner);
+    sshape[x.ndim() - 2] = pad_outer;
+    sshape[x.ndim() - 1] = pad_inner;
+    sshape.back() = scales_inner;
+
+    // Allocate outputs
+    const int64_t xq_bytes = x.size() * bits_ / 8;
+    const int64_t batch = x.size() / (x.shape(-2) * x.shape(-1));
+    const int64_t scales_bytes = batch * (pad_outer * pad_inner);
+
+    array x_q(cu::malloc_async(xq_bytes, encoder), xq_shape, uint32);
+    array scales_x(cu::malloc_async(scales_bytes, encoder), sshape, uint8);
+
+    fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
+
+    encoder.add_temporary(x_q);
+    encoder.add_temporary(scales_x);
+    return {x_q, scales_x};
+  };
   auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
   auto [w_q, scale_w_pre] = [&]() {
     if (inputs[1].dtype() != uint32) {
