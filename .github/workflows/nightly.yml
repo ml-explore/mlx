@@ -23,14 +23,14 @@ jobs:
           build-backend: ${{ matrix.python-version == '3.10' }}
           arch: "x86_64"
       - name: Upload mlx artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: linux-wheels-${{ matrix.python_version }}
           path: wheelhouse/mlx-*.whl
           retention-days: 7
       - name: Upload mlx-cpu artifacts
         if: matrix.python_version == '3.10'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mlx-cpu
           path: wheelhouse/mlx_cpu-*.whl
@@ -89,7 +89,7 @@ jobs:
         with:
           toolkit: 'cuda-12.9'
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mlx-cuda
           path: wheelhouse/mlx_cuda-*.whl

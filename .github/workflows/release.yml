@@ -63,14 +63,14 @@ jobs:
           build-backend: ${{ matrix.python-version == '3.10' }}
           arch: ${{ matrix.arch }}
       - name: Upload MLX artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           overwrite: true
           name: linux-wheels-${{ matrix.python_version }}-${{ matrix.arch }}
           path: wheelhouse/mlx-*.whl
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           overwrite: true
           name: mlx-cpu-${{ matrix.arch }}
@@ -114,14 +114,14 @@ jobs:
           macos-target: 15.0
           build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           overwrite: true
           name: mac-wheels-${{ matrix.python-version }}
           path: dist/mlx-*.whl
       - name: Upload Metal artifacts
         if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           overwrite: true
           name: mlx-metal
@@ -148,7 +148,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           overwrite: true
           name: mlx-cuda
@@ -164,12 +164,12 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: linux-wheels-*
           merge-multiple: true
           path: dist
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: mac-wheels-*
           merge-multiple: true
@@ -191,7 +191,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-cuda
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: mlx-cuda
           path: dist
@@ -212,7 +212,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-cpu
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           pattern: mlx-cpu-*
           merge-multiple: true
@@ -234,7 +234,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlx-metal
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: mlx-metal
           path: dist
