@@ -3,11 +3,6 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 
-#include "mlx/backend/metal/kernels/steel/attn/nax.h"
-#include "mlx/backend/metal/kernels/steel/attn/params.h"
-#include "mlx/backend/metal/kernels/steel/attn/transforms.h"
-#include "mlx/backend/metal/kernels/steel/utils.h"
-
 #include "mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h"
 
 #define instantiate_attn(tname, dtype, bq, bk, bd, wm, wn, mname, mtype) \

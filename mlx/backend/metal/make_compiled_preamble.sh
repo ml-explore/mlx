@@ -69,8 +69,6 @@ HDRS_SORTED+=("${INPUT_FILE#$SRC_DIR/}")
 CONTENT=$(
 echo "// Copyright © 2025 Apple Inc."
 echo "" 
-echo "// Auto generated source for $INPUT_FILE" 
-echo "" 
 
 for header in "${HDRS_SORTED[@]}"
 do 

@@ -365,4 +365,34 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_steel_attention_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    const array&) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    const array&) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
 } // namespace mlx::core

@@ -4,6 +4,8 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
@@ -88,7 +90,20 @@ void sdpa_full_self_attention_nax(
       (has_sinks ? 't' : 'n'));
 
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(base_name, hash_name, func_consts);
+
+  auto kernel = get_steel_attention_nax_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      q,
+      bq,
+      bk,
+      bd,
+      wm,
+      wn,
+      (has_mask ? *mask : q));
+
   compute_encoder.set_compute_pipeline_state(kernel);
 
   const int NQ = (qL + bq - 1) / bq;
@@ -238,7 +253,20 @@ void sdpa_full_self_attention_metal(
       (has_sinks ? 't' : 'n'));
 
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(base_name, hash_name, func_consts);
+
+  auto kernel = get_steel_attention_kernel(
+      d,
+      base_name,
+      hash_name,
+      func_consts,
+      q,
+      bq,
+      bk,
+      bd,
+      wm,
+      wn,
+      (has_mask ? *mask : q));
+
   compute_encoder.set_compute_pipeline_state(kernel);
 
   const int NQ = (qL + bq - 1) / bq;

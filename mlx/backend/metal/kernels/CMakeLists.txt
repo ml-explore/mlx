@@ -114,18 +114,6 @@ set(STEEL_NAX_ATTN_HEADERS
     steel/attn/params.h
     steel/attn/kernels/steel_attention_nax.h)
 
-build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
-
-if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
-                                              26.2))
-
-  build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
-  build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
-               ${STEEL_NAX_HEADERS})
-
-  build_kernel(steel/attn/kernels/steel_attention_nax ${STEEL_NAX_ATTN_HEADERS})
-endif()
-
 if(NOT MLX_METAL_JIT)
   build_kernel(arange arange.h)
   build_kernel(binary binary.h binary_ops.h)
@@ -157,12 +145,21 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
+  build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
   if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
                                                 26.2))
 
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
+
+    build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
+    build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
+                 ${STEEL_NAX_HEADERS})
+
+    build_kernel(steel/attn/kernels/steel_attention_nax
+                 ${STEEL_NAX_ATTN_HEADERS})
+
   endif()
 
 endif()

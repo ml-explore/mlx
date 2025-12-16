@@ -960,7 +960,7 @@ MTL::ComputePipelineState* get_qmm_nax_kernel(
     concatenate(
         kernel_source,
         metal::utils(),
-        metal::gemm(),
+        metal::gemm_nax(),
         metal::quantized_utils(),
         (mode == "affine") ? metal::quantized_nax() : metal::fp_quantized_nax(),
         template_def);
@@ -988,7 +988,10 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
     concatenate(
-        kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
+        kernel_source,
+        metal::utils(),
+        metal::gemm_nax(),
+        metal::quantized_utils());
     bool is_affine = mode == "affine";
     concatenate(
         kernel_source,
@@ -1005,6 +1008,74 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
             wm,
             wn,
             transpose));
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn,
+    const array& m) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::steel_attention(),
+        get_template_definition(
+            lib_name,
+            "attention",
+            get_type_string(q.dtype()),
+            bq,
+            bk,
+            bd,
+            wm,
+            wn,
+            get_type_string(m.dtype())));
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_attention_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn,
+    const array& m) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(
+        kernel_source,
+        metal::utils(),
+        metal::steel_attention_nax(),
+        get_template_definition(
+            lib_name,
+            "attention_nax",
+            get_type_string(q.dtype()),
+            bq,
+            bk,
+            bd,
+            wm,
+            wn,
+            get_type_string(m.dtype())));
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
