@@ -3468,6 +3468,71 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
   return {std::move(out_shape)};
 }
 
+bool QQMatmul::is_equivalent(const Primitive& other) const {
+  const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_;
+}
+
+std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
+  auto out_shape = inputs[0].shape();
+  int w_outer_dims = inputs[2].shape(-2);
+  out_shape.back() = w_outer_dims;
+  return {std::move(out_shape)};
+}
+
+std::vector<array> QQMatmul::vjp(
+    const std::vector<array>& primals, // non quantized x, non quantized w
+    const std::vector<array>& cotangents, // non quantized upstream grads
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  if (primals.size() != 2) {
+    throw std::runtime_error(
+        "[QQMatmul::vjp] Expected exactly 2 non-quantized primal inputs (x, w).");
+  }
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+  auto& s = stream();
+  // primal[1] -- non quantized w (N, K)
+  // primal[0] -- non quantized activations (M, K)
+  // cotan -- non quantized grads (M, N)
+  auto qmode = quantization_mode_to_string(mode_);
+  for (auto arg : argnums) {
+    // TODO: we need a kernel that will quantize columnwise + transpose
+    if (arg == 0) { // gradient wrt to x
+      // We transpose weights -> quantize along N
+      vjps.push_back(qqmm(
+          cotan, //  M X N
+          swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          s));
+    } else if (arg == 1) { // gradient wrt to weights
+      vjps.push_back(qqmm(
+          swapaxes(cotan, -1, -2, s), // (N, M)
+          swapaxes(primals[0], -1, -2, s), // (K, M)
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          s));
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> QQMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QQMM::jvp NYI");
+}
+
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

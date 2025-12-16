@@ -1642,6 +1642,36 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool transpose_;
 };
 
+class QQMatmul : public UnaryPrimitive {
+ public:
+  explicit QQMatmul(
+      Stream stream,
+      int group_size,
+      int bits,
+      QuantizationMode mode)
+      : UnaryPrimitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        mode_(mode) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  // DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(QQMatmul)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(group_size_, bits_, mode_);
+  }
+
+ private:
+  int group_size_;
+  int bits_;
+  QuantizationMode mode_;
+};
+
 class GatherQMM : public UnaryPrimitive {
  public:
   explicit GatherQMM(

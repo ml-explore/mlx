@@ -18,6 +18,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_grouped_conv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/cublas_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
@@ -64,6 +65,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+else()
+  target_sources(
+    mlx
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
