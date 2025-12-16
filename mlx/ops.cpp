@@ -9,6 +9,7 @@
 #include <set>
 #include <sstream>
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -4339,10 +4340,8 @@ array qqmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
-  // we need t ocheck 2 cases:
-  // 1. w is quantized, scales is provided
-  // 2. w is not quantized, scales is not provided
-  if (s.device != Device::gpu || !cuda::is_available()) {
+  auto stream = to_stream(s);
+  if (stream.device != Device::gpu || !cu::is_available()) {
     throw std::invalid_argument(
         "[qqmm] Only supported on GPU with the CUDA backend.");
   }
@@ -4354,6 +4353,9 @@ array qqmm(
         << mode << "' was provided.";
     throw std::invalid_argument(msg.str());
   }
+  // we need to check 2 cases:
+  // 1. w is quantized, scales is provided
+  // 2. w is not quantized, scales is not provided
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   // validate inputs
@@ -4373,7 +4375,7 @@ array qqmm(
   return array(
       std::move(out_shape),
       x.dtype(), // output dtype is the same as x dtype
-      std::make_shared<QQMatmul>(to_stream(s), group_size, bits, qmode),
+      std::make_shared<QQMatmul>(stream, group_size, bits, qmode),
       std::move(inputs));
 }
 
