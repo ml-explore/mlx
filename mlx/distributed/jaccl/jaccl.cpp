@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include <dlfcn.h>
 #include <infiniband/verbs.h>
 #include <unistd.h>
 #include <fstream>
@@ -12,6 +13,16 @@
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
 #include "mlx/dtype_utils.h"
+
+#define LOAD_SYMBOL(symbol, variable)                               \
+  {                                                                 \
+    variable = (decltype(variable))dlsym(librdma_handle_, #symbol); \
+    char* error = dlerror();                                        \
+    if (error != nullptr) {                                         \
+      librdma_handle_ = nullptr;                                    \
+      return;                                                       \
+    }                                                               \
+  }
 
 constexpr const char* IBV_TAG = "[jaccl]";
 constexpr int NUM_BUFFERS = 2;
@@ -26,6 +37,73 @@ using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
 namespace detail = mlx::core::distributed::detail;
 namespace allocator = mlx::core::allocator;
+
+struct IBVWrapper {
+  IBVWrapper() {
+    librdma_handle_ = dlopen("librdma.dylib", RTLD_NOW | RTLD_GLOBAL);
+    if (librdma_handle_ == nullptr) {
+      return;
+    }
+
+    LOAD_SYMBOL(i().v_get_device_list, get_device_list);
+    LOAD_SYMBOL(ibv_get_device_name, get_device_name);
+    LOAD_SYMBOL(ibv_open_device, open_device);
+    LOAD_SYMBOL(ibv_free_device_list, free_device_list);
+    LOAD_SYMBOL(ibv_close_device, close_device);
+
+    LOAD_SYMBOL(ibv_alloc_pd, alloc_pd);
+    LOAD_SYMBOL(ibv_create_qp, create_qp);
+    LOAD_SYMBOL(ibv_create_cq, create_cq);
+    LOAD_SYMBOL(ibv_destroy_cq, destroy_cq);
+    LOAD_SYMBOL(ibv_destroy_qp, destroy_qp);
+    LOAD_SYMBOL(ibv_dealloc_pd, dealloc_pd);
+
+    LOAD_SYMBOL(ibv_query_port, query_port);
+    LOAD_SYMBOL(ibv_query_gid, query_gid);
+    LOAD_SYMBOL(ibv_modify_qp, modify_qp);
+    LOAD_SYMBOL(ibv_reg_mr, reg_mr);
+    LOAD_SYMBOL(ibv_dereg_mr, dereg_mr);
+
+    LOAD_SYMBOL(ibv_post_send, post_send);
+    LOAD_SYMBOL(ibv_post_recv, post_recv);
+    LOAD_SYMBOL(ibv_poll_cq, poll_cq);
+  }
+
+  bool is_available() {
+    return librdma_handle_ != nullptr;
+  }
+
+  void* librdma_handle_;
+
+  // API
+  ibv_device** (*get_device_list)(int*);
+  const char* (*get_device_name)(ibv_device*);
+  ibv_context* (*open_device)(ibv_device*);
+  void (*free_device_list)(ibv_device**);
+  int (*close_device)(ibv_context*);
+
+  ibv_pd* (*alloc_pd)(ibv_context*);
+  ibv_qp* (*create_qp)(ibv_pd*, ibv_qp_init_attr*);
+  ibv_cq* (*create_cq)(ibv_context*, int, void*, ibv_comp_channel*, int);
+  int (*destroy_cq)(ibv_cq*);
+  int (*destroy_qp)(ibv_qp*);
+  int (*dealloc_pd)(ibv_pd*);
+
+  int (*query_port)(ibv_context*, uint8_t, ibv_port_attr*);
+  int (*query_gid)(ibv_context*, uint8_t, int, ibv_gid*);
+  int (*modify_qp)(ibv_qp*, ibv_qp_attr*, int);
+  ibv_mr* (*reg_mr)(ibv_pd*, void*, size_t, int);
+  int (*dereg_mr)(ibv_mr*);
+
+  int (*post_send)(ibv_qp*, ibv_send_wr*, ibv_send_wr**);
+  int (*post_recv)(ibv_qp*, ibv_recv_wr*, ibv_recv_wr**);
+  int (*poll_cq)(ibv_cq*, int, ibv_wc*);
+};
+
+IBVWrapper& ibv() {
+  static IBVWrapper wrapper;
+  return wrapper;
+}
 
 template <typename T, typename = void>
 struct is_container : std::false_type {};
@@ -84,7 +162,7 @@ class SharedBuffer {
       : data_(page_aligned_alloc(num_bytes)), num_bytes_(num_bytes) {}
   ~SharedBuffer() {
     for (auto& [pd, mr] : memory_regions_) {
-      ibv_dereg_mr(mr);
+      ibv().dereg_mr(mr);
     }
     if (data_ != nullptr) {
       std::free(data_);
@@ -106,7 +184,7 @@ class SharedBuffer {
           "[jaccl] Buffer can be registered once per protection domain");
     }
 
-    it->second = ibv_reg_mr(
+    it->second = ibv().reg_mr(
         protection_domain,
         data_,
         num_bytes_,
@@ -189,28 +267,28 @@ struct Connection {
 
   ~Connection() {
     if (queue_pair != nullptr) {
-      ibv_destroy_qp(queue_pair);
+      ibv().destroy_qp(queue_pair);
     }
     if (completion_queue != nullptr) {
-      ibv_destroy_cq(completion_queue);
+      ibv().destroy_cq(completion_queue);
     }
     if (protection_domain != nullptr) {
-      ibv_dealloc_pd(protection_domain);
+      ibv().dealloc_pd(protection_domain);
     }
     if (ctx != nullptr) {
-      ibv_close_device(ctx);
+      ibv().close_device(ctx);
     }
   }
 
   void allocate_protection_domain() {
-    protection_domain = ibv_alloc_pd(ctx);
+    protection_domain = ibv().alloc_pd(ctx);
     if (protection_domain == nullptr) {
       throw std::runtime_error("[jaccl] Couldn't allocate protection domain");
     }
   }
 
   void create_completion_queue(int num_entries) {
-    completion_queue = ibv_create_cq(ctx, num_entries, nullptr, nullptr, 0);
+    completion_queue = ibv().create_cq(ctx, num_entries, nullptr, nullptr, 0);
     if (completion_queue == nullptr) {
       throw std::runtime_error("[jaccl] Couldn't create completion queue");
     }
@@ -231,7 +309,7 @@ struct Connection {
     init_attr.qp_type = IBV_QPT_UC;
     init_attr.sq_sig_all = 0;
 
-    queue_pair = ibv_create_qp(protection_domain, &init_attr);
+    queue_pair = ibv().create_qp(protection_domain, &init_attr);
 
     if (queue_pair == nullptr) {
       throw std::runtime_error("[jaccl] Couldn't create queue pair");
@@ -244,9 +322,9 @@ struct Connection {
     }
 
     ibv_port_attr port_attr;
-    ibv_query_port(ctx, 1, &port_attr);
+    ibv().query_port(ctx, 1, &port_attr);
     ibv_gid gid;
-    ibv_query_gid(ctx, 1, 1, &gid);
+    ibv().query_gid(ctx, 1, 1, &gid);
 
     src.local_id = port_attr.lid;
     src.queue_pair_number = queue_pair->qp_num;
@@ -267,7 +345,7 @@ struct Connection {
     int mask =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
 
-    if (int status = ibv_modify_qp(queue_pair, &attr, mask); status != 0) {
+    if (int status = ibv().modify_qp(queue_pair, &attr, mask); status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Changing queue pair to INIT failed with errno " << status;
       throw std::invalid_argument(msg.str());
@@ -297,7 +375,7 @@ struct Connection {
     int mask = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
         IBV_QP_RQ_PSN;
 
-    if (int status = ibv_modify_qp(queue_pair, &attr, mask); status != 0) {
+    if (int status = ibv().modify_qp(queue_pair, &attr, mask); status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Changing queue pair to RTR failed with errno " << status;
       throw std::invalid_argument(msg.str());
@@ -311,7 +389,7 @@ struct Connection {
 
     int mask = IBV_QP_STATE | IBV_QP_SQ_PSN;
 
-    if (int status = ibv_modify_qp(queue_pair, &attr, mask); status != 0) {
+    if (int status = ibv().modify_qp(queue_pair, &attr, mask); status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Changing queue pair to RTS failed with errno " << status;
       throw std::invalid_argument(msg.str());
@@ -330,7 +408,7 @@ struct Connection {
     work_request.next = nullptr;
 
     if (int status =
-            ibv_post_send(queue_pair, &work_request, &bad_work_request);
+            ibv().post_send(queue_pair, &work_request, &bad_work_request);
         status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Send failed with error code " << status;
@@ -348,7 +426,7 @@ struct Connection {
     work_request.next = nullptr;
 
     if (int status =
-            ibv_post_recv(queue_pair, &work_request, &bad_work_request);
+            ibv().post_recv(queue_pair, &work_request, &bad_work_request);
         status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Recv failed with error code " << status;
@@ -606,7 +684,7 @@ class ConnectionManager {
         return completions;
       }
 
-      int c = ibv_poll_cq(
+      int c = ibv().poll_cq(
           connections_[r].completion_queue,
           num_completions - completions,
           work_completions + completions);
@@ -620,7 +698,7 @@ class ConnectionManager {
    *
    */
   int poll(int rank, int num_completions, ibv_wc* work_completions) {
-    return ibv_poll_cq(
+    return ibv().poll_cq(
         connections_[rank].completion_queue, num_completions, work_completions);
   }
 
@@ -639,7 +717,7 @@ class ConnectionManager {
  private:
   void create_contexts(const std::vector<std::string>& device_names) {
     int num_devices = 0;
-    ibv_device** devices = ibv_get_device_list(&num_devices);
+    ibv_device** devices = ibv().get_device_list(&num_devices);
     for (auto& name : device_names) {
       // Empty so add a nullptr context
       if (name.empty()) {
@@ -649,8 +727,8 @@ class ConnectionManager {
 
       // Search for the name and try to open the device
       for (int i = 0; i < num_devices; i++) {
-        if (name == ibv_get_device_name(devices[i])) {
-          auto ctx = ibv_open_device(devices[i]);
+        if (name == ibv().get_device_name(devices[i])) {
+          auto ctx = ibv().open_device(devices[i]);
           if (ctx == nullptr) {
             std::ostringstream msg;
             msg << "[jaccl] Could not open device " << name;
@@ -661,7 +739,7 @@ class ConnectionManager {
         }
       }
     }
-    ibv_free_device_list(devices);
+    ibv().free_device_list(devices);
   }
 
   int rank_;
@@ -1077,11 +1155,7 @@ class IBVGroup : public GroupImpl {
 };
 
 bool is_available() {
-  if (__builtin_available(macOS 26.2, *)) {
-    return true;
-  } else {
-    return false;
-  }
+  return ibv().is_available();
 }
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
