@@ -4305,31 +4305,28 @@ std::pair<int, int> extract_qqmm_dims(
     std::optional<array> scales_w,
     int group_size,
     int bits) {
-  auto [w_inner_dims, w_outer_dims] = [&]() {
-    if (w.dtype() != uint32) {
-      // if w is not quantized, check that last dims match
-      if (x.shape(-1) != w.shape(-1)) {
-        std::ostringstream msg;
-        msg << "[qqmm] Last dimension of first input with shape " << x.shape()
-            << " must match last dimension of"
-            << " second input with shape " << w.shape() << ".";
-        throw std::invalid_argument(msg.str());
-      }
-      return std::make_pair(w.shape(-1), w.shape(-2));
-    } else {
-      // if w is quantized, extract dims from quantized w
-      return extract_quantized_matmul_dims(
-          "qqmm",
-          x,
-          w,
-          *scales_w,
-          std::nullopt,
-          /* transpose = */ true,
-          group_size,
-          bits);
+  if (w.dtype() != uint32) {
+    // if w is not quantized, check that last dims match
+    if (x.shape(-1) != w.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[qqmm] Last dimension of first input with shape " << x.shape()
+          << " must match last dimension of"
+          << " second input with shape " << w.shape() << ".";
+      throw std::invalid_argument(msg.str());
     }
-  }();
-  return {w_inner_dims, w_outer_dims};
+    return std::make_pair(w.shape(-1), w.shape(-2));
+  } else {
+    // if w is quantized, extract dims from quantized w
+    return extract_quantized_matmul_dims(
+        "qqmm",
+        x,
+        w,
+        *scales_w,
+        std::nullopt,
+        /* transpose = */ true,
+        group_size,
+        bits);
+  }
 }
 
 array qqmm(
