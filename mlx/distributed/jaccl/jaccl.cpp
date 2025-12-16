@@ -19,6 +19,7 @@
     variable = (decltype(variable))dlsym(librdma_handle_, #symbol); \
     char* error = dlerror();                                        \
     if (error != nullptr) {                                         \
+      std::cerr << IBV_TAG << " " << error << std::endl;            \
       librdma_handle_ = nullptr;                                    \
       return;                                                       \
     }                                                               \
@@ -45,7 +46,7 @@ struct IBVWrapper {
       return;
     }
 
-    LOAD_SYMBOL(i().v_get_device_list, get_device_list);
+    LOAD_SYMBOL(ibv_get_device_list, get_device_list);
     LOAD_SYMBOL(ibv_get_device_name, get_device_name);
     LOAD_SYMBOL(ibv_open_device, open_device);
     LOAD_SYMBOL(ibv_free_device_list, free_device_list);
@@ -64,9 +65,12 @@ struct IBVWrapper {
     LOAD_SYMBOL(ibv_reg_mr, reg_mr);
     LOAD_SYMBOL(ibv_dereg_mr, dereg_mr);
 
-    LOAD_SYMBOL(ibv_post_send, post_send);
-    LOAD_SYMBOL(ibv_post_recv, post_recv);
-    LOAD_SYMBOL(ibv_poll_cq, poll_cq);
+    // Not really symbols but leaving them here in case they become symbols in
+    // the future.
+    //
+    // LOAD_SYMBOL(ibv_post_send, post_send);
+    // LOAD_SYMBOL(ibv_post_recv, post_recv);
+    // LOAD_SYMBOL(ibv_poll_cq, poll_cq);
   }
 
   bool is_available() {
@@ -94,10 +98,6 @@ struct IBVWrapper {
   int (*modify_qp)(ibv_qp*, ibv_qp_attr*, int);
   ibv_mr* (*reg_mr)(ibv_pd*, void*, size_t, int);
   int (*dereg_mr)(ibv_mr*);
-
-  int (*post_send)(ibv_qp*, ibv_send_wr*, ibv_send_wr**);
-  int (*post_recv)(ibv_qp*, ibv_recv_wr*, ibv_recv_wr**);
-  int (*poll_cq)(ibv_cq*, int, ibv_wc*);
 };
 
 IBVWrapper& ibv() {
@@ -408,7 +408,7 @@ struct Connection {
     work_request.next = nullptr;
 
     if (int status =
-            ibv().post_send(queue_pair, &work_request, &bad_work_request);
+            ibv_post_send(queue_pair, &work_request, &bad_work_request);
         status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Send failed with error code " << status;
@@ -426,7 +426,7 @@ struct Connection {
     work_request.next = nullptr;
 
     if (int status =
-            ibv().post_recv(queue_pair, &work_request, &bad_work_request);
+            ibv_post_recv(queue_pair, &work_request, &bad_work_request);
         status != 0) {
       std::ostringstream msg;
       msg << "[jaccl] Recv failed with error code " << status;
@@ -684,7 +684,7 @@ class ConnectionManager {
         return completions;
       }
 
-      int c = ibv().poll_cq(
+      int c = ibv_poll_cq(
           connections_[r].completion_queue,
           num_completions - completions,
           work_completions + completions);
@@ -698,7 +698,7 @@ class ConnectionManager {
    *
    */
   int poll(int rank, int num_completions, ibv_wc* work_completions) {
-    return ibv().poll_cq(
+    return ibv_poll_cq(
         connections_[rank].completion_queue, num_completions, work_completions);
   }
 
