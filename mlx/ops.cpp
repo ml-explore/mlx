@@ -4272,8 +4272,8 @@ void validate_qqmm_inputs(
     // if w is quantized, scales are provided
     if (!scales_w.has_value()) {
       std::ostringstream msg;
-      msg << "[qqmm] Scales must be provided if second argument is quantized.";
-      throw std::invalid_argument(msg.str());
+      throw std::invalid_argument(
+          "[qqmm] Scales must be provided if second argument is quantized.");
     }
     // if scales are provided, check compatibility with quantized w
     else {
@@ -4339,12 +4339,13 @@ array qqmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
-// we need t ocheck 2 cases:
-// 1. w is quantized, scales is provided
-// 2. w is not quantized, scales is not provided
-#ifndef MLX_USE_CUDA
-  throw std::invalid_argument("[qqmm] QQMM is only supported on CUDA backend.");
-#endif
+  // we need t ocheck 2 cases:
+  // 1. w is quantized, scales is provided
+  // 2. w is not quantized, scales is not provided
+  if (s.device != Device::gpu || !cuda::is_available()) {
+    throw std::invalid_argument(
+        "[qqmm] Only supported on GPU with the CUDA backend.");
+  }
   auto qmode = string_to_quantization_mode(mode, "qqmm");
   // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
   if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {

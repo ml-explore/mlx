@@ -65,6 +65,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+else()
+  target_sources(
+    mlx
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
@@ -74,8 +80,6 @@ else()
   target_sources(
     mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm_batched_12_0.cpp)
 endif()
-
-target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
 
 # Embed kernel sources in binary for JIT compilation.
 file(
@@ -94,6 +98,10 @@ add_custom_command(
 add_custom_target(cuda_jit_sources DEPENDS gen/cuda_jit_sources.h)
 add_dependencies(mlx cuda_jit_sources)
 target_include_directories(mlx PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen")
+
+# ------------------------ Compilation configs ------------------------
+
+target_compile_definitions(mlx PRIVATE MLX_USE_CUDA)
 
 # Enable defining device lambda functions.
 target_compile_options(mlx
@@ -116,6 +124,10 @@ endif()
 # Suppress warning when building for compute capability 7 used by V100.
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
+
+# Suppress nvcc warnings on MLX headers.
+target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
+                                   --diag_suppress=997>)
 
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.
@@ -144,26 +156,7 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-set(MLX_CUDA_HAS_SM100 OFF)
-foreach(_arch IN LISTS MLX_CUDA_ARCHITECTURES)
-  string(REGEX MATCH "^[0-9]+" _n "${_arch}")
-  if(_n AND _n GREATER_EQUAL 100)
-    set(MLX_CUDA_HAS_SM100 ON)
-    break()
-  endif()
-endforeach()
-
-if(MLX_CUDA_HAS_SM100 AND CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL
-                          12.8.0)
-  target_sources(
-    mlx
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
-else()
-  target_sources(mlx
-                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_stub.cpp)
-endif()
+# ------------------------ Dependencies ------------------------
 
 # Use fixed version of CCCL.
 FetchContent_Declare(
@@ -171,7 +164,19 @@ FetchContent_Declare(
   URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx BEFORE PRIVATE "${cccl_SOURCE_DIR}/include")
-set_target_properties(mlx PROPERTIES CCCL_DIR "${cccl_SOURCE_DIR}/include")
+
+# Install CCCL headers for JIT.
+install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+
+# The binary of C++ tests will not be installed so it can not find the CCCL
+# headers, and we have to hard-code the path.
+if(MLX_BUILD_TESTS)
+  target_compile_definitions(mlx
+                             PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
+endif()
 
 # Use fixed version of NVTX.
 FetchContent_Declare(
@@ -209,10 +214,3 @@ target_link_libraries(mlx PRIVATE cudnn_frontend)
 # Link with the actual cuDNN libraries.
 include(${cudnn_frontend_SOURCE_DIR}/cmake/cuDNN.cmake)
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
-
-# Suppress nvcc warnings on MLX headers.
-target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
-                                   --diag_suppress=997>)
-# Install CCCL headers for JIT.
-install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)

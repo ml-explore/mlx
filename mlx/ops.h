@@ -1422,7 +1422,7 @@ array dequantize(
 
 array qqmm(
     array x, // input activations
-    array w, // may be quantized weights
+    array w, // maybe quantized weights
     std::optional<array> w_scales = std::nullopt, // optional scales if w is
                                                   // quantized
     std::optional<int> group_size = std::nullopt,

@@ -119,6 +119,13 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+  auto& device = encoder.device();
+  auto cc = device.compute_capability_major() * 100 +
+      device.compute_capability_minor() * 10;
+  if (cc < 1000) {
+    throw std::runtime_error(
+        "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
+  }
   assert(
       (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
       (inputs.size() == 2));
@@ -144,8 +151,9 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     const int64_t batch = x.size() / (x.shape(-2) * x.shape(-1));
     const int64_t scales_bytes = batch * (pad_outer * pad_inner);
 
-    array x_q(cu::malloc_async(xq_bytes, encoder), xq_shape, uint32);
-    array scales_x(cu::malloc_async(scales_bytes, encoder), sshape, uint8);
+    array x_q(cu::malloc_async(xq_bytes, encoder), std::move(xq_shape), uint32);
+    array scales_x(
+        cu::malloc_async(scales_bytes, encoder), std::move(sshape), uint8);
 
     fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
 
@@ -154,13 +162,10 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return {x_q, scales_x};
   };
   auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
-  auto [w_q, scale_w_pre] = [&]() {
-    if (inputs[1].dtype() != uint32) {
-      return quantize(inputs[1], encoder, s);
-    } else {
-      return std::make_pair(inputs[1], inputs[2]);
-    }
-  }();
+  auto [w_q, scale_w_pre] = (inputs[1].dtype() != uint32)
+      ? quantize(inputs[1], encoder, s)
+      : std::make_pair(inputs[1], inputs[2]);
+
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   auto out_dtype = out.dtype();
@@ -170,7 +175,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K_packed = x_q.shape(-1);
   int K = K_packed * (32 / bits_);
 
-  // // Repack scales from linear to tiled layout for tensor cores
+  // Repack scales from linear to tiled layout for tensor cores
   array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
   array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
 

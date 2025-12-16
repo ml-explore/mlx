@@ -3486,6 +3486,10 @@ std::vector<array> QQMatmul::vjp(
     const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
+  if (primals.size() != 2) {
+    throw std::runtime_error(
+        "[QQMatmul::vjp] Expected exactly 2 non-quantized primal inputs (x, w).");
+  }
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
   std::vector<int> reorder(cotan.ndim());
@@ -3502,7 +3506,7 @@ std::vector<array> QQMatmul::vjp(
       // We transpose weights -> quantize along N
       vjps.push_back(qqmm(
           cotan, //  M X N
-          transpose(primals[1], {1, 0}, s), // assuming that w is 2D
+          swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
           {},
           group_size_,
           bits_,
@@ -3510,8 +3514,8 @@ std::vector<array> QQMatmul::vjp(
           s));
     } else if (arg == 1) { // gradient wrt to weights
       vjps.push_back(qqmm(
-          transpose(cotan, reorder, s), // (N, M)
-          transpose(primals[0], reorder, s), // (K, M)
+          swapaxes(cotan, -1, -2, s), // (N, M)
+          swapaxes(primals[0], -1, -2, s), // (K, M)
           {},
           group_size_,
           bits_,

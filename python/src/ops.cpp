@@ -5460,9 +5460,9 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
-        ``x`` and `w`` if not-quantized must have float32, float16, or bfloat16
-        data types.
-        If quantized, ``w`` must be packed in uint32 data type with.
+        If ``x`` and `w`` are not quantized, their data types must be ``float32``, 
+        ``float16``, or ``bfloat16``.
+        If ``w`` is quantized, it must be packed in unsigned integers.
         
       Args:
         x (array): Input array.
@@ -5476,8 +5476,8 @@ void init_ops(nb::module_& m) {
           ``x`` and ``w``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
-          See supported values and defaults in the :ref:`table of quantization 
-          modes <quantize-modes>`.
+          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          :ref:`table of quantization modes <quantize-modes>` for details.
 
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
