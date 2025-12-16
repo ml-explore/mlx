@@ -20,7 +20,7 @@ moment we support several different communication backends introduced below.
    * - :ref:`RING <ring_section>`
      - Ring all reduce and all gather over TCP sockets. Always available and
        usually faster than MPI.
-   * - :ref:`JACCL <ring_section>`
+   * - :ref:`JACCL <jaccl_section>`
      - Low latency communication with RDMA over thunderbolt. Necessary for
        things like tensor parallelism.
    * - :ref:`NCCL <nccl_section>`
@@ -211,7 +211,7 @@ available. It uses TCP sockets so the nodes need to be reachable via a network.
 As the name suggests the nodes are connected in a ring which means that rank 1
 can only communicate with rank 0 and rank 2, rank 2 only with rank 1 and rank 3
 and so on and so forth. As a result :func:`send` and :func:`recv` with
-arbitrary sender and receiver is not supported in the ring backend.
+arbitrary sender and receiver are not supported in the ring backend.
 
 Defining a Ring
 ^^^^^^^^^^^^^^^
@@ -272,10 +272,10 @@ If you want to go through the process manually, the steps are as follows:
 
 .. _jaccl_section:
 
-Getting Started with RDMA over Thunderbolt
-------------------------------------------
+Getting Started with JACCL
+--------------------------
 
-Starting from version 26.2 RDMA over thunderbolt is available in MacOS and
+Starting from macOS 26.2, RDMA over thunderbolt is available and
 enables low-latency communication between Macs with thunderbolt 5. MLX provides
 the JACCL backend that uses this functionality to achieve communication latency
 an order of magnitude lower than the ring backend.
@@ -327,11 +327,11 @@ Ultra 1 is not connected to M3 Ultra 2.
 
    <div style="display: flex; text-align: center; align-items: end; font-size: 80%;">
      <div>
-       <img src="/_static/distributed/m3-ultra-mesh.png" alt="M3 Ultra thunderbolt mesh" style="width: 55%">
+       <img src="../_static/distributed/m3-ultra-mesh.png" alt="M3 Ultra thunderbolt mesh" style="width: 55%">
        <p>Fully connected mesh of four M3 Ultra.</p>
      </div>
      <div>
-       <img src="/_static/distributed/m3-ultra-mesh-broken.png" alt="M3 Ultra broken thunderbolt mesh" style="width: 55%">
+       <img src="../_static/distributed/m3-ultra-mesh-broken.png" alt="M3 Ultra broken thunderbolt mesh" style="width: 55%">
        <p>Not a valid mesh (M3 Ultra 1 is not connected to M3 Ultra 2).</p>
      </div>
    </div>
@@ -383,7 +383,7 @@ script will
 - provide the commands to configure each node (or run them if sudo is available)
 - generate the hostfile to be used with ``mlx.launch``
 
-Putting it All Together
+Putting It All Together
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 For example launching a distributed MLX script that uses JACCL is fairly simple
@@ -409,7 +409,7 @@ and save the hostfile to ``m3-ultra-jaccl.json`` by running:
         --auto-setup --output m3-ultra-jaccl.json
 
 And now we are ready to run a distributed MLX script such as distributed inference
-of a gigantic model using MLX-LM.
+of a gigantic model using MLX LM.
 
 .. code-block::
 
@@ -633,7 +633,7 @@ communication capabilities of MLX.
 - *Batch your communication.*
 
   As described in the :ref:`training example <training_example>`, performing a
-  lot of small communication can hurt performance. Copy the approach of
+  lot of small communications can hurt performance. Copy the approach of
   :func:`mlx.nn.average_gradients` to gather many small communications in a
   single large one.
 

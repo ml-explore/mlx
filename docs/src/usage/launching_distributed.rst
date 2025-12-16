@@ -7,7 +7,7 @@ Launching Distributed Programs
 
 .. currentmodule:: mlx.core.distributed
 
-Installing the MLX python package provides two utilities to help you configure
+The MLX python package provides two utilities to help you configure
 your Macs for distributed computation and also launch distributed programs on
 multiple nodes or with many processes in a single node. These utilities are aptly named
 
@@ -48,7 +48,7 @@ following command to configure the nodes and create the hostfile.
 
 Let's walk through the steps that the script takes to configure the nodes.
 
-1. Ssh to all nodes to verify that they are reachable
+1. ssh to all nodes to verify that they are reachable
 2. Extract the thunderbolt connectivity. Namely run commands on each node to
    calculate which node is connected to which other node.
 3. Verify that we have a valid fully connected mesh
