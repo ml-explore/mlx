@@ -415,7 +415,7 @@ of a gigantic model using MLX LM.
 
    mlx.launch --verbose --backend jaccl --hostfile m3-ultra-jaccl.json \
         --env MLX_METAL_FAST_SYNCH=1 -- \  # <--- important
-        /path/to/remote/python -m mlx_lm chat --model mlx-community/DeepSeek-V3.2-8bit --shard
+        /path/to/remote/python -m mlx_lm chat --model mlx-community/DeepSeek-R1-0528-4bit
 
 .. note::
 
@@ -442,7 +442,7 @@ it takes to run a distributed job is
    mlx.launch -n 8 test.py
 
    # perfect for interactive scripts
-   mlx.launch -n 8 python -m mlx_lm chat --model my-model --shard
+   mlx.launch -n 8 python -m mlx_lm chat --model my-model
 
 You can also use ``mlx.launch`` to ssh to a remote node and launch a script
 with the same ease
