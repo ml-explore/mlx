@@ -224,8 +224,7 @@ MTL::Library* load_library(
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
       << "We attempted to load it from <" << current_binary_dir() << "/"
-      << lib_name << ".metallib"
-      << ">";
+      << lib_name << ".metallib>";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";
 #endif

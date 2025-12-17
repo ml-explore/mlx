@@ -1,20 +1,20 @@
 Metal Logging
 =============
 
-In **Debug** builds, MLX compiles Metal kernels with `os_log` enabled so shader
+In debug builds, MLX compiles Metal kernels with ``os_log`` enabled so shader
 warnings and debug messages are visible during development.
 
-Build in Debug
---------------
+.. note::
+    Metal logging is only available with Metal 3.2 or higher (macOS 15 and up,
+   iOS 18 and up).
+
+To enable logging from kernels, first make sure to build in debug mode:
 
 .. code-block:: bash
 
     DEBUG=1 python -m pip install -e .
 
-Logging from inside a kernel
-----------------------------
-
-Inside a Metal kernel, include `metal_logging` and use `os_log`:
+Then, in the kernel source code include ``<metal_logging>`` and use ``os_log``:
 
 .. code-block:: 
 
@@ -28,23 +28,13 @@ Inside a Metal kernel, include `metal_logging` and use `os_log`:
       logger.log_debug("unexpected state: idx=%u", idx);
     }
 
-Run
----
-
-For console apps, enable Metal shader logging at launch and forward it to stderr:
+When you run the program, set the Metal log level to your desired level and
+forward logs to ``stderr``:
 
 .. code-block:: bash
 
-    MTL_LOG_LEVEL=MTLLogLevelInfo MTL_LOG_TO_STDERR=1 your_app
+    MTL_LOG_LEVEL=MTLLogLevelDebug MTL_LOG_TO_STDERR=1 python script.py
 
-Where to see logs
------------------
+See the `Metal logging guide`_ for more details.
 
-Logs show up in:
-
-* **Xcode Run console** (when you launch your app under Xcode)
-* **Command line** via `log stream` (for console apps or any run)
-
-See Apple's `Metal logging guide`_ for details.
-
-.. _Metal logging guide: [https://developer.apple.com/documentation/metal/logging-shader-debug-messages](https://developer.apple.com/documentation/metal/logging-shader-debug-messages)
+.. _`Metal logging guide`: https://developer.apple.com/documentation/metal/logging-shader-debug-messages
