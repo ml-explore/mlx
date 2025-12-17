@@ -77,7 +77,8 @@ __global__ void copy_g(
 template <typename In, typename Out, int N_READS>
 __global__ void
 copy_col_row(const In* in, Out* out, int64_t rows, int64_t cols) {
-  __shared__ Out tile[N_READS * TILE_SIZE][N_READS * TILE_SIZE + 1];
+  __shared__ Out
+      tile[N_READS * TILE_SIZE][N_READS * TILE_SIZE + 4 / sizeof(Out)];
 
   auto block = cg::this_thread_block();
   auto grid = cg::this_grid();
@@ -93,7 +94,7 @@ copy_col_row(const In* in, Out* out, int64_t rows, int64_t cols) {
 #pragma unroll
   for (int i = 0; i < N_READS; ++i) {
     if ((tile_col + tidy + i) < cols) {
-      auto in_vec = load_vector<N_READS>(in_ptr, tidx, rows, In(0));
+      auto in_vec = load_vector<N_READS>(in_ptr, tidx, rows - tile_row, In(0));
 #pragma unroll
       for (int j = 0; j < N_READS; ++j) {
         tile[N_READS * tidx + j][tidy + i] = CastOp<In, Out>{}(in_vec[j]);
@@ -114,7 +115,7 @@ copy_col_row(const In* in, Out* out, int64_t rows, int64_t cols) {
       for (int j = 0; j < N_READS; ++j) {
         out_vec[j] = tile[tidy + i][N_READS * tidx + j];
       }
-      store_vector(out_ptr, tidx, out_vec, cols);
+      store_vector(out_ptr, tidx, out_vec, cols - tile_col);
       out_ptr += cols;
     }
   }
@@ -140,8 +141,9 @@ void copy_general_input(
       int ndim = shape.size();
 
       // Column contiguous to row contiguous specialization
-      if (ndim == 2 && strides_in[0] == 1 && strides_in[1] > 1) {
-        constexpr int work_per_thread = 16 / sizeof(OutType);
+      if (ndim == 2 && strides_in[0] == 1 && strides_in[1] == shape[0]) {
+        constexpr int work_per_thread =
+            std::min(static_cast<int>(16 / sizeof(OutType)), 8);
         dim3 block_dims = {TILE_SIZE, TILE_SIZE};
         uint32_t num_blocks_x =
             cuda::ceil_div(shape[0], TILE_SIZE * work_per_thread);
