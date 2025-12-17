@@ -2,12 +2,10 @@
 
 #include <metal_stdlib>
 
+#include "mlx/backend/metal/kernels/utils.h"
+
 #include "mlx/backend/metal/kernels/steel/gemm/gemm_nax.h"
 #include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather_nax.h"
-#include "mlx/backend/metal/kernels/steel/gemm/nax.h"
-#include "mlx/backend/metal/kernels/steel/gemm/params.h"
-#include "mlx/backend/metal/kernels/steel/utils.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
 // clang-format off
 #define instantiate_gather_mm_rhs(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn) \

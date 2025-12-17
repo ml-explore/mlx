@@ -33,6 +33,23 @@ auto get_quantized_kernel_wrapped(
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
+template <typename... Args>
+auto get_qmm_nax_kernel_wrapped(
+    metal::Device& d,
+    const std::string& name,
+    const std::string& func,
+    const std::string& mode,
+    const std::string& type,
+    int group_size,
+    int bits,
+    Args... args) {
+  std::string template_def;
+  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  template_def = get_template_definition(
+      name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  return get_qmm_nax_kernel(d, name, template_def, mode);
+}
+
 inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
@@ -504,7 +521,7 @@ void qmm_nax(
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
+    kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
         "qmm_t_nax",
@@ -513,10 +530,27 @@ void qmm_nax(
         group_size,
         bits,
         aligned,
-        batched);
+        batched,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
   } else {
-    kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmm_n_nax", mode, type_string, group_size, bits, batched);
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "qmm_n_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        batched,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
   }
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -589,7 +623,7 @@ void gather_qmm_nax(
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "");
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
+    kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
         "gather_qmm_t_nax_",
@@ -597,19 +631,14 @@ void gather_qmm_nax(
         type_string,
         group_size,
         bits,
-        "_bm",
+        aligned,
         bm,
-        "_bn",
-        bn,
-        "_bk",
         bk,
-        "_wm",
+        bn,
         wm,
-        "_wn",
-        wn,
-        aligned);
+        wn);
   } else {
-    kernel = get_quantized_kernel_wrapped(
+    kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
         "gather_qmm_n_nax_",
@@ -617,15 +646,10 @@ void gather_qmm_nax(
         type_string,
         group_size,
         bits,
-        "_bm",
         bm,
-        "_bn",
-        bn,
-        "_bk",
         bk,
-        "_wm",
+        bn,
         wm,
-        "_wn",
         wn);
   }
 
@@ -1053,7 +1077,7 @@ void gather_qmm_rhs_nax(
 
   // Get and set the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_gather_qmm_kernel(
+  auto kernel = get_gather_qmm_nax_kernel(
       d,
       kname,
       hash_name,
