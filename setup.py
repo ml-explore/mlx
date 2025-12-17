@@ -265,8 +265,8 @@ if __name__ == "__main__":
     }
     entry_points = {
         "console_scripts": [
-            "mlx.launch = mlx.distributed_run:main",
-            "mlx.distributed_config = mlx.distributed_run:distributed_config",
+            "mlx.launch = mlx._distributed_utils.launch:main",
+            "mlx.distributed_config = mlx._distributed_utils.config:main",
         ]
     }
     install_requires = []
