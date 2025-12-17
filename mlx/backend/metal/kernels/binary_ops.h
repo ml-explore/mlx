@@ -3,10 +3,11 @@
 #pragma once
 
 #include <metal_integer>
-#include <metal_logging>
 #include <metal_math>
 
-constant os_log logger("mlx", "binary_ops");
+#include "mlx/backend/metal/kernels/logging.h"
+
+constant mlx::os_log logger("mlx", "binary_ops");
 
 struct Add {
   template <typename T>

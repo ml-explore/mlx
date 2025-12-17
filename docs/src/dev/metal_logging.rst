@@ -6,7 +6,7 @@ warnings and debug messages are visible during development.
 
 .. note::
     Metal logging is only available with Metal 3.2 or higher (macOS 15 and up,
-   iOS 18 and up).
+    iOS 18 and up).
 
 To enable logging from kernels, first make sure to build in debug mode:
 
@@ -14,14 +14,14 @@ To enable logging from kernels, first make sure to build in debug mode:
 
     DEBUG=1 python -m pip install -e .
 
-Then, in the kernel source code include ``<metal_logging>`` and use ``os_log``:
+Then, in the kernel source code include MLX's logging shim and use
+``mlx::os_log``:
 
-.. code-block:: 
+.. code-block::
 
-    #include <metal_logging>
-    using namespace metal;
+    #include "mlx/backend/metal/kernels/logging.h"
 
-    constant os_log logger("mlx", "my_kernel");
+    constant mlx::os_log logger("mlx", "my_kernel");
 
     kernel void my_kernel(/* ... */) {
     // ...

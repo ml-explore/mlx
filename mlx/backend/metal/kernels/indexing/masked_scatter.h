@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include <metal_logging>
+#include "mlx/backend/metal/kernels/logging.h"
 
-constant os_log logger("mlx", "masked_assign");
+constant mlx::os_log logger("mlx", "masked_assign");
 
 template <typename T, bool src_contiguous>
 [[kernel]] void masked_assign_impl(

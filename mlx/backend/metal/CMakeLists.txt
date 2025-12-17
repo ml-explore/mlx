@@ -22,7 +22,7 @@ function(make_jit_source SRC_FILE)
 endfunction(make_jit_source)
 
 make_jit_source(utils kernels/bf16.h kernels/bf16_math.h kernels/complex.h
-                kernels/defines.h)
+                kernels/defines.h kernels/logging.h)
 make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h kernels/fp8.h)
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
