@@ -1,9 +1,21 @@
 #!/bin/bash
 #
-# This script generates a C++ function that provides the Metal unary and binary
-# ops at runtime for use with kernel generation.
+# This script generates a C++ function that provides the Metal source code
+# at runtime for use with kernel generation.
 #
-# Copyright © 2023-24 Apple Inc.
+# The steps executed are as follows 
+# - Take as input a metal header file in the mlx metal backend 
+# - Use the metal compiler to expand the dependency headers 
+# - Sort the headers in order of inclusion 
+# - Expand the headers in order of inclusion 
+# - Export the generated source code content as a C++ function
+#
+# Doing the expansion this way allows us to retain macros, comments, and 
+# formatting in the expanded source. This adds user readibility, and also 
+# enables use of the metal macros in the source code which can then be 
+# handled by the metal runtime compiler
+#
+# Copyright © 2023-25 Apple Inc.
 
 OUTPUT_DIR=$1
 CC=$2
@@ -15,15 +27,17 @@ JIT_INCLUDES=${SRC_DIR}/mlx/backend/metal/kernels/jit
 INPUT_FILE=${SRC_DIR}/mlx/backend/metal/kernels/${SRC_FILE}.h
 OUTPUT_FILE=${OUTPUT_DIR}/${SRC_NAME}.cpp
 
+# Prepare output
 mkdir -p "$OUTPUT_DIR"
-# CONTENT=$($CC -I"$SRC_DIR" -I"$JIT_INCLUDES" -DMLX_METAL_JIT -E -P "$INPUT_FILE" $CFLAGS 2>/dev/null)
 
+# Use the metal compiler to get a list of headers (with depth)
 CCC="xcrun -sdk macosx metal -x metal"
-
 HDRS=$( $CCC -I"$SRC_DIR" -I"$JIT_INCLUDES" -DMLX_METAL_JIT -E -P -CC -C -H "$INPUT_FILE" $CFLAGS -w 2>&1 1>/dev/null )
 
+# Remove any included system frameworks (for MetalPerformancePrimitive headers)
 HDRS=$(echo "$HDRS" | grep -v "Xcode")
 
+# Use the header depth to sort the files in order of inclusion
 declare -a HDRS_LIST=($HDRS)
 declare -a HDRS_STACK=()
 declare -a HDRS_SORTED=()
@@ -64,11 +78,15 @@ do
 
 done
 
+# Make sure the given metal header is also expanded in the source content
 HDRS_SORTED+=("${INPUT_FILE#$SRC_DIR/}")
 
+# Expand the headers in order of inclusion 
 CONTENT=$(
 echo "// Copyright © 2025 Apple Inc."
 echo "" 
+echo "// Auto generated source for ${INPUT_FILE#$SRC_DIR/}"
+echo ""
 
 for header in "${HDRS_SORTED[@]}"
 do 
@@ -88,6 +106,7 @@ done
 echo "///////////////////////////////////////////////////////////////////////////////"
 )
 
+# Export the generated source code content as a C++ function
 cat << EOF > "$OUTPUT_FILE"
 namespace mlx::core::metal {
 
