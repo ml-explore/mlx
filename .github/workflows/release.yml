@@ -152,7 +152,7 @@ jobs:
         with:
           overwrite: true
           name: mlx-cuda
-          path: wheelhouse/mlx_cuda-*.whl
+          path: wheelhouse/mlx_cuda_*.whl
 
   pypi-publish:
     name: Upload release to PyPI
