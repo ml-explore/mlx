@@ -155,7 +155,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           overwrite: true
-          name: mlx-cuda
+          name: mlx-${{ matrix.toolkit }}-${{ matrix.arch }}
           path: wheelhouse/mlx_cuda_*.whl
           if-no-files-found: error
 
