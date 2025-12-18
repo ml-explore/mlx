@@ -274,10 +274,10 @@ class QQLinear(Module):
     """Quantizes input and applies an affine transformation to it
         using a quantized weight matrix.
 
-    Weights can be either in quantized form (together with itss scales)
-    or in higher precision. If the weights are expected to be included
-    in gradient computations they are stored in higher precision
-    and quantized on the fly during computation.
+    The weight matrix can be stored either in quantized form together 
+    with its scales. If the weights are expected to be included in 
+    gradient computations they are stored in higher precision and 
+    quantized on the fly during computation.
 
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.
