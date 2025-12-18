@@ -198,7 +198,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
         with:
-          name: mlx-cuda
+          name: mlx-cuda-*
           path: dist
       - name: Display structure of downloaded files
         run: ls -R dist
