@@ -68,6 +68,7 @@ jobs:
           overwrite: true
           name: linux-wheels-${{ matrix.python_version }}-${{ matrix.arch }}
           path: wheelhouse/mlx-*.whl
+          if-no-files-found: error
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
         uses: actions/upload-artifact@v6
@@ -75,6 +76,7 @@ jobs:
           overwrite: true
           name: mlx-cpu-${{ matrix.arch }}
           path: wheelhouse/mlx_cpu-*.whl
+          if-no-files-found: error
   
   build_mac_release:
     if: github.repository == 'ml-explore/mlx'
@@ -119,6 +121,7 @@ jobs:
           overwrite: true
           name: mac-wheels-${{ matrix.python-version }}
           path: dist/mlx-*.whl
+          if-no-files-found: error
       - name: Upload Metal artifacts
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v6
@@ -126,6 +129,7 @@ jobs:
           overwrite: true
           name: mlx-metal
           path: dist/mlx_metal-*.whl
+          if-no-files-found: error
 
   build_cuda_release:
     if: github.repository == 'ml-explore/mlx'
@@ -152,7 +156,8 @@ jobs:
         with:
           overwrite: true
           name: mlx-cuda
-          path: wheelhouse/mlx_cuda-*.whl
+          path: wheelhouse/mlx_cuda_*.whl
+          if-no-files-found: error
 
   pypi-publish:
     name: Upload release to PyPI
