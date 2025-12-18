@@ -21,4 +21,11 @@ runs:
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
-        bash python/scripts/repair_cuda.sh ${{ inputs.arch }}
+
+        auditwheel repair dist/* \
+          --plat manylinux_2_35_${{ inputs.arch }} \
+          --exclude libcublas* \
+          --exclude libcuda* \
+          --exclude libcudnn* \
+          --exclude libnccl* \
+          --exclude libnvrtc*
