@@ -5,8 +5,6 @@
 #include <metal_integer>
 #include <metal_math>
 
-#include "mlx/backend/metal/kernels/logging.h"
-
 constant mlx::os_log logger("mlx", "binary_ops");
 
 struct Add {

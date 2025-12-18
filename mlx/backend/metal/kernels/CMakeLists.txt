@@ -6,6 +6,7 @@ set(BASE_HEADERS
     erf.h
     expm1f.h
     fp8.h
+    logging.h
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)

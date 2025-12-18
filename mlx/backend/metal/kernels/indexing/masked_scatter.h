@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "mlx/backend/metal/kernels/logging.h"
-
 constant mlx::os_log logger("mlx", "masked_assign");
 
 template <typename T, bool src_contiguous>
