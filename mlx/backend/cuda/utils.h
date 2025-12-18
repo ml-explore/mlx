@@ -43,4 +43,7 @@ struct Dtype;
 // Convert Dtype to CUDA C++ types.
 const char* dtype_to_cuda_type(const Dtype& dtype);
 
+// Allocate an empty array and add it as temporary.
+void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size);
+
 } // namespace mlx::core
