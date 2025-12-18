@@ -155,7 +155,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           overwrite: true
-          name: mlx-cuda
+          name: mlx-${{ matrix.toolkit }}-${{ matrix.arch }}
           path: wheelhouse/mlx_cuda_*.whl
           if-no-files-found: error
 
@@ -198,7 +198,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
         with:
-          name: mlx-cuda
+          name: mlx-cuda-*
           path: dist
       - name: Display structure of downloaded files
         run: ls -R dist
