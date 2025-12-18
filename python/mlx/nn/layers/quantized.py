@@ -271,13 +271,16 @@ class QuantizedLinear(Module):
 
 
 class QQLinear(Module):
-    """Quantizes input and applies an affine transformation to it
-        using a quantized weight matrix.
+    """Quantizes the input and applies an affine transformation using quantized weights.
 
-    Weights can be either in quantized form (together with itss scales)
-    or in higher precision. If the weights are expected to be included
-    in gradient computations they are stored in higher precision
-    and quantized on the fly during computation.
+    Two use cases are supported:
+
+    1) **Inference / frozen weights**: weights are stored in quantized form together with
+       their scales (``self.weight`` is quantized and ``self.scales`` is provided).
+
+    2) **Training / weights are included in gradient computation**:
+        weights are stored in higher precision and are quantized on
+        the fly during computation.
 
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.
@@ -285,7 +288,8 @@ class QQLinear(Module):
     :obj:`QQLinear` also provides the class method :meth:`from_linear` to convert
     :class:`mlx.nn.Linear` layers to :obj:`QQLinear` layers.
 
-    Note: This layer does not support bias terms yet.
+    Note: This layer does not support a bias term yet.
+
     Args:
         input_dims (int): The dimensionality of the input features.
         output_dims (int): The dimensionality of the output features.
