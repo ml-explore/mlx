@@ -5,6 +5,8 @@
 #include <metal_integer>
 #include <metal_math>
 
+constant mlx::os_log logger("mlx", "binary_ops");
+
 struct Add {
   template <typename T>
   T operator()(T x, T y) {
@@ -225,6 +227,8 @@ struct Power {
     T res = 1;
     // Undefined to raise integer to negative power
     if (exp < 0) {
+      logger.log_debug(
+          "int pow exp<0 (base=%ld exp=%ld)", (long)base, (long)exp);
       return 0;
     }
 

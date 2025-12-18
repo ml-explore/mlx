@@ -6,6 +6,7 @@ set(BASE_HEADERS
     erf.h
     expm1f.h
     fp8.h
+    logging.h
     utils.h)
 
 function(build_kernel_base TARGET SRCFILE DEPS)
@@ -19,6 +20,9 @@ function(build_kernel_base TARGET SRCFILE DEPS)
       -Wno-c++20-extensions)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
+  endif()
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND MLX_METAL_VERSION GREATER_EQUAL 320)
+    set(METAL_FLAGS ${METAL_FLAGS} -fmetal-enable-logging)
   endif()
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
     set(METAL_FLAGS ${METAL_FLAGS}

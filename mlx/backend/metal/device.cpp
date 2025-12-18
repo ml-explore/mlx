@@ -224,7 +224,7 @@ MTL::Library* load_library(
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
       << "We attempted to load it from <" << current_binary_dir() << "/"
-      << lib_name << ".metallib" << ">";
+      << lib_name << ".metallib>";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";
 #endif
@@ -529,6 +529,11 @@ MTL::Library* Device::build_library_(const std::string& source_string) {
   auto options = MTL::CompileOptions::alloc()->init();
   options->setFastMathEnabled(false);
   options->setLanguageVersion(get_metal_version());
+#ifndef NDEBUG
+  if (options->languageVersion() >= MTL::LanguageVersion3_2) {
+    options->setEnableLogging(true);
+  }
+#endif
   auto mtl_lib = device_->newLibrary(ns_code, options, &error);
   options->release();
 
