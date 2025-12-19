@@ -47,7 +47,7 @@ class CommandProcess:
 class RemoteProcess(CommandProcess):
     def __init__(self, rank, host, python, cwd, files, env, command):
         is_local = host == "127.0.0.1"
-        cmd = RemoteProcess.make_launch_script(rank, cwd, files, env, command)
+        cmd = RemoteProcess.make_launch_script(rank, cwd, files, env, command, is_local)
         if not is_local:
             cmd = f"ssh -tt -o LogLevel=QUIET {host} {shlex.quote(cmd)}"
 
@@ -104,11 +104,12 @@ class RemoteProcess(CommandProcess):
         self._killed = c.stdout.strip() == "1"
 
     @staticmethod
-    def make_launch_script(rank, cwd, files, env, command):
+    def make_launch_script(rank, cwd, files, env, command, is_local):
         script = ""
 
         # Disable echo
-        script = "stty -echo; "
+        if not is_local:
+            script = "stty -echo; "
 
         # Write the PID to a file so we can kill the process if needed
         script += "pidfile=$(mktemp); "
