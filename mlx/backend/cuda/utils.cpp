@@ -93,4 +93,23 @@ CudaStream::CudaStream(cu::Device& device) {
   CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
 }
 
+void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
+  if (workspace_size == 0) {
+    return nullptr;
+  }
+
+  // Workspace allocation should not be captured.
+#ifndef NDEBUG
+  cudaStreamCaptureStatus status;
+  CHECK_CUDA_ERROR(cudaStreamIsCapturing(encoder.stream(), &status));
+  assert(status == cudaStreamCaptureStatusNone);
+#endif
+
+  // Ensure workspace is 256-byte aligned.
+  int nbytes = cuda::ceil_div(workspace_size, 256) * 256;
+  array workspace(cu::malloc_async(nbytes, encoder), {nbytes}, int8);
+  encoder.add_temporary(workspace);
+  return gpu_ptr<void>(workspace);
+}
+
 } // namespace mlx::core

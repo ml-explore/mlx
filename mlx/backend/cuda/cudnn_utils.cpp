@@ -94,15 +94,7 @@ fe::error_t DnnGraph::encode_capturing(
 void* DnnGraph::prepare_workspace(cu::CommandEncoder& encoder) {
   int64_t workspace_size = 0;
   CHECK_CUDNN_FE_ERROR(get_workspace_size(workspace_size));
-  if (workspace_size > 0) {
-    array workspace(
-        cu::malloc_async(workspace_size, encoder),
-        {static_cast<int>(workspace_size)},
-        uint8);
-    encoder.add_temporary(workspace);
-    return gpu_ptr<void>(workspace);
-  }
-  return nullptr;
+  return allocate_workspace(encoder, workspace_size);
 }
 
 void DnnGraph::set_tensor_attrs(

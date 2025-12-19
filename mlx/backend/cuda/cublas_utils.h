@@ -12,8 +12,6 @@ namespace cublas_utils {
 // Get the shared cublas preference for a device
 cublasLtMatmulPreference_t get_preference(cu::Device& device);
 
-void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size);
-
 cublasLtMatrixLayout_t create_matrix_layout(
     cudaDataType_t type,
     uint64_t rows,
