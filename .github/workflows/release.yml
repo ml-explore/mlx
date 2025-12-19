@@ -115,6 +115,11 @@ jobs:
         with:
           macos-target: 15.0
           build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 26 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 26.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v6
         with:

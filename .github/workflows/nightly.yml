@@ -65,6 +65,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: ./.github/actions/build-macos
+      - name: Build macOS 26 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 26.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Build macOS 15 package
         uses: ./.github/actions/build-macos-release
         with:
