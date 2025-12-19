@@ -55,8 +55,10 @@ target_link_libraries(core PRIVATE mlx)
 
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_options(core PRIVATE -Wl,-rpath,@loader_path/lib)
+    set_target_properties(core PROPERTIES INSTALL_RPATH "@loader_path/lib")
   else()
-    target_link_options(core PRIVATE -Wl,-rpath,\$ORIGIN/lib)
+    set_target_properties(core PROPERTIES INSTALL_RPATH "\$ORIGIN/lib")
   endif()
+  # Do not add build dir to rpath.
+  set_target_properties(core PROPERTIES BUILD_WITH_INSTALL_RPATH ON)
 endif()

@@ -22,7 +22,7 @@ runs:
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
 
-        auditwheel repair dist/* \
+        auditwheel repair dist/mlx_cuda*.whl \
           --plat manylinux_2_35_${{ inputs.arch }} \
           --exclude libcublas* \
           --exclude libcuda* \
