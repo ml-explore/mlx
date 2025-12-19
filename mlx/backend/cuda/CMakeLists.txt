@@ -156,6 +156,18 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
+if(MLX_BUILD_PYTHON_BINDINGS)
+  set_property(
+    TARGET mlx
+    APPEND
+    PROPERTY INSTALL_RPATH
+             # The paths here should match the install_requires in setup.py.
+             "$ORIGIN/../../nvidia/cublas/lib"
+             "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
+             "$ORIGIN/../../nvidia/cudnn/lib"
+             "$ORIGIN/../../nvidia/nccl/lib")
+endif()
+
 # ------------------------ Dependencies ------------------------
 
 # Use fixed version of CCCL.
