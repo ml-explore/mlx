@@ -289,7 +289,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [128, 64, 32],  # group_size
             [2, 3, 4, 5, 6, 8],  # bits
             [256, 512, 67],  # M
-            [64, 128],  # N
+            [64, 256],  # N
             [0, 1, 3, 8],  # B
         )
         for group_size, bits, M, N, B in tests:
@@ -309,33 +309,34 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
-    def test_mxfp4_qmv(self):
+    def test_fp_qmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         tests = product(
             [256, 512, 67],  # M
-            [64, 128],  # N
+            [64, 256],  # N
             [0, 1, 3, 8],  # B
         )
+        modes = ["mxfp4", "nvfp4", "mxfp8"]
         for M, N, B in tests:
-            with self.subTest(shape=(B, M, N), group_size=32):
-                x_shape = (3, 1, N) if B == 0 else (B, 1, N)
-                w_shape = (M, N) if B == 0 else (B, M, N)
-                x = mx.random.normal(shape=x_shape, key=k1)
-                w = mx.random.normal(shape=w_shape, key=k2)
-                w_q, scales = mx.quantize(w, group_size=32, mode="mxfp4")
-                w_hat = mx.dequantize(w_q, scales, group_size=32, mode="mxfp4")
-                y_q = mx.quantized_matmul(
-                    x,
-                    w_q,
-                    scales,
-                    transpose=True,
-                    group_size=32,
-                    mode="mxfp4",
-                )
-                y_hat = x @ mx.swapaxes(w_hat, -1, -2)
-                self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+            for mode in modes:
+                with self.subTest(shape=(B, M, N), mode=mode):
+                    x_shape = (3, 1, N) if B == 0 else (B, 1, N)
+                    w_shape = (M, N) if B == 0 else (B, M, N)
+                    x = mx.random.normal(shape=x_shape, key=k1)
+                    w = mx.random.normal(shape=w_shape, key=k2)
+                    w_q, scales = mx.quantize(w, mode=mode)
+                    w_hat = mx.dequantize(w_q, scales, mode=mode)
+                    y_q = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        scales,
+                        transpose=True,
+                        mode=mode,
+                    )
+                    y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qvm(self):
         key = mx.random.key(0)
@@ -402,7 +403,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
-    def test_mxfp4_qvm(self):
+    def test_fp_qvm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         tests = product(
@@ -413,26 +414,27 @@ class TestQuantized(mlx_tests.MLXTestCase):
         # Add a splitk
         tests = list(tests)
         tests.append((128, 16384, 0))
+        modes = ["mxfp4", "nvfp4", "mxfp8"]
 
         for M, N, B in tests:
-            with self.subTest(shape=(B, M, N)):
-                x_shape = (1, N) if B == 0 else (B, 1, N)
-                w_shape = (N, M) if B == 0 else (B, N, M)
-                x = mx.random.normal(shape=x_shape, key=k1)
-                w = mx.random.normal(shape=w_shape, key=k2)
-                w_q, scales = mx.quantize(w, group_size=32, mode="mxfp4")
-                w_hat = mx.dequantize(w_q, scales, group_size=32, mode="mxfp4")
-                y_q = mx.quantized_matmul(
-                    x,
-                    w_q,
-                    scales,
-                    transpose=False,
-                    group_size=32,
-                    mode="mxfp4",
-                )
-                y_hat = x @ w_hat
-                self.assertEqual(y_q.shape, y_hat.shape)
-                self.assertLess((y_q - y_hat).abs().max(), 2e-3)
+            for mode in modes:
+                with self.subTest(shape=(B, M, N), mode=mode):
+                    x_shape = (1, N) if B == 0 else (B, 1, N)
+                    w_shape = (N, M) if B == 0 else (B, N, M)
+                    x = mx.random.normal(shape=x_shape, key=k1)
+                    w = mx.random.normal(shape=w_shape, key=k2)
+                    w_q, scales = mx.quantize(w, mode=mode)
+                    w_hat = mx.dequantize(w_q, scales, mode=mode)
+                    y_q = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        scales,
+                        transpose=False,
+                        mode=mode,
+                    )
+                    y_hat = x @ w_hat
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
     def test_mode_error_cases(self):
         w = mx.random.normal(shape=(256, 256))
@@ -740,6 +742,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 "group_size": 32,
                 "mode": "mxfp4",
             },
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+                "group_size": 32,
+                "mode": "mxfp8",
+            },
         )
 
         for kwargs in inputs:
@@ -753,24 +763,24 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
 
-    def test_qmm_mxfp4_type(self):
+    def test_qmm_fp_type(self):
         indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
 
-        for t in [mx.bfloat16, mx.float16, mx.float32]:
-            x = mx.random.normal((32, 256)).astype(t)
+        modes = ["mxfp8", "mxfp4"]
+        for mode in modes:
+            for t in [mx.bfloat16, mx.float16, mx.float32]:
+                x = mx.random.normal((32, 256)).astype(t)
 
-            w = mx.random.normal((32, 256))
-            wq, s = mx.quantize(w, mode="mxfp4", bits=4, group_size=32)
-            out = mx.quantized_matmul(x, wq, s, mode="mxfp4", group_size=32, bits=4)
-            self.assertEqual(out.dtype, t)
+                w = mx.random.normal((32, 256))
+                wq, s = mx.quantize(w, mode=mode)
+                out = mx.quantized_matmul(x, wq, s, mode=mode)
+                self.assertEqual(out.dtype, t)
 
-            w = mx.random.normal((4, 32, 256))
-            wq, s = mx.quantize(w, mode="mxfp4", bits=4, group_size=32)
+                w = mx.random.normal((4, 32, 256))
+                wq, s = mx.quantize(w, mode=mode)
 
-            out = mx.gather_qmm(
-                x, wq, s, rhs_indices=indices, mode="mxfp4", group_size=32, bits=4
-            )
-            self.assertEqual(out.dtype, t)
+                out = mx.gather_qmm(x, wq, s, rhs_indices=indices, mode=mode)
+                self.assertEqual(out.dtype, t)
 
     def test_gather_matmul_grad(self):
         def quantize(w, transpose=True, group_size=64, bits=4):
@@ -802,14 +812,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(g1, g2, atol=1e-4))
 
     def test_gather_qmm_sorted(self):
-        def quantize(w, transpose=True, bits=4, group_size=64, mode="affine"):
+        def quantize(w, transpose=True, group_size=None, mode="affine"):
             if mode == "affine":
-                qw, s, b = mx.quantize(w, group_size=group_size, bits=bits, mode=mode)
+                qw, s, b = mx.quantize(w, group_size=group_size, mode=mode)
             else:
-                qw, s = mx.quantize(w, group_size=group_size, bits=bits, mode=mode)
+                qw, s = mx.quantize(w, mode=mode)
                 b = None
 
-            w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits, mode=mode)
+            w_hat = mx.dequantize(qw, s, b, group_size=group_size, mode=mode)
             if transpose:
                 w_hat = w_hat.swapaxes(-1, -2)
             return w_hat, qw, s, b
@@ -831,11 +841,13 @@ class TestQuantized(mlx_tests.MLXTestCase):
             # L, K, D, E, I, transpose
             (32, 512, 512, 4, 2, True, "affine"),
             (32, 512, 544, 4, 2, True, "mxfp4"),
+            (32, 512, 544, 4, 2, True, "mxfp8"),
             (133, 512, 512, 4, 2, True, "affine"),
             (133, 512, 555, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
             (64, 512, 512, 4, 2, False, "affine"),
             (64, 512, 544, 4, 2, False, "mxfp4"),
+            (64, 512, 544, 4, 2, False, "mxfp8"),
             (133, 512, 512, 4, 2, False, "affine"),
             (133, 512, 544, 4, 2, False, "affine"),
             (133, 512, 555, 4, 2, False, "affine"),
@@ -848,8 +860,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
         for L, K, D, E, I, transpose, mode in parameters:
             with self.subTest(L=L, K=K, D=D, E=E, I=I, transpose=transpose, mode=mode):
-                if mode == "mxfp4":
-                    group_size = 32
+                if mode != "affine":
+                    group_size = None
                     dtype = (
                         mx.bfloat16 if (mx.default_device() == mx.gpu) else mx.float32
                     )
@@ -984,36 +996,33 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 num_ds = (out_up - out_down) / (2 * eps)
                 self.assertAlmostEqual(dparams[p][idx], num_ds, delta=2e-2)
 
-    def test_mxfp4_vjp_scales_throws(self):
+    def test_fp_vjp_scales_throws(self):
         mx.random.seed(0)
         x = mx.random.normal(shape=(2, 512))
         w = mx.random.normal(shape=(512, 512))
-        wq, s = mx.quantize(w, bits=4, group_size=32, mode="mxfp4")
+        for mode in ["mxfp4", "mxfp8", "nvfp4"]:
+            wq, s = mx.quantize(w, mode=mode)
 
-        def mm(s, x, wq):
-            return mx.quantized_matmul(
-                x, wq, s, bits=4, group_size=32, mode="mxfp4"
-            ).sum()
+            def mm(s, x, wq):
+                return mx.quantized_matmul(x, wq, s, mode=mode).sum()
 
-        # Should raise
-        with self.assertRaises(ValueError):
-            ds = mx.grad(mm)(s, x, wq)
+            # Should raise
+            with self.assertRaises(ValueError):
+                ds = mx.grad(mm)(s, x, wq)
 
-        rhs_indices = mx.array(0)
-        with self.assertRaises(ValueError):
+            rhs_indices = mx.array(0)
+            with self.assertRaises(ValueError):
 
-            def gmm(s, x, wq):
-                return mx.gather_qmm(
-                    x,
-                    wq,
-                    s,
-                    rhs_indices=rhs_indices,
-                    bits=4,
-                    group_size=32,
-                    mode="mxfp4",
-                ).sum()
+                def gmm(s, x, wq):
+                    return mx.gather_qmm(
+                        x,
+                        wq,
+                        s,
+                        rhs_indices=rhs_indices,
+                        mode=mode,
+                    ).sum()
 
-            ds = mx.grad(gmm)(s, x, wq)
+                ds = mx.grad(gmm)(s, x, wq)
 
     def test_quantize_strided(self):
         N = 64

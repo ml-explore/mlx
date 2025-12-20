@@ -49,6 +49,16 @@ struct fp8_e4m3 {
     return as_type<float>(result);
   }
 
+  operator bfloat16_t() {
+    // TODO maybe direct conversion is faster here
+    return static_cast<bfloat16_t>(this->operator float());
+  }
+
+  operator float16_t() {
+    // TODO maybe direct conversion is faster here
+    return static_cast<float16_t>(this->operator float());
+  }
+
   uint8_t bits;
 };
 
