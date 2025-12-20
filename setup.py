@@ -255,11 +255,9 @@ if __name__ == "__main__":
 
     extras = {
         "dev": [
-            "nanobind==2.10.2",
-            "numpy",
+            "numpy>=2",
             "pre-commit",
-            "setuptools>=80",
-            "torch",
+            "torch>=2.9",
             "typing_extensions",
         ],
     }
