@@ -29,6 +29,37 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/trees.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
 
+if(MLX_BUILD_PYTHON_STUBS)
+  nanobind_add_stub(
+    core_stub
+    # Run stubgen -m mlx.core -i python -p _stub_patterns.txt -o python/mlx
+    RECURSIVE
+    MODULE
+    "mlx.core"
+    PYTHON_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    PATTERN_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/_stub_patterns.txt"
+    OUTPUT_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx"
+    # Note that the list is passed to cmake for dependency managment and not
+    # used by stubgen.
+    OUTPUT
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/__init__.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/cuda.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/distributed.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fast.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fft.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/linalg.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/metal.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/random.pyi"
+    # Make this an optional installable component.
+    EXCLUDE_FROM_ALL
+    INSTALL_TIME
+    COMPONENT
+    core_stub)
+endif()
+
 if(NOT MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY)
   if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
     set(MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
