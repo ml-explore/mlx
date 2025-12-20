@@ -4188,6 +4188,11 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
     } else {
       return {dtype, qmode};
     }
+  } else if (scales.dtype() != uint8) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Scale type must be uint8 but received type "
+        << scales.dtype() << ".";
+    throw std::invalid_argument(msg.str());
   }
   if (biases) {
     std::ostringstream msg;

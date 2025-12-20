@@ -1452,25 +1452,26 @@ void fast::Quantize::eval_gpu(
   auto& compute_encoder = d.get_command_encoder(s.index);
 
   auto w = ensure_row_contiguous(w_pre, d, s);
-  compute_encoder.set_input_array(w, 0);
   if (dequantize_) {
     auto scales = ensure_row_contiguous(inputs[1], d, s);
-    compute_encoder.set_input_array(scales, 1);
-    compute_encoder.set_output_array(out, 3);
     if (mode_ == QuantizationMode::Affine) {
       auto biases = ensure_row_contiguous(inputs[2], d, s);
       compute_encoder.set_input_array(biases, 2);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
+    compute_encoder.set_output_array(out, 3);
   } else {
     auto& scales = outputs[1];
     scales.set_data(allocator::malloc(scales.nbytes()));
-    compute_encoder.set_output_array(out, 1);
-    compute_encoder.set_output_array(scales, 2);
     if (mode_ == QuantizationMode::Affine) {
       auto& biases = outputs[2];
       biases.set_data(allocator::malloc(biases.nbytes()));
       compute_encoder.set_output_array(biases, 3);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_output_array(scales, 2);
   }
 
   auto type_string = dequantize_ ? get_type_string(out.dtype())
