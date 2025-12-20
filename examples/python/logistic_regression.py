@@ -1,6 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
-from time import perf_counter
+import time
 
 import mlx.core as mx
 
@@ -30,13 +30,13 @@ def loss_fn(w):
 
 grad_fn = mx.grad(loss_fn)
 
-tic = perf_counter()
+tic = time.perf_counter()
 for _ in range(num_iters):
     grad = grad_fn(w)
     w = w - lr * grad
     mx.eval(w)
 
-toc = perf_counter()
+toc = time.perf_counter()
 
 loss = loss_fn(w)
 final_preds = (X @ w) > 0
