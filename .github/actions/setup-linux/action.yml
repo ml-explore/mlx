@@ -9,7 +9,7 @@ inputs:
   python-version:
     description: 'Version of python to set up'
     required: false
-    default: '3.10'
+    default: '3.14'
   use-ccache:
     description: 'Whether to enable ccache'
     required: false
@@ -21,8 +21,13 @@ runs:
     - name: Install common dependencies
       shell: bash
       run: |
+        echo "::group::Install common dependencies"
         sudo apt-get update
-        sudo apt-get install -y libblas-dev liblapack-dev liblapacke-dev zip
+        sudo apt-get install -y --no-install-recommends \
+            zip \
+            libblas-dev liblapack-dev liblapacke-dev \
+            openmpi-bin openmpi-common libopenmpi-dev
+        echo "::endgroup::"
 
     - name: Use ccache
       if: ${{ inputs.use-ccache == 'true' }}
@@ -40,16 +45,14 @@ runs:
     - name: Setup Python venv
       shell: bash
       run: |
+        echo "::group::Setup Python venv"
         python -m venv .venv
         source .venv/bin/activate
         pip install setuptools cmake nanobind==2.10.2
         echo PATH=$PATH >> $GITHUB_ENV
         # Make cmake search .venv for nanobind
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
-
-    - name: Install MPI
-      shell: bash
-      run: sudo apt-get install -y openmpi-bin openmpi-common libopenmpi-dev
+        echo "::endgroup::"
 
     - name: Install CUDA toolkit
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}
@@ -60,34 +63,31 @@ runs:
         # https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/support-matrix.html
         PACKAGES: |
           {
-            "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-toolkit-12-6",
-            "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-toolkit-12-9",
-            "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-toolkit-13-0"
+            "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-compiler-12-6 cuda-libraries-dev-12-6",
+            "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-compiler-12-9 cuda-libraries-dev-12-9",
+            "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-compiler-13-0 cuda-libraries-dev-13-0"
           }
       run: |
+        echo "::group::Install CUDA toolkit"
         # The CUDA binaries are hosted in the "sbsa" repo, the "arm64" repo is
         # Jetson specific. SBSA means Arm Server Base System Architecture.
         ARCH=${{ runner.arch == 'arm64' && 'sbsa' || 'x86_64' }}
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$ARCH/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt-get install -y --no-install-recommends \
             libnccl2 libnccl-dev \
             ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
         echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
+        echo "::endgroup::"
 
     - name: CUDA packages and driver report
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}
       shell: bash
       run: |
-        sudo apt-get install -y ubuntu-drivers-common dkms
-        echo "NVIDIA Driver Packages Available:"
-        sudo ubuntu-drivers list --gpgpu
-        echo "NVIDIA Driver Version:"
-        cat /proc/driver/nvidia/version || echo "nvidia driver not found"
-        echo "Installed NVIDIA and CUDA packages:"
+        echo "::group::Installed NVIDIA and CUDA packages"
         dpkg -l | egrep "cuda|nvidia" -i
-        echo "DKMS Status:"
-        dkms status || echo "dkms not found"
-        echo "NVIDIA-SMI Status:"
-        nvidia-smi || echo "nvidia-smi not found"
+        echo "::endgroup::"
+        echo "::group::NVIDIA-SMI Status"
+        nvidia-smi || true
+        echo "::endgroup::"
