@@ -135,18 +135,13 @@ inline void qouter(const thread uint8_t* w, U x, U scale, thread U* result) {
   }
 }
 
-template <typename U, int N, int bits>
-inline void
-dequantize(const device uint8_t* w, U scale, threadgroup U* w_local) {
+template <typename U, int bits>
+inline void dequantize(uint8_t w, U scale, threadgroup U* w_local) {
   if constexpr (bits == 4) {
-    for (int i = 0; i < (N / 2); i++) {
-      w_local[2 * i] = scale * Dequantize<4, U>{}(w[i]);
-      w_local[2 * i + 1] = scale * Dequantize<4, U>{}(w[i] >> 4);
-    }
+    w_local[0] = scale * Dequantize<4, U>{}(w);
+    w_local[1] = scale * Dequantize<4, U>{}(w >> 4);
   } else {
-    for (int i = 0; i < N; i++) {
-      w_local[i] = scale * Dequantize<8, U>{}(w[i]);
-    }
+    w_local[0] = scale * Dequantize<8, U>{}(w);
   }
 }
 
@@ -160,19 +155,17 @@ template <
     short group_size,
     short bits>
 struct QuantizedBlockLoader {
-  //  static_assert(
-  //      BCOLS <= group_size,
-  //      "The group size should be larger than the columns");
-  //  static_assert(
-  //      group_size % BCOLS == 0,
-  //      "The group size should be divisible by the columns");
-
   MLX_MTL_CONST short pack_factor = get_pack_factor<8, bits>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack();
   MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
   MLX_MTL_CONST short n_reads =
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  MLX_MTL_CONST short group_steps = group_size / BCOLS;
+  MLX_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
+  MLX_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
+
+  static_assert(
+      (n_reads * pack_factor) <= group_size,
+      "The number of reads per thread must be laess than the group size.");
 
   const int src_ld;
   const int tile_stride;
@@ -206,7 +199,9 @@ struct QuantizedBlockLoader {
         dst(dst_ + bi * dst_ld + bj * pack_factor),
         src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
             bj * bytes_per_pack),
-        scales(scales_ + bi * src_ld / group_size) {
+        scales(
+            scales_ + bi * src_ld / group_size +
+            (bj * pack_factor) / group_size) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
@@ -217,8 +212,8 @@ struct QuantizedBlockLoader {
 
     T scale = dequantize_scale<T, group_size>(*scales);
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          src + i * bytes_per_pack, scale, dst + i * pack_factor);
+      dequantize<T, bits>(
+          src[i * bytes_per_pack], scale, dst + i * pack_factor);
     }
   }
 
@@ -243,10 +238,8 @@ struct QuantizedBlockLoader {
 
     T scale = dequantize_scale<T, group_size>(*scales);
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          dst + i * pack_factor);
+      dequantize<T, bits>(
+          src[i * bytes_per_pack], scale, dst + i * pack_factor);
     }
   }
 
@@ -260,7 +253,7 @@ struct QuantizedBlockLoader {
           scales++;
         }
       } else {
-        scales++;
+        scales += scale_step;
       }
     } else {
       scales += group_stride;

@@ -628,7 +628,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_gather_qmm(self):
-        def quantize(w, transpose=True, group_size=64, bits=4, mode="affine"):
+        def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":
                 qw, s, b = mx.quantize(w, group_size=group_size, bits=bits, mode=mode)
             else:
@@ -649,8 +649,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             lhs_indices=None,
             rhs_indices=None,
             transpose=True,
-            group_size=64,
-            bits=4,
+            group_size=None,
+            bits=None,
             mode="affine",
         ):
             with self.subTest(
@@ -739,7 +739,13 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 "lhs_indices": (0,),
                 "batch_B": (3,),
                 "rhs_indices": (2, 1),
-                "group_size": 32,
+                "mode": "nvfp4",
+            },
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
                 "mode": "mxfp4",
             },
             {
@@ -747,7 +753,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 "lhs_indices": (0,),
                 "batch_B": (3,),
                 "rhs_indices": (2, 1),
-                "group_size": 32,
                 "mode": "mxfp8",
             },
         )
@@ -841,12 +846,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
             # L, K, D, E, I, transpose
             (32, 512, 512, 4, 2, True, "affine"),
             (32, 512, 544, 4, 2, True, "mxfp4"),
+            (32, 512, 544, 4, 2, True, "nvfp4"),
             (32, 512, 544, 4, 2, True, "mxfp8"),
             (133, 512, 512, 4, 2, True, "affine"),
             (133, 512, 555, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
             (64, 512, 512, 4, 2, False, "affine"),
             (64, 512, 544, 4, 2, False, "mxfp4"),
+            (64, 512, 544, 4, 2, False, "nvfp4"),
             (64, 512, 544, 4, 2, False, "mxfp8"),
             (133, 512, 512, 4, 2, False, "affine"),
             (133, 512, 544, 4, 2, False, "affine"),
