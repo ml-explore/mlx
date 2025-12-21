@@ -201,9 +201,7 @@ struct QuantizedBlockLoader {
             bj * bytes_per_pack),
         scales(
             scales_ + bi * src_ld / group_size +
-            (bj * pack_factor) / group_size) {
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-  }
+            (bj * pack_factor) / group_size) {}
 
   void load_unsafe() const {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
