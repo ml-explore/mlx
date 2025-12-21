@@ -181,7 +181,7 @@ class GenerateStubs(Command):
         pass
 
     def run(self) -> None:
-        out_path = "python/mlx/core"
+        out_path = "python/mlx"
         stub_cmd = [
             "python",
             "-m",
@@ -192,9 +192,6 @@ class GenerateStubs(Command):
             "python/mlx/_stub_patterns.txt",
         ]
         subprocess.run(stub_cmd + ["-r", "-O", out_path])
-        # Run again without recursive to specify output file name
-        subprocess.run(["rm", f"{out_path}/mlx.pyi"])
-        subprocess.run(stub_cmd + ["-o", f"{out_path}/__init__.pyi"])
 
 
 class MLXBdistWheel(bdist_wheel):
