@@ -1015,6 +1015,17 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
             ds = mx.grad(gmm)(s, x, wq)
 
+    def test_quantize_strided(self):
+        N = 64
+        mode = "nvfp4"
+        w = mx.random.normal(shape=(N, N))
+        w_q, scales = mx.quantize(w, mode="nvfp4")
+
+        scales = mx.broadcast_to(mx.array(56, mx.uint8), scales.shape)
+        w_hat = mx.dequantize(w_q, scales, mode=mode)
+        expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
+        self.assertTrue(mx.allclose(w_hat, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
