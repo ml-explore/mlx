@@ -165,7 +165,7 @@ struct QuantizedBlockLoader {
 
   static_assert(
       (n_reads * pack_factor) <= group_size,
-      "The number of reads per thread must be laess than the group size.");
+      "The number of reads per thread must be less than the group size.");
 
   const int src_ld;
   const int tile_stride;

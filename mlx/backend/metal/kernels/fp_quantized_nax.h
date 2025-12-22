@@ -17,7 +17,7 @@ using namespace metal;
 MLX_MTL_CONST int SIMD_SIZE = 32;
 MLX_MTL_CONST int QUAD_SIZE = 4;
 
-template <int wsize = 8, int bits = 4>
+template <int wsize = 8, int bits>
 inline constexpr short get_pack_factor() {
   return wsize / bits;
 }
@@ -76,22 +76,21 @@ template <
     short dst_ld,
     short reduction_dim,
     short tgp_size,
-    short group_size>
+    short group_size,
+    short bits>
 struct QuantizedBlockLoader {
-  static_assert(
-      BCOLS % group_size == 0,
-      "The group size should be divisible by the columns");
-
-  MLX_MTL_CONST short pack_factor = get_pack_factor<8>();
+  MLX_MTL_CONST short pack_factor = get_pack_factor<8, bits>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack();
   MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
   MLX_MTL_CONST short n_reads =
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  MLX_MTL_CONST short n_groups = BCOLS / group_size;
 
-  static_assert(
-      (BCOLS_PACKED / n_reads) == n_groups,
-      "Other configurations are not yet supported");
+  MLX_MTL_CONST short n_reads_per_scale = (n_reads * pack_factor) <= group_size
+      ? n_reads
+      : (group_size / pack_factor);
+  MLX_MTL_CONST short n_steps_per_read = n_reads / n_reads_per_scale;
+
+  MLX_MTL_CONST short n_groups = BCOLS / group_size;
 
   const int src_ld;
   const int tile_stride;
@@ -133,10 +132,14 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    T scale = dequantize_scale<T, group_size>(*scales);
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, bits>(
-          src[i * bytes_per_pack], scale, dst + i * pack_factor);
+    int k = 0;
+    for (int i = 0; i < n_steps_per_read; i++) {
+      T scale = dequantize_scale<T, group_size>(scales[i]);
+      for (int j = 0; j < n_reads_per_scale; j++) {
+        dequantize<T, bits>(
+            src[k * bytes_per_pack], scale, dst + k * pack_factor);
+        k++;
+      }
     }
   }
 
@@ -159,25 +162,21 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    T scale = dequantize_scale<T, group_size>(*scales);
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, bits>(
-          src[i * bytes_per_pack], scale, dst + i * pack_factor);
+    int k = 0;
+    for (int i = 0; i < n_steps_per_read; i++) {
+      T scale = dequantize_scale<T, group_size>(scales[i]);
+      for (int j = 0; j < n_reads_per_scale; j++) {
+        dequantize<T, bits>(
+            src[k * bytes_per_pack], scale, dst + k * pack_factor);
+        k++;
+      }
     }
   }
 
   void next() {
     src += tile_stride;
     if (reduction_dim == 1) {
-      // if (group_steps > 1) {
-      //   group_step_cnt++;
-      //   if (group_step_cnt == group_steps) {
-      //     group_step_cnt = 0;
-      //     scales++;
-      //   }
-      // } else {
       scales += n_groups;
-      // }
     } else {
       scales += n_groups * group_stride;
     }
@@ -215,7 +214,7 @@ METAL_FUNC void fp_qmm_t_impl(
 
   (void)lid;
 
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
   constexpr int BK_padded = (BK + 16 / sizeof(Wtype));
@@ -228,7 +227,8 @@ METAL_FUNC void fp_qmm_t_impl(
       BK_padded,
       1,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -367,7 +367,7 @@ METAL_FUNC void fp_qmm_n_impl(
   (void)lid;
   (void)M;
 
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
   constexpr int BN_padded = (BN + 16 / sizeof(T));
@@ -379,7 +379,8 @@ METAL_FUNC void fp_qmm_n_impl(
       BN_padded,
       0,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -822,7 +823,7 @@ template <
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]]) {
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
   constexpr int BK_padded = (BK + 16 / sizeof(Wtype));
   constexpr int BN_padded = (BN + 16 / sizeof(Wtype));
@@ -834,7 +835,8 @@ template <
       transpose ? BK_padded : BN_padded,
       transpose,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   threadgroup Wtype Ws[transpose ? BN * BK_padded : BK * BN_padded];
 
