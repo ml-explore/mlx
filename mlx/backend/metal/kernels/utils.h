@@ -8,6 +8,7 @@
 #include "mlx/backend/metal/kernels/bf16_math.h"
 #include "mlx/backend/metal/kernels/complex.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/kernels/logging.h"
 
 typedef half float16_t;
 

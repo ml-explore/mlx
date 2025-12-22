@@ -24,13 +24,18 @@ runs:
         pip install -e ".[dev]" -v
         pip install typing_extensions
         python setup.py generate_stubs
+
     - name: Build Python package
       shell: bash
       run: |
         pip install auditwheel patchelf build
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
-        bash python/scripts/repair_linux.sh ${{ inputs.arch }}
+        auditwheel repair dist/mlx-*.whl \
+          --plat manylinux_2_35_${{ inputs.arch }} \
+          --exclude libmlx.so* \
+          --only-plat
+
     - name: Build backend package
       if: ${{ inputs.build-backend }}
       shell: bash

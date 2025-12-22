@@ -4,6 +4,8 @@
 
 #include "mlx/backend/metal/kernels/steel/gemm/nax.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
+#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
+#include "mlx/backend/metal/kernels/steel/utils.h"
 
 using namespace metal;
 

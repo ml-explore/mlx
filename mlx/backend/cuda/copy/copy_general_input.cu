@@ -5,6 +5,7 @@
 #include <cooperative_groups.h>
 
 namespace mlx::core {
+static constexpr int TILE_SIZE = 16;
 
 namespace cu {
 
@@ -73,6 +74,53 @@ __global__ void copy_g(
   store_vector(out + shape_x * index_rest, index_x, out_vec, shape_x);
 }
 
+template <typename In, typename Out, int N_READS>
+__global__ void
+copy_col_row(const In* in, Out* out, int64_t rows, int64_t cols) {
+  __shared__ Out
+      tile[N_READS * TILE_SIZE][N_READS * TILE_SIZE + 4 / sizeof(Out)];
+
+  auto block = cg::this_thread_block();
+  auto grid = cg::this_grid();
+
+  auto tile_row = grid.block_index().x * TILE_SIZE * N_READS;
+  auto tile_col = grid.block_index().y * TILE_SIZE * N_READS;
+
+  auto tidx = block.thread_index().x;
+  auto tidy = N_READS * block.thread_index().y;
+
+  auto in_ptr = in + (tile_col + tidy) * rows + tile_row;
+
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    if ((tile_col + tidy + i) < cols) {
+      auto in_vec = load_vector<N_READS>(in_ptr, tidx, rows - tile_row, In(0));
+#pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        tile[N_READS * tidx + j][tidy + i] = CastOp<In, Out>{}(in_vec[j]);
+      }
+      in_ptr += rows;
+    }
+  }
+
+  block.sync();
+
+  auto out_ptr = out + (tile_row + tidy) * cols + tile_col;
+
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    if ((tile_row + tidy + i) < rows) {
+      AlignedVector<Out, N_READS> out_vec;
+#pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        out_vec[j] = tile[tidy + i][N_READS * tidx + j];
+      }
+      store_vector(out_ptr, tidx, out_vec, cols - tile_col);
+      out_ptr += cols;
+    }
+  }
+}
+
 } // namespace cu
 
 void copy_general_input(
@@ -86,15 +134,38 @@ void copy_general_input(
     const Strides& strides_in) {
   dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
     dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
+      using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
+      const InType* in_ptr = gpu_ptr<InType>(in) + offset_in;
+      OutType* out_ptr = gpu_ptr<OutType>(out) + offset_out;
+      int ndim = shape.size();
+
+      // Column contiguous to row contiguous specialization
+      if (ndim == 2 && strides_in[0] == 1 && strides_in[1] == shape[0]) {
+        constexpr int work_per_thread =
+            std::min(static_cast<int>(16 / sizeof(OutType)), 8);
+        dim3 block_dims = {TILE_SIZE, TILE_SIZE};
+        uint32_t num_blocks_x =
+            cuda::ceil_div(shape[0], TILE_SIZE * work_per_thread);
+        uint32_t num_blocks_y =
+            cuda::ceil_div(shape[1], TILE_SIZE * work_per_thread);
+        auto kernel = cu::copy_col_row<InType, OutType, work_per_thread>;
+        encoder.add_kernel_node(
+            kernel,
+            {num_blocks_x, num_blocks_y},
+            block_dims,
+            0,
+            in_ptr,
+            out_ptr,
+            int64_t(shape[0]),
+            int64_t(shape[1]));
+        return;
+      }
+
       dispatch_bool(
           in.data_size() > INT32_MAX || out.data_size() > INT32_MAX,
           [&](auto large) {
-            using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
-            using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-            const InType* in_ptr = gpu_ptr<InType>(in) + offset_in;
-            OutType* out_ptr = gpu_ptr<OutType>(out) + offset_out;
-            int ndim = shape.size();
 
             int work_per_thread = 8;
             auto dim0 = ndim > 0 ? shape.back() : 1;

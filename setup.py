@@ -79,22 +79,22 @@ class CMakeBuild(build_ext):
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
-        build_python = "ON"
-        install_prefix = f"{extdir}{os.sep}"
+        install_prefix = extdir
+        pybind_out_dir = extdir
         if build_stage == 1:
             # Don't include MLX libraries in the wheel
-            install_prefix = f"{build_temp}"
+            install_prefix = build_temp
         elif build_stage == 2:
             # Don't include Python bindings in the wheel
-            build_python = "OFF"
+            pybind_out_dir = build_temp
         cmake_args = [
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
+            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={pybind_out_dir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
-            f"-DMLX_BUILD_PYTHON_BINDINGS={build_python}",
+            "-DMLX_BUILD_PYTHON_BINDINGS=ON",
             "-DMLX_BUILD_TESTS=OFF",
             "-DMLX_BUILD_BENCHMARKS=OFF",
             "-DMLX_BUILD_EXAMPLES=OFF",
-            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}{os.sep}",
         ]
         if build_stage == 2 and build_cuda:
             # Last arch is always real and virtual for forward-compatibility
@@ -181,7 +181,7 @@ class GenerateStubs(Command):
         pass
 
     def run(self) -> None:
-        out_path = "python/mlx/core"
+        out_path = "python/mlx"
         stub_cmd = [
             "python",
             "-m",
@@ -192,9 +192,6 @@ class GenerateStubs(Command):
             "python/mlx/_stub_patterns.txt",
         ]
         subprocess.run(stub_cmd + ["-r", "-O", out_path])
-        # Run again without recursive to specify output file name
-        subprocess.run(["rm", f"{out_path}/mlx.pyi"])
-        subprocess.run(stub_cmd + ["-o", f"{out_path}/__init__.pyi"])
 
 
 class MLXBdistWheel(bdist_wheel):
@@ -255,18 +252,16 @@ if __name__ == "__main__":
 
     extras = {
         "dev": [
-            "nanobind==2.10.2",
-            "numpy",
+            "numpy>=2",
             "pre-commit",
-            "setuptools>=80",
-            "torch",
+            "torch>=2.9",
             "typing_extensions",
         ],
     }
     entry_points = {
         "console_scripts": [
-            "mlx.launch = mlx.distributed_run:main",
-            "mlx.distributed_config = mlx.distributed_run:distributed_config",
+            "mlx.launch = mlx._distributed_utils.launch:main",
+            "mlx.distributed_config = mlx._distributed_utils.config:main",
         ]
     }
     install_requires = []
@@ -313,6 +308,9 @@ if __name__ == "__main__":
         elif build_cuda:
             toolkit = cuda_toolkit_major_version()
             name = f"mlx-cuda-{toolkit}"
+            # Note: update following files when new dependency is added:
+            # * .github/actions/build-cuda-release/action.yml
+            # * mlx/backend/cuda/CMakeLists.txt
             if toolkit == 12:
                 install_requires += [
                     "nvidia-cublas-cu12==12.9.*",
@@ -320,8 +318,8 @@ if __name__ == "__main__":
                 ]
             elif toolkit == 13:
                 install_requires += [
-                    "nvidia-cublas-cu13",
-                    "nvidia-cuda-nvrtc-cu13",
+                    "nvidia-cublas",
+                    "nvidia-cuda-nvrtc",
                 ]
             else:
                 raise ValueError(f"Unknown toolkit {toolkit}")

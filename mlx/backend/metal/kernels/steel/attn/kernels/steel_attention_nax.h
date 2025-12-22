@@ -1,5 +1,10 @@
 // Copyright © 2024-25 Apple Inc.
 
+#include "mlx/backend/metal/kernels/steel/attn/nax.h"
+#include "mlx/backend/metal/kernels/steel/attn/params.h"
+#include "mlx/backend/metal/kernels/steel/attn/transforms.h"
+#include "mlx/backend/metal/kernels/steel/utils.h"
+
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////

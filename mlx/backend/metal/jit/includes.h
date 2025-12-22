@@ -43,5 +43,15 @@ const char* conv();
 const char* steel_conv();
 const char* steel_conv_general();
 const char* gemv_masked();
+const char* steel_attention();
+
+const char* gemm_nax();
+const char* steel_gemm_fused_nax();
+const char* steel_gemm_gather_nax();
+
+const char* quantized_nax();
+const char* fp_quantized_nax();
+
+const char* steel_attention_nax();
 
 } // namespace mlx::core::metal

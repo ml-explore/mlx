@@ -246,7 +246,7 @@ void steel_matmul_regular_axpby_nax(
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_steel_gemm_fused_kernel(
+  auto kernel = get_steel_gemm_fused_nax_kernel(
       /* metal::Device& d = */ d,
       /* const std::string& kernel_name = */ base_name,
       /* const std::string& hash_name = */ hash_name,
@@ -1851,7 +1851,7 @@ void gather_mm_rhs_nax(
 
   // Get and set the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_steel_gemm_gather_kernel(
+  auto kernel = get_steel_gemm_gather_nax_kernel(
       d,
       base_name,
       hash_name,

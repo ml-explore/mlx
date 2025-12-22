@@ -88,9 +88,10 @@ jobs:
         uses: ./.github/actions/build-cuda-release
         with:
           toolkit: 'cuda-12.9'
+          arch: 'x86_64'
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
           name: mlx-cuda
-          path: wheelhouse/mlx_cuda-*.whl
+          path: wheelhouse/mlx_cuda_*.whl
           retention-days: 7

@@ -37,5 +37,7 @@ target_sources(
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
+target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
+target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)

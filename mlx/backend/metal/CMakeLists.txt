@@ -22,7 +22,7 @@ function(make_jit_source SRC_FILE)
 endfunction(make_jit_source)
 
 make_jit_source(utils kernels/bf16.h kernels/bf16_math.h kernels/complex.h
-                kernels/defines.h)
+                kernels/defines.h kernels/logging.h)
 make_jit_source(unary_ops kernels/erf.h kernels/expm1f.h kernels/fp8.h)
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
@@ -79,6 +79,21 @@ if(MLX_METAL_JIT)
   make_jit_source(fp_quantized kernels/quantized_utils.h kernels/fp8.h
                   kernels/fp4.h)
   make_jit_source(gemv_masked)
+
+  make_jit_source(steel/attn/kernels/steel_attention)
+
+  make_jit_source(
+    steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
+    kernels/steel/gemm/params.h kernels/steel/gemm/transforms.h)
+  make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
+  make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
+
+  make_jit_source(quantized_nax kernels/quantized_utils.h)
+  make_jit_source(fp_quantized_nax kernels/quantized_utils.h kernels/fp8.h
+                  kernels/fp4.h)
+
+  make_jit_source(steel/attn/kernels/steel_attention_nax)
+
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)
 endif()

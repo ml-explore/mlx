@@ -362,7 +362,6 @@ METAL_FUNC void fp_qmm_n_impl(
     const device uint8_t* scales,
     const device T* x,
     device T* y,
-    threadgroup T* Xs,
     threadgroup T* Ws,
     const constant int& K,
     const constant int& N,
@@ -371,23 +370,18 @@ METAL_FUNC void fp_qmm_n_impl(
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]],
-    threadgroup T* lut) {
+    threadgroup Wtype* lut) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
   (void)lid;
+  (void)M;
 
   constexpr int pack_factor = get_pack_factor<8>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
-  constexpr int BK_padded = (BK + 16 / sizeof(T));
   constexpr int BN_padded = (BN + 16 / sizeof(T));
 
-  // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = mlx::steel::
-      BlockMMA<T, T, BM, BN, BK, WM, WN, false, false, BK_padded, BN_padded>;
-  using loader_x_t = mlx::steel::
-      BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE, 1, 4>;
   using loader_w_t = QuantizedBlockLoader<
       T,
       BK,
@@ -397,89 +391,88 @@ METAL_FUNC void fp_qmm_n_impl(
       WM * WN * SIMD_SIZE,
       group_size>;
 
-  auto wl = (const device uint8_t*)w;
-
   // Set the block
+  const int K_w = K * bytes_per_pack / pack_factor;
+  const int K_g = K / group_size;
   const int y_row = tid.y * BM;
   const int y_col = tid.x * BN;
+
+  auto wl = (const device uint8_t*)w;
+
   x += y_row * static_cast<int64_t>(K);
-  wl += y_col * bytes_per_pack / pack_factor;
-  scales += y_col / group_size;
+  wl += y_col * K_w;
+  scales += y_col * K_g;
   y += y_row * static_cast<int64_t>(N) + y_col;
 
   // Make the x loader and mma operation
-  const short num_els = min(BM, M - y_row);
-  loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
-  loader_w_t loader_w(wl, scales, N, Ws, lut, simd_gid, simd_lid);
-  mma_t mma_op(simd_gid, simd_lid);
+  // const short num_els = min(BM, M - y_row);
+  // const short num_outs = min(BN, N - y_col);
+  loader_w_t loader_w(wl, scales, K, Ws, lut, simd_gid, simd_lid);
 
-  if (num_els < BM) {
-    if ((K % BK) != 0) {
-      const int k_blocks = K / BK;
-      for (int k = 0; k < k_blocks; k++) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-      const short num_k = K - k_blocks * BK;
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      loader_x.load_safe(short2(num_k, num_els));
-      loader_w.load_safe(short2(BN, num_k));
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      mma_op.mma(Xs, Ws);
-    } else {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
+  constexpr short UM = 16;
+  constexpr short UN = 32;
+  constexpr short UK = 16;
+  constexpr short SM = BM / WM;
+  constexpr short SN = BN / WN;
+  constexpr short SK = 32;
+
+  constexpr short TM = SM / UM;
+  constexpr short TN = SN / UN;
+  constexpr short TK = SK / UK;
+
+  const short tm = SM * (simd_gid / WN);
+  const short tn = SN * (simd_gid % WN);
+
+  const short ldb_tgp = BN_padded;
+
+  constexpr bool transpose_a = false;
+  constexpr bool transpose_b = false;
+
+  using AccumType = float;
+
+  using ASubTile = NAXSubTile<T, UM, UK>;
+  using BSubTile = NAXSubTile<T, UK, UN>;
+  using DSubTile = NAXSubTile<AccumType, UM, UN>;
+
+  NAXTile<AccumType, TM, TN, DSubTile> Dtile;
+
+  Dtile.clear();
+
+  x += tm * K;
+
+  for (int k = 0; k < K; k += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    loader_w.load_unsafe();
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    STEEL_PRAGMA_NO_UNROLL
+    for (int kk1 = 0; kk1 < BK; kk1 += SK) {
+      NAXTile<T, TM, TK, ASubTile> Atile;
+      NAXTile<Wtype, TK, TN, BSubTile> Btile;
+
+      volatile int compiler_barrier;
+
+      Atile.load(x + kk1, K);
+      Btile.template load<T, BN_padded, 1>(Ws + tn + kk1 * ldb_tgp);
+
+      tile_matmad_nax(
+          Dtile,
+          Atile,
+          metal::bool_constant<transpose_a>{},
+          Btile,
+          metal::bool_constant<transpose_b>{});
+
+      (void)compiler_barrier;
     }
-  } else {
-    if ((K % BK) != 0) {
-      const int k_blocks = K / BK;
-      for (int k = 0; k < k_blocks; k++) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_unsafe();
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-      const short num_k = K - k_blocks * BK;
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      loader_x.load_safe(short2(num_k, BM));
-      loader_w.load_safe(short2(BN, num_k));
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      mma_op.mma(Xs, Ws);
-    } else {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_unsafe();
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-    }
+
+    x += BK;
+    loader_w.next();
   }
 
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (num_els < BM) {
-    mma_op.store_result_safe(y, N, short2(BN, num_els));
-  } else {
-    mma_op.store_result(y, N);
-  }
+
+  Dtile.store(y + tm * N + tn, N);
 }
 
 template <typename T, typename S>

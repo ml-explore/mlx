@@ -5,11 +5,6 @@
 #include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/steel/gemm/gemm_nax.h"
-#include "mlx/backend/metal/kernels/steel/gemm/nax.h"
-#include "mlx/backend/metal/kernels/steel/gemm/params.h"
-#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
-#include "mlx/backend/metal/kernels/steel/utils.h"
-
 #include "mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_fused_nax.h"
 
 // clang-format off

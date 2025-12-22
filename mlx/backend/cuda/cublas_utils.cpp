@@ -40,21 +40,6 @@ cublasLtMatmulPreference_t get_preference(cu::Device& device) {
   return pref.pref_;
 }
 
-void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
-  if (workspace_size == 0) {
-    return nullptr;
-  }
-
-  // Ensure workspace is 256-byte aligned
-  int nbytes = cuda::ceil_div(workspace_size, 256) * 256;
-  array workspace(
-      cu::malloc_async(nbytes, encoder),
-      {static_cast<int>(workspace_size)},
-      int8);
-  encoder.add_temporary(workspace);
-  return gpu_ptr<void>(workspace);
-}
-
 cublasLtMatrixLayout_t create_matrix_layout(
     cudaDataType_t type,
     uint64_t rows,
@@ -193,8 +178,7 @@ void CublasMatmulBase::execute_matmul(
     }
   }
 
-  void* workspace_ptr =
-      cublas_utils::allocate_workspace(encoder, heuristic_.workspaceSize);
+  void* workspace_ptr = allocate_workspace(encoder, heuristic_.workspaceSize);
 
   // Execute matmul
   auto capture = encoder.capture_context();
