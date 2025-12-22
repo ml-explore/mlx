@@ -5,7 +5,7 @@ inputs:
   macos-target:
     description: 'macOS build target'
     required: false
-    default: '26.0'
+    default: '15.0'
   build-backend:
     description: 'Build the backend mlx-metal package'
     type: boolean
