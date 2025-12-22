@@ -41,7 +41,6 @@ struct fp4_e2m1 {
   }
 
   operator bfloat16_t() {
-    // TODO maybe direct conversion is faster here
     return static_cast<bfloat16_t>(this->operator float16_t());
   }
 
