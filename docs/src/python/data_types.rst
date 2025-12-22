@@ -52,7 +52,7 @@ The default floating point type is ``float32`` and the default integer type is
      - 4 
      - 32-bit float
    * - ``float64``
-     - 4 
+     - 8
      - 64-bit double
    * - ``complex64``
      - 8 
