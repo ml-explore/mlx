@@ -65,7 +65,7 @@ jobs:
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
-        macos-target: ["14.0", "15.0"]
+        macos-target: ["14.0", "15.0", "26.0"]
     runs-on: [self-hosted, macos]
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}

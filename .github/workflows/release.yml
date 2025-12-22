@@ -61,7 +61,7 @@ jobs:
           use-ccache: false
       - uses: ./.github/actions/build-linux-release
         with:
-          build-backend: ${{ matrix.python-version == '3.10' }}
+          build-backend: ${{ matrix.python_version == '3.10' }}
           arch: ${{ matrix.arch }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v6
