@@ -6,68 +6,68 @@
 #include "mlx/backend/metal/kernels/quantized_utils.h"
 #include "mlx/backend/metal/kernels/fp_quantized.h"
 
-#define instantiate_quantized(mode, name, type) \
+#define instantiate_quantized(mode, name, type, group_size, bits) \
   instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_32_b_4", \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits, \
       fp_ ## name, \
       type, \
-      32,   \
-      4)
+      group_size,   \
+      bits)
 
-#define instantiate_quantized_batched(mode, name, type, batched) \
+#define instantiate_quantized_batched(mode, name, type, batched, group_size, bits) \
   instantiate_kernel( \
-      #mode  "_" #name "_" #type "_gs_32_b_4_batch_" #batched, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched, \
       fp_ ## name,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       batched)
 
-#define instantiate_quantized_aligned(mode, name, type, aligned) \
+#define instantiate_quantized_aligned(mode, name, type, aligned, group_size, bits) \
   instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_32_b_4_alN_" #aligned, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned, \
       fp_ ## name,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       aligned)
 
-#define instantiate_quantized_aligned_batched(mode, name, type, aligned, batched) \
+#define instantiate_quantized_aligned_batched(mode, name, type, aligned, batched, group_size, bits) \
   instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_32_b_4_alN_" #aligned "_batch_" #batched, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched, \
       fp_ ## name,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       aligned, \
       batched)
 
-#define instantiate_quantized_quad(mode, name, type, D, batched) \
+#define instantiate_quantized_quad(mode, name, type, D, batched, group_size, bits) \
   instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_32_b_4_d_" #D "_batch_" #batched, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D "_batch_" #batched, \
       fp_ ## name,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       D,       \
       batched)
 
-#define instantiate_quantized_split_k(mode, name, type, split_k) \
+#define instantiate_quantized_split_k(mode, name, type, split_k, group_size, bits) \
   instantiate_kernel( \
-      #mode "_" #name "_" #type "_gs_32_b_4_spk_" #split_k, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_spk_" #split_k, \
       fp_ ## name,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       split_k)
 
-#define instantiate_gather_qmm_rhs(func, name, type, bm, bn, bk, wm, wn, transpose) \
+#define instantiate_gather_qmm_rhs(func, name, type, bm, bn, bk, wm, wn, transpose, mode, group_size, bits) \
   instantiate_kernel( \
-      #name "_" #type "_gs_32_b_4_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn, \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_bm_" #bm "_bn_" #bn "_bk_" #bk "_wm_" #wm "_wn_" #wn, \
       func,    \
       type,    \
-      32,      \
-      4,       \
+      group_size,      \
+      bits,       \
       bm,      \
       bn,      \
       bk,      \
@@ -75,43 +75,43 @@
       wn,      \
       transpose)
 
-#define instantiate_quantized_batched_wrap(mode, name, type) \
-  instantiate_quantized_batched(mode, name, type, 1)         \
-  instantiate_quantized_batched(mode, name, type, 0)
+#define instantiate_quantized_batched_wrap(name, type, mode, group_size, bits) \
+  instantiate_quantized_batched(mode, name, type, 1, group_size, bits)         \
+  instantiate_quantized_batched(mode, name, type, 0, group_size, bits)
 
-#define instantiate_quantized_all_batched(type) \
-  instantiate_quantized_batched_wrap(mxfp4, qmv_fast, type) \
-  instantiate_quantized_batched_wrap(mxfp4, qmv, type)      \
-  instantiate_quantized_batched_wrap(mxfp4, qvm, type)      \
-  instantiate_quantized_batched_wrap(mxfp4, qmm_n, type)
+#define instantiate_quantized_all_batched(type, mode, group_size, bits) \
+  instantiate_quantized_batched_wrap(qmv_fast, type, mode, group_size, bits) \
+  instantiate_quantized_batched_wrap(qmv, type, mode, group_size, bits)      \
+  instantiate_quantized_batched_wrap(qvm, type, mode, group_size, bits) \
+  instantiate_quantized_batched_wrap(qmm_n, type, mode, group_size, bits)
 
-#define instantiate_quantized_all_single(type) \
-  instantiate_quantized(mxfp4, gather_qmv_fast, type) \
-  instantiate_quantized(mxfp4, gather_qmv, type)      \
-  instantiate_quantized(mxfp4, gather_qvm, type)      \
-  instantiate_quantized(mxfp4, gather_qmm_n, type)
+#define instantiate_quantized_all_single(type, mode, group_size, bits) \
+  instantiate_quantized(mode, gather_qmv_fast, type, group_size, bits) \
+  instantiate_quantized(mode, gather_qmv, type, group_size, bits)      \
+  instantiate_quantized(mode, gather_qvm, type, group_size, bits) \
+  instantiate_quantized(mode, gather_qmm_n, type, group_size, bits)
 
-#define instantiate_quantized_all_aligned(type) \
-  instantiate_quantized_aligned(mxfp4, gather_qmm_t, type, true)      \
-  instantiate_quantized_aligned(mxfp4, gather_qmm_t, type, false)     \
-  instantiate_quantized_aligned_batched(mxfp4, qmm_t, type, true, 1)  \
-  instantiate_quantized_aligned_batched(mxfp4, qmm_t, type, true, 0)  \
-  instantiate_quantized_aligned_batched(mxfp4, qmm_t, type, false, 1) \
-  instantiate_quantized_aligned_batched(mxfp4, qmm_t, type, false, 0)
+#define instantiate_quantized_all_aligned(type, mode, group_size, bits) \
+  instantiate_quantized_aligned(mode, gather_qmm_t, type, true, group_size, bits)      \
+  instantiate_quantized_aligned(mode, gather_qmm_t, type, false, group_size, bits)     \
+  instantiate_quantized_aligned_batched(mode, qmm_t, type, true, 1, group_size, bits)  \
+  instantiate_quantized_aligned_batched(mode, qmm_t, type, true, 0, group_size, bits)  \
+  instantiate_quantized_aligned_batched(mode, qmm_t, type, false, 1, group_size, bits) \
+  instantiate_quantized_aligned_batched(mode, qmm_t, type, false, 0, group_size, bits)
 
-#define instantiate_quantized_all_quad(type) \
-  instantiate_quantized_quad(mxfp4, qmv_quad, type, 64, 1)  \
-  instantiate_quantized_quad(mxfp4, qmv_quad, type, 64, 0)  \
-  instantiate_quantized_quad(mxfp4, qmv_quad, type, 128, 1) \
-  instantiate_quantized_quad(mxfp4, qmv_quad, type, 128, 0)
+#define instantiate_quantized_all_quad(type, mode, group_size, bits) \
+  instantiate_quantized_quad(mode, qmv_quad, type, 64, 1, group_size, bits)  \
+  instantiate_quantized_quad(mode, qmv_quad, type, 64, 0, group_size, bits)  \
+  instantiate_quantized_quad(mode, qmv_quad, type, 128, 1, group_size, bits) \
+  instantiate_quantized_quad(mode, qmv_quad, type, 128, 0, group_size, bits)
 
-#define instantiate_quantized_all_splitk(type) \
-  instantiate_quantized_split_k(mxfp4, qvm_split_k, type, 8) \
-  instantiate_quantized_split_k(mxfp4, qvm_split_k, type, 32)
+#define instantiate_quantized_all_splitk(type, mode, group_size, bits) \
+  instantiate_quantized_split_k(mode, qvm_split_k, type, 8, group_size, bits) \
+  instantiate_quantized_split_k(mode, qvm_split_k, type, 32, group_size, bits)
 
-#define instantiate_quantized_all_rhs(type) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, mxfp4_gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, mxfp4_gather_qmm_rhs_nn, type, 16, 32, 32, 1, 2, false)
+#define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nn, type, 16, 32, 32, 1, 2, false, mode, group_size, bits)
 
 #define instantiate_quantize_dequantize(type, mode, group_size, bits) \
   instantiate_kernel( \
@@ -127,19 +127,19 @@
     group_size,  \
     bits)
 
-#define instantiate_quantize_dequantize_modes(type) \
-  instantiate_quantize_dequantize(type, mxfp4, 32, 4) \
-  instantiate_quantize_dequantize(type, nvfp4, 16, 4) \
-  instantiate_quantize_dequantize(type, mxfp8, 32, 8)
+#define instantiate_quantized_modes(type, mode, group_size, bits) \
+  instantiate_quantized_all_batched(type, mode, group_size, bits) \
+  instantiate_quantized_all_single(type, mode, group_size, bits)  \
+  instantiate_quantized_all_quad(type, mode, group_size, bits)    \
+  instantiate_quantized_all_splitk(type, mode, group_size, bits)  \
+  instantiate_quantized_all_aligned(type, mode, group_size, bits) \
+  instantiate_quantized_all_rhs(type, mode, group_size, bits)     \
+  instantiate_quantize_dequantize(type, mode, group_size, bits)
 
 #define instantiate_quantized_types(type) \
-  instantiate_quantized_all_batched(type) \
-  instantiate_quantized_all_quad(type)    \
-  instantiate_quantized_all_splitk(type)  \
-  instantiate_quantized_all_single(type)  \
-  instantiate_quantized_all_aligned(type) \
-  instantiate_quantized_all_rhs(type)     \
-  instantiate_quantize_dequantize_modes(type)
+  instantiate_quantized_modes(type, nvfp4, 16, 4) \
+  instantiate_quantized_modes(type, mxfp8, 32, 8) \
+  instantiate_quantized_modes(type, mxfp4, 32, 4)
 
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)

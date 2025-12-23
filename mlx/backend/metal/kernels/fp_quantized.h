@@ -17,9 +17,9 @@ using namespace metal;
 MLX_MTL_CONST int SIMD_SIZE = 32;
 MLX_MTL_CONST int QUAD_SIZE = 4;
 
-template <int wsize = 8>
+template <int wsize = 8, int bits = 4>
 inline constexpr short get_pack_factor() {
-  return wsize / 4;
+  return wsize / bits;
 }
 
 template <int wsize = 8>
@@ -27,9 +27,14 @@ inline constexpr short get_bytes_per_pack() {
   return wsize / 8;
 }
 
-template <typename T>
+template <typename T, int group_size>
 static inline T dequantize_scale(uint8_t s) {
-  return T(*(thread fp8_e8m0*)(&s));
+  if constexpr (group_size == 16) {
+    // Use nv scale
+    return T(*(thread fp8_e4m3*)(&s));
+  } else {
+    return T(*(thread fp8_e8m0*)(&s));
+  }
 }
 
 template <int bits>
@@ -43,34 +48,29 @@ struct Quantize {
   }
 };
 
-template <int bits>
+template <int bits, typename U = float>
 struct Dequantize {
-  float operator()(uint8_t x) {
-    if (bits == 8) {
-      return float(*(thread fp8_e4m3*)(&x));
+  U operator()(uint8_t x) {
+    if constexpr (bits == 8) {
+      return U(*(thread fp8_e4m3*)(&x));
     } else {
-      return float(*(thread fp4_e2m1*)(&x));
+      return U(*(thread fp4_e2m1*)(&x));
     }
   }
 };
 
 template <typename T, typename U, int values_per_thread>
 inline void load_vector(const device T* x, thread U* x_thread) {
-  for (int i = 0; i < values_per_thread; i += 4) {
+#pragma unroll
+  for (int i = 0; i < values_per_thread; i++) {
     x_thread[i] = x[i];
-    x_thread[i + 1] = x[i + 1];
-    x_thread[i + 2] = x[i + 2];
-    x_thread[i + 3] = x[i + 3];
   }
 }
 
 template <typename T, typename U, int values_per_thread>
 inline void load_vector_safe(const device T* x, thread U* x_thread, int N) {
-  for (int i = 0; i < N; i += 4) {
+  for (int i = 0; i < N; i++) {
     x_thread[i] = x[i];
-    x_thread[i + 1] = x[i + 1];
-    x_thread[i + 2] = x[i + 2];
-    x_thread[i + 3] = x[i + 3];
   }
 
   for (int i = N; i < values_per_thread; i++) {
@@ -78,53 +78,70 @@ inline void load_vector_safe(const device T* x, thread U* x_thread, int N) {
   }
 }
 
-template <typename U, int values_per_thread>
+template <typename U, int values_per_thread, int bits>
 inline U qdot(const device uint8_t* w, const thread U* x_thread, U scale) {
   U accum = 0;
-  const device uint16_t* ws = (const device uint16_t*)w;
-  for (int i = 0; i < (values_per_thread / 4); i++) {
-    accum +=
-        (x_thread[4 * i] * Dequantize<4>{}(ws[i]) +
-         x_thread[4 * i + 1] * Dequantize<4>{}(ws[i] >> 4) +
-         x_thread[4 * i + 2] * Dequantize<4>{}(ws[i] >> 8) +
-         x_thread[4 * i + 3] * Dequantize<4>{}(ws[i] >> 12));
+  if constexpr (bits == 4) {
+    const device uint16_t* ws = (const device uint16_t*)w;
+    for (int i = 0; i < (values_per_thread / 4); i++) {
+      accum +=
+          (x_thread[4 * i] * Dequantize<4>{}(ws[i]) +
+           x_thread[4 * i + 1] * Dequantize<4>{}(ws[i] >> 4) +
+           x_thread[4 * i + 2] * Dequantize<4>{}(ws[i] >> 8) +
+           x_thread[4 * i + 3] * Dequantize<4>{}(ws[i] >> 12));
+    }
+  } else {
+    for (int i = 0; i < values_per_thread; i++) {
+      accum += x_thread[i] * Dequantize<8>{}(w[i]);
+    }
   }
+
   return scale * accum;
 }
 
-template <typename U, int values_per_thread>
+template <typename U, int values_per_thread, int bits>
 inline U
 qdot_safe(const device uint8_t* w, const thread U* x_thread, U scale, int N) {
   U accum = 0;
 
-  const device uint16_t* ws = (const device uint16_t*)w;
-  for (int i = 0; i < (N / 4); i++) {
-    accum +=
-        (x_thread[4 * i] * Dequantize<4>{}(ws[i]) +
-         x_thread[4 * i + 1] * Dequantize<4>{}(ws[i] >> 4) +
-         x_thread[4 * i + 2] * Dequantize<4>{}(ws[i] >> 8) +
-         x_thread[4 * i + 3] * Dequantize<4>{}(ws[i] >> 12));
+  if constexpr (bits == 4) {
+    const device uint16_t* ws = (const device uint16_t*)w;
+    for (int i = 0; i < (N / 4); i++) {
+      accum +=
+          (x_thread[4 * i] * Dequantize<4>{}(ws[i]) +
+           x_thread[4 * i + 1] * Dequantize<4>{}(ws[i] >> 4) +
+           x_thread[4 * i + 2] * Dequantize<4>{}(ws[i] >> 8) +
+           x_thread[4 * i + 3] * Dequantize<4>{}(ws[i] >> 12));
+    }
+  } else {
+    for (int i = 0; i < N; i++) {
+      accum += x_thread[i] * Dequantize<8>{}(w[i]);
+    }
   }
   return scale * accum;
 }
 
-template <typename U, int values_per_thread>
+template <typename U, int values_per_thread, int bits>
 inline void qouter(const thread uint8_t* w, U x, U scale, thread U* result) {
-  for (int i = 0; i < (values_per_thread / 2); i++) {
-    result[2 * i] += x * scale * Dequantize<4>{}(w[i]);
-    result[2 * i + 1] += x * scale * Dequantize<4>{}(w[i] >> 4);
+  if constexpr (bits == 4) {
+    for (int i = 0; i < (values_per_thread / 2); i++) {
+      result[2 * i] += x * scale * Dequantize<4>{}(w[i]);
+      result[2 * i + 1] += x * scale * Dequantize<4>{}(w[i] >> 4);
+    }
+  } else {
+    for (int i = 0; i < values_per_thread; i++) {
+      result[i] += x * scale * Dequantize<8>{}(w[i]);
+    }
   }
 }
 
-template <typename U, int N>
-inline void dequantize(
-    const device uint8_t* w,
-    U scale,
-    threadgroup U* w_local,
-    const threadgroup U* lut) {
-  for (int i = 0; i < (N / 2); i++) {
-    w_local[2 * i] = scale * lut[w[i] & 0xf];
-    w_local[2 * i + 1] = scale * lut[(w[i] >> 4) & 0xf];
+template <typename U, int bits>
+inline void dequantize(uint8_t w, U scale, threadgroup U* w_local) {
+  if constexpr (bits == 4) {
+    w_local[0] = scale * Dequantize<4, U>{}(w);
+    w_local[1] = scale * Dequantize<4, U>{}(w >> 4);
+  } else {
+    w_local[0] = scale * Dequantize<8, U>{}(w);
   }
 }
 
@@ -135,21 +152,20 @@ template <
     short dst_ld,
     short reduction_dim,
     short tgp_size,
-    short group_size>
+    short group_size,
+    short bits>
 struct QuantizedBlockLoader {
-  static_assert(
-      BCOLS <= group_size,
-      "The group size should be larger than the columns");
-  static_assert(
-      group_size % BCOLS == 0,
-      "The group size should be divisible by the columns");
-
-  MLX_MTL_CONST short pack_factor = get_pack_factor<8>();
+  MLX_MTL_CONST short pack_factor = get_pack_factor<8, bits>();
   MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack();
   MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
   MLX_MTL_CONST short n_reads =
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  MLX_MTL_CONST short group_steps = group_size / BCOLS;
+  MLX_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
+  MLX_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
+
+  static_assert(
+      (n_reads * pack_factor) <= group_size,
+      "The number of reads per thread must be less than the group size.");
 
   const int src_ld;
   const int tile_stride;
@@ -163,14 +179,12 @@ struct QuantizedBlockLoader {
   threadgroup T* dst;
   const device uint8_t* src;
   const device uint8_t* scales;
-  threadgroup T* lut;
 
   QuantizedBlockLoader(
       const device uint8_t* src_,
       const device uint8_t* scales_,
       const int src_ld_,
       threadgroup T* dst_,
-      threadgroup T* lut_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
       ushort simd_lane_id [[thread_index_in_simdgroup]])
       : src_ld(src_ld_),
@@ -185,23 +199,19 @@ struct QuantizedBlockLoader {
         dst(dst_ + bi * dst_ld + bj * pack_factor),
         src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
             bj * bytes_per_pack),
-        scales(scales_ + bi * src_ld / group_size),
-        lut(lut_) {
-    if (simd_group_id == 0 && simd_lane_id < 16) {
-      lut[simd_lane_id] = static_cast<T>(FP4_LUT[simd_lane_id]);
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-  }
+        scales(
+            scales_ + bi * src_ld / group_size +
+            (bj * pack_factor) / group_size) {}
 
   void load_unsafe() const {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
 
-    T scale = dequantize_scale<T>(*scales);
+    T scale = dequantize_scale<T, group_size>(*scales);
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor>(
-          src + i * bytes_per_pack, scale, dst + i * pack_factor, lut);
+      dequantize<T, bits>(
+          src[i * bytes_per_pack], scale, dst + i * pack_factor);
     }
   }
 
@@ -224,13 +234,10 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    T scale = dequantize_scale<T>(*scales);
+    T scale = dequantize_scale<T, group_size>(*scales);
     for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          dst + i * pack_factor,
-          lut);
+      dequantize<T, bits>(
+          src[i * bytes_per_pack], scale, dst + i * pack_factor);
     }
   }
 
@@ -244,7 +251,7 @@ struct QuantizedBlockLoader {
           scales++;
         }
       } else {
-        scales++;
+        scales += scale_step;
       }
     } else {
       scales += group_stride;
@@ -264,10 +271,13 @@ METAL_FUNC void fp_qmv_quad_impl(
     uint quad_gid [[quadgroup_index_in_threadgroup]],
     uint quad_lid [[thread_index_in_quadgroup]]) {
   constexpr int quads_per_simd = SIMD_SIZE / QUAD_SIZE;
-  constexpr int pack_factor = 8;
+  constexpr int pack_factor = get_pack_factor<32, bits>();
   constexpr int values_per_thread = D / QUAD_SIZE;
+  constexpr int steps_per_thread =
+      values_per_thread < group_size ? 1 : values_per_thread / group_size;
+  constexpr int values_per_step = values_per_thread / steps_per_thread;
   constexpr int packs_per_thread = values_per_thread / pack_factor;
-  constexpr int scale_step_per_thread = group_size / values_per_thread;
+  constexpr int packs_per_step = values_per_step / pack_factor;
   constexpr int results_per_quadgroup = 8;
 
   typedef float U;
@@ -281,7 +291,8 @@ METAL_FUNC void fp_qmv_quad_impl(
   const int out_row = tid.y * quads_per_simd * results_per_quadgroup + quad_gid;
 
   w += out_row * in_vec_size_w + quad_lid * packs_per_thread;
-  scales += out_row * in_vec_size_g + quad_lid / scale_step_per_thread;
+  scales +=
+      out_row * in_vec_size_g + (quad_lid * values_per_thread) / group_size;
   x += tid.x * in_vec_size + quad_lid * values_per_thread;
   y += tid.x * out_vec_size + out_row;
 
@@ -290,10 +301,15 @@ METAL_FUNC void fp_qmv_quad_impl(
   for (int row = 0; row < results_per_quadgroup; row++) {
     auto wl = (const device uint8_t*)(w + row * in_vec_size_w * quads_per_simd);
     const device uint8_t* sl = scales + row * in_vec_size_g * quads_per_simd;
-
-    U s = dequantize_scale<U>(sl[0]);
-    if (row * quads_per_simd + out_row < out_vec_size) {
-      result[row] += qdot<U, values_per_thread>(wl, x_thread, s);
+#pragma unroll
+    for (int k = 0; k < steps_per_thread; ++k) {
+      U s = dequantize_scale<U, group_size>(sl[0]);
+      if (row * quads_per_simd + out_row < out_vec_size) {
+        result[row] += qdot<U, values_per_step, bits>(
+            wl, x_thread + k * values_per_step, s);
+      }
+      sl++;
+      wl += (sizeof(uint32_t) / sizeof(uint8_t)) * packs_per_step;
     }
   }
 
@@ -319,7 +335,7 @@ METAL_FUNC void fp_qmv_fast_impl(
   constexpr int packs_per_thread = 2;
   constexpr int num_simdgroups = 2;
   constexpr int results_per_simdgroup = 4;
-  constexpr int pack_factor = get_pack_factor<32>();
+  constexpr int pack_factor = get_pack_factor<32, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack<32>();
   constexpr int values_per_thread = pack_factor * packs_per_thread;
   constexpr int block_size = values_per_thread * SIMD_SIZE;
@@ -349,8 +365,8 @@ METAL_FUNC void fp_qmv_fast_impl(
       auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
       const device auto* sl = scales + row * in_vec_size_g;
 
-      U s = dequantize_scale<U>(sl[0]);
-      result[row] += qdot<U, values_per_thread>(wl, x_thread, s);
+      U s = dequantize_scale<U, group_size>(sl[0]);
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
     }
 
     ws += block_size * bytes_per_pack / pack_factor;
@@ -380,7 +396,7 @@ METAL_FUNC void fp_qmv_impl(
   constexpr int num_simdgroups = 2;
   constexpr int results_per_simdgroup = 4;
   constexpr int packs_per_thread = 1;
-  constexpr int pack_factor = get_pack_factor<32>();
+  constexpr int pack_factor = get_pack_factor<32, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack<32>();
 
   constexpr int values_per_thread = pack_factor * packs_per_thread;
@@ -423,7 +439,7 @@ METAL_FUNC void fp_qmv_impl(
         const device auto* sl = scales + row * in_vec_size_g;
 
         uint8_t s = sl[0];
-        result[row] += qdot<U, values_per_thread>(wl, x_thread, s);
+        result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
       }
 
       ws += block_size * bytes_per_pack / pack_factor;
@@ -441,8 +457,8 @@ METAL_FUNC void fp_qmv_impl(
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
-        U s = dequantize_scale<U>(sl[0]);
-        result[row] += qdot<U, values_per_thread>(wl, x_thread, s);
+        U s = dequantize_scale<U, group_size>(sl[0]);
+        result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
       }
     }
 
@@ -470,8 +486,8 @@ METAL_FUNC void fp_qmv_impl(
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
-        U s = dequantize_scale<U>(sl[0]);
-        result[row] += qdot<U, values_per_thread>(wl, x_thread, s);
+        U s = dequantize_scale<U, group_size>(sl[0]);
+        result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
       }
 
       ws += block_size * bytes_per_pack / pack_factor;
@@ -489,9 +505,9 @@ METAL_FUNC void fp_qmv_impl(
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
-        U s = dequantize_scale<U>(sl[0]);
+        U s = dequantize_scale<U, group_size>(sl[0]);
         result[row] +=
-            qdot_safe<U, values_per_thread>(wl, x_thread, s, remaining);
+            qdot_safe<U, values_per_thread, bits>(wl, x_thread, s, remaining);
       }
     }
     for (int row = 0; row < results_per_simdgroup; row++) {
@@ -515,10 +531,10 @@ METAL_FUNC void fp_qvm_impl(
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr int num_simdgroups = 2;
-  constexpr int pack_factor = get_pack_factor<32>();
+  constexpr int pack_factor = get_pack_factor<32, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
-  constexpr int tn = 32 / pack_factor;
+  constexpr int tn = group_size / pack_factor;
   constexpr int block_size = SIMD_SIZE;
 
   using W_T = uint32_t;
@@ -537,6 +553,7 @@ METAL_FUNC void fp_qvm_impl(
   // Adjust positions
   const int out_vec_size_w = out_vec_size * bytes_per_pack / pack_factor;
   const int out_vec_size_g = out_vec_size / group_size;
+  // 32 * (tid.y * 2 + simd_gid)
   int out_col = pack_factor * tn * (tid.y * num_simdgroups + simd_gid);
   ws += out_col * bytes_per_pack / pack_factor + simd_lid * out_vec_size_w;
   scales += out_col / group_size + simd_lid * out_vec_size_g;
@@ -552,9 +569,9 @@ METAL_FUNC void fp_qvm_impl(
   if (remaining == 0) {
     for (int i = 0; i < in_vec_size; i += block_size) {
       x_local = *x;
-      scale = dequantize_scale<U>(*scales);
+      scale = dequantize_scale<U, group_size>(*scales);
       w_local = *((device vec_w*)ws);
-      qouter<U, tn * pack_factor>(
+      qouter<U, tn * pack_factor, bits>(
           (thread uint8_t*)&w_local, x_local, scale, result);
 
       x += block_size;
@@ -564,10 +581,10 @@ METAL_FUNC void fp_qvm_impl(
   } else {
     for (int i = block_size; i < in_vec_size; i += block_size) {
       x_local = *x;
-      scale = dequantize_scale<U>(*scales);
+      scale = dequantize_scale<U, group_size>(*scales);
       w_local = *((device vec_w*)ws);
 
-      qouter<U, tn * pack_factor>(
+      qouter<U, tn * pack_factor, bits>(
           (thread uint8_t*)&w_local, x_local, scale, result);
 
       x += block_size;
@@ -576,13 +593,13 @@ METAL_FUNC void fp_qvm_impl(
     }
     if (static_cast<int>(simd_lid) < remaining) {
       x_local = *x;
-      scale = dequantize_scale<U>(*scales);
+      scale = dequantize_scale<U, group_size>(*scales);
       w_local = *((device vec_w*)ws);
     } else {
       x_local = 0;
       scale = 0;
     }
-    qouter<U, tn * pack_factor>(
+    qouter<U, tn * pack_factor, bits>(
         (thread uint8_t*)&w_local, x_local, scale, result);
   }
 
@@ -622,8 +639,7 @@ METAL_FUNC void fp_qmm_t_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]],
-    threadgroup T* lut) {
+    uint simd_lid [[thread_index_in_simdgroup]]) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
@@ -631,7 +647,7 @@ METAL_FUNC void fp_qmm_t_impl(
 
   constexpr int WM = 2;
   constexpr int WN = 2;
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
   constexpr int BK_padded = (BK + 16 / sizeof(T));
@@ -648,7 +664,8 @@ METAL_FUNC void fp_qmm_t_impl(
       BK_padded,
       1,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   // Set the block
   const int K_w = K * bytes_per_pack / pack_factor;
@@ -667,7 +684,7 @@ METAL_FUNC void fp_qmm_t_impl(
   const short num_els = min(BM, M - y_row);
   const short num_outs = min(BN, N - y_col);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
-  loader_w_t loader_w(wl, scales, K, Ws, lut, simd_gid, simd_lid);
+  loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
   if (num_els < BM) {
@@ -746,8 +763,7 @@ METAL_FUNC void fp_qmm_n_impl(
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]],
-    threadgroup T* lut) {
+    uint simd_lid [[thread_index_in_simdgroup]]) {
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
@@ -755,7 +771,7 @@ METAL_FUNC void fp_qmm_n_impl(
 
   constexpr int WM = 2;
   constexpr int WN = 2;
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
 
   constexpr int BK_padded = (BK + 16 / sizeof(T));
@@ -773,7 +789,8 @@ METAL_FUNC void fp_qmm_n_impl(
       BN_padded,
       0,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   auto wl = (const device uint8_t*)w;
 
@@ -788,7 +805,7 @@ METAL_FUNC void fp_qmm_n_impl(
   // Make the x loader and mma operation
   const short num_els = min(BM, M - y_row);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
-  loader_w_t loader_w(wl, scales, N, Ws, lut, simd_gid, simd_lid);
+  loader_w_t loader_w(wl, scales, N, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
   if (num_els < BM) {
@@ -1178,7 +1195,6 @@ template <
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BN * BK_padded];
-  threadgroup T lut[16];
 
   if (batched) {
     adjust_matrix_offsets(
@@ -1197,7 +1213,7 @@ template <
         tid);
   }
   fp_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
@@ -1234,7 +1250,6 @@ template <
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BK * BN_padded];
-  threadgroup T lut[16];
 
   if (batched) {
     adjust_matrix_offsets(
@@ -1254,7 +1269,7 @@ template <
   }
 
   fp_qmm_n_impl<T, group_size, bits, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <typename T, int group_size, int bits>
@@ -1443,7 +1458,6 @@ template <
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BN * BK_padded];
-  threadgroup T lut[16];
 
   adjust_matrix_offsets(
       x,
@@ -1466,7 +1480,7 @@ template <
       s_strides,
       tid);
   fp_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
@@ -1508,7 +1522,6 @@ template <
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BK * BN_padded];
-  threadgroup T lut[16];
 
   adjust_matrix_offsets(
       x,
@@ -1531,7 +1544,7 @@ template <
       s_strides,
       tid);
   fp_qmm_n_impl<T, group_size, bits, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid, lut);
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
@@ -1556,11 +1569,10 @@ template <
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]]) {
-  constexpr int pack_factor = get_pack_factor<8>();
+  constexpr int pack_factor = get_pack_factor<8, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack();
   constexpr int BK_padded = (BK + 16 / sizeof(T));
   constexpr int BN_padded = (BN + 16 / sizeof(T));
-  threadgroup T lut[16];
 
   using mma_t = mlx::steel::BlockMMA<
       T,
@@ -1583,7 +1595,8 @@ template <
       transpose ? BK_padded : BN_padded,
       transpose,
       WM * WN * SIMD_SIZE,
-      group_size>;
+      group_size,
+      bits>;
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[transpose ? BN * BK_padded : BK * BN_padded];
@@ -1648,7 +1661,6 @@ template <
         scales + index * stride_s,
         transpose ? K : N,
         Ws,
-        lut,
         simd_group_id,
         simd_lane_id);
 
