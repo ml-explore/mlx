@@ -17,6 +17,7 @@ from .common import (
     OptionalBoolAction,
     log,
     log_error,
+    log_warning,
     parse_hostfile,
     parse_hostlist,
 )
@@ -44,17 +45,29 @@ class ThunderboltHost:
     ports: list[ThunderboltPort]
 
 
-def add_ethernet_ips(hosts, verbose=False):
+def add_ips(hosts, verbose=False):
     # Get the ips for each host
     for h in hosts:
         log(verbose, "Getting the ip from", h.ssh_hostname)
-        h.ips.append(
-            run(
-                ["ssh", h.ssh_hostname, "ipconfig", "getifaddr", "en0"],
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-        )
+        ip = run(
+            ["ssh", h.ssh_hostname, "ipconfig", "getifaddr", "en0"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if ip != "":
+            h.ips.append(ip)
+            continue
+
+        ip = run(
+            ["ssh", h.ssh_hostname, "ipconfig", "getifaddr", "en1"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if ip != "":
+            h.ips.append(ip)
+            continue
+
+        log_warning("Could not extract ip for", h.ssh_hostname)
 
 
 def check_rdma(hosts, verbose=False):
@@ -393,7 +406,7 @@ def check_ssh_connections(hosts):
 
 def prepare_ethernet_hostfile(args, hosts):
     log(args.verbose, f"Preparing an ethernet hostfile")
-    add_ethernet_ips(hosts, args.verbose)
+    add_ips(hosts, args.verbose)
 
     hostfile = []
     for h in hosts:
@@ -438,7 +451,7 @@ def configure_ring(args, hosts, ips, ring, sshinfo):
 def configure_jaccl(args, hosts, ips, sshinfo):
     log(args.verbose, "Prepare a jaccl hostfile")
     check_rdma(hosts, args.verbose)
-    add_ethernet_ips(hosts, args.verbose)
+    add_ips(hosts, args.verbose)
 
     hostfile = []
     for i, h in enumerate(hosts):
