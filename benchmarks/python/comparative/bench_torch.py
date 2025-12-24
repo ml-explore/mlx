@@ -37,10 +37,10 @@ def bench(f, *args):
     for i in range(10):
         f(*args)
 
-    s = time.time()
+    s = time.perf_counter()
     for i in range(100):
         f(*args)
-    e = time.time()
+    e = time.perf_counter()
     return e - s
 
 

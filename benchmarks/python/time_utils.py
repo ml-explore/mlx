@@ -31,8 +31,8 @@ def measure_runtime(fn, **kwargs):
     for _ in range(5):
         fn(**kwargs)
 
-    tic = time.time()
+    tic = time.perf_counter()
     iters = 100
     for _ in range(iters):
         fn(**kwargs)
-    return (time.time() - tic) * 1000 / iters
+    return (time.perf_counter() - tic) * 1000 / iters
