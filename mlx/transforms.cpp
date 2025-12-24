@@ -1015,14 +1015,21 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
             //       waste computation.
             fun_jvp.value_or([fun](auto primals, auto tangents, auto argnums) {
               std::vector<array> all_tangents;
+              std::vector<array> masked_primals;
+              masked_primals.reserve(primals.size());
+
               for (int i = 0, j = 0; i < primals.size(); i++) {
                 if (j < argnums.size() && i == argnums[j]) {
                   all_tangents.emplace_back(tangents[j++]);
+                  masked_primals.push_back(primals[i]);
                 } else {
+                  // Optimization: Stop gradient for inputs not involved in
+                  // differentiation
                   all_tangents.emplace_back(zeros_like(primals[i]));
+                  masked_primals.push_back(stop_gradient(primals[i]));
                 }
               }
-              auto [__, jvps] = jvp(fun, primals, all_tangents);
+              auto [__, jvps] = jvp(fun, masked_primals, all_tangents);
               return jvps;
             }),
 
