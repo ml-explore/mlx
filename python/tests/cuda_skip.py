@@ -6,7 +6,7 @@ cuda_skip = {
     # Gather matmul NYI
     "TestBlas.test_gather_matmul",
     "TestBlas.test_gather_matmul_grad",
-    "TestBlas.test_gather_mm_sorted",
+    "TestBlas.test_gather_mm_sorted_vjp",
     # Segmented matmul NYI
     "TestBlas.test_segmented_mm",
     # Hadamard NYI
