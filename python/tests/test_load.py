@@ -22,6 +22,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         "int64",
         "float32",
         "float16",
+        "bfloat16",
         "complex64",
     ]
 
@@ -116,7 +117,7 @@ class TestLoad(mlx_tests.MLXTestCase):
             os.mkdir(self.test_dir)
 
         # TODO: Add support for other dtypes (self.dtypes + ["bfloat16"])
-        supported_dtypes = ["float16", "float32", "int8", "int16", "int32"]
+        supported_dtypes = ["float16", "float32", "int8", "int16", "int32", "bfloat16"]
         for dt in supported_dtypes:
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
