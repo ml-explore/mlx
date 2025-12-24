@@ -48,9 +48,9 @@ runs:
         echo "::group::Setup Python venv"
         python -m venv .venv
         source .venv/bin/activate
-        pip install setuptools cmake nanobind==2.10.2
+        pip install setuptools cmake typing_extensions
         echo PATH=$PATH >> $GITHUB_ENV
-        # Make cmake search .venv for nanobind
+        # Search python packages in .venv
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
         echo "::endgroup::"
 

@@ -98,13 +98,8 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install --upgrade pip
-          pip install cmake setuptools nanobind==2.10.2
+          pip install cmake setuptools typing_extensions
           pip install -e . -v
-      - name: Generate package stubs
-        shell: bash -l {0}
-        run: |
-          pip install typing_extensions
-          python setup.py generate_stubs
       - name: Build macOS 14 package
         uses: ./.github/actions/build-macos-release
         with:

@@ -18,12 +18,9 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Generate package stubs
+    - name: Build MLX
       shell: bash
-      run: |
-        pip install -e ".[dev]" -v
-        pip install typing_extensions
-        python setup.py generate_stubs
+      run: pip install -e . -v
 
     - name: Build Python package
       shell: bash
