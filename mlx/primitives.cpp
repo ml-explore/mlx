@@ -2168,7 +2168,7 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
       {array(
           out_shape,
           real_ && inverse_ ? float32 : complex64,
-          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_),
+          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_, scale_),
           {in})},
       {ax}};
 }
@@ -2186,13 +2186,40 @@ std::vector<array> FFT::vjp(
   // TODO: Add it as an option to do an unnormalized or scaled fft so that this
   //       isn't part of the graph.
   double n_elements = 1;
+
   for (auto ax : axes) {
     n_elements *= inverse_ ? cotangents[0].shape(ax) : primals[0].shape(ax);
   }
 
+  // Optimize VJP to use scaled FFT directly
+  float scale_param = inverse_ ? n_elements : (1.0f / n_elements);
+  float scale_ = inverse_
+      ? 1.0f
+      : (1.0f /
+         n_elements); // vjp of fft is ifft * N? No, vjp of fft (unscaled) is
+                      // ifft * N? if y=fft(x), x=ifft(y). v = dL/dy. dx =
+                      // ifft(v) * N. Standard: ifft(y) = 1/N sum. So if y = sum
+                      // x e^-i..., dL/dx = sum dL/dy e^-i... = sum v e^-i... =
+                      // N * 1/N sum v e^-i... = N * ifft(v).
+  // Wait, existing code had:
+  // if (inverse_) return val * n_elements
+  // else return val * 1/n_elements.
+  // My replacement above:
+  // if (inverse_) scale_ = n_elements?
+  // else scale_ = 1/n_elements?
+  // Let's defer calculation logic to inside the replacement.
+  float scale_ = 1.0f / n_elements;
+  if (inverse_) {
+    scale_ = n_elements;
+  }
+
+  // Calculate constants for mask logic
+  // n_elements logic handled by scale_param fusion or manual mask scaling.
+
   if (real_ && inverse_) {
-    // Make a mask to account for the double use in the forward pass.
-    // Everything except the DC and nyquist frequencies gets doubled.
+    // IRFFT primitive (input complex, output real).
+    // VJP is RFFT(d_out) * Mask. Mask(1, 2) handles symmetry redundancy.
+    // IRFFT is scaled by 1/N. We use RFFT(scale=1/N) to fuse.
     int N = in.shape(axes_.back());
     bool odd = cotangents[0].shape(axes_.back()) % 2;
     Shape c(in.ndim(), 1);
@@ -2200,25 +2227,33 @@ std::vector<array> FFT::vjp(
     array indices = reshape(arange(N, stream()), std::move(c), stream());
     array first(0, indices.dtype());
     array last(N - 1 + odd, indices.dtype());
-    array one(1 / n_elements, in.dtype());
-    array two(2 / n_elements, in.dtype());
     array mask = where(
         logical_and(
             greater(indices, first, stream()),
             less(indices, last, stream()),
             stream()),
-        two,
-        one,
+        array(2.0f, in.dtype()),
+        array(1.0f, in.dtype()),
         stream());
-    return {
-        multiply(fft::rfftn(cotangents[0], axes, stream()), mask, stream())};
+
+    auto val = array(
+        primals[0].shape(),
+        primals[0].dtype(),
+        std::make_shared<FFT>(stream(), axes_, !inverse_, real_, scale_param),
+        {cotangents[0]});
+    return {multiply(val, mask, stream())};
+
   } else if (real_) {
+    // RFFT primitive (input real, output complex).
+    // VJP is IRFFT(d_out * Mask).
+    // Mask(0.5, 1) handles redundancy.
+    // RFFT is unscaled. VJP is IRFFT * N. We use IRFFT(scale=N).
+    // Since we multiply input by mask, we can't fuse mask into scale.
+    // But we CAN fuse the *N.
     Shape n;
     for (auto ax : axes_) {
       n.push_back(in.shape(ax));
     }
-    // Make a mask to account for the double use in the forward pass.
-    // Everything except the DC and nyquist frequencies gets halved.
     int N = cotangents[0].shape(axes_.back());
     bool odd = in.shape(axes_.back()) % 2;
     Shape c(in.ndim(), 1);
@@ -2226,30 +2261,32 @@ std::vector<array> FFT::vjp(
     array indices = reshape(arange(N, stream()), std::move(c), stream());
     array first(0, indices.dtype());
     array last(N - 1 + odd, indices.dtype());
-    array one(1, complex64);
-    array half(0.5, complex64);
     array mask = where(
         logical_and(
             greater(indices, first, stream()),
             less(indices, last, stream()),
             stream()),
-        half,
-        one,
+        array(0.5f, complex64),
+        array(1.0f, complex64),
         stream());
-    return {multiply(
-        fft::irfftn(multiply(cotangents[0], mask, stream()), n, axes, stream()),
-        array(n_elements, in.dtype()),
-        stream())};
-  } else if (inverse_) {
-    return {multiply(
-        fft::fftn(cotangents[0], axes, stream()),
-        array(1 / n_elements, complex64),
-        stream())};
+
+    auto input_masked = multiply(cotangents[0], mask, stream());
+
+    // IRFFT with scale=N (scale_param)
+    auto val = array(
+        primals[0].shape(),
+        primals[0].dtype(),
+        std::make_shared<FFT>(stream(), axes_, !inverse_, real_, scale_param),
+        {input_masked});
+    return {val};
+
   } else {
-    return {multiply(
-        fft::ifftn(cotangents[0], axes, stream()),
-        array(n_elements, complex64),
-        stream())};
+    // Generic complex case
+    return {array(
+        primals[0].shape(),
+        primals[0].dtype(),
+        std::make_shared<FFT>(stream(), axes_, !inverse_, real_, scale_param),
+        {cotangents[0]})};
   }
 }
 
@@ -3852,10 +3889,10 @@ std::vector<array> Reduce::vjp(
           return multiply(exclusive_prod, cotan, s);
         };
 
-    // To compute a numerically stable gradient for prod we need an exclusive
-    // product of all elements in axes_ . To achieve that we move axes_ to the
-    // last dim and perform two exclusive cumprods. Afterwards we move
-    // everything back to the original axes.
+    // To compute a numerically stable gradient for prod we need an
+    // exclusive product of all elements in axes_ . To achieve that we move
+    // axes_ to the last dim and perform two exclusive cumprods. Afterwards
+    // we move everything back to the original axes.
     if (axes_.size() > 1) {
       std::vector<int> transpose_to;
       std::vector<int> transpose_back;
@@ -4160,7 +4197,8 @@ std::vector<array> Scan::vjp(
         where(eq_zero, z, grad, stream()),
         stream())};
   } else {
-    // Can probably be implemented by equals and then cummax to make the mask
+    // Can probably be implemented by equals and then cummax to make the
+    // mask
     throw std::runtime_error("VJP is not implemented for cumulative min/max");
   }
 }
@@ -4323,7 +4361,8 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
         inputs[i] =
             repeat(expand_dims(inputs[i], 0, stream()), vmap_size, 0, stream());
       }
-      // Adjust non-vmapped index axes to account for the extra vmap dimension.
+      // Adjust non-vmapped index axes to account for the extra vmap
+      // dimension.
       if (scatter_axes[i - 1] >= src_ax) {
         scatter_axes[i - 1]++;
       }

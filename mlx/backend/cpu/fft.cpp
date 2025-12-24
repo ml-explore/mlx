@@ -31,7 +31,7 @@ void FFT::eval_cpu(const std::vector<array>& inputs, array& out) {
     shape.insert(shape.end(), in.shape().begin(), in.shape().end());
   }
 
-  float scale = 1.0f;
+  float scale = scale_;
   if (inverse_) {
     size_t nelem = std::accumulate(
         axes_.begin(), axes_.end(), 1, [&shape](auto x, auto y) {

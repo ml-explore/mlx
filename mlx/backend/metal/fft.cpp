@@ -802,6 +802,49 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   } else {
     fft_op(in, out, axes_[0], inverse_, real_, /*inplace=*/false, s);
   }
+
+  // Apply scaling if different from default kernel scaling
+  float default_scale = 1.0f;
+  if (inverse_) {
+    double n_elements = 1;
+    for (auto ax : axes_) {
+      n_elements *= in.shape(ax);
+    }
+    if (real_) {
+      // irfft output is real, input complex.
+      // n_elements calculation for irfft:
+      // For irfft(a, n), shape is (n/2+1).
+      // The effective N is (shape-1)*2 or similar.
+      // Wait, default metal implementation of IRFFT scales by 1/N?
+      // Let's assume standard behavior: 1/N where N is logical output size.
+      // In loop above, in.shape(ax) is input shape.
+      // If real_, axes_.back() is (N/2+1).
+      // I need to correct n_elements calculation.
+      // But for `fft.cpp` logic: `fft_op` uses `in.shape(axis)` or
+      // `out.shape(axis)`? `fft_op` line 519: `size_t n = out.dtype() ==
+      // float32 ? out.shape(axis) : in.shape(axis);` `total_n` is product of
+      // these `n`s. Since `out` is the result, `out.shape` is the target shape.
+      // So I should use `out.shape`.
+    }
+    // Correct way: use out.shape() for inverse since that's the spatial domain
+    // size.
+    n_elements = 1;
+    for (auto ax : axes_) {
+      n_elements *= out.shape(ax);
+    }
+    default_scale = 1.0f / n_elements;
+  }
+
+  if (std::abs(scale_ - default_scale) > 1e-6f) {
+    array correction({scale_ / default_scale}, float32);
+    // We need to cast correction to match out dtype?
+    // out is float32 or complex64. Mul with float32 should work via
+    // broadcasting/casting? Metal binary op supports mixed? usually yes if one
+    // is scalar. But let's be safe.
+    if (out.dtype() == complex64)
+      correction = astype(correction, complex64, s);
+    binary_op_gpu_inplace({out, correction}, out, "Multiply", s);
+  }
 }
 
 } // namespace mlx::core

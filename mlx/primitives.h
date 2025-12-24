@@ -1075,8 +1075,13 @@ class FFT : public UnaryPrimitive {
       Stream stream,
       const std::vector<size_t>& axes,
       bool inverse,
-      bool real)
-      : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real) {}
+      bool real,
+      float scale = 1.0f)
+      : UnaryPrimitive(stream),
+        axes_(axes),
+        inverse_(inverse),
+        real_(real),
+        scale_(scale) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1087,13 +1092,14 @@ class FFT : public UnaryPrimitive {
 
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
-    return std::make_tuple(axes_, inverse_, real_);
+    return std::make_tuple(axes_, inverse_, real_, scale_);
   }
 
  private:
   std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
+  float scale_;
 };
 
 class Flatten : public UnaryPrimitive {
