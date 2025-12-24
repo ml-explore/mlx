@@ -4157,3 +4157,173 @@ TEST_CASE("test max min with nan") {
   CHECK(array_equal(max_result, expected, true).item<bool>());
   CHECK(array_equal(min_result, expected, true).item<bool>());
 }
+
+TEST_CASE("test searchsorted") {
+  // Test basic 1D functionality with different dtypes and sides
+  {
+    // int32, left side
+    auto a = array({1, 2, 3, 4, 5}, int32);
+    auto v = array({0, 2, 3, 6}, int32);
+    auto result = searchsorted(a, v, false);
+    auto expected = array({0, 1, 2, 5}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+
+    // int32, right side
+    result = searchsorted(a, v, true);
+    expected = array({0, 2, 3, 5}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+
+    // float32, left side
+    auto a_f = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float32);
+    auto v_f = array({0.0f, 2.0f, 3.0f, 6.0f}, float32);
+    result = searchsorted(a_f, v_f, false);
+    expected = array({0, 1, 2, 5}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+
+    // float32, right side
+    result = searchsorted(a_f, v_f, true);
+    expected = array({0, 2, 3, 5}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+
+    // float16, left side
+    auto a_f16 = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float16);
+    auto v_f16 = array({0.0f, 2.0f, 3.0f, 6.0f}, float16);
+    result = searchsorted(a_f16, v_f16, false);
+    expected = array({0, 1, 2, 5}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+  }
+
+  // Test with duplicates
+  {
+    auto a = array({1, 2, 2, 2, 5}, int32);
+
+    // Scalar value, left side
+    auto result = searchsorted(a, array(2), false);
+    CHECK_EQ(result.item<int>(), 1);
+
+    // Scalar value, right side
+    result = searchsorted(a, array(2), true);
+    CHECK_EQ(result.item<int>(), 4);
+  }
+
+  // Test edge cases - empty array
+  {
+    auto a = array({}, int32);
+    auto v = array({1, 2, 3}, int32);
+    auto result = searchsorted(a, v);
+    auto expected = array({0, 0, 0}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+  }
+
+  // Test edge cases - single element
+  {
+    auto a = array({5}, int32);
+
+    // Value less than element
+    auto result = searchsorted(a, array(3), false);
+    CHECK_EQ(result.item<int>(), 0);
+
+    // Value equal to element, left side
+    result = searchsorted(a, array(5), false);
+    CHECK_EQ(result.item<int>(), 0);
+
+    // Value equal to element, right side
+    result = searchsorted(a, array(5), true);
+    CHECK_EQ(result.item<int>(), 1);
+
+    // Value greater than element
+    result = searchsorted(a, array(7), false);
+    CHECK_EQ(result.item<int>(), 1);
+  }
+
+  // Test edge cases - all duplicates
+  {
+    auto a = array({5, 5, 5, 5, 5}, int32);
+
+    auto result = searchsorted(a, array(5), false);
+    CHECK_EQ(result.item<int>(), 0);
+
+    result = searchsorted(a, array(5), true);
+    CHECK_EQ(result.item<int>(), 5);
+  }
+
+  // Test out of range values
+  {
+    auto a = array({10, 20, 30, 40, 50}, int32);
+
+    auto result = searchsorted(a, array(5));
+    CHECK_EQ(result.item<int>(), 0);
+
+    result = searchsorted(a, array(0));
+    CHECK_EQ(result.item<int>(), 0);
+
+    result = searchsorted(a, array(60));
+    CHECK_EQ(result.item<int>(), 5);
+
+    result = searchsorted(a, array(100));
+    CHECK_EQ(result.item<int>(), 5);
+  }
+
+  // Test with special float values
+  {
+    auto a = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float32);
+
+    // Positive infinity
+    auto inf = std::numeric_limits<float>::infinity();
+    auto result = searchsorted(a, array(inf));
+    CHECK_EQ(result.item<int>(), 5);
+
+    // Negative infinity
+    auto neginf = -std::numeric_limits<float>::infinity();
+    result = searchsorted(a, array(neginf));
+    CHECK_EQ(result.item<int>(), 0);
+
+    // NaN - behavior matches NumPy (NaN goes to the end)
+    result = searchsorted(a, array(NAN));
+    CHECK_EQ(result.item<int>(), 5);
+  }
+
+  // Test output shape matches v shape
+  {
+    auto a = array({1, 2, 3, 4, 5}, int32);
+
+    // Scalar v
+    auto result = searchsorted(a, array(3));
+    CHECK_EQ(result.shape(), Shape{});
+
+    // 1D v
+    result = searchsorted(a, array({1, 2, 3}, int32));
+    CHECK_EQ(result.shape(), Shape{3});
+
+    // 2D v
+    result = searchsorted(a, array({1, 2, 3, 4}, {2, 2}, int32));
+    CHECK_EQ(result.shape(), Shape{2, 2});
+  }
+
+  // Test output dtype is integer
+  {
+    auto a = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float32);
+    auto result = searchsorted(a, array({2.5f, 4.5f}, float32));
+    CHECK(
+        (result.dtype() == int32 || result.dtype() == int64 ||
+         result.dtype() == uint32 || result.dtype() == uint64));
+  }
+
+  // Test large array
+  {
+    auto a = arange(10000);
+    auto v = array({100, 5000, 9999}, int32);
+    auto result = searchsorted(a, v);
+    auto expected = array({100, 5000, 9999}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+  }
+
+  // Test int64 dtype
+  {
+    auto a = array({1, 2, 3, 4, 5}, int64);
+    auto v = array({2, 4}, int64);
+    auto result = searchsorted(a, v);
+    auto expected = array({1, 3}, int32);
+    CHECK(array_equal(result, expected).item<bool>());
+  }
+}
