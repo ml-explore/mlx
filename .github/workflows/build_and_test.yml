@@ -90,9 +90,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [ASAN, UBSAN]
-        # todo 12/16/2025: enable TSAN later + consider enabling ASAN for GPU backend tests.
-        # sanitizer: [ASAN, UBSAN, TSAN]
+        sanitizer: [ASAN, UBSAN, TSAN]
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code

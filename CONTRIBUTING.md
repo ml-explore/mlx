@@ -15,6 +15,8 @@ possible.
    This should install hooks for running `black` and `clang-format` to ensure
    consistent style for C++ and python code.
 
+   Note: We run ThreadSanitizer (TSAN) in our CI pipeline to catch data races. Please ensure your changes are thread-safe.
+
    You can also run the formatters manually as follows:
 
    ```shell
