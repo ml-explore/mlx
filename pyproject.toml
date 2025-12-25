@@ -1,7 +1,7 @@
 [build-system]
 requires = [
   "setuptools>=80",
-  "nanobind==2.10.2",
   "cmake>=3.25",
+  "typing_extensions",
 ]
 build-backend = "setuptools.build_meta"

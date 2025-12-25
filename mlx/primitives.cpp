@@ -3397,9 +3397,11 @@ std::vector<array> QuantizedMatmul::vjp(
       throw std::runtime_error(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == QuantizationMode::Mxfp4) {
-        throw std::invalid_argument(
-            "[QuantizedMatmul::vjp] no gradient wrt scales with mxfp4 quantization.");
+      if (mode_ != QuantizationMode::Affine) {
+        std::ostringstream msg;
+        msg << "[QuantizedMatmul::vjp] no gradient wrt scales in "
+            << quantization_mode_to_string(mode_) << " quantization.";
+        throw std::invalid_argument(msg.str());
       }
       if (!dsb) {
         int ndim = primals[1].ndim();
@@ -3606,9 +3608,11 @@ std::vector<array> GatherQMM::vjp(
       throw std::runtime_error(
           "[GatherQMM::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == QuantizationMode::Mxfp4) {
-        throw std::invalid_argument(
-            "[GatherQMM::vjp] no gradient wrt scales with mxfp4 quantization.");
+      if (mode_ != QuantizationMode::Affine) {
+        std::ostringstream msg;
+        msg << "[GatherQMM::vjp] no gradient wrt scales in "
+            << quantization_mode_to_string(mode_) << " quantization.";
+        throw std::invalid_argument(msg.str());
       }
 
       if (!dsb) {

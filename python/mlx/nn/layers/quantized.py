@@ -8,10 +8,21 @@ from mlx.nn.layers.base import Module
 from mlx.utils import tree_map_with_path
 
 
+def _defaults_for_mode(mode, group_size, bits):
+    mode_defaults = {
+        "affine": (64, 4),
+        "mxfp4": (32, 4),
+        "nvfp4": (16, 4),
+        "mxfp8": (32, 8),
+    }
+    default_group_size, default_bits = mode_defaults[mode]
+    return group_size or default_group_size, bits or default_bits
+
+
 def quantize(
     model: Module,
-    group_size: int = 64,
-    bits: int = 4,
+    group_size: int = None,
+    bits: int = None,
     *,
     mode: str = "affine",
     class_predicate: Optional[Callable[[str, Module], Union[bool, dict]]] = None,
@@ -24,10 +35,10 @@ def quantize(
 
     Args:
         model (mlx.nn.Module): The model whose leaf modules may be quantized.
-        group_size (int): The quantization group size (see
-           :func:`mlx.core.quantize`). Default: ``64``.
-        bits (int): The number of bits per parameter (see
-           :func:`mlx.core.quantize`). Default: ``4``.
+        group_size (Optional[int]): The quantization group size (see
+           :func:`mlx.core.quantize`). Default: ``None``.
+        bits (Optional[int]): The number of bits per parameter (see
+           :func:`mlx.core.quantize`). Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
         class_predicate (Optional[Callable]): A callable which receives the
@@ -72,10 +83,10 @@ class QuantizedEmbedding(Module):
         num_embeddings (int): How many possible discrete tokens can we embed.
            Usually called the vocabulary size.
         dims (int): The dimensionality of the embeddings.
-        group_size (int, optional): The group size to use for the quantized
-            weight. See :func:`~mlx.core.quantize`. Default: ``64``.
-        bits (int, optional): The bit width to use for the quantized weight.
-            See :func:`~mlx.core.quantize`. Default: ``4``.
+        group_size (Optional[int]): The group size to use for the quantized
+            weight. See :func:`~mlx.core.quantize`. Default: ``None``.
+        bits (Optional[int]): The bit width to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
     """
@@ -84,15 +95,14 @@ class QuantizedEmbedding(Module):
         self,
         num_embeddings: int,
         dims: int,
-        group_size: int = 64,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "affine",
     ):
         super().__init__()
 
         # Quantization config
-        self.group_size = group_size
-        self.bits = bits
+        self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
         self.mode = mode
 
         # Initialize the quantized weight
@@ -147,8 +157,8 @@ class QuantizedEmbedding(Module):
     def from_embedding(
         cls,
         embedding_layer: Module,
-        group_size: int = 64,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "affine",
     ):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
@@ -179,10 +189,10 @@ class QuantizedLinear(Module):
         output_dims (int): The dimensionality of the output features.
         bias (bool, optional): If set to ``False`` then the layer will not use
             a bias. Default: ``True``.
-        group_size (int, optional): The group size to use for the quantized
-            weight. See :func:`~mlx.core.quantize`. Default: ``64``.
-        bits (int, optional): The bit width to use for the quantized weight.
-            See :func:`~mlx.core.quantize`. Default: ``4``.
+        group_size (Optional[int]): The group size to use for the quantized
+            weight. See :func:`~mlx.core.quantize`. Default: ``None``.
+        bits (Optional[int]): The bit width to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
     """
@@ -192,15 +202,14 @@ class QuantizedLinear(Module):
         input_dims: int,
         output_dims: int,
         bias: bool = True,
-        group_size: int = 64,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "affine",
     ):
         super().__init__()
 
         # Quantization config
-        self.group_size = group_size
-        self.bits = bits
+        self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
         self.mode = mode
 
         # Initialize the quantized weight
@@ -249,8 +258,8 @@ class QuantizedLinear(Module):
     def from_linear(
         cls,
         linear_layer: Module,
-        group_size: int = 64,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "affine",
     ):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""

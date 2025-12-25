@@ -21,18 +21,12 @@ runs:
         if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
           # There is no GPU in arm64 runner, use a common arch.
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_CUDA_ARCHITECTURES=90a"
-          # Can not build tests when the built executables can not run.
-          CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF"
+          # Can not build tests and stubs when the built executables can not run.
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF -DMLX_BUILD_PYTHON_STUBS=OFF"
         fi
         pip install --no-build-isolation -e ".[dev]" -v
         # Pass the CMAKE_ARGS to following steps.
         echo CMAKE_ARGS="$CMAKE_ARGS" >> $GITHUB_OUTPUT
-
-    - name: Generate package stubs
-      shell: sh
-      run: |
-        pip install typing_extensions
-        python setup.py generate_stubs
 
     - name: Build CPP only
       shell: bash

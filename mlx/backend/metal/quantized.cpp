@@ -315,9 +315,10 @@ void qvm_split_k(
   int B = out.size() / M / N;
   B *= split_k;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims = MTL::Size(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims = MTL::Size(bk, num_simdgroups, 1);
   MTL::Size grid_dims = MTL::Size(M, N / bn, B);
 
   auto x_shape = x.shape();
@@ -431,9 +432,10 @@ void qvm(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims(bk, num_simdgroups, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;
@@ -944,9 +946,10 @@ void gather_qvm(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims(bk, num_simdgroups, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;

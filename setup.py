@@ -8,7 +8,7 @@ import subprocess
 from functools import partial
 from pathlib import Path
 
-from setuptools import Command, Extension, find_namespace_packages, setup
+from setuptools import Extension, find_namespace_packages, setup
 from setuptools.command.bdist_wheel import bdist_wheel
 from setuptools.command.build_ext import build_ext
 
@@ -155,43 +155,25 @@ class CMakeBuild(build_ext):
     def run(self):
         super().run()
 
+        ext = next(ext for ext in self.extensions if ext.name == "mlx.core")
+
         # Based on https://github.com/pypa/setuptools/blob/main/setuptools/command/build_ext.py#L102
         if self.inplace:
-            for ext in self.extensions:
-                if ext.name == "mlx.core":
-                    # Resolve inplace package dir
-                    build_py = self.get_finalized_command("build_py")
-                    inplace_file, regular_file = self._get_inplace_equivalent(
-                        build_py, ext
-                    )
+            # Resolve inplace package dir
+            build_py = self.get_finalized_command("build_py")
+            inplace_file, regular_file = self._get_inplace_equivalent(build_py, ext)
 
-                    inplace_dir = str(Path(inplace_file).parent.resolve())
-                    regular_dir = str(Path(regular_file).parent.resolve())
+            inplace_dir = str(Path(inplace_file).parent.resolve())
+            regular_dir = str(Path(regular_file).parent.resolve())
 
-                    self.copy_tree(regular_dir, inplace_dir)
+            self.copy_tree(regular_dir, inplace_dir)
 
-
-class GenerateStubs(Command):
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self) -> None:
-        out_path = "python/mlx"
-        stub_cmd = [
-            "python",
-            "-m",
-            "nanobind.stubgen",
-            "-m",
-            "mlx.core",
-            "-p",
-            "python/mlx/_stub_patterns.txt",
-        ]
-        subprocess.run(stub_cmd + ["-r", "-O", out_path])
+        # Build type stubs.
+        build_temp = Path(self.build_temp) / ext.name
+        subprocess.run(
+            ["cmake", "--install", build_temp, "--component", "core_stub"],
+            check=True,
+        )
 
 
 class MLXBdistWheel(bdist_wheel):
@@ -243,7 +225,6 @@ if __name__ == "__main__":
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={
             "build_ext": CMakeBuild,
-            "generate_stubs": GenerateStubs,
             "bdist_wheel": MLXBdistWheel,
         },
     )

@@ -128,13 +128,6 @@ Run the tests with:
 
   python -m unittest discover python/tests
 
-Optional: Install stubs to enable auto completions and type checking from your
-IDE:
-
-.. code-block:: shell
-
-  python setup.py generate_stubs
-
 C++ API
 ^^^^^^^
 

@@ -33,7 +33,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 NO_GPU(BlockMaskedMM)
 NO_GPU(FFT)
-NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
 NO_GPU(Hadamard)
 NO_GPU_MULTI(LUF)
