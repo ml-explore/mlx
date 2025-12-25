@@ -248,6 +248,40 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             torch_param = param.data.detach().numpy()
             self.assertTrue(np.allclose(torch_param, mlx_param))
 
+    def test_adabelief(self):
+        params = {
+            "first": [mx.zeros((10,)), mx.zeros((1,))],
+            "second": mx.zeros((1,)),
+        }
+        grads = tree_map(lambda x: mx.ones_like(x), params)
+
+        # Explicit init
+        optim = opt.AdaBelief(learning_rate=1e-2)
+        optim.init(params)
+        self.assertTrue(
+            tree_equal(
+                lambda p, s: mx.array_equal(s["s"], mx.zeros_like(p)),
+                params,
+                optim.state,
+            )
+        )
+        self.assertTrue(
+            tree_equal(
+                lambda p, s: mx.array_equal(s["m"], mx.zeros_like(p)),
+                params,
+                optim.state,
+            )
+        )
+
+        # Implicit init
+        optim = opt.AdaBelief(learning_rate=1e-2, betas=[0.9, 0.999])
+        optim.apply_gradients(grads, params)
+        self.assertTrue(
+            tree_equal(
+                lambda g, s: mx.allclose(s["m"], (1 - 0.9) * g), grads, optim.state
+            )
+        )
+
     def test_lion(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
