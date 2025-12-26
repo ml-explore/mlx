@@ -87,7 +87,12 @@ from mlx.nn.layers.pooling import (
     MaxPool3d,
 )
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
-from mlx.nn.layers.quantized import QuantizedEmbedding, QuantizedLinear, quantize
+from mlx.nn.layers.quantized import (
+    QQLinear,
+    QuantizedEmbedding,
+    QuantizedLinear,
+    quantize,
+)
 from mlx.nn.layers.recurrent import GRU, LSTM, RNN
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,
