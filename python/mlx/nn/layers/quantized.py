@@ -294,36 +294,39 @@ class QQLinear(Module):
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.
 
-    :obj:`QQLinear` also provides the class method :meth:`from_linear` to convert
-    :class:`mlx.nn.Linear` layers to :obj:`QQLinear` layers.
+    :obj:`QQLinear` also provides:
+     -  the class method :meth:`from_linear` to convert :class:`mlx.nn.Linear` 
+     layers to :obj:`QQLinear` layers. If the layer is created in evaluation mode, 
+     the weights will be quantized.
+     -  the methods :meth:`eval` and :meth:`train` to switch between inference
+        and training modes.
 
     Note: This layer does not support a bias term yet.
 
     Args:
         input_dims (int): The dimensionality of the input features.
         output_dims (int): The dimensionality of the output features.
-        group_size (int, optional): The group size to use for the quantized weight.
-            See :func:`~mlx.core.quantize`. Default: ``16``.
-        bits (int, optional): The bit width to use for the quantized weight.
-            See :func:`~mlx.core.quantize`. Default: ``4``.
-        mode (str, optional): The quantization method to use (see
+        group_size (Optional[int]): The group size to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``None``.
+        bits (Optional[int]): The bit width to use for the quantized weight.
+            See :func:`~mlx.core.quantize`. Default: ``None``.
+        mode (Optional[str]): The quantization method to use (see
             :func:`mlx.core.quantize`). Currently, only ``"nvfp4"`` and ``"mxfp8"``
-            are supported. Default: ``"nvfp4"``.
+            are supported. Default: ``None``.
     """
 
     def __init__(
         self,
         input_dims: int,
         output_dims: int,
-        group_size: int = 16,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "nvfp4",
     ):
         super().__init__()
 
         # Quantization config
-        self.group_size = group_size
-        self.bits = bits
+        self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
         self.mode = mode
 
         scale = math.sqrt(1 / input_dims)
@@ -341,6 +344,26 @@ class QQLinear(Module):
             f"input_dims={in_dims}, output_dims={out_dims}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
+
+    def eval(self):
+        if self.weight.dtype != mx.uint32:
+            self.weight, self.scales = mx.quantize(
+                self.weight,
+                self.group_size,
+                self.bits,
+                mode=self.mode,
+            )
+    
+    def train(self):
+        if self.weight.dtype == mx.uint32:
+            self.weight = mx.dequantize(
+                self.weight,
+                scales=self.scales,
+                group_size=self.group_size,
+                bits=self.bits,
+                mode=self.mode,
+            )
+            del self.scales
 
     def __call__(self, x):
         x = mx.qqmm(
@@ -360,10 +383,14 @@ class QQLinear(Module):
         group_size: int = 16,
         bits: int = 4,
         mode: str = "nvfp4",
+        train: bool = True,
     ):
         """Create a :obj:`QQLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape  # (N,K)
         ql = cls(input_dims, output_dims, group_size, bits, mode=mode)
         ql.weight = linear_layer.weight
+
+        if not train:
+            ql.eval()
 
         return ql
