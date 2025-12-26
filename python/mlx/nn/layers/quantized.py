@@ -312,7 +312,7 @@ class QQLinear(Module):
             See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (Optional[str]): The quantization method to use (see
             :func:`mlx.core.quantize`). Currently, only ``"nvfp4"`` and ``"mxfp8"``
-            are supported. Default: ``None``.
+            are supported. Default: ``nvfp4``.
     """
 
     def __init__(
