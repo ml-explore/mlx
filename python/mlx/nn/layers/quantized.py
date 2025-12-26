@@ -380,8 +380,8 @@ class QQLinear(Module):
     def from_linear(
         cls,
         linear_layer: Module,
-        group_size: int = 16,
-        bits: int = 4,
+        group_size: int = None,
+        bits: int = None,
         mode: str = "nvfp4",
         train: bool = True,
     ):
