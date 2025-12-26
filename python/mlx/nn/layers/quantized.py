@@ -295,8 +295,8 @@ class QQLinear(Module):
     quantizes the input as well and includes weights in gradient computations.
 
     :obj:`QQLinear` also provides:
-     -  the class method :meth:`from_linear` to convert :class:`mlx.nn.Linear` 
-     layers to :obj:`QQLinear` layers. If the layer is created in evaluation mode, 
+     -  the class method :meth:`from_linear` to convert :class:`mlx.nn.Linear`
+     layers to :obj:`QQLinear` layers. If the layer is created in evaluation mode,
      the weights will be quantized.
      -  the methods :meth:`eval` and :meth:`train` to switch between inference
         and training modes.
@@ -353,7 +353,7 @@ class QQLinear(Module):
                 self.bits,
                 mode=self.mode,
             )
-    
+
     def train(self):
         if self.weight.dtype == mx.uint32:
             self.weight = mx.dequantize(
