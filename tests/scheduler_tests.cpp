@@ -2,6 +2,12 @@
 
 #include "doctest/doctest.h"
 
+#include <future>
+#include <mutex>
+#include <thread>
+#include <unordered_set>
+#include <vector>
+
 #include "mlx/mlx.h"
 #include "mlx/scheduler.h"
 
@@ -105,6 +111,36 @@ TEST_CASE("test stream placement") {
 
     p->set_value();
   }
+}
+
+TEST_CASE("test concurrent stream creation") {
+  constexpr int kNumThreads = 16;
+  std::promise<void> go;
+  auto start = go.get_future().share();
+
+  std::mutex results_mtx;
+  std::vector<int> indices;
+  indices.reserve(kNumThreads);
+  std::vector<std::thread> threads;
+  threads.reserve(kNumThreads);
+
+  for (int i = 0; i < kNumThreads; ++i) {
+    threads.emplace_back([&]() {
+      start.wait();
+      auto s = new_stream(Device::cpu);
+      std::lock_guard<std::mutex> lk(results_mtx);
+      indices.push_back(s.index);
+    });
+  }
+
+  go.set_value();
+  for (auto& t : threads) {
+    t.join();
+  }
+
+  CHECK_EQ(indices.size(), static_cast<std::size_t>(kNumThreads));
+  std::unordered_set<int> unique_indices(indices.begin(), indices.end());
+  CHECK_EQ(unique_indices.size(), indices.size());
 }
 
 TEST_CASE("test scheduler races") {
