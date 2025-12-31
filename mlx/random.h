@@ -89,7 +89,7 @@ inline array uniform(
     const Shape& shape,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
-  return uniform(shape, float32, key);
+  return uniform(shape, float32, key, s);
 }
 
 /** Generate samples from the standard normal distribution. */
