@@ -71,6 +71,21 @@ class TestLoad(mlx_tests.MLXTestCase):
         load_arr = mx.load(Path(save_file))
         self.assertTrue(mx.array_equal(load_arr, save_arr))
 
+    def test_load_npy_dtype(self):
+        save_file = os.path.join(self.test_dir, "mlx_path.npy")
+        a = np.random.randn(8).astype(np.float64)
+        np.save(save_file, a)
+        out = mx.load(save_file, stream=mx.cpu)
+        self.assertEqual(out.dtype, mx.float64)
+        self.assertTrue(np.array_equal(np.array(out), a))
+
+        a = np.random.randn(8).astype(np.float64)
+        b = np.random.randn(8).astype(np.float64)
+        c = a + 0j * b
+        np.save(save_file, c)
+        with self.assertRaises(Exception):
+            out = mx.load(save_file, stream=mx.cpu)
+
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):
