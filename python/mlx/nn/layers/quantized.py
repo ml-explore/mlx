@@ -284,22 +284,20 @@ class QQLinear(Module):
 
     Two use cases are supported:
 
-    1) **Inference / frozen weights**: weights are stored in quantized form together with
+    1) **Eval**:  The weights are frozen and stored in quantized form together with
        their scales (``self.weight`` is quantized and ``self.scales`` is provided).
+    2) **Train**: The weights are stored in higher precision and are quantized on
+         the fly during computation so that gradients with respect to the weights
+         can be computed.
 
-    2) **Training / weights are included in gradient computation**:
-        weights are stored in higher precision and are quantized on
-        the fly during computation.
+    To switch between the two cases, use ``layer.eval()`` and ``layer.train()`` respectively.
 
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.
 
     :obj:`QQLinear` also provides:
      -  the class method :meth:`from_linear` to convert :class:`mlx.nn.Linear`
-     layers to :obj:`QQLinear` layers. If the layer is created in evaluation mode,
-     the weights will be quantized.
-     -  the methods :meth:`eval` and :meth:`train` to switch between inference
-        and training modes.
+     layers to :obj:`QQLinear` layers.
 
     Note: This layer does not support a bias term yet.
 
@@ -312,7 +310,7 @@ class QQLinear(Module):
             See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (Optional[str]): The quantization method to use (see
             :func:`mlx.core.quantize`). Currently, only ``"nvfp4"`` and ``"mxfp8"``
-            are supported. Default: ``nvfp4``.
+            are supported. Default: ``"nvfp4"``.
     """
 
     def __init__(
@@ -335,6 +333,7 @@ class QQLinear(Module):
             high=scale,
             shape=(output_dims, input_dims),
         )
+        self._quantized = False
 
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
@@ -345,31 +344,34 @@ class QQLinear(Module):
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
 
-    def eval(self):
-        if self.weight.dtype != mx.uint32:
-            self.weight, self.scales = mx.quantize(
-                self.weight,
-                self.group_size,
-                self.bits,
-                mode=self.mode,
-            )
-
-    def train(self):
-        if self.weight.dtype == mx.uint32:
-            self.weight = mx.dequantize(
-                self.weight,
-                scales=self.scales,
-                group_size=self.group_size,
-                bits=self.bits,
-                mode=self.mode,
-            )
-            del self.scales
+    def _update_mode(self):
+        if self._training:
+            if self._quantized:
+                self.weight = mx.dequantize(
+                    self.weight,
+                    scales=self.scales,
+                    group_size=self.group_size,
+                    bits=self.bits,
+                    mode=self.mode,
+                )
+                self.__delattr__("scales")
+                self._quantized = False
+        else:
+            if not self._quantized:
+                self.weight, self.scales = mx.quantize(
+                    self.weight,
+                    self.group_size,
+                    self.bits,
+                    mode=self.mode,
+                )
+                self._quantized = True
 
     def __call__(self, x):
+        self._update_mode()
         x = mx.qqmm(
             x,
             self["weight"],
-            getattr(self, "scales", None),
+            scales=self.get("scales"),
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
@@ -383,14 +385,13 @@ class QQLinear(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "nvfp4",
-        train: bool = True,
     ):
         """Create a :obj:`QQLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape  # (N,K)
+        if linear_layer.get('bias') is not None:
+            raise NotImplementedError("QQLinear does not support bias yet.")
         ql = cls(input_dims, output_dims, group_size, bits, mode=mode)
         ql.weight = linear_layer.weight
-
-        if not train:
-            ql.eval()
-
+        ql._training = linear_layer._training
+            
         return ql
