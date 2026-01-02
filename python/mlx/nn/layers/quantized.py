@@ -388,10 +388,10 @@ class QQLinear(Module):
     ):
         """Create a :obj:`QQLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape  # (N,K)
-        if linear_layer.get('bias') is not None:
+        if linear_layer.get("bias") is not None:
             raise NotImplementedError("QQLinear does not support bias yet.")
         ql = cls(input_dims, output_dims, group_size, bits, mode=mode)
         ql.weight = linear_layer.weight
         ql._training = linear_layer._training
-            
+
         return ql
