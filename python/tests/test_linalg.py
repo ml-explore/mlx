@@ -591,6 +591,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
         expected = np.linalg.solve(a, b)
         self.assertTrue(np.allclose(result, expected, rtol=1e-5, atol=1e-5))
 
+        # Test singular matrix raises an exception instead of crashing
+        # (regression test for issue #2888)
+        singular_a = mx.ones((2, 2))
+        singular_b = mx.ones((2,))
+        with self.assertRaises(RuntimeError):
+            result = mx.linalg.solve(singular_a, singular_b, stream=mx.cpu)
+            # Force evaluation and synchronization to trigger the exception
+            result.tolist()
+            mx.synchronize()
+
     def test_solve_triangular(self):
         # Test lower triangular matrix
         a = mx.array([[4.0, 0.0, 0.0], [2.0, 3.0, 0.0], [1.0, -2.0, 5.0]])
