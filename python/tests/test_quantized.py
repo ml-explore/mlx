@@ -27,6 +27,31 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 a_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 self.assertTrue(mx.all(a_hat == 0))
 
+    def test_ternary_quantize_dequantize(self):
+        g0 = mx.array([-2.0, 0.0, 2.0, 0.0] * 8, dtype=mx.float32)
+        g1 = mx.array([-0.5, 0.0, 0.5, 0.0] * 8, dtype=mx.float32)
+        w = mx.concatenate([g0, g1]).reshape(1, 64)
+
+        # Invalid bits / group size
+        with self.assertRaises(ValueError):
+            mx.quantize(w, bits=3, mode="ternary")
+
+        with self.assertRaises(ValueError):
+            mx.quantize(w, group_size=64, mode="ternary")
+
+        w_q, scales = mx.quantize(w, group_size=32, bits=2, mode="ternary")
+        expected_scales = mx.array([[2.0, 0.5]], dtype=scales.dtype)
+        self.assertTrue(mx.allclose(scales, expected_scales))
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, bits=3, mode="ternary")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, group_size=64, bits=2, mode="ternary")
+
+        w_hat = mx.dequantize(w_q, scales, group_size=32, bits=2, mode="ternary")
+        self.assertTrue(mx.allclose(w_hat, w))
+
     def test_mxfp4_quantize_dequantize(self):
         lut = mx.array(
             [
@@ -903,7 +928,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     group_size=group_size,
                     mode=mode,
                     transpose=transpose,
-                    rhs_indices=indices
+                    rhs_indices=indices,
                 )
                 xs, idx, inv_order = gather_sort(x, indices)
                 y3 = mx.gather_mm(xs, w, rhs_indices=idx, sorted_indices=True)
@@ -915,7 +940,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     mode=mode,
                     rhs_indices=idx,
                     transpose=transpose,
-                    sorted_indices=True
+                    sorted_indices=True,
                 )
                 y3 = scatter_unsort(y3, inv_order, indices.shape)
                 y4 = scatter_unsort(y4, inv_order, indices.shape)

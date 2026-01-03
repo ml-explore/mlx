@@ -4149,10 +4149,13 @@ std::pair<int, int> quantization_params_from_mode(
       default_group_size = 32;
       default_bits = 8;
       break;
+    case QuantizationMode::Ternary:
+      default_group_size = 32;
+      default_bits = 2; // TODO: 1.58?
+      break;
   }
   return {
-      group_size_.has_value() ? *group_size_ : default_group_size,
-      bits_.has_value() ? *bits_ : default_bits};
+      group_size_.value_or(default_group_size), bits_.value_or(default_bits)};
 }
 
 std::pair<Dtype, QuantizationMode> validate_mode_with_type(
@@ -4162,6 +4165,7 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
     const std::optional<Dtype> out_type,
     const std::string& mode) {
   auto qmode = string_to_quantization_mode(mode, tag);
+
   if (out_type.has_value() && !issubdtype(*out_type, floating)) {
     std::ostringstream msg;
     msg << "[" << tag << "] Only real floating types are supported but "
@@ -4169,42 +4173,64 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
     throw std::invalid_argument(msg.str());
   }
 
-  if (qmode == QuantizationMode::Affine) {
-    if (!biases) {
-      std::ostringstream msg;
-      msg << "[" << tag << "] Biases must be provided for affine quantization.";
-      throw std::invalid_argument(msg.str());
+  Dtype default_dtype{bfloat16};
+
+  switch (qmode) {
+    case QuantizationMode::Affine: {
+      if (!biases) {
+        std::ostringstream msg;
+        msg << "[" << tag
+            << "] Biases must be provided for affine quantization.";
+        throw std::invalid_argument(msg.str());
+      }
+
+      auto dtype = result_type(scales, *biases);
+      if (!issubdtype(dtype, floating)) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Only real floating types are supported but "
+            << "scales.dtype() == " << scales.dtype()
+            << " and biases.dtype() == " << biases->dtype() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+      default_dtype = dtype;
+      break;
     }
-    auto dtype = result_type(scales, *biases);
-    if (!issubdtype(dtype, floating)) {
-      std::ostringstream msg;
-      msg << "[" << tag << "] Only real floating types are supported but "
-          << "scales.dtype() == " << scales.dtype()
-          << " and biases.dtype() == " << biases->dtype() << ".";
-      throw std::invalid_argument(msg.str());
+
+    case QuantizationMode::Ternary: {
+      if (!issubdtype(scales.dtype(), floating)) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] " << mode << " scales must be floating but got "
+            << scales.dtype() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+      if (biases) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Biases must be null for quantization mode '"
+            << mode << "'.";
+        throw std::invalid_argument(msg.str());
+      }
+      default_dtype = scales.dtype();
+      break;
     }
-    if (out_type.has_value()) {
-      return {*out_type, qmode};
-    } else {
-      return {dtype, qmode};
+
+    default: {
+      if (scales.dtype() != uint8) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Scale type must be uint8 but received type "
+            << scales.dtype() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+      if (biases) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Biases must be null for quantization mode '"
+            << mode << "'.";
+        throw std::invalid_argument(msg.str());
+      }
+      break;
     }
-  } else if (scales.dtype() != uint8) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] Scale type must be uint8 but received type "
-        << scales.dtype() << ".";
-    throw std::invalid_argument(msg.str());
   }
-  if (biases) {
-    std::ostringstream msg;
-    msg << "[" << tag << "] Biases must be null for quantization mode '" << mode
-        << "'.";
-    throw std::invalid_argument(msg.str());
-  }
-  if (out_type.has_value()) {
-    return {*out_type, qmode};
-  } else {
-    return {bfloat16, qmode};
-  }
+
+  return {out_type.value_or(default_dtype), qmode};
 }
 
 array quantized_matmul(
@@ -4429,8 +4455,7 @@ array pack_and_quantize(
 }
 
 std::vector<array>
-affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
-  auto s = to_stream(s_);
+affine_quantize(const array& w, int group_size, int bits, Stream s) {
   if (group_size != 32 && group_size != 64 && group_size != 128) {
     std::ostringstream msg;
     msg << "[quantize] The requested group size " << group_size
@@ -4500,8 +4525,8 @@ std::vector<array> fp_quantize(
     int bits,
     QuantizationMode mode,
     Stream s) {
-  int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
-  int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
+  auto [expected_gs, expected_bits] =
+      quantization_params_from_mode(mode, std::nullopt, std::nullopt);
   if (group_size != expected_gs) {
     std::ostringstream msg;
     msg << "[quantize] " << quantization_mode_to_string(mode)
@@ -4589,6 +4614,82 @@ std::vector<array> fp_quantize(
   return fallback({w});
 }
 
+array pack_2bit_u32(array codes, const Stream& s) {
+  constexpr int bits = 2;
+  constexpr int pack_bits = 32;
+  constexpr int vals_per_pack = pack_bits / bits;
+  codes = astype(codes, uint32, s);
+
+  array shifts =
+      power(array(2, uint32), arange(0, pack_bits, bits, uint32, s), s);
+  codes = reshape(codes, {codes.shape(0), -1, vals_per_pack}, s);
+  codes = sum(multiply(codes, shifts, s), 2, false, s);
+  return codes;
+}
+
+std::vector<array>
+ternary_quantize(const array& w, int group_size, int bits, Stream s) {
+  auto [expected_gs, expected_bits] = quantization_params_from_mode(
+      QuantizationMode::Ternary, std::nullopt, std::nullopt);
+  if (group_size != expected_gs) {
+    std::ostringstream msg;
+    msg << "[quantize] "
+        << quantization_mode_to_string(QuantizationMode::Ternary)
+        << " quantization requires group size " << expected_gs << " but got "
+        << group_size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (bits != expected_bits) {
+    std::ostringstream msg;
+    msg << "[quantize] "
+        << quantization_mode_to_string(QuantizationMode::Ternary)
+        << " quantization requires bits to be " << expected_bits << " but got "
+        << bits << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  auto fallback = [bits = bits, group_size = group_size, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto wq_shape = w.shape();
+    wq_shape.back() = w.shape(-1) * bits / 32;
+    auto sshape = w.shape();
+    sshape.back() = w.shape(-1) / group_size;
+
+    array eps(1e-7, float32);
+
+    auto wq = reshape(w, {-1, group_size}, s);
+    auto scales = max(abs(wq, s), -1, true, s);
+    scales = maximum(scales, eps, s);
+
+    wq = astype(wq, float32, s);
+    wq = divide(wq, scales, s); // [-1, 1]
+    wq = round(wq, s); // only int
+    wq = add(wq, array(1.0f, float32), s); // [0, 2]
+
+    wq = pack_2bit_u32(astype(wq, uint32, s), s);
+
+    wq = reshape(wq, wq_shape, s);
+    scales = astype(scales, w.dtype(), s);
+    scales = reshape(scales, sshape, s);
+    return {std::move(wq), std::move(scales)};
+  };
+
+  // TODO: implement SIMD CPU + Metal + CUDA backend
+  // if (s.device == Device::gpu) {
+  //   auto wq_shape = w.shape();
+  //   wq_shape.back() = w.shape(-1) * bits / 32;
+  //   auto sshape = w.shape();
+  //   sshape.back() = w.shape(-1) / group_size;
+  //   return array::make_arrays(
+  //       {std::move(wq_shape), std::move(sshape)},
+  //       {uint32, uint8},
+  //       std::make_shared<fast::Quantize>(
+  //           s, fallback, group_size, bits, mode, false),
+  //       {w});
+  // }
+  return fallback({w});
+}
+
 std::vector<array> quantize(
     const array& w,
     std::optional<int> group_size_ /* = std::nullopt */,
@@ -4622,7 +4723,9 @@ std::vector<array> quantize(
   }
 
   if (qmode == QuantizationMode::Affine) {
-    return affine_quantize(w, group_size, bits, s);
+    return affine_quantize(w, group_size, bits, to_stream(s));
+  } else if (qmode == QuantizationMode::Ternary) {
+    return ternary_quantize(w, group_size, bits, to_stream(s));
   } else {
     return fp_quantize(w, group_size, bits, qmode, to_stream(s));
   }
@@ -4835,6 +4938,82 @@ array fp_dequantize(
   return fallback({w, scales})[0];
 }
 
+array ternary_dequantize(
+    const array& w,
+    const array& scales,
+    int group_size,
+    int bits,
+    Dtype out_type,
+    Stream s) {
+  auto wshape = w.shape();
+  auto sshape = scales.shape();
+  if (wshape.size() != sshape.size()) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales does not match the matrix");
+  }
+  wshape.back() = -1;
+  sshape.back() = -1;
+
+  if (wshape != sshape) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales does not match the matrix");
+  }
+
+  // Packing into uint32
+  int out_size = w.shape(-1) * 32 / bits;
+
+  if (out_size != scales.shape(-1) * group_size) {
+    std::ostringstream msg;
+    msg << "[dequantize] Shape of scales does not match the matrix "
+        << "given the quantization parameters. Provided matrix of shape "
+        << w.shape() << " and scales/biases of shape " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // bits should be 1 or 2, and let's implement 2 bit case first
+
+  auto fallback =
+      [wshape = std::move(wshape),
+       sshape = std::move(sshape),
+       group_size,
+       bits,
+       out_type,
+       s](const std::vector<array>& inputs) mutable -> std::vector<array> {
+    auto w = inputs[0];
+    auto& scales = inputs[1];
+    if (bits == 2) {
+      w = expand_dims(w, -1, s);
+      w = right_shift(w, arange(0, 32, bits, uint32, s), s);
+      w = bitwise_and(w, array((1 << bits) - 1, uint32), s);
+    } else {
+      throw std::runtime_error{"skip for now"};
+    }
+
+    // Dequantize
+    wshape.push_back(group_size);
+    w = reshape(w, wshape, s);
+    w = subtract(astype(w, out_type, s), array(1, out_type), s);
+    w = multiply(w, expand_dims(scales, -1, s), s);
+    w = reshape(w, sshape, s);
+
+    return {w};
+  };
+
+  // TODO: Fast CPU SIMD, GPU
+  // if (s.device == Device::gpu) {
+  //   auto out_shape = w.shape();
+  //   out_shape.back() = out_size;
+  //   return array(
+  //       std::move(out_shape),
+  //       scales.dtype(),
+  //       std::make_shared<fast::Quantize>(
+  //           s, fallback, group_size, bits, QuantizationMode::Affine, true),
+  //       {w, scales, biases});
+  // }
+  return fallback({w, scales})[0];
+}
+
 array dequantize(
     const array& w,
     const array& scales,
@@ -4874,6 +5053,9 @@ array dequantize(
         affine_dequantize(w, scales, *biases, group_size, bits, s),
         out_type,
         s);
+  } else if (qmode == QuantizationMode::Ternary) {
+    return ternary_dequantize(
+        w, scales, group_size, bits, out_type, to_stream(s));
   } else {
     return fp_dequantize(
         w, scales, group_size, bits, out_type, qmode, to_stream(s));
