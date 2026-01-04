@@ -272,6 +272,10 @@ void init_fast(nb::module_& parent_module) {
                can have at most 4 dimensions and must be broadcast-compatible with
                the shape ``[B, N, T_q, T_kv]``. If an additive mask is given its
                type must promote to the promoted type of ``q``, ``k``, and ``v``.
+               When ``T_q != T_kv``, the ``"causal"`` mask uses lower-right
+               alignment where the last query aligns with the last key. This is
+               equivalent to PyTorch's ``causal_lower_right`` and differs from
+               PyTorch's default ``is_causal=True`` which uses upper-left alignment.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
 
