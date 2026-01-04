@@ -1973,6 +1973,20 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(hasattr(api, "array"))
         self.assertTrue(hasattr(api, "add"))
 
+    def test_array_namespace_asarray(self):
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "asarray"))
+
+        arr = xp.asarray([1, 2, 3])
+        self.assertEqual(arr.tolist(), [1, 2, 3])
+
+        arr_f32 = xp.asarray([1, 2, 3], dtype=mx.float32)
+        self.assertEqual(arr_f32.dtype, mx.float32)
+
+        existing = mx.array([4, 5, 6])
+        arr_pass = xp.asarray(existing)
+        self.assertEqual(arr_pass.tolist(), [4, 5, 6])
+
     def test_to_scalar(self):
         a = mx.array(1)
         self.assertEqual(int(a), 1)
