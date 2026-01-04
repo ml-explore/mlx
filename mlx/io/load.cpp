@@ -98,6 +98,8 @@ Dtype dtype_from_array_protocol(std::string_view t) {
           return float16;
         else if (size == 4)
           return float32;
+        else if (size == 8)
+          return float64;
       }
       case 'c': {
         return complex64;

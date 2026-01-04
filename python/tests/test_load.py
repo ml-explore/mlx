@@ -22,6 +22,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         "int64",
         "float32",
         "float16",
+        "float64",
         "complex64",
     ]
 
@@ -418,6 +419,16 @@ class TestLoad(mlx_tests.MLXTestCase):
         load_with_binary = mx.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
+
+    def test_load_float64_dtype(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fpath = os.path.join(tmp, "float64_test.npy")
+            original = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+            np.save(fpath, original)
+
+            loaded = mx.load(fpath)
+            self.assertEqual(loaded.dtype, mx.float64)
+            self.assertTrue(np.allclose(np.array(loaded), original))
 
 
 if __name__ == "__main__":
