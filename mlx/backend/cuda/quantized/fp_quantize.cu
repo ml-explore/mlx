@@ -31,7 +31,7 @@ struct Dequantize {
 namespace cg = cooperative_groups;
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+__global__ void fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -92,6 +92,88 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   store_vector<group_size / elem_per_byte>(out, thread_idx, quantized);
 }
 
+template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
+__global__ void fp_quantize_columnwise_transpose(
+    T* w,
+    uint8_t* out,
+    uint8_t* scales,
+    size_t size,
+    size_t in_stride,
+    size_t out_stride) {
+  using Tx2 = Vector2_t<T>;
+  using Tx4 = Vector4_t<T>;
+  uint32_t rbits = 0; // reserved bits for future use
+  auto block_size = cg::this_thread_block().dim_threads();
+  auto block_idx = cg::this_thread_block().group_index();
+  auto idx_in_block = cg::this_thread_block().thread_index();
+  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
+  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
+
+  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+
+  size_t total_groups = size / group_size;
+  if (thread_idx >= total_groups) {
+    return;
+  }
+
+  size_t num_rows = size / in_stride;
+  size_t groups_per_col = num_rows / group_size;
+  size_t col = thread_idx / groups_per_col;
+  size_t group_in_col = thread_idx % groups_per_col;
+  size_t base_idx = col + group_in_col * group_size * in_stride;
+
+  AlignedVector<T, group_size> w_tile;
+  // load 16 or 32 elements column-wise
+  #pragma unroll
+    for (int i = 0; i < group_size; i++) {
+      size_t idx = base_idx + i * in_stride;
+      w_tile[i] = w[idx];
+    }
+
+  float scale = 0.0f;
+  Tx2 amax_2x = Tx2{0.0f, 0.0f};
+
+#pragma unroll
+  for (int i = 0; i < group_size; i += 2) {
+    auto pair = Tx2{w_tile[i], w_tile[i + 1]};
+    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+  }
+
+  scale = static_cast<float>(
+      max(fabsf(static_cast<float>(amax_2x.x)),
+          fabsf(static_cast<float>(amax_2x.y))));
+
+  scale /= bits == 4 ? 6.0f : 448.0f;
+  // Convert to mx scale or nv scale
+  using ScaleType =
+      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  auto s = ScaleType(scale);
+  uint8_t q_scale = s.__x;
+  scale = float(s);
+
+  scales[thread_idx] = q_scale;
+  constexpr int elem_per_byte = bits == 8 ? 1 : 2;
+  AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
+
+#pragma unroll
+  for (int i = 0; i < group_size / 4; i++) {
+    Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
+    if constexpr (bits == 8) {
+      uint32_t quantized_val =
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      *reinterpret_cast<uint32_t*>(&quantized[i * 4]) = quantized_val;
+    } else {
+      uint16_t quantized_val =
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      *reinterpret_cast<uint16_t*>(&quantized[i * 2]) = quantized_val;
+    }
+  }
+
+  size_t out_base = col * out_stride + group_in_col * group_size;
+  store_vector<group_size / elem_per_byte>(out, out_base / elem_per_byte, quantized);
+}
+
 template <typename T, int group_size, int bits, bool use_mx_scale>
 __global__ void
 fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
@@ -145,14 +227,14 @@ void fp_quantize(
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize", [&](auto type_tag) {
+  dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize<T, 32, 4, true, false>;
+      auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
       if (bits == 8) {
-        kernel = cu::fp_quantize<T, 32, 8, true, false>;
+        kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
       } else if (group_size == 16) {
-        kernel = cu::fp_quantize<T, 16, 4, false, false>;
+        kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
       }
       bool large = w.size() > UINT_MAX;
       auto [num_blocks, block_dims] =
