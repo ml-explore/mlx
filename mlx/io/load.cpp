@@ -72,6 +72,7 @@ Dtype dtype_from_array_protocol(std::string_view t) {
       case 'b': {
         if (size == 1)
           return bool_;
+        break;
       }
       case 'i': {
         if (size == 1)
@@ -82,6 +83,7 @@ Dtype dtype_from_array_protocol(std::string_view t) {
           return int32;
         else if (size == 8)
           return int64;
+        break;
       }
       case 'u': {
         if (size == 1)
@@ -92,21 +94,27 @@ Dtype dtype_from_array_protocol(std::string_view t) {
           return uint32;
         else if (size == 8)
           return uint64;
+        break;
       }
       case 'f': {
         if (size == 2)
           return float16;
         else if (size == 4)
           return float32;
+        else if (size == 8)
+          return float64;
+        break;
       }
       case 'c': {
-        return complex64;
+        if (size == 8)
+          return complex64;
+        break;
       }
     }
   }
 
   throw std::invalid_argument(
-      "[from_str] Invalid array protocol type-string: " + std::string(t));
+      "[from_str] Unsupported array protocol type-string: " + std::string(t));
 }
 
 #ifdef _WIN32
