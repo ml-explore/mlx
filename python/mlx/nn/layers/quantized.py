@@ -344,30 +344,37 @@ class QQLinear(Module):
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
 
-    def _update_mode(self):
+    def quantize(self):
+        if not self._quantized:
+            self.weight, self.scales = mx.quantize(
+                self.weight,
+                self.group_size,
+                self.bits,
+                mode=self.mode,
+            )
+            self._quantized = True
+
+    def dequantize(self):
+        if self._quantized:
+            self.weight = mx.dequantize(
+                self.weight,
+                scales=self.scales,
+                group_size=self.group_size,
+                bits=self.bits,
+                mode=self.mode,
+            )
+            self.__delattr__("scales")
+            self._quantized = False
+
+    def _set_training_mode(self, mode: bool):
+        super()._set_training_mode(mode)
+
         if self._training:
-            if self._quantized:
-                self.weight = mx.dequantize(
-                    self.weight,
-                    scales=self.scales,
-                    group_size=self.group_size,
-                    bits=self.bits,
-                    mode=self.mode,
-                )
-                self.__delattr__("scales")
-                self._quantized = False
+            self.dequantize()
         else:
-            if not self._quantized:
-                self.weight, self.scales = mx.quantize(
-                    self.weight,
-                    self.group_size,
-                    self.bits,
-                    mode=self.mode,
-                )
-                self._quantized = True
+            self.quantize()
 
     def __call__(self, x):
-        self._update_mode()
         x = mx.qqmm(
             x,
             self["weight"],
@@ -392,6 +399,6 @@ class QQLinear(Module):
             raise NotImplementedError("QQLinear does not support bias yet.")
         ql = cls(input_dims, output_dims, group_size, bits, mode=mode)
         ql.weight = linear_layer.weight
-        ql._training = linear_layer._training
+        ql.train(linear_layer.training)
 
         return ql

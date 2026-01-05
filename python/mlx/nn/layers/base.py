@@ -559,6 +559,9 @@ class Module(dict):
             _unfreeze_impl("", self)
         return self
 
+    def _set_training_mode(self, mode: bool) -> None:
+        self._training = mode
+
     def train(self, mode: bool = True) -> Module:
         """Set the model in or out of training mode.
 
@@ -573,10 +576,8 @@ class Module(dict):
             The module instance after updating the training mode.
         """
 
-        def _set_train(_, m):
-            m._training = mode
+        self.apply_to_modules(lambda _, m: m._set_training_mode(mode))
 
-        self.apply_to_modules(_set_train)
         return self
 
     def eval(self) -> Module:
