@@ -4151,7 +4151,7 @@ std::pair<int, int> quantization_params_from_mode(
       break;
     case QuantizationMode::Ternary:
       default_group_size = 32;
-      default_bits = 2; // TODO: 1.58?
+      default_bits = 2;
       break;
   }
   return {
@@ -4614,49 +4614,38 @@ std::vector<array> fp_quantize(
   return fallback({w});
 }
 
-array pack_2bit_u32(array codes, const Stream& s) {
-  constexpr int bits = 2;
-  constexpr int pack_bits = 32;
-  constexpr int vals_per_pack = pack_bits / bits;
-  codes = astype(codes, uint32, s);
-
-  array shifts =
-      power(array(2, uint32), arange(0, pack_bits, bits, uint32, s), s);
-  codes = reshape(codes, {codes.shape(0), -1, vals_per_pack}, s);
-  codes = sum(multiply(codes, shifts, s), 2, false, s);
-  return codes;
-}
-
 std::vector<array>
 ternary_quantize(const array& w, int group_size, int bits, Stream s) {
-  auto [expected_gs, expected_bits] = quantization_params_from_mode(
-      QuantizationMode::Ternary, std::nullopt, std::nullopt);
-  if (group_size != expected_gs) {
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
     std::ostringstream msg;
     msg << "[quantize] "
         << quantization_mode_to_string(QuantizationMode::Ternary)
-        << " quantization requires group size " << expected_gs << " but got "
+        << " quantization requires group size to be 32, 64, and 128. but got "
         << group_size << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (bits != expected_bits) {
+  if (bits != 1 && bits != 2) {
     std::ostringstream msg;
-    msg << "[quantize] "
+    msg << "[dequantize] "
         << quantization_mode_to_string(QuantizationMode::Ternary)
-        << " quantization requires bits to be " << expected_bits << " but got "
-        << bits << ".";
+        << " quantization requires bits to be 1 or 2 but got " << bits << ".";
     throw std::invalid_argument(msg.str());
   }
-  auto fallback = [bits = bits, group_size = group_size, s](
-                      const std::vector<array>& inputs) -> std::vector<array> {
+  const int values_per_pack = (bits == 1) ? 20 : 32 / bits;
+  const int input_cols = w.shape(-1);
+  auto fallback =
+      [bits = bits, group_size = group_size, values_per_pack, input_cols, s](
+          const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
+    const int row_count = w.size() / input_cols;
     auto wq_shape = w.shape();
-    wq_shape.back() = w.shape(-1) * bits / 32;
+    wq_shape.back() = (input_cols + values_per_pack - 1) / values_per_pack;
     auto sshape = w.shape();
-    sshape.back() = w.shape(-1) / group_size;
+    sshape.back() = input_cols / group_size;
 
     array eps(1e-7, float32);
 
+    // Quantize
     auto wq = reshape(w, {-1, group_size}, s);
     auto scales = max(abs(wq, s), -1, true, s);
     scales = maximum(scales, eps, s);
@@ -4666,7 +4655,40 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
     wq = round(wq, s); // only int
     wq = add(wq, array(1.0f, float32), s); // [0, 2]
 
-    wq = pack_2bit_u32(astype(wq, uint32, s), s);
+    // Pack
+    wq = astype(wq, uint32, s);
+    wq = reshape(wq, {row_count, input_cols}, s);
+    if (bits == 2) {
+      constexpr int pack_bits = 32;
+      const int vals_per_pack = pack_bits / bits;
+      auto bit_shifts =
+          power(array(2, uint32), arange(0, pack_bits, bits, uint32, s), s);
+      wq = reshape(wq, {row_count, -1, vals_per_pack}, s);
+      wq = sum(multiply(wq, bit_shifts, s), 2, false, s);
+    } else {
+      // 5 trits in a u32
+      constexpr int bytes_u32 = 4;
+      constexpr int trits_per_byte = 5;
+
+      const int pad_per_row = wq_shape.back() * values_per_pack - wq.shape(-1);
+      if (pad_per_row > 0) {
+        wq = concatenate(
+            {wq, zeros({row_count, pad_per_row}, wq.dtype(), s)}, 1, s);
+      }
+
+      wq = reshape(wq, {-1, bytes_u32, trits_per_byte}, s);
+      auto ternary_weights = array({81, 27, 9, 3, 1}, uint32);
+      auto trit_values = sum(multiply(wq, ternary_weights, s), -1, false, s);
+
+      // b = (trit_values * 256 + 242) / 243
+      trit_values = astype(trit_values, uint32, s); // prevent overflow
+      auto numerator = add(
+          multiply(trit_values, array(256, uint32), s), array(242, uint32), s);
+      auto packed_bytes = floor_divide(numerator, array(243, uint32), s);
+
+      auto byte_shifts = array({0, 8, 16, 24}, uint32);
+      wq = sum(left_shift(packed_bytes, byte_shifts, s), -1, false, s);
+    }
 
     wq = reshape(wq, wq_shape, s);
     scales = astype(scales, w.dtype(), s);
@@ -4675,18 +4697,6 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
   };
 
   // TODO: implement SIMD CPU + Metal + CUDA backend
-  // if (s.device == Device::gpu) {
-  //   auto wq_shape = w.shape();
-  //   wq_shape.back() = w.shape(-1) * bits / 32;
-  //   auto sshape = w.shape();
-  //   sshape.back() = w.shape(-1) / group_size;
-  //   return array::make_arrays(
-  //       {std::move(wq_shape), std::move(sshape)},
-  //       {uint32, uint8},
-  //       std::make_shared<fast::Quantize>(
-  //           s, fallback, group_size, bits, mode, false),
-  //       {w});
-  // }
   return fallback({w});
 }
 
@@ -4959,35 +4969,83 @@ array ternary_dequantize(
         "[dequantize] Shape of scales does not match the matrix");
   }
 
-  // Packing into uint32
-  int out_size = w.shape(-1) * 32 / bits;
-
-  if (out_size != scales.shape(-1) * group_size) {
+  if (bits != 1 && bits != 2) {
     std::ostringstream msg;
-    msg << "[dequantize] Shape of scales does not match the matrix "
-        << "given the quantization parameters. Provided matrix of shape "
-        << w.shape() << " and scales/biases of shape " << scales.shape()
-        << " with group_size=" << group_size << " and bits=" << bits << ".";
+    msg << "[dequantize] "
+        << quantization_mode_to_string(QuantizationMode::Ternary)
+        << ": bits must be 1 or 2 (got " << bits << ").";
     throw std::invalid_argument(msg.str());
   }
 
-  // bits should be 1 or 2, and let's implement 2 bit case first
+  const int values_per_pack = (bits == 1) ? 20 : 32 / bits;
+  const int row_count = w.size() / w.shape(-1);
+  const int unpacked_cols = scales.shape(-1) * group_size;
+  const int unpacked_size = row_count * unpacked_cols;
+  const int available_values = row_count * w.shape(-1) * values_per_pack;
+  if (available_values < unpacked_size) {
+    std::ostringstream msg;
+    msg << "[dequantize] "
+        << quantization_mode_to_string(QuantizationMode::Ternary)
+        << ": packed values " << available_values << " < required "
+        << unpacked_size << " (group_size=" << group_size << ", bits=" << bits
+        << ").";
+    throw std::invalid_argument(msg.str());
+  }
+  const int pad_per_row = available_values / row_count - unpacked_cols;
+  if (bits == 1) {
+    if (pad_per_row >= values_per_pack) {
+      std::ostringstream msg;
+      msg << "[dequantize] "
+          << quantization_mode_to_string(QuantizationMode::Ternary)
+          << ": unexpected padding (pad_per_row=" << pad_per_row
+          << ", bits=1).";
+      throw std::invalid_argument(msg.str());
+    }
+  } else if (pad_per_row != 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] "
+        << quantization_mode_to_string(QuantizationMode::Ternary)
+        << ": packed columns do not match scales (group_size=" << group_size
+        << ", bits=" << bits << ").";
+    throw std::invalid_argument(msg.str());
+  }
 
   auto fallback =
       [wshape = std::move(wshape),
        sshape = std::move(sshape),
+       unpacked_size,
        group_size,
        bits,
        out_type,
        s](const std::vector<array>& inputs) mutable -> std::vector<array> {
     auto w = inputs[0];
     auto& scales = inputs[1];
+    // Unpack
     if (bits == 2) {
       w = expand_dims(w, -1, s);
       w = right_shift(w, arange(0, 32, bits, uint32, s), s);
       w = bitwise_and(w, array((1 << bits) - 1, uint32), s);
     } else {
-      throw std::runtime_error{"skip for now"};
+      w = reshape(w, {-1, 1}, s);
+      auto byte_shifts = array({0, 8, 16, 24}, uint32);
+      // (packed >> shift) & 0xFF
+      w = bitwise_and(right_shift(w, byte_shifts, s), array(255, uint32));
+      w = reshape(w, {-1, 1}, s);
+
+      auto ternary_offsets = array({1, 3, 9, 27, 81}, uint32);
+
+      // (b * shift) % 256
+      w = astype(multiply(w, ternary_offsets, s), uint8, s);
+      w = astype(w, uint32, s); // prevent overflow
+
+      // (q8 * 3) >> 8
+      w = right_shift(multiply(w, array(3, uint32), s), array(8, uint32));
+
+      // remove padding
+      if (unpacked_size < w.size()) {
+        w = reshape(w, {-1}, s);
+        w = slice(w, {0}, {unpacked_size}, s);
+      }
     }
 
     // Dequantize
@@ -5001,16 +5059,6 @@ array ternary_dequantize(
   };
 
   // TODO: Fast CPU SIMD, GPU
-  // if (s.device == Device::gpu) {
-  //   auto out_shape = w.shape();
-  //   out_shape.back() = out_size;
-  //   return array(
-  //       std::move(out_shape),
-  //       scales.dtype(),
-  //       std::make_shared<fast::Quantize>(
-  //           s, fallback, group_size, bits, QuantizationMode::Affine, true),
-  //       {w, scales, biases});
-  // }
   return fallback({w, scales})[0];
 }
 
