@@ -258,40 +258,40 @@ __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4_rs(
   return out_fp4x4;
 }
 
-template <bool USE_SR>
+template <bool use_sr>
 __device__ __forceinline__ uint16_t scale_cvt_bf16x4_to_fp4x4(
     const bf16x4 input,
     const float scale,
     uint32_t rbits) {
   float2 scale_fp32x2 = make_float2(scale, scale);
-  if constexpr (USE_SR) {
+  if constexpr (use_sr) {
     return scale_cvt_bf16x4_to_fp4x4_rs(input, scale_fp32x2, rbits);
   } else {
     return scale_cvt_bf16x4_to_fp4x4_rn(input, scale_fp32x2);
   }
 }
 
-template <bool USE_SR>
+template <bool use_sr>
 __device__ __forceinline__ uint16_t scale_cvt_fp16x4_to_fp4x4(
     const fp16x4 input,
     const float scale,
     uint32_t rbits) {
   float2 scale_fp32x2 = make_float2(scale, scale);
-  if constexpr (USE_SR) {
+  if constexpr (use_sr) {
     return scale_cvt_fp16x4_to_fp4x4_rs(input, scale_fp32x2, rbits);
   } else {
     return scale_cvt_fp16x4_to_fp4x4_rn(input, scale_fp32x2);
   }
 }
 
-template <bool USE_SR>
+template <bool use_sr>
 __device__ __forceinline__ uint16_t
 scale_cvt_f32x4_to_fp4x4(const f32x4 input, const float scale, uint32_t rbits) {
   float2 scale_fp32x2 = make_float2(scale, scale);
   float2 input_fp32x2_0 = make_float2(input.x, input.y);
   float2 input_fp32x2_1 = make_float2(input.z, input.w);
 
-  if constexpr (USE_SR) {
+  if constexpr (use_sr) {
     return scale_cvt_fp32x4_to_fp4x4_rs(
         input_fp32x2_0, input_fp32x2_1, scale_fp32x2, rbits);
   } else {
@@ -300,34 +300,34 @@ scale_cvt_f32x4_to_fp4x4(const f32x4 input, const float scale, uint32_t rbits) {
   }
 }
 
-template <typename T, bool USE_SR>
+template <typename T, bool use_sr>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4_fast(
     const Vector4_t<T> input,
     const float scale,
     uint32_t rbits) {
   if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-    return scale_cvt_bf16x4_to_fp4x4<USE_SR>(input, scale, rbits);
+    return scale_cvt_bf16x4_to_fp4x4<use_sr>(input, scale, rbits);
   } else if constexpr (std::is_same<T, __half>::value) {
-    return scale_cvt_fp16x4_to_fp4x4<USE_SR>(input, scale, rbits);
+    return scale_cvt_fp16x4_to_fp4x4<use_sr>(input, scale, rbits);
   } else {
-    return scale_cvt_f32x4_to_fp4x4<USE_SR>(input, scale, rbits);
+    return scale_cvt_f32x4_to_fp4x4<use_sr>(input, scale, rbits);
   }
 }
 #endif // (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) &&
        // (__CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000)
 
-template <typename T, bool USE_SR>
+template <typename T, bool use_sr>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4(
     const Vector4_t<T> input,
     const float scale,
     uint32_t rbits) {
 #if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
     (__CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000)
-  return scale_cvt_Tx4_to_fp4x4_fast<T, USE_SR>(input, scale, rbits);
+  return scale_cvt_Tx4_to_fp4x4_fast<T, use_sr>(input, scale, rbits);
 #else
   static_assert(
-      !USE_SR,
-      "Stochastic rounding (USE_SR=true) requires CUDA >= 12.8 and compute capability >= 1000.");
+      !use_sr,
+      "Stochastic rounding (use_sr=true) requires CUDA >= 12.8 and compute capability >= 1000.");
   return scale_cvt_Tx4_to_fp4x4_fallback(input, scale);
 #endif
 }

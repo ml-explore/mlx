@@ -30,8 +30,9 @@ struct Dequantize {
 
 namespace cg = cooperative_groups;
 
-template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+template <typename T, int group_size, int bits, bool use_mx_scale, bool use_sr>
+__global__ void
+fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -98,8 +99,7 @@ __global__ void fp_quantize_columnwise_transpose(
     uint8_t* out,
     uint8_t* scales,
     size_t size,
-    size_t in_stride,
-    size_t out_stride) {
+    size_t in_stride) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -123,13 +123,14 @@ __global__ void fp_quantize_columnwise_transpose(
   size_t group_in_col = thread_idx % groups_per_col;
   size_t base_idx = col + group_in_col * group_size * in_stride;
 
-  AlignedVector<T, group_size> w_tile;
+  T w_tile[group_size];
   // load 16 or 32 elements column-wise
-  #pragma unroll
-    for (int i = 0; i < group_size; i++) {
-      size_t idx = base_idx + i * in_stride;
-      w_tile[i] = w[idx];
-    }
+
+#pragma unroll
+  for (int i = 0; i < group_size; i++) {
+    size_t idx = base_idx + i * in_stride;
+    w_tile[i] = w[idx];
+  }
 
   float scale = 0.0f;
   Tx2 amax_2x = Tx2{0.0f, 0.0f};
@@ -169,9 +170,8 @@ __global__ void fp_quantize_columnwise_transpose(
       *reinterpret_cast<uint16_t*>(&quantized[i * 2]) = quantized_val;
     }
   }
-
-  size_t out_base = col * out_stride + group_in_col * group_size;
-  store_vector<group_size / elem_per_byte>(out, out_base / elem_per_byte, quantized);
+  store_vector<group_size / elem_per_byte>(
+      out, thread_idx / elem_per_byte, quantized);
 }
 
 template <typename T, int group_size, int bits, bool use_mx_scale>
@@ -227,79 +227,114 @@ void fp_quantize(
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
-      if (bits == 8) {
-        kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
-      } else if (group_size == 16) {
-        kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
+  if (w.strides().back() != 1) {
+    auto stride = w.strides().back();
+    dispatch_float_types(
+        w.dtype(), "fp_quantize_columnwise_transpose", [&](auto type_tag) {
+          using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+          if constexpr (!std::is_same_v<T, double>) {
+            auto kernel =
+                cu::fp_quantize_columnwise_transpose<T, 32, 4, true, false>;
+            if (bits == 8) {
+              kernel =
+                  cu::fp_quantize_columnwise_transpose<T, 32, 8, true, false>;
+            } else if (group_size == 16) {
+              kernel =
+                  cu::fp_quantize_columnwise_transpose<T, 16, 4, false, false>;
+            }
+            bool large = w.size() > UINT_MAX;
+            auto [num_blocks, block_dims] = get_launch_args(
+                w.size(), w.shape(), w.strides(), large, group_size);
+
+            enc.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
+                0,
+                gpu_ptr<T>(w),
+                gpu_ptr<uint8_t>(wq),
+                gpu_ptr<uint8_t>(scales),
+                w.size(),
+                stride);
+          } else {
+            throw std::runtime_error(
+                "[Quantize::eval_gpu] Can not quantize input with type float64.");
+          }
+        });
+  } else {
+    dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      if constexpr (!std::is_same_v<T, double>) {
+        auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
+        if (bits == 8) {
+          kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
+        } else if (group_size == 16) {
+          kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
+        }
+        bool large = w.size() > UINT_MAX;
+        auto [num_blocks, block_dims] = get_launch_args(
+            w.size(), w.shape(), w.strides(), large, group_size);
+
+        enc.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
+            0,
+            gpu_ptr<T>(w),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<uint8_t>(scales),
+            w.size());
+      } else {
+        throw std::runtime_error(
+            "[Quantize::eval_gpu] Can not quantize input with type float64.");
       }
-      bool large = w.size() > UINT_MAX;
-      auto [num_blocks, block_dims] =
-          get_launch_args(w.size(), w.shape(), w.strides(), large, group_size);
+    });
+  }
 
-      enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<T>(w),
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          w.size());
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not quantize input with type float64.");
-    }
-  });
-}
+  void fp_dequantize(
+      const array& wq,
+      const array& scales,
+      array& w,
+      int group_size,
+      int bits,
+      cu::CommandEncoder& enc,
+      const Stream& s) {
+    constexpr int uint8_per_uint32 = 4;
+    int packs_per_int = 8 / bits;
 
-void fp_dequantize(
-    const array& wq,
-    const array& scales,
-    array& w,
-    int group_size,
-    int bits,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  constexpr int uint8_per_uint32 = 4;
-  int packs_per_int = 8 / bits;
+    size_t size = w.size() / packs_per_int;
+    bool large = size > UINT_MAX;
+    auto grid_shape = w.shape();
+    grid_shape.back() *= uint8_per_uint32;
 
-  size_t size = w.size() / packs_per_int;
-  bool large = size > UINT_MAX;
-  auto grid_shape = w.shape();
-  grid_shape.back() *= uint8_per_uint32;
-
-  enc.set_input_array(wq);
-  enc.set_input_array(scales);
-  enc.set_output_array(w);
-  dispatch_float_types(w.dtype(), "fp_dequantize", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_dequantize<T, 32, 4, true>;
-      if (bits == 8) {
-        kernel = cu::fp_dequantize<T, 32, 8, true>;
-      } else if (group_size == 16) {
-        kernel = cu::fp_dequantize<T, 16, 4, false>;
+    enc.set_input_array(wq);
+    enc.set_input_array(scales);
+    enc.set_output_array(w);
+    dispatch_float_types(w.dtype(), "fp_dequantize", [&](auto type_tag) {
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      if constexpr (!std::is_same_v<T, double>) {
+        auto kernel = cu::fp_dequantize<T, 32, 4, true>;
+        if (bits == 8) {
+          kernel = cu::fp_dequantize<T, 32, 8, true>;
+        } else if (group_size == 16) {
+          kernel = cu::fp_dequantize<T, 16, 4, false>;
+        }
+        auto [num_blocks, block_dims] =
+            get_launch_args(size, grid_shape, w.strides(), large);
+        enc.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
+            0,
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<uint8_t>(scales),
+            gpu_ptr<T>(w),
+            w.size());
+      } else {
+        throw std::runtime_error(
+            "[Quantize::eval_gpu] Can not dequantize to output with type float64.");
       }
-      auto [num_blocks, block_dims] =
-          get_launch_args(size, grid_shape, w.strides(), large);
-      enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          gpu_ptr<T>(w),
-          w.size());
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not dequantize to output with type float64.");
-    }
-  });
-}
+    });
+  }
 
 } // namespace mlx::core

@@ -22,7 +22,7 @@ scale_cvt_Tx4_to_fp8x4_fallback(const Vector4_t<T> input, const float scale) {
 }
 
 // Place holder for future fast path implementation
-template <typename T, bool USE_SR>
+template <typename T, bool use_sr>
 __device__ __forceinline__ uint32_t scale_cvt_Tx4_to_fp8x4(
     const Vector4_t<T> input,
     const float scale,

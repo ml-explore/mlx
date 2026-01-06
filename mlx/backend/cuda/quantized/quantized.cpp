@@ -24,6 +24,28 @@ inline array ensure_row_contiguous(
   }
 }
 
+inline array ensure_row_column_contiguous(
+    const array& x,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  auto stride_0 = x.strides()[x.ndim() - 2]; // if row contiguous = num columns,
+                                             // = 1 if row contiguous T
+  auto stride_1 =
+      x.strides()[x.ndim() - 1]; // if row contiguous = 1, = num columns  T
+
+  if (stride_0 == x.shape(-1) && stride_1 == 1) {
+    return x; // row contiguous
+  } else {
+    if (stride_0 == 1 && stride_1 == x.shape(-1)) {
+      return x; // column contiguous
+    } else {
+      array x_copy = contiguous_copy_gpu(x, s);
+      enc.add_temporary(x_copy);
+      return x_copy;
+    }
+  }
+}
+
 inline array ensure_row_contiguous_matrix(
     const array& x,
     cu::CommandEncoder& enc,
@@ -68,7 +90,7 @@ void fast::Quantize::eval_gpu(
       fp_dequantize(wq, scales, w, group_size_, bits_, enc, s);
     }
   } else {
-    auto w = ensure_row_contiguous(inputs[0], enc, s);
+    auto w = ensure_row_column_contiguous(inputs[0], enc, s);
     auto& wq = outputs[0];
     auto& scales = outputs[1];
 
