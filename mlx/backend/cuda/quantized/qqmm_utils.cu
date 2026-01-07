@@ -43,95 +43,123 @@ namespace cg = cooperative_groups;
 //          [252, 253, 254, 255],
 //          [380, 381, 382, 383],
 //          [508, 509, 510, 511]]]]],
-__device__ size_t
-scale_tiled_offset(size_t scale_index, size_t num_rows, size_t num_scale_cols) {
-  // Compute the tiled layout offset for scale factors used in tensor cores
-  // This function maps from a linear scale index to the tiled layout expected
-  // by tensor cores (and cublaslt).
-  //
-  // Input: linear scale index (e.g., for a matrix M x K with group_size,
-  //        scale_index ranges from 0 to (M * K/group_size - 1))
-  //
-  // The tiled layout organizes scales into tiles of 128 rows x 4 columns,
-  // where each tile is subdivided into 4 sub-blocks of 32 rows x 4 columns.
-  size_t row = scale_index / num_scale_cols;
-  size_t col = scale_index % num_scale_cols;
 
-  constexpr size_t rows_per_tile = 128;
-  constexpr size_t rows_per_sub_block = 32;
-  constexpr size_t cols_per_sub_block = 4;
-  constexpr size_t sub_blocks_per_tile = 4; // Vertically stacked
+inline std::tuple<dim3, dim3> get_swizzle_launch_args(
+    size_t M_swizzled,
+    size_t K_swizzled,
+    int tile_rows = 128,
+    int tile_cols = 4,
+    int tiles_per_lane = 1) {
+  constexpr int lanes_per_block = 32 // 32 threads per warp
+      int lanes_per_block =
+          tiles_per_lane* lanes_per_block // tiles_per_lane = 1 if load int, 4
+                                          // if int4
+      const int tiles_per_block = lanes_per_block * tiles_per_lane;
+  const int warps_per_block = tile_rows / 4; // 128 / 4 = 32
 
-  // Decompose row position
-  size_t tile_row = row / rows_per_tile; // Which tile row
-  size_t row_in_tile = row % rows_per_tile; // Row within tile
-  size_t sub_block_row =
-      row_in_tile / rows_per_sub_block; // Sub-block within tile
-  size_t row_in_sub_block =
-      row_in_tile % rows_per_sub_block; // Row in sub-block
+  const int num_tiles_k = K_swizzled / tile_cols;
+  const int num_tiles_m = M_swizzled / tile_rows;
 
-  // Decompose column position
-  size_t col_tile = col / cols_per_sub_block; // Which column tile
-  size_t col_in_sub_block = col % cols_per_sub_block; // Column within sub-block
+  dim3 grid;
+  grid.x = cuda::ceil_div(num_tiles_k, tiles_per_block);
+  grid.y = num_tiles_m;
+  grid.z = 1;
 
-  // Compute tile index and offset within tile
-  size_t num_col_tiles = cuda::ceil_div(num_scale_cols, cols_per_sub_block);
-  size_t tile_idx = tile_row * num_col_tiles + col_tile;
+  // Block is always (32, 32) = 1024 threads
+  dim3 block(lanes_per_block, warps_per_block, 1);
 
-  size_t offset_in_tile =
-      (row_in_sub_block * sub_blocks_per_tile * cols_per_sub_block) +
-      (sub_block_row * cols_per_sub_block) + col_in_sub_block;
-
-  constexpr size_t tile_size = rows_per_tile * cols_per_sub_block;
-  return tile_idx * tile_size + offset_in_tile;
+  return std::make_tuple(grid, block);
 }
 
 namespace cu {
 
-__global__ void repack_scales(
+__global__ void swizzle_scaling_factors_impl(
     const uint8_t* scales_linear,
-    uint8_t* scales_tiled,
-    size_t input_rows,
-    size_t input_cols,
-    size_t output_rows,
-    size_t output_cols) {
-  auto block_size = cg::this_thread_block().dim_threads();
+    uint8_t* scales_swizzled,
+    const size_t M,
+    const size_t K,
+    const size_t M_swizzled,
+    const size_t K_swizzled) {
+  // M_swizzled and K_swizzled are dimensions of scales_tiled array
+  // (padded to full tiles 128x4 if M or K are not multiples of tile sizes)
+
+  // Tile dimensions for scale factors
+  constexpr int tile_dim_row = 128;
+  constexpr int tile_dim_col = 4;
+  constexpr int tile_size = tile_dim_row * tile_dim_col; // 512 bytes
+  constexpr int num_tile_rows_per_thread = 4; // always 4
+  constexpr int num_tiles_per_thread = 1;
+  constexpr int int4_per_tile =
+      tile_dim_row* tile_dim_col / 16 constexpr int lanes_per_block = 32;
+  constexpr int num_tiles_per_block = lanes_per_block * num_tiles_per_thread;
+  // Each thread loads 4 rows of 4 bytes x 1 column of scales (16 bytes -- 16
+  // scales) thread (0, 0) loads scales at rows 0,32,64,96 of tile 0 thread (1,
+  // 0) loads rows 0,32,64,96 of of tile 1 therefore a warp loads: consecutive 4
+  // bytes x 32 = 128 bytes 4 times with a stride 32 this can be improved
+  // further with processing 2/4 tiles within a warp: load 8/16 bytes but it
+  // will be a bit more complicated, because then we would need to shuffle
+  // registers so for now each thread process exactly 1 tile
+
+  auto block_size = cg::this_thread_block().dim_threads(); // (32, 32, 1)
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
 
-  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
-  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
+  auto tidx = idx_in_block.x; // lane within warp (0, 31)
+  auto tidy = idx_in_block.y; // warp index (0, 31)
+  auto linear_tid = tidy * block_size.x + tidx;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  const int bid_x = block_idx.x;
+  const int bid_y = block_idx.y;
 
-  size_t output_index = tidx + grid_dim_x * size_t(tidy);
-  size_t output_size = output_rows * output_cols;
+  // [M tile * 128 * bytes] + [K tile * 32]
+  const int K_int = K_swizzled / 4;
+  // incase of overflow cast to size_t
+  const size_t input_block_offset =
+      static_cast<size_t>(bid_y) * tile_dim_row * K_int +
+      static_cast<size_t>(bid_x) * num_tiles_per_block;
+  const int* input_block =
+      reinterpret_cast<const int*>(scales_linear) + input_block_offset;
 
-  if (output_index >= output_size) {
-    return;
+  const size_t output_offset =
+      static_cast<size_t>(bid_y) * tile_dim_row * K_int +
+      static_cast<size_t>(bid_x) * num_tiles_per_block * tile_size / 4;
+
+  int* output_block = reinterpret_cast<int*>(scales_swizzled) + output_offset;
+
+  const int num_tiles_k = K_swizzled / tile_dim_col;
+  const int grid_dim_x = cg::this_grid().dim_blocks().x;
+  const int grid_dim_y = cg::this_grid().dim_blocks().y;
+
+  // each thread store 16 consecutive scales, but this store is strided within a
+  // warp so we will write first to the shared memory (each thread 4 int32 -- 4
+  // rows -- 16 scales) then it will be coaleased store shared -> global within
+  // a thread block
+  extern __shared__ int4 strided_scales_thread[];
+  // load
+  int thread_tile_rows[num_tile_rows_per_thread];
+#pragma unroll
+  for (int i = 0; i < num_tile_rows_per_thread; i++) {
+    const int thread_offset =
+        (i * block_size.x + tidy) * K_int + tidx * num_tiles_per_thread;
+    thread_tile_rows[i] = __ldg(input_block + thread_offset);
   }
+  // todo add padding  + boundaries
+  //  write 4 ints to the shared memory
+  strided_scales_thread[tidx * tile_size / 16 + tidy] =
+      *reinterpret_cast<int4*>(thread_tile_rows);
+  __syncthreads();
 
-  size_t tiled_offset =
-      scale_tiled_offset(output_index, output_rows, output_cols);
-
-  size_t row = output_index / output_cols;
-  size_t col = output_index % output_cols;
-
-  // Probably this can be done better with 2 separated paths for valid and
-  // padding
-  if (row < input_rows && col < input_cols) {
-    size_t input_index = row * input_cols + col;
-    scales_tiled[tiled_offset] = scales_linear[input_index];
-  } else {
-    // Zero-fill padding region
-    scales_tiled[tiled_offset] = 0;
+  // shared -> global
+  __align__(16) int4* output_block_int4 = reinterpret_cast<int4*>(output_block);
+  const int total_int4s = tiles_in_block * tile_size / 16;
+#pragma unroll
+  for (int i = linear_tid; i < total_int4s; i += block_size.x * block_size.y) {
+    output_block_int4[i] = strided_scales_thread[i];
   }
 }
-
 } // namespace cu
 
-void repack_scales(
+void swizzle_scaling_factors(
     const array& scales,
     array& scales_tiled,
     cu::CommandEncoder& enc,
@@ -140,24 +168,23 @@ void repack_scales(
   enc.set_output_array(scales_tiled);
 
   // Note: scales_tiled is padded to full tiles so if num_rows or num_cols
-  // are not multiples of tile sizes, the extra space is filled with zeros
+  // are not multiples of tile sizes
 
   size_t input_rows = scales.shape(-2);
   size_t input_cols = scales.shape(-1);
 
   size_t output_rows = scales_tiled.shape(-2);
   size_t output_cols = scales_tiled.shape(-1);
-  size_t output_size = output_rows * output_cols;
 
-  bool large = output_size > UINT_MAX;
-  auto [num_blocks, block_dims] = get_launch_args(
-      output_size, scales_tiled.shape(), scales_tiled.strides(), large);
+  uint32_t smem_bytes = 128 * 4 * 32;
+  auto [num_blocks, block_dims] =
+      get_swizzle_launch_args(output_rows, output_cols);
 
   enc.add_kernel_node(
-      cu::repack_scales,
+      cu::swizzle_scaling_factors_impl,
       num_blocks,
       block_dims,
-      0,
+      smem_bytes,
       gpu_ptr<uint8_t>(scales),
       gpu_ptr<uint8_t>(scales_tiled),
       input_rows,
