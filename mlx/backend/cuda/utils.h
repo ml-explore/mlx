@@ -8,6 +8,10 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cuda_utils.h"
 
+#if defined(_WIN32)
+typedef unsigned int uint;
+#endif
+
 namespace mlx::core {
 
 template <typename T>

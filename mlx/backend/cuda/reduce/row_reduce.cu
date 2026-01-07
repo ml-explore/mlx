@@ -309,9 +309,11 @@ void row_reduce_looped(
       dim3 block(threads, 1, 1);
 
       // Pick the kernel
-      auto kernel = cu::row_reduce_looped<T, U, OP, 1, N_READS>;
+      using KernelT = void (*)(const T*, U*, const cu::RowReduceArgs);
+      auto kernel = (KernelT)cu::row_reduce_looped<T, U, OP, 1, N_READS>;
       dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        kernel = cu::row_reduce_looped<T, U, OP, reduce_ndim.value, N_READS>;
+        kernel = (KernelT)
+            cu::row_reduce_looped<T, U, OP, reduce_ndim.value, N_READS>;
       });
 
       encoder.add_kernel_node(

@@ -65,10 +65,11 @@ void copy_contiguous(
         using InType = cuda_type_t<MLX_GET_TYPE(in_type_tag)>;
         using OutType = cuda_type_t<MLX_GET_TYPE(out_type_tag)>;
         using IdxT = std::conditional_t<large(), int64_t, uint32_t>;
-        constexpr int N_READS = 16 / sizeof(InType);
-        auto kernel = cu::copy_s<InType, OutType, IdxT, N_READS>;
+        const int N_READS = 16 / sizeof(InType);
+        using KernelFunc = void (*)(const InType*, OutType*, IdxT);
+        KernelFunc kernel = &cu::copy_s<InType, OutType, IdxT, N_READS>;
         if (ctype == CopyType::Vector) {
-          kernel = cu::copy_v<InType, OutType, IdxT, N_READS>;
+          kernel = &cu::copy_v<InType, OutType, IdxT, N_READS>;
         }
         auto [num_blocks, block_dims] = get_launch_args(
             out.data_size(), out.shape(), out.strides(), large(), N_READS);

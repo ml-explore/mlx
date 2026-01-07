@@ -1,4 +1,6 @@
+#if !defined(_WIN32)
 #include <arpa/inet.h>
+#endif
 #include <cuda_runtime.h>
 #include <nccl.h>
 

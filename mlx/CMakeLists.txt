@@ -25,8 +25,18 @@ target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
 if(MSVC)
-  # Disable some MSVC warnings to speed up compilation.
-  target_compile_options(mlx PUBLIC /wd4068 /wd4244 /wd4267 /wd4804)
+  # Disable some MSVC warnings to speed up compilation. For C++ files, pass
+  # flags directly; for CUDA files, wrap with -Xcompiler
+  target_compile_options(
+    mlx
+    PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/wd4068
+           /wd4244
+           /wd4267
+           /wd4804>
+           $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/wd4068
+           -Xcompiler=/wd4244
+           -Xcompiler=/wd4267
+           -Xcompiler=/wd4804>)
 endif()
 
 if(WIN32)

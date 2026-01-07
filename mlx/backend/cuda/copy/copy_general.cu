@@ -146,9 +146,9 @@ void copy_general(
                     const_param<ndim_constant()>(strides_out));
               });
             } else { // ndim >= 4
-              auto kernel = cu::copy_gg<InType, OutType, IdxT, 1>;
+              auto kernel = &cu::copy_gg<InType, OutType, IdxT, 1>;
               if (work_per_thread == 4) {
-                kernel = cu::copy_gg<InType, OutType, IdxT, 4>;
+                kernel = &cu::copy_gg<InType, OutType, IdxT, 4>;
               }
               encoder.add_kernel_node(
                   kernel,

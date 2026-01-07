@@ -145,7 +145,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     constexpr int N_READS = 16 / sizeof(DataType);
     dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-      auto kernel = cu::logsumexp<DataType, float, block_dim(), N_READS>;
+      auto kernel = &cu::logsumexp<DataType, float, block_dim(), N_READS>;
       encoder.add_kernel_node(
           kernel,
           n_rows,

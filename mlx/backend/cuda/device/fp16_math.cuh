@@ -54,7 +54,23 @@ MLX_DEFINE_UNARY_OP(ceil, hceil)
 MLX_DEFINE_UNARY_OP(cos, hcos)
 MLX_DEFINE_UNARY_OP(exp, hexp)
 MLX_DEFINE_UNARY_OP(floor, hfloor)
-MLX_DEFINE_UNARY_OP(isnan, __hisnan)
+
+// Special handling for isnan: integral types are never NaN
+template <typename T>
+__forceinline__ __device__ auto isnan(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __hisnan(x);
+#if CUDART_VERSION >= 12000 || __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __hisnan(x);
+#endif
+  } else if constexpr (cuda::std::is_integral_v<T>) {
+    return false;
+  } else {
+    return ::isnan(x);
+  }
+}
+
 MLX_DEFINE_UNARY_OP(log, hlog)
 MLX_DEFINE_UNARY_OP(log2, hlog2)
 MLX_DEFINE_UNARY_OP(log10, hlog10)

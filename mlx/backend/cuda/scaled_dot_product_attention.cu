@@ -10,6 +10,11 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
+#if defined(_WIN32)
+#define _USE_MATH_DEFINES
+#include <math.h>
+#endif
+
 namespace mlx::core {
 
 namespace cu {
@@ -503,7 +508,7 @@ void sdpa_vector_1pass_fallback(
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
         auto kernel =
-            cu::kernel_sdpav_1pass<DataType, do_causal.value, headdim.value>;
+            &cu::kernel_sdpav_1pass<DataType, do_causal.value, headdim.value>;
         encoder.add_kernel_node(
             kernel,
             grid_dim,

@@ -129,9 +129,9 @@ class CopyableCudaEvent {
 
   void wait(Stream s) {
     if (s.device == mlx::core::Device::cpu) {
-      scheduler::enqueue(s, [*this]() mutable {
-        check_recorded();
-        event_->wait();
+      scheduler::enqueue(s, [self = *this]() mutable {
+        self.check_recorded();
+        self.event_->wait();
       });
     } else {
       check_recorded();
@@ -213,7 +213,8 @@ void AtomicEvent::wait(cudaStream_t stream, uint64_t value) {
 void AtomicEvent::wait(Stream s, uint64_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::wait(s)");
   if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
+    scheduler::enqueue(
+        s, [self = *this, value]() mutable { self.wait(value); });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
@@ -237,7 +238,8 @@ void AtomicEvent::signal(Stream s, uint64_t value) {
     // Signal through a GPU stream so the atomic is updated in GPU - updating
     // the atomic in CPU sometimes does not get GPU notified.
     static CudaStream stream(device(mlx::core::Device::gpu));
-    scheduler::enqueue(s, [*this, value]() mutable { signal(stream, value); });
+    scheduler::enqueue(
+        s, [self = *this, value]() mutable { self.signal(stream, value); });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
