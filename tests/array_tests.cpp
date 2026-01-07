@@ -613,7 +613,12 @@ TEST_CASE("test make array from user buffer") {
   std::vector<int> buffer(size, 0);
 
   int count = 0;
-  auto deleter = [&count](void*) { count++; };
+  auto deleter = [&count, data = buffer.data()](void* ptr) {
+    // make sure pointer is correct
+    if (ptr == data) {
+      count++;
+    }
+  };
 
   {
     auto a = array(buffer.data(), Shape{size}, int32, deleter);
