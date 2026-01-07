@@ -1670,13 +1670,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "asarray",
-      [](const ScalarOrArray& a, std::optional<mx::Dtype> dtype) {
-        return to_array(a, dtype);
+      [](const ArrayInitType& a, std::optional<mx::Dtype> dtype) {
+        return create_array(a, dtype);
       },
       nb::arg(),
       "dtype"_a = nb::none(),
-      nb::sig("def asarray(a: Union[scalar, array], dtype: Optional[Dtype] = "
-              "None) -> array"),
+      nb::sig("def asarray(a: Union[scalar, array, Sequence], dtype: "
+              "Optional[Dtype] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
 
