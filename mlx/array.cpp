@@ -96,7 +96,7 @@ array::array(
     deleter(data);
   } else {
     auto wrapped_deleter = [deleter](allocator::Buffer buffer) {
-      auto ptr = buffer.ptr();
+      auto ptr = buffer.raw_ptr();
       allocator::release(buffer);
       return deleter(ptr);
     };
