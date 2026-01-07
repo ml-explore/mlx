@@ -54,6 +54,7 @@ are the CPU and GPU.
    examples/linear_regression
    examples/mlp
    examples/llama-inference
+   examples/tensor_parallelism
 
 .. toctree::
    :caption: Python API Reference
