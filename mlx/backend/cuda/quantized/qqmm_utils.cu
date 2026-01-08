@@ -87,6 +87,11 @@ __global__ void swizzle_scales(
 
   constexpr int tile_stride = tile_size / 16; // 32 int4s per tile
 
+  // Each thread loads 4 rows of 4 bytes x 1 column of scales (16 bytes -- 16
+  // scales) thread (0, 0) loads scales at rows 0,32,64,96 of tile 0 thread (1,
+  // 0) loads rows 0,32,64,96 of of tile 1 therefore a warp loads: consecutive 4
+  // bytes x 32 = 128 bytes
+  // Note: it is better to have K aligned to 4
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -99,11 +104,6 @@ __global__ void swizzle_scales(
   const int bid_y = block_idx.y;
 
   const int K_int = K_swizzled / 4;
-  const size_t block_offset =
-      static_cast<size_t>(bid_y) * tile_dim_row * K_int +
-      static_cast<size_t>(bid_x) * max_tiles_per_block;
-  const int* input_block =
-      reinterpret_cast<const int*>(scales_linear) + block_offset;
 
   const size_t output_offset =
       static_cast<size_t>(bid_y) * tile_dim_row * K_int +
@@ -113,34 +113,74 @@ __global__ void swizzle_scales(
   const int grid_dim_x = cg::this_grid().dim_blocks().x;
   const int grid_dim_y = cg::this_grid().dim_blocks().y;
 
-  bool pad_rows = (bid_y == grid_dim_y - 1) && (M < M_swizzled);
-  bool pad_cols = (bid_x == grid_dim_x - 1) && (K < K_swizzled);
-
   int remaining = K_int - bid_x * max_tiles_per_block;
-  int tiles_in_block = std::min(remaining, max_tiles_per_block);
-  bool valid_tile = threadIdx.x * num_tiles_per_thread < tiles_in_block;
+  int tiles_in_block = min(remaining, max_tiles_per_block);
+  bool valid_tile = tidx * num_tiles_per_thread < tiles_in_block;
 
+  // Each thread loads 16 scales from 4 rows (stride 32) and packs them into
+  // int4. The store is strided within a warp (stride 32 int4s), so we first
+  // write to shared memory, then do a coalesced store from shared to global
   __shared__ int4 strided_scales_thread[max_tiles_per_block * tile_stride];
 
-  int thread_tile_rows[num_tile_rows_per_thread];
+  // Initialize to zero for padding
+  int thread_tile_rows[num_tile_rows_per_thread] = {0, 0, 0, 0};
+
   if (valid_tile) {
+    const size_t col_base =
+        static_cast<size_t>(bid_x) * max_tiles_per_block * tile_dim_col +
+        tidx * tile_dim_col;
+
+    const bool aligned_k = (K % 4 == 0);
+
+    if (aligned_k) {
+      // fast path: K is aligned, use vectorized loads with stride K/4
+      const int K_stride = K / 4;
+      const size_t block_offset =
+          static_cast<size_t>(bid_y) * tile_dim_row * K_stride +
+          static_cast<size_t>(bid_x) * max_tiles_per_block;
+      const int* input_block =
+          reinterpret_cast<const int*>(scales_linear) + block_offset;
+
+// load
 #pragma unroll
-    for (int i = 0; i < num_tile_rows_per_thread; i++) {
-      const int thread_offset =
-          (i * block_size.x + tidy) * K_int + tidx * num_tiles_per_thread;
-      thread_tile_rows[i] = __ldg(input_block + thread_offset);
-      if (pad_rows || pad_cols) {
-        for (int j = 0; j < num_tile_rows_per_thread * sizeof(int); j++) {
-          const size_t element_idx =
-              (block_offset + thread_offset) * sizeof(int) + j;
-          if (element_idx / K_swizzled >= M ||
-              (element_idx % K_swizzled) >= K) {
-            reinterpret_cast<uint8_t*>(&thread_tile_rows[i])[j] = 0;
+      for (int i = 0; i < num_tile_rows_per_thread; i++) {
+        const size_t row =
+            static_cast<size_t>(bid_y) * tile_dim_row + i * block_size.x + tidy;
+        const int thread_offset =
+            (i * block_size.x + tidy) * K_stride + tidx * num_tiles_per_thread;
+
+        if (row < M && col_base + tile_dim_col <= K) {
+          thread_tile_rows[i] = __ldg(input_block + thread_offset);
+        } else if (row < M) {
+// partial tile at K boundary: load byte-by-byte
+#pragma unroll
+          for (int c = 0; c < tile_dim_col; c++) {
+            if (col_base + c < K) {
+              reinterpret_cast<uint8_t*>(&thread_tile_rows[i])[c] =
+                  scales_linear[row * K + col_base + c];
+            }
+          }
+        }
+      }
+    } else {
+#pragma unroll
+      for (int i = 0; i < num_tile_rows_per_thread; i++) {
+        const size_t row =
+            static_cast<size_t>(bid_y) * tile_dim_row + i * block_size.x + tidy;
+        if (row < M) {
+          const size_t row_start = row * K;
+#pragma unroll
+          for (int c = 0; c < tile_dim_col; c++) {
+            if (col_base + c < K) {
+              reinterpret_cast<uint8_t*>(&thread_tile_rows[i])[c] =
+                  scales_linear[row_start + col_base + c];
+            }
           }
         }
       }
     }
-    // store to shared with XOR swizzle to avoid 32 way bank conflict
+
+    // store to shared with XOR swizzle to avoid bank conflicts
     int base_idx = tidx * tile_stride + tidy;
     int xor_bits = (tidy >> 3) & 0x3;
     int swizzled_idx = base_idx ^ xor_bits;
@@ -151,7 +191,6 @@ __global__ void swizzle_scales(
   cg::thread_block block = cg::this_thread_block();
   cg::sync(block);
 
-  // load from shared with XOR swizzle to avoid 4 way bank conflict
   const int total_int4s = tiles_in_block * tile_stride;
 #pragma unroll
   for (int i = linear_tid; i < total_int4s; i += block_size.x * block_size.y) {

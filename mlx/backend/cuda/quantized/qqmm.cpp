@@ -69,9 +69,7 @@ array pad_and_swizzle_scales(
   encoder.add_temporary(scale_tiled);
   return scale_tiled;
 }
-} // namespace
 
-namespace {
 void qqmm_impl(
     cu::CommandEncoder& encoder,
     int M,
