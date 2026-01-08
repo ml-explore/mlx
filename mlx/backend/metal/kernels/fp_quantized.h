@@ -40,7 +40,7 @@ static inline T dequantize_scale(uint8_t s) {
 template <int bits>
 struct Quantize {
   uint8_t operator()(float x) {
-    if (bits == 8) {
+    if constexpr (bits == 8) {
       return fp8_e4m3(x).bits;
     } else {
       return fp4_e2m1(x).bits;

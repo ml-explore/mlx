@@ -4633,15 +4633,19 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
   }
   const int values_per_pack = (bits == 1) ? 20 : 32 / bits;
   const int input_cols = w.shape(-1);
-  auto fallback =
-      [bits = bits, group_size = group_size, values_per_pack, input_cols, s](
-          const std::vector<array>& inputs) -> std::vector<array> {
+  auto wq_shape = w.shape();
+  wq_shape.back() = (input_cols + values_per_pack - 1) / values_per_pack;
+  auto sshape = w.shape();
+  sshape.back() = input_cols / group_size;
+  auto fallback = [bits = bits,
+                   group_size = group_size,
+                   values_per_pack,
+                   input_cols,
+                   wq_shape,
+                   sshape,
+                   s](const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
     const int row_count = w.size() / input_cols;
-    auto wq_shape = w.shape();
-    wq_shape.back() = (input_cols + values_per_pack - 1) / values_per_pack;
-    auto sshape = w.shape();
-    sshape.back() = input_cols / group_size;
 
     array eps(1e-7, float32);
 
@@ -4696,7 +4700,15 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
     return {std::move(wq), std::move(scales)};
   };
 
-  // TODO: implement SIMD CPU + Metal + CUDA backend
+  if (s.device == Device::gpu && bits == 2) {
+    return array::make_arrays(
+        {wq_shape, sshape},
+        {uint32, w.dtype()},
+        std::make_shared<fast::Quantize>(
+            s, fallback, group_size, bits, QuantizationMode::Ternary, false),
+        {w});
+  }
+
   return fallback({w});
 }
 
@@ -4982,6 +4994,8 @@ array ternary_dequantize(
   const int unpacked_cols = scales.shape(-1) * group_size;
   const int unpacked_size = row_count * unpacked_cols;
   const int available_values = row_count * w.shape(-1) * values_per_pack;
+  auto out_shape = scales.shape();
+  out_shape.back() = unpacked_cols;
   if (available_values < unpacked_size) {
     std::ostringstream msg;
     msg << "[dequantize] "
@@ -5058,7 +5072,15 @@ array ternary_dequantize(
     return {w};
   };
 
-  // TODO: Fast CPU SIMD, GPU
+  if (s.device == Device::gpu && bits == 2) {
+    return array(
+        std::move(out_shape),
+        out_type,
+        std::make_shared<fast::Quantize>(
+            s, fallback, group_size, bits, QuantizationMode::Ternary, true),
+        {w, scales});
+  }
+
   return fallback({w, scales})[0];
 }
 

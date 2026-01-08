@@ -28,61 +28,69 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.all(a_hat == 0))
 
     def test_ternary_quantize_dequantize(self):
-        g0 = mx.array([-2.0, 0.0, 2.0, 0.0] * 8, dtype=mx.float32)
-        g1 = mx.array([-0.5, 0.0, 0.5, 0.0] * 8, dtype=mx.float32)
-        w = mx.concatenate([g0, g1]).reshape(1, 64)
+        def make_w(gs):
+            hi = mx.array([-2.4, 0.0, 2.4, 0.0] * (gs // 4), dtype=mx.float32)
+            lo = mx.array([0.5, 0.0, 0.5, 0.0] * (gs // 4), dtype=mx.float32)
+            return mx.concatenate([hi, lo]).reshape(1, gs * 2)
 
-        # Invalid bits / group size
-        with self.assertRaises(ValueError):
-            mx.quantize(w, bits=3, mode="ternary")
+        def expected_wq_cols(ncols, bits):
+            pack = 20 if bits == 1 else 16
+            return (ncols + pack - 1) // pack
 
-        with self.assertRaises(ValueError):
-            mx.quantize(w, bits=0, mode="ternary")
+        expected_scales = mx.array([[2.4, 0.5]], dtype=mx.float32)
+        for gs, bits in product([32, 64, 128], [1, 2]):
+            with self.subTest(group_size=gs, bits=bits):
+                w = make_w(gs)
+                for bad_bits in [0, 3]:
+                    with self.assertRaises(ValueError):
+                        mx.quantize(w, bits=bad_bits, mode="ternary")
 
-        w_q, scales = mx.quantize(w, group_size=32, bits=2, mode="ternary")
-        expected_scales = mx.array([[2.0, 0.5]], dtype=scales.dtype)
-        self.assertTrue(mx.allclose(scales, expected_scales))
+                w_q, scales = mx.quantize(w, group_size=gs, bits=bits, mode="ternary")
+                self.assertEqual(w_q.dtype, mx.uint32)
+                self.assertEqual(w_q.shape, (1, expected_wq_cols(w.shape[-1], bits)))
+                self.assertEqual(scales.shape, (1, w.shape[-1] // gs))
+                self.assertTrue(
+                    mx.allclose(scales, expected_scales.astype(scales.dtype))
+                )
 
-        with self.assertRaises(ValueError):
-            mx.dequantize(w_q, scales, bits=3, mode="ternary")
+                with self.assertRaises(ValueError):
+                    mx.dequantize(w_q, scales, bits=3, mode="ternary")
+                with self.assertRaises(ValueError):
+                    mx.dequantize(
+                        w_q, scales, group_size=gs * 2, bits=bits, mode="ternary"
+                    )
 
-        with self.assertRaises(ValueError):
-            mx.dequantize(w_q, scales, group_size=64, bits=2, mode="ternary")
+                w_hat = mx.dequantize(
+                    w_q, scales, group_size=gs, bits=bits, mode="ternary"
+                )
+                self.assertTrue(mx.allclose(w_hat, w))
 
-        w_hat = mx.dequantize(w_q, scales, group_size=32, bits=2, mode="ternary")
-        self.assertTrue(mx.allclose(w_hat, w))
-
-        # 1-bit ternary round-trip (pads to multiples of 20 per packed u32)
-        w1 = mx.array([-1.0, 0.0, 1.0, 0.0] * 8, dtype=mx.float32).reshape(1, 32)
+        # Missing packed values should error (bits==1 padding)
+        w1 = make_w(32)
         w_q1, scales1 = mx.quantize(w1, group_size=32, bits=1, mode="ternary")
-        w1_hat = mx.dequantize(w_q1, scales1, group_size=32, bits=1, mode="ternary")
-        self.assertTrue(mx.allclose(w1_hat, w1))
-
-        # 1-bit ternary with two groups (verify scales per group)
-        w1_two = mx.concatenate(
-            [
-                mx.array([-1.0, 0.0, 1.0, 0.0] * 8, dtype=mx.float32),
-                mx.array([-2.0, 0.0, 2.0, 0.0] * 8, dtype=mx.float32),
-            ]
-        ).reshape(1, 64)
-        wq1_two, scales1_two = mx.quantize(
-            w1_two, group_size=32, bits=1, mode="ternary"
-        )
-        expected_scales1_two = mx.array([[1.0, 2.0]], dtype=scales1_two.dtype)
-        self.assertTrue(mx.allclose(scales1_two, expected_scales1_two))
-        w1_two_hat = mx.dequantize(
-            wq1_two, scales1_two, group_size=32, bits=1, mode="ternary"
-        )
-        self.assertTrue(mx.allclose(w1_two_hat, w1_two))
-
-        # Missing packed values should error
         with self.assertRaises(ValueError):
             mx.dequantize(w_q1[..., :1], scales1, group_size=32, bits=1, mode="ternary")
 
-        # Excess padding per row should error
-        w_q1_extra = mx.concatenate([w_q1, mx.zeros((1, 1), dtype=w_q1.dtype)], axis=-1)
+        # Group size mismatch
         with self.assertRaises(ValueError):
-            mx.dequantize(w_q1_extra, scales1, group_size=32, bits=1, mode="ternary")
+            mx.quantize(
+                mx.zeros((1, 33), dtype=mx.float32),
+                group_size=32,
+                bits=2,
+                mode="ternary",
+            )
+
+        # Zero block: scales hit eps and round-trip stays zero
+        w_zero = mx.zeros((1, 64), dtype=mx.float32)
+        wq_zero, scales_zero = mx.quantize(
+            w_zero, group_size=32, bits=2, mode="ternary"
+        )
+        expected_scales_zero = mx.full((1, 2), 1e-7, dtype=scales_zero.dtype)
+        self.assertTrue(mx.allclose(scales_zero, expected_scales_zero))
+        w_zero_hat = mx.dequantize(
+            wq_zero, scales_zero, group_size=32, bits=2, mode="ternary"
+        )
+        self.assertTrue(mx.allclose(w_zero_hat, w_zero))
 
     def test_mxfp4_quantize_dequantize(self):
         lut = mx.array(
