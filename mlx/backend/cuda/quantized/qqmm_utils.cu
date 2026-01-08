@@ -50,11 +50,8 @@ inline std::tuple<dim3, dim3> get_swizzle_launch_args(
     int tile_rows = 128,
     int tile_cols = 4,
     int tiles_per_lane = 1) {
-  constexpr int lanes_per_block = 32 // 32 threads per warp
-      int lanes_per_block =
-          tiles_per_lane* lanes_per_block // tiles_per_lane = 1 if load int, 4
-                                          // if int4
-      const int tiles_per_block = lanes_per_block * tiles_per_lane;
+  constexpr int lanes_per_block = 32; // 32 threads per warp
+  const int tiles_per_block = lanes_per_block * tiles_per_lane;
   const int warps_per_block = tile_rows / 4; // 128 / 4 = 32
 
   const int num_tiles_k = K_swizzled / tile_cols;
@@ -73,7 +70,7 @@ inline std::tuple<dim3, dim3> get_swizzle_launch_args(
 
 namespace cu {
 
-__global__ void swizzle_scaling_factors_impl(
+__global__ void swizzle_scales(
     const uint8_t* scales_linear,
     uint8_t* scales_swizzled,
     const size_t M,
@@ -89,17 +86,12 @@ __global__ void swizzle_scaling_factors_impl(
   constexpr int tile_size = tile_dim_row * tile_dim_col; // 512 bytes
   constexpr int num_tile_rows_per_thread = 4; // always 4
   constexpr int num_tiles_per_thread = 1;
-  constexpr int int4_per_tile =
-      tile_dim_row* tile_dim_col / 16 constexpr int lanes_per_block = 32;
+  constexpr int lanes_per_block = 32;
   constexpr int num_tiles_per_block = lanes_per_block * num_tiles_per_thread;
   // Each thread loads 4 rows of 4 bytes x 1 column of scales (16 bytes -- 16
   // scales) thread (0, 0) loads scales at rows 0,32,64,96 of tile 0 thread (1,
   // 0) loads rows 0,32,64,96 of of tile 1 therefore a warp loads: consecutive 4
-  // bytes x 32 = 128 bytes 4 times with a stride 32 this can be improved
-  // further with processing 2/4 tiles within a warp: load 8/16 bytes but it
-  // will be a bit more complicated, because then we would need to shuffle
-  // registers so for now each thread process exactly 1 tile
-
+  // bytes x 32 = 128 bytes 4 times with a stride 32
   auto block_size = cg::this_thread_block().dim_threads(); // (32, 32, 1)
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -114,11 +106,11 @@ __global__ void swizzle_scaling_factors_impl(
   // [M tile * 128 * bytes] + [K tile * 32]
   const int K_int = K_swizzled / 4;
   // incase of overflow cast to size_t
-  const size_t input_block_offset =
+  const size_t block_offset =
       static_cast<size_t>(bid_y) * tile_dim_row * K_int +
       static_cast<size_t>(bid_x) * num_tiles_per_block;
   const int* input_block =
-      reinterpret_cast<const int*>(scales_linear) + input_block_offset;
+      reinterpret_cast<const int*>(scales_linear) + block_offset;
 
   const size_t output_offset =
       static_cast<size_t>(bid_y) * tile_dim_row * K_int +
@@ -130,43 +122,62 @@ __global__ void swizzle_scaling_factors_impl(
   const int grid_dim_x = cg::this_grid().dim_blocks().x;
   const int grid_dim_y = cg::this_grid().dim_blocks().y;
 
-  // each thread store 16 consecutive scales, but this store is strided within a
-  // warp so we will write first to the shared memory (each thread 4 int32 -- 4
-  // rows -- 16 scales) then it will be coaleased store shared -> global within
-  // a thread block
+  bool pad_rows = (bid_y == grid_dim_y - 1) &&
+      (M < M_swizzled); // if the last and is partial
+  bool pad_cols = (bid_x == grid_dim_x - 1) &&
+      (K < K_swizzled); // if the last and is partial
+
+  int num_tiles_per_block_ = num_tiles_per_block;
+  if (bid_x == grid_dim_x - 1) {
+    num_tiles_per_block_ = (K_int - 1) % num_tiles_per_block + 1;
+  }
+  bool valid_tile = threadIdx.x * num_tiles_per_thread < num_tiles_per_block_;
+  // Each thread loads 16 scales from 4 rows (stride 32) and packs them into
+  // int4. The store is strided within a warp (stride 32 int4s), so we first
+  // write to shared memory, then do a coalesced store from shared to global
   extern __shared__ int4 strided_scales_thread[];
   // load
   int thread_tile_rows[num_tile_rows_per_thread];
+  if (valid_tile) {
 #pragma unroll
-  for (int i = 0; i < num_tile_rows_per_thread; i++) {
-    const int thread_offset =
-        (i * block_size.x + tidy) * K_int + tidx * num_tiles_per_thread;
-    thread_tile_rows[i] = __ldg(input_block + thread_offset);
+    for (int i = 0; i < num_tile_rows_per_thread; i++) {
+      const int thread_offset =
+          (i * block_size.x + tidy) * K_int + tidx * num_tiles_per_thread;
+      thread_tile_rows[i] = __ldg(input_block + thread_offset);
+      if (pad_rows || pad_cols) {
+        // check bytes we need to pad
+        for (int j = 0; j < num_tile_rows_per_thread * sizeof(int); j++) {
+          const size_t element_idx =
+              (block_offset + thread_offset) * sizeof(int) + j;
+          if (element_idx / K_swizzled >= M ||
+              (element_idx % K_swizzled) >= K) {
+            reinterpret_cast<uint8_t*>(&thread_tile_rows[i])[j] = 0;
+          }
+        }
+      }
+      // write 4 ints to the shared memory
+    }
+    strided_scales_thread[tidx * tile_size / 16 + tidy] =
+        *reinterpret_cast<int4*>(thread_tile_rows);
   }
-  // todo add padding  + boundaries
-  //  write 4 ints to the shared memory
-  strided_scales_thread[tidx * tile_size / 16 + tidy] =
-      *reinterpret_cast<int4*>(thread_tile_rows);
   __syncthreads();
 
   // shared -> global
-  __align__(16) int4* output_block_int4 = reinterpret_cast<int4*>(output_block);
-  const int total_int4s = tiles_in_block * tile_size / 16;
+  const int total_int4s = num_tiles_per_block_ * tile_size / 16;
 #pragma unroll
   for (int i = linear_tid; i < total_int4s; i += block_size.x * block_size.y) {
-    output_block_int4[i] = strided_scales_thread[i];
+    reinterpret_cast<int4*>(output_block)[i] = strided_scales_thread[i];
   }
 }
 } // namespace cu
 
-void swizzle_scaling_factors(
+void swizzle_scales(
     const array& scales,
     array& scales_tiled,
     cu::CommandEncoder& enc,
     const Stream& s) {
   enc.set_input_array(scales);
   enc.set_output_array(scales_tiled);
-
   // Note: scales_tiled is padded to full tiles so if num_rows or num_cols
   // are not multiples of tile sizes
 
@@ -179,9 +190,8 @@ void swizzle_scaling_factors(
   uint32_t smem_bytes = 128 * 4 * 32;
   auto [num_blocks, block_dims] =
       get_swizzle_launch_args(output_rows, output_cols);
-
   enc.add_kernel_node(
-      cu::swizzle_scaling_factors_impl,
+      cu::swizzle_scales,
       num_blocks,
       block_dims,
       smem_bytes,
