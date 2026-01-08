@@ -18,6 +18,18 @@ runs:
       shell: bash
       run: xcodebuild -showComponent MetalToolchain
 
-    - uses: actions/setup-python@v6
-      with:
-        python-version: ${{ inputs.python-version }}
+    - name: Install Python
+      shell: sh
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        $HOME/.local/bin/uv venv --python ${{ inputs.python-version }}
+        source .venv/bin/activate
+        echo PATH=$PATH >> $GITHUB_ENV
+        # Search python packages in .venv
+        echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
+
+    - name: Install build dependencies
+      shell: sh
+      run: |
+        pip install --upgrade pip
+        pip install cmake setuptools typing_extensions

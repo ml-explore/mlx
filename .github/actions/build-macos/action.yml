@@ -4,14 +4,12 @@ description: 'Build and test MLX on macOS'
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies
+    - name: Build
       env:
         DEBUG: 1
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
       shell: bash -l {0}
       run: |
-        pip install --upgrade pip
-        pip install cmake setuptools typing_extensions
         pip install -e . -v
 
     - name: Install tests dependencies
