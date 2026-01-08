@@ -21,7 +21,7 @@ inline std::pair<int, int> get_padded_scale_dims(int num_rows, int num_cols) {
   return {padded_rows, padded_cols};
 }
 
-void repack_scales(
+void swizzle_scales(
     const array& scales,
     array& scales_tiled,
     cu::CommandEncoder& enc,
