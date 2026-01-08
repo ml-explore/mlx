@@ -829,7 +829,9 @@ MTL::ComputePipelineState* get_quantized_kernel(
         metal::utils(),
         metal::gemm(),
         metal::quantized_utils(),
-        (mode == "affine") ? metal::quantized() : metal::fp_quantized(),
+        (mode == "affine")        ? metal::quantized()
+            : (mode == "ternary") ? metal::ternary_quantized()
+                                  : metal::fp_quantized(),
         template_def);
     return kernel_source;
   });

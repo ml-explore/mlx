@@ -18,4 +18,4 @@
 instantiate_ternary_types(32)
 instantiate_ternary_types(64)
 instantiate_ternary_types(128)
-// clang-format on
+    // clang-format on

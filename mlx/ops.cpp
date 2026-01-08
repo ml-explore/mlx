@@ -4620,13 +4620,13 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
     std::ostringstream msg;
     msg << "[quantize] "
         << quantization_mode_to_string(QuantizationMode::Ternary)
-        << " quantization requires group size to be 32, 64, and 128. but got "
+        << " quantization requires group size to be 32, 64, or 128, but got "
         << group_size << ".";
     throw std::invalid_argument(msg.str());
   }
   if (bits != 1 && bits != 2) {
     std::ostringstream msg;
-    msg << "[dequantize] "
+    msg << "[quantize] "
         << quantization_mode_to_string(QuantizationMode::Ternary)
         << " quantization requires bits to be 1 or 2 but got " << bits << ".";
     throw std::invalid_argument(msg.str());
@@ -4670,7 +4670,7 @@ ternary_quantize(const array& w, int group_size, int bits, Stream s) {
       wq = reshape(wq, {row_count, -1, vals_per_pack}, s);
       wq = sum(multiply(wq, bit_shifts, s), 2, false, s);
     } else {
-      // 5 trits in a u32
+      // 5 trits per byte (20 trits per uint32).
       constexpr int bytes_u32 = 4;
       constexpr int trits_per_byte = 5;
 

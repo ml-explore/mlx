@@ -3,8 +3,6 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/utils.h"
-
 using namespace metal;
 
 template <typename T, const int group_size, const int bits>
