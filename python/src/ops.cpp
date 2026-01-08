@@ -4251,8 +4251,9 @@ void init_ops(nb::module_& m) {
           ``quantize`` only supports inputs with two or more dimensions with
           the last dimension divisible by ``group_size``
 
-        The supported quantization modes are ``"affine"``, ``"mxfp4"``,
-        ``"mxfp8"``, and ``"nvfp4"``. They are described in more detail below.
+        The supported quantization modes are ``"affine"``, ``"ternary"``,
+        ``"mxfp4"``, ``"mxfp8"``, and ``"nvfp4"``. They are described in more
+        detail below.
 
         Args:
           w (array): Array to be quantized
@@ -4276,16 +4277,19 @@ void init_ops(nb::module_& m) {
 
           .. table:: Quantization modes
 
-            ======  ======================   ==========================  =============  =====
-            mode    group size               bits                        scale type     bias
-            ======  ======================   ==========================  =============  =====
-            affine  32, 64\ :sup:`*`, 128    2, 3, 4\ :sup:`*`, 5, 6, 8  same as input  yes
-            mxfp4   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
-            mxfp8   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
-            nvfp4   16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
-            ======  ======================   ==========================  =============  =====
+            =======  ======================   ==========================  =============  =====
+            mode     group size               bits                        scale type     bias
+            =======  ======================   ==========================  =============  =====
+            affine   32, 64\ :sup:`*`, 128    2, 3, 4\ :sup:`*`, 5, 6, 8  same as input  yes
+            ternary  32, 64\ :sup:`*`, 128    1\ :sup:`p`, 2              same as input  no
+            mxfp4    32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
+            mxfp8    32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
+            nvfp4    16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
+            =======  ======================   ==========================  =============  =====
 
           :sup:`*` indicates the default value when unspecified.
+
+          :sup:`p` indicates 1.6-bit packing for 1-bit ``ternary`` quantization.
 
           The ``"affine"`` mode quantizes groups of :math:`g` consecutive
           elements in a row of ``w``. For each group the quantized
@@ -4309,6 +4313,12 @@ void init_ops(nb::module_& m) {
           To dequantize the elements of ``w``, we also save :math:`s` and
           :math:`\beta` which are the returned ``scales`` and
           ``biases`` respectively.
+
+          The ``"ternary"`` mode quantizes elements to :math:`-1`, :math:`0`,
+          and :math:`1` using a scale per group. The scale is
+          :math:`s = \max_i |w_i|`. The quantized values are stored as
+          :math:`\hat{w_i} \in \{0, 1, 2\}` and dequantized as
+          :math:`w_i = s(\hat{w_i} - 1)`.
 
           The ``"mxfp4"``, ``"mxfp8"``, and ``"nvfp4"`` modes similarly
           quantize groups of :math:`g` elements of ``w``. For the ``"mx"``
@@ -4362,7 +4372,7 @@ void init_ops(nb::module_& m) {
 
         Notes:
           The currently supported quantization modes are ``"affine"``,
-          ``"mxfp4``, ``"mxfp8"``, and ``"nvfp4"``.
+          ``"ternary"``, ``"mxfp4"``, ``"mxfp8"``, and ``"nvfp4"``.
 
           For ``affine`` quantization, given the notation in :func:`quantize`,
           we compute :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s`
@@ -4371,6 +4381,10 @@ void init_ops(nb::module_& m) {
           .. math::
 
             w_i = s \hat{w_i} + \beta
+
+          For ``ternary`` quantization, the quantized values are
+          :math:`\hat{w_i} \in \{0, 1, 2\}` and the dequantized values are
+          :math:`w_i = s(\hat{w_i} - 1)`.
       )pbdoc");
   m.def(
       "gather_qmm",
