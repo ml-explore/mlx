@@ -93,67 +93,96 @@ fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   store_vector<group_size / elem_per_byte>(out, thread_idx, quantized);
 }
 
-template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
+template <
+    typename T,
+    typename LT,
+    int group_size,
+    int bits,
+    bool use_mx_scale,
+    bool USE_SR>
 __global__ void fp_quantize_columnwise_transpose(
     T* w,
     uint8_t* out,
     uint8_t* scales,
     size_t size,
-    size_t in_stride) {
+    int M,
+    int K) {
+  // LT is a load type used to load data from global memory
+  // can be int, int2, int4
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
-  auto block_size = cg::this_thread_block().dim_threads();
+  // w is row major, we want to quantize columwise
+  // we want to have coalesed load. For this we need to orginise threads
+  // in a warp to load 128 consecutive bytes in one memory transaction
+  // so each thread will load 4 bytes with stride num_rows * sizeof(T) bytes
+  // group_size times to registers
+  // then we will compute amax, quantize values and store scales and values in
+  // shared memory finally we will write shared memory to global memory in
+  // coalesced way to transpose data
+
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
-  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
-  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
-  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
+  // since we need to know the size for shared memory at compile time,
+  // I hardcoded the block_size.
+  // It is very much unikely that we will aucnh less than 1024 threads
+  constexpr int BLOCK_X = 32;
+  constexpr int BLOCK_Y = 32;
+  constexpr int cols_per_thread = sizeof(LT) / sizeof(T);
+  constexpr int rows_per_thread = group_size;
+  constexpr int cols_per_block = BLOCK_X * cols_per_thread;
+  constexpr int rows_per_block = BLOCK_Y * rows_per_thread;
+  constexpr int K_LT = K / cols_per_thread;
 
-  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+  auto tidx = idx_in_block.x; // index within block in x
+  auto tidy = idx_in_block.y; // index within block in y
+  auto bidx = block_idx.x % (K / cols_per_block) auto bidy = block_idx.x /
+      (K / cols_per_block)
 
-  size_t total_groups = size / group_size;
-  if (thread_idx >= total_groups) {
-    return;
+          LT thread_column[rows_per_thread]; // for instance, if LT = int4 = 128
+                                             // bit, T = 16 bits, register_size
+                                             // = row_per_thread *
+                                             // columns_per_thread * sizeof(T) /
+                                             // sizeof(LT) = row_per_thread
+  __shared__ uint8_t scales_block[BLOCK_Y][cols_per_block];
+
+  auto row_base = bidy * rows_per_block + tidy * rows_per_thread;
+  auto col_base = bidx * cols_per_block + tidx * cols_per_thread;
+  bool valid = (row_base < M) && (col_base < K);
+  if (valid) {
+    // load to registers
+    for (int i = 0; i < rows_per_thread; i++) {
+      auto row = bidy * rows_per_block + tidy * rows_per_thread + i;
+      auto col_LT = bidx * block_size.x + tidx;
+      auto index_LT = row * K_LT + col_LT;
+      thread_column[i] = reinterpret_cast<LT>(w)[index_LT];
+    }
+    // find scale and store in shared memory
+    T* thread_column_T =
+        reinterpret_cast<T*>(thread_column); // View as T elements
+    for (int c = 0; c < cols_per_thread; c++) {
+      Tx2 amax_2x = Tx2{0.0f, 0.0f};
+      // compute amax for each column
+      for (int r = 0; r < group_size; r += 2) {
+        // Elements are interleaved: thread_column_T[r * cols_per_thread + c]
+        auto elem0 = thread_column_T[r * cols_per_thread + c];
+        auto elem1 = thread_column_T[(r + 1) * cols_per_thread + c];
+        auto pair = Tx2{elem0, elem1};
+        abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+      }
+      float scale =
+          max(fabsf(static_cast<float>(amax_2x.x)),
+              fabsf(static_cast<float>(amax_2x.y)));
+      scale /= (bits == 4) ? 6.0f : 448.0f;
+
+      using ScaleType =
+          std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+      auto s = ScaleType(scale);
+      scales_block[tidy][tidx * cols_per_thread + c] = s.__x;
+    }
   }
+  __syncthreads();
 
-  size_t num_rows = size / in_stride;
-  size_t groups_per_col = num_rows / group_size;
-  size_t col = thread_idx / groups_per_col;
-  size_t group_in_col = thread_idx % groups_per_col;
-  size_t base_idx = col + group_in_col * group_size * in_stride;
-
-  T w_tile[group_size];
-  // load 16 or 32 elements column-wise
-
-#pragma unroll
-  for (int i = 0; i < group_size; i++) {
-    size_t idx = base_idx + i * in_stride;
-    w_tile[i] = w[idx];
-  }
-
-  float scale = 0.0f;
-  Tx2 amax_2x = Tx2{0.0f, 0.0f};
-
-#pragma unroll
-  for (int i = 0; i < group_size; i += 2) {
-    auto pair = Tx2{w_tile[i], w_tile[i + 1]};
-    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
-  }
-
-  scale = static_cast<float>(
-      max(fabsf(static_cast<float>(amax_2x.x)),
-          fabsf(static_cast<float>(amax_2x.y))));
-
-  scale /= bits == 4 ? 6.0f : 448.0f;
-  // Convert to mx scale or nv scale
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
-  auto s = ScaleType(scale);
-  uint8_t q_scale = s.__x;
-  scale = float(s);
-
-  scales[thread_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;
   AlignedVector<uint8_t, group_size / elem_per_byte> quantized;
 
@@ -336,5 +365,5 @@ void fp_quantize(
       }
     });
   }
-
+}
 } // namespace mlx::core
