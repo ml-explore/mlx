@@ -87,11 +87,11 @@ __global__ void swizzle_scales(
 
   constexpr int tile_stride = tile_size / 16; // 32 int4s per tile
 
-  // Each thread loads 4 rows of 4 bytes x 1 column of scales (16 bytes -- 16
-  // scales) thread (0, 0) loads scales at rows 0,32,64,96 of tile 0 thread (1,
-  // 0) loads rows 0,32,64,96 of of tile 1 therefore a warp loads: consecutive 4
-  // bytes x 32 = 128 bytes
-  // Note: it is better to have K aligned to 4
+  // Each thread loads 16 scales from 4 rows (stride 32) and packs them into
+  // int4. For example: thread (0, 0) loads scales at rows 0,32,64,96 of tile 0,
+  // thread (1, 0) loads rows 0,32,64,96 of of tile 1, etc.
+  // The store is strided within a warp (stride 32 int4s), so we first
+  // write to shared memory, then do a coalesced store from shared to global
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -117,9 +117,6 @@ __global__ void swizzle_scales(
   int tiles_in_block = min(remaining, max_tiles_per_block);
   bool valid_tile = tidx * num_tiles_per_thread < tiles_in_block;
 
-  // Each thread loads 16 scales from 4 rows (stride 32) and packs them into
-  // int4. The store is strided within a warp (stride 32 int4s), so we first
-  // write to shared memory, then do a coalesced store from shared to global
   __shared__ int4 strided_scales_thread[max_tiles_per_block * tile_stride];
 
   // Initialize to zero for padding
@@ -140,7 +137,6 @@ __global__ void swizzle_scales(
           static_cast<size_t>(bid_x) * max_tiles_per_block;
       const int* input_block =
           reinterpret_cast<const int*>(scales_linear) + block_offset;
-
 // load
 #pragma unroll
       for (int i = 0; i < num_tile_rows_per_thread; i++) {
@@ -148,7 +144,6 @@ __global__ void swizzle_scales(
             static_cast<size_t>(bid_y) * tile_dim_row + i * block_size.x + tidy;
         const int thread_offset =
             (i * block_size.x + tidy) * K_stride + tidx * num_tiles_per_thread;
-
         if (row < M && col_base + tile_dim_col <= K) {
           thread_tile_rows[i] = __ldg(input_block + thread_offset);
         } else if (row < M) {
@@ -179,7 +174,6 @@ __global__ void swizzle_scales(
         }
       }
     }
-
     // store to shared with XOR swizzle to avoid bank conflicts
     int base_idx = tidx * tile_stride + tidy;
     int xor_bits = (tidy >> 3) & 0x3;
