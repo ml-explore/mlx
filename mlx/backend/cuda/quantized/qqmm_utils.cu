@@ -102,8 +102,7 @@ __global__ void repack_scales(
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   size_t output_index = tidx + grid_dim_x * size_t(tidy);
   size_t output_size = output_rows * output_cols;
