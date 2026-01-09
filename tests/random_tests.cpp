@@ -5,6 +5,7 @@
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -713,4 +714,18 @@ TEST_CASE("test laplace") {
     CHECK(all(less(abs(out), array(inf))).item<bool>());
     CHECK(abs(float(mean(out).item<bfloat16_t>())) < 0.1);
   }
+}
+
+TEST_CASE("RandomBits::is_equivalent must consider width") {
+  Stream s(0, Device::cpu);  // <-- FIX: Stream has no default ctor in this repo
+
+  Shape shape{32, 32};
+
+  RandomBits rb_u8(s, shape, /*width=*/1);
+  RandomBits rb_u32(s, shape, /*width=*/4);
+
+  CHECK_FALSE(rb_u8.is_equivalent(static_cast<const Primitive&>(rb_u32)));
+
+  RandomBits rb_u8_2(s, shape, /*width=*/1);
+  CHECK(rb_u8.is_equivalent(static_cast<const Primitive&>(rb_u8_2)));
 }
