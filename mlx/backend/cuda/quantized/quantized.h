@@ -42,4 +42,22 @@ void fp_dequantize(
     cu::CommandEncoder& enc,
     const Stream& s);
 
+void ternary_quantize(
+    const array& w,
+    array& wq,
+    array& scales,
+    int group_size,
+    int bits,
+    cu::CommandEncoder& enc,
+    const Stream& s);
+
+void ternary_dequantize(
+    const array& wq,
+    const array& scales,
+    array& w,
+    int group_size,
+    int bits,
+    cu::CommandEncoder& enc,
+    const Stream& s);
+
 } // namespace mlx::core

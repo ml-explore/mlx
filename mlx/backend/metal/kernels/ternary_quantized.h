@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
 #include <metal_simdgroup>
 #include <metal_stdlib>
@@ -25,6 +25,10 @@ template <typename T, const int group_size, const int bits>
   constexpr int values_per_reduce = group_size / simd_size;
   constexpr int threads_per_pack = elements_per_uint / values_per_reduce;
 
+  static_assert(threads_per_pack > 0, "Threads per pack must be positive.");
+  static_assert(
+      (threads_per_pack & (threads_per_pack - 1)) == 0,
+      "Threads per pack must be power of 2.");
   static_assert(
       group_size % simd_size == 0,
       "Group size must be divisible by simd size.");
