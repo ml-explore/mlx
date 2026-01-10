@@ -133,16 +133,16 @@ __global__ void fp_quantize_columnwise_transpose(
   T thread_column[rows_per_thread];
 
   __shared__ uint8_t scales_block[BLOCK_Y * cols_per_block];
-  __shared__ uint8_t quantized_block[rows_per_block * cols_per_block]
+  __shared__ uint8_t quantized_block[rows_per_block * cols_per_block];
 
-      auto row_base = bidy * rows_per_block + tidy * rows_per_thread;
+  auto row_base = bidy * rows_per_block + tidy * rows_per_thread;
   auto col_base = bidx * cols_per_block + tidx * cols_per_thread;
 
   bool valid = (row_base < M) && (col_base < K);
   if (valid) {
     // load to registers
     for (int i = 0; i < rows_per_thread; i++) {
-      auto index = row_base * K + col;
+      auto index = (row_base + i) * K + col_base;
       thread_column[i] = w[index];
     }
     // find scale and store in shared memory
@@ -160,10 +160,16 @@ __global__ void fp_quantize_columnwise_transpose(
     using ScaleType =
         std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
     auto s = ScaleType(scale);
-    scales_block[tidx * BLOCK_Y + tidy] = s.__x;
+
+    int num_groups_per_col = M / group_size;
+    int scale_col = bidy * BLOCK_Y + tidy;
+    int scale_row = bidx * cols_per_block + tidx;
+
+    scales[scale_row * num_groups_per_col + scale_col] = s.__x;
+
     int shared_idx = tidx * rows_per_block + tidy * group_size;
 #pragma unroll
-            for (int j = 0; j < group_size / 4; j++) {
+    for (int j = 0; j < group_size / 4; j++) {
       Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_column[j * 4]);
       if constexpr (bits == 8) {
         uint32_t quantized_val =
@@ -180,9 +186,20 @@ __global__ void fp_quantize_columnwise_transpose(
   }
   __syncthreads();
   // coalesed store from shared to global
-  size_t linear_idx = tidx + tidy * BLOCK_Y;
-  for (int i = linear_idx; i < rows_per_block * cols_per_block;
-       i += BLOCK_X * BLOCK_Y) {
+  int linear_tid = tidx + tidy * BLOCK_X; // 0 to 1023
+  int total_elements = rows_per_block * cols_per_block;
+
+  for (int i = linear_tid; i < total_elements; i += BLOCK_X * BLOCK_Y) {
+    // Shared memory is [cols, rows], so:
+    int local_col = i / rows_per_block;
+    int local_row = i % rows_per_block;
+
+    int global_col = bidx * cols_per_block + local_col;
+    int global_row = bidy * rows_per_block + local_row;
+
+    if (global_col < K && global_row < M) {
+      out[global_col * M + global_row] = quantized_block[i];
+    }
   }
 }
 
