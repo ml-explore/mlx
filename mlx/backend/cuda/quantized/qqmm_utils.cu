@@ -44,7 +44,7 @@ namespace cg = cooperative_groups;
 //          [380, 381, 382, 383],
 //          [508, 509, 510, 511]]]]],
 
-inline std::tuple<dim3, dim3, int> get_swizzle_launch_args(
+inline std::tuple<dim3, dim3> get_swizzle_launch_args(
     size_t M_swizzled,
     size_t K_swizzled,
     int tile_rows = 128,
@@ -61,11 +61,10 @@ inline std::tuple<dim3, dim3, int> get_swizzle_launch_args(
   grid.x = cuda::ceil_div(num_tiles_k, tiles_per_block);
   grid.y = num_tiles_m;
   grid.z = 1;
-  int shared_mem_bytes = tile_rows * tile_cols * tiles_per_block;
   // Block is always (32, 32) = 1024 threads
   dim3 block(lanes_per_block, warps_per_block, 1);
 
-  return std::make_tuple(grid, block, shared_mem_bytes);
+  return std::make_tuple(grid, block);
 }
 
 namespace cu {
@@ -214,13 +213,13 @@ void swizzle_scales(
   size_t output_rows = scales_tiled.shape(-2);
   size_t output_cols = scales_tiled.shape(-1);
 
-  auto [num_blocks, block_dims, shared_mem_bytes] =
+  auto [num_blocks, block_dims] =
       get_swizzle_launch_args(output_rows, output_cols);
   enc.add_kernel_node(
       cu::swizzle_scales,
       num_blocks,
       block_dims,
-      shared_mem_bytes,
+      0,
       gpu_ptr<uint8_t>(scales),
       gpu_ptr<uint8_t>(scales_tiled),
       input_rows,
