@@ -16,11 +16,15 @@ For example, consider an :class:`mlx.nn.AllToShardedLinear` layer with ``input_d
 .. raw:: html
 
     <div>
-      <img src="../_static/distributed/AllToShardedLinear.png" alt="column-wise tensor parallelism" style="width: 100%">
+      <img src="../_static/tp_inference/all-to-sharded-linear.png" alt="column-wise tensor parallelism" style="width: 100%">
       <p style="font-size: 0.85em; margin-top: 0.5em;"><small>Check out <a href="https://huggingface.co/spaces/gxa33/ultrascale-playbook?section=tensor_parallelism_in_a_transformer_block">huggingface ultrascale-playbook</a> to learn about TP more in depth.</small></p>
     </div>
 
 This layer does not automatically gather all outputs from each device. This is an intended and :ref:`useful design choice <useful_design_choices>`.
+
+:class:`QuantizedAllToShardedLinear <mlx.nn.QuantizedAllToShardedLinear>` is the quantized equivalent of :class:`mlx.nn.AllToShardedLinear`.
+Similar to :class:`mlx.nn.QuantizedLinear` its parameters are frozen and
+will not be included in any gradient computation.
 
 :class:`ShardedToAllLinear <mlx.nn.ShardedToAllLinear>`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -32,18 +36,18 @@ For example, consider an :class:`mlx.nn.ShardedToAllLinear` layer with ``input_d
 .. raw:: html
 
     <div>
-      <img src="../_static/distributed/ShardedToAllLinear.png" alt="row-wise tensor parallelism" style="width: 100%">
+      <img src="../_static/tp_inference/sharded-to-all-linear.png" alt="row-wise tensor parallelism" style="width: 100%">
     </div>
 
-This layer does not automatically shard the inputs along the batch dimension for you. It is necessary to create a "partial" input structure to feed into the layer. This is an intended and :ref:`useful design choice <useful_design_choices>`.
+This layer does not automatically shard the inputs along the feature dimension for you. It is necessary to create a "partial" input structure to feed into the layer. This is an intended and :ref:`useful design choice <useful_design_choices>`.
 
-We can create partial inputs based on rank. For example, for ``batch_size=1024``, we can create sharded inputs in the following manner:
+We can create partial inputs based on rank. For example, for an input with 1024 features, we can create sharded inputs in the following manner:
 
 .. code-block:: python
 
   world = mx.distributed.init()
   part = (
-      slice(None), # batch dimension keep everything in column
+      slice(None), # batch dimension: keep all batches per feature
       slice(
           world.rank() * 1024 // world.size(), # start
           (world.rank() + 1) * 1024 // world.size(), # end
@@ -53,28 +57,27 @@ We can create partial inputs based on rank. For example, for ``batch_size=1024``
   layer = nn.ShardedToAllLinear(1024, 1024, bias=False) # initialize the layer
   y = layer(x[part]) # process sharded input
 
-This code splits the 1024 input features into ``world.size()`` different groups which are assigned continously based on ``world.rank()``. More information about distributed communication can be found in the :doc:`Distributed Communication <usage/distributed>` page. 
+This code splits the 1024 input features into ``world.size()`` different groups which are assigned continuously based on ``world.rank()``. More information about distributed communication can be found in the :doc:`Distributed Communication <../usage/distributed>` page. 
 
-:class:`QuantizedAllToShardedLinear <mlx.nn.QuantizedAllToShardedLinear>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:class:`QuantizedShardedToAllLinear <mlx.nn.QuantizedShardedToAllLinear>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:class:`QuantizedShardedToAllLinear <mlx.nn.QuantizedShardedToAllLinear>` is the quantized equivalent of :class:`mlx.nn.ShardedToAllLinear`.
+Similar to :class:`mlx.nn.QuantizedLinear` its parameters are frozen and
+will not be included in any gradient computation.
 
 .. _useful_design_choices:
 Useful Design Choices
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 
 There are design choices made above related to when things are done automatically that are done on purpose to make model training / inference easier.
 
 Column-wise and row-wise tensor parallel layers naturally go together due to the output of the column-wise TP layer being the exact size needed for the sharded input of a row-wise TP layer. This removes the need for an intermediary gather step between the layers, reducing communication overhead.
 
-This is why AllToShardedLinear does not aggregate results automatically and why ShardedToAllLinear does not shard inputs automatically. It is so that they can be placed in succesive order and work together easily.
+This is why AllToShardedLinear does not aggregate results automatically and why ShardedToAllLinear does not shard inputs automatically. It is so that they can be placed in successive order and work together easily.
 
 We can demonstrate this through a simple model using our two types of distributed layers.
 
 .. code-block:: python
 
-  x = mx.array() # (4, 2) model input: batch size 4, feature size 2
+  x = ... # some (4, 2) model input: batch size 4, feature size 2
 
   l1 = nn.AllToShardedLinear(2, 2, bias=False)   # initialize the layer
   l1_out = l1(x) # (4, 1) output
@@ -85,9 +88,80 @@ We can demonstrate this through a simple model using our two types of distribute
 .. raw:: html
 
     <div>
-      <img src="../_static/distributed/ColumnRowTP.png" alt="column-wise tensor parallelism" style="width: 100%">
+      <img src="../_static/tp_inference/column-row-tp.png" alt="column-wise tensor parallelism" style="width: 100%">
       <p style="font-size: 0.85em; margin-top: 0.5em;"><small>A visualization of the simple MLX model using column-wise then row-wise tensor parallelism across 2 devices.</small></p>
     </div>
 
+.. _llm_inference_with_tp:
+LLM Inference with Tensor Parallelism
+-------------------------------------
+
+We can apply these TP techniques to LLMs in order to enable inference for much larger models by sharding parameters from huge layers across multiple devices.
+
+To demonstrate how it is possible to do this, let's apply TP to the Transformer block of our :doc:`Llama Inference <../examples/llama-inference>` example. In this example we will use the same inference script as the Llama Inference example which can be found in `mlx-examples`_.
+
+Our first edit is to initialize the distributed communication group and get the current process rank:
+
+.. code-block:: python
+
+  world = mx.distributed.init()
+  rank = world.rank()
+
+Next, let's look at the current architecture of the transformer block and see how we can apply tensor parallelism:
+
+.. raw:: html
+
+    <div>
+      <img src="../_static/tp_inference/llama-transformer.png" alt="llama transformer example" style="width: 100%">
+    </div>
 
 
+This architecture has two natural places where our column-wise then row-wise tensor parallelism paradigm can be applied: the attention block and the FFN block. Both follow the same pattern: multiple parallel linear layers operating on the same input, followed by a single output linear layer. In the attention block, the Q, K, and V projections are sharded column-wise, and the output projection is sharded row-wise. In the FFN block, the gate and up projections are sharded column-wise, and the down projection is sharded row-wise.
+
+The intermediate operations between the linear layers (RoPE, softmax, scaled dot-product attention in the attention block, and element-wise multiplication in the FFN block) do not impede the use of our TP paradigm. These operations are either:
+
+- **Element-wise operations** (RoPE, element-wise multiplication): These operate independently on each element or position, preserving the sharding pattern without requiring cross-device communication.
+
+- **Operations on non-sharded dimensions** (softmax, scaled dot-product attention): These operate along dimensions that are not sharded (such as the sequence length or head dimensions), so they can be computed independently on each device. The attention computation ``Q @ K^T`` and ``scores @ V`` work correctly with sharded Q, K, V tensors because the matrix multiplications are performed along the sharded feature dimension, and the results remain properly sharded for the subsequent row-wise TP layer.
+
+The :func:`mlx.nn.layers.distributed.shard_linear` utility function simplifies creating tensor parallel layers based on existing Linear layers. Similarly, :func:`mlx.nn.layers.distributed.shard_inplace` does the same thing but changes the existing Linear layer instead of creating a new one. If the input is a :class:`mlx.nn.QuantizedLinear` layer, it automatically returns the corresponding quantized tensor parallel layer.
+
+The following code shows how to shard the Attention block. The Q, K, and V projection layers are converted to column-wise sharded layers (all-to-sharded), while the output projection is converted to a row-wise sharded layer (sharded-to-all). The number of heads and repeats are also adjusted to account for the sharding:
+
+.. code-block:: python
+
+  # ... in Attention class
+  def shard(self, group: mx.distributed.Group):
+    self.n_heads = self.n_heads // group.size()
+    self.n_kv_heads = self.n_kv_heads // group.size()
+    self.repeats = self.n_heads // self.n_kv_heads
+
+    self.wq = nn.layers.distributed.shard_linear(self.wq, "all-to-sharded", group=group)
+    self.wk = nn.layers.distributed.shard_linear(self.wk, "all-to-sharded", group=group)
+    self.wv = nn.layers.distributed.shard_linear(self.wv, "all-to-sharded", group=group)
+    self.wo = nn.layers.distributed.shard_linear(self.wo, "sharded-to-all", group=group)
+  
+Similarly, the FeedForward block is sharded by converting the gate (w1) and up (w3) projections to column-wise sharded layers, and the down projection (w2) to a row-wise sharded layer:
+
+.. code-block:: python
+
+  # ... in FeedForward class
+  def shard(self, group: mx.distributed.Group):
+    self.w1 = nn.layers.distributed.shard_linear(self.w1, "all-to-sharded", group=group)
+    self.w2 = nn.layers.distributed.shard_linear(self.w2, "sharded-to-all", group=group)
+    self.w3 = nn.layers.distributed.shard_linear(self.w3, "all-to-sharded", group=group)
+
+Finally, in our :code:`load_model` function, we need to apply our sharding functions to all transformer layers when using multiple devices:
+
+.. code-block:: python
+
+  # ... in load_model function
+  if world.size() > 1:
+    # convert Linear layers in Transformer/FFN to appropriate Sharded Layers
+    for layer in model.layers:
+        layer.attention.shard(group=world)
+        layer.feed_forward.shard(group=world)
+
+This allows us to use the llama inference file as normal when running :code:`python llama.py`, but now we can also use it running across two (or more) devices via :code:`mlx.launch -n 2 llama.py`.
+
+.. _mlx-examples: https://github.com/ml-explore/mlx-examples/tree/main/llms/llama
