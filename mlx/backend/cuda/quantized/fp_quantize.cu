@@ -30,6 +30,77 @@ struct Dequantize {
 
 namespace cg = cooperative_groups;
 
+inline __device__ float4 dequant_fp8(uint32_t bits) {
+  return float4(*(__nv_fp8x4_e4m3*)(&bits));
+}
+
+inline __device__ float4 dequant_fp4(uint16_t bits) {
+  return float4(*(__nv_fp4x4_e2m1*)(&bits));
+}
+
+template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
+__global__ void fp_quantize_dequantize(T* w, T* out, size_t size) {
+  using Tx2 = Vector2_t<T>;
+  using Tx4 = Vector4_t<T>;
+  uint32_t rbits = 0; // reserved bits for future use
+  auto block_size = cg::this_thread_block().dim_threads();
+  auto block_idx = cg::this_thread_block().group_index();
+  auto idx_in_block = cg::this_thread_block().thread_index();
+  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
+  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
+
+  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+  size_t base_idx = thread_idx * group_size;
+
+  if (base_idx >= size) {
+    return;
+  }
+
+  auto w_tile = load_vector<group_size, T>(w, thread_idx);
+  float scale = 0.0f;
+
+  Tx2 amax_2x = Tx2{0.0f, 0.0f};
+
+#pragma unroll
+  for (int i = 0; i < group_size; i += 2) {
+    auto pair = Tx2{w_tile[i], w_tile[i + 1]};
+    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+  }
+
+  scale = static_cast<float>(
+      max(fabsf(static_cast<float>(amax_2x.x)),
+          fabsf(static_cast<float>(amax_2x.y))));
+
+  scale /= bits == 4 ? 6.0f : 448.0f;
+  // Convert to mx scale or nv scale
+  using ScaleType =
+      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  auto s = ScaleType(scale);
+  scale = float(s);
+  AlignedVector<T, group_size> w_hat;
+
+#pragma unroll
+  for (int i = 0; i < group_size / 4; i++) {
+    Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
+    float4 dq;
+    if constexpr (bits == 8) {
+      uint32_t quantized_val =
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      dq = dequant_fp8(quantized_val);
+    } else {
+      uint16_t quantized_val =
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+      dq = dequant_fp4(quantized_val);
+    }
+    w_hat[i * 4] = static_cast<T>(dq.x * scale);
+    w_hat[i * 4 + 1] = static_cast<T>(dq.y * scale);
+    w_hat[i * 4 + 2] = static_cast<T>(dq.z * scale);
+    w_hat[i * 4 + 3] = static_cast<T>(dq.w * scale);
+  }
+  store_vector<group_size>(out, thread_idx, w_hat);
+}
+
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
 __global__ void
 fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
@@ -279,6 +350,40 @@ get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
 }
 
 } // namespace cu
+
+void fp_quantize_dequantize(
+    const array& w,
+    array& what,
+    int group_size,
+    int bits,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  enc.set_input_array(w);
+  enc.set_output_array(what);
+  dispatch_float_types(w.dtype(), "fp_quantize_dequantize", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    if constexpr (!std::is_same_v<T, double>) {
+      auto kernel = cu::fp_quantize_dequantize<T, 32, 4, true, false>;
+      if (bits == 8) {
+        kernel = cu::fp_quantize_dequantize<T, 32, 8, true, false>;
+      } else if (group_size == 16) {
+        kernel = cu::fp_quantize_dequantize<T, 16, 4, false, false>;
+      }
+      bool large = w.size() > UINT_MAX;
+      auto [num_blocks, block_dims] =
+          get_launch_args(w.size(), w.shape(), w.strides(), large, group_size);
+
+      enc.add_kernel_node(
+          kernel,
+          num_blocks,
+          block_dims,
+          0,
+          gpu_ptr<T>(w),
+          gpu_ptr<T>(what),
+          w.size());
+    }
+  });
+}
 
 void fp_quantize(
     const array& w,

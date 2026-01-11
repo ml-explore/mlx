@@ -96,11 +96,11 @@ __device__ void fp_qmv_impl(
     float sum = 0.0f;
     for (int col = n_per_thread * warp.thread_rank(); col < packed_cols;
          col += (WARP_SIZE * n_per_thread)) {
-      auto local_mat =
-          unsafe_load_vector<n_per_thread>(mat + row * packed_cols + col, 0);
       auto local_vec =
           unsafe_load_vector<nv_per_thread>(vec + vals_per_item * col, 0);
-      // #pragma unroll
+      auto local_mat =
+          unsafe_load_vector<n_per_thread>(mat + row * packed_cols + col, 0);
+#pragma unroll
       for (int i = 0; i < scales_per_step; ++i) {
         float2 local_sum = {0.0f, 0.0f};
 #pragma unroll

@@ -64,7 +64,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = cu::device(s.device);
   auto& enc = d.get_command_encoder(s);
 
-  out.set_data(cu::malloc_async(out.nbytes(), enc.stream()));
+  out.set_data(cu::malloc_async(out.nbytes(), enc));
 
   // Make sure the last two dims of x and w, s, b are contiguous. This should
   // be relaxed for x.
