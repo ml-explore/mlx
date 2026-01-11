@@ -2149,6 +2149,40 @@ class Softmax : public UnaryPrimitive {
   bool precise_;
 };
 
+class SearchSorted : public Primitive {
+ public:
+  explicit SearchSorted(Stream stream, int axis, bool right)
+      : Primitive(stream), axis_(axis), right_(right) {};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(SearchSorted)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+
+  std::pair<std::vector<array>, std::vector<int>> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  auto state() const {
+    return std::make_pair(axis_, right_);
+  }
+
+  int axis() const {
+    return axis_;
+  };
+  bool right() const {
+    return right_;
+  };
+
+ private:
+  int axis_;
+  bool right_;
+};
+
 class Sort : public UnaryPrimitive {
  public:
   explicit Sort(Stream stream, int axis)
