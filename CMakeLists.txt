@@ -152,8 +152,10 @@ add_library(mlx)
 
 # Supress warnings: note: parameter passing for argument of type
 # ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
-# 10.1
-target_compile_options(mlx PRIVATE -Wno-psabi)
+# 10.1 Only apply -Wno-psabi on GCC/Clang, not MSVC or NVCC
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-psabi>)
+endif()
 target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
 target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 

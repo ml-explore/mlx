@@ -5,6 +5,11 @@
 #include "mlx/backend/metal/kernels/steel/attn/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
 
+#if defined(_WIN32)
+#define _USE_MATH_DEFINES
+#include <math.h>
+#endif
+
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////

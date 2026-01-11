@@ -69,7 +69,7 @@ void all_reduce(
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   auto get_args = [](size_t size, int N) {
-    int threads = std::min(512UL, (size + N - 1) / N);
+    int threads = std::min(512ULL, (size + N - 1) / N);
     threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     int reductions_per_step = threads * N;
     size_t steps_needed =

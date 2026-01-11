@@ -96,7 +96,7 @@ void copy_general_dynamic(
             } else { // ndim >= 4
               auto [num_blocks, block_dims] = get_launch_args(out, large());
               encoder.add_kernel_node(
-                  cu::copy_gg_dynamic<InType, OutType, IdxT>,
+                  &cu::copy_gg_dynamic<InType, OutType, IdxT>,
                   num_blocks,
                   block_dims,
                   0,

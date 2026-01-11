@@ -130,6 +130,12 @@ target_compile_options(
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
                                    --diag_suppress=997>)
 
+# Add /bigobj flag for MSVC to handle large object files on Windows.
+if(MSVC)
+  target_compile_options(mlx
+                         PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>)
+endif()
+
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0)
