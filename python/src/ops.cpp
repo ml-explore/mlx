@@ -5460,10 +5460,10 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
-        If ``x`` and `w`` are not quantized, their data types must be ``float32``, 
+        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
-        
+
       Args:
         x (array): Input array.
         w (array): Weight matrix. If quantized, it is packed in unsigned integers.
@@ -5482,5 +5482,41 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).
+  )pbdoc");
+  m.def(
+      "from_fp8",
+      &mx::from_fp8,
+      nb::arg(),
+      "dtype"_a = mx::bfloat16,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def from_fp8(x: array, dtype: Dtype = bfloat16, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array from fp8 (e4m3) to another floating-point type.
+
+      Args:
+        x (array): The input fp8 array with type ``uint8``.
+        dtype (Dtype): The data type to convert to. Default: ``bfloat16``.
+
+      Returns:
+        array: The array converted from fp8.
+  )pbdoc");
+  m.def(
+      "to_fp8",
+      &mx::to_fp8,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def to_fp8(x: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array to fp8 (e4m3) from another floating-point type.
+
+      Args:
+        x (array): The input array.
+
+      Returns:
+        array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
 }
