@@ -160,6 +160,36 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+    def test_qqmv(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = product(
+            [256, 512, 67],  # M
+            [64, 256],  # N
+        )
+        modes = ["nvfp4", "mxfp8"]
+        for M, N in tests:
+            for mode in modes:
+                with self.subTest(shape=(M, N), mode=mode):
+                    x_shape = (1, N)
+                    w_shape = (M, N)
+
+                    x = mx.random.normal(shape=x_shape, key=k1).astype(mx.bfloat16)
+                    x_hat = mx.dequantize(*mx.quantize(x, mode=mode), mode=mode)
+
+                    w = mx.random.normal(shape=w_shape, key=k2).astype(mx.bfloat16)
+                    w_q, scales = mx.quantize(w, mode=mode)
+                    w_hat = mx.dequantize(w_q, scales, mode=mode)
+                    y_q = mx.qqmm(
+                        x,
+                        w_q,
+                        scales,
+                        mode=mode,
+                    )
+                    y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
