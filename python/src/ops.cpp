@@ -1669,6 +1669,25 @@ void init_ops(nb::module_& m) {
             array: The array of zeros with the specified shape.
       )pbdoc");
   m.def(
+      "asarray",
+      [](const ArrayInitType& a, std::optional<mx::Dtype> dtype) {
+        return create_array(a, dtype);
+      },
+      nb::arg(),
+      "dtype"_a = nb::none(),
+      nb::sig("def asarray(a: Union[scalar, array, Sequence], dtype: "
+              "Optional[Dtype] = None) -> array"),
+      R"pbdoc(
+        Convert the input to an array.
+
+        Args:
+            a: Input data.
+            dtype (Dtype, optional): The desired data-type for the array.
+
+        Returns:
+            array: An array interpretation of the input.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
