@@ -156,6 +156,14 @@ class Scheduler {
     }
   }
 
+  void check_cpu_exceptions() {
+    for (size_t i = 0; i < threads_.size(); ++i) {
+      if (threads_[i] != nullptr) {
+        threads_[i]->check_exception();
+      }
+    }
+  }
+
   ~Scheduler() {
     for (auto s : streams_) {
       try {
@@ -210,6 +218,10 @@ inline void wait_for_one() {
 
 inline void check_exception(const Stream& stream) {
   scheduler().check_exception(stream);
+}
+
+inline void check_cpu_exceptions() {
+  scheduler().check_cpu_exceptions();
 }
 
 } // namespace mlx::core::scheduler

@@ -250,9 +250,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
       }
       scheduler::wait_for_one();
+      scheduler::check_cpu_exceptions();
       while (get_active_memory() > get_memory_limit() &&
              scheduler::n_active_tasks() > 0) {
         scheduler::wait_for_one();
+        scheduler::check_cpu_exceptions();
       }
     }
 
