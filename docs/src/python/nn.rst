@@ -183,3 +183,4 @@ In detail:
    nn/functions
    nn/losses
    nn/init
+   nn/distributed
