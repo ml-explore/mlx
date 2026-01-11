@@ -31,7 +31,8 @@ struct Dequantize {
 namespace cg = cooperative_groups;
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+__global__ void
+fp_quantize_rowwise(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -123,7 +124,6 @@ __global__ void fp_quantize_columnwise_transpose(
   constexpr int rows_per_thread = group_size;
   constexpr int cols_per_block = BLOCK_X * cols_per_thread;
   constexpr int rows_per_block = BLOCK_Y * rows_per_thread;
-  constexpr int K_LT = K / cols_per_thread;
 
   auto tidx = idx_in_block.x; // index within block in x
   auto tidy = idx_in_block.y; // index within block in y
@@ -132,7 +132,6 @@ __global__ void fp_quantize_columnwise_transpose(
 
   T thread_column[rows_per_thread];
 
-  __shared__ uint8_t scales_block[BLOCK_Y * cols_per_block];
   __shared__ uint8_t quantized_block[rows_per_block * cols_per_block];
 
   auto row_base = bidy * rows_per_block + tidy * rows_per_thread;
@@ -245,6 +244,26 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
 
 } // namespace cu
 
+inline std::tuple<dim3, dim3> get_columnwise_quantize_transpose_launch_args(
+    size_t size,
+    int M,
+    int K) {
+
+    constexpr int BLOCK_X = 32;
+    constexpr int BLOCK_Y = 32;
+    constexpr int cols_per_block = BLOCK_X;
+    constexpr int rows_per_block = BLOCK_Y * group_size;
+
+    dim3 grid;
+    grid.x = cuda::ceil_div(K, cols_per_block) * cuda::ceil_div(M, rows_per_block);
+    grid.y = 1;
+    grid.z = 1;
+
+    dim3 block(BLOCK_X, BLOCK_Y);
+
+    return std::make_tuple(grid, block);
+}
+
 void fp_quantize(
     const array& w,
     array& wq,
@@ -256,33 +275,74 @@ void fp_quantize(
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    if constexpr (!std::is_same_v<T, double>) {
-      auto kernel = cu::fp_quantize<T, 32, 4, true, false>;
-      if (bits == 8) {
-        kernel = cu::fp_quantize<T, 32, 8, true, false>;
-      } else if (group_size == 16) {
-        kernel = cu::fp_quantize<T, 16, 4, false, false>;
-      }
-      bool large = w.size() > UINT_MAX;
-      auto [num_blocks, block_dims] =
-          get_launch_args(w.size(), w.shape(), w.strides(), large, group_size);
+  std::cout << "w strides: " << w.strides() << "w shape: " << w.shape()
+            << std::endl;
+  if (w.strides().back() == 1) {
+    dispatch_float_types(
+        w.dtype(), "fp_quantize_columnwise_transpose", [&](auto type_tag) {
+          using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+          if constexpr (!std::is_same_v<T, double>) {
+            auto kernel =
+                cu::fp_quantize_columnwise_transpose<T, 32, 4, true, false>;
+            if (bits == 8) {
+              kernel =
+                  cu::fp_quantize_columnwise_transpose<T, 32, 8, true, false>;
+            } else if (group_size == 16) {
+              kernel =
+                  cu::fp_quantize_columnwise_transpose<T, 16, 4, false, false>;
+            }
+            bool large = w.size() > UINT_MAX;
+            auto M = w.shape(-2);
+            auto K = w.shape(-1);
 
-      enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<T>(w),
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          w.size());
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not quantize input with type float64.");
-    }
-  });
+            auto [num_blocks, block_dims] = get_columnwise_quantize_transpose_launch_args(
+                w.size(), M, K);
+
+            enc.add_kernel_node(
+                kernel,
+                num_blocks,
+                block_dims,
+                0,
+                gpu_ptr<T>(w),
+                gpu_ptr<uint8_t>(wq),
+                gpu_ptr<uint8_t>(scales),
+                w.size(),
+                M,
+                K);
+          } else {
+            throw std::runtime_error(
+                "[Quantize::eval_gpu] Can not quantize input with type float64.");
+          }
+        });
+  } else {
+    dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      if constexpr (!std::is_same_v<T, double>) {
+        auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
+        if (bits == 8) {
+          kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
+        } else if (group_size == 16) {
+          kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
+        }
+        bool large = w.size() > UINT_MAX;
+        auto [num_blocks, block_dims] = get_launch_args(
+            w.size(), w.shape(), w.strides(), large, group_size);
+
+        enc.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
+            0,
+            gpu_ptr<T>(w),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<uint8_t>(scales),
+            w.size());
+      } else {
+        throw std::runtime_error(
+            "[Quantize::eval_gpu] Can not quantize input with type float64.");
+      }
+    });
+  }
 }
 
 void fp_dequantize(

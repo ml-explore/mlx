@@ -36,7 +36,7 @@ inline array ensure_row_column_contiguous(
   if (stride_0 == x.shape(-1) && stride_1 == 1) {
     return x; // row contiguous
   } else {
-    if (stride_0 == 1 && stride_1 == x.shape(-1)) {
+    if (stride_0 == 1 && stride_1 == x.shape(-2)) {
       return x; // column contiguous
     } else {
       array x_copy = contiguous_copy_gpu(x, s);
