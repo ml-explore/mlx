@@ -47,7 +47,12 @@ struct CommandEncoder {
     if (num_ops_ == 0) {
       scheduler::notify_new_task(stream_);
       auto task_wrap = [s = stream_, task = std::move(task)]() mutable {
-        task();
+        try {
+          task();
+        } catch (...) {
+          scheduler::notify_task_completion(s);
+          throw;
+        }
         scheduler::notify_task_completion(s);
       };
       scheduler::enqueue(stream_, std::move(task_wrap));

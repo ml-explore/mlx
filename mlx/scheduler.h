@@ -20,8 +20,9 @@ struct StreamThread {
   std::condition_variable cond;
   bool stop;
   std::thread thread;
+  std::exception_ptr eptr;
 
-  StreamThread() : stop(false), thread(&StreamThread::thread_fn, this) {}
+  StreamThread() : stop(false), eptr(nullptr), thread(&StreamThread::thread_fn, this) {}
 
   ~StreamThread() {
     {
@@ -45,7 +46,14 @@ struct StreamThread {
         q.pop();
       }
 
-      task();
+      try {
+        task();
+      } catch (...) {
+        std::lock_guard<std::mutex> lk(mtx);
+        if (!eptr) {
+          eptr = std::current_exception();
+        }
+      }
     }
   }
 
@@ -60,6 +68,15 @@ struct StreamThread {
       q.emplace(std::forward<F>(f));
     }
     cond.notify_one();
+  }
+
+  void check_exception() {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (eptr) {
+      std::exception_ptr e = eptr;
+      eptr = nullptr;
+      std::rethrow_exception(e);
+    }
   }
 };
 
@@ -133,6 +150,20 @@ class Scheduler {
     }
   }
 
+  void check_exception(const Stream& stream) {
+    if (stream.device == Device::cpu && threads_[stream.index] != nullptr) {
+      threads_[stream.index]->check_exception();
+    }
+  }
+
+  void check_cpu_exceptions() {
+    for (size_t i = 0; i < threads_.size(); ++i) {
+      if (threads_[i] != nullptr) {
+        threads_[i]->check_exception();
+      }
+    }
+  }
+
   ~Scheduler() {
     for (auto s : streams_) {
       try {
@@ -183,6 +214,14 @@ inline void notify_task_completion(const Stream& stream) {
 
 inline void wait_for_one() {
   scheduler().wait_for_one();
+}
+
+inline void check_exception(const Stream& stream) {
+  scheduler().check_exception(stream);
+}
+
+inline void check_cpu_exceptions() {
+  scheduler().check_cpu_exceptions();
 }
 
 } // namespace mlx::core::scheduler
