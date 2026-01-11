@@ -266,6 +266,9 @@ Device& device(mlx::core::Device);
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
 inline bool is_nax_available() {
+#ifdef MLX_METAL_NO_NAX
+  return false;
+#else
   auto _check_nax = []() {
     bool can_use_nax = false;
     if (__builtin_available(
@@ -278,6 +281,7 @@ inline bool is_nax_available() {
   };
   static bool is_nax_available_ = _check_nax();
   return is_nax_available_;
+#endif
 }
 
 } // namespace mlx::core::metal
