@@ -124,20 +124,26 @@ __global__ void fp_quantize_columnwise_transpose(
   constexpr int rows_per_thread = group_size;
   constexpr int cols_per_block = BLOCK_X * cols_per_thread;
   constexpr int rows_per_block = BLOCK_Y * rows_per_thread;
+  constexpr int elem_per_byte = (bits == 8) ? 1 : 2;
+  constexpr int bytes_per_thread = group_size / elem_per_byte;
+  constexpr int bytes_per_block = cols_per_block * rows_per_block / elem_per_byte;
 
   auto tidx = idx_in_block.x; // index within block in x
   auto tidy = idx_in_block.y; // index within block in y
-  auto bidx = block_idx.x % (K / cols_per_block);
-  auto bidy = block_idx.x / (K / cols_per_block);
+
+  int num_blocks = (K + cols_per_block - 1) / cols_per_block;
+  auto bidx = block_idx.x % num_blocks;
+  auto bidy = block_idx.x / num_blocks;
 
   T thread_column[rows_per_thread];
 
-  __shared__ uint8_t quantized_block[rows_per_block * cols_per_block];
+  __shared__ uint8_t quantized_block[bytes_per_block];
 
   auto row_base = bidy * rows_per_block + tidy * rows_per_thread;
   auto col_base = bidx * cols_per_block + tidx * cols_per_thread;
 
-  bool valid = (row_base < M) && (col_base < K);
+  // Check if the entire group is valid (all rows must be in bounds)
+  bool valid = (row_base + rows_per_thread <= M) && (col_base < K);
   if (valid) {
     // load to registers
     for (int i = 0; i < rows_per_thread; i++) {
@@ -148,7 +154,6 @@ __global__ void fp_quantize_columnwise_transpose(
     Tx2 amax_2x = Tx2{0.0f, 0.0f};
     // compute amax for each column
     for (int r = 0; r < group_size; r += 2) {
-      // thread_column_T[r * cols_per_thread + c]
       auto pair = Tx2{thread_column[r], thread_column[r + 1]};
       abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
     }
@@ -159,6 +164,7 @@ __global__ void fp_quantize_columnwise_transpose(
     using ScaleType =
         std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
     auto s = ScaleType(scale);
+    scale = float(s);  // Use quantized scale for consistency with dequantization
 
     int num_groups_per_col = M / group_size;
     int scale_col = bidy * BLOCK_Y + tidy;
@@ -166,7 +172,7 @@ __global__ void fp_quantize_columnwise_transpose(
 
     scales[scale_row * num_groups_per_col + scale_col] = s.__x;
 
-    int shared_idx = tidx * rows_per_block + tidy * group_size;
+    int shared_idx = tidx * (rows_per_block / elem_per_byte) + tidy * bytes_per_thread;
 #pragma unroll
     for (int j = 0; j < group_size / 4; j++) {
       Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_column[j * 4]);
@@ -184,20 +190,22 @@ __global__ void fp_quantize_columnwise_transpose(
     }
   }
   __syncthreads();
-  // coalesed store from shared to global
-  int linear_tid = tidx + tidy * BLOCK_X; // 0 to 1023
-  int total_elements = rows_per_block * cols_per_block;
 
-  for (int i = linear_tid; i < total_elements; i += BLOCK_X * BLOCK_Y) {
-    // Shared memory is [cols, rows], so:
-    int local_col = i / rows_per_block;
-    int local_row = i % rows_per_block;
+  // coalesed store from shared to global
+  int output_rows_per_col = M / elem_per_byte;
+  int local_rows_per_block = rows_per_block / elem_per_byte;
+
+  int linear_tid = tidx + tidy * BLOCK_X; // 0 to 1023
+
+  for (int i = linear_tid; i < bytes_per_block; i += BLOCK_X * BLOCK_Y) {
+    int local_col = i / local_rows_per_block;
+    int local_row = i % local_rows_per_block;
 
     int global_col = bidx * cols_per_block + local_col;
-    int global_row = bidy * rows_per_block + local_row;
+    int global_row = bidy * local_rows_per_block + local_row;
 
-    if (global_col < K && global_row < M) {
-      out[global_col * M + global_row] = quantized_block[i];
+    if (global_col < K && global_row < output_rows_per_col) {
+      out[global_col * output_rows_per_col + global_row] = quantized_block[i];
     }
   }
 }
@@ -246,13 +254,14 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
 
 inline std::tuple<dim3, dim3> get_columnwise_quantize_transpose_launch_args(
     size_t size,
+    int group_size,
     int M,
     int K) {
 
     constexpr int BLOCK_X = 32;
     constexpr int BLOCK_Y = 32;
     constexpr int cols_per_block = BLOCK_X;
-    constexpr int rows_per_block = BLOCK_Y * group_size;
+    int rows_per_block = BLOCK_Y * group_size;
 
     dim3 grid;
     grid.x = cuda::ceil_div(K, cols_per_block) * cuda::ceil_div(M, rows_per_block);
@@ -275,29 +284,25 @@ void fp_quantize(
   enc.set_input_array(w);
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  std::cout << "w strides: " << w.strides() << "w shape: " << w.shape()
-            << std::endl;
-  if (w.strides().back() == 1) {
+  if (w.strides().back() != 1) {
     dispatch_float_types(
         w.dtype(), "fp_quantize_columnwise_transpose", [&](auto type_tag) {
           using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
           if constexpr (!std::is_same_v<T, double>) {
-            auto kernel =
-                cu::fp_quantize_columnwise_transpose<T, 32, 4, true, false>;
+            bool large = w.size() > UINT_MAX;
+            auto M = w.shape(-2);
+            auto K = w.shape(-1);
+            auto kernel = cu::fp_quantize_columnwise_transpose<T, 32, 4, true, false>;
             if (bits == 8) {
-              kernel =
+               kernel =
                   cu::fp_quantize_columnwise_transpose<T, 32, 8, true, false>;
             } else if (group_size == 16) {
               kernel =
                   cu::fp_quantize_columnwise_transpose<T, 16, 4, false, false>;
             }
-            bool large = w.size() > UINT_MAX;
-            auto M = w.shape(-2);
-            auto K = w.shape(-1);
-
-            auto [num_blocks, block_dims] = get_columnwise_quantize_transpose_launch_args(
-                w.size(), M, K);
-
+            auto [num_blocks, block_dims] =
+                get_columnwise_quantize_transpose_launch_args(
+                    w.size(), group_size, M, K);
             enc.add_kernel_node(
                 kernel,
                 num_blocks,
