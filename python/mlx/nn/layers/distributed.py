@@ -87,7 +87,7 @@ def _all_to_sharded(segments):
 
     def _shard_fn(path, weight):
         if path.endswith("bias"):
-            return -1
+            return -1, segments
         return max(weight.ndim - 2, 0), segments
 
     return _shard_fn
