@@ -3,25 +3,17 @@
 #include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmv.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
-#include <cuda_fp4.h>
 
 namespace mlx::core::cu {
 
 namespace cg = cooperative_groups;
 
 static constexpr int rows_per_block = 8;
-
-inline __device__ float4 dequant_fp8(uint32_t bits) {
-  return float4(*(__nv_fp8x4_e4m3*)(&bits));
-}
-
-inline __device__ float2 dequant_fp4(uint8_t bits) {
-  return float2(*(__nv_fp4x2_e2m1*)(&bits));
-}
 
 template <typename T>
 __device__ void adjust_matrix_offsets(
@@ -122,24 +114,20 @@ __device__ void fp_qmv_impl(
                 v.x * static_cast<float>(local_vec[vals_per_item * k]);
             local_sum.y +=
                 v.y * static_cast<float>(local_vec[vals_per_item * k + 1]);
-
-            v = dequant_fp4(local_mat[k] >> 8);
             local_sum.x +=
-                v.x * static_cast<float>(local_vec[vals_per_item * k + 2]);
+                v.z * static_cast<float>(local_vec[vals_per_item * k + 2]);
             local_sum.y +=
-                v.y * static_cast<float>(local_vec[vals_per_item * k + 3]);
+                v.w * static_cast<float>(local_vec[vals_per_item * k + 3]);
 
             v = dequant_fp4(local_mat[k] >> 16);
             local_sum.x +=
                 v.x * static_cast<float>(local_vec[vals_per_item * k + 4]);
             local_sum.y +=
                 v.y * static_cast<float>(local_vec[vals_per_item * k + 5]);
-
-            v = dequant_fp4(local_mat[k] >> 24);
             local_sum.x +=
-                v.x * static_cast<float>(local_vec[vals_per_item * k + 6]);
+                v.z * static_cast<float>(local_vec[vals_per_item * k + 6]);
             local_sum.y +=
-                v.y * static_cast<float>(local_vec[vals_per_item * k + 7]);
+                v.w * static_cast<float>(local_vec[vals_per_item * k + 7]);
           }
         }
         sum += (local_sum.x + local_sum.y) * float(scales[i]);

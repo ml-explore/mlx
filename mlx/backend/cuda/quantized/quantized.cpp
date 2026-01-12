@@ -3,7 +3,7 @@
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/quantized/qmv.h"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 

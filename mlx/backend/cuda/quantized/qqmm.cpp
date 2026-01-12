@@ -5,7 +5,7 @@
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
