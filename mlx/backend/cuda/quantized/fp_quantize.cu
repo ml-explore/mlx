@@ -134,7 +134,8 @@ __global__ void fp_quantize_columnwise(
 
   T thread_data[group_size];
 
-  __shared__ uint8_t quantized_block[rows_per_block * padded_local_cols];
+  __shared__ uint8_t quantized_smem[rows_per_block * padded_local_cols];
+  __shared__ uint8_t scales_smem[BLOCK_X][BLOCK_Y + SMEM_PAD];
 
   int row_base = bidy * rows_per_block + tidx;
   int col_base = bidx * cols_per_block + tidy * group_size;
@@ -160,11 +161,7 @@ __global__ void fp_quantize_columnwise(
         std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
     auto s = ScaleType(scale);
     scale = float(s);
-
-    int num_groups_per_row = K / group_size;
-    int scale_row = row_base;
-    int scale_col = bidx * BLOCK_Y + tidy;
-    scales[scale_row * num_groups_per_row + scale_col] = s.__x;
+    scales_smem[tidx][tidy] = s.__x;
 
     int shared_idx = tidx * padded_local_cols + tidy * bytes_per_group;
 
@@ -174,12 +171,12 @@ __global__ void fp_quantize_columnwise(
       if constexpr (bits == 8) {
         uint32_t quantized_val =
             scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
-        *reinterpret_cast<uint32_t*>(&quantized_block[shared_idx + j * 4]) =
+        *reinterpret_cast<uint32_t*>(&quantized_smem[shared_idx + j * 4]) =
             quantized_val;
       } else {
         uint16_t quantized_val =
             scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
-        *reinterpret_cast<uint16_t*>(&quantized_block[shared_idx + j * 2]) =
+        *reinterpret_cast<uint16_t*>(&quantized_smem[shared_idx + j * 2]) =
             quantized_val;
       }
     }
@@ -187,8 +184,9 @@ __global__ void fp_quantize_columnwise(
   __syncthreads();
 
   int output_cols = K / elem_per_byte;
+  int num_groups_per_row = K / group_size;
   int linear_tid = tidx + tidy * BLOCK_X;
-
+  // Write back quantized values
   for (int i = linear_tid; i < bytes_per_block; i += BLOCK_X * BLOCK_Y) {
     int local_row = i / local_cols;
     int local_col = i % local_cols;
@@ -198,8 +196,21 @@ __global__ void fp_quantize_columnwise(
 
     if (global_row < M && global_col < output_cols) {
       int physical_idx = local_row * padded_local_cols + local_col;
-      out[global_row * output_cols + global_col] =
-          quantized_block[physical_idx];
+      out[global_row * output_cols + global_col] = quantized_smem[physical_idx];
+    }
+  }
+  // Write back scales
+  constexpr int num_scales = BLOCK_X * BLOCK_Y;
+  for (int i = linear_tid; i < num_scales; i += BLOCK_X * BLOCK_Y) {
+    int local_row = i / BLOCK_Y;
+    int local_col = i % BLOCK_Y;
+
+    int global_row = bidy * BLOCK_X + local_row;
+    int global_col = bidx * BLOCK_Y + local_col;
+
+    if (global_row < M && global_col < num_groups_per_row) {
+      scales[global_row * num_groups_per_row + global_col] =
+          scales_smem[local_row][local_col];
     }
   }
 }
