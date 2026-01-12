@@ -81,3 +81,16 @@ struct __nv_fp4_e2m1 {
   }
   uint8_t __x{0};
 };
+
+struct __nv_fp4x4_e2m1 {
+  __device__ operator float4() {
+    float4 out;
+    out.x = float(*(__nv_fp4_e2m1*)(__high & 0xf));
+    out.y = float(*(__nv_fp4_e2m1*)((__high >> 4) & 0xf));
+    out.z = float(*(__nv_fp4_e2m1*)(__low & 0xf));
+    out.w = float(*(__nv_fp4_e2m1*)((__low >> 4) & 0xf));
+    return out;
+  }
+  uint8_t __high{0};
+  uint8_t __low{0};
+};
