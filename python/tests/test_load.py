@@ -168,8 +168,8 @@ class TestLoad(mlx_tests.MLXTestCase):
 
         expected = [
             0,
-            mx.nan,
-            mx.nan,
+            480,
+            -480,
             -0.875,
             0.4375,
             -0.005859,
@@ -184,7 +184,7 @@ class TestLoad(mlx_tests.MLXTestCase):
             f.write(contents)
             f.seek(0)
             out = mx.load(f)["tensor"]
-        self.assertTrue(mx.allclose(out[0], expected[0], equal_nan=True))
+        self.assertTrue(mx.allclose(mx.from_fp8(out), expected))
 
     def test_save_and_load_gguf_metadata_basic(self):
         if not os.path.isdir(self.test_dir):
