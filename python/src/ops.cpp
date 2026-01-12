@@ -4281,7 +4281,7 @@ void init_ops(nb::module_& m) {
             ======  ======================   ==========================  =============  =====
             affine  32, 64\ :sup:`*`, 128    2, 3, 4\ :sup:`*`, 5, 6, 8  same as input  yes
             mxfp4   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
-            mxfp8   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
+            mxfp8   32\ :sup:`*`             8\ :sup:`*`                 e8m0           no
             nvfp4   16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
             ======  ======================   ==========================  =============  =====
 
@@ -4316,7 +4316,7 @@ void init_ops(nb::module_& m) {
           size must be 16. The elements are quantized to 4-bit or 8-bit
           precision floating-point values: E2M1 for ``"fp4"`` and E4M3 for
           ``"fp8"``. There is a shared 8-bit scale per group. The ``"mx"``
-          modes us an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
+          modes use an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
           Unlike ``affine`` quantization, these modes does not have a bias
           value.
 
