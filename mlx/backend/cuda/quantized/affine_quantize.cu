@@ -23,8 +23,7 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
   constexpr float eps = 1e-7;
   constexpr int simd_size = WARP_SIZE;
   constexpr float n_bins = (1 << bits) - 1;
@@ -141,8 +140,7 @@ __global__ void affine_dequantize(
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = get_pack_factor<bits, 8>();
   constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
