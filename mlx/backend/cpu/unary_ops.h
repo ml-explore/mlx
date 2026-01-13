@@ -158,7 +158,8 @@ struct FromFP8 {
     auto converted = *(Simd<float16_t, N>*)(&v);
     converted = converted * 256.0;
     auto sign = Simd<bool, N>(x & 128);
-    return Simd<float, N>(select(sign, -converted, converted));
+    Simd<float, N> out = select(sign, -converted, converted);
+    return out;
   }
   float operator()(uint8_t x) {
     return (*this)(Simd<uint8_t, 1>(x)).value;

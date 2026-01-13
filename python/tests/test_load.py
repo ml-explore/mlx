@@ -168,8 +168,8 @@ class TestLoad(mlx_tests.MLXTestCase):
 
         expected = [
             0,
-            480,
-            -480,
+            448,
+            -448,
             -0.875,
             0.4375,
             -0.005859,
@@ -179,7 +179,7 @@ class TestLoad(mlx_tests.MLXTestCase):
             -0.0039,
         ]
         expected = mx.array(expected, dtype=mx.bfloat16)
-        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00\x7f\xff\xb6.\x83\xba\xba\xbc\x82'
+        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00~\xfe\xb6.\x83\xba\xba\xbc\x82'
         with tempfile.NamedTemporaryFile(suffix=".safetensors") as f:
             f.write(contents)
             f.seek(0)
