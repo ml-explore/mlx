@@ -3197,8 +3197,6 @@ class TestOps(mlx_tests.MLXTestCase):
             )
         )
 
-
-class TestBroadcast(mlx_tests.MLXTestCase):
     def test_broadcast_shapes(self):
         # Basic broadcasting
         self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))
@@ -3242,6 +3240,13 @@ class TestBroadcast(mlx_tests.MLXTestCase):
         expected = mx.array([0.0, 2.0, 3.0, mx.nan])
         self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
         x = mx.array([3.0, mx.nan, 2.0, 0.0]) + 1j * mx.array([1.0] * 4)
+
+    def test_to_from_fp8(self):
+        vals = mx.array(
+            [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 0.015625]
+        )
+        self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
+        self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
 
 if __name__ == "__main__":
