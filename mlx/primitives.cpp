@@ -3717,7 +3717,7 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
 
 bool RandomBits::is_equivalent(const Primitive& other) const {
   const RandomBits& r_other = static_cast<const RandomBits&>(other);
-  return shape_ == r_other.shape_;
+  return shape_ == r_other.shape_ && width_ == r_other.width_;
 }
 
 std::vector<array> Real::vjp(
