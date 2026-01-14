@@ -255,8 +255,6 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   }
 }
 
-} // namespace cu
-
 inline std::tuple<dim3, dim3>
 get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
   constexpr int BLOCK_X = 32;
@@ -275,6 +273,8 @@ get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
   return std::make_tuple(grid, block);
 }
 
+} // namespace cu
+
 void fp_quantize(
     const array& w,
     array& wq,
@@ -290,7 +290,6 @@ void fp_quantize(
     dispatch_float_types(w.dtype(), "fp_quantize_columnwise", [&](auto type_tag) {
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       if constexpr (!std::is_same_v<T, double>) {
-        bool large = w.size() > UINT_MAX;
         auto M = w.shape(-2);
         auto K = w.shape(-1);
         auto kernel = cu::fp_quantize_columnwise<T, 32, 4, true, false>;
@@ -300,7 +299,7 @@ void fp_quantize(
           kernel = cu::fp_quantize_columnwise<T, 16, 4, false, false>;
         }
         auto [num_blocks, block_dims] =
-            get_columnwise_quantize_launch_args(w.size(), group_size, M, K);
+            cu::get_columnwise_quantize_launch_args(w.size(), group_size, M, K);
         enc.add_kernel_node(
             kernel,
             num_blocks,
@@ -327,9 +326,8 @@ void fp_quantize(
         } else if (group_size == 16) {
           kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
         }
-        bool large = w.size() > UINT_MAX;
         auto [num_blocks, block_dims] = get_launch_args(
-            w.size(), w.shape(), w.strides(), large, group_size);
+            w.size(), w.shape(), w.strides(), w.size() > UINT_MAX, group_size);
 
         enc.add_kernel_node(
             kernel,

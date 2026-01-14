@@ -24,10 +24,8 @@ inline array ensure_row_contiguous(
   }
 }
 
-inline array ensure_row_column_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
   auto stride_0 = x.strides()[x.ndim() - 2]; // if row contiguous = num columns,
                                              // = 1 if row contiguous T
   auto stride_1 =
@@ -90,7 +88,7 @@ void fast::Quantize::eval_gpu(
       fp_dequantize(wq, scales, w, group_size_, bits_, enc, s);
     }
   } else {
-    auto w = ensure_row_column_contiguous(inputs[0], enc, s);
+    auto w = ensure_contiguous(inputs[0], enc, s);
     auto& wq = outputs[0];
     auto& scales = outputs[1];
 
