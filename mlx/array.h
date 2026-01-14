@@ -2,9 +2,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "mlx/allocator.h"
@@ -14,6 +16,20 @@
 
 namespace mlx::core {
 
+  namespace detail {
+    inline std::size_t normalize_dim(int dim, std::size_t ndims) {
+      using S = std::ptrdiff_t;
+      S d = static_cast<S>(dim);
+      S n = static_cast<S>(ndims);
+
+      if (d < 0) d += n;               // -1 => last dim
+      if (d < 0 || d >= n) {
+	throw std::out_of_range("dimension out of range");
+      }
+      return static_cast<std::size_t>(d);
+    }
+  } // namespace detail
+  
 // Forward declaration
 class Primitive;
 
@@ -121,7 +137,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto shape(int dim) const {
-    return shape().at(dim < 0 ? dim + ndim() : dim);
+    return shape().at(detail::normalize_dim(dim, ndim()));
   }
 
   /** The strides of the array. */
@@ -135,7 +151,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto strides(int dim) const {
-    return strides().at(dim < 0 ? dim + ndim() : dim);
+    return strides().at(detail::normalize_dim(dim, ndim()));
   }
 
   /** Get the arrays data type. */

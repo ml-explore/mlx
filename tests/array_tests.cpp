@@ -1,5 +1,8 @@
 // Copyright © 2023 Apple Inc.
 #include <climits>
+#include <cassert>
+#include <vector>
+#include <stdexcept>
 
 #include "doctest/doctest.h"
 
@@ -632,4 +635,36 @@ TEST_CASE("test make array from user buffer") {
   }
   // deleter should always get called
   CHECK_EQ(count, 1);
+}
+
+TEST CASE("Test Negative Indexing") {
+ // 2D array: shape = {2, 3}
+  std::vector<float> data(6, 1.0f);
+  array a(data.begin(), Shape{2, 3});
+
+  // Valid negative indexing
+  assert(a.shape(-1) == a.shape(1));
+  assert(a.shape(-2) == a.shape(0));
+  assert(a.shape(-1) == 3);
+  assert(a.shape(-2) == 2);
+
+  assert(a.strides(-1) == a.strides(1));
+  assert(a.strides(-2) == a.strides(0));
+
+  // Invalid: too negative
+  try {
+    (void)a.shape(-3);
+    assert(false && "Expected out_of_range for shape(-3)");
+  } catch (const std::out_of_range&) {}
+
+  try {
+    (void)a.strides(-3);
+    assert(false && "Expected out_of_range for strides(-3)");
+  } catch (const std::out_of_range&) {}
+
+  // Invalid: too positive
+  try {
+    (void)a.shape(2);
+    assert(false && "Expected out_of_range for shape(2)");
+  } catch (const std::out_of_range&) {}
 }
