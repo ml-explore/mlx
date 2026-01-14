@@ -164,6 +164,8 @@ if(NOT MLX_METAL_JIT)
     build_kernel(steel/attn/kernels/steel_attention_nax
                  ${STEEL_NAX_ATTN_HEADERS})
 
+  else()
+    target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
   endif()
 
 endif()

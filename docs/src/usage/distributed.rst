@@ -584,7 +584,7 @@ the process.
 **MLX_JACCL_COORDINATOR** should contain the IP and port that rank 0 can listen
 to all the other ranks connect to in order to establish the RDMA connections.
 
-**MLX_IBV_DEVICES** should contain the path to a json file that contains the
+**MLX_JACCL_DEVICES** should contain the path to a json file that contains the
 ibverbs device names that connect each node to each other node, something like
 the following:
 

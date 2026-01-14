@@ -95,7 +95,6 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
   } else if (str == ST_C64) {
     return complex64;
   } else if (str == ST_F8_E4M3) {
-    // We convert this manually later
     return uint8;
   } else {
     throw std::runtime_error(
@@ -148,16 +147,14 @@ SafetensorsLoad load_safetensors(
     const Shape& shape = item.value().at("shape");
     const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
-    auto loaded_array = array(
-        shape,
-        type,
-        std::make_shared<Load>(
-            stream, in_stream, offset + data_offsets.at(0), false),
-        std::vector<array>{});
-    if (dtype == ST_F8_E4M3) {
-      loaded_array = from_fp8(loaded_array, bfloat16, s);
-    }
-    res.insert({item.key(), loaded_array});
+    res.insert(
+        {item.key(),
+         array(
+             shape,
+             type,
+             std::make_shared<Load>(
+                 stream, in_stream, offset + data_offsets.at(0), false),
+             std::vector<array>{})});
   }
   return {res, metadata_map};
 }

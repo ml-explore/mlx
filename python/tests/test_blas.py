@@ -297,6 +297,7 @@ class TestBlas(mlx_tests.MLXTestCase):
             self.assertTrue(np.allclose(out_mlx, out_npy, atol=1e-5))
 
     def test_matrix_vector(self):
+        mx.random.seed(0)
         for dtype in self.dtypes:
             with self.subTest(dtype=dtype):
                 np_dtype = getattr(np, dtype)

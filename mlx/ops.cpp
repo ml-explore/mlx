@@ -4335,7 +4335,7 @@ std::pair<int, int> extract_qqmm_dims(
 }
 
 array qqmm(
-    array x,
+    array in_x,
     array w,
     std::optional<array> scales_w,
     std::optional<int> group_size_ /* = std::nullopt */,
@@ -4360,6 +4360,16 @@ array qqmm(
   // 2. w is not quantized, scales is not provided
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
+
+  // Allow gemv
+  auto x = in_x;
+  if (x.ndim() == 1) {
+    // Insert a singleton dim in the beginning
+    x = expand_dims(x, 0, s);
+  } else if (w.ndim() == 2 && x.ndim() > 2) {
+    x = flatten(x, 0, -2, s);
+  }
+
   // validate inputs
   validate_qqmm_inputs(x, w, scales_w, group_size, bits);
   // validate and extract shapes
@@ -4374,11 +4384,19 @@ array qqmm(
   }
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
-  return array(
+  auto out = array(
       std::move(out_shape),
       x.dtype(), // output dtype is the same as x dtype
       std::make_shared<QQMatmul>(stream, group_size, bits, qmode),
       std::move(inputs));
+  if (in_x.ndim() > 2) {
+    auto orig_shape = in_x.shape();
+    orig_shape.pop_back();
+    out = unflatten(out, 0, std::move(orig_shape), s);
+  } else if (in_x.ndim() == 1) {
+    out = squeeze(out, 0, s);
+  }
+  return out;
 }
 
 array pack_and_quantize(
