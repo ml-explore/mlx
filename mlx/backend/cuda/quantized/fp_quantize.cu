@@ -326,8 +326,9 @@ void fp_quantize(
         } else if (group_size == 16) {
           kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
         }
+        bool large = w.size() > UINT_MAX;
         auto [num_blocks, block_dims] = get_launch_args(
-            w.size(), w.shape(), w.strides(), w.size() > UINT_MAX, group_size);
+            w.size(), w.shape(), w.strides(), large, group_size);
 
         enc.add_kernel_node(
             kernel,
