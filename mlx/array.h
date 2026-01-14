@@ -16,20 +16,21 @@
 
 namespace mlx::core {
 
-  namespace detail {
-    inline std::size_t normalize_dim(int dim, std::size_t ndims) {
-      using S = std::ptrdiff_t;
-      S d = static_cast<S>(dim);
-      S n = static_cast<S>(ndims);
+namespace detail {
+inline std::size_t normalize_dim(int dim, std::size_t ndims) {
+  using S = std::ptrdiff_t;
+  S d = static_cast<S>(dim);
+  S n = static_cast<S>(ndims);
 
-      if (d < 0) d += n;               // -1 => last dim
-      if (d < 0 || d >= n) {
-	throw std::out_of_range("dimension out of range");
-      }
-      return static_cast<std::size_t>(d);
-    }
-  } // namespace detail
-  
+  if (d < 0)
+    d += n; // -1 => last dim
+  if (d < 0 || d >= n) {
+    throw std::out_of_range("dimension out of range");
+  }
+  return static_cast<std::size_t>(d);
+}
+} // namespace detail
+
 // Forward declaration
 class Primitive;
 

@@ -1,8 +1,8 @@
 // Copyright © 2023 Apple Inc.
-#include <climits>
 #include <cassert>
-#include <vector>
+#include <climits>
 #include <stdexcept>
+#include <vector>
 
 #include "doctest/doctest.h"
 
