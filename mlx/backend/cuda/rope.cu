@@ -332,7 +332,7 @@ void RoPE::eval_gpu(
         using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if (single && !with_freqs) {
           auto kernel =
-              cu::rope_single<DataType, traditional.value, forward.value>;
+              &cu::rope_single<DataType, traditional.value, forward.value>;
           uint2 dims = make_uint2(dims_ / 2, N);
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
           encoder.add_kernel_node(

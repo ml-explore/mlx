@@ -370,7 +370,7 @@ void RMSNorm::eval_gpu(
           axis_size, [&](auto group_dim, auto n_groups, auto groups_per_block) {
             constexpr int block_dim = n_groups() * group_dim();
             auto kernel =
-                cu::rms_norm_small<DataType, block_dim, group_dim(), N_READS>;
+                &cu::rms_norm_small<DataType, block_dim, group_dim(), N_READS>;
             auto n_blocks =
                 (n_rows + groups_per_block() - 1) / groups_per_block();
             encoder.add_kernel_node(

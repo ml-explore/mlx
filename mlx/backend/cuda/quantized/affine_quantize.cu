@@ -252,7 +252,7 @@ void affine_quantize(
     dispatch_groups(group_size_, [&](auto group_size) {
       dispatch_bits(bits_, [&](auto bits) {
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        auto kernel = cu::affine_quantize<T, group_size.value, bits.value>;
+        auto kernel = &cu::affine_quantize<T, group_size.value, bits.value>;
         auto [num_blocks, block_dims] =
             get_launch_args(size, grid_shape, w.strides(), large);
         enc.add_kernel_node(

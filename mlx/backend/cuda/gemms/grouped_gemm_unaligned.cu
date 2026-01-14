@@ -117,11 +117,11 @@ void grouped_gemm_v2(
   dispatch_bool(a_transposed, [&](auto a_transposed_tag) {
     dispatch_bool(b_transposed, [&](auto b_transposed_tag) {
       using LayoutA = std::conditional_t<
-          a_transposed_tag,
+          decltype(a_transposed_tag)::value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using LayoutB = std::conditional_t<
-          b_transposed_tag,
+          decltype(b_transposed_tag)::value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using GemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
@@ -216,7 +216,7 @@ void cutlass_grouped_gemm_unaligned(
   constexpr int N_READS = 4;
   size_t n_threads = cuda::ceil_div(indices.size(), N_READS);
   n_threads = group_count < n_threads ? n_threads : group_count;
-  dim3 block_dims(std::min(n_threads, 1024ul));
+  dim3 block_dims(std::min(n_threads, 1024ull));
   dim3 num_blocks(1);
 
   encoder.set_input_array(indices);
