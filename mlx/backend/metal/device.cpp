@@ -326,28 +326,28 @@ Device::Device() {
   auto arch = arch_.back();
   switch (arch) {
     case 'p': // phone
-      max_ops_per_buffer_ = 20;
-      max_mb_per_buffer_ = 40;
+      max_ops_per_buffer = 20;
+      max_mb_per_buffer = 40;
       break;
     case 'g': // base, pro
-      max_ops_per_buffer_ = 40;
-      max_mb_per_buffer_ = 40;
+      max_ops_per_buffer = 40;
+      max_mb_per_buffer = 40;
       break;
     case 's': // max
-      max_ops_per_buffer_ = 50;
-      max_mb_per_buffer_ = 50;
+      max_ops_per_buffer = 50;
+      max_mb_per_buffer = 50;
       break;
     case 'd': // ultra
-      max_ops_per_buffer_ = 50;
-      max_mb_per_buffer_ = 50;
+      max_ops_per_buffer = 50;
+      max_mb_per_buffer = 50;
       break;
     default: // default to medium
-      max_ops_per_buffer_ = 40;
-      max_mb_per_buffer_ = 40;
+      max_ops_per_buffer = 40;
+      max_mb_per_buffer = 40;
       break;
   }
-  max_ops_per_buffer_ = env::max_ops_per_buffer(max_ops_per_buffer_);
-  max_mb_per_buffer_ = env::max_mb_per_buffer(max_mb_per_buffer_);
+  max_ops_per_buffer = env::max_ops_per_buffer(max_ops_per_buffer);
+  max_mb_per_buffer = env::max_mb_per_buffer(max_mb_per_buffer);
 }
 
 Device::~Device() {
@@ -382,8 +382,8 @@ MTL::CommandQueue* Device::get_queue(Stream stream) {
 
 bool Device::command_buffer_needs_commit(int index) {
   auto& stream = get_stream_(index);
-  return (stream.buffer_ops > max_ops_per_buffer_) ||
-      ((stream.buffer_sizes >> 20) > max_mb_per_buffer_);
+  return (stream.buffer_ops > max_ops_per_buffer) ||
+      ((stream.buffer_sizes >> 20) > max_mb_per_buffer);
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {

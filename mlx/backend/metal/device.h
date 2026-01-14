@@ -171,6 +171,8 @@ class Device {
 
   MTL::CommandBuffer* get_command_buffer(int index);
   bool command_buffer_needs_commit(int index);
+  int max_ops_per_buffer;
+  int max_mb_per_buffer;
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
@@ -257,8 +259,6 @@ class Device {
   const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
   int arch_gen_;
-  int max_ops_per_buffer_;
-  int max_mb_per_buffer_;
 };
 
 Device& device(mlx::core::Device);
