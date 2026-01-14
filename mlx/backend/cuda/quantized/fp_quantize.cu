@@ -105,7 +105,7 @@ __global__ void fp_quantize_columnwise(
   // Quantized output: [M, K/elem_per_byte] row-major (K-major)
   // Scales: [M, K/group_size] row-major (K-major)
   // Quantize along K (last dimension, groups of group_size elements)
-  
+
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0;
