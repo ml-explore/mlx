@@ -102,9 +102,10 @@ __global__ void fp_quantize_columnwise(
     int M,
     int K) {
   // Input: [M, K] with strides [1, M] (M-major)
-  // Output: [M, K/elem_per_byte] row-major (K-major)
+  // Quantized output: [M, K/elem_per_byte] row-major (K-major)
+  // Scales: [M, K/group_size] row-major (K-major)
   // Quantize along K (last dimension, groups of group_size elements)
-
+  
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0;
@@ -142,6 +143,7 @@ __global__ void fp_quantize_columnwise(
 
   bool valid = (row_base < M) && (col_base + group_size <= K);
   if (valid) {
+#pragma unroll
     for (int i = 0; i < group_size; i++) {
       auto index = row_base + (col_base + i) * M;
       thread_data[i] = w[index];
@@ -149,6 +151,7 @@ __global__ void fp_quantize_columnwise(
 
     // Compute scale
     Tx2 amax_2x = Tx2{0.0f, 0.0f};
+#pragma unroll
     for (int r = 0; r < group_size; r += 2) {
       auto pair = Tx2{thread_data[r], thread_data[r + 1]};
       abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
@@ -187,6 +190,7 @@ __global__ void fp_quantize_columnwise(
   int num_groups_per_row = K / group_size;
   int linear_tid = tidx + tidy * BLOCK_X;
   // Write back quantized values
+#pragma unroll
   for (int i = linear_tid; i < bytes_per_block; i += BLOCK_X * BLOCK_Y) {
     int local_row = i / local_cols;
     int local_col = i % local_cols;
@@ -201,6 +205,7 @@ __global__ void fp_quantize_columnwise(
   }
   // Write back scales
   constexpr int num_scales = BLOCK_X * BLOCK_Y;
+#pragma unroll
   for (int i = linear_tid; i < num_scales; i += BLOCK_X * BLOCK_Y) {
     int local_row = i / BLOCK_Y;
     int local_col = i % BLOCK_Y;
