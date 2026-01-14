@@ -803,3 +803,16 @@ TEST_CASE("test compile with no-ops") {
   auto out = compile(fun)({in})[0];
   CHECK_EQ(out.inputs()[0].id(), in.id());
 }
+
+TEST_CASE("test compile random bits") {
+  auto fun = [](const std::vector<array>& inputs) {
+    auto key = inputs[0];
+    auto a = random::bits({32, 32}, 4, key);
+    auto b = random::bits({32, 32}, 2, key);
+    return std::vector<array>{a + b};
+  };
+  auto in = random::key(0);
+  auto expected = fun({in})[0];
+  auto out = compile(fun)({in})[0];
+  CHECK(array_equal(out, expected).item<bool>());
+}
