@@ -15,22 +15,12 @@ namespace {
 
 inline array
 ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
-  auto stride_0 = x.strides()[x.ndim() - 2]; // if row contiguous = num columns,
-                                             // = 1 if row contiguous T
-  auto stride_1 =
-      x.strides()[x.ndim() - 1]; // if row contiguous = 1, = num columns  T
-
-  if (stride_0 == x.shape(-1) && stride_1 == 1) {
-    return x; // row contiguous
-  } else {
-    if (stride_0 == 1 && stride_1 == x.shape(-2)) {
-      return x; // column contiguous
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      enc.add_temporary(x_copy);
-      return x_copy;
-    }
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
+    return x;
   }
+  array x_copy = contiguous_copy_gpu(x, s);
+  enc.add_temporary(x_copy);
+  return x_copy;
 }
 
 array pad_and_swizzle_scales(
