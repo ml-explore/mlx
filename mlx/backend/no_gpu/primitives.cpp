@@ -30,7 +30,6 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
-    bool is_training,
     bool output_logsumexp,
     Stream s) {
   return true;
@@ -42,7 +41,10 @@ bool fast::ScaledDotProductAttention::supports_bool_mask() {
 
 bool fast::ScaledDotProductAttentionVJP::use_fallback(
     const array& q,
-    Stream s) {
+    Stream s,
+    bool /* has_mask */,
+    bool /* has_sinks */,
+    int /* n_kv_heads */) {
   return true;
 }
 

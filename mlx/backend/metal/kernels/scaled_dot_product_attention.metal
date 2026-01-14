@@ -3,6 +3,7 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/sdpa_vector.h"
+#include "mlx/backend/metal/kernels/sdpa_vector_vjp.h"
 
 using namespace metal;
 
@@ -41,4 +42,42 @@ using namespace metal;
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
+
+// SDPA vector VJP instantiations
+#define instantiate_sdpa_vector_vjp(type, qk_dim, value_dim)    \
+  instantiate_kernel(                                           \
+      "sdpa_vector_vjp_" #type "_" #qk_dim "_" #value_dim,      \
+      sdpa_vector_vjp,                                          \
+      type,                                                     \
+      qk_dim,                                                   \
+      value_dim)
+
+// Note: D=256 exceeds Metal's 32KB threadgroup memory limit for vector VJP kernel
+#define instantiate_sdpa_vector_vjp_heads(type)    \
+  instantiate_sdpa_vector_vjp(type, 64, 64)        \
+  instantiate_sdpa_vector_vjp(type, 96, 96)        \
+  instantiate_sdpa_vector_vjp(type, 128, 128)
+
+instantiate_sdpa_vector_vjp_heads(float)
+instantiate_sdpa_vector_vjp_heads(bfloat16_t)
+instantiate_sdpa_vector_vjp_heads(float16_t)
+
+// SDPA vector VJP accumulate instantiations (for half/bfloat16 with float32 accumulators)
+#define instantiate_sdpa_vector_vjp_accumulate(type, qk_dim, value_dim)    \
+  instantiate_kernel(                                           \
+      "sdpa_vector_vjp_accumulate_" #type "_" #qk_dim "_" #value_dim,      \
+      sdpa_vector_vjp_accumulate,                                          \
+      type,                                                     \
+      qk_dim,                                                   \
+      value_dim)
+
+// Note: D=256 exceeds Metal's 32KB threadgroup memory limit for vector VJP kernel
+#define instantiate_sdpa_vector_vjp_accumulate_heads(type)    \
+  instantiate_sdpa_vector_vjp_accumulate(type, 64, 64)        \
+  instantiate_sdpa_vector_vjp_accumulate(type, 96, 96)        \
+  instantiate_sdpa_vector_vjp_accumulate(type, 128, 128)
+
+// Note: Only instantiate for half/bfloat16 since float32 doesn't need accumulate variant
+instantiate_sdpa_vector_vjp_accumulate_heads(bfloat16_t)
+instantiate_sdpa_vector_vjp_accumulate_heads(float16_t)
     // clang-format on
