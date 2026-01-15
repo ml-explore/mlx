@@ -10,6 +10,7 @@ constant bool do_causal [[function_constant(22)]];
 constant bool bool_mask [[function_constant(23)]];
 constant bool float_mask [[function_constant(24)]];
 constant bool has_sinks [[function_constant(25)]];
+constant int blocks [[function_constant(26)]];
 
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
@@ -211,7 +212,6 @@ template <typename T, int D, int V = D>
   constexpr int v_per_thread = V / BD;
   int inner_k_stride = BN * int(k_seq_stride);
   int inner_v_stride = BN * int(v_seq_stride);
-  constexpr int blocks = 32;
 
   typedef float U;
 
@@ -370,38 +370,56 @@ template <typename T, int D>
   constexpr int BN = 32;
   constexpr int BD = 32;
   constexpr int elem_per_thread = D / BD;
-  constexpr int blocks = 32;
 
   typedef float U;
 
-  thread U o[elem_per_thread];
+  thread U o[elem_per_thread] = {0};
   threadgroup U outputs[BN * BD];
 
   // Adjust positions
   const int head_idx = tid.x;
   const int q_seq_idx = tid.y;
   const int q_offset = head_idx * tpg.y + q_seq_idx;
-  ;
   partials += q_offset * blocks * D + simd_gid * D + simd_lid * elem_per_thread;
   sums += q_offset * blocks;
   maxs += q_offset * blocks;
   out += q_offset * D + simd_gid * elem_per_thread;
 
-  // First everybody reads the max and sum_exp
-  U max_score = maxs[simd_lid];
-  U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
-  U sum_exp_score = simd_sum(sums[simd_lid] * factor);
+  // Set defaults
+  U sum_exp_score = 0.0;
+  U max_score = Limits<U>::finite_min;
 
-  // Now read the block into registers and then use shared memory to transpose
-  // it
-  for (int i = 0; i < elem_per_thread; i++) {
-    o[i] = partials[i];
+  // Reduce the max
+  for (int b = 0; b < blocks / BN; ++b) {
+    max_score = max(max_score, maxs[simd_lid + BN * b]);
   }
+  max_score = simd_max(max_score);
+
+  // Reduce the d
+  for (int b = 0; b < blocks / BN; ++b) {
+    U factor = fast::exp(maxs[simd_lid + BN * b] - max_score);
+    sum_exp_score += factor * sums[simd_lid + BN * b];
+  }
+  sum_exp_score = simd_sum(sum_exp_score);
+
+  // Reduce the sum exp and partials
+  for (int b = 0; b < blocks / BN; ++b) {
+    U factor = fast::exp(maxs[simd_gid] - max_score);
+
+    // Update the output accumulator
+    for (int i = 0; i < elem_per_thread; i++) {
+      o[i] += factor * partials[i];
+    }
+    maxs += BN;
+    sums += BN;
+    partials += BN * D;
+  }
+
+  // Use shared memory to transpose and reduce the final block
   for (int i = 0; i < elem_per_thread; i++) {
     outputs[simd_lid * BD + simd_gid] = o[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    o[i] = simd_sum(outputs[simd_gid * BD + simd_lid] * factor);
+    o[i] = simd_sum(outputs[simd_gid * BD + simd_lid]);
     o[i] = sum_exp_score == 0 ? o[i] : (o[i] / sum_exp_score);
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }

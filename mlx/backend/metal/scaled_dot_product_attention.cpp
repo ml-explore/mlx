@@ -439,7 +439,7 @@ void sdpa_vector_2pass(
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
-  int blocks = 32;
+  int blocks = N < 8192 ? 32 : 256;
   int B = q.shape(0) * q.shape(1);
 
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
@@ -479,12 +479,14 @@ void sdpa_vector_2pass(
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
+      {&blocks, MTL::DataType::DataTypeInt, 26},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
-  hash_name += has_sinks ? "_sinks" : "_nosinks";
+  hash_name += has_sinks ? "_sinks_" : "_nosinks_";
+  hash_name += std::to_string(blocks);
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -527,13 +529,18 @@ void sdpa_vector_2pass(
 
   // Final pass
   kname.clear();
-  kname += "sdpa_vector_2pass_2_";
+  kname = "sdpa_vector_2pass_2_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(v.shape(-1));
 
+  func_consts = {
+      {&blocks, MTL::DataType::DataTypeInt, 26},
+  };
+  hash_name = kname + "_" + std::to_string(blocks);
+
   // Get the kernel
-  kernel = d.get_kernel(kname);
+  kernel = d.get_kernel(kname, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
