@@ -362,7 +362,6 @@ template <
             const int M_str = int(mask_params->M_strides[2]);
             const int M_load_off = row_pos * M_str + col_pos;
             mfrag.load(mask + M_load_off, M_str, Int<1>{});
-
           }
 
           thread auto& fg = Ptile.subtile_at(iq, ik).frag_at(0, 0);
