@@ -14,6 +14,9 @@
 #include <cuda_fp4.h>
 #include <cuda_fp8.h>
 
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
 namespace mlx::core {
 namespace cu {
 
@@ -31,7 +34,17 @@ struct Dequantize {
 namespace cg = cooperative_groups;
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
+__global__ void fp_quantize(
+    T* w,
+    uint8_t* out,
+    uint8_t* scales,
+    size_t size,
+    float* tensor_amax) {
+  // NVFP4 conversion:
+  // Global encode scale: (448 × 6) / *tensor_amax
+  // Per-block decode scale: S_dec_b = (block_amax / 6) × S_enc → stored as FP8
+  // E4M3 Per-block encode scale: S_enc_b = S_enc / S_dec_b
+  const float scale_enc = (F8E4M3_MAX * F4E2M1_MAX) / *tensor_amax;
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -50,7 +63,7 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
   }
 
   auto w_tile = load_vector<group_size, T>(w, thread_idx);
-  float scale = 0.0f;
+  float scale_dec_b = 0.0f;
 
   Tx2 amax_2x = Tx2{0.0f, 0.0f};
 
@@ -60,17 +73,18 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
     abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
   }
 
-  scale = static_cast<float>(
+  scale_dec_b = static_cast<float>(
       max(fabsf(static_cast<float>(amax_2x.x)),
           fabsf(static_cast<float>(amax_2x.y))));
 
-  scale /= bits == 4 ? 6.0f : 448.0f;
+  scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
+  scale_dec_b *= use_mx_scale ? 1.0f : scale_enc;
   // Convert to mx scale or nv scale
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
-  auto s = ScaleType(scale);
+  auto s = ScaleType(scale_dec_b);
   uint8_t q_scale = s.__x;
-  scale = float(s);
+  float scale_enc_b = scale_enc / float(scale_dec_b);
 
   scales[thread_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;
@@ -81,11 +95,11 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
     Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
     if constexpr (bits == 8) {
       uint32_t quantized_val =
-          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
       *reinterpret_cast<uint32_t*>(&quantized[i * 4]) = quantized_val;
     } else {
       uint16_t quantized_val =
-          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
       *reinterpret_cast<uint16_t*>(&quantized[i * 2]) = quantized_val;
     }
   }
@@ -93,8 +107,12 @@ __global__ void fp_quantize(T* w, uint8_t* out, uint8_t* scales, size_t size) {
 }
 
 template <typename T, int group_size, int bits, bool use_mx_scale>
-__global__ void
-fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
+__global__ void fp_dequantize(
+    const uint8_t* w,
+    const uint8_t* scales,
+    T* out,
+    size_t size,
+    float* tensor_amax) {
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -105,6 +123,8 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = bits == 8 ? 1 : 2;
+  const float inv_scale_enc =
+      use_mx_scale ? 1.0f : (*tensor_amax) / (F8E4M3_MAX * F4E2M1_MAX);
   size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t oindex = offset * pack_factor;
 
@@ -115,7 +135,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
   size_t gindex = oindex / group_size;
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
-  auto scale = float(((ScaleType*)(scales))[gindex]);
+  auto scale = float(((ScaleType*)(scales))[gindex]) * inv_scale_enc;
 
   out += oindex;
 
@@ -138,6 +158,7 @@ void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
+    const array& tensor_amax,
     int group_size,
     int bits,
     cu::CommandEncoder& enc,
@@ -166,7 +187,8 @@ void fp_quantize(
           gpu_ptr<T>(w),
           gpu_ptr<uint8_t>(wq),
           gpu_ptr<uint8_t>(scales),
-          w.size());
+          w.size(),
+          gpu_ptr<float>(tensor_amax));
     } else {
       throw std::runtime_error(
           "[Quantize::eval_gpu] Can not quantize input with type float64.");
@@ -177,6 +199,7 @@ void fp_quantize(
 void fp_dequantize(
     const array& wq,
     const array& scales,
+    const array& tensor_amax,
     array& w,
     int group_size,
     int bits,
@@ -212,7 +235,8 @@ void fp_dequantize(
           gpu_ptr<uint8_t>(wq),
           gpu_ptr<uint8_t>(scales),
           gpu_ptr<T>(w),
-          w.size());
+          w.size(),
+          gpu_ptr<float>(tensor_amax));
     } else {
       throw std::runtime_error(
           "[Quantize::eval_gpu] Can not dequantize to output with type float64.");

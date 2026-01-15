@@ -65,7 +65,8 @@ void fast::Quantize::eval_gpu(
       auto biases = ensure_row_contiguous(inputs[2], enc, s);
       affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
     } else {
-      fp_dequantize(wq, scales, w, group_size_, bits_, enc, s);
+      auto tensor_amax = inputs[2];
+      fp_dequantize(wq, scales, tensor_amax, w, group_size_, bits_, enc, s);
     }
   } else {
     auto w = ensure_row_contiguous(inputs[0], enc, s);
@@ -74,12 +75,25 @@ void fast::Quantize::eval_gpu(
 
     wq.set_data(cu::malloc_async(wq.nbytes(), enc));
     scales.set_data(cu::malloc_async(scales.nbytes(), enc));
+
     if (mode_ == QuantizationMode::Affine) {
       auto& biases = outputs[2];
       biases.set_data(cu::malloc_async(biases.nbytes(), enc));
       affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
     } else {
-      fp_quantize(w, wq, scales, group_size_, bits_, enc, s);
+      auto& tensor_amax = outputs[2];
+      tensor_amax.set_data(cu::malloc_async(tensor_amax.nbytes(), enc));
+      // here we will write launch amax kernel
+      all_reduce(enc, s, w, tensor_amax, MAX_OP); // compute amax
+      fp_quantize(
+          w,
+          wq,
+          scales,
+          tensor_amax,
+          group_size_,
+          bits_,
+          enc,
+          s); // pass amax to quantization kernel
     }
   }
 }
