@@ -24,6 +24,8 @@ runs:
           # Can not build tests and stubs when the built executables can not run.
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF -DMLX_BUILD_PYTHON_STUBS=OFF"
         fi
+        # Install cpu-only torch to save space
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
         pip install --no-build-isolation -e ".[dev]" -v
         # Pass the CMAKE_ARGS to following steps.
         echo CMAKE_ARGS="$CMAKE_ARGS" >> $GITHUB_OUTPUT

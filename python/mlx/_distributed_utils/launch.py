@@ -376,7 +376,7 @@ def launch_jaccl(parser, hosts, args, command):
     env = args.env
     cwd = args.cwd
     env.append(f"MLX_JACCL_COORDINATOR={coordinator}:{args.starting_port}")
-    files = {"MLX_JACCL_DEVICES": json.dumps([h.rdma for h in hosts])}
+    files = {"MLX_IBV_DEVICES": json.dumps([h.rdma for h in hosts])}
 
     log(args.verbose, "Running", shlex.join(command))
 
