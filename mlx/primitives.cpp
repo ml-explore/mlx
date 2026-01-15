@@ -3478,7 +3478,7 @@ bool QQMatmul::is_equivalent(const Primitive& other) const {
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
   auto out_shape = inputs[0].shape();
-  int w_outer_dims = inputs[2].shape(-2);
+  int w_outer_dims = inputs[1].shape(-2);
   out_shape.back() = w_outer_dims;
   return {std::move(out_shape)};
 }
@@ -3494,16 +3494,12 @@ std::vector<array> QQMatmul::vjp(
   }
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
-  std::vector<int> reorder(cotan.ndim());
-  std::iota(reorder.begin(), reorder.end(), 0);
-  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   auto& s = stream();
   // primal[1] -- non quantized w (N, K)
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
   for (auto arg : argnums) {
-    // TODO: we need a kernel that will quantize columnwise + transpose
     if (arg == 0) { // gradient wrt to x
       // We transpose weights -> quantize along N
       vjps.push_back(qqmm(

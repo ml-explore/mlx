@@ -13,33 +13,10 @@ namespace mlx::core {
 
 namespace {
 
-inline array ensure_row_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    enc.add_temporary(x_copy);
-    return x_copy;
-  } else {
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
     return x;
-  }
-}
-
-inline array ensure_row_contiguous_matrix(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (x.ndim() < 2) {
-    if (x.strides()[0] == 1) {
-      return x;
-    }
-  } else {
-    auto stride_0 = x.strides()[x.ndim() - 2];
-    auto stride_1 = x.strides()[x.ndim() - 1];
-    if (stride_0 == x.shape(-1) && stride_1 == 1) {
-      return x;
-    }
   }
   array x_copy = contiguous_copy_gpu(x, s);
   enc.add_temporary(x_copy);
@@ -131,8 +108,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto quantize = [&](const array& input,
                       cu::CommandEncoder& encoder,
                       const Stream& s) -> std::pair<array, array> {
-    const array x = ensure_row_contiguous(input, encoder, s);
-
+    auto x = ensure_contiguous(input, encoder, s);
     auto xq_shape = x.shape();
     xq_shape.back() = x.shape(-1) * bits_ / 32;
 
