@@ -1,3 +1,5 @@
+.. _tensor_parallelism:
+
 Tensor Parallelism
 ==================
 
@@ -60,7 +62,7 @@ We can create partial inputs based on rank. For example, for an input with 1024 
   layer = nn.ShardedToAllLinear(1024, 1024, bias=False) # initialize the layer
   y = layer(x[part]) # process sharded input
 
-This code splits the 1024 input features into ``world.size()`` different groups which are assigned continuously based on ``world.rank()``. More information about distributed communication can be found in the :doc:`Distributed Communication <../usage/distributed>` page. 
+This code splits the 1024 input features into ``world.size()`` different groups which are assigned continuously based on ``world.rank()``. More information about distributed communication can be found in the :ref:`Distributed Communication <usage_distributed>` page. 
 
 :class:`QuantizedShardedToAllLinear <mlx.nn.QuantizedShardedToAllLinear>` is the quantized equivalent of :class:`mlx.nn.ShardedToAllLinear`.
 Similar to :class:`mlx.nn.QuantizedLinear`, its parameters are frozen and
@@ -117,7 +119,7 @@ LLM Inference with Tensor Parallelism
 
 We can apply these TP techniques to LLMs in order to enable inference for much larger models by sharding parameters from huge layers across multiple devices.
 
-To demonstrate this, let's apply TP to the Transformer block of our :doc:`Llama Inference <../examples/llama-inference>` example. In this example, we will use the same inference script as the Llama Inference example, which can be found in `mlx-examples`_.
+To demonstrate this, let's apply TP to the Transformer block of our :doc:`Llama Inference <llama-inference>` example. In this example, we will use the same inference script as the Llama Inference example, which can be found in `mlx-examples`_.
 
 Our first edit is to initialize the distributed communication group and get the current process rank:
 
