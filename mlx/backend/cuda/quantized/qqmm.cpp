@@ -2,9 +2,10 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/quantized/cublas_qqmm.h"
+#include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
@@ -12,39 +13,6 @@
 namespace mlx::core {
 
 namespace {
-
-inline array ensure_row_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    enc.add_temporary(x_copy);
-    return x_copy;
-  } else {
-    return x;
-  }
-}
-
-inline array ensure_row_contiguous_matrix(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (x.ndim() < 2) {
-    if (x.strides()[0] == 1) {
-      return x;
-    }
-  } else {
-    auto stride_0 = x.strides()[x.ndim() - 2];
-    auto stride_1 = x.strides()[x.ndim() - 1];
-    if (stride_0 == x.shape(-1) && stride_1 == 1) {
-      return x;
-    }
-  }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
-}
 
 array pad_and_swizzle_scales(
     const array& scale,
@@ -114,20 +82,50 @@ void qqmm_impl(
 } // namespace
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(
+      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
+      (inputs.size() == 2));
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
+
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   auto& device = encoder.device();
+
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  if (w_quantized && inputs[0].shape(-2) == 1) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+    bool donate_x = inputs[0].is_donatable();
+    array x = ensure_row_contiguous(inputs[0], encoder, s);
+    // If x is a copy it should be donatable
+    donate_x |= x.is_donatable();
+    auto xhat = donate_x
+        ? x
+        : array(cu::malloc_async(x.nbytes(), encoder), x.shape(), x.dtype());
+    if (!donate_x) {
+      encoder.add_temporary(xhat);
+    }
+    fp_quantize_dequantize(x, xhat, group_size_, bits_, encoder, s);
+
+    // Make sure the last two dims of w and s are contiguous
+    array w = ensure_row_contiguous_matrix(inputs[1], encoder, s);
+    array scales = ensure_row_contiguous_matrix(inputs[2], encoder, s);
+
+    bool non_batched = w.ndim() == 2;
+    int K = x.shape(-1);
+    int M = non_batched ? x.size() / K : x.shape(-2);
+    int N = out.shape(-1);
+
+    fp_qmv(w, scales, xhat, out, bits_, group_size_, M, N, K, encoder);
+    return;
+  }
+
   auto cc = device.compute_capability_major() * 100 +
       device.compute_capability_minor() * 10;
   if (cc < 1000) {
     throw std::runtime_error(
         "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
   }
-  assert(
-      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
-      (inputs.size() == 2));
-
   auto quantize = [&](const array& input,
                       cu::CommandEncoder& encoder,
                       const Stream& s) -> std::pair<array, array> {
@@ -160,9 +158,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return {x_q, scales_x};
   };
   auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
-  auto [w_q, scale_w_pre] = (inputs[1].dtype() != uint32)
-      ? quantize(inputs[1], encoder, s)
-      : std::make_pair(inputs[1], inputs[2]);
+  auto [w_q, scale_w_pre] = !w_quantized ? quantize(inputs[1], encoder, s)
+                                         : std::make_pair(inputs[1], inputs[2]);
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
