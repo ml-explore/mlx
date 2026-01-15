@@ -27,6 +27,7 @@ runs:
             zip \
             libblas-dev liblapack-dev liblapacke-dev \
             openmpi-bin openmpi-common libopenmpi-dev
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
         echo "::endgroup::"
 
     - name: Use ccache
