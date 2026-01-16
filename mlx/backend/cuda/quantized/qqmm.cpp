@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/quantized/cublas_qqmm.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
+#include "mlx/backend/cuda/reduce/reduce.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
@@ -152,11 +153,14 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     array x_q(cu::malloc_async(xq_bytes, encoder), std::move(xq_shape), uint32);
     array scales_x(
         cu::malloc_async(scales_bytes, encoder), std::move(sshape), uint8);
-
-    fp_quantize(x, x_q, scales_x, group_size_, bits_, encoder, s);
+    array tensor_amax_x({}, x.dtype(), nullptr, {});
+    all_reduce(encoder, x, tensor_amax_x, Reduce::ReduceType::AbsMax);
+    fp_quantize(
+        x, x_q, scales_x, tensor_amax_x, group_size_, bits_, encoder, s);
 
     encoder.add_temporary(x_q);
     encoder.add_temporary(scales_x);
+    encoder.add_temporary(tensor_amax_x);
     return {x_q, scales_x};
   };
   auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);

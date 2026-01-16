@@ -4597,9 +4597,10 @@ std::vector<array> fp_quantize(
     wq_shape.back() = w.shape(-1) * bits / 32;
     auto sshape = w.shape();
     sshape.back() = w.shape(-1) / group_size;
+    Shape tashape = {};
     return array::make_arrays(
-        {std::move(wq_shape), std::move(sshape)},
-        {uint32, uint8},
+        {std::move(wq_shape), std::move(sshape), std::move(tashape)},
+        {uint32, uint8, float32},
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, false),
         {w});
@@ -4743,6 +4744,7 @@ array affine_dequantize(
 array fp_dequantize(
     const array& w,
     const array& scales,
+    const array& tensor_amax,
     int group_size,
     int bits,
     Dtype out_type,
@@ -4848,7 +4850,7 @@ array fp_dequantize(
         out_type,
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, true),
-        {w, scales});
+        {w, scales, tensor_amax});
   }
   return fallback({w, scales})[0];
 }
@@ -4856,6 +4858,7 @@ array fp_dequantize(
 array dequantize(
     const array& w,
     const array& scales,
+    // const std::optional<array>& tensor_amax /* = std::nullopt */,
     const std::optional<array>& biases /* = std::nullopt */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,

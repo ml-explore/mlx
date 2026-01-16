@@ -37,7 +37,11 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   for (; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
-      accs[0] = op(accs[0], cast_to<U>(vals[j]));
+      if constexpr (cuda::std::is_same_v<ReduceOp, AbsMax>) {
+        accs[0] = op(accs[0], abs(cast_to<U>(vals[j])));
+      } else {
+        accs[0] = op(accs[0], cast_to<U>(vals[j]));
+      }
     }
   }
 
@@ -45,7 +49,11 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
     cub::LoadDirectBlocked(
         block.thread_rank(), in + i, vals, check - i, cast_to<T>(init));
     for (int i = 0; i < N; i++) {
-      accs[0] = op(accs[0], cast_to<U>(vals[i]));
+      if constexpr (cuda::std::is_same_v<ReduceOp, AbsMax>) {
+        accs[0] = op(accs[0], abs(cast_to<U>(vals[i])));
+      } else {
+        accs[0] = op(accs[0], cast_to<U>(vals[i]));
+      }
     }
   }
 

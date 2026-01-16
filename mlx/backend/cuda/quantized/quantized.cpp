@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/reduce/reduce.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/fast_primitives.h"
 
@@ -83,8 +84,8 @@ void fast::Quantize::eval_gpu(
     } else {
       auto& tensor_amax = outputs[2];
       tensor_amax.set_data(cu::malloc_async(tensor_amax.nbytes(), enc));
-      // here we will write launch amax kernel
-      all_reduce(enc, s, w, tensor_amax, MAX_OP); // compute amax
+      all_reduce(
+          enc, w, tensor_amax, Reduce::ReduceType::AbsMax); // compute amax
       fp_quantize(
           w,
           wq,

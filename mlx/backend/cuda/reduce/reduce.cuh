@@ -35,6 +35,8 @@ void dispatch_reduce_ops(Reduce::ReduceType reduce_type, F&& f) {
     f(type_identity<cu::Max>{});
   } else if (reduce_type == Reduce::ReduceType::Min) {
     f(type_identity<cu::Min>{});
+  } else if (reduce_type == Reduce::ReduceType::AbsMax) {
+    f(type_identity<cu::AbsMax>{});
   } else {
     throw std::invalid_argument("Unknown reduce type.");
   }
