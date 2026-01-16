@@ -706,7 +706,7 @@ void ScaledDotProductAttention::eval_gpu(
     // - The sequence length is even longer and we have gqa
     bool do_causal = do_causal_ && q.shape(2) > 1;
     char devc = d.get_architecture().back();
-    if ((devc == 'd' && k.shape(2) >= 1024) ||
+    if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     } else {
