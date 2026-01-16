@@ -2234,6 +2234,175 @@ class TestOps(mlx_tests.MLXTestCase):
         y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
 
+    def test_searchsorted(self):
+        # Test basic 1D functionality with different dtypes and sides
+        for dtype in ("int32", "float32", "float16"):
+            for side in ("left", "right"):
+                with self.subTest(dtype=dtype, side=side):
+                    np_dtype = getattr(np, dtype)
+                    a_np = np.array([1, 2, 3, 4, 5], dtype=np_dtype)
+                    v_np = np.array([0, 2, 3, 6], dtype=np_dtype)
+                    a_mx = mx.array(a_np)
+                    v_mx = mx.array(v_np)
+
+                    result_np = np.searchsorted(a_np, v_np, side=side)
+                    result_mx = mx.searchsorted(a_mx, v_mx, side=side)
+                    self.assertTrue(np.array_equal(result_np, result_mx))
+
+        # Test with duplicates
+        for side in ("left", "right"):
+            with self.subTest(test="duplicates", side=side):
+                a_np = np.array([1, 2, 2, 2, 5])
+                a_mx = mx.array(a_np)
+
+                result_np = np.searchsorted(a_np, 2, side=side)
+                result_mx = mx.searchsorted(a_mx, 2, side=side)
+                self.assertEqual(result_np, result_mx.item())
+
+        # Test multi-dimensional with different axes
+        # shape = (3, 4, 5)
+        # for dtype in ("int32", "float32"):
+        #     for axis in (None, 0, 1, 2, -1):
+        #         with self.subTest(dtype=dtype, axis=axis):
+        #             np.random.seed(0)
+        #             np_dtype = getattr(np, dtype)
+        #             a_np = np.sort(
+        #                 np.random.uniform(0, 100, size=shape).astype(np_dtype),
+        #                 axis=axis,
+        #             )
+        #             a_mx = mx.array(a_np)
+
+        #             # Create search values
+        #             if axis is None:
+        #                 v_np = np.array([25, 50, 75], dtype=np_dtype)
+        #             else:
+        #                 # Create values that broadcast correctly
+        #                 # v needs to be broadcastable against a_no_axis (2D)
+        #                 # Reshape to (2, 1, 1) to broadcast to (2, dim1, dim2)
+        #                 v_np = np.array([25, 50], dtype=np_dtype).reshape(2, 1, 1)
+
+        #             v_mx = mx.array(v_np)
+
+        #             result_np = searchsorted_numpy(a_np, v_np, side="left", axis=axis)
+        #             result_mx = mx.searchsorted(a_mx, v_mx, side="left", axis=axis)
+        #             self.assertTrue(np.array_equal(result_np, result_mx))
+
+        # Test edge cases
+        # Empty array
+        a_np = np.array([])
+        a_mx = mx.array(a_np)
+        v_np = np.array([1, 2, 3])
+        v_mx = mx.array(v_np)
+        result_np = np.searchsorted(a_np, v_np)
+        result_mx = mx.searchsorted(a_mx, v_mx)
+        self.assertTrue(np.array_equal(result_np, result_mx))
+
+    def test_searchsorted_int64_promotion(self):
+        # Regression test for int64 type promotion bug
+        # See https://github.com/ml-explore/mlx/issues/1255
+
+        # Case 1: int64 array + Python int scalar (promoted to int64)
+        a = mx.array([1, 2, 2, 2, 5], dtype=mx.int64)
+        v = 2
+        idx = mx.searchsorted(a, v)
+        self.assertEqual(idx.item(), 1)
+
+        # Case 2: int32 array + int64 scalar (both promoted to int64)
+        a = mx.array([1, 2, 2, 2, 5], dtype=mx.int32)
+        v = mx.array(2, dtype=mx.int64)
+        idx = mx.searchsorted(a, v)
+        self.assertEqual(idx.item(), 1)
+
+        # Single element
+        a_np = np.array([5])
+        a_mx = mx.array(a_np)
+        for v in [3, 5, 7]:
+            for side in ("left", "right"):
+                with self.subTest(test="single_element", v=v, side=side):
+                    result_np = np.searchsorted(a_np, v, side=side)
+                    result_mx = mx.searchsorted(a_mx, v, side=side)
+                    self.assertEqual(result_np, result_mx.item())
+
+        # All duplicates
+        a_np = np.array([5, 5, 5, 5, 5])
+        a_mx = mx.array(a_np)
+        result_np = np.searchsorted(a_np, 5, side="left")
+        result_mx = mx.searchsorted(a_mx, 5, side="left")
+        self.assertEqual(result_np, result_mx.item())
+        result_np = np.searchsorted(a_np, 5, side="right")
+        result_mx = mx.searchsorted(a_mx, 5, side="right")
+        self.assertEqual(result_np, result_mx.item())
+
+        # Out of range values
+        a_np = np.array([10, 20, 30, 40, 50])
+        a_mx = mx.array(a_np)
+        for v in [5, 0, 60, 100]:
+            with self.subTest(test="out_of_range", v=v):
+                result_np = np.searchsorted(a_np, v)
+                result_mx = mx.searchsorted(a_mx, v)
+                self.assertEqual(result_np, result_mx.item())
+
+        # Test with special float values
+        a_np = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        a_mx = mx.array(a_np)
+        for v in [float("inf"), float("-inf")]:
+            with self.subTest(test="special_values", v=v):
+                result_np = np.searchsorted(a_np, v)
+                result_mx = mx.searchsorted(a_mx, v)
+                self.assertEqual(result_np, result_mx.item())
+
+        # Test with NaN
+        result_np = np.searchsorted(a_np, float("nan"))
+        result_mx = mx.searchsorted(a_mx, float("nan"))
+        self.assertEqual(result_np, result_mx.item())
+
+        # Test output shape matches v shape
+        a_mx = mx.array([1, 2, 3, 4, 5])
+        # Scalar v
+        result = mx.searchsorted(a_mx, 3)
+        self.assertEqual(result.shape, ())
+        # 1D v
+        result = mx.searchsorted(a_mx, mx.array([1, 2, 3]))
+        self.assertEqual(result.shape, (3,))
+        # 2D v
+        result = mx.searchsorted(a_mx, mx.array([[1, 2], [3, 4]]))
+        self.assertEqual(result.shape, (2, 2))
+
+        # Test output dtype is integer
+        a_mx = mx.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = mx.searchsorted(a_mx, mx.array([2.5, 4.5]))
+        self.assertTrue(result.dtype in [mx.int32, mx.int64, mx.uint32, mx.uint64])
+
+        # Test large array
+        a_mx = mx.arange(10000)
+        v_mx = mx.array([100, 5000, 9999])
+        result = mx.searchsorted(a_mx, v_mx)
+        expected = mx.array([100, 5000, 9999])
+        self.assertTrue(mx.array_equal(result, expected))
+
+        # Test 2D with axis parameter
+        # a_np = np.array([[1, 2, 3], [4, 5, 6]])
+        # a_mx = mx.array(a_np)
+        # v_np = np.array([2, 5])
+        # v_mx = mx.array(v_np)
+
+        # # axis=1
+        # result_np = np.searchsorted(a_np, v_np, side="left")
+        # result_mx = mx.searchsorted(a_mx, v_mx, side="left")
+        # self.assertTrue(np.array_equal(result_np, result_mx))
+
+        # Test scalar value with 2D array
+        a_mx = mx.array([[1, 2, 3], [4, 5, 6]])
+        result = mx.searchsorted(a_mx, 3, side="left")
+        self.assertEqual(result.shape, ())
+
+        # Test mixed precision
+        a_mx = mx.array([1, 2, 3, 4, 5], dtype=mx.int32)
+        v_mx = mx.array([2.5, 4.5], dtype=mx.float32)
+        result = mx.searchsorted(a_mx, v_mx)
+        expected = mx.array([2, 4])
+        self.assertTrue(mx.array_equal(result, expected))
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
