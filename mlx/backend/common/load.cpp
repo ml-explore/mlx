@@ -1,10 +1,18 @@
 // Copyright © 2023 Apple Inc.
 
-#include <algorithm>
+#include <stddef.h>
+#include <stdint.h>
+#include <future>
+#include <memory>
+#include <type_traits>
 #include <utility>
 
+#include "mlx/allocator.h"
+#include "mlx/array.h"
+#include "mlx/io/load.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
+#include "mlx/threadpool.h"
 
 namespace {
 

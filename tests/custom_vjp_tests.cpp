@@ -1,8 +1,14 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "doctest/doctest.h"
+#include <functional>
+#include <tuple>
+#include <utility>
+#include <vector>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/ops.h"
+#include "mlx/transforms.h"
 
 using namespace mlx::core;
 

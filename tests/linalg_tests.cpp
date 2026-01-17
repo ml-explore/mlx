@@ -1,11 +1,19 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "doctest/doctest.h"
-
 #include <cmath>
+#include <limits>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/linalg.h"
 #include "mlx/ops.h"
+#include "mlx/random.h"
 
 using namespace mlx::core;
 using namespace mlx::core::linalg;

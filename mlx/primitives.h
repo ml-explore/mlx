@@ -2,12 +2,32 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <functional>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <tuple>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/io/load.h"
+#include "mlx/small_vector.h"
 #include "mlx/stream.h"
+
+namespace mlx {
+namespace core {
+namespace io {
+class Reader;
+} // namespace io
+struct Device;
+} // namespace core
+} // namespace mlx
 
 #define DEFINE_VMAP()                                                 \
   virtual std::pair<std::vector<array>, std::vector<int>> vmap(       \

@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 
 #include "mlx/backend/cuda/cuda.h"
@@ -9,6 +11,14 @@
 #include "mlx/distributed/mpi/mpi.h"
 #include "mlx/distributed/nccl/nccl.h"
 #include "mlx/distributed/ring/ring.h"
+#include "mlx/stream.h"
+#include "mlx/utils.h"
+
+namespace mlx {
+namespace core {
+class array;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core::distributed {
 

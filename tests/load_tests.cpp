@@ -1,12 +1,20 @@
 // Copyright © 2023 Apple Inc.
 
 #include <filesystem>
-#include <stdexcept>
+#include <initializer_list>
+#include <string>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "doctest/doctest.h"
-
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/dtype.h"
+#include "mlx/io.h"
+#include "mlx/ops.h"
+#include "mlx/random.h"
 
 using namespace mlx::core;
 

@@ -1,8 +1,10 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/primitives.h"
+
+#include "mlx/allocator.h"
+#include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/slicing.h"
-#include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
 
@@ -10,7 +12,9 @@
 #include <nvtx3/nvtx3.hpp>
 #endif
 
+#include <algorithm>
 #include <cassert>
+#include <optional>
 
 #if defined(MLX_USE_CUDA)
 #define MLX_PROFILER_RANGE(message) nvtx3::scoped_range r(message)

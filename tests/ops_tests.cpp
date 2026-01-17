@@ -2,13 +2,30 @@
 
 // Required for using M_PI_2 in MSVC.
 #define _USE_MATH_DEFINES
+#include <arm_fp16.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <cmath>
-#include <numeric>
+#include <complex>
+#include <functional>
+#include <initializer_list>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include "doctest/doctest.h"
-
+#include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
-#include "mlx/mlx.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
+#include "mlx/transforms.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
+#include "mlx/utils.h"
 
 using namespace mlx::core;
 

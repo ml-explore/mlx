@@ -3,6 +3,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "mlx/array.h"
 #include "mlx/utils.h"

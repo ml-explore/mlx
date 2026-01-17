@@ -1,10 +1,21 @@
 // Copyright © 2023 Apple Inc.
 
+#include <arm_fp16.h>
+#include <stdint.h>
 #include <cassert>
+#include <functional>
+#include <vector>
 
+#include "mlx/allocator.h"
+#include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/dtype.h"
 #include "mlx/primitives.h"
+#include "mlx/stream.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
 
 namespace mlx::core {
 

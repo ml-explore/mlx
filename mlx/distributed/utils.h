@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <sys/socket.h>
 #include <functional>
 #include <string>

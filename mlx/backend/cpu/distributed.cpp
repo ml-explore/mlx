@@ -1,11 +1,18 @@
 // Copyright © 2024 Apple Inc.
 
 #include <cassert>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 #include "mlx/allocator.h"
+#include "mlx/array.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/distributed/distributed.h"
+#include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/primitives.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::distributed {
 

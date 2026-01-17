@@ -3,6 +3,7 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 
 #include "array.h"
 #include "device.h"

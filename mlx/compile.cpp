@@ -1,7 +1,15 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <_stdlib.h>
+#include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <map>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -9,10 +17,11 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
-#include "mlx/fast_primitives.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms.h"
+#include "mlx/stream.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 

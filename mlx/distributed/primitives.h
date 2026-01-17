@@ -5,6 +5,7 @@
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/primitives.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::distributed {
 

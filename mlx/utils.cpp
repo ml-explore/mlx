@@ -1,7 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
+#include <_stdlib.h>
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <vector>
 

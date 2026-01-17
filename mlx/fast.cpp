@@ -1,10 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <stddef.h>
 #include <cassert>
+#include <cmath>
+#include <initializer_list>
+#include <iterator>
+#include <limits>
+#include <memory>
 #include <numeric>
+#include <sstream>
+#include <stdexcept>
 
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
+#include "mlx/small_vector.h"
+#include "mlx/stream.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 

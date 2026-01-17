@@ -2,7 +2,10 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 

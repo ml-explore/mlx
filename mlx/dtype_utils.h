@@ -2,10 +2,24 @@
 
 #pragma once
 
+#include <arm_fp16.h>
+#include <stdint.h>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
+#include <string_view>
 
 #include "mlx/dtype.h"
+#include "mlx/types/half_types.h"
 #include "mlx/utils.h"
+
+namespace mlx {
+namespace core {
+struct complex64_t;
+template <typename T>
+struct type_identity;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

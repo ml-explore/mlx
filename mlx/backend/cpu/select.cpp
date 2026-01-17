@@ -1,10 +1,27 @@
 // Copyright © 2023 Apple Inc.
 
+#include <arm_fp16.h>
+#include <stdint.h>
 #include <cassert>
+#include <functional>
+#include <vector>
 
+#include "mlx/array.h"
+#include "mlx/backend/common/ternary.h"
 #include "mlx/backend/cpu/binary_ops.h"
+#include "mlx/backend/cpu/encoder.h"
+#include "mlx/backend/cpu/simd/base_simd.h"
 #include "mlx/backend/cpu/ternary.h"
+#include "mlx/dtype.h"
 #include "mlx/primitives.h"
+#include "mlx/stream.h"
+#include "mlx/types/half_types.h"
+
+namespace mlx {
+namespace core {
+struct complex64_t;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

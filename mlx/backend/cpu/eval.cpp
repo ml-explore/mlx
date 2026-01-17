@@ -1,9 +1,18 @@
 // Copyright © 2025 Apple Inc.
 #include "mlx/backend/cpu/eval.h"
+
+#include <functional>
+#include <memory>
+#include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include "mlx/array.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
-#include "mlx/utils.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::cpu {
 

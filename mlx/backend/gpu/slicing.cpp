@@ -1,8 +1,19 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/slicing.h"
+
+#include <stddef.h>
+#include <memory>
+
+#include "mlx/backend/common/copy.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
+
+namespace mlx {
+namespace core {
+struct Stream;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

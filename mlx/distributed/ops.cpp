@@ -1,12 +1,16 @@
 // Copyright © 2024 Apple Inc.
 
+#include <iterator>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
-#include "mlx/backend/cuda/cuda.h"
-#include "mlx/backend/metal/metal.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
+#include "mlx/dtype.h"
 
 namespace mlx::core::distributed {
 

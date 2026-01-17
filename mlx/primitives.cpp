@@ -6,15 +6,17 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <iterator>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
-#include "mlx/backend/common/utils.h"
 #include "mlx/fft.h"
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/types/complex.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {

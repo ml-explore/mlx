@@ -1,6 +1,13 @@
 // Copyright © 2024 Apple Inc.
+#include <_ctype.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
+#include <iterator>
 #include <numeric>
 #include <sstream>
+#include <stdexcept>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 

@@ -1,6 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
+
+#include <future>
+#include <memory>
+#include <type_traits>
+
 #include "mlx/backend/gpu/available.h"
 #include "mlx/backend/gpu/eval.h"
 

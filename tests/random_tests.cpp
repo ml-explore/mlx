@@ -1,10 +1,27 @@
 // Copyright © 2023 Apple Inc.
 
-#include <numeric>
+#include <arm_fp16.h>
+#include <stdint.h>
+#include <cmath>
+#include <cstdlib>
+#include <functional>
+#include <initializer_list>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <utility>
 
 #include "doctest/doctest.h"
-
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
+#include "mlx/random.h"
+#include "mlx/small_vector.h"
+#include "mlx/transforms.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/half_types.h"
+#include "mlx/utils.h"
 
 using namespace mlx::core;
 

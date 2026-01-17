@@ -1,12 +1,33 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/export.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <map>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <type_traits>
+#include <unordered_set>
+
 #include "mlx/compile_impl.h"
+#include "mlx/device.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/graph_utils.h"
+#include "mlx/io/load.h"
 #include "mlx/primitives.h"
+#include "mlx/small_vector.h"
+#include "mlx/stream.h"
 #include "mlx/utils.h"
 #include "mlx/version.h"
+
+namespace mlx {
+namespace core {
+enum class VariantType;
+struct PrimitiveSerializer;
+} // namespace core
+} // namespace mlx
 
 // clang-format off
 #define SERIALIZE_PRIMITIVE(primitive, ...)  \

@@ -1,5 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
+#include <memory>
+#include <stdexcept>
+
+#include "mlx/distributed/distributed.h"
 #include "mlx/distributed/nccl/nccl.h"
 
 namespace mlx::core::distributed::nccl {

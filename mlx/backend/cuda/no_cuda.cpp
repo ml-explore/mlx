@@ -1,7 +1,21 @@
 // Copyright © 2025 Apple Inc.
 
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <vector>
+
+#include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/fast.h"
+#include "mlx/utils.h"
+
+namespace mlx {
+namespace core {
+struct Dtype;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

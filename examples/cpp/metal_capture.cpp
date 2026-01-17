@@ -1,9 +1,14 @@
 // Copyright © 2024 Apple Inc.
 
-#include <cassert>
 #include <iostream>
+#include <string>
 
-#include "mlx/mlx.h"
+#include "mlx/backend/metal/metal.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
+#include "mlx/stream.h"
+#include "mlx/utils.h"
 
 namespace mx = mlx::core;
 

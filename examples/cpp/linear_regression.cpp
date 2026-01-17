@@ -2,9 +2,15 @@
 
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <iostream>
+#include <ratio>
 
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/ops.h"
+#include "mlx/random.h"
+#include "mlx/transforms.h"
+#include "mlx/utils.h"
 #include "timer.h"
 
 /**

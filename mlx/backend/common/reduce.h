@@ -2,6 +2,10 @@
 
 #pragma once
 
+#include <utility>
+#include <vector>
+
+#include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {

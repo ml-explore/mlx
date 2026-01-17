@@ -1,27 +1,50 @@
 // Copyright © 2024 Apple Inc.
 
+#include <_stdlib.h>
+#include <_string.h>
+#include <arm_fp16.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <json.hpp>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <stdint.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
-
+#include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <iostream>
 #include <list>
+#include <memory>
+#include <mutex>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include <json.hpp>
-
+#include "mlx/array.h"
 #include "mlx/backend/cpu/encoder.h"
-#include "mlx/distributed/distributed.h"
+#include "mlx/device.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
+#include "mlx/dtype.h"
+#include "mlx/stream.h"
 #include "mlx/threadpool.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
+#include "mlx/utils.h"
 
 #ifndef SOL_TCP
 #define SOL_TCP IPPROTO_TCP

@@ -2,10 +2,17 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <initializer_list>
 #include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"
 

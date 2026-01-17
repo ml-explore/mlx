@@ -3,6 +3,7 @@
 
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "mlx/array.h"

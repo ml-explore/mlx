@@ -1,12 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <arm_fp16.h>
 #include <cmath>
+#include <iterator>
+#include <limits>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
+#include <vector>
 
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/random.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/half_types.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::random {

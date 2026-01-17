@@ -1,7 +1,15 @@
 // Copyright © 2023 Apple Inc.
+#include <stddef.h>
+#include <algorithm>
+#include <iterator>
+#include <memory>
 #include <numeric>
 #include <set>
+#include <sstream>
+#include <stdexcept>
 
+#include "mlx/array.h"
+#include "mlx/dtype.h"
 #include "mlx/fft.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"

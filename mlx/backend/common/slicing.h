@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <tuple>
+
 #include "mlx/array.h"
 
 namespace mlx::core {

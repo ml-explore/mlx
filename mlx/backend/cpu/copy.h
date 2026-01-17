@@ -2,11 +2,19 @@
 
 #pragma once
 
+#include <stdint.h>
 #include <optional>
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/utils.h"
+
+namespace mlx {
+namespace core {
+enum class CopyType;
+struct Stream;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

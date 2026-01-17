@@ -1,10 +1,14 @@
 // Copyright © 2023 Apple Inc.
 
-#include "doctest/doctest.h"
-
+#include <_stdlib.h>
 #include <cstdlib>
+#include <stdexcept>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/backend/gpu/available.h"
+#include "mlx/device.h"
+#include "mlx/ops.h"
 
 using namespace mlx::core;
 

@@ -1,9 +1,19 @@
 // Copyright © 2023 Apple Inc.
 
-#include "doctest/doctest.h"
+#include <stdint.h>
+#include <initializer_list>
+#include <memory>
+#include <vector>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/backend/metal/metal.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/random.h"
+#include "mlx/stream.h"
 
 using namespace mlx::core;
 

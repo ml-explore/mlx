@@ -1,9 +1,15 @@
 // Copyright © 2023 Apple Inc.
 
+#include <stddef.h>
 #include <cassert>
+#include <functional>
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
+#include "mlx/transforms.h"
+#include "mlx/utils.h"
 
 namespace mx = mlx::core;
 

@@ -1,9 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
+#include <_string.h>
+#include <errno.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <chrono>
 #include <cstring>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 
 #include "mlx/distributed/utils.h"
