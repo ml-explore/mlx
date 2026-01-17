@@ -86,6 +86,8 @@ def _all_to_sharded(segments):
     representation becomes a sharded representation."""
 
     def _shard_fn(path, weight):
+        if path.endswith("bias"):
+            return -1, segments
         return max(weight.ndim - 2, 0), segments
 
     return _shard_fn
