@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 
+#include "mlx/array.h"
 #include "mlx/io.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -8,6 +9,8 @@
 
 extern "C" {
 #include <gguflib.h>
+#include <string>
+#include <unordered_map>
 }
 
 namespace mlx::core {

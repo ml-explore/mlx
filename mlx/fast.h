@@ -2,9 +2,16 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
 #include <variant>
+#include <vector>
 
+#include "mlx/array.h"
+#include "mlx/dtype.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {

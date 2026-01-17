@@ -1,18 +1,42 @@
 // Copyright © 2025 Apple Inc.
 
+#include <_stdlib.h>
+#include <_string.h>
 #include <dlfcn.h>
 #include <infiniband/verbs.h>
-#include <unistd.h>
-#include <fstream>
-#include <iostream>
-
 #include <json.hpp>
+#include <stdint.h>
+#include <unistd.h>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
+#include "mlx/allocator.h"
+#include "mlx/array.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/device.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
 #include "mlx/dtype_utils.h"
+#include "mlx/stream.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/complex.h"
+#include "mlx/utils.h"
+
+struct IBVWrapper;
 
 #define LOAD_SYMBOL(symbol, variable)                               \
   {                                                                 \

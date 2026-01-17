@@ -3,17 +3,29 @@
 // Required for using M_2_SQRTPI in MSVC.
 #define _USE_MATH_DEFINES
 
+#include <stddef.h>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
+#include <functional>
+#include <initializer_list>
+#include <limits>
 #include <sstream>
+#include <stdexcept>
+#include <utility>
 #include <vector>
+
 #include "doctest/doctest.h"
-
-#include "mlx/graph_utils.h"
-#include "mlx/mlx.h"
-
+#include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/graph_utils.h"
+#include "mlx/ops.h"
+#include "mlx/random.h"
+#include "mlx/small_vector.h"
+#include "mlx/transforms.h"
+#include "mlx/types/complex.h"
+#include "mlx/utils.h"
 
 using namespace mlx::core;
 

@@ -2,10 +2,15 @@
 
 #pragma once
 
+#include <functional>
+#include <iterator>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 #include "mlx/scheduler.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::cpu {
 

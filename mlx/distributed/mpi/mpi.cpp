@@ -1,14 +1,38 @@
 // Copyright © 2024 Apple Inc.
 
+#include <_stdlib.h>
+#include <arm_fp16.h>
 #include <dlfcn.h>
+#include <algorithm>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
+#include "mlx/array.h"
 #include "mlx/backend/cpu/encoder.h"
-#include "mlx/distributed/distributed.h"
+#include "mlx/device.h"
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
 #include "mlx/distributed/mpi/mpi_declarations.h"
+#include "mlx/dtype.h"
+#include "mlx/stream.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
+#include "mlx/utils.h"
+
+namespace mlx {
+namespace core {
+namespace distributed {
+namespace mpi {
+struct MPIWrapper;
+} // namespace mpi
+} // namespace distributed
+} // namespace core
+} // namespace mlx
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \

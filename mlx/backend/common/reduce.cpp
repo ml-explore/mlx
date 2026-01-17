@@ -2,6 +2,9 @@
 
 #include "mlx/backend/common/reduce.h"
 
+#include <stdint.h>
+#include <algorithm>
+
 namespace mlx::core {
 
 std::pair<Shape, Strides> shapes_without_reduction_axes(

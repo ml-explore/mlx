@@ -2,13 +2,26 @@
 
 #pragma once
 
+#include <arm_fp16.h>
+#include <stdint.h>
+#include <cmath>
 #include <exception>
+#include <iterator>
+#include <ostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <variant>
+#include <vector>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/dtype.h"
+#include "mlx/small_vector.h"
 #include "mlx/stream.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
 
 namespace mlx::core {
 

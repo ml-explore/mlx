@@ -2,6 +2,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 namespace mlx::core {
 

@@ -1,21 +1,31 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <stddef.h>
 #include <algorithm>
+#include <cstdint>
 #include <deque>
-#include <future>
+#include <iterator>
+#include <memory>
 #include <numeric>
 #include <set>
 #include <sstream>
 #include <stack>
+#include <stdexcept>
+#include <type_traits>
+#include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/event.h"
 #include "mlx/fence.h"
 #include "mlx/memory.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
+#include "mlx/stream.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"

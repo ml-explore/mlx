@@ -4,8 +4,15 @@
 
 #include <optional>
 
+#include "mlx/array.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/utils.h"
+
+namespace mlx {
+namespace core {
+struct Dtype;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core::distributed {
 

@@ -2,11 +2,19 @@
 
 #pragma once
 
+#include <_stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <algorithm>
 #include <filesystem>
+#include <iterator>
+#include <limits>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "mlx/array.h"
+#include "mlx/small_vector.h"
 
 namespace mlx::core {
 

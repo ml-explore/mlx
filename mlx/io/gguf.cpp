@@ -1,12 +1,28 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <_string.h>
+#include <stdlib.h>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <numeric>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <tuple>
+#include <utility>
+#include <variant>
+#include <vector>
 
+#include "gguflib.h"
+#include "mlx/allocator.h"
+#include "mlx/dtype.h"
+#include "mlx/io.h"
 #include "mlx/io/gguf.h"
 #include "mlx/ops.h"
+#include "mlx/transforms.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 

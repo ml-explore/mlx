@@ -1,16 +1,31 @@
 // Copyright © 2023 Apple Inc.
 #pragma once
 
+#include <arm_fp16.h>
+#include <stddef.h>
 #include <algorithm>
+#include <complex>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
 #include "mlx/event.h"
 #include "mlx/small_vector.h"
+#include "mlx/types/half_types.h"
+
+namespace mlx {
+namespace core {
+struct complex64_t;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

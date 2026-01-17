@@ -2,10 +2,15 @@
 
 #pragma once
 
+#include <fcntl.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <algorithm>
 #include <memory>
 #include <sstream>
-
-#include <fcntl.h>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #ifdef _MSC_VER
 #include <io.h>
 #else
@@ -14,6 +19,8 @@
 #endif
 
 #include "mlx/threadpool.h"
+
+class ThreadPool;
 
 // Strictly we need to operate on files in binary mode (to avoid \r getting
 // automatically inserted), but every modern system except for Windows no

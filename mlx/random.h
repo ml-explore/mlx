@@ -2,10 +2,13 @@
 
 #pragma once
 
+#include <stdint.h>
 #include <chrono>
 #include <optional>
+#include <utility>
 
 #include "mlx/array.h"
+#include "mlx/dtype.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"
 

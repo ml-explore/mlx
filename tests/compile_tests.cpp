@@ -3,10 +3,25 @@
 // Required for using M_SQRT2 in MSVC.
 #define _USE_MATH_DEFINES
 
-#include "doctest/doctest.h"
+#include <math.h>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/compile.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/random.h"
+#include "mlx/stream.h"
+#include "mlx/transforms.h"
+#include "mlx/utils.h"
 
 using namespace mlx::core;
 

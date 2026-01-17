@@ -1,11 +1,27 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 
+#include <stddef.h>
 #include <functional>
 #include <iomanip>
+#include <limits>
+#include <ostream>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <typeinfo>
+#include <vector>
 
+#include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/primitives.h"
+
+namespace mlx {
+namespace core {
+struct Dtype;
+struct _MLX_BFloat16;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

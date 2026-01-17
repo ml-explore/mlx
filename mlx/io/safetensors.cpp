@@ -1,15 +1,26 @@
 // Copyright © 2023 Apple Inc.
 //
 #include <json.hpp>
+#include <stddef.h>
+#include <stdint.h>
 #include <memory>
-#include <stack>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
+#include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/io.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
+#include "mlx/utils.h"
 
 using json = nlohmann::json;
 

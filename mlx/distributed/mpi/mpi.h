@@ -1,6 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
+#include <memory>
+
 #include "mlx/distributed/distributed.h"
+#include "mlx/distributed/distributed_impl.h"
 
 namespace mlx::core::distributed::mpi {
 

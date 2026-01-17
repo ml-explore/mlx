@@ -1,21 +1,43 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iomanip>
 #include <list>
 #include <mutex>
 #include <shared_mutex>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include <fmt/format.h>
-
+#include "fmt/core.h"
+#include "mlx/array.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/cpu/compiled_preamble.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/jit_compiler.h"
-#include "mlx/device.h"
 #include "mlx/graph_utils.h"
+#include "mlx/primitives.h"
+#include "mlx/small_vector.h"
+#include "mlx/stream.h"
 #include "mlx/version.h"
+
+namespace mlx {
+namespace core {
+struct Device;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

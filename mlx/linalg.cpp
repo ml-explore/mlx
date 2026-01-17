@@ -1,11 +1,21 @@
 // Copyright © 2023 Apple Inc.
 
+#include <algorithm>
+#include <iterator>
+#include <limits>
+#include <memory>
 #include <numeric>
-#include <ostream>
+#include <sstream>
+#include <stdexcept>
 #include <vector>
 
+#include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/linalg.h"
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/small_vector.h"
+#include "mlx/stream.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::linalg {

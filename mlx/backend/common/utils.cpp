@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <stdexcept>
 
 #include "mlx/backend/common/utils.h"
 

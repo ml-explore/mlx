@@ -3,10 +3,13 @@
 #include <unordered_map>
 
 #include "mlx/array.h"
+#include "mlx/device.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/stream.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/types/complex.h"
 
 namespace mlx::core {
 

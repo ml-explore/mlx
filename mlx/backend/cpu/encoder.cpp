@@ -2,6 +2,8 @@
 
 #include "mlx/backend/cpu/encoder.h"
 
+#include <unordered_map>
+
 namespace mlx::core::cpu {
 
 CommandEncoder& get_command_encoder(Stream stream) {

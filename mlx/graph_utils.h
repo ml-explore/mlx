@@ -2,7 +2,12 @@
 
 #pragma once
 
+#include <cstdint>
+#include <iosfwd>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 

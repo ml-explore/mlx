@@ -1,8 +1,11 @@
 // Copyright © 2024 Apple Inc.
 
-#include <cassert>
+#include <optional>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
-#include "mlx/allocator.h"
+#include "mlx/array.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/ops.h"

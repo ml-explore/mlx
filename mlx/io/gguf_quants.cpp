@@ -1,10 +1,25 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <arm_fp16.h>
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <numeric>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
+#include "gguflib.h"
+#include "mlx/allocator.h"
+#include "mlx/array.h"
+#include "mlx/dtype.h"
 #include "mlx/io/gguf.h"
+#include "mlx/types/half_types.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 

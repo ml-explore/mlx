@@ -1,8 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
 #include <iostream>
+#include <optional>
 
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/distributed/distributed.h"
+#include "mlx/distributed/ops.h"
+#include "mlx/ops.h"
+#include "mlx/utils.h"
 
 namespace mx = mlx::core;
 

@@ -1,11 +1,13 @@
 // Copyright © 2023 Apple Inc.
 
 #define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest/doctest.h"
-
+#include <_stdlib.h>
 #include <cstdlib>
+#include <string>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/backend/metal/metal.h"
+#include "mlx/device.h"
 
 using namespace mlx::core;
 

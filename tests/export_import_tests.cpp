@@ -1,13 +1,20 @@
 // Copyright © 2024 Apple Inc.
 
 #include <filesystem>
+#include <functional>
+#include <initializer_list>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "doctest/doctest.h"
-
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/export.h"
-#include "mlx/mlx.h"
+#include "mlx/export_impl.h"
+#include "mlx/ops.h"
+#include "mlx/stream.h"
 
 using namespace mlx::core;
 

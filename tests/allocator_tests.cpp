@@ -1,9 +1,8 @@
 // Copyright © 2023 Apple Inc.
 
-#include <stdexcept>
+#include <stddef.h>
 
 #include "doctest/doctest.h"
-
 #include "mlx/allocator.h"
 
 using namespace mlx::core;

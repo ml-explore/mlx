@@ -1,9 +1,13 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <_string.h>
 #include <algorithm>
 #include <cstring>
-#include <fstream>
+#include <future>
 #include <limits>
+#include <memory>
 #include <sstream>
+#include <string_view>
+#include <vector>
 
 // Used by pread implementation.
 #ifdef _WIN32
@@ -13,10 +17,14 @@
 #include <windows.h>
 #endif // _WIN32
 
+#include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/threadpool.h"
 #include "mlx/utils.h"
 
 // Adapted from

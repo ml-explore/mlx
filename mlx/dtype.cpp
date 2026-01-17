@@ -1,8 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <arm_fp16.h>
 #include <cstdint>
 
 #include "mlx/dtype.h"
+#include "mlx/types/half_types.h"
 
 namespace mlx::core {
 

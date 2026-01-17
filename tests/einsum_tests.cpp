@@ -1,7 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "doctest/doctest.h"
-#include "mlx/mlx.h"
+#include "mlx/array.h"
+#include "mlx/einsum.h"
+#include "mlx/ops.h"
 
 using namespace mlx::core;
 

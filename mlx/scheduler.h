@@ -3,10 +3,16 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <future>
+#include <mutex>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/device.h"

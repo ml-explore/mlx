@@ -3,11 +3,15 @@
 #pragma once
 
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/ops.h"
 #include "mlx/stream.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::linalg {
 

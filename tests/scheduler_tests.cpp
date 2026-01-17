@@ -1,9 +1,22 @@
 // Copyright © 2023 Apple Inc.
 
-#include "doctest/doctest.h"
+#include <functional>
+#include <future>
+#include <memory>
+#include <stdexcept>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
-#include "mlx/mlx.h"
+#include "doctest/doctest.h"
+#include "mlx/array.h"
+#include "mlx/backend/gpu/available.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/ops.h"
 #include "mlx/scheduler.h"
+#include "mlx/stream.h"
+#include "mlx/transforms.h"
 
 using namespace mlx::core;
 

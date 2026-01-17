@@ -1,7 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <functional>
-#include <optional>
+#include <iterator>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>

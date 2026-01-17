@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/common/utils.h"
+#include "mlx/allocator.h"
+#include "mlx/array.h"
 
 namespace mlx::core {
 

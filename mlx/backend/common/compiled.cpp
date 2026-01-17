@@ -1,7 +1,18 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/common/compiled.h"
+
+#include <arm_fp16.h>
+#include <stdint.h>
+#include <algorithm>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype.h"
+#include "mlx/types/complex.h"
+#include "mlx/types/half_types.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {

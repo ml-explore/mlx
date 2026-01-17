@@ -2,7 +2,15 @@
 
 #pragma once
 
+#include <vector>
+
 #include "mlx/array.h"
+
+namespace mlx {
+namespace core {
+struct Stream;
+} // namespace core
+} // namespace mlx
 
 namespace mlx::core {
 

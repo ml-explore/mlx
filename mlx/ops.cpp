@@ -2,19 +2,34 @@
 
 // Required for using M_PI in MSVC.
 #define _USE_MATH_DEFINES
+#include <_stdlib.h>
+#include <arm_fp16.h>
+#include <stdint.h>
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
+#include <functional>
+#include <iterator>
+#include <limits>
+#include <memory>
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include <type_traits>
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/device.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms.h"
+#include "mlx/small_vector.h"
+#include "mlx/stream.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/types/bf16.h"
+#include "mlx/types/half_types.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {

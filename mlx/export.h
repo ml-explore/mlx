@@ -2,11 +2,19 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <functional>
 #include <optional>
 #include <set>
+#include <string>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <variant>
+#include <vector>
+
 #include "mlx/array.h"
+#include "mlx/dtype.h"
 
 namespace mlx::core {
 

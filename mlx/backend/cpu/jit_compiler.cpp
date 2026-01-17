@@ -2,11 +2,15 @@
 
 #include "mlx/backend/cpu/jit_compiler.h"
 
+#include <_ctype.h>
+#include <_stdio.h>
+#include <stdio.h>
+#include <sys/wait.h>
 #include <algorithm>
-#include <sstream>
-#include <vector>
+#include <cctype>
+#include <stdexcept>
 
-#include <fmt/format.h>
+#include "fmt/core.h"
 
 namespace mlx::core {
 
