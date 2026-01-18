@@ -211,8 +211,7 @@ template <typename T, int D, int V = D>
   typedef float U;
 
   thread U q[qk_per_thread];
-  thread U k[qk_per_thread];
-  thread U o[v_per_thread];
+  thread U o[v_per_thread] = {0};
 
   // Adjust positions
   const int kv_head_idx = tid.x;
@@ -246,12 +245,9 @@ template <typename T, int D, int V = D>
   sums += o_offset * blocks + block_idx;
   maxs += o_offset * blocks + block_idx;
 
-  // Read the query and 0 the output accumulator
+  // Read the query
   for (int i = 0; i < qk_per_thread; i++) {
     q[i] = static_cast<U>(scale) * queries[i];
-  }
-  for (int i = 0; i < v_per_thread; i++) {
-    o[i] = 0;
   }
 
   U max_score = Limits<U>::finite_min;
@@ -266,22 +262,18 @@ template <typename T, int D, int V = D>
   for (int i = block_idx; i < N; i += blocks) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+      use_key = i <= (N - q_seq_len + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {
       use_key = (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
-      // Read the key
-      for (int i = 0; i < qk_per_thread; i++) {
-        k[i] = keys[i];
-      }
 
       // Compute the i-th score
       U score = 0;
       for (int i = 0; i < qk_per_thread; i++) {
-        score += q[i] * k[i];
+        score += q[i] * keys[i];
       }
       score = simd_sum(score);
 
@@ -304,8 +296,8 @@ template <typename T, int D, int V = D>
     }
 
     // Move the pointers to the next kv
-    keys += blocks * k_seq_stride;
-    values += blocks * v_seq_stride;
+    keys += blocks * int(k_seq_stride);
+    values += blocks * int(v_seq_stride);
     if (bool_mask) {
       bmask += blocks * mask_kv_seq_stride;
     }
@@ -321,7 +313,7 @@ template <typename T, int D, int V = D>
   }
 
   for (int i = 0; i < v_per_thread; i++) {
-    out[i] = static_cast<T>(o[i]);
+    out[i] = o[i];
   }
 }
 
