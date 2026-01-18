@@ -174,7 +174,7 @@ endif()
 # Use fixed version of CCCL.
 FetchContent_Declare(
   cccl
-  URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
+  URL "https://github.com/NVIDIA/cccl/releases/download/v3.1.3/cccl-v3.1.3.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx BEFORE PRIVATE "${cccl_SOURCE_DIR}/include")
 
