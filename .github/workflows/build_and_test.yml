@@ -36,6 +36,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
       - uses: ./.github/actions/test-linux
+      - run: df -h
 
   cuda_build_and_test:
     name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
