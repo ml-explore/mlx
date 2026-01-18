@@ -1333,7 +1333,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def value_and_grad(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable"),
+          "def value_and_grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Tuple[R, Any]]"),
       R"pbdoc(
         Returns a function which computes the value and gradient of ``fun``.
 
@@ -1472,7 +1472,7 @@ void init_transforms(nb::module_& m) {
       "outputs"_a = nb::none(),
       "shapeless"_a = false,
       nb::sig(
-          "def compile(fun: Callable, inputs: Optional[object] = None, outputs: Optional[object] = None, shapeless: bool = False) -> Callable"),
+          "def compile(fun: Callable[P, R], inputs: Optional[object] = None, outputs: Optional[object] = None, shapeless: bool = False) -> Callable[P, R]"),
       R"pbdoc(
         Returns a compiled function which produces the same output as ``fun``.
 

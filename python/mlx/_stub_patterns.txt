@@ -1,10 +1,12 @@
 mlx.core.__prefix__:
-  from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+  from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, ParamSpec, TypeVar
   import sys
   if sys.version_info >= (3, 10):
     from typing import TypeAlias
   else:
     from typing_extensions import TypeAlias
+  P = ParamSpec("P")
+  R = TypeVar("R")
 
 mlx.core.__suffix__:
   from typing import Union
