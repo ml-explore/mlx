@@ -139,10 +139,15 @@ Simd<T, N> erf(Simd<T, N> x) {
   // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
   //  For float16 inputs, compute in float32 precision for accuracy
   // For float32/float64, compute in the same precision
-  using ComputeT = std::conditional_t<std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>, float, T>;
+  using ComputeT = std::conditional_t<
+      std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>,
+      float,
+      T>;
   Simd<ComputeT, N> v = x;
-  auto t = recip(fma(Simd<ComputeT, N>(ComputeT(0.3275911f)), abs(v), ComputeT(1.0f)));
-  auto r = fma(Simd<ComputeT, N>(ComputeT(1.061405429f)), t, ComputeT(-1.453152027f));
+  auto t = recip(
+      fma(Simd<ComputeT, N>(ComputeT(0.3275911f)), abs(v), ComputeT(1.0f)));
+  auto r = fma(
+      Simd<ComputeT, N>(ComputeT(1.061405429f)), t, ComputeT(-1.453152027f));
   r = fma(r, t, ComputeT(1.421413741f));
   r = fma(r, t, ComputeT(-0.284496736f));
   r = fma(r, t, ComputeT(0.254829592f));
@@ -155,7 +160,10 @@ template <typename T, int N>
 Simd<T, N> erfinv(Simd<T, N> a_) {
   // For float16 inputs, compute in float32 precision for accuracy
   // For float32/float64, compute in the same precision
-  using ComputeT = std::conditional_t<std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>, float, T>;
+  using ComputeT = std::conditional_t<
+      std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>,
+      float,
+      T>;
   Simd<ComputeT, N> a = a_;
   auto t = fma(a, ComputeT(0.0f) - a, ComputeT(1.0f));
   t = log(t);

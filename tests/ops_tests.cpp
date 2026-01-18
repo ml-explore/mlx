@@ -2547,6 +2547,75 @@ TEST_CASE("test scatter types") {
   }
 }
 
+TEST_CASE("test float16 NaN propagation") {
+  // Test NaN propagation in minimum/maximum operations for float16 and bfloat16
+  // IEEE 754 requires that NaN propagates through operations
+
+  // Test float16
+  {
+    array nan_arr(NAN, float16);
+    array normal_arr(1.0f, float16);
+
+    // First verify the arrays themselves contain expected values
+    CHECK(isnan(nan_arr).item<bool>());
+    CHECK_FALSE(isnan(normal_arr).item<bool>());
+
+    // maximum(NaN, x) should return NaN
+    {
+      auto result = maximum(nan_arr, normal_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // maximum(x, NaN) should return NaN
+    {
+      auto result = maximum(normal_arr, nan_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // minimum(NaN, x) should return NaN
+    {
+      auto result = minimum(nan_arr, normal_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // minimum(x, NaN) should return NaN
+    {
+      auto result = minimum(normal_arr, nan_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+  }
+
+  // Test bfloat16
+  {
+    array nan_arr(NAN, bfloat16);
+    array normal_arr(1.0f, bfloat16);
+
+    // maximum(NaN, x) should return NaN
+    {
+      auto result = maximum(nan_arr, normal_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // maximum(x, NaN) should return NaN
+    {
+      auto result = maximum(normal_arr, nan_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // minimum(NaN, x) should return NaN
+    {
+      auto result = minimum(nan_arr, normal_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+
+    // minimum(x, NaN) should return NaN
+    {
+      auto result = minimum(normal_arr, nan_arr);
+      CHECK(isnan(result).item<bool>());
+    }
+  }
+}
+
 TEST_CASE("test complex ops") {
   //  Creation ops
   {

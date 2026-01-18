@@ -4,13 +4,15 @@
 
 // AVX2 provides 256-bit SIMD for both floating-point AND integers
 // This combines what was originally Phase 2 (AVX) and Phase 3 (AVX2)
-// Rationale: AVX1 without AVX2 is too limited (no 256-bit integer ops, not even for bool masks)
+// Rationale: AVX1 without AVX2 is too limited (no 256-bit integer ops, not even
+// for bool masks)
 #include "mlx/backend/cpu/simd/base_simd.h"
+#include "mlx/backend/cpu/simd/x86_simd_macros.h"
 #include "mlx/types/half_types.h"
 
 #include <immintrin.h> // AVX
-#include <cmath>
 #include <stdint.h>
+#include <cmath>
 
 namespace mlx::core::simd {
 
@@ -54,67 +56,32 @@ struct Simd<bool, 4> {
 };
 
 // Bool operators for Simd<bool, 8>
-inline Simd<bool, 8> operator!(Simd<bool, 8> a) {
-  return Simd<bool, 8>(_mm256_xor_si256(a.value, _mm256_set1_epi32(-1)));
-}
-
-inline Simd<bool, 8> operator||(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return Simd<bool, 8>(_mm256_or_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator&&(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return Simd<bool, 8>(_mm256_and_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator&(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return Simd<bool, 8>(_mm256_and_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator|(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return Simd<bool, 8>(_mm256_or_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator^(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return Simd<bool, 8>(_mm256_xor_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator==(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return !Simd<bool, 8>(_mm256_xor_si256(a.value, b.value));
-}
-
-inline Simd<bool, 8> operator!=(Simd<bool, 8> a, Simd<bool, 8> b) {
-  return !(a == b);
-}
+DEFINE_X86_BOOL_OPS_VECTOR(8, si256, _mm256, 32)
 
 // Bool operators for Simd<bool, 4> (AVX double version with __m256i)
+// Note: Using _mm256_set1_epi64x instead of _mm256_set1_epi64 (which doesn't
+// exist)
 inline Simd<bool, 4> operator!(Simd<bool, 4> a) {
   return Simd<bool, 4>(_mm256_xor_si256(a.value, _mm256_set1_epi64x(-1)));
 }
-
 inline Simd<bool, 4> operator||(Simd<bool, 4> a, Simd<bool, 4> b) {
   return Simd<bool, 4>(_mm256_or_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator&&(Simd<bool, 4> a, Simd<bool, 4> b) {
   return Simd<bool, 4>(_mm256_and_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator&(Simd<bool, 4> a, Simd<bool, 4> b) {
   return Simd<bool, 4>(_mm256_and_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator|(Simd<bool, 4> a, Simd<bool, 4> b) {
   return Simd<bool, 4>(_mm256_or_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator^(Simd<bool, 4> a, Simd<bool, 4> b) {
   return Simd<bool, 4>(_mm256_xor_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator==(Simd<bool, 4> a, Simd<bool, 4> b) {
   return !Simd<bool, 4>(_mm256_xor_si256(a.value, b.value));
 }
-
 inline Simd<bool, 4> operator!=(Simd<bool, 4> a, Simd<bool, 4> b) {
   return !(a == b);
 }
@@ -123,9 +90,14 @@ inline Simd<bool, 4> operator!=(Simd<bool, 4> a, Simd<bool, 4> b) {
 template <>
 inline Simd<bool, 8> load<bool, 8>(const bool* ptr) {
   return Simd<bool, 8>(_mm256_set_epi32(
-    ptr[7] ? -1 : 0, ptr[6] ? -1 : 0, ptr[5] ? -1 : 0, ptr[4] ? -1 : 0,
-    ptr[3] ? -1 : 0, ptr[2] ? -1 : 0, ptr[1] ? -1 : 0, ptr[0] ? -1 : 0
-  ));
+      ptr[7] ? -1 : 0,
+      ptr[6] ? -1 : 0,
+      ptr[5] ? -1 : 0,
+      ptr[4] ? -1 : 0,
+      ptr[3] ? -1 : 0,
+      ptr[2] ? -1 : 0,
+      ptr[1] ? -1 : 0,
+      ptr[0] ? -1 : 0));
 }
 
 template <>
@@ -139,11 +111,10 @@ inline void store<bool, 8>(bool* ptr, Simd<bool, 8> v) {
 template <>
 inline Simd<bool, 4> load<bool, 4>(const bool* ptr) {
   return Simd<bool, 4>(_mm256_set_epi64x(
-    ptr[3] ? -1LL : 0,
-    ptr[2] ? -1LL : 0,
-    ptr[1] ? -1LL : 0,
-    ptr[0] ? -1LL : 0
-  ));
+      ptr[3] ? -1LL : 0,
+      ptr[2] ? -1LL : 0,
+      ptr[1] ? -1LL : 0,
+      ptr[0] ? -1LL : 0));
 }
 
 template <>
@@ -191,52 +162,29 @@ inline void store<float, 8>(float* ptr, Simd<float, 8> v) {
 }
 
 // Arithmetic float32x8
-inline Simd<float, 8> operator+(Simd<float, 8> a, Simd<float, 8> b) {
-  return _mm256_add_ps(a.value, b.value);
-}
-inline Simd<float, 8> operator-(Simd<float, 8> a, Simd<float, 8> b) {
-  return _mm256_sub_ps(a.value, b.value);
-}
-inline Simd<float, 8> operator*(Simd<float, 8> a, Simd<float, 8> b) {
-  return _mm256_mul_ps(a.value, b.value);
-}
-inline Simd<float, 8> operator/(Simd<float, 8> a, Simd<float, 8> b) {
-  return _mm256_div_ps(a.value, b.value);
-}
+DEFINE_X86_BINARY_OP(+, float, 8, _mm256_add_ps)
+DEFINE_X86_BINARY_OP(-, float, 8, _mm256_sub_ps)
+DEFINE_X86_BINARY_OP(*, float, 8, _mm256_mul_ps)
+DEFINE_X86_BINARY_OP(/, float, 8, _mm256_div_ps)
 inline Simd<float, 8> operator-(Simd<float, 8> a) {
   return _mm256_sub_ps(_mm256_setzero_ps(), a.value);
 }
 
 // Comparisons float32x8
-inline Simd<bool, 8> operator<(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_LT_OQ)));
-}
-inline Simd<bool, 8> operator>(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_GT_OQ)));
-}
-inline Simd<bool, 8> operator<=(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_LE_OQ)));
-}
-inline Simd<bool, 8> operator>=(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_GE_OQ)));
-}
-inline Simd<bool, 8> operator==(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_EQ_OQ)));
-}
-inline Simd<bool, 8> operator!=(Simd<float, 8> a, Simd<float, 8> b) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, b.value, _CMP_NEQ_OQ)));
-}
+DEFINE_X86_COMPARISONS_CMP(float, 8, _mm256, ps, _mm256_castps_si256)
 
 inline Simd<bool, 8> operator!(Simd<float, 8> a) {
   return a == Simd<float, 8>(0.0f);
 }
 
 inline Simd<bool, 8> isnan(Simd<float, 8> a) {
-  return Simd<bool, 8>(_mm256_castps_si256(_mm256_cmp_ps(a.value, a.value, _CMP_UNORD_Q)));
+  return Simd<bool, 8>(
+      _mm256_castps_si256(_mm256_cmp_ps(a.value, a.value, _CMP_UNORD_Q)));
 }
 
 // Select (blend) float32x8
-inline Simd<float, 8> select(Simd<bool, 8> mask, Simd<float, 8> x, Simd<float, 8> y) {
+inline Simd<float, 8>
+select(Simd<bool, 8> mask, Simd<float, 8> x, Simd<float, 8> y) {
   return _mm256_blendv_ps(y.value, x.value, _mm256_castsi256_ps(mask.value));
 }
 
@@ -246,28 +194,15 @@ inline Simd<float, 8> abs(Simd<float, 8> a) {
   return _mm256_and_ps(a.value, mask);
 }
 
-inline Simd<float, 8> sqrt(Simd<float, 8> a) {
-  return _mm256_sqrt_ps(a.value);
-}
-
-inline Simd<float, 8> rsqrt(Simd<float, 8> a) {
-  return _mm256_rsqrt_ps(a.value);
-}
-
-inline Simd<float, 8> recip(Simd<float, 8> a) {
-  return _mm256_rcp_ps(a.value);
-}
-
-inline Simd<float, 8> floor(Simd<float, 8> a) {
-  return _mm256_floor_ps(a.value);
-}
-
-inline Simd<float, 8> ceil(Simd<float, 8> a) {
-  return _mm256_ceil_ps(a.value);
-}
+DEFINE_X86_UNARY_OP(sqrt, float, 8, _mm256_sqrt_ps)
+DEFINE_X86_UNARY_OP(rsqrt, float, 8, _mm256_rsqrt_ps)
+DEFINE_X86_UNARY_OP(recip, float, 8, _mm256_rcp_ps)
+DEFINE_X86_UNARY_OP(floor, float, 8, _mm256_floor_ps)
+DEFINE_X86_UNARY_OP(ceil, float, 8, _mm256_ceil_ps)
 
 inline Simd<float, 8> rint(Simd<float, 8> a) {
-  return _mm256_round_ps(a.value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+  return _mm256_round_ps(
+      a.value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
 }
 
 inline Simd<float, 8> maximum(Simd<float, 8> a, Simd<float, 8> b) {
@@ -282,7 +217,8 @@ inline Simd<float, 8> minimum(Simd<float, 8> a, Simd<float, 8> b) {
   return out;
 }
 
-inline Simd<float, 8> clamp(Simd<float, 8> v, Simd<float, 8> min_val, Simd<float, 8> max_val) {
+inline Simd<float, 8>
+clamp(Simd<float, 8> v, Simd<float, 8> min_val, Simd<float, 8> max_val) {
   return minimum(maximum(v, min_val), max_val);
 }
 
@@ -318,14 +254,14 @@ inline Simd<float, 8> remainder(Simd<float, 8> a, Simd<float, 8> b) {
 }
 
 // Macro for transcendental functions
-#define AVX2_TRANSCENDENTAL_FLOAT(name, func)                    \
-  inline Simd<float, 8> name(Simd<float, 8> a) {                 \
-    alignas(32) float tmp_a[8], tmp_r[8];                        \
-    _mm256_store_ps(tmp_a, a.value);                             \
-    for (int i = 0; i < 8; i++) {                                \
-      tmp_r[i] = std::func(tmp_a[i]);                            \
-    }                                                            \
-    return _mm256_load_ps(tmp_r);                                \
+#define AVX2_TRANSCENDENTAL_FLOAT(name, func)    \
+  inline Simd<float, 8> name(Simd<float, 8> a) { \
+    alignas(32) float tmp_a[8], tmp_r[8];        \
+    _mm256_store_ps(tmp_a, a.value);             \
+    for (int i = 0; i < 8; i++) {                \
+      tmp_r[i] = std::func(tmp_a[i]);            \
+    }                                            \
+    return _mm256_load_ps(tmp_r);                \
   }
 
 AVX2_TRANSCENDENTAL_FLOAT(exp, exp)
@@ -364,11 +300,13 @@ inline Simd<float, 8> operator||(Simd<float, 8> a, Simd<float, 8> b) {
 
 // FMA
 #if defined(__FMA__)
-inline Simd<float, 8> fma(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
+inline Simd<float, 8>
+fma(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
   return _mm256_fmadd_ps(a.value, b.value, c.value);
 }
 #else
-inline Simd<float, 8> fma(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
+inline Simd<float, 8>
+fma(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
   return _mm256_add_ps(_mm256_mul_ps(a.value, b.value), c.value);
 }
 #endif
@@ -454,18 +392,10 @@ inline void store<double, 4>(double* ptr, Simd<double, 4> v) {
 }
 
 // Arithmetic double64x4
-inline Simd<double, 4> operator+(Simd<double, 4> a, Simd<double, 4> b) {
-  return _mm256_add_pd(a.value, b.value);
-}
-inline Simd<double, 4> operator-(Simd<double, 4> a, Simd<double, 4> b) {
-  return _mm256_sub_pd(a.value, b.value);
-}
-inline Simd<double, 4> operator*(Simd<double, 4> a, Simd<double, 4> b) {
-  return _mm256_mul_pd(a.value, b.value);
-}
-inline Simd<double, 4> operator/(Simd<double, 4> a, Simd<double, 4> b) {
-  return _mm256_div_pd(a.value, b.value);
-}
+DEFINE_X86_BINARY_OP(+, double, 4, _mm256_add_pd)
+DEFINE_X86_BINARY_OP(-, double, 4, _mm256_sub_pd)
+DEFINE_X86_BINARY_OP(*, double, 4, _mm256_mul_pd)
+DEFINE_X86_BINARY_OP(/, double, 4, _mm256_div_pd)
 inline Simd<double, 4> operator-(Simd<double, 4> a) {
   return _mm256_sub_pd(_mm256_setzero_pd(), a.value);
 }
@@ -482,41 +412,24 @@ inline Simd<double, 4> operator^(Simd<double, 4> a, Simd<double, 4> b) {
 }
 
 // Comparisons double64x4
-inline Simd<bool, 4> operator<(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_LT_OQ)));
-}
-inline Simd<bool, 4> operator>(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_GT_OQ)));
-}
-inline Simd<bool, 4> operator<=(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_LE_OQ)));
-}
-inline Simd<bool, 4> operator>=(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_GE_OQ)));
-}
-inline Simd<bool, 4> operator==(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_EQ_OQ)));
-}
-inline Simd<bool, 4> operator!=(Simd<double, 4> a, Simd<double, 4> b) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, b.value, _CMP_NEQ_OQ)));
-}
+DEFINE_X86_COMPARISONS_CMP(double, 4, _mm256, pd, _mm256_castpd_si256)
 
-// Logical NOT for double - returns bool mask where each element is true if input is zero
+// Logical NOT for double - returns bool mask where each element is true if
+// input is zero
 inline Simd<bool, 4> operator!(Simd<double, 4> a) {
   return a == Simd<double, 4>(0.0);
 }
 
 // Select (blend) double64x4 - defined early since it's used by maximum/minimum
-inline Simd<double, 4> select(
-    Simd<bool, 4> mask,
-    Simd<double, 4> x,
-    Simd<double, 4> y) {
+inline Simd<double, 4>
+select(Simd<bool, 4> mask, Simd<double, 4> x, Simd<double, 4> y) {
   return _mm256_blendv_pd(y.value, x.value, _mm256_castsi256_pd(mask.value));
 }
 
 // isnan for double - use unordered comparison (specifically for NaN detection)
 inline Simd<bool, 4> isnan(Simd<double, 4> a) {
-  return Simd<bool, 4>(_mm256_castpd_si256(_mm256_cmp_pd(a.value, a.value, _CMP_UNORD_Q)));
+  return Simd<bool, 4>(
+      _mm256_castpd_si256(_mm256_cmp_pd(a.value, a.value, _CMP_UNORD_Q)));
 }
 
 // Math functions double64x4
@@ -525,9 +438,7 @@ inline Simd<double, 4> abs(Simd<double, 4> a) {
   return _mm256_and_pd(a.value, mask);
 }
 
-inline Simd<double, 4> sqrt(Simd<double, 4> a) {
-  return _mm256_sqrt_pd(a.value);
-}
+DEFINE_X86_UNARY_OP(sqrt, double, 4, _mm256_sqrt_pd)
 
 inline Simd<double, 4> rsqrt(Simd<double, 4> a) {
   // No AVX rsqrt for double, use div
@@ -539,16 +450,12 @@ inline Simd<double, 4> recip(Simd<double, 4> a) {
   return Simd<double, 4>(1.0) / a;
 }
 
-inline Simd<double, 4> floor(Simd<double, 4> a) {
-  return _mm256_floor_pd(a.value);
-}
-
-inline Simd<double, 4> ceil(Simd<double, 4> a) {
-  return _mm256_ceil_pd(a.value);
-}
+DEFINE_X86_UNARY_OP(floor, double, 4, _mm256_floor_pd)
+DEFINE_X86_UNARY_OP(ceil, double, 4, _mm256_ceil_pd)
 
 inline Simd<double, 4> rint(Simd<double, 4> a) {
-  return _mm256_round_pd(a.value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+  return _mm256_round_pd(
+      a.value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
 }
 
 inline Simd<double, 4> maximum(Simd<double, 4> a, Simd<double, 4> b) {
@@ -565,7 +472,8 @@ inline Simd<double, 4> minimum(Simd<double, 4> a, Simd<double, 4> b) {
   return out;
 }
 
-inline Simd<double, 4> clamp(Simd<double, 4> v, Simd<double, 4> min_val, Simd<double, 4> max_val) {
+inline Simd<double, 4>
+clamp(Simd<double, 4> v, Simd<double, 4> min_val, Simd<double, 4> max_val) {
   return minimum(maximum(v, min_val), max_val);
 }
 
@@ -592,14 +500,14 @@ inline Simd<double, 4> pow(Simd<double, 4> base, Simd<double, 4> exp) {
 }
 
 // Transcendental functions - use scalar fallback for now
-#define AVX_TRANSCENDENTAL_DOUBLE(name, func)                   \
-  inline Simd<double, 4> name(Simd<double, 4> a) {              \
-    alignas(32) double tmp_a[4], tmp_r[4];                      \
-    _mm256_store_pd(tmp_a, a.value);                            \
-    for (int i = 0; i < 4; i++) {                               \
-      tmp_r[i] = std::func(tmp_a[i]);                           \
-    }                                                           \
-    return _mm256_load_pd(tmp_r);                               \
+#define AVX_TRANSCENDENTAL_DOUBLE(name, func)      \
+  inline Simd<double, 4> name(Simd<double, 4> a) { \
+    alignas(32) double tmp_a[4], tmp_r[4];         \
+    _mm256_store_pd(tmp_a, a.value);               \
+    for (int i = 0; i < 4; i++) {                  \
+      tmp_r[i] = std::func(tmp_a[i]);              \
+    }                                              \
+    return _mm256_load_pd(tmp_r);                  \
   }
 
 AVX_TRANSCENDENTAL_DOUBLE(exp, exp)
@@ -647,7 +555,8 @@ inline Simd<double, 4> operator||(Simd<double, 4> a, Simd<double, 4> b) {
 }
 
 // FMA (emulated)
-inline Simd<double, 4> fma(Simd<double, 4> a, Simd<double, 4> b, Simd<double, 4> c) {
+inline Simd<double, 4>
+fma(Simd<double, 4> a, Simd<double, 4> b, Simd<double, 4> c) {
   return _mm256_add_pd(_mm256_mul_pd(a.value, b.value), c.value);
 }
 
@@ -701,7 +610,7 @@ inline double prod(Simd<double, 4> v) {
 template <>
 struct Simd<float16_t, 8> {
   static constexpr int size = 8;
-  __m128i value;  // Stored as 8x16-bit values
+  __m128i value; // Stored as 8x16-bit values
 
   Simd() : value(_mm_setzero_si128()) {}
   Simd(__m128i v) : value(v) {}
@@ -746,6 +655,69 @@ inline Simd<float, 8>::Simd(Simd<float16_t, 8> v) {
   }
 
   value = _mm256_load_ps(tmp);
+}
+
+// Load/store for float16_t (8 elements in 128 bits)
+template <>
+inline Simd<float16_t, 8> load<float16_t, 8>(const float16_t* ptr) {
+  return _mm_loadu_si128((const __m128i*)ptr);
+}
+
+template <>
+inline void store<float16_t, 8>(float16_t* ptr, Simd<float16_t, 8> v) {
+  _mm_storeu_si128((__m128i*)ptr, v.value);
+}
+
+// Comparison operators for float16_t (using scalar fallback)
+inline Simd<bool, 8> operator<(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  alignas(16) uint16_t a_bits[8], b_bits[8];
+  _mm_store_si128((__m128i*)a_bits, a.value);
+  _mm_store_si128((__m128i*)b_bits, b.value);
+  alignas(32) int32_t result[8];
+  for (int i = 0; i < 8; ++i) {
+    float16_t fa = *reinterpret_cast<float16_t*>(&a_bits[i]);
+    float16_t fb = *reinterpret_cast<float16_t*>(&b_bits[i]);
+    result[i] = static_cast<float>(fa) < static_cast<float>(fb) ? -1 : 0;
+  }
+  return load<bool, 8>((const bool*)result);
+}
+
+inline Simd<bool, 8> operator<=(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  alignas(16) uint16_t a_bits[8], b_bits[8];
+  _mm_store_si128((__m128i*)a_bits, a.value);
+  _mm_store_si128((__m128i*)b_bits, b.value);
+  alignas(32) int32_t result[8];
+  for (int i = 0; i < 8; ++i) {
+    float16_t fa = *reinterpret_cast<float16_t*>(&a_bits[i]);
+    float16_t fb = *reinterpret_cast<float16_t*>(&b_bits[i]);
+    result[i] = static_cast<float>(fa) <= static_cast<float>(fb) ? -1 : 0;
+  }
+  return load<bool, 8>((const bool*)result);
+}
+
+inline Simd<bool, 8> operator>(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  return b < a;
+}
+
+inline Simd<bool, 8> operator>=(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  return b <= a;
+}
+
+inline Simd<bool, 8> operator==(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  alignas(16) uint16_t a_bits[8], b_bits[8];
+  _mm_store_si128((__m128i*)a_bits, a.value);
+  _mm_store_si128((__m128i*)b_bits, b.value);
+  alignas(32) int32_t result[8];
+  for (int i = 0; i < 8; ++i) {
+    float16_t fa = *reinterpret_cast<float16_t*>(&a_bits[i]);
+    float16_t fb = *reinterpret_cast<float16_t*>(&b_bits[i]);
+    result[i] = static_cast<float>(fa) == static_cast<float>(fb) ? -1 : 0;
+  }
+  return load<bool, 8>((const bool*)result);
+}
+
+inline Simd<bool, 8> operator!=(Simd<float16_t, 8> a, Simd<float16_t, 8> b) {
+  return !(a == b);
 }
 
 // ============================================================================
@@ -1027,7 +999,8 @@ inline Simd<bool, 8> operator!=(Simd<uint32_t, 8> a, Simd<uint32_t, 8> b) {
 }
 inline Simd<bool, 8> operator<(Simd<uint32_t, 8> a, Simd<uint32_t, 8> b) {
   auto minn = _mm256_min_epu32(a.value, b.value);
-  return Simd<bool, 8>(_mm256_andnot_si256(_mm256_cmpeq_epi32(a.value, b.value), _mm256_cmpeq_epi32(minn, a.value)));
+  return Simd<bool, 8>(_mm256_andnot_si256(
+      _mm256_cmpeq_epi32(a.value, b.value), _mm256_cmpeq_epi32(minn, a.value)));
 }
 inline Simd<bool, 8> operator>(Simd<uint32_t, 8> a, Simd<uint32_t, 8> b) {
   return b < a;
@@ -1058,10 +1031,12 @@ inline Simd<int32_t, 8> abs(Simd<int32_t, 8> a) {
 }
 
 // Select
-inline Simd<int32_t, 8> select(Simd<bool, 8> mask, Simd<int32_t, 8> x, Simd<int32_t, 8> y) {
+inline Simd<int32_t, 8>
+select(Simd<bool, 8> mask, Simd<int32_t, 8> x, Simd<int32_t, 8> y) {
   return _mm256_blendv_epi8(y.value, x.value, mask.value);
 }
-inline Simd<uint32_t, 8> select(Simd<bool, 8> mask, Simd<uint32_t, 8> x, Simd<uint32_t, 8> y) {
+inline Simd<uint32_t, 8>
+select(Simd<bool, 8> mask, Simd<uint32_t, 8> x, Simd<uint32_t, 8> y) {
   return _mm256_blendv_epi8(y.value, x.value, mask.value);
 }
 
@@ -1238,7 +1213,7 @@ inline uint32_t prod(Simd<uint32_t, 8> v) {
 template <>
 struct Simd<uint8_t, 8> {
   static constexpr int size = 8;
-  __m128i value;  // Only lower 64 bits used
+  __m128i value; // Only lower 64 bits used
 
   Simd() : value(_mm_setzero_si128()) {}
   Simd(__m128i v) : value(v) {}
@@ -1367,7 +1342,8 @@ inline Simd<uint8_t, 8> operator>>(Simd<uint8_t, 8> a, Simd<uint8_t, 8> b) {
 
 // Scalar versions
 inline Simd<uint8_t, 8> operator<<(Simd<uint8_t, 8> a, int bits) {
-  if (bits >= 8) return Simd<uint8_t, 8>(_mm_setzero_si128());
+  if (bits >= 8)
+    return Simd<uint8_t, 8>(_mm_setzero_si128());
   // No 8-bit shift in SSE, need scalar fallback
   alignas(16) uint8_t a_arr[16], result[16];
   _mm_store_si128((__m128i*)a_arr, a.value);
@@ -1378,7 +1354,8 @@ inline Simd<uint8_t, 8> operator<<(Simd<uint8_t, 8> a, int bits) {
 }
 
 inline Simd<uint8_t, 8> operator>>(Simd<uint8_t, 8> a, int bits) {
-  if (bits >= 8) return Simd<uint8_t, 8>(_mm_setzero_si128());
+  if (bits >= 8)
+    return Simd<uint8_t, 8>(_mm_setzero_si128());
   // No 8-bit shift in SSE, need scalar fallback
   alignas(16) uint8_t a_arr[16], result[16];
   _mm_store_si128((__m128i*)a_arr, a.value);
@@ -1409,7 +1386,8 @@ inline Simd<uint8_t, 8> pow(Simd<uint8_t, 8> base, Simd<uint8_t, 8> exp) {
 }
 
 // select for uint8_t
-inline Simd<uint8_t, 8> select(Simd<bool, 8> mask, Simd<uint8_t, 8> x, Simd<uint8_t, 8> y) {
+inline Simd<uint8_t, 8>
+select(Simd<bool, 8> mask, Simd<uint8_t, 8> x, Simd<uint8_t, 8> y) {
   // Convert 32-bit masks back to 8-bit masks
   alignas(32) int32_t mask32[8];
   _mm256_store_si256((__m256i*)mask32, mask.value);
@@ -1449,7 +1427,8 @@ inline uint8_t min(Simd<uint8_t, 8> v) {
   _mm_store_si128((__m128i*)tmp, v.value);
   uint8_t result = tmp[0];
   for (int i = 1; i < 8; i++) {
-    if (tmp[i] < result) result = tmp[i];
+    if (tmp[i] < result)
+      result = tmp[i];
   }
   return result;
 }
@@ -1459,7 +1438,8 @@ inline uint8_t max(Simd<uint8_t, 8> v) {
   _mm_store_si128((__m128i*)tmp, v.value);
   uint8_t result = tmp[0];
   for (int i = 1; i < 8; i++) {
-    if (tmp[i] > result) result = tmp[i];
+    if (tmp[i] > result)
+      result = tmp[i];
   }
   return result;
 }
@@ -1492,10 +1472,14 @@ inline Simd<uint8_t, 8> operator||(Simd<uint8_t, 8> a, Simd<uint8_t, 8> b) {
 // ============================================================================
 // Conversion constructor definitions (after all structs are complete)
 // ============================================================================
-inline Simd<float, 8>::Simd(Simd<bool, 8> v) : value(_mm256_castsi256_ps(v.value)) {}
-inline Simd<float, 8>::Simd(Simd<int32_t, 8> v) : value(_mm256_cvtepi32_ps(v.value)) {}
-inline Simd<float, 8>::Simd(Simd<uint32_t, 8> v) : value(_mm256_cvtepi32_ps(v.value)) {}
-inline Simd<double, 4>::Simd(Simd<bool, 4> v) : value(_mm256_castsi256_pd(v.value)) {}
+inline Simd<float, 8>::Simd(Simd<bool, 8> v)
+    : value(_mm256_castsi256_ps(v.value)) {}
+inline Simd<float, 8>::Simd(Simd<int32_t, 8> v)
+    : value(_mm256_cvtepi32_ps(v.value)) {}
+inline Simd<float, 8>::Simd(Simd<uint32_t, 8> v)
+    : value(_mm256_cvtepi32_ps(v.value)) {}
+inline Simd<double, 4>::Simd(Simd<bool, 4> v)
+    : value(_mm256_castsi256_pd(v.value)) {}
 
 // int32_t and uint32_t conversions (size 8)
 inline Simd<int32_t, 8>::Simd(Simd<uint32_t, 8> v) : value(v.value) {}
@@ -1509,19 +1493,25 @@ inline Simd<uint32_t, 4>::Simd(int32_t v) : value(_mm_set1_epi32(v)) {}
 
 // int32_t and uint32_t concatenation constructors (size 4 -> size 8)
 inline Simd<int32_t, 8>::Simd(Simd<int32_t, 4> lo, Simd<int32_t, 4> hi)
-  : value(_mm256_inserti128_si256(_mm256_castsi128_si256(lo.value), hi.value, 1)) {}
+    : value(_mm256_inserti128_si256(
+          _mm256_castsi128_si256(lo.value),
+          hi.value,
+          1)) {}
 
 inline Simd<uint32_t, 8>::Simd(Simd<uint32_t, 4> lo, Simd<uint32_t, 4> hi)
-  : value(_mm256_inserti128_si256(_mm256_castsi128_si256(lo.value), hi.value, 1)) {}
+    : value(_mm256_inserti128_si256(
+          _mm256_castsi128_si256(lo.value),
+          hi.value,
+          1)) {}
 
 // Type conversions between different element widths
 // uint8 -> int32 (zero-extend)
 inline Simd<int32_t, 8>::Simd(Simd<uint8_t, 8> v)
-  : value(_mm256_cvtepu8_epi32(v.value)) {}
+    : value(_mm256_cvtepu8_epi32(v.value)) {}
 
 // uint8 -> uint32 (zero-extend)
 inline Simd<uint32_t, 8>::Simd(Simd<uint8_t, 8> v)
-  : value(_mm256_cvtepu8_epi32(v.value)) {}
+    : value(_mm256_cvtepu8_epi32(v.value)) {}
 
 // uint32 -> uint8 (truncate/pack)
 inline Simd<uint8_t, 8>::Simd(Simd<uint32_t, 8> v) {
@@ -1537,11 +1527,11 @@ inline Simd<uint8_t, 8>::Simd(Simd<uint32_t, 8> v) {
 
 // uint8 -> uint16 (zero-extend using masks and shifts)
 inline Simd<uint16_t, 8>::Simd(Simd<uint8_t, 8> v)
-  : value(_mm_cvtepu8_epi16(v.value)) {}
+    : value(_mm_cvtepu8_epi16(v.value)) {}
 
 // uint8 -> bool (extend to 32-bit masks)
 inline Simd<bool, 8>::Simd(Simd<uint8_t, 8> v)
-  : value(_mm256_cvtepi8_epi32(v.value)) {}
+    : value(_mm256_cvtepi8_epi32(v.value)) {}
 
 // ============================================================================
 // Bool reductions

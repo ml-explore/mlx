@@ -4,23 +4,28 @@
 // Used by both sse_simd.h and avx_simd.h
 // AVX doesn't have 256-bit integer ops, so it reuses these SSE integer types
 //
-// IMPORTANT: This header assumes Simd<bool, 4> is already defined by the includer
-// - In SSE builds: sse_simd.h defines Simd<bool, 4> with __m128i (4x32-bit masks)
-// - In AVX builds: avx_simd.h defines Simd<bool, 4> with __m256i (4x64-bit masks for doubles)
+// IMPORTANT: This header assumes Simd<bool, 4> is already defined by the
+// includer
+// - In SSE builds: sse_simd.h defines Simd<bool, 4> with __m128i (4x32-bit
+// masks)
+// - In AVX builds: avx_simd.h defines Simd<bool, 4> with __m256i (4x64-bit
+// masks for doubles)
 //   but integer comparisons still return the SSE version with __m128i
 
 #include <smmintrin.h> // SSE4.1
-#include <cmath>
 #include <stdint.h>
+#include <cmath>
 
 namespace mlx::core::simd {
 
 // SSE integer types: 128-bit registers for int32/uint32
 // Note: max_size is NOT defined here - each includer defines it
 // SSE: max_size<int32_t> = 4, max_size<uint32_t> = 4
-// AVX: max_size<int32_t> = 4, max_size<uint32_t> = 4 (same, AVX doesn't add int support)
+// AVX: max_size<int32_t> = 4, max_size<uint32_t> = 4 (same, AVX doesn't add int
+// support)
 
-// Note: Bool reductions (all/any) are defined in sse_simd.h to avoid duplication
+// Note: Bool reductions (all/any) are defined in sse_simd.h to avoid
+// duplication
 
 // ============================================================================
 // int32x4 and uint32x4 types (128-bit SSE)
@@ -150,7 +155,10 @@ inline Simd<uint32_t, 4> minimum(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
   return _mm_min_epu32(a.value, b.value);
 }
 
-inline Simd<uint32_t, 4> clamp(Simd<uint32_t, 4> v, Simd<uint32_t, 4> min_val, Simd<uint32_t, 4> max_val) {
+inline Simd<uint32_t, 4> clamp(
+    Simd<uint32_t, 4> v,
+    Simd<uint32_t, 4> min_val,
+    Simd<uint32_t, 4> max_val) {
   return minimum(maximum(v, min_val), max_val);
 }
 
@@ -184,7 +192,8 @@ inline Simd<uint32_t, 4> operator||(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
 
 inline Simd<bool, 4> operator<(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
   auto minn = _mm_min_epu32(a.value, b.value);
-  return Simd<bool, 4>(_mm_andnot_si128(_mm_cmpeq_epi32(a.value, b.value), _mm_cmpeq_epi32(minn, a.value)));
+  return Simd<bool, 4>(_mm_andnot_si128(
+      _mm_cmpeq_epi32(a.value, b.value), _mm_cmpeq_epi32(minn, a.value)));
 }
 
 inline Simd<bool, 4> operator>(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
@@ -216,10 +225,8 @@ inline Simd<uint32_t, 4> pow(Simd<uint32_t, 4> base, Simd<uint32_t, 4> exp) {
   return _mm_load_si128((__m128i*)tmp_r);
 }
 
-inline Simd<uint32_t, 4> select(
-    Simd<bool, 4> mask,
-    Simd<uint32_t, 4> x,
-    Simd<uint32_t, 4> y) {
+inline Simd<uint32_t, 4>
+select(Simd<bool, 4> mask, Simd<uint32_t, 4> x, Simd<uint32_t, 4> y) {
   return _mm_blendv_epi8(y.value, x.value, mask.value);
 }
 
@@ -360,7 +367,8 @@ inline Simd<int32_t, 4> abs(Simd<int32_t, 4> a) {
   return _mm_abs_epi32(a.value);
 }
 
-inline Simd<int32_t, 4> clamp(Simd<int32_t, 4> v, Simd<int32_t, 4> min_val, Simd<int32_t, 4> max_val) {
+inline Simd<int32_t, 4>
+clamp(Simd<int32_t, 4> v, Simd<int32_t, 4> min_val, Simd<int32_t, 4> max_val) {
   return minimum(maximum(v, min_val), max_val);
 }
 
@@ -376,16 +384,15 @@ inline Simd<int32_t, 4> operator||(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
   return Simd<int32_t, 4>(_mm_or_si128(mask_a.value, mask_b.value));
 }
 
-inline Simd<int32_t, 4> select(
-    Simd<bool, 4> mask,
-    Simd<int32_t, 4> x,
-    Simd<int32_t, 4> y) {
+inline Simd<int32_t, 4>
+select(Simd<bool, 4> mask, Simd<int32_t, 4> x, Simd<int32_t, 4> y) {
   return _mm_blendv_epi8(y.value, x.value, mask.value);
 }
 
 inline Simd<int32_t, 4> remainder(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
   auto r = a - b * (a / b);
-  auto mask = (r != Simd<int32_t, 4>(0)) && ((r < Simd<int32_t, 4>(0)) != (b < Simd<int32_t, 4>(0)));
+  auto mask = (r != Simd<int32_t, 4>(0)) &&
+      ((r < Simd<int32_t, 4>(0)) != (b < Simd<int32_t, 4>(0)));
   return select(mask, r + b, r);
 }
 

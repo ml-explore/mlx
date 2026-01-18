@@ -536,7 +536,8 @@ simd::Simd<float, S> fp_extract_bits_simd(const uint32_t* w) {
     wi = wi >> shifts;
     wi = wi & 0xf;
     // Note: SIMD types don't support writable lane access (w_out[i] = val)
-    // Build in scalar array then load - standard pattern for element-wise lookups
+    // Build in scalar array then load - standard pattern for element-wise
+    // lookups
     alignas(32) float tmp[S];
     for (int i = 0; i < S; ++i) {
       tmp[i] = FP4_LUT[wi[i]];
