@@ -44,6 +44,7 @@ void synchronize(Stream s) {
     std::future<void> f = p->get_future();
     scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
     f.wait();
+    scheduler::check_exception(s);
   } else {
     gpu::synchronize(s);
   }
