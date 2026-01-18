@@ -169,15 +169,10 @@ class CMakeBuild(build_ext):
             self.copy_tree(regular_dir, inplace_dir)
 
         # Build type stubs.
-        ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)  # type: ignore[no-untyped-call]
-        extdir = ext_fullpath.parent.parent.resolve()
         build_temp = Path(self.build_temp) / ext.name
-        env = os.environ.copy()
-        env["PYTHONPATH"] += f":{extdir}"
         subprocess.run(
             ["cmake", "--install", build_temp, "--component", "core_stub"],
             check=True,
-            env=env,
         )
 
 
