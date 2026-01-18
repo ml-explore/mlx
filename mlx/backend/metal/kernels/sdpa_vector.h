@@ -80,8 +80,10 @@ template <typename T, int D, int V = D>
   out += o_offset * V + simd_gid * v_per_thread;
 
   // Read the query and 0 the output accumulator
+  // Scale by M_LOG2E_F to match STEEL attention domain (exp2 instead of exp)
+  const U log2e_scale = static_cast<U>(scale * M_LOG2E_F);
   for (int i = 0; i < qk_per_thread; i++) {
-    q[i] = static_cast<U>(scale) * queries[i];
+    q[i] = log2e_scale * queries[i];
   }
   for (int i = 0; i < v_per_thread; i++) {
     o[i] = 0;
@@ -90,7 +92,8 @@ template <typename T, int D, int V = D>
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
   if (has_sinks && simd_gid == 0) {
-    max_score = static_cast<U>(sinks[q_batch_head_idx % num_q_heads]);
+    // Scale sink by M_LOG2E_F to match log2 domain
+    max_score = static_cast<U>(M_LOG2E_F) * static_cast<U>(sinks[q_batch_head_idx % num_q_heads]);
     sum_exp_score = 1;
   }
 
@@ -117,13 +120,14 @@ template <typename T, int D, int V = D>
       }
       score = simd_sum(score);
       if (float_mask) {
-        score += static_cast<U>(fmask[0]);
+        // Scale float mask by M_LOG2E_F to match log2 domain
+        score += static_cast<U>(M_LOG2E_F) * static_cast<U>(fmask[0]);
       }
 
-      // Update the accumulators
+      // Update the accumulators (using exp2 to match STEEL attention)
       U new_max = max(max_score, score);
-      U factor = fast::exp(max_score - new_max);
-      U exp_score = fast::exp(score - new_max);
+      U factor = fast::exp2(max_score - new_max);
+      U exp_score = fast::exp2(score - new_max);
 
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
@@ -155,7 +159,7 @@ template <typename T, int D, int V = D>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   max_score = max_scores[simd_lid];
   U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
+  U factor = fast::exp2(max_score - new_max);
   sum_exp_score = simd_sum(sum_exp_scores[simd_lid] * factor);
 
   // Now we need to aggregate all the outputs
@@ -252,8 +256,10 @@ template <typename T, int D, int V = D>
   maxs += o_offset * blocks + block_idx;
 
   // Read the query and 0 the output accumulator
+  // Scale by M_LOG2E_F to match STEEL attention domain (exp2 instead of exp)
+  const U log2e_scale = static_cast<U>(scale * M_LOG2E_F);
   for (int i = 0; i < qk_per_thread; i++) {
-    q[i] = static_cast<U>(scale) * queries[i];
+    q[i] = log2e_scale * queries[i];
   }
   for (int i = 0; i < v_per_thread; i++) {
     o[i] = 0;
@@ -263,7 +269,8 @@ template <typename T, int D, int V = D>
   U sum_exp_score = 0;
   if (has_sinks && block_idx == 0 && simd_gid == 0) {
     int q_head_idx = q_batch_head_idx % num_q_heads;
-    max_score = static_cast<U>(sinks[q_head_idx]);
+    // Scale sink by M_LOG2E_F to match log2 domain
+    max_score = static_cast<U>(M_LOG2E_F) * static_cast<U>(sinks[q_head_idx]);
     sum_exp_score = 1;
   }
 
@@ -291,13 +298,14 @@ template <typename T, int D, int V = D>
       score = simd_sum(score);
 
       if (float_mask) {
-        score += fmask[0];
+        // Scale float mask by M_LOG2E_F to match log2 domain
+        score += static_cast<U>(M_LOG2E_F) * static_cast<U>(fmask[0]);
       }
 
-      // Update the accumulators
+      // Update the accumulators (using exp2 to match STEEL attention)
       U new_max = max(max_score, score);
-      U factor = fast::exp(max_score - new_max);
-      U exp_score = fast::exp(score - new_max);
+      U factor = fast::exp2(max_score - new_max);
+      U exp_score = fast::exp2(score - new_max);
 
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
@@ -329,7 +337,7 @@ template <typename T, int D, int V = D>
   threadgroup_barrier(mem_flags::mem_threadgroup);
   max_score = (simd_lid < BN) ? max_scores[simd_lid] : -1e9;
   U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
+  U factor = fast::exp2(max_score - new_max);
   sum_exp_score = (simd_lid < BN) ? sum_exp_scores[simd_lid] : 0;
   sum_exp_score = simd_sum(sum_exp_score * factor);
 
@@ -342,7 +350,7 @@ template <typename T, int D, int V = D>
   // Now we need to aggregate all the outputs
   for (int i = 0; i < v_per_thread; i++) {
     outputs[simd_lid * BN + simd_gid] =
-        o[i] * fast::exp(max_scores[simd_gid] - new_max);
+        o[i] * fast::exp2(max_scores[simd_gid] - new_max);
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // And write the output
@@ -390,7 +398,7 @@ template <typename T, int D>
   // First everybody reads the max and sum_exp
   U max_score = maxs[simd_lid];
   U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
+  U factor = fast::exp2(max_score - new_max);
   U sum_exp_score = simd_sum(sums[simd_lid] * factor);
 
   // Now read the block into registers and then use shared memory to transpose

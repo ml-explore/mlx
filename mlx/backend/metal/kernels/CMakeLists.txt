@@ -53,7 +53,29 @@ build_kernel(layer_norm)
 build_kernel(random)
 build_kernel(rms_norm)
 build_kernel(rope)
-build_kernel(scaled_dot_product_attention sdpa_vector.h)
+build_kernel(scaled_dot_product_attention sdpa_vector.h sdpa_vector_vjp.h)
+
+set(STEEL_ATTN_HEADERS
+    steel/defines.h
+    steel/utils.h
+    steel/gemm/gemm.h
+    steel/gemm/mma.h
+    steel/gemm/loader.h
+    steel/gemm/transforms.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h
+    steel/attn/attn.h
+    steel/attn/loader.h
+    steel/attn/mma.h
+    steel/attn/params.h
+    steel/attn/transforms.h
+    steel/attn/kernels/steel_attention.h
+    steel/attn/kernels/steel_attention_vjp_dq.h
+    steel/attn/kernels/steel_attention_vjp_dkv.h)
+
+build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
+build_kernel(steel/attn/kernels/steel_attention_vjp_dq ${STEEL_ATTN_HEADERS})
+build_kernel(steel/attn/kernels/steel_attention_vjp_dkv ${STEEL_ATTN_HEADERS})
 if(MLX_METAL_VERSION GREATER_EQUAL 320)
   build_kernel(fence)
 endif()
@@ -80,22 +102,6 @@ set(STEEL_HEADERS
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
     steel/utils/integral_constant.h)
-
-set(STEEL_ATTN_HEADERS
-    steel/defines.h
-    steel/utils.h
-    steel/gemm/gemm.h
-    steel/gemm/mma.h
-    steel/gemm/loader.h
-    steel/gemm/transforms.h
-    steel/utils/type_traits.h
-    steel/utils/integral_constant.h
-    steel/attn/attn.h
-    steel/attn/loader.h
-    steel/attn/mma.h
-    steel/attn/params.h
-    steel/attn/transforms.h
-    steel/attn/kernels/steel_attention.h)
 
 set(STEEL_NAX_HEADERS
     steel/defines.h
