@@ -439,13 +439,13 @@ void sdpa_vector_2pass(
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
-  int blocks = 128; // N < 8192 ? 32 : 256;
+  int blocks;
+  blocks = 256;
 
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
-  // TODO handle case where gqa_factor * q.shape > 32
   MTL::Size group_dims(32, gqa_factor, q.shape(2));
   MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
@@ -581,6 +581,9 @@ bool ScaledDotProductAttention::use_fallback(
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);
   const int key_sequence_length = k.shape(2);
+  const int num_query_heads = q.shape(1);
+  const int num_kv_heads = k.shape(1);
+  const int gqa_factor = num_query_heads / num_kv_heads;
 
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
@@ -597,7 +600,8 @@ bool ScaledDotProductAttention::use_fallback(
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
       (query_sequence_length <= key_sequence_length) &&
-      sdpa_vector_supported_head_dim;
+      sdpa_vector_supported_head_dim &&
+      (query_sequence_length * gqa_factor) <= 32;
 
   return !(supports_sdpa_full || supports_sdpa_vector);
 }
