@@ -12,33 +12,16 @@
 namespace mlx::core::simd {
 
 // SSE: 128-bit SIMD
-// Focus on float and double for Phase 1, let others use scalar fallback
+// Float, double, and bool types defined here
+// Integer types provided by sse_int_types.h (shared with AVX)
 template <>
 inline constexpr int max_size<float> = 4;
 template <>
 inline constexpr int max_size<double> = 2;
-// For now, only implement int32 as well since it's commonly used
-template <>
-inline constexpr int max_size<int32_t> = 4;
-template <>
-inline constexpr int max_size<uint32_t> = 4;
-// Let other integer types use scalar fallback (max_size = 1 from base_simd.h)
-// We can add these in later phases
-// template <>
-// inline constexpr int max_size<int64_t> = 2;
-// template <>
-// inline constexpr int max_size<uint64_t> = 2;
-// template <>
-// inline constexpr int max_size<int16_t> = 8;
-// template <>
-// inline constexpr int max_size<uint16_t> = 8;
-// template <>
-// inline constexpr int max_size<int8_t> = 16;
-// template <>
-// inline constexpr int max_size<uint8_t> = 16;
 
 // ============================================================================
 // Bool specializations (forward declare early for comparison operators)
+// Note: These are 128-bit bool vectors for SSE (4x32-bit or 2x64-bit masks)
 // ============================================================================
 
 template <>
@@ -58,7 +41,7 @@ struct Simd<bool, 2> {
 
   Simd() : value(_mm_setzero_si128()) {}
   Simd(__m128i v) : value(v) {}
-  Simd(bool v) : value(_mm_set1_epi64x(v ? -1 : 0)) {}
+  Simd(bool v) : value(_mm_set1_epi64x(v ? -1LL : 0)) {}
 };
 
 // Bool operators (needed early for comparison operator implementations)
@@ -169,6 +152,30 @@ inline void store<bool, 2>(bool* ptr, Simd<bool, 2> v) {
   ptr[0] = (mask & 1) != 0;
   ptr[1] = (mask & 2) != 0;
 }
+
+// Bool reductions (operators defined above)
+inline bool all(Simd<bool, 4> x) {
+  return _mm_movemask_ps(_mm_castsi128_ps(x.value)) == 0xF;
+}
+
+inline bool any(Simd<bool, 4> x) {
+  return _mm_movemask_ps(_mm_castsi128_ps(x.value)) != 0;
+}
+
+inline bool all(Simd<bool, 2> x) {
+  return _mm_movemask_pd(_mm_castsi128_pd(x.value)) == 0x3;
+}
+
+inline bool any(Simd<bool, 2> x) {
+  return _mm_movemask_pd(_mm_castsi128_pd(x.value)) != 0;
+}
+
+} // namespace mlx::core::simd
+
+// Include integer types after bool types are defined (needed for comparisons)
+#include "mlx/backend/cpu/simd/sse_int_types.h"
+
+namespace mlx::core::simd {
 
 // ============================================================================
 // float32x4 (4 floats in 128 bits)
@@ -674,489 +681,11 @@ inline double prod(Simd<double, 2> v) {
   return _mm_cvtsd_f64(prods);
 }
 
-// ============================================================================
-// int32x4 (4 int32s in 128 bits)
-// ============================================================================
-
-template <>
-struct Simd<int32_t, 4> {
-  static constexpr int size = 4;
-  __m128i value;
-
-  Simd() : value(_mm_setzero_si128()) {}
-  Simd(__m128i v) : value(v) {}
-  Simd(int32_t v) : value(_mm_set1_epi32(v)) {}
-  // Allow conversion from other Simd<U, 4> where U is integer-like
-  template <typename U>
-  Simd(Simd<U, 4> v) : value(v.value) {}
-
-  int32_t operator[](int idx) const {
-    alignas(16) int32_t tmp[4];
-    _mm_store_si128((__m128i*)tmp, value);
-    return tmp[idx];
-  }
-};
-
-// uint32x4 (same as int32x4, just different signedness)
-template <>
-struct Simd<uint32_t, 4> {
-  static constexpr int size = 4;
-  __m128i value;
-
-  Simd() : value(_mm_setzero_si128()) {}
-  Simd(__m128i v) : value(v) {}
-  Simd(uint32_t v) : value(_mm_set1_epi32(v)) {}
-  // Allow conversion from other Simd<U, 4> where U is integer-like
-  template <typename U>
-  Simd(Simd<U, 4> v) : value(v.value) {}
-
-  uint32_t operator[](int idx) const {
-    alignas(16) uint32_t tmp[4];
-    _mm_store_si128((__m128i*)tmp, value);
-    return tmp[idx];
-  }
-};
-
 // Conversion constructor definitions (after all structs are complete)
 inline Simd<float, 4>::Simd(Simd<int32_t, 4> v) : value(_mm_cvtepi32_ps(v.value)) {}
 inline Simd<float, 4>::Simd(Simd<uint32_t, 4> v) : value(_mm_cvtepi32_ps(v.value)) {}
 inline Simd<float, 4>::Simd(Simd<bool, 4> v) : value(_mm_castsi128_ps(v.value)) {}
 inline Simd<double, 2>::Simd(Simd<bool, 2> v) : value(_mm_castsi128_pd(v.value)) {}
-
-// Load/Store int32x4
-template <>
-inline Simd<int32_t, 4> load<int32_t, 4>(const int32_t* ptr) {
-  return _mm_loadu_si128((__m128i*)ptr);
-}
-
-template <>
-inline void store<int32_t, 4>(int32_t* ptr, Simd<int32_t, 4> v) {
-  _mm_storeu_si128((__m128i*)ptr, v.value);
-}
-
-// Load/Store uint32x4
-template <>
-inline Simd<uint32_t, 4> load<uint32_t, 4>(const uint32_t* ptr) {
-  return _mm_loadu_si128((__m128i*)ptr);
-}
-
-template <>
-inline void store<uint32_t, 4>(uint32_t* ptr, Simd<uint32_t, 4> v) {
-  _mm_storeu_si128((__m128i*)ptr, v.value);
-}
-
-// Arithmetic uint32x4 (same as int32 but unsigned)
-inline Simd<uint32_t, 4> operator+(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_add_epi32(a.value, b.value);
-}
-inline Simd<uint32_t, 4> operator-(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_sub_epi32(a.value, b.value);
-}
-inline Simd<uint32_t, 4> operator*(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_mullo_epi32(a.value, b.value);
-}
-// Unary minus for uint32
-inline Simd<uint32_t, 4> operator-(Simd<uint32_t, 4> a) {
-  return _mm_sub_epi32(_mm_setzero_si128(), a.value);
-}
-inline Simd<uint32_t, 4> operator/(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  // No SIMD division, use scalar
-  alignas(16) uint32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] / tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-// Bitwise uint32x4
-inline Simd<uint32_t, 4> operator&(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_and_si128(a.value, b.value);
-}
-inline Simd<uint32_t, 4> operator|(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_or_si128(a.value, b.value);
-}
-inline Simd<uint32_t, 4> operator^(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_xor_si128(a.value, b.value);
-}
-inline Simd<uint32_t, 4> operator~(Simd<uint32_t, 4> a) {
-  return _mm_xor_si128(a.value, _mm_set1_epi32(-1));
-}
-
-// Shifts uint32x4
-inline Simd<uint32_t, 4> operator<<(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  alignas(16) uint32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] << tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-inline Simd<uint32_t, 4> operator>>(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  alignas(16) uint32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] >> tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-// Additional uint32 operations (use scalar fallback or cast to int32)
-inline Simd<uint32_t, 4> maximum(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_max_epu32(a.value, b.value);
-}
-
-inline Simd<uint32_t, 4> minimum(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return _mm_min_epu32(a.value, b.value);
-}
-
-inline Simd<uint32_t, 4> clamp(Simd<uint32_t, 4> v, Simd<uint32_t, 4> min_val, Simd<uint32_t, 4> max_val) {
-  return minimum(maximum(v, min_val), max_val);
-}
-
-// Comparisons for uint32 (defined early since they're used by other operators)
-inline Simd<bool, 4> operator==(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return Simd<bool, 4>(_mm_cmpeq_epi32(a.value, b.value));
-}
-
-inline Simd<bool, 4> operator!=(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return !(a == b);
-}
-
-// Logical NOT for uint32 - returns bool mask
-inline Simd<bool, 4> operator!(Simd<uint32_t, 4> a) {
-  return a == Simd<uint32_t, 4>(0);
-}
-
-// isnan for uint32 - integers are never NaN
-inline Simd<bool, 4> isnan(Simd<uint32_t, 4> a) {
-  return Simd<bool, 4>(false);
-}
-
-inline Simd<uint32_t, 4> operator&&(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  auto mask_a = (a != Simd<uint32_t, 4>(0));
-  auto mask_b = (b != Simd<uint32_t, 4>(0));
-  return Simd<uint32_t, 4>(_mm_and_si128(mask_a.value, mask_b.value));
-}
-
-inline Simd<uint32_t, 4> operator||(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  auto mask_a = (a != Simd<uint32_t, 4>(0));
-  auto mask_b = (b != Simd<uint32_t, 4>(0));
-  return Simd<uint32_t, 4>(_mm_or_si128(mask_a.value, mask_b.value));
-}
-
-// Unsigned comparisons - SSE4.1 has unsigned min/max which we can use
-inline Simd<bool, 4> operator<(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  // a < b  <==>  min(a,b) == a && a != b
-  auto minn = _mm_min_epu32(a.value, b.value);
-  return Simd<bool, 4>(_mm_andnot_si128(_mm_cmpeq_epi32(a.value, b.value), _mm_cmpeq_epi32(minn, a.value)));
-}
-
-inline Simd<bool, 4> operator>(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return b < a;
-}
-
-inline Simd<bool, 4> operator<=(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return !(a > b);
-}
-
-inline Simd<bool, 4> operator>=(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  return !(a < b);
-}
-
-inline Simd<uint32_t, 4> remainder(Simd<uint32_t, 4> a, Simd<uint32_t, 4> b) {
-  // For unsigned, remainder is simpler
-  return a - b * (a / b);
-}
-
-inline Simd<uint32_t, 4> pow(Simd<uint32_t, 4> base, Simd<uint32_t, 4> exp) {
-  alignas(16) uint32_t tmp_base[4], tmp_exp[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_base, base.value);
-  _mm_store_si128((__m128i*)tmp_exp, exp.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = 1;
-    for (uint32_t j = 0; j < tmp_exp[i]; j++) {
-      tmp_r[i] *= tmp_base[i];
-    }
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-// Select (blend) for uint32x4
-inline Simd<uint32_t, 4> select(
-    Simd<bool, 4> mask,
-    Simd<uint32_t, 4> x,
-    Simd<uint32_t, 4> y) {
-  return _mm_blendv_epi8(y.value, x.value, mask.value);
-}
-
-// Reductions uint32x4
-inline uint32_t sum(Simd<uint32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i sums = _mm_add_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(sums, _MM_SHUFFLE(1, 0, 3, 2));
-  sums = _mm_add_epi32(sums, shuf);
-  return _mm_cvtsi128_si32(sums);
-}
-
-inline uint32_t max(Simd<uint32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i maxs = _mm_max_epu32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(maxs, _MM_SHUFFLE(1, 0, 3, 2));
-  maxs = _mm_max_epu32(maxs, shuf);
-  return _mm_cvtsi128_si32(maxs);
-}
-
-inline uint32_t min(Simd<uint32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i mins = _mm_min_epu32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(mins, _MM_SHUFFLE(1, 0, 3, 2));
-  mins = _mm_min_epu32(mins, shuf);
-  return _mm_cvtsi128_si32(mins);
-}
-
-inline uint32_t prod(Simd<uint32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i prods = _mm_mullo_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(prods, _MM_SHUFFLE(1, 0, 3, 2));
-  prods = _mm_mullo_epi32(prods, shuf);
-  return _mm_cvtsi128_si32(prods);
-}
-
-// Arithmetic int32x4
-inline Simd<int32_t, 4> operator+(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_add_epi32(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator-(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_sub_epi32(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator*(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_mullo_epi32(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator/(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  // SSE doesn't have integer division, use scalar fallback
-  alignas(16) int32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] / tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-inline Simd<int32_t, 4> operator-(Simd<int32_t, 4> a) {
-  return _mm_sub_epi32(_mm_setzero_si128(), a.value);
-}
-
-// Bitwise int32x4
-inline Simd<int32_t, 4> operator&(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_and_si128(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator|(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_or_si128(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator^(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_xor_si128(a.value, b.value);
-}
-inline Simd<int32_t, 4> operator~(Simd<int32_t, 4> a) {
-  return _mm_xor_si128(a.value, _mm_set1_epi32(-1));
-}
-
-// Shifts int32x4 (with int scalar shift amount)
-inline Simd<int32_t, 4> operator<<(Simd<int32_t, 4> a, int bits) {
-  return _mm_slli_epi32(a.value, bits);
-}
-inline Simd<int32_t, 4> operator>>(Simd<int32_t, 4> a, int bits) {
-  return _mm_srai_epi32(a.value, bits);
-}
-
-// Shifts int32x4 (with vector shift amount - element-wise)
-inline Simd<int32_t, 4> operator<<(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  // SSE4.2 doesn't have variable shift per-element, need to do it manually
-  alignas(16) int32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] << tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-inline Simd<int32_t, 4> operator>>(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  // SSE4.2 doesn't have variable shift per-element, need to do it manually
-  alignas(16) int32_t tmp_a[4], tmp_b[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_a, a.value);
-  _mm_store_si128((__m128i*)tmp_b, b.value);
-  for (int i = 0; i < 4; i++) {
-    tmp_r[i] = tmp_a[i] >> tmp_b[i];
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-// Comparisons int32x4
-inline Simd<bool, 4> operator<(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return Simd<bool, 4>(_mm_cmplt_epi32(a.value, b.value));
-}
-inline Simd<bool, 4> operator>(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return Simd<bool, 4>(_mm_cmpgt_epi32(a.value, b.value));
-}
-inline Simd<bool, 4> operator<=(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return !(a > b);
-}
-inline Simd<bool, 4> operator>=(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return !(a < b);
-}
-inline Simd<bool, 4> operator==(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return Simd<bool, 4>(_mm_cmpeq_epi32(a.value, b.value));
-}
-inline Simd<bool, 4> operator!=(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return !(a == b);
-}
-
-// Logical NOT for int32 - returns bool mask where each element is true if input is zero
-inline Simd<bool, 4> operator!(Simd<int32_t, 4> a) {
-  return a == Simd<int32_t, 4>(0);
-}
-
-// isnan for int32 - integers are never NaN
-inline Simd<bool, 4> isnan(Simd<int32_t, 4> a) {
-  return Simd<bool, 4>(false);
-}
-
-inline Simd<int32_t, 4> maximum(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_max_epi32(a.value, b.value);
-}
-
-inline Simd<int32_t, 4> minimum(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  return _mm_min_epi32(a.value, b.value);
-}
-
-inline Simd<int32_t, 4> abs(Simd<int32_t, 4> a) {
-  return _mm_abs_epi32(a.value);
-}
-
-inline Simd<int32_t, 4> clamp(Simd<int32_t, 4> v, Simd<int32_t, 4> min_val, Simd<int32_t, 4> max_val) {
-  return minimum(maximum(v, min_val), max_val);
-}
-
-// Logical operators for int32x4 (return int with bit pattern, not bool)
-inline Simd<int32_t, 4> operator&&(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  auto mask_a = (a != Simd<int32_t, 4>(0));
-  auto mask_b = (b != Simd<int32_t, 4>(0));
-  return Simd<int32_t, 4>(_mm_and_si128(mask_a.value, mask_b.value));
-}
-
-inline Simd<int32_t, 4> operator||(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  auto mask_a = (a != Simd<int32_t, 4>(0));
-  auto mask_b = (b != Simd<int32_t, 4>(0));
-  return Simd<int32_t, 4>(_mm_or_si128(mask_a.value, mask_b.value));
-}
-
-// Select (blend) int32x4 - needed for remainder
-inline Simd<int32_t, 4> select(
-    Simd<bool, 4> mask,
-    Simd<int32_t, 4> x,
-    Simd<int32_t, 4> y) {
-  return _mm_blendv_epi8(y.value, x.value, mask.value);
-}
-
-// remainder for int32x4
-inline Simd<int32_t, 4> remainder(Simd<int32_t, 4> a, Simd<int32_t, 4> b) {
-  auto r = a - b * (a / b);
-  auto mask = (r != Simd<int32_t, 4>(0)) && ((r < Simd<int32_t, 4>(0)) != (b < Simd<int32_t, 4>(0)));
-  return select(mask, r + b, r);
-}
-
-// pow for int32x4 (using scalar fallback)
-inline Simd<int32_t, 4> pow(Simd<int32_t, 4> base, Simd<int32_t, 4> exp) {
-  alignas(16) int32_t tmp_base[4], tmp_exp[4], tmp_r[4];
-  _mm_store_si128((__m128i*)tmp_base, base.value);
-  _mm_store_si128((__m128i*)tmp_exp, exp.value);
-  for (int i = 0; i < 4; i++) {
-    // Integer power: raise base to exp
-    if (tmp_exp[i] < 0) {
-      tmp_r[i] = 0;  // Undefined for integers
-    } else {
-      tmp_r[i] = 1;
-      for (int32_t j = 0; j < tmp_exp[i]; j++) {
-        tmp_r[i] *= tmp_base[i];
-      }
-    }
-  }
-  return _mm_load_si128((__m128i*)tmp_r);
-}
-
-// Reductions int32x4
-inline int32_t sum(Simd<int32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i sums = _mm_add_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(sums, _MM_SHUFFLE(1, 0, 3, 2));
-  sums = _mm_add_epi32(sums, shuf);
-  return _mm_cvtsi128_si32(sums);
-}
-
-inline int32_t max(Simd<int32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i maxs = _mm_max_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(maxs, _MM_SHUFFLE(1, 0, 3, 2));
-  maxs = _mm_max_epi32(maxs, shuf);
-  return _mm_cvtsi128_si32(maxs);
-}
-
-inline int32_t min(Simd<int32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i mins = _mm_min_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(mins, _MM_SHUFFLE(1, 0, 3, 2));
-  mins = _mm_min_epi32(mins, shuf);
-  return _mm_cvtsi128_si32(mins);
-}
-
-inline int32_t prod(Simd<int32_t, 4> v) {
-  __m128i shuf = _mm_shuffle_epi32(v.value, _MM_SHUFFLE(2, 3, 0, 1));
-  __m128i prods = _mm_mullo_epi32(v.value, shuf);
-  shuf = _mm_shuffle_epi32(prods, _MM_SHUFFLE(1, 0, 3, 2));
-  prods = _mm_mullo_epi32(prods, shuf);
-  return _mm_cvtsi128_si32(prods);
-}
-
-// ============================================================================
-// Bool reductions (operators defined earlier)
-inline bool all(Simd<bool, 4> x) {
-  return _mm_movemask_ps(_mm_castsi128_ps(x.value)) == 0xF;
-}
-
-inline bool any(Simd<bool, 4> x) {
-  return _mm_movemask_ps(_mm_castsi128_ps(x.value)) != 0;
-}
-
-inline bool all(Simd<bool, 2> x) {
-  return _mm_movemask_pd(_mm_castsi128_pd(x.value)) == 0x3;
-}
-
-inline bool any(Simd<bool, 2> x) {
-  return _mm_movemask_pd(_mm_castsi128_pd(x.value)) != 0;
-}
-
-// ============================================================================
-// clz (count leading zeros) - use scalar fallback
-// ============================================================================
-
-inline Simd<uint32_t, 4> clz(Simd<uint32_t, 4> x) {
-  alignas(16) uint32_t tmp[4], res[4];
-  _mm_store_si128((__m128i*)tmp, x.value);
-  for (int i = 0; i < 4; i++) {
-    res[i] = tmp[i] == 0 ? 32 : __builtin_clz(tmp[i]);
-  }
-  return _mm_load_si128((__m128i*)res);
-}
-
-inline Simd<int32_t, 4> clz(Simd<int32_t, 4> x) {
-  // Reinterpret as unsigned for clz
-  return Simd<int32_t, 4>(clz(Simd<uint32_t, 4>(x.value)).value);
-}
 
 } // namespace mlx::core::simd
 

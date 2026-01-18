@@ -535,11 +535,13 @@ simd::Simd<float, S> fp_extract_bits_simd(const uint32_t* w) {
     auto wi = simd::Simd<uint32_t, S>(*w);
     wi = wi >> shifts;
     wi = wi & 0xf;
-    simd::Simd<float, S> w_out;
+    // Note: SIMD types don't support writable lane access (w_out[i] = val)
+    // Build in scalar array then load - standard pattern for element-wise lookups
+    alignas(32) float tmp[S];
     for (int i = 0; i < S; ++i) {
-      w_out[i] = FP4_LUT[wi[i]];
+      tmp[i] = FP4_LUT[wi[i]];
     }
-    return w_out;
+    return simd::load<float, S>(tmp);
   } else if constexpr (S == 8 && bits == 8) {
     auto w_out = simd::load<uint8_t, S>(reinterpret_cast<const uint8_t*>(w));
     return detail::FromFP8{}(w_out);

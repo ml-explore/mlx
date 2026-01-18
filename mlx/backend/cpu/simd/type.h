@@ -11,6 +11,11 @@
 #endif
 
 // x86 SIMD implementations
-#if defined(__SSE4_2__) && !defined(MLX_USE_ACCELERATE)
-#include "mlx/backend/cpu/simd/sse_simd.h"
+// Use the most advanced SIMD available (only one active at a time)
+#if !defined(MLX_USE_ACCELERATE)
+  #if defined(__AVX2__)
+    #include "mlx/backend/cpu/simd/avx_simd.h"
+  #elif defined(__SSE4_2__)
+    #include "mlx/backend/cpu/simd/sse_simd.h"
+  #endif
 #endif
