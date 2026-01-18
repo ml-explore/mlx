@@ -439,15 +439,15 @@ void sdpa_vector_2pass(
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
-  int blocks = N < 8192 ? 32 : 256;
-  int B = q.shape(0) * q.shape(1);
+  int blocks = 128; // N < 8192 ? 32 : 256;
 
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
-  MTL::Size group_dims(8 * 32, 1, 1);
-  MTL::Size grid_dims(B, q.shape(2), blocks);
+  // TODO handle case where gqa_factor * q.shape > 32
+  MTL::Size group_dims(32, gqa_factor, q.shape(2));
+  MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
   // Allocate the intermediates
   Shape intermediate_shape;
@@ -501,7 +501,6 @@ void sdpa_vector_2pass(
   compute_encoder.set_output_array(intermediate, 3);
   compute_encoder.set_output_array(sums, 4);
   compute_encoder.set_output_array(maxs, 5);
-  compute_encoder.set_bytes(gqa_factor, 6);
   compute_encoder.set_bytes(N, 7);
   compute_encoder.set_bytes(k_head_stride, 8);
   compute_encoder.set_bytes(k_seq_stride, 9);
@@ -521,7 +520,6 @@ void sdpa_vector_2pass(
   }
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 18);
-    compute_encoder.set_bytes(q.shape(1), 19);
   }
 
   // Launch
@@ -551,7 +549,7 @@ void sdpa_vector_2pass(
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
-  grid_dims = MTL::Size(B, q.shape(2), 1);
+  grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
