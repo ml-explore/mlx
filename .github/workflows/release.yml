@@ -58,6 +58,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           python-version: ${{ matrix.python_version }}
+          clear-disk: true
           use-ccache: false
       - uses: ./.github/actions/build-linux-release
         with:
@@ -141,6 +142,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           toolkit: ${{ matrix.toolkit }}
+          clear-disk: true
           use-ccache: false
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release

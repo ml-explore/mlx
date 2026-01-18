@@ -4,20 +4,25 @@ description: 'Install dependencies for Linux builds'
 inputs:
   toolkit:
     description: 'Which toolkit to install'
-    required: false
     default: 'cpu'
   python-version:
     description: 'Version of python to set up'
-    required: false
     default: '3.14'
+  clear-disk:
+    description: 'Remove unused software to free some disk space'
+    default: 'false'
   use-ccache:
     description: 'Whether to enable ccache'
-    required: false
     default: 'true'
 
 runs:
   using: "composite"
   steps:
+    - name: Clear disk
+      if: ${{ inputs.clear-disk == 'true' }}
+      shell: bash
+      run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
     - name: Install common dependencies
       shell: bash
       run: |
@@ -27,7 +32,6 @@ runs:
             zip \
             libblas-dev liblapack-dev liblapacke-dev \
             openmpi-bin openmpi-common libopenmpi-dev
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
         echo "::endgroup::"
 
     - name: Use ccache
