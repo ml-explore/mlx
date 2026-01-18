@@ -27,4 +27,11 @@ void swizzle_scales(
     cu::CommandEncoder& enc,
     const Stream& s);
 
+// Compute alpha = tensor_amax_x * tensor_amax_w / (448 * 6)^2
+void compute_qqmm_alpha(
+    array& alpha_out,
+    const array& tensor_amax_x,
+    const array& tensor_amax_w,
+    cu::CommandEncoder& enc);
+
 } // namespace mlx::core

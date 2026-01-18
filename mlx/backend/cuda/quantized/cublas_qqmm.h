@@ -52,6 +52,15 @@ class CublasQQMM : public CublasMatmulBase {
       const array& b,
       const array& a_scale,
       const array& b_scale,
+      const array& alpha);
+
+  void run(
+      cu::CommandEncoder& encoder,
+      array& out,
+      const array& a,
+      const array& b,
+      const array& a_scale,
+      const array& b_scale,
       float alpha = 1.0f);
 
  private:

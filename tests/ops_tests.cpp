@@ -3087,7 +3087,7 @@ TEST_CASE("test quantize dequantize") {
     CHECK_EQ(scales.shape(), Shape{128, 4});
     CHECK_EQ(biases.shape(), Shape{128, 4});
 
-    auto x_hat = dequantize(x_q, scales, biases, 128, i);
+    auto x_hat = dequantize(x_q, scales, {}, biases, 128, i);
     auto max_diff = max(abs(x - x_hat)).item<float>();
     CHECK(max_diff <= 127.0 / (1 << i));
   }

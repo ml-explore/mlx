@@ -1,6 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
+#include <optional>
 #include "mlx/backend/cuda/device.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -28,6 +30,7 @@ void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
+    const std::optional<array>& tensor_amax,
     int group_size,
     int bits,
     cu::CommandEncoder& enc,
@@ -36,10 +39,17 @@ void fp_quantize(
 void fp_dequantize(
     const array& wq,
     const array& scales,
+    const std::optional<array>& tensor_amax,
     array& w,
     int group_size,
     int bits,
     cu::CommandEncoder& enc,
     const Stream& s);
+
+void all_reduce(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
 
 } // namespace mlx::core

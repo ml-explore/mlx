@@ -4,13 +4,14 @@
 #include "mlx/backend/cuda/quantized/cublas_qqmm.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/cuda/reduce/reduce.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
+
+using QuantizedResult = std::tuple<array, array, std::optional<array>>;
 
 namespace {
 
@@ -71,6 +72,68 @@ array pad_and_swizzle_scales(
   return scale_tiled;
 }
 
+QuantizedResult quantize_input(
+    const array& input,
+    cu::CommandEncoder& encoder,
+    const Stream& s,
+    QuantizationMode mode,
+    int bits,
+    int group_size) {
+  const array x = ensure_row_contiguous(input, encoder, s);
+
+  auto build_shapes = [&](const array& x_in) {
+    auto xq_shape = x_in.shape();
+    xq_shape.back() = x_in.shape(-1) * bits / 32;
+
+    auto sshape = x_in.shape();
+    const int64_t scales_inner = x_in.shape(-1) / group_size;
+    auto [pad_outer, pad_inner] =
+        get_padded_scale_dims(x_in.shape(-2), scales_inner);
+    sshape[x_in.ndim() - 2] = pad_outer;
+    sshape[x_in.ndim() - 1] = pad_inner;
+    sshape.back() = scales_inner;
+
+    return std::tuple{
+        std::move(xq_shape),
+        std::move(sshape),
+        pad_outer,
+        pad_inner,
+    };
+  };
+
+  auto allocate_outputs = [&](const array& x_in) {
+    auto [xq_shape, sshape, pad_outer, pad_inner] = build_shapes(x_in);
+
+    const int64_t xq_bytes = x_in.size() * bits / 8;
+    const int64_t batch = x_in.size() / (x_in.shape(-2) * x_in.shape(-1));
+    const int64_t scales_bytes = batch * (pad_outer * pad_inner);
+
+    array x_q(cu::malloc_async(xq_bytes, encoder), std::move(xq_shape), uint32);
+    array scales_x(
+        cu::malloc_async(scales_bytes, encoder), std::move(sshape), uint8);
+    encoder.add_temporary(x_q);
+    encoder.add_temporary(scales_x);
+
+    return std::pair{std::move(x_q), std::move(scales_x)};
+  };
+
+  auto run_quant = [&](const array& x_in, std::optional<array> tensor_amax) {
+    auto [x_q, scales_x] = allocate_outputs(x_in);
+    fp_quantize(x_in, x_q, scales_x, tensor_amax, group_size, bits, encoder, s);
+    return QuantizedResult{
+        std::move(x_q), std::move(scales_x), std::move(tensor_amax)};
+  };
+
+  if (mode == QuantizationMode::Nvfp4) {
+    array tensor_amax(cu::malloc_async(sizeof(float), encoder), {1}, float32);
+    encoder.add_temporary(tensor_amax);
+    all_reduce(encoder, x, tensor_amax, Reduce::ReduceType::AbsMax);
+    return run_quant(x, tensor_amax);
+  }
+
+  return run_quant(x, std::nullopt);
+}
+
 void qqmm_impl(
     cu::CommandEncoder& encoder,
     int M,
@@ -125,49 +188,16 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
   }
+  auto quant_input_size = (mode_ == QuantizationMode::Nvfp4) ? 4 : 3;
   assert(
-      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
+      (inputs.size() == quant_input_size && inputs[1].dtype() == uint32) ||
       (inputs.size() == 2));
 
-  auto quantize = [&](const array& input,
-                      cu::CommandEncoder& encoder,
-                      const Stream& s) -> std::pair<array, array> {
-    const array x = ensure_row_contiguous(input, encoder, s);
-
-    auto xq_shape = x.shape();
-    xq_shape.back() = x.shape(-1) * bits_ / 32;
-
-    auto sshape = x.shape();
-    const int64_t scales_inner = x.shape(-1) / group_size_;
-    auto [pad_outer, pad_inner] =
-        get_padded_scale_dims(x.shape(-2), scales_inner);
-    sshape[x.ndim() - 2] = pad_outer;
-    sshape[x.ndim() - 1] = pad_inner;
-    sshape.back() = scales_inner;
-
-    // Allocate outputs
-    const int64_t xq_bytes = x.size() * bits_ / 8;
-    const int64_t batch = x.size() / (x.shape(-2) * x.shape(-1));
-    const int64_t scales_bytes = batch * (pad_outer * pad_inner);
-
-    array x_q(cu::malloc_async(xq_bytes, encoder), std::move(xq_shape), uint32);
-    array scales_x(
-        cu::malloc_async(scales_bytes, encoder), std::move(sshape), uint8);
-    array tensor_amax_x({}, x.dtype(), nullptr, {});
-    all_reduce(encoder, x, tensor_amax_x, Reduce::ReduceType::AbsMax);
-    fp_quantize(
-        x, x_q, scales_x, tensor_amax_x, group_size_, bits_, encoder, s);
-
-    encoder.add_temporary(x_q);
-    encoder.add_temporary(scales_x);
-    encoder.add_temporary(tensor_amax_x);
-    return {x_q, scales_x};
-  };
-  auto [x_q, scale_x_pre] = quantize(inputs[0], encoder, s);
-  auto [w_q, scale_w_pre] = (inputs[1].dtype() != uint32)
-      ? quantize(inputs[1], encoder, s)
-      : std::make_pair(inputs[1], inputs[2]);
-
+  auto [x_q, scale_x_pre, tensor_amax_x] =
+      quantize_input(inputs[0], encoder, s, mode_, bits_, group_size_);
+  auto [w_q, scale_w_pre, tensor_amax_w] = (inputs[1].dtype() != uint32)
+      ? quantize_input(inputs[1], encoder, s, mode_, bits_, group_size_)
+      : QuantizedResult{inputs[1], inputs[2], std::optional<array>(inputs[3])};
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   auto out_dtype = out.dtype();

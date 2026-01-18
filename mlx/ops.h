@@ -1413,6 +1413,7 @@ std::vector<array> quantize(
 array dequantize(
     const array& w,
     const array& scales,
+    const std::optional<array>& tensor_amax = std::nullopt,
     const std::optional<array>& biases = std::nullopt,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
