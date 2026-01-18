@@ -184,7 +184,6 @@ template <typename T, int D, int V = D>
     device float* out [[buffer(3)]],
     device float* sums [[buffer(4)]],
     device float* maxs [[buffer(5)]],
-    const constant int& gqa_factor [[buffer(6)]],
     const constant int& N [[buffer(7)]],
     const constant size_t& k_head_stride [[buffer(8)]],
     const constant size_t& k_seq_stride [[buffer(9)]],
@@ -200,18 +199,14 @@ template <typename T, int D, int V = D>
     const constant int& mask_head_stride
     [[buffer(17), function_constant(has_mask)]],
     const device T* sinks [[buffer(18), function_constant(has_sinks)]],
-    const constant int& num_q_heads
-    [[buffer(19), function_constant(has_sinks)]],
+    uint3 tptg [[threads_per_threadgroup]],
+    uint3 tidtg [[thread_position_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  constexpr int BN = 8;
   constexpr int BD = 32;
   constexpr int qk_per_thread = D / BD;
   constexpr int v_per_thread = V / BD;
-  int inner_k_stride = BN * int(k_seq_stride);
-  int inner_v_stride = BN * int(v_seq_stride);
 
   typedef float U;
 
@@ -219,34 +214,34 @@ template <typename T, int D, int V = D>
   thread U k[qk_per_thread];
   thread U o[v_per_thread];
 
-  threadgroup U outputs[BN * BD];
-  threadgroup U max_scores[BN];
-  threadgroup U sum_exp_scores[BN];
-
   // Adjust positions
+  const int kv_head_idx = tid.x;
+  const int q_batch_idx = tid.y;
   const int block_idx = tid.z;
-  const int q_batch_head_idx = tid.x;
-  const int q_seq_idx = tid.y;
-  const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
+  const int gqa_factor = tptg.y;
+  const int q_seq_len = tptg.z;
+  const int q_seq_idx = tidtg.z;
+  const int q_head_idx = gqa_factor * kv_head_idx + tidtg.y;
+  const int num_kv_heads = tpg.x;
+  const int num_q_heads = num_kv_heads * gqa_factor;
+  const int q_batch_head_idx = (q_batch_idx * num_q_heads + q_head_idx);
+  const int o_offset = q_batch_head_idx * q_seq_len + q_seq_idx;
   const int q_offset =
-      query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
-  const int kv_head_idx = q_batch_head_idx / gqa_factor;
+      query_transposed ? num_q_heads * q_seq_idx + q_batch_head_idx : o_offset;
 
   queries += q_offset * D + simd_lid * qk_per_thread;
-  keys += kv_head_idx * k_head_stride +
-      (block_idx * BN + simd_gid) * k_seq_stride + simd_lid * qk_per_thread;
-  values += kv_head_idx * v_head_stride +
-      (block_idx * BN + simd_gid) * v_seq_stride + simd_lid * v_per_thread;
+  keys += kv_head_idx * k_head_stride + block_idx * k_seq_stride +
+      simd_lid * qk_per_thread;
+  values += kv_head_idx * v_head_stride + block_idx * v_seq_stride +
+      simd_lid * v_per_thread;
   out += o_offset * blocks * V + block_idx * V + simd_lid * v_per_thread;
   if (bool_mask) {
     bmask += q_batch_head_idx * mask_head_stride +
-        (block_idx * BN + simd_gid) * mask_kv_seq_stride +
-        q_seq_idx * mask_q_seq_stride;
+        block_idx * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
   if (float_mask) {
     fmask += q_batch_head_idx * mask_head_stride +
-        (block_idx * BN + simd_gid) * mask_kv_seq_stride +
-        q_seq_idx * mask_q_seq_stride;
+        block_idx * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
   sums += o_offset * blocks + block_idx;
   maxs += o_offset * blocks + block_idx;
@@ -261,14 +256,14 @@ template <typename T, int D, int V = D>
 
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
-  if (has_sinks && block_idx == 0 && simd_gid == 0) {
+  if (has_sinks && block_idx == 0) {
     int q_head_idx = q_batch_head_idx % num_q_heads;
     max_score = static_cast<U>(sinks[q_head_idx]);
     sum_exp_score = 1;
   }
 
   // For each key
-  for (int i = block_idx * BN + simd_gid; i < N; i += blocks * BN) {
+  for (int i = block_idx; i < N; i += blocks) {
     bool use_key = true;
     if (do_causal) {
       use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
@@ -309,51 +304,24 @@ template <typename T, int D, int V = D>
     }
 
     // Move the pointers to the next kv
-    keys += blocks * inner_k_stride;
-    values += blocks * inner_v_stride;
+    keys += blocks * k_seq_stride;
+    values += blocks * v_seq_stride;
     if (bool_mask) {
-      bmask += BN * blocks * mask_kv_seq_stride;
+      bmask += blocks * mask_kv_seq_stride;
     }
     if (float_mask) {
-      fmask += BN * blocks * mask_kv_seq_stride;
+      fmask += blocks * mask_kv_seq_stride;
     }
   }
 
-  // Each thread has a partial part of the output so we need to combine them.
-
-  // First let's communicate the max and sum_exp
+  // Write the sum and max and outputs
   if (simd_lid == 0) {
-    max_scores[simd_gid] = max_score;
-    sum_exp_scores[simd_gid] = sum_exp_score;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  max_score = (simd_lid < BN) ? max_scores[simd_lid] : -1e9;
-  U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
-  sum_exp_score = (simd_lid < BN) ? sum_exp_scores[simd_lid] : 0;
-  sum_exp_score = simd_sum(sum_exp_score * factor);
-
-  // Write the sum and new max
-  if (simd_gid == 0) {
     sums[0] = sum_exp_score;
-    maxs[0] = new_max;
+    maxs[0] = max_score;
   }
 
-  // Now we need to aggregate all the outputs
   for (int i = 0; i < v_per_thread; i++) {
-    outputs[simd_lid * BN + simd_gid] =
-        o[i] * fast::exp(max_scores[simd_gid] - new_max);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // And write the output
-    if (simd_gid == 0) {
-      U output = outputs[simd_lid * BN];
-      for (int j = 1; j < BN; j++) {
-        output += outputs[simd_lid * BN + j];
-      }
-      out[i] = static_cast<T>(output);
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    out[i] = static_cast<T>(o[i]);
   }
 }
 
