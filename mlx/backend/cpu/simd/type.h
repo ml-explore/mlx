@@ -9,3 +9,8 @@
 #include "mlx/backend/cpu/simd/accelerate_simd.h"
 #endif
 #endif
+
+// x86 SIMD implementations
+#if defined(__SSE4_2__) && !defined(MLX_USE_ACCELERATE)
+#include "mlx/backend/cpu/simd/sse_simd.h"
+#endif
