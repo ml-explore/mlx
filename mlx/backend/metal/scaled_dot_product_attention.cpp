@@ -438,10 +438,40 @@ void sdpa_vector_2pass(
 
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
+  int n_simds = gqa_factor * q.shape(2);
+
+  char devc = d.get_architecture().back();
   int N = k.shape(2);
   int blocks;
-  blocks = 256;
-
+  if (devc == 's') {
+    blocks = 64;
+    if (N > 1024 && n_simds > 4) {
+      if (N <= 8192) {
+        blocks = 128;
+      } else if (N <= 32768) {
+        blocks = 256;
+      } else if (N <= 65536) {
+        blocks = 512;
+      } else {
+        blocks = 1024;
+      }
+    }
+  } else if (devc == 'd') {
+    blocks = 128;
+    if (n_simds <= 2 && N > 8192) {
+      blocks = 256;
+    }
+    else if (n_simds >= 6) {
+      if (N >= 16384 && N < 65536) {
+        blocks = 512;
+      } else if (N >= 65536) {
+        blocks = 1024;
+      }
+    }
+  } else {
+    // TODO tune this for other chip sizes
+    blocks = 64;
+  }
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
@@ -456,7 +486,7 @@ void sdpa_vector_2pass(
       intermediate_shape.end(), out.shape().begin(), out.shape().end() - 1);
   intermediate_shape.push_back(blocks);
   intermediate_shape.push_back(out.shape().back());
-  array intermediate(intermediate_shape, float32, nullptr, {});
+  array intermediate(intermediate_shape, q.dtype(), nullptr, {});
   intermediate_shape.pop_back();
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
