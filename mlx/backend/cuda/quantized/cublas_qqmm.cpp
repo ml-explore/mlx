@@ -150,6 +150,35 @@ CublasQQMM::CublasQQMM(
       batch_count,
       c_batch_stride);
 }
+// Supported overloads:
+// alpha float
+// alpha device ptr
+
+void CublasQQMM::run(
+    cu::CommandEncoder& encoder,
+    array& out,
+    const array& a,
+    const array& b,
+    const array& a_scale,
+    const array& b_scale,
+    const array& alpha) {
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(a_scale);
+  encoder.set_input_array(b_scale);
+  encoder.set_input_array(alpha);
+  encoder.set_output_array(out);
+
+  execute(
+      encoder,
+      gpu_ptr<void>(out),
+      gpu_ptr<void>(a),
+      gpu_ptr<void>(b),
+      gpu_ptr<void>(a_scale),
+      gpu_ptr<void>(b_scale),
+      nullptr,
+      gpu_ptr<void>(alpha));
+}
 
 void CublasQQMM::run(
     cu::CommandEncoder& encoder,
@@ -176,16 +205,10 @@ void CublasQQMM::run(
       alpha);
 }
 
-void CublasQQMM::execute(
+void CublasQQMM::set_scales_decs(
     cu::CommandEncoder& encoder,
-    void* out,
-    const void* a,
-    const void* b,
     const void* a_scale,
-    const void* b_scale,
-    const void* c,
-    float alpha /* = 1 */,
-    float beta /* = 0 */) {
+    const void* b_scale) {
   CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
       matmul_desc_,
       CUBLASLT_MATMUL_DESC_A_SCALE_POINTER,
@@ -196,6 +219,41 @@ void CublasQQMM::execute(
       CUBLASLT_MATMUL_DESC_B_SCALE_POINTER,
       &a_scale,
       sizeof(a_scale)));
+}
+
+void CublasQQMM::execute(
+    cu::CommandEncoder& encoder,
+    void* out,
+    const void* a,
+    const void* b,
+    const void* a_scale,
+    const void* b_scale,
+    const void* c,
+    const float* alpha) {
+  set_scales_decs(encoder, a_scale, b_scale);
+  // alpha and beta are both should be device pointers
+  // by default cublas uses host pointers
+  // https://docs.nvidia.com/cuda/cublas/#cublasltpointermode-t
+  cublasLtPointerMode_t pointer_mode = CUBLASLT_POINTER_MODE_DEVICE;
+  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
+      matmul_desc_,
+      CUBLASLT_MATMUL_DESC_POINTER_MODE,
+      &pointer_mode,
+      sizeof(pointer_mode)));
+  execute_matmul(encoder, out, a, b, c, alpha, nullptr);
+}
+
+void CublasQQMM::execute(
+    cu::CommandEncoder& encoder,
+    void* out,
+    const void* a,
+    const void* b,
+    const void* a_scale,
+    const void* b_scale,
+    const void* c,
+    const float alpha /* = 1 */,
+    const float beta /* = 0 */) {
+  set_scales_decs(encoder, a_scale, b_scale);
 
   const void* alpha_ptr = &alpha;
   const void* beta_ptr = &beta;

@@ -214,8 +214,8 @@ void CublasGemm::execute(
     const void* a,
     const void* b,
     const void* c,
-    float alpha /* = 1 */,
-    float beta /* = 0 */) {
+    const float alpha /* = 1 */,
+    const float beta /* = 0 */) {
   const void* alpha_ptr = &alpha;
   const void* beta_ptr = &beta;
   complex64_t alpha_c, beta_c;

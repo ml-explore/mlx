@@ -61,20 +61,13 @@ class CublasQQMM : public CublasMatmulBase {
       const array& b,
       const array& a_scale,
       const array& b_scale,
-      float alpha = 1.0f);
+      const float alpha = 1.0f);
 
  private:
-  void run_batched(
+  void set_scales_decs(
       cu::CommandEncoder& encoder,
-      array& out,
-      const array& a,
-      const array& b,
-      const array& a_scale,
-      const array& b_scale,
-      const Shape& batch_shape,
-      const Strides& a_batch_strides,
-      const Strides& b_batch_strides,
-      float alpha);
+      const void* a_scale,
+      const void* b_scale);
 
   void execute(
       cu::CommandEncoder& encoder,
@@ -84,8 +77,18 @@ class CublasQQMM : public CublasMatmulBase {
       const void* a_scale,
       const void* b_scale,
       const void* c,
-      float alpha = 1,
-      float beta = 0);
+      const float* alpha);
+
+  void execute(
+      cu::CommandEncoder& encoder,
+      void* out,
+      const void* a,
+      const void* b,
+      const void* a_scale,
+      const void* b_scale,
+      const void* c,
+      const float alpha = 1.0f,
+      const float beta = 0.0f);
 
   std::string quantization_mode_;
   cublasLtMatmulMatrixScale_t a_scale_mode_;

@@ -125,12 +125,11 @@ QuantizedResult quantize_input(
   };
 
   if (mode == QuantizationMode::Nvfp4) {
-    array tensor_amax(cu::malloc_async(sizeof(float), encoder), {1}, float32);
+    array tensor_amax(cu::malloc_async(sizeof(float), encoder), {}, float32);
     encoder.add_temporary(tensor_amax);
     all_reduce(encoder, x, tensor_amax, Reduce::ReduceType::AbsMax);
     return run_quant(x, tensor_amax);
   }
-
   return run_quant(x, std::nullopt);
 }
 
@@ -150,7 +149,7 @@ void qqmm_impl(
     const array& b_scale,
     Dtype out_dtype,
     QuantizationMode mode,
-    float alpha = 1.0f) {
+    const float alpha) {
   // Invoke CublasQQMM
   std::string qmode = quantization_mode_to_string(mode);
 

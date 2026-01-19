@@ -4266,7 +4266,8 @@ void validate_qqmm_inputs(
     std::optional<array> scales_w,
     std::optional<array> tensor_amax_w,
     int group_size,
-    int bits) {
+    int bits,
+    QuantizationMode qmode) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
     std::ostringstream msg;
@@ -4302,6 +4303,24 @@ void validate_qqmm_inputs(
     msg << "[qqmm] Only real floating types except float64 are supported but "
         << "first argument dtype == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
+  }
+  // TODO: not sure if we want to support nvfp4 without tensor amax,
+  // maybe by adding a boolean variable for quantization if not amax -> set to
+  // array(1, foat32)
+  if (qmode != QuantizationMode::Nvfp4) {
+    if (tensor_amax_w.has_value()) {
+      std::ostringstream msg;
+      msg << "[qqmm] The 'tensor_amax_w' argument is only supported"
+          << " with 'nvfp4' quantization mode.";
+      throw std::invalid_argument(msg.str());
+    }
+  } else {
+    if (!tensor_amax_w.has_value()) {
+      std::ostringstream msg;
+      msg << "[qqmm] The 'tensor_amax_w' argument must be provided"
+          << " with 'nvfp4' quantization mode.";
+      throw std::invalid_argument(msg.str());
+    }
   }
 }
 
@@ -4371,23 +4390,8 @@ array qqmm(
   } else if (w.ndim() == 2 && x.ndim() > 2) {
     x = flatten(x, 0, -2, s);
   }
-  if (qmode != QuantizationMode::Nvfp4) {
-    if (tensor_amax_w.has_value()) {
-      std::ostringstream msg;
-      msg << "[qqmm] The 'tensor_amax_w' argument is only supported"
-          << " with 'nvfp4' quantization mode.";
-      throw std::invalid_argument(msg.str());
-    }
-  } else {
-    if (!tensor_amax_w.has_value()) {
-      std::ostringstream msg;
-      msg << "[qqmm] The 'tensor_amax_w' argument must be provided"
-          << " with 'nvfp4' quantization mode.";
-      throw std::invalid_argument(msg.str());
-    }
-  }
   // validate inputs
-  validate_qqmm_inputs(x, w, scales_w, group_size, bits);
+  validate_qqmm_inputs(x, w, scales_w, tensor_amax_w, group_size, bits);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);
