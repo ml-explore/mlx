@@ -122,10 +122,8 @@ auto gemm_loop(
             const int k = kk1 + kk * UK;
             const short psk = max(0, rem_bk - k);
 
-            const int A_offset =
-                transpose_a ? (m + k * lda) : (m * lda + k);
-            const int B_offset =
-                transpose_b ? (k + n * ldb) : (k * ldb + n);
+            const int A_offset = transpose_a ? (m + k * lda) : (m * lda + k);
+            const int B_offset = transpose_b ? (k + n * ldb) : (k * ldb + n);
 
             {
               const short psm = kAlignedM ? SM : max(0, sgp_sm - m);

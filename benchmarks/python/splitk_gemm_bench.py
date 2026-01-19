@@ -34,10 +34,7 @@ print((e - s) * 1e-9)
 """
 
     result = subprocess.run(
-        [sys.executable, "-c", code],
-        env=env,
-        capture_output=True,
-        text=True
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
     )
 
     if result.returncode != 0:
@@ -66,12 +63,14 @@ if __name__ == "__main__":
         (4096, 4096, 18432),
         (4096, 4096, 21504),
         (4096, 6144, 21504),
-        (6144, 6144, 21504)
+        (6144, 6144, 21504),
     )
 
     for dtype in dtypes:
         print(f"\nPerformance ({dtype}):")
-        print(f"{'M':>5s} {'N':>5s} {'K':>6s}  {'Regular':>10s}  {'Split-K':>10s}  {'Speedup':>10s}")
+        print(
+            f"{'M':>5s} {'N':>5s} {'K':>6s}  {'Regular':>10s}  {'Split-K':>10s}  {'Speedup':>10s}"
+        )
         print("-" * 70)
 
         for M, N, K in shapes:

@@ -698,7 +698,8 @@ void steel_gemm_splitk_axpby_nax(
 
   // Determine how many partitions to split K into
   constexpr int split_k_partition_size = 3072;
-  int split_k_partitions = (K + split_k_partition_size - 1) / split_k_partition_size;
+  int split_k_partitions =
+      (K + split_k_partition_size - 1) / split_k_partition_size;
 
   const int bk_iters_per_partition = split_k_partition_size / bk;
   const int split_k_partition_stride = M * N;
@@ -783,10 +784,12 @@ void steel_gemm_splitk_axpby_nax(
       /* const int gemm_k_iterations_aligned = */ bk_iters_per_partition};
 
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  // Use 1D grid with K-partition-major layout: [Partition0: M×N tiles][Partition1: M×N tiles]...
-  // Grid size is 1D to prevent driver/HW from using its own heuristic
-  // to exploit 2D locality by launching threadgroups in a non-linear order
-  MTL::Size grid_dims = MTL::Size(tn_swizzled * tm_swizzled * split_k_partitions, 1, 1);
+  // Use 1D grid with K-partition-major layout: [Partition0: M×N
+  // tiles][Partition1: M×N tiles]... Grid size is 1D to prevent driver/HW from
+  // using its own heuristic to exploit 2D locality by launching threadgroups in
+  // a non-linear order
+  MTL::Size grid_dims =
+      MTL::Size(tn_swizzled * tm_swizzled * split_k_partitions, 1, 1);
 
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);
@@ -945,31 +948,29 @@ void steel_matmul_axpby(
   // TODO: Add device-specific tuning for more NAX GPUs in the future
   constexpr int min_mn_threshold = 2048 * 2048;
   constexpr int min_k_threshold = 10240;
-  if (batch_size_out == 1 &&
-      metal::is_nax_available() &&
+  if (batch_size_out == 1 && metal::is_nax_available() &&
       !issubdtype(a.dtype(), complexfloating) &&
       (env::enable_tf32() || a.dtype() != float32) &&
-      !env::disable_splitk_nax() &&
-      int64_t(M) * N >= min_mn_threshold && K >= min_k_threshold &&
-      K >= (3 * std::max(M, N))) {
+      !env::disable_splitk_nax() && int64_t(M) * N >= min_mn_threshold &&
+      K >= min_k_threshold && K >= (3 * std::max(M, N))) {
     return steel_gemm_splitk_axpby_nax<CHECK_AB>(
-          /* const Stream& s = */ s,
-          /* metal::Device& d = */ d,
-          /* const array& a = */ a,
-          /* const array& b = */ b,
-          /* const array& c = */ c,
-          /* array& out = */ out,
-          /* int M = */ M,
-          /* int N = */ N,
-          /* int K = */ K,
-          /* int batch_size_out = */ batch_size_out,
-          /* int lda = */ lda,
-          /* int ldb = */ ldb,
-          /* bool transpose_a = */ transpose_a,
-          /* bool transpose_b = */ transpose_b,
-          /* std::vector<array>& copies = */ copies,
-          /* float alpha = */ alpha,
-          /* float beta = */ beta);
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ batch_size_out,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* bool transpose_a = */ transpose_a,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* float alpha = */ alpha,
+        /* float beta = */ beta);
   }
 
   /////////////////////////////////////////////////////////////////////////////

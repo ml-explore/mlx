@@ -32,7 +32,8 @@ template <
 
   // Compute swizzled tile dimensions
   const int tn_swizzled = params->tiles_n << params->swizzle_log;
-  const int tm_swizzled = (params->tiles_m + (1 << params->swizzle_log) - 1) >> params->swizzle_log;
+  const int tm_swizzled =
+      (params->tiles_m + (1 << params->swizzle_log) - 1) >> params->swizzle_log;
   const int tiles_per_partition = tn_swizzled * tm_swizzled;
 
   const int tid_z = linear_tid / tiles_per_partition;
@@ -94,7 +95,7 @@ template <
   A += transpose_a ? tm : (tm * params->lda);
   B += transpose_b ? (tn * params->ldb) : tn;
   C += tm * params->ldc + tn;
-  
+
   using DSubTile = NAXSubTile<AccumType, UM, UN>;
   NAXTile<AccumType, TM, TN, DSubTile> Dtile;
 
