@@ -233,7 +233,7 @@ class QuantizedLinear(Module):
 
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
-        in_dims *= 32 // self.bits
+        in_dims = (in_dims * 32) // self.bits
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
@@ -338,7 +338,7 @@ class QQLinear(Module):
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
         if self.weight.dtype == mx.uint32:
-            in_dims *= 32 // self.bits
+            in_dims = (in_dims * 32) // self.bits
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
