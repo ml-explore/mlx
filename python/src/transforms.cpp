@@ -1402,7 +1402,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def grad(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable"),
+          "def grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Any]"),
       R"pbdoc(
         Returns a function which computes the gradient of ``fun``.
 
@@ -1435,7 +1435,7 @@ void init_transforms(nb::module_& m) {
       "in_axes"_a = 0,
       "out_axes"_a = 0,
       nb::sig(
-          "def vmap(fun: Callable, in_axes: object = 0, out_axes: object = 0) -> Callable"),
+          "def vmap(fun: Callable[P, R], in_axes: object = 0, out_axes: object = 0) -> Callable[P, R]"),
       R"pbdoc(
         Returns a vectorized version of ``fun``.
 
@@ -1518,7 +1518,22 @@ void init_transforms(nb::module_& m) {
   m.def(
       "checkpoint",
       [](nb::callable fun) { return mlx_func(PyCheckpointedFun{fun}, fun); },
-      "fun"_a);
+      "fun"_a,
+      nb::sig("def checkpoint(fun: Callable[P, R]) -> Callable[P, R]"),
+      R"pbdoc(
+      Transform the passed callable to one that performs gradient
+      checkpointing with respect to the inputs of the callable.
+
+      Use this to reduce memory use for gradient computations at the expense of
+      increased computation.
+
+      Args:
+          fun (Callable): The function to checkpoint.
+
+      Returns:
+          A callable that recomputes intermediate states during gradient
+          computation.
+      )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
