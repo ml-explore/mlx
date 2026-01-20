@@ -1,0 +1,13 @@
+name: 'Run tests on Windows'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run CPP tests - CPU
+      shell: bash
+      env:
+        DEVICE: cpu
+      run: |
+        echo "::group::CPP tests - CPU"
+        ./build/tests/tests -tce="*gguf*,test random uniform"
+        echo "::endgroup::"
