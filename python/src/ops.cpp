@@ -4346,18 +4346,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "dequantize",
-      [](const mx::array& w,
-         const mx::array& scales,
-         const std::optional<mx::array>& tensor_scale,
-         const std::optional<mx::array>& biases,
-         std::optional<int> group_size,
-         std::optional<int> bits,
-         const std::string& mode,
-         std::optional<mx::Dtype> dtype,
-         mx::StreamOrDevice s) {
-        return mx::dequantize(
-            w, scales, tensor_scale, biases, group_size, bits, mode, dtype, s);
-      },
+      &mx::dequantize,
       nb::arg(),
       "scales"_a,
       "tensor_scale"_a = nb::none(),
