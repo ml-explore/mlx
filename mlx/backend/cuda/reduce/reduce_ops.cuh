@@ -166,9 +166,10 @@ struct ReduceResult<Max, T> {
   using type = T;
 };
 
+// TODO: this should not be hardcoded
 template <typename T>
 struct ReduceResult<AbsMax, T> {
-  using type = T;
+  using type = float;
 };
 
 // Traits to get the init value of reduce op.
@@ -227,8 +228,9 @@ struct ReduceInit<Max, T> {
 
 template <typename T>
 struct ReduceInit<AbsMax, T> {
-  static constexpr __host__ __device__ T value() {
-    return T(0); // abs values are >= 0
+  using result_type = typename ReduceResult<AbsMax, T>::type;
+  static constexpr __host__ __device__ result_type value() {
+    return result_type(0); // abs values are >= 0
   }
 };
 

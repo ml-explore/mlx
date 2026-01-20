@@ -223,7 +223,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = x_q.shape(-1) * (32 / bits_);
 
   bool x_transposed = false;
-  bool w_transposed = true; // weights are always transposed
+  bool w_transposed = true; // always transposed
   int64_t lda = K;
   int64_t ldb = K;
 
