@@ -7,13 +7,11 @@
 
 // Used by pread implementation.
 #ifdef _WIN32
-#ifdef _MSC_VER
-#define NOMINMAX
-#endif
 #include <windows.h>
 #endif // _WIN32
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/io.h"
 #include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"

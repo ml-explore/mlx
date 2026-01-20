@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 
+#include "mlx/mlx_export.h"
+
 namespace mlx::core {
 
 /* Get the actively used memory in bytes.
@@ -11,25 +13,25 @@ namespace mlx::core {
  * Note, this will not always match memory use reported by the system because
  * it does not include cached memory buffers.
  * */
-size_t get_active_memory();
+MLX_API size_t get_active_memory();
 
 /* Get the peak amount of used memory in bytes.
  *
  * The maximum memory used recorded from the beginning of the program
  * execution or since the last call to reset_peak_memory.
  * */
-size_t get_peak_memory();
+MLX_API size_t get_peak_memory();
 
 /* Reset the peak memory to zero.
  * */
-void reset_peak_memory();
+MLX_API void reset_peak_memory();
 
 /* Get the cache size in bytes.
  *
  * The cache includes memory not currently used that has not been returned
  * to the system allocator.
  * */
-size_t get_cache_memory();
+MLX_API size_t get_cache_memory();
 
 /* Set the memory limit.
  * The memory limit is a guideline for the maximum amount of memory to use
@@ -42,10 +44,10 @@ size_t get_cache_memory();
  *
  * Returns the previous memory limit.
  * */
-size_t set_memory_limit(size_t limit);
+MLX_API size_t set_memory_limit(size_t limit);
 
 /* Get the current memory limit. */
-size_t get_memory_limit();
+MLX_API size_t get_memory_limit();
 
 /* Set the cache limit.
  * If using more than the given limit, free memory will be reclaimed
@@ -56,10 +58,10 @@ size_t get_memory_limit();
  *
  * Returns the previous cache limit.
  * */
-size_t set_cache_limit(size_t limit);
+MLX_API size_t set_cache_limit(size_t limit);
 
 /* Clear the memory cache. */
-void clear_cache();
+MLX_API void clear_cache();
 
 /* Set the wired size limit.
  *
@@ -73,6 +75,6 @@ void clear_cache();
  *
  * Returns the previous wired limit.
  * */
-size_t set_wired_limit(size_t limit);
+MLX_API size_t set_wired_limit(size_t limit);
 
 } // namespace mlx::core

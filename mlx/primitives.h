@@ -7,6 +7,7 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/io/load.h"
+#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 #define DEFINE_VMAP()                                                 \
@@ -45,7 +46,7 @@
 namespace mlx::core {
 
 // Abstract base class
-class Primitive {
+class MLX_API Primitive {
  public:
   explicit Primitive(Stream stream) : stream_(stream) {}
 
@@ -123,7 +124,7 @@ class Primitive {
   Stream stream_;
 };
 
-class UnaryPrimitive : public Primitive {
+class MLX_API UnaryPrimitive : public Primitive {
   /**
    * An abstract base class for a primitive with a single output.
    */
@@ -349,7 +350,7 @@ class ArgPartition : public UnaryPrimitive {
   int axis_;
 };
 
-class ArgReduce : public UnaryPrimitive {
+class MLX_API ArgReduce : public UnaryPrimitive {
  public:
   enum ReduceType {
     ArgMin,

@@ -419,12 +419,37 @@ void reduce_dispatch_sum_prod(
   if (rtype == Reduce::Sum) {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, SumReduce>(in, out, axes, 0);
+    } else if constexpr (
+        std::is_same_v<InT, float16_t> || std::is_same_v<InT, bfloat16_t>) {
+      // Use float32 accumulator for half-precision types to avoid precision
+      // loss during reductions, then convert back to the output dtype
+      array temp_out(out.shape(), float32, nullptr, {});
+      temp_out.set_data(allocator::malloc(temp_out.nbytes()));
+      reduction_op<InT, float, SumReduce>(in, temp_out, axes, 0.0f);
+      // Copy results back to output array, converting to target dtype
+      auto src = temp_out.data<float>();
+      auto dst = out.data<InT>();
+      for (size_t i = 0; i < out.size(); i++) {
+        dst[i] = static_cast<InT>(src[i]);
+      }
     } else {
       reduction_op<InT, InT, SumReduce>(in, out, axes, 0);
     }
   } else {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, ProdReduce>(in, out, axes, 1);
+    } else if constexpr (
+        std::is_same_v<InT, float16_t> || std::is_same_v<InT, bfloat16_t>) {
+      // Use float32 accumulator for half-precision types
+      array temp_out(out.shape(), float32, nullptr, {});
+      temp_out.set_data(allocator::malloc(temp_out.nbytes()));
+      reduction_op<InT, float, ProdReduce>(in, temp_out, axes, 1.0f);
+      // Copy results back to output array, converting to target dtype
+      auto src = temp_out.data<float>();
+      auto dst = out.data<InT>();
+      for (size_t i = 0; i < out.size(); i++) {
+        dst[i] = static_cast<InT>(src[i]);
+      }
     } else {
       reduction_op<InT, InT, ProdReduce>(in, out, axes, 1);
     }

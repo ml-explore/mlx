@@ -8,13 +8,14 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/dtype.h"
+#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 namespace mlx::core {
 
 using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
-Stream to_stream(StreamOrDevice s);
-Stream to_stream(StreamOrDevice s, Device default_);
+MLX_API Stream to_stream(StreamOrDevice s);
+MLX_API Stream to_stream(StreamOrDevice s, Device default_);
 
 struct StreamContext {
  public:
@@ -54,13 +55,13 @@ struct PrintFormatter {
   bool capitalize_bool{false};
 };
 
-PrintFormatter& get_global_formatter();
+MLX_API PrintFormatter& get_global_formatter();
 
 /** Print the exception and then abort. */
-void abort_with_exception(const std::exception& error);
+MLX_API void abort_with_exception(const std::exception& error);
 
 /** Holds information about floating-point types. */
-struct finfo {
+struct MLX_API finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
   double min;
@@ -69,7 +70,7 @@ struct finfo {
 };
 
 /** Holds information about integral types. */
-struct iinfo {
+struct MLX_API iinfo {
   explicit iinfo(Dtype dtype);
   Dtype dtype;
   int64_t min;
@@ -83,23 +84,21 @@ inline Dtype result_type(const array& a, const array& b) {
 inline Dtype result_type(const array& a, const array& b, const array& c) {
   return promote_types(result_type(a, b), c.dtype());
 }
-Dtype result_type(const std::vector<array>& arrays);
+MLX_API Dtype result_type(const std::vector<array>& arrays);
 
-Shape broadcast_shapes(const Shape& s1, const Shape& s2);
+MLX_API Shape broadcast_shapes(const Shape& s1, const Shape& s2);
 
 /**
  * Returns the axis normalized to be in the range [0, ndim).
  */
-int normalize_axis_index(
-    int axis,
-    int ndim,
-    const std::string& msg_prefix = "");
+MLX_API int
+normalize_axis_index(int axis, int ndim, const std::string& msg_prefix = "");
 
-std::ostream& operator<<(std::ostream& os, const Device& d);
-std::ostream& operator<<(std::ostream& os, const Stream& s);
-std::ostream& operator<<(std::ostream& os, const Dtype& d);
-std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k);
-std::ostream& operator<<(std::ostream& os, array a);
+MLX_API std::ostream& operator<<(std::ostream& os, const Device& d);
+MLX_API std::ostream& operator<<(std::ostream& os, const Stream& s);
+MLX_API std::ostream& operator<<(std::ostream& os, const Dtype& d);
+MLX_API std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k);
+MLX_API std::ostream& operator<<(std::ostream& os, array a);
 inline std::ostream& operator<<(std::ostream& os, const complex64_t& v) {
   return os << v.real() << (v.imag() >= 0 ? "+" : "") << v.imag() << "j";
 }
@@ -136,7 +135,7 @@ inline int next_power_of_2(int n) {
 
 namespace env {
 
-int get_var(const char* name, int default_value);
+MLX_API int get_var(const char* name, int default_value);
 
 inline int bfs_max_width() {
   static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);

@@ -34,13 +34,23 @@ struct VisualStudioInfo {
     arch = "x64";
 #endif
     // Get path of Visual Studio.
+    // Use -latest to get only the most recent installation when multiple
+    // versions are installed, avoiding path concatenation issues.
     std::string vs_path = JitCompiler::exec(fmt::format(
         "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
-        " -property installationPath",
+        " -latest -property installationPath",
         std::getenv("ProgramFiles(x86)")));
     if (vs_path.empty()) {
       throw std::runtime_error("Can not find Visual Studio.");
     }
+    // Trim any trailing whitespace/newlines from the path
+    vs_path.erase(
+        std::find_if(
+            vs_path.rbegin(),
+            vs_path.rend(),
+            [](unsigned char ch) { return !std::isspace(ch); })
+            .base(),
+        vs_path.end());
     // Read the envs from vcvarsall.
     std::string envs = JitCompiler::exec(fmt::format(
         "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",

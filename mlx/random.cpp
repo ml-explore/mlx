@@ -83,12 +83,13 @@ array split(const array& key, int num, StreamOrDevice s /* = {} */) {
 }
 
 // Get the next representable value below 1.0 for half precision
-// floating point types (fp16, bf16)
+// floating point types (fp16, bf16).
+// Access the bits_ member directly to avoid strict aliasing issues
+// that can cause incorrect optimizations on MSVC.
 template <typename T>
 T below_one() {
   T f = T(1.0);
-  uint16_t* m = (uint16_t*)&f;
-  *m -= 1;
+  f.bits_ -= 1;
   return f;
 }
 

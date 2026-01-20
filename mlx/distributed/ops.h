@@ -5,50 +5,51 @@
 #include <optional>
 
 #include "mlx/distributed/distributed.h"
+#include "mlx/mlx_export.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::distributed {
 
-array all_sum(
+MLX_API array all_sum(
     const array& x,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array all_gather(
+MLX_API array all_gather(
     const array& x,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice S = {});
 
-array send(
+MLX_API array send(
     const array& x,
     int dst,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array recv(
+MLX_API array recv(
     Shape shape,
     Dtype dtype,
     int src,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array recv_like(
+MLX_API array recv_like(
     const array& x,
     int src,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array all_max(
+MLX_API array all_max(
     const array& x,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array all_min(
+MLX_API array all_min(
     const array& x,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
-array sum_scatter(
+MLX_API array sum_scatter(
     const array& x,
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});

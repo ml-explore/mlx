@@ -5,11 +5,12 @@
 #include <memory>
 #include <stdexcept>
 
+#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 namespace mlx::core {
 
-class Event {
+class MLX_API Event {
  public:
   Event() {};
   explicit Event(Stream stream);

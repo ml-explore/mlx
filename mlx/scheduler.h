@@ -10,6 +10,7 @@
 
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/device.h"
+#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 namespace mlx::core::scheduler {
@@ -162,7 +163,7 @@ void Scheduler::enqueue(const Stream& stream, F&& f) {
   threads_[stream.index]->enqueue(std::forward<F>(f));
 }
 
-Scheduler& scheduler();
+MLX_API Scheduler& scheduler();
 
 template <typename F>
 void enqueue(const Stream& stream, F&& f) {

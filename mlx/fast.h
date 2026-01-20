@@ -5,24 +5,25 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/mlx_export.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
 
-array rms_norm(
+MLX_API array rms_norm(
     const array& x,
     const std::optional<array>& weight,
     float eps,
     StreamOrDevice s = {});
 
-array layer_norm(
+MLX_API array layer_norm(
     const array& x,
     const std::optional<array>& weight,
     const std::optional<array>& bias,
     float eps,
     StreamOrDevice s = {});
 
-array rope(
+MLX_API array rope(
     const array& x,
     int dims,
     bool traditional,
@@ -32,7 +33,7 @@ array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
-array rope(
+MLX_API array rope(
     const array& x,
     int dims,
     bool traditional,
@@ -43,7 +44,7 @@ array rope(
     StreamOrDevice s = {});
 
 /** Computes: O = softmax(Q @ K.T) @ V **/
-array scaled_dot_product_attention(
+MLX_API array scaled_dot_product_attention(
     const array& queries,
     const array& keys,
     const array& values,
@@ -67,7 +68,7 @@ using CustomKernelFunction = std::function<std::vector<array>(
     bool,
     StreamOrDevice)>;
 
-CustomKernelFunction metal_kernel(
+MLX_API CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -76,7 +77,7 @@ CustomKernelFunction metal_kernel(
     bool ensure_row_contiguous = true,
     bool atomic_outputs = false);
 
-CustomKernelFunction cuda_kernel(
+MLX_API CustomKernelFunction cuda_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -85,7 +86,7 @@ CustomKernelFunction cuda_kernel(
     bool ensure_row_contiguous = true,
     int shared_memory = 0);
 
-std::vector<array> precompiled_cuda_kernel(
+MLX_API std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,
     const std::vector<array>& inputs,

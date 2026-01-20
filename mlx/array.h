@@ -10,6 +10,7 @@
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
 #include "mlx/event.h"
+#include "mlx/mlx_export.h"
 #include "mlx/small_vector.h"
 
 namespace mlx::core {
@@ -22,7 +23,7 @@ using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
 
-class array {
+class MLX_API array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc
    * object */
 
@@ -153,7 +154,7 @@ class array {
   template <typename T>
   T item() const;
 
-  struct ArrayIterator {
+  struct MLX_API ArrayIterator {
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = size_t;
     using value_type = const array;
@@ -464,7 +465,7 @@ class array {
   template <typename It>
   void init(const It src);
 
-  struct ArrayDesc {
+  struct MLX_API ArrayDesc {
     Shape shape;
     Strides strides;
     size_t size;

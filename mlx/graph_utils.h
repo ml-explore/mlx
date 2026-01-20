@@ -5,17 +5,18 @@
 #include <unordered_map>
 
 #include "mlx/array.h"
+#include "mlx/mlx_export.h"
 
 namespace mlx::core {
 
-struct NodeNamer {
+struct MLX_API NodeNamer {
   std::unordered_map<std::uintptr_t, std::string> names;
 
   const std::string& get_name(const array& x);
   void set_name(const array& x, std::string n);
 };
 
-void print_graph(
+MLX_API void print_graph(
     std::ostream& os,
     NodeNamer namer,
     const std::vector<array>& outputs);
@@ -39,7 +40,7 @@ print_graph(std::ostream& os, NodeNamer namer, Arrays&&... outputs) {
       std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
-void export_to_dot(
+MLX_API void export_to_dot(
     std::ostream& os,
     NodeNamer namer,
     const std::vector<array>& outputs);

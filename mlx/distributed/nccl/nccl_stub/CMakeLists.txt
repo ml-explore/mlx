@@ -9,6 +9,8 @@ file(
 
 add_library(nccl SHARED nccl_stubs.cpp)
 set_target_properties(nccl PROPERTIES SOVERSION 2)
+# On Windows, export all symbols so that an import library (.lib) is generated
+set_target_properties(nccl PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(nccl PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 target_include_directories(nccl PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

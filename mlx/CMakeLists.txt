@@ -22,11 +22,18 @@ target_sources(
 # Define MLX_VERSION only in the version.cpp file.
 add_library(mlx_version OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
 target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
+# mlx_version needs access to version.h for MLX_API export macro
+target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
+# On Windows shared lib builds, mlx_version also needs MLX_EXPORT for proper DLL
+# linkage
+if(WIN32 AND BUILD_SHARED_LIBS)
+  target_compile_definitions(mlx_version PRIVATE MLX_EXPORT)
+endif()
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   # Supress warnings: note: parameter passing for argument of type
-  # ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in
+  # 'std::pair<float, float>' when C++17 is enabled changed to match C++14 in
   # GCC 10.1
   target_compile_options(mlx PRIVATE -Wno-psabi)
 endif()
@@ -42,8 +49,10 @@ if(MSVC)
 endif()
 
 if(WIN32)
-  # Export symbols by default to behave like macOS/linux.
-  set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+  # On Windows, we use explicit __declspec(dllexport) via MLX_API macro instead
+  # of WINDOWS_EXPORT_ALL_SYMBOLS to avoid exceeding the 65535 symbol export
+  # limit (template instantiations can generate many symbols).
+  set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS FALSE)
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
