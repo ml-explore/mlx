@@ -2,6 +2,7 @@
 
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/cuda/allocator.h"
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/gpu/device_info.h"
 #include "mlx/primitives.h"

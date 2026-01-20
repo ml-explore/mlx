@@ -178,39 +178,60 @@ void CublasGemm::run_batched(
   int ndim = batch_shape.size();
   if (ndim <= 3) {
     dispatch_1_2_3(ndim, [&](auto ndim_constant) {
+      auto kernel = cu::set_mm_device_pointers_nd<ndim_constant()>;
+      // Store params in variables to ensure they remain valid
+      int8_t** pointers_ptr = gpu_ptr<int8_t*>(pointers);
+      int8_t* a_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(a));
+      int8_t* b_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(b));
+      int8_t* out_ptr = gpu_ptr<int8_t>(out);
+      int item_size_val = item_size;
+      auto batch_shape_param = const_param<ndim_constant()>(batch_shape);
+      auto a_strides_param = const_param<ndim_constant()>(a_batch_strides);
+      auto b_strides_param = const_param<ndim_constant()>(b_batch_strides);
+      int64_t batch_stride_val = batch_stride;
+      int batch_count_val = batch_count;
+      void* params[] = {
+          &pointers_ptr,
+          &a_ptr,
+          &b_ptr,
+          &out_ptr,
+          &item_size_val,
+          &batch_shape_param,
+          &a_strides_param,
+          &b_strides_param,
+          &batch_stride_val,
+          &batch_count_val};
       encoder.add_kernel_node(
-          cu::set_mm_device_pointers_nd<ndim_constant()>,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<int8_t*>(pointers),
-          gpu_ptr<int8_t>(a),
-          gpu_ptr<int8_t>(b),
-          gpu_ptr<int8_t>(out),
-          item_size,
-          const_param<ndim_constant()>(batch_shape),
-          const_param<ndim_constant()>(a_batch_strides),
-          const_param<ndim_constant()>(b_batch_strides),
-          batch_stride,
-          batch_count);
+          reinterpret_cast<void*>(kernel), num_blocks, block_dims, 0, params);
     });
   } else {
+    auto kernel = cu::set_mm_device_pointers_g;
+    // Store params in variables to ensure they remain valid
+    int8_t** pointers_ptr = gpu_ptr<int8_t*>(pointers);
+    int8_t* a_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(a));
+    int8_t* b_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(b));
+    int8_t* out_ptr = gpu_ptr<int8_t>(out);
+    int item_size_val = item_size;
+    auto batch_shape_param = const_param(batch_shape);
+    auto a_strides_param = const_param(a_batch_strides);
+    auto b_strides_param = const_param(b_batch_strides);
+    int64_t batch_stride_val = batch_stride;
+    int ndim_val = ndim;
+    int batch_count_val = batch_count;
+    void* params[] = {
+        &pointers_ptr,
+        &a_ptr,
+        &b_ptr,
+        &out_ptr,
+        &item_size_val,
+        &batch_shape_param,
+        &a_strides_param,
+        &b_strides_param,
+        &batch_stride_val,
+        &ndim_val,
+        &batch_count_val};
     encoder.add_kernel_node(
-        cu::set_mm_device_pointers_g,
-        num_blocks,
-        block_dims,
-        0,
-        gpu_ptr<int8_t*>(pointers),
-        gpu_ptr<int8_t>(a),
-        gpu_ptr<int8_t>(b),
-        gpu_ptr<int8_t>(out),
-        item_size,
-        const_param(batch_shape),
-        const_param(a_batch_strides),
-        const_param(b_batch_strides),
-        batch_stride,
-        ndim,
-        batch_count);
+        reinterpret_cast<void*>(kernel), num_blocks, block_dims, 0, params);
   }
 
   // Run matmul

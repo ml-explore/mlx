@@ -244,6 +244,94 @@ __global__ void col_reduce_small(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues.
+template <
+    typename T,
+    typename U,
+    typename OP,
+    int NDIM,
+    int BM,
+    int BN,
+    int N_READS,
+    int BLOCKS>
+void launch_col_reduce_looped_kernel(
+    cu::CommandEncoder& encoder,
+    T* indata,
+    U* outdata,
+    dim3 grid,
+    int blocks,
+    const cu::ColReduceArgs& args,
+    int64_t out_stride) {
+  auto kernel = cu::col_reduce_looped<T, U, OP, NDIM, BM, BN, N_READS, BLOCKS>;
+  // Store params in variables to ensure they remain valid
+  cu::ColReduceArgs args_copy = args;
+  int64_t out_stride_val = out_stride;
+  void* params[] = {&indata, &outdata, &args_copy, &out_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, blocks, 0, params);
+}
+
+template <
+    typename T,
+    typename U,
+    typename OP,
+    int BM,
+    int BN,
+    int N_READS,
+    int BLOCKS>
+void dispatch_col_reduce_looped_ndim(
+    cu::CommandEncoder& encoder,
+    T* indata,
+    U* outdata,
+    dim3 grid,
+    int blocks,
+    const cu::ColReduceArgs& args,
+    int64_t out_stride) {
+  switch (args.reduce_ndim) {
+    case 1:
+      launch_col_reduce_looped_kernel<T, U, OP, 1, BM, BN, N_READS, BLOCKS>(
+          encoder, indata, outdata, grid, blocks, args, out_stride);
+      break;
+    case 2:
+      launch_col_reduce_looped_kernel<T, U, OP, 2, BM, BN, N_READS, BLOCKS>(
+          encoder, indata, outdata, grid, blocks, args, out_stride);
+      break;
+    case 3:
+      launch_col_reduce_looped_kernel<T, U, OP, 3, BM, BN, N_READS, BLOCKS>(
+          encoder, indata, outdata, grid, blocks, args, out_stride);
+      break;
+    case 4:
+      launch_col_reduce_looped_kernel<T, U, OP, 4, BM, BN, N_READS, BLOCKS>(
+          encoder, indata, outdata, grid, blocks, args, out_stride);
+      break;
+    default:
+      launch_col_reduce_looped_kernel<T, U, OP, 5, BM, BN, N_READS, BLOCKS>(
+          encoder, indata, outdata, grid, blocks, args, out_stride);
+      break;
+  }
+}
+
+template <typename T, typename U, typename OP, int N_READS>
+void launch_col_reduce_small_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    dim3 grid,
+    dim3 block,
+    const cu::ColReduceArgs& args,
+    size_t total) {
+  auto kernel = cu::col_reduce_small<T, U, OP, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const T* in_ptr = gpu_ptr<T>(in);
+  U* out_ptr = gpu_ptr<U>(out);
+  cu::ColReduceArgs args_copy = args;
+  size_t total_val = total;
+  void* params[] = {&in_ptr, &out_ptr, &args_copy, &total_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
 inline auto output_grid_for_col_reduce(
     const array& out,
     const cu::ColReduceArgs& args,
@@ -277,30 +365,25 @@ void col_reduce_looped(
   encoder.set_output_array(out);
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-      dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
-        // Cub doesn't like const pointers for vectorized loads. (sigh)
-        T* indata = const_cast<T*>(gpu_ptr<T>(in));
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename cu::ReduceResult<OP, T>::type;
+      // Cub doesn't like const pointers for vectorized loads. (sigh)
+      T* indata = const_cast<T*>(gpu_ptr<T>(in));
 
-        constexpr int N_READS = 4;
-        constexpr int BM = 32;
-        constexpr int BN = 32;
-        dim3 grid = output_grid_for_col_reduce(out, args, BN);
-        int blocks = BM * BN / N_READS;
-        auto kernel =
-            cu::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>;
-        encoder.add_kernel_node(
-            kernel,
-            grid,
-            blocks,
-            0,
-            indata,
-            gpu_ptr<U>(out),
-            static_cast<cu::ColReduceArgs>(args),
-            out.size() / args.reduction_stride);
-      });
+      constexpr int N_READS = 4;
+      constexpr int BM = 32;
+      constexpr int BN = 32;
+      dim3 grid = output_grid_for_col_reduce(out, args, BN);
+      int blocks = BM * BN / N_READS;
+      dispatch_col_reduce_looped_ndim<T, U, OP, BM, BN, N_READS, 1>(
+          encoder,
+          indata,
+          gpu_ptr<U>(out),
+          grid,
+          blocks,
+          args,
+          out.size() / args.reduction_stride);
     });
   });
 }
@@ -328,16 +411,8 @@ void col_reduce_small(
       constexpr int N_READS = 16 / sizeof(T);
       auto tmp_grid = get_2d_grid_dims(out.shape(), out.strides());
       auto [grid, block] = get_grid_and_block(tmp_grid.x, tmp_grid.y, 1);
-      auto kernel = cu::col_reduce_small<T, U, OP, N_READS>;
-      encoder.add_kernel_node(
-          kernel,
-          grid,
-          block,
-          0,
-          gpu_ptr<T>(in),
-          gpu_ptr<U>(out),
-          static_cast<cu::ColReduceArgs>(args),
-          out.size());
+      launch_col_reduce_small_kernel<T, U, OP, N_READS>(
+          encoder, in, out, grid, block, args, out.size());
     });
   });
 }
@@ -386,30 +461,25 @@ void col_reduce_two_pass(
   encoder.set_output_array(intermediate);
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-      dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
-        // Cub doesn't like const pointers for vectorized loads. (sigh)
-        T* indata = const_cast<T*>(gpu_ptr<T>(in));
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename cu::ReduceResult<OP, T>::type;
+      // Cub doesn't like const pointers for vectorized loads. (sigh)
+      T* indata = const_cast<T*>(gpu_ptr<T>(in));
 
-        constexpr int N_READS = 4;
-        constexpr int BM = 32;
-        constexpr int BN = 32;
-        dim3 grid = output_grid_for_col_reduce(out, args, BN, outer);
-        int blocks = BM * BN / N_READS;
-        auto kernel = cu::
-            col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS, outer>;
-        encoder.add_kernel_node(
-            kernel,
-            grid,
-            blocks,
-            0,
-            indata,
-            gpu_ptr<U>(intermediate),
-            static_cast<cu::ColReduceArgs>(args),
-            out.size() / args.reduction_stride);
-      });
+      constexpr int N_READS = 4;
+      constexpr int BM = 32;
+      constexpr int BN = 32;
+      dim3 grid = output_grid_for_col_reduce(out, args, BN, outer);
+      int blocks = BM * BN / N_READS;
+      dispatch_col_reduce_looped_ndim<T, U, OP, BM, BN, N_READS, outer>(
+          encoder,
+          indata,
+          gpu_ptr<U>(intermediate),
+          grid,
+          blocks,
+          args,
+          out.size() / args.reduction_stride);
     });
   });
 
@@ -427,28 +497,23 @@ void col_reduce_two_pass(
   encoder.set_output_array(out);
   dispatch_all_types(intermediate.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
-      dispatch_reduce_ndim(second_args.reduce_ndim, [&](auto reduce_ndim) {
-        using OP = MLX_GET_TYPE(reduce_type_tag);
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        using U = typename cu::ReduceResult<OP, T>::type;
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename cu::ReduceResult<OP, T>::type;
 
-        constexpr int N_READS = 4;
-        constexpr int BM = 32;
-        constexpr int BN = 32;
-        dim3 grid = output_grid_for_col_reduce(out, second_args, BN);
-        int blocks = BM * BN / N_READS;
-        auto kernel =
-            cu::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>;
-        encoder.add_kernel_node(
-            kernel,
-            grid,
-            blocks,
-            0,
-            gpu_ptr<T>(intermediate),
-            gpu_ptr<U>(out),
-            second_args,
-            second_args.reduction_stride);
-      });
+      constexpr int N_READS = 4;
+      constexpr int BM = 32;
+      constexpr int BN = 32;
+      dim3 grid = output_grid_for_col_reduce(out, second_args, BN);
+      int blocks = BM * BN / N_READS;
+      dispatch_col_reduce_looped_ndim<T, U, OP, BM, BN, N_READS, 1>(
+          encoder,
+          gpu_ptr<T>(intermediate),
+          gpu_ptr<U>(out),
+          grid,
+          blocks,
+          second_args,
+          second_args.reduction_stride);
     });
   });
 }
@@ -507,3 +572,7 @@ void col_reduce(
 }
 
 } // namespace mlx::core
+
+// Note: col_reduce kernels have complex template parameters that are
+// instantiated through dispatch functions. Registration is handled differently
+// for these.

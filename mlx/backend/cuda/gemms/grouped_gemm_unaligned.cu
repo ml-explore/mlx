@@ -184,11 +184,11 @@ void grouped_gemm_v2(
   dispatch_bool(a_transposed, [&](auto a_transposed_tag) {
     dispatch_bool(b_transposed, [&](auto b_transposed_tag) {
       using LayoutA = std::conditional_t<
-          a_transposed_tag.value,
+          decltype(a_transposed_tag)::value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using LayoutB = std::conditional_t<
-          b_transposed_tag.value,
+          decltype(b_transposed_tag)::value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using GemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
@@ -256,10 +256,12 @@ auto* get_grouped_mm_funcion(Dtype dtype, int N, cu::Device& device) {
     dispatch_cutlass_arch(device, [&](auto arch_tag) {
       using Arch = MLX_GET_TYPE(arch_tag);
       dispatch_bool(N % 8 == 0, [&](auto is_out_aligned) {
-        constexpr int kAlignmentC = is_out_aligned ? 8 : 1;
-        dispatch_bool(env::enable_tf32(), [&](auto kEnableTF32) {
-          fun = grouped_gemm_v2<
-              GemmConfiguration<DataType, Arch, kAlignmentC, kEnableTF32>>;
+        dispatch_bool(env::enable_tf32(), [&](auto enable_tf32) {
+          fun = grouped_gemm_v2<GemmConfiguration<
+              DataType,
+              Arch,
+              is_out_aligned.value ? 8 : 1,
+              enable_tf32.value>>;
         });
       });
     });
@@ -309,32 +311,57 @@ void cutlass_grouped_gemm_unaligned(
 
   encoder.set_input_array(indices);
   encoder.set_output_array(gemm_args);
+  auto kernel = cu::prepare_grouped_mm_data<N_READS>;
+  // Store params in variables to ensure they remain valid
+  const uint32_t* indices_ptr = gpu_ptr<uint32_t>(indices);
+  size_t size_val = indices.size();
+  int group_count_val = group_count;
+  int K_val = a.shape(-1);
+  int N_val = b.shape(-1);
+  int lda_val = lda;
+  int ldb_val = ldb;
+  int item_size_val = out.itemsize();
+  int8_t* a_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(a));
+  int8_t* b_ptr = const_cast<int8_t*>(gpu_ptr<int8_t>(b));
+  int8_t* out_ptr_val = gpu_ptr<int8_t>(out);
+  int a_batch_stride_val = a.shape(-2) * a.shape(-1);
+  int b_batch_stride_val = b.shape(-2) * b.shape(-1);
+  int out_batch_stride_val = out.shape(-2) * out.shape(-1);
+  ProblemSize* problem_sizes_ptr = problem_sizes;
+  int64_t* a_lds_ptr = a_lds;
+  int64_t* b_lds_ptr = b_lds;
+  int64_t* out_lds_ptr = out_lds;
+  void** a_ptrs_ptr = a_ptrs;
+  void** b_ptrs_ptr = b_ptrs;
+  void** out_ptrs_ptr = out_ptrs;
+  void* params[] = {
+      &indices_ptr,
+      &size_val,
+      &group_count_val,
+      &K_val,
+      &N_val,
+      &lda_val,
+      &ldb_val,
+      &item_size_val,
+      &a_ptr,
+      &b_ptr,
+      &out_ptr_val,
+      &a_batch_stride_val,
+      &b_batch_stride_val,
+      &out_batch_stride_val,
+      &problem_sizes_ptr,
+      &a_lds_ptr,
+      &b_lds_ptr,
+      &out_lds_ptr,
+      &a_ptrs_ptr,
+      &b_ptrs_ptr,
+      &out_ptrs_ptr};
   encoder.add_kernel_node(
-      cu::prepare_grouped_mm_data<N_READS>,
+      reinterpret_cast<void*>(kernel),
       num_blocks,
       block_dims,
       group_count * sizeof(uint32_t), // sizeof(cum_histo)
-      gpu_ptr<uint32_t>(indices),
-      indices.size(),
-      group_count,
-      K,
-      N,
-      lda,
-      ldb,
-      out.itemsize(),
-      gpu_ptr<int8_t>(a),
-      gpu_ptr<int8_t>(b),
-      gpu_ptr<int8_t>(out),
-      a.shape(-2) * a.shape(-1), // a_batch_stride
-      b.shape(-2) * b.shape(-1), // b_batch_stride
-      out.shape(-2) * out.shape(-1), // out_batch_stride
-      problem_sizes,
-      a_lds,
-      b_lds,
-      out_lds,
-      a_ptrs,
-      b_ptrs,
-      out_ptrs);
+      static_cast<void**>(params));
 
   // Invoke grouped GEMM.
   encoder.set_input_array(a);

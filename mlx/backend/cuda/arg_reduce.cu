@@ -168,20 +168,28 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       if (reduce_type_ == ArgReduce::ArgMin) {
         kernel = cu::arg_reduce_general<T, cu::ArgMin<T>, block_dim(), N_READS>;
       }
+      // Store params in variables to ensure they remain valid
+      const T* in_ptr = gpu_ptr<T>(in);
+      uint32_t* out_ptr = gpu_ptr<uint32_t>(out);
+      size_t out_size = out.size();
+      auto shape_param = const_param(shape);
+      auto in_strides_param = const_param(in_strides);
+      auto out_strides_param = const_param(out_strides);
+      int ndim_val = ndim;
+      int64_t axis_stride_val = axis_stride;
+      int axis_size_val = axis_size;
+      void* params[] = {
+          &in_ptr,
+          &out_ptr,
+          &out_size,
+          &shape_param,
+          &in_strides_param,
+          &out_strides_param,
+          &ndim_val,
+          &axis_stride_val,
+          &axis_size_val};
       encoder.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dim(),
-          0,
-          gpu_ptr<T>(in),
-          gpu_ptr<uint32_t>(out),
-          out.size(),
-          const_param(shape),
-          const_param(in_strides),
-          const_param(out_strides),
-          ndim,
-          axis_stride,
-          axis_size);
+          reinterpret_cast<void*>(kernel), num_blocks, block_dim(), 0, params);
     });
   });
 }

@@ -13,6 +13,11 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
+#if defined(_WIN32)
+#define _USE_MATH_DEFINES
+#include <math.h>
+#endif
+
 namespace mlx::core {
 
 namespace cu {
@@ -448,6 +453,287 @@ __global__ void kernel_sdpav_2pass_2(
 
 namespace {
 
+// Helper template functions to work around MSVC template function pointer
+// issues.
+template <typename DataType, bool do_causal, int headdim>
+void launch_sdpav_1pass_kernel(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    array& o,
+    const std::optional<array>& sinks,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& attn_params) {
+  auto kernel = &cu::kernel_sdpav_1pass<DataType, do_causal, headdim>;
+  // Store params in variables to ensure they remain valid
+  const DataType* q_ptr = gpu_ptr<DataType>(q);
+  const DataType* k_ptr = gpu_ptr<DataType>(k);
+  const DataType* v_ptr = gpu_ptr<DataType>(v);
+  DataType* o_ptr = gpu_ptr<DataType>(o);
+  const DataType* sinks_ptr = sinks ? gpu_ptr<DataType>(*sinks) : nullptr;
+  cu::AttnParams attn_params_copy = attn_params;
+  void* params[] = {
+      &q_ptr, &k_ptr, &v_ptr, &o_ptr, &sinks_ptr, &attn_params_copy};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid_dim, block_dim, 0, params);
+}
+
+template <typename DataType, bool do_causal>
+void dispatch_sdpav_1pass_headdim(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    array& o,
+    const std::optional<array>& sinks,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& params) {
+  switch (params.D) {
+    case 64:
+      launch_sdpav_1pass_kernel<DataType, do_causal, 64>(
+          encoder, q, k, v, o, sinks, grid_dim, block_dim, params);
+      break;
+    case 96:
+      launch_sdpav_1pass_kernel<DataType, do_causal, 96>(
+          encoder, q, k, v, o, sinks, grid_dim, block_dim, params);
+      break;
+    case 128:
+      launch_sdpav_1pass_kernel<DataType, do_causal, 128>(
+          encoder, q, k, v, o, sinks, grid_dim, block_dim, params);
+      break;
+  }
+}
+
+template <typename DataType>
+void dispatch_sdpav_1pass(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    array& o,
+    const std::optional<array>& sinks,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& params,
+    bool do_causal) {
+  if (do_causal) {
+    dispatch_sdpav_1pass_headdim<DataType, true>(
+        encoder, q, k, v, o, sinks, grid_dim, block_dim, params);
+  } else {
+    dispatch_sdpav_1pass_headdim<DataType, false>(
+        encoder, q, k, v, o, sinks, grid_dim, block_dim, params);
+  }
+}
+
+template <typename DataType, bool do_causal, int headdim>
+void launch_sdpav_2pass_1_kernel(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    const std::optional<array>& sinks,
+    array& intermediate,
+    array& sums,
+    array& maxs,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& attn_params) {
+  auto kernel = cu::kernel_sdpav_2pass_1<DataType, do_causal, headdim>;
+  // Store params in variables to ensure they remain valid
+  const DataType* q_ptr = gpu_ptr<DataType>(q);
+  const DataType* k_ptr = gpu_ptr<DataType>(k);
+  const DataType* v_ptr = gpu_ptr<DataType>(v);
+  const DataType* sinks_ptr = sinks ? gpu_ptr<DataType>(*sinks) : nullptr;
+  float* intermediate_ptr = gpu_ptr<float>(intermediate);
+  float* sums_ptr = gpu_ptr<float>(sums);
+  float* maxs_ptr = gpu_ptr<float>(maxs);
+  cu::AttnParams attn_params_copy = attn_params;
+  void* params[] = {
+      &q_ptr,
+      &k_ptr,
+      &v_ptr,
+      &sinks_ptr,
+      &intermediate_ptr,
+      &sums_ptr,
+      &maxs_ptr,
+      &attn_params_copy};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid_dim, block_dim, 0, params);
+}
+
+template <typename DataType, bool do_causal>
+void dispatch_sdpav_2pass_1_headdim(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    const std::optional<array>& sinks,
+    array& intermediate,
+    array& sums,
+    array& maxs,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& params) {
+  switch (params.D) {
+    case 64:
+      launch_sdpav_2pass_1_kernel<DataType, do_causal, 64>(
+          encoder,
+          q,
+          k,
+          v,
+          sinks,
+          intermediate,
+          sums,
+          maxs,
+          grid_dim,
+          block_dim,
+          params);
+      break;
+    case 96:
+      launch_sdpav_2pass_1_kernel<DataType, do_causal, 96>(
+          encoder,
+          q,
+          k,
+          v,
+          sinks,
+          intermediate,
+          sums,
+          maxs,
+          grid_dim,
+          block_dim,
+          params);
+      break;
+    case 128:
+      launch_sdpav_2pass_1_kernel<DataType, do_causal, 128>(
+          encoder,
+          q,
+          k,
+          v,
+          sinks,
+          intermediate,
+          sums,
+          maxs,
+          grid_dim,
+          block_dim,
+          params);
+      break;
+  }
+}
+
+template <typename DataType, bool do_causal, int headdim>
+void launch_sdpav_2pass_2_kernel(
+    cu::CommandEncoder& encoder,
+    const array& intermediate,
+    const array& sums,
+    const array& maxs,
+    array& o,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& attn_params) {
+  auto kernel = cu::kernel_sdpav_2pass_2<DataType, do_causal, headdim>;
+  // Store params in variables to ensure they remain valid
+  const float* intermediate_ptr = gpu_ptr<float>(intermediate);
+  const float* sums_ptr = gpu_ptr<float>(sums);
+  const float* maxs_ptr = gpu_ptr<float>(maxs);
+  DataType* o_ptr = gpu_ptr<DataType>(o);
+  cu::AttnParams attn_params_copy = attn_params;
+  void* params[] = {
+      &intermediate_ptr, &sums_ptr, &maxs_ptr, &o_ptr, &attn_params_copy};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid_dim, block_dim, 0, params);
+}
+
+template <typename DataType, bool do_causal>
+void dispatch_sdpav_2pass_2_headdim(
+    cu::CommandEncoder& encoder,
+    const array& intermediate,
+    const array& sums,
+    const array& maxs,
+    array& o,
+    dim3 grid_dim,
+    dim3 block_dim,
+    const cu::AttnParams& params) {
+  switch (params.D) {
+    case 64:
+      launch_sdpav_2pass_2_kernel<DataType, do_causal, 64>(
+          encoder, intermediate, sums, maxs, o, grid_dim, block_dim, params);
+      break;
+    case 96:
+      launch_sdpav_2pass_2_kernel<DataType, do_causal, 96>(
+          encoder, intermediate, sums, maxs, o, grid_dim, block_dim, params);
+      break;
+    case 128:
+      launch_sdpav_2pass_2_kernel<DataType, do_causal, 128>(
+          encoder, intermediate, sums, maxs, o, grid_dim, block_dim, params);
+      break;
+  }
+}
+
+template <typename DataType>
+void dispatch_sdpav_2pass(
+    cu::CommandEncoder& encoder,
+    const array& q,
+    const array& k,
+    const array& v,
+    const std::optional<array>& sinks,
+    array& intermediate,
+    array& sums,
+    array& maxs,
+    array& o,
+    const cu::AttnParams& params,
+    bool do_causal) {
+  // First pass
+  {
+    dim3 grid_dim(params.H, params.qL, params.B * 32);
+    dim3 block_dim(8 * 32, 1, 1);
+
+    if (do_causal) {
+      dispatch_sdpav_2pass_1_headdim<DataType, true>(
+          encoder,
+          q,
+          k,
+          v,
+          sinks,
+          intermediate,
+          sums,
+          maxs,
+          grid_dim,
+          block_dim,
+          params);
+    } else {
+      dispatch_sdpav_2pass_1_headdim<DataType, false>(
+          encoder,
+          q,
+          k,
+          v,
+          sinks,
+          intermediate,
+          sums,
+          maxs,
+          grid_dim,
+          block_dim,
+          params);
+    }
+  }
+
+  // Second pass
+  {
+    dim3 grid_dim(params.H, params.qL, params.B);
+    dim3 block_dim(1024, 1, 1);
+
+    if (do_causal) {
+      dispatch_sdpav_2pass_2_headdim<DataType, true>(
+          encoder, intermediate, sums, maxs, o, grid_dim, block_dim, params);
+    } else {
+      dispatch_sdpav_2pass_2_headdim<DataType, false>(
+          encoder, intermediate, sums, maxs, o, grid_dim, block_dim, params);
+    }
+  }
+}
+
 template <typename F>
 void dispatch_headdim(int n, F&& f) {
   switch (n) {
@@ -501,25 +787,9 @@ void sdpa_vector_1pass_fallback(
   dim3 block_dim(1024, 1, 1);
 
   dispatch_float_types(o.dtype(), "kernel_sdpav_1pass", [&](auto type_tag) {
-    dispatch_bool(do_causal, [&](auto do_causal) {
-      dispatch_headdim(params.D, [&](auto headdim) {
-        using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-
-        auto kernel =
-            cu::kernel_sdpav_1pass<DataType, do_causal.value, headdim.value>;
-        encoder.add_kernel_node(
-            kernel,
-            grid_dim,
-            block_dim,
-            0,
-            gpu_ptr<DataType>(q),
-            gpu_ptr<DataType>(k),
-            gpu_ptr<DataType>(v),
-            gpu_ptr<DataType>(o),
-            sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
-            params);
-      });
-    });
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    dispatch_sdpav_1pass<DataType>(
+        encoder, q, k, v, o, sinks, grid_dim, block_dim, params, do_causal);
   });
 }
 
@@ -573,68 +843,36 @@ void sdpa_vector_2pass_fallback(
   encoder.add_temporary(maxs);
 
   dispatch_float_types(o.dtype(), "kernel_sdpav_2pass", [&](auto type_tag) {
-    dispatch_bool(do_causal, [&](auto do_causal) {
-      dispatch_headdim(params.D, [&](auto headdim) {
-        using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
-        {
-          auto kernel = cu::
-              kernel_sdpav_2pass_1<DataType, do_causal.value, headdim.value>;
+    encoder.set_input_array(q);
+    encoder.set_input_array(k);
+    encoder.set_input_array(v);
+    if (sinks) {
+      encoder.set_input_array(*sinks);
+    }
 
-          encoder.set_input_array(q);
-          encoder.set_input_array(k);
-          encoder.set_input_array(v);
-          if (sinks) {
-            encoder.set_input_array(*sinks);
-          }
+    encoder.set_output_array(intermediate);
+    encoder.set_output_array(sums);
+    encoder.set_output_array(maxs);
 
-          encoder.set_output_array(intermediate);
-          encoder.set_output_array(sums);
-          encoder.set_output_array(maxs);
+    dispatch_sdpav_2pass<DataType>(
+        encoder,
+        q,
+        k,
+        v,
+        sinks,
+        intermediate,
+        sums,
+        maxs,
+        o,
+        params,
+        do_causal);
 
-          dim3 grid_dim(params.H, params.qL, params.B * 32);
-          dim3 block_dim(8 * 32, 1, 1);
-
-          encoder.add_kernel_node(
-              kernel,
-              grid_dim,
-              block_dim,
-              0,
-              gpu_ptr<DataType>(q),
-              gpu_ptr<DataType>(k),
-              gpu_ptr<DataType>(v),
-              sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
-              gpu_ptr<float>(intermediate),
-              gpu_ptr<float>(sums),
-              gpu_ptr<float>(maxs),
-              params);
-        }
-
-        {
-          auto kernel = cu::
-              kernel_sdpav_2pass_2<DataType, do_causal.value, headdim.value>;
-
-          encoder.set_input_array(intermediate);
-          encoder.set_input_array(sums);
-          encoder.set_input_array(maxs);
-          encoder.set_output_array(o);
-
-          dim3 grid_dim(params.H, params.qL, params.B);
-          dim3 block_dim(1024, 1, 1);
-
-          encoder.add_kernel_node(
-              kernel,
-              grid_dim,
-              block_dim,
-              0,
-              gpu_ptr<float>(intermediate),
-              gpu_ptr<float>(sums),
-              gpu_ptr<float>(maxs),
-              gpu_ptr<DataType>(o),
-              params);
-        }
-      });
-    });
+    encoder.set_input_array(intermediate);
+    encoder.set_input_array(sums);
+    encoder.set_input_array(maxs);
+    encoder.set_output_array(o);
   });
 }
 

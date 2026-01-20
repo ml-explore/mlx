@@ -94,12 +94,12 @@ void CudaEvent::wait() {
 
 void CudaEvent::wait(cudaStream_t stream) {
   event_.device.make_current();
-  cudaStreamWaitEvent(stream, event_);
+  CHECK_CUDA_ERROR(cudaStreamWaitEvent(stream, event_));
 }
 
 void CudaEvent::record(cudaStream_t stream) {
   event_.device.make_current();
-  cudaEventRecord(event_, stream);
+  CHECK_CUDA_ERROR(cudaEventRecord(event_, stream));
 }
 
 bool CudaEvent::completed() const {
@@ -129,9 +129,9 @@ class CopyableCudaEvent {
 
   void wait(Stream s) {
     if (s.device == mlx::core::Device::cpu) {
-      scheduler::enqueue(s, [*this]() mutable {
-        check_recorded();
-        event_->wait();
+      scheduler::enqueue(s, [self = *this]() mutable {
+        self.check_recorded();
+        self.event_->wait();
       });
     } else {
       check_recorded();
@@ -189,21 +189,71 @@ __global__ void event_wait_kernel(AtomicEvent::Atomic* ac, uint64_t value) {
 }
 
 __global__ void event_signal_kernel(AtomicEvent::Atomic* ac, uint64_t value) {
+#ifdef _WIN32
+  // On Windows WDDM, cuda::atomic operations may not work reliably on managed
+  // memory. Use a regular store with fence for memory ordering.
+  volatile uint64_t* ptr = reinterpret_cast<volatile uint64_t*>(ac);
+  __threadfence_system(); // Ensure prior writes are visible
+  *ptr = value;
+  __threadfence_system(); // Ensure this write is visible to system
+#else
   event_signal(ac, value);
+#endif
 }
 
 AtomicEvent::AtomicEvent() {
+#ifdef _WIN32
+  // On Windows WDDM, managed memory doesn't have proper CPU cache coherence.
+  // Use pinned host memory instead, which is accessible by both CPU and GPU.
+  void* data_ptr;
+  CHECK_CUDA_ERROR(cudaMallocHost(&data_ptr, sizeof(Atomic)));
+  // Create a CudaBuffer to wrap the pinned memory - device=-1 means "managed"
+  // but for pinned host memory this works fine as Buffer::raw_ptr() just
+  // returns data
+  auto* cbuf = new cu::CudaBuffer{data_ptr, sizeof(Atomic), -1};
+  buf_ = std::shared_ptr<Buffer>(new Buffer{cbuf}, [](Buffer* buf) {
+    auto* cbuf = static_cast<cu::CudaBuffer*>(buf->ptr());
+    cudaFreeHost(cbuf->data);
+    delete cbuf;
+    delete buf;
+  });
+  *static_cast<uint64_t*>(data_ptr) = 0;
+#else
   buf_ = std::shared_ptr<Buffer>(
       new Buffer{allocator().malloc(sizeof(Atomic))}, [](Buffer* ptr) {
         allocator().free(*ptr);
         delete ptr;
       });
   *static_cast<uint64_t*>(buf_->raw_ptr()) = 0;
+#endif
 }
 
 void AtomicEvent::wait(uint64_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::wait");
+
+#ifdef _WIN32
+  // On Windows with WDDM, cuda::atomic operations don't work reliably.
+  // Synchronize the GPU first to ensure any pending writes are visible.
+  cudaDeviceSynchronize();
+
+  auto* ac = atomic();
+  // Use a polling loop with volatile read instead of cuda::atomic wait
+  volatile uint64_t* ptr = reinterpret_cast<volatile uint64_t*>(ac);
+  uint64_t current = *ptr;
+  int spin_count = 0;
+  while (current < value) {
+    // Yield to avoid busy waiting
+    std::this_thread::yield();
+    spin_count++;
+    // Periodically sync to ensure any pending signal kernels complete
+    if (spin_count % 100 == 0) {
+      cudaDeviceSynchronize();
+    }
+    current = *ptr;
+  }
+#else
   event_wait(atomic(), value);
+#endif
 }
 
 void AtomicEvent::wait(cudaStream_t stream, uint64_t value) {
@@ -213,7 +263,8 @@ void AtomicEvent::wait(cudaStream_t stream, uint64_t value) {
 void AtomicEvent::wait(Stream s, uint64_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::wait(s)");
   if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
+    scheduler::enqueue(
+        s, [self = *this, value]() mutable { self.wait(value); });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
@@ -229,6 +280,11 @@ void AtomicEvent::signal(uint64_t value) {
 
 void AtomicEvent::signal(cudaStream_t stream, uint64_t value) {
   event_signal_kernel<<<1, 1, 0, stream>>>(atomic(), value);
+#ifdef _WIN32
+  // On Windows, synchronize to ensure signal kernel completes before CPU can
+  // see it
+  cudaStreamSynchronize(stream);
+#endif
 }
 
 void AtomicEvent::signal(Stream s, uint64_t value) {
@@ -237,7 +293,10 @@ void AtomicEvent::signal(Stream s, uint64_t value) {
     // Signal through a GPU stream so the atomic is updated in GPU - updating
     // the atomic in CPU sometimes does not get GPU notified.
     static CudaStream stream(device(mlx::core::Device::gpu));
-    scheduler::enqueue(s, [*this, value]() mutable { signal(stream, value); });
+    cudaStream_t raw_stream = stream;
+    scheduler::enqueue(s, [self = *this, value, raw_stream]() mutable {
+      self.signal(raw_stream, value);
+    });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();

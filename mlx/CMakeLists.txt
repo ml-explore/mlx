@@ -50,7 +50,8 @@ endif()
 if(MSVC)
   # Some of CUDA's headers include windows.h, which defines min/max macros.
   target_compile_definitions(mlx PRIVATE NOMINMAX)
-  # Disable some MSVC warnings to speed up compilation.
+  # Disable some MSVC warnings to speed up compilation. For C++ files, pass
+  # flags directly; for CUDA files, wrap with -Xcompiler
   target_compile_options(
     mlx
     PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/wd4068

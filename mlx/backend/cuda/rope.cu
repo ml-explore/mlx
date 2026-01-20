@@ -238,6 +238,167 @@ __global__ void rope_freqs(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues. By making DataType, traditional, and forward explicit template
+// parameters, MSVC can resolve the kernel function pointer type correctly.
+
+template <typename DataType, bool traditional, bool forward>
+void launch_rope_single_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    const array& offset,
+    bool donated,
+    float scale,
+    float base,
+    int64_t mat_size,
+    uint2 dims) {
+  auto kernel = &cu::rope_single<DataType, traditional, forward>;
+  auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  const int32_t* offset_ptr = gpu_ptr<int32_t>(offset);
+  float scale_val = scale;
+  float base_val = std::log2(base);
+  int64_t mat_size_val = mat_size;
+  uint2 dims_val = dims;
+  void* params[] = {
+      &in_ptr,
+      &out_ptr,
+      &offset_ptr,
+      &scale_val,
+      &base_val,
+      &mat_size_val,
+      &dims_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
+template <typename DataType, bool traditional, bool forward>
+void launch_rope_single_freqs_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    const array& offset,
+    const array& freqs,
+    bool donated,
+    float scale,
+    int64_t mat_size,
+    uint2 dims) {
+  auto kernel = cu::rope_single_freqs<DataType, traditional, forward>;
+  auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  const int32_t* offset_ptr = gpu_ptr<int32_t>(offset);
+  const float* freqs_ptr = gpu_ptr<float>(freqs);
+  float scale_val = scale;
+  int64_t mat_size_val = mat_size;
+  uint2 dims_val = dims;
+  int64_t freq_stride_val = freqs.strides(0);
+  void* params[] = {
+      &in_ptr,
+      &out_ptr,
+      &offset_ptr,
+      &freqs_ptr,
+      &scale_val,
+      &mat_size_val,
+      &dims_val,
+      &freq_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
+template <typename DataType, bool traditional, bool forward>
+void launch_rope_freqs_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    const array& offset,
+    const array& freqs,
+    bool donated,
+    float scale,
+    float base,
+    const cuda::std::array<int64_t, 3>& strides,
+    const cuda::std::array<int64_t, 3>& out_strides,
+    int64_t offset_stride,
+    int N,
+    uint3 dims) {
+  auto kernel = cu::rope_freqs<DataType, traditional, forward>;
+  auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  const int32_t* offset_ptr = gpu_ptr<int32_t>(offset);
+  const float* freqs_ptr = gpu_ptr<float>(freqs);
+  float scale_val = scale;
+  float base_val = std::log2(base);
+  auto strides_val = strides;
+  auto out_strides_val = out_strides;
+  int64_t offset_stride_val = offset_stride;
+  int N_val = N;
+  uint3 dims_val = dims;
+  int64_t freq_stride_val = freqs.strides(0);
+  void* params[] = {
+      &in_ptr,
+      &out_ptr,
+      &offset_ptr,
+      &freqs_ptr,
+      &scale_val,
+      &base_val,
+      &strides_val,
+      &out_strides_val,
+      &offset_stride_val,
+      &N_val,
+      &dims_val,
+      &freq_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
+template <typename DataType, bool traditional, bool forward>
+void launch_rope_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    const array& offset,
+    bool donated,
+    float scale,
+    float base,
+    const cuda::std::array<int64_t, 3>& strides,
+    const cuda::std::array<int64_t, 3>& out_strides,
+    int64_t offset_stride,
+    int N,
+    uint3 dims) {
+  auto kernel = cu::rope<DataType, traditional, forward>;
+  auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  const int32_t* offset_ptr = gpu_ptr<int32_t>(offset);
+  float scale_val = scale;
+  float base_val = std::log2(base);
+  auto strides_val = strides;
+  auto out_strides_val = out_strides;
+  int64_t offset_stride_val = offset_stride;
+  int N_val = N;
+  uint3 dims_val = dims;
+  void* params[] = {
+      &in_ptr,
+      &out_ptr,
+      &offset_ptr,
+      &scale_val,
+      &base_val,
+      &strides_val,
+      &out_strides_val,
+      &offset_stride_val,
+      &N_val,
+      &dims_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
 namespace fast {
 
 bool RoPE::use_fallback(Stream s) {
@@ -327,92 +488,66 @@ void RoPE::eval_gpu(
   }
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_bool(traditional_, [&](auto traditional) {
       dispatch_bool(forward_, [&](auto forward) {
-        using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if (single && !with_freqs) {
-          auto kernel =
-              cu::rope_single<DataType, traditional.value, forward.value>;
           uint2 dims = make_uint2(dims_ / 2, N);
-          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
+          launch_rope_single_kernel<DataType, traditional.value, forward.value>(
+              encoder, in, out, offset, donated, scale_, base_, mat_size, dims);
+        } else if (single) {
+          uint2 dims = make_uint2(dims_ / 2, N);
+          launch_rope_single_freqs_kernel<
+              DataType,
+              traditional.value,
+              forward.value>(
+              encoder,
+              in,
+              out,
+              offset,
+              inputs[2],
+              donated,
               scale_,
-              std::log2(base_),
               mat_size,
               dims);
-        } else if (single) {
-          auto kernel =
-              cu::rope_single_freqs<DataType, traditional.value, forward.value>;
-          uint2 dims = make_uint2(dims_ / 2, N);
-          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              mat_size,
-              dims,
-              inputs[2].strides(0));
         } else if (with_freqs) {
-          auto kernel =
-              cu::rope_freqs<DataType, traditional.value, forward.value>;
           int n_per_thread = 4;
           uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
           uint3 dims = make_uint3(dims_ / 2, T, dimz);
-          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
           int64_t offset_stride = 0;
           if (inputs[1].ndim() > 0) {
             offset_stride = inputs[1].strides()[0];
           }
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
+          launch_rope_freqs_kernel<DataType, traditional.value, forward.value>(
+              encoder,
+              in,
+              out,
+              offset,
+              inputs[2],
+              donated,
               scale_,
-              std::log2(base_),
+              base_,
               strides,
               out_strides,
               offset_stride,
               N,
-              dims,
-              inputs[2].strides(0));
+              dims);
         } else {
-          auto kernel = cu::rope<DataType, traditional.value, forward.value>;
           int n_per_thread = 4;
           uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
           uint3 dims = make_uint3(dims_ / 2, T, dimz);
-          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
           int64_t offset_stride = 0;
           if (inputs[1].ndim() > 0) {
             offset_stride = inputs[1].strides()[0];
           }
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
+          launch_rope_kernel<DataType, traditional.value, forward.value>(
+              encoder,
+              in,
+              out,
+              offset,
+              donated,
               scale_,
-              std::log2(base_),
+              base_,
               strides,
               out_strides,
               offset_stride,

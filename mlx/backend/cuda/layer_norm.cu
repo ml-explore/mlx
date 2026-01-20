@@ -217,6 +217,180 @@ __global__ void layer_norm_vjp(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues.
+template <typename DataType, int BLOCK_DIM, int N_READS>
+void launch_layer_norm_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& b,
+    array& out,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride,
+    int64_t b_stride) {
+  auto kernel = &cu::layer_norm<DataType, BLOCK_DIM, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  const DataType* b_ptr = gpu_ptr<DataType>(b);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  float eps_val = eps;
+  int32_t axis_size_val = axis_size;
+  int64_t w_stride_val = w_stride;
+  int64_t b_stride_val = b_stride;
+  void* params[] = {
+      &x_ptr,
+      &w_ptr,
+      &b_ptr,
+      &out_ptr,
+      &eps_val,
+      &axis_size_val,
+      &w_stride_val,
+      &b_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, BLOCK_DIM, 0, params);
+}
+
+template <typename DataType, int N_READS>
+void dispatch_layer_norm_block_dim(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& b,
+    array& out,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride,
+    int64_t b_stride) {
+  int threads = cuda::ceil_div(axis_size, N_READS);
+  if (threads <= WARP_SIZE) {
+    launch_layer_norm_kernel<DataType, WARP_SIZE, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  } else if (threads <= WARP_SIZE * 2) {
+    launch_layer_norm_kernel<DataType, WARP_SIZE * 2, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  } else if (threads <= WARP_SIZE * 4) {
+    launch_layer_norm_kernel<DataType, WARP_SIZE * 4, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  } else if (threads <= WARP_SIZE * 8) {
+    launch_layer_norm_kernel<DataType, WARP_SIZE * 8, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  } else if (threads <= WARP_SIZE * 16) {
+    launch_layer_norm_kernel<DataType, WARP_SIZE * 16, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  } else {
+    launch_layer_norm_kernel<DataType, WARP_SIZE * 32, N_READS>(
+        encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+  }
+}
+
+template <typename DataType>
+void dispatch_layer_norm(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& b,
+    array& out,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride,
+    int64_t b_stride) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  dispatch_layer_norm_block_dim<DataType, N_READS>(
+      encoder, x, w, b, out, n_rows, eps, axis_size, w_stride, b_stride);
+}
+
+template <typename DataType, bool HAS_W, int BLOCK_DIM, int N_READS>
+void launch_layer_norm_vjp_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride) {
+  auto kernel = cu::layer_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  const DataType* g_ptr = gpu_ptr<DataType>(g);
+  DataType* gx_ptr = gpu_ptr<DataType>(gx);
+  DataType* gw_ptr = gpu_ptr<DataType>(gw_temp);
+  float eps_val = eps;
+  int32_t axis_size_val = axis_size;
+  int64_t w_stride_val = w_stride;
+  void* params[] = {
+      &x_ptr,
+      &w_ptr,
+      &g_ptr,
+      &gx_ptr,
+      &gw_ptr,
+      &eps_val,
+      &axis_size_val,
+      &w_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, BLOCK_DIM, 0, params);
+}
+
+template <typename DataType, bool HAS_W, int N_READS>
+void dispatch_layer_norm_vjp_block_dim(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride) {
+  int threads = cuda::ceil_div(axis_size, N_READS);
+  if (threads <= WARP_SIZE) {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  } else if (threads <= WARP_SIZE * 2) {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE * 2, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  } else if (threads <= WARP_SIZE * 4) {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE * 4, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  } else if (threads <= WARP_SIZE * 8) {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE * 8, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  } else if (threads <= WARP_SIZE * 16) {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE * 16, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  } else {
+    launch_layer_norm_vjp_kernel<DataType, HAS_W, WARP_SIZE * 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+  }
+}
+
+template <typename DataType, bool HAS_W>
+void dispatch_layer_norm_vjp(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    int32_t n_rows,
+    float eps,
+    int32_t axis_size,
+    int64_t w_stride) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  dispatch_layer_norm_vjp_block_dim<DataType, HAS_W, N_READS>(
+      encoder, x, w, g, gx, gw_temp, n_rows, eps, axis_size, w_stride);
+}
+
 namespace fast {
 
 bool LayerNorm::use_fallback(Stream s) {
@@ -272,23 +446,8 @@ void LayerNorm::eval_gpu(
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "layernorm", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    constexpr int N_READS = 16 / sizeof(DataType);
-    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-      auto kernel = cu::layer_norm<DataType, block_dim(), N_READS>;
-      encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          block_dim(),
-          0,
-          gpu_ptr<DataType>(x),
-          gpu_ptr<DataType>(w),
-          gpu_ptr<DataType>(b),
-          gpu_ptr<DataType>(out),
-          eps_,
-          axis_size,
-          w_stride,
-          b_stride);
-    });
+    dispatch_layer_norm<DataType>(
+        encoder, x, w, b, out, n_rows, eps_, axis_size, w_stride, b_stride);
   });
 }
 
@@ -378,30 +537,10 @@ void LayerNormVJP::eval_gpu(
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
   dispatch_float_types(gx.dtype(), "layernorm_vjp", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_bool(has_w, [&](auto has_w_constant) {
-      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-      constexpr int N_READS = 16 / sizeof(DataType);
-      dispatch_block_dim(
-          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-            auto kernel = cu::layer_norm_vjp<
-                DataType,
-                has_w_constant.value,
-                block_dim(),
-                N_READS>;
-            encoder.add_kernel_node(
-                kernel,
-                n_rows,
-                block_dim(),
-                0,
-                gpu_ptr<DataType>(x),
-                gpu_ptr<DataType>(w),
-                gpu_ptr<DataType>(g),
-                gpu_ptr<DataType>(gx),
-                gpu_ptr<DataType>(gw_temp),
-                eps_,
-                axis_size,
-                w_stride);
-          });
+      dispatch_layer_norm_vjp<DataType, has_w_constant.value>(
+          encoder, x, w, g, gx, gw_temp, n_rows, eps_, axis_size, w_stride);
     });
   });
 

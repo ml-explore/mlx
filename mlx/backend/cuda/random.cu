@@ -47,30 +47,34 @@ __device__ rbits threefry2x32_hash(uint2 key, uint2 count) {
 __global__ void rbitsc(
     const uint32_t* keys,
     uint8_t* out,
-    dim3 grid_dims,
-    bool odd,
+    uint32_t grid_dims_x,
+    uint32_t grid_dims_y,
+    int32_t odd,
     uint32_t bytes_per_key) {
   auto grid = cg::this_grid();
-  uint32_t thread_index = grid.thread_rank();
-  uint32_t index_x = thread_index % grid_dims.x;
-  uint32_t index_y = thread_index / grid_dims.x;
-  if (index_x >= grid_dims.x || index_y >= grid_dims.y) {
+  uint thread_index = grid.thread_rank();
+  uint index_x = thread_index % grid_dims_x;
+  uint index_y = thread_index / grid_dims_x;
+
+  if (index_x >= grid_dims_x || index_y >= grid_dims_y) {
     return;
   }
 
   auto kidx = 2 * index_x;
   auto key = uint2{keys[kidx], keys[kidx + 1]};
-  auto half_size = grid_dims.y - odd;
+  auto half_size = grid_dims_y - odd;
   out += index_x * bytes_per_key;
   bool drop_last = odd && (index_y == half_size);
+
   auto bits = threefry2x32_hash(
-      key, uint2{index_y, drop_last ? 0 : index_y + grid_dims.y});
+      key, uint2{index_y, drop_last ? 0 : index_y + grid_dims_y});
   size_t idx = size_t(index_y) << 2;
+
   for (int i = 0; i < 4; ++i) {
     out[idx + i] = bits.bytes[0][i];
   }
   if (!drop_last) {
-    idx = (drop_last ? 0 : size_t(index_y) + grid_dims.y) << 2;
+    idx = (drop_last ? 0 : size_t(index_y) + grid_dims_y) << 2;
     if ((index_y + 1) == half_size && (bytes_per_key % 4) > 0) {
       int edge_bytes = (bytes_per_key % 4);
       for (int i = 0; i < edge_bytes; ++i) {
@@ -87,17 +91,18 @@ __global__ void rbitsc(
 __global__ void rbits(
     const uint32_t* keys,
     uint8_t* out,
-    dim3 grid_dims,
-    bool odd,
+    uint32_t grid_dims_x,
+    uint32_t grid_dims_y,
+    int32_t odd,
     uint32_t bytes_per_key,
     int32_t ndim,
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
   auto grid = cg::this_grid();
-  uint32_t thread_index = grid.thread_rank();
-  uint32_t index_x = thread_index % grid_dims.x;
-  uint32_t index_y = thread_index / grid_dims.x;
-  if (index_x >= grid_dims.x || index_y >= grid_dims.y) {
+  uint thread_index = grid.thread_rank();
+  uint index_x = thread_index % grid_dims_x;
+  uint index_y = thread_index / grid_dims_x;
+  if (index_x >= grid_dims_x || index_y >= grid_dims_y) {
     return;
   }
 
@@ -106,17 +111,17 @@ __global__ void rbits(
   auto k2_elem =
       elem_to_loc(kidx + 1, key_shape.data(), key_strides.data(), ndim);
   auto key = uint2{keys[k1_elem], keys[k2_elem]};
-  auto half_size = grid_dims.y - odd;
+  auto half_size = grid_dims_y - odd;
   out += size_t(index_x) * bytes_per_key;
   bool drop_last = odd && (index_y == half_size);
   auto bits = threefry2x32_hash(
-      key, uint2{index_y, drop_last ? 0 : index_y + grid_dims.y});
+      key, uint2{index_y, drop_last ? 0 : index_y + grid_dims_y});
   size_t idx = size_t(index_y) << 2;
   for (int i = 0; i < 4; ++i) {
     out[idx + i] = bits.bytes[0][i];
   }
   if (!drop_last) {
-    idx = (drop_last ? 0 : size_t(index_y) + grid_dims.y) << 2;
+    idx = (drop_last ? 0 : size_t(index_y) + grid_dims_y) << 2;
     if ((index_y + 1) == half_size && (bytes_per_key % 4) > 0) {
       int edge_bytes = (bytes_per_key % 4);
       for (int i = 0; i < edge_bytes; ++i) {
@@ -132,6 +137,10 @@ __global__ void rbits(
 
 } // namespace cu
 
+// Force kernel registration with global volatile pointers
+volatile void* g_rbitsc = reinterpret_cast<void*>(&cu::rbitsc);
+volatile void* g_rbits = reinterpret_cast<void*>(&cu::rbits);
+
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("RandomBits::eval_gpu");
   assert(inputs.size() == 1);
@@ -143,6 +152,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
+
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -172,30 +182,52 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [grid, block] = get_grid_and_block(threads_x, threads_y, 1);
   auto& stream = encoder.stream();
   if (keys.flags().row_contiguous) {
+    // Store params in variables to ensure they remain valid
+    // IMPORTANT: Use exact types matching kernel signature to avoid parameter
+    // alignment issues on 64-bit platforms. Pass dim3 as separate uint32_t
+    // values.
+    const uint32_t* keys_ptr = gpu_ptr<uint32_t>(keys);
+    uint8_t* out_ptr = gpu_ptr<uint8_t>(out);
+    uint32_t grid_dims_x = grid_dims.x;
+    uint32_t grid_dims_y = grid_dims.y;
+    int32_t odd_val = odd ? 1 : 0;
+    uint32_t bytes_per_key_val = static_cast<uint32_t>(bytes_per_key);
+    // Use explicit void* params[] - variadic template may have issues on
+    // Windows
+    void* params[] = {
+        &keys_ptr,
+        &out_ptr,
+        &grid_dims_x,
+        &grid_dims_y,
+        &odd_val,
+        &bytes_per_key_val};
     encoder.add_kernel_node(
-        cu::rbitsc,
-        grid,
-        block,
-        0,
-        gpu_ptr<uint32_t>(keys),
-        gpu_ptr<uint8_t>(out),
-        grid_dims,
-        odd,
-        bytes_per_key);
+        const_cast<void*>(g_rbitsc), grid, block, 0, params);
   } else {
-    encoder.add_kernel_node(
-        cu::rbits,
-        grid,
-        block,
-        0,
-        gpu_ptr<uint32_t>(keys),
-        gpu_ptr<uint8_t>(out),
-        grid_dims,
-        odd,
-        bytes_per_key,
-        keys.ndim(),
-        const_param(keys.shape()),
-        const_param(keys.strides()));
+    // Store params in variables to ensure they remain valid
+    // IMPORTANT: Use exact types matching kernel signature to avoid parameter
+    // alignment issues on 64-bit platforms. Pass dim3 as separate uint32_t
+    // values.
+    const uint32_t* keys_ptr = gpu_ptr<uint32_t>(keys);
+    uint8_t* out_ptr = gpu_ptr<uint8_t>(out);
+    uint32_t grid_dims_x = grid_dims.x;
+    uint32_t grid_dims_y = grid_dims.y;
+    int32_t odd_val = odd ? 1 : 0;
+    uint32_t bytes_per_key_val = static_cast<uint32_t>(bytes_per_key);
+    int32_t ndim = keys.ndim();
+    auto shape_param = const_param(keys.shape());
+    auto strides_param = const_param(keys.strides());
+    void* params[] = {
+        &keys_ptr,
+        &out_ptr,
+        &grid_dims_x,
+        &grid_dims_y,
+        &odd_val,
+        &bytes_per_key_val,
+        &ndim,
+        &shape_param,
+        &strides_param};
+    encoder.add_kernel_node(const_cast<void*>(g_rbits), grid, block, 0, params);
   }
 }
 

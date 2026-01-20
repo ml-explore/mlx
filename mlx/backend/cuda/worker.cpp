@@ -3,12 +3,22 @@
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/backend/cuda/device.h"
 
+#include <fmt/format.h>
+
 namespace mlx::core::cu {
 
 Worker::Worker(Device& d)
     : signal_stream_(d),
       signal_event_(d, cudaEventDisableTiming | cudaEventBlockingSync),
-      worker_(&Worker::thread_fn, this) {}
+      worker_(&Worker::thread_fn, this) {
+  // Debug: Check CUDA state after initialization
+  cudaError_t err = cudaPeekAtLastError();
+  if (err != cudaSuccess) {
+    throw std::runtime_error(fmt::format(
+        "Worker: CUDA error during initialization: {}",
+        cudaGetErrorString(err)));
+  }
+}
 
 Worker::~Worker() {
   {
@@ -68,7 +78,7 @@ void Worker::thread_fn() {
       }
       worker_tasks_.erase(worker_tasks_.begin(), end);
     }
-    // Make sure tasks are cleared before the next wait
+    // Make sure tasks are cleared before the next wait.
     for (int i = 0; i < tasks.size(); ++i) {
       auto task = std::move(tasks[i]);
       task();

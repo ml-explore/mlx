@@ -310,39 +310,64 @@ void binary_two_op_gpu_inplace(
                           dims_constant(),
                           4>;
                     }
+                    // Store params in variables to ensure they remain valid
+                    const InType* a_ptr = gpu_ptr<InType>(a);
+                    const InType* b_ptr = gpu_ptr<InType>(b);
+                    OutType* out_a_ptr = gpu_ptr<OutType>(out_a);
+                    OutType* out_b_ptr = gpu_ptr<OutType>(out_b);
+                    IdxT rest_val = rest;
+                    auto shape_param = const_param<dims_constant()>(shape);
+                    auto a_strides_param =
+                        const_param<dims_constant()>(a_strides);
+                    auto b_strides_param =
+                        const_param<dims_constant()>(b_strides);
+                    void* params[] = {
+                        &a_ptr,
+                        &b_ptr,
+                        &out_a_ptr,
+                        &out_b_ptr,
+                        &rest_val,
+                        &shape_param,
+                        &a_strides_param,
+                        &b_strides_param};
                     encoder.add_kernel_node(
-                        kernel,
+                        reinterpret_cast<void*>(kernel),
                         {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
-                        gpu_ptr<InType>(a),
-                        gpu_ptr<InType>(b),
-                        gpu_ptr<OutType>(out_a),
-                        gpu_ptr<OutType>(out_b),
-                        rest,
-                        const_param<dims_constant()>(shape),
-                        const_param<dims_constant()>(a_strides),
-                        const_param<dims_constant()>(b_strides));
+                        params);
                   });
                 } else {
                   auto kernel = cu::binary_two_g<Op, InType, OutType, IdxT, 1>;
                   if (work_per_thread == 4) {
                     kernel = cu::binary_two_g<Op, InType, OutType, IdxT, 4>;
                   }
+                  // Store params in variables to ensure they remain valid
+                  const InType* a_ptr = gpu_ptr<InType>(a);
+                  const InType* b_ptr = gpu_ptr<InType>(b);
+                  OutType* out_a_ptr = gpu_ptr<OutType>(out_a);
+                  OutType* out_b_ptr = gpu_ptr<OutType>(out_b);
+                  IdxT rest_val = rest;
+                  auto shape_param = const_param(shape);
+                  auto a_strides_param = const_param(a_strides);
+                  auto b_strides_param = const_param(b_strides);
+                  int ndim_val = ndim;
+                  void* params[] = {
+                      &a_ptr,
+                      &b_ptr,
+                      &out_a_ptr,
+                      &out_b_ptr,
+                      &rest_val,
+                      &shape_param,
+                      &a_strides_param,
+                      &b_strides_param,
+                      &ndim_val};
                   encoder.add_kernel_node(
-                      kernel,
+                      reinterpret_cast<void*>(kernel),
                       {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
-                      gpu_ptr<InType>(a),
-                      gpu_ptr<InType>(b),
-                      gpu_ptr<OutType>(out_a),
-                      gpu_ptr<OutType>(out_b),
-                      rest,
-                      const_param(shape),
-                      const_param(a_strides),
-                      const_param(b_strides),
-                      ndim);
+                      params);
                 }
               });
         } else {
@@ -363,16 +388,19 @@ void binary_two_op_gpu_inplace(
                 out_a.strides(),
                 large(),
                 N_READS);
+            // Store params in variables to ensure they remain valid
+            const InType* a_ptr = gpu_ptr<InType>(a);
+            const InType* b_ptr = gpu_ptr<InType>(b);
+            OutType* out_a_ptr = gpu_ptr<OutType>(out_a);
+            OutType* out_b_ptr = gpu_ptr<OutType>(out_b);
+            IdxT size = out_a.data_size();
+            void* params[] = {&a_ptr, &b_ptr, &out_a_ptr, &out_b_ptr, &size};
             encoder.add_kernel_node(
-                kernel,
+                reinterpret_cast<void*>(kernel),
                 num_blocks,
                 block_dims,
                 0,
-                gpu_ptr<InType>(a),
-                gpu_ptr<InType>(b),
-                gpu_ptr<OutType>(out_a),
-                gpu_ptr<OutType>(out_b),
-                out_a.data_size());
+                params);
           });
         }
       } else {

@@ -7,6 +7,7 @@
 #include "mlx/backend/cuda/cuda_utils.h"
 
 #include <cuda_runtime.h>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -79,7 +80,8 @@ class CudaAllocator : public allocator::Allocator {
   size_t peak_memory_{0};
   std::vector<cudaStream_t> free_streams_;
   std::vector<cudaMemPool_t> mem_pools_;
-  SmallSizePool scalar_pool_;
+  bool mem_pools_supported_{false};
+  std::unique_ptr<SmallSizePool> scalar_pool_;
 };
 
 CudaAllocator& allocator();

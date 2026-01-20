@@ -18,6 +18,10 @@
 #include <fmt/format.h>
 #include <cuda/cmath>
 
+#if defined(_WIN32)
+typedef unsigned int uint;
+#endif
+
 namespace mlx::core {
 
 template <typename F>

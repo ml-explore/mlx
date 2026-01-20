@@ -1,21 +1,28 @@
-target_sources(
-  mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/add.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/arctan2.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bitwise_binary.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/divide.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/equal.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/greater.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/greater_equal.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/less.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/less_equal.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/logical_and.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/logical_or.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/log_add_exp.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/minimum.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/maximum.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/multiply.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/power.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/remainder.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/not_equal.cu
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/subtract.cu)
+# On Windows, compile all binary operations in a single TU to avoid kernel
+# registration issues with templates across multiple TUs. On other platforms,
+# use separate files for faster parallel compilation.
+if(WIN32)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/binary_all_windows.cu)
+else()
+  target_sources(
+    mlx
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/add.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/arctan2.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bitwise_binary.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/divide.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/equal.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/greater.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/greater_equal.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/less.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/less_equal.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/logical_and.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/logical_or.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/log_add_exp.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/minimum.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/maximum.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/multiply.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/power.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/remainder.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/not_equal.cu
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/subtract.cu)
+endif()

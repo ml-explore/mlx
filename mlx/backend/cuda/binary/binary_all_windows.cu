@@ -1,5 +1,15 @@
 // Copyright © 2025 Apple Inc.
 
+// Windows-only: All binary operations with INLINE kernel definitions.
+//
+// CRITICAL: On Windows with NVCC, CUDA kernel templates defined in .cuh headers
+// are NOT registered with the CUDA runtime (even with explicit instantiation,
+// single TU, /WHOLEARCHIVE, etc.). However, kernels defined DIRECTLY in .cu
+// files ARE registered correctly.
+//
+// This file defines all binary kernels INLINE (not via header include) to
+// ensure proper CUDA runtime registration on Windows.
+
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/binary_ops.cuh"
@@ -222,6 +232,10 @@ constexpr bool supports_binary_op() {
 
 } // namespace cu
 
+// ============================================================================
+// DISPATCH FUNCTIONS
+// ============================================================================
+
 template <typename Op>
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
@@ -287,7 +301,6 @@ void binary_op_gpu_inplace(
                           dims_constant(),
                           4>;
                     }
-                    // Store params in variables to ensure they remain valid
                     const InType* a_ptr = gpu_ptr<InType>(a);
                     const InType* b_ptr = gpu_ptr<InType>(b);
                     OutType* out_ptr = gpu_ptr<OutType>(out);
@@ -317,7 +330,6 @@ void binary_op_gpu_inplace(
                   if (work_per_thread == 4) {
                     kernel = cu::binary_g<Op, InType, OutType, IdxT, 4>;
                   }
-                  // Store params in variables to ensure they remain valid
                   const InType* a_ptr = gpu_ptr<InType>(a);
                   const InType* b_ptr = gpu_ptr<InType>(b);
                   OutType* out_ptr = gpu_ptr<OutType>(out);
@@ -357,7 +369,6 @@ void binary_op_gpu_inplace(
             }
             auto [num_blocks, block_dims] = get_launch_args(
                 out.data_size(), out.shape(), out.strides(), large(), N_READS);
-            // Store params in variables to ensure they remain valid
             const InType* a_ptr = gpu_ptr<InType>(a);
             const InType* b_ptr = gpu_ptr<InType>(b);
             OutType* out_ptr = gpu_ptr<OutType>(out);
@@ -392,17 +403,185 @@ void binary_op_gpu(
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
   auto& encoder = cu::get_command_encoder(s);
-
   set_binary_op_output_data(
       a, b, out, bopt, [&](auto n) { return cu::malloc_async(n, encoder); });
   binary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
-#define BINARY_GPU(func)                                              \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    nvtx3::scoped_range r(#func "::eval_gpu");                        \
-    auto& s = out.primitive().stream();                               \
-    binary_op_gpu<cu::func>(inputs, out, name(), s);                  \
+#define BINARY_GPU(OP)                                              \
+  void OP::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    nvtx3::scoped_range r(#OP "::eval_gpu");                        \
+    auto& s = out.primitive().stream();                             \
+    binary_op_gpu<cu::OP>(inputs, out, name(), s);                  \
   }
+
+// ============================================================================
+// BINARY OPERATION IMPLEMENTATIONS
+// ============================================================================
+
+// Arithmetic operations
+BINARY_GPU(Add)
+BINARY_GPU(Subtract)
+BINARY_GPU(Multiply)
+BINARY_GPU(Divide)
+BINARY_GPU(Remainder)
+BINARY_GPU(Power)
+BINARY_GPU(Maximum)
+BINARY_GPU(Minimum)
+
+// Comparison operations
+BINARY_GPU(Greater)
+BINARY_GPU(GreaterEqual)
+BINARY_GPU(Less)
+BINARY_GPU(LessEqual)
+BINARY_GPU(NotEqual)
+
+// Logical operations
+BINARY_GPU(LogicalAnd)
+BINARY_GPU(LogicalOr)
+
+// Other binary operations
+BINARY_GPU(ArcTan2)
+BINARY_GPU(LogAddExp)
+
+// Equal operation with special NaN handling
+void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Equal::eval_gpu");
+  auto& s = out.primitive().stream();
+  if (equal_nan_) {
+    binary_op_gpu<cu::NaNEqual>(inputs, out, name(), s);
+  } else {
+    binary_op_gpu<cu::Equal>(inputs, out, name(), s);
+  }
+}
+
+// Bitwise operations
+void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("BitwiseBinary::eval_gpu");
+  auto& s = out.primitive().stream();
+  switch (op_) {
+    case BitwiseBinary::And:
+      binary_op_gpu<cu::BitwiseAnd>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::Or:
+      binary_op_gpu<cu::BitwiseOr>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::Xor:
+      binary_op_gpu<cu::BitwiseXor>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::LeftShift:
+      binary_op_gpu<cu::LeftShift>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::RightShift:
+      binary_op_gpu<cu::RightShift>(inputs, out, name(), s);
+      break;
+  }
+}
+
+// ============================================================================
+// Force instantiation of complex64 binary kernels for Windows registration
+// ============================================================================
+
+// complex64 + complex64 -> complex64 (Multiply, Add, Subtract, Divide)
+// N_READS = 16 / sizeof(cu::complex64_t) = 16 / 8 = 2
+template __global__ void
+cu::binary_ss<cu::Multiply, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_sv<cu::Multiply, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vs<cu::Multiply, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vv<cu::Multiply, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+
+template __global__ void
+cu::binary_ss<cu::Add, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_sv<cu::Add, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vs<cu::Add, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vv<cu::Add, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+
+template __global__ void
+cu::binary_ss<cu::Subtract, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_sv<cu::Subtract, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vs<cu::Subtract, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vv<cu::Subtract, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+
+template __global__ void
+cu::binary_ss<cu::Divide, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_sv<cu::Divide, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vs<cu::Divide, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
+template __global__ void
+cu::binary_vv<cu::Divide, cu::complex64_t, cu::complex64_t, uint32_t, 2>(
+    const cu::complex64_t*,
+    const cu::complex64_t*,
+    cu::complex64_t*,
+    uint32_t);
 
 } // namespace mlx::core

@@ -4,6 +4,7 @@
 
 #include "mlx/backend/cuda/device/atomic_ops.cuh"
 #include "mlx/backend/cuda/device/cast_op.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce_utils.cuh"
 
@@ -70,14 +71,14 @@ struct Min {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) {
     if constexpr (is_complex_v<T>) {
-      if (cuda::std::isnan(a.real()) || cuda::std::isnan(a.imag())) {
+      if (cu::isnan(a.real()) || cu::isnan(a.imag())) {
         return a;
       }
-      if (cuda::std::isnan(b.real()) || cuda::std::isnan(b.imag())) {
+      if (cu::isnan(b.real()) || cu::isnan(b.imag())) {
         return b;
       }
     } else if constexpr (!cuda::std::is_integral_v<T>) {
-      if (cuda::std::isnan(a) || cuda::std::isnan(b)) {
+      if (cu::isnan(a) || cu::isnan(b)) {
         return cuda::std::numeric_limits<float>::quiet_NaN();
       }
     }
@@ -94,14 +95,14 @@ struct Max {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) {
     if constexpr (is_complex_v<T>) {
-      if (cuda::std::isnan(a.real()) || cuda::std::isnan(a.imag())) {
+      if (cu::isnan(a.real()) || cu::isnan(a.imag())) {
         return a;
       }
-      if (cuda::std::isnan(b.real()) || cuda::std::isnan(b.imag())) {
+      if (cu::isnan(b.real()) || cu::isnan(b.imag())) {
         return b;
       }
     } else if constexpr (!cuda::std::is_integral_v<T>) {
-      if (cuda::std::isnan(a) || cuda::std::isnan(b)) {
+      if (cu::isnan(a) || cu::isnan(b)) {
         return cuda::std::numeric_limits<float>::quiet_NaN();
       }
     }

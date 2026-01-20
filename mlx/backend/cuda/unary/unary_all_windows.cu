@@ -1,5 +1,11 @@
 // Copyright © 2025 Apple Inc.
 
+// Windows-only: All unary operations with INLINE kernel definitions.
+//
+// CRITICAL: On Windows with NVCC, CUDA kernel templates defined in .cuh headers
+// are NOT registered with the CUDA runtime. This file defines all unary kernels
+// INLINE to ensure proper registration.
+
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/unary_ops.cuh"
@@ -11,6 +17,10 @@
 #include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
+
+// ============================================================================
+// KERNEL DEFINITIONS - MUST BE INLINE IN THIS FILE, NOT FROM HEADER
+// ============================================================================
 
 namespace cu {
 
@@ -118,6 +128,10 @@ constexpr bool supports_unary_op() {
 }
 
 } // namespace cu
+
+// ============================================================================
+// DISPATCH FUNCTIONS
+// ============================================================================
 
 template <typename Op>
 void unary_op_gpu_inplace(
@@ -232,5 +246,86 @@ void unary_op_gpu(
     auto& s = out.primitive().stream();                               \
     unary_op_gpu<cu::func>(inputs, out, name(), s);                   \
   }
+
+// ============================================================================
+// UNARY OPERATION IMPLEMENTATIONS
+// ============================================================================
+
+UNARY_GPU(Abs)
+UNARY_GPU(ArcCos)
+UNARY_GPU(ArcCosh)
+UNARY_GPU(ArcSin)
+UNARY_GPU(ArcSinh)
+UNARY_GPU(ArcTan)
+UNARY_GPU(ArcTanh)
+UNARY_GPU(Ceil)
+UNARY_GPU(Conjugate)
+UNARY_GPU(Cos)
+UNARY_GPU(Cosh)
+UNARY_GPU(Erf)
+UNARY_GPU(ErfInv)
+UNARY_GPU(Exp)
+UNARY_GPU(Expm1)
+UNARY_GPU(Floor)
+UNARY_GPU(Imag)
+UNARY_GPU(Log1p)
+UNARY_GPU(LogicalNot)
+UNARY_GPU(Negative)
+UNARY_GPU(Real)
+// Round has special handling for integer types (no-op)
+void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Round::eval_gpu");
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  auto& s = out.primitive().stream();
+  if (issubdtype(in.dtype(), inexact)) {
+    unary_op_gpu<cu::Round>(inputs, out, name(), s);
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
+  }
+}
+UNARY_GPU(Sigmoid)
+UNARY_GPU(Sign)
+UNARY_GPU(Sin)
+UNARY_GPU(Sinh)
+UNARY_GPU(Square)
+UNARY_GPU(Tan)
+UNARY_GPU(Tanh)
+
+// BitwiseInvert has a different pattern
+void BitwiseInvert::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("BitwiseInvert::eval_gpu");
+  auto& s = out.primitive().stream();
+  unary_op_gpu<cu::BitwiseInvert>(inputs, out, name(), s);
+}
+
+// Log has special handling for different bases
+void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Log::eval_gpu");
+  auto& s = out.primitive().stream();
+  switch (base_) {
+    case Base::e:
+      unary_op_gpu<cu::Log>(inputs, out, name(), s);
+      break;
+    case Base::two:
+      unary_op_gpu<cu::Log2>(inputs, out, name(), s);
+      break;
+    case Base::ten:
+      unary_op_gpu<cu::Log10>(inputs, out, name(), s);
+      break;
+  }
+}
+
+// Sqrt has special handling for reciprocal
+void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Sqrt::eval_gpu");
+  auto& s = out.primitive().stream();
+  if (recip_) {
+    unary_op_gpu<cu::Rsqrt>(inputs, out, "Rsqrt", s);
+  } else {
+    unary_op_gpu<cu::Sqrt>(inputs, out, "Sqrt", s);
+  }
+}
 
 } // namespace mlx::core

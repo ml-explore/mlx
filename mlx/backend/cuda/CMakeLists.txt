@@ -26,6 +26,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/fft.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
@@ -58,7 +59,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
-          ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
+          ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp
+          $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/dllmain.cpp>)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
@@ -113,6 +115,18 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
+# CUDA 12.8 emits warning #20280-D for copy kernels which is a false positive.
+# On Windows, we MUST use --static-global-template-stub=true (the default) to
+# ensure kernel templates get properly registered with the CUDA runtime. With
+# =false, the stubs have weak linkage and may not be properly linked into the
+# final exe. Note: The warning is acceptable - we just don't use =false anymore.
+# if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0) -- removed
+# --static-global-template-stub=false which broke kernel registration endif()
+
+# Suppress warning when building for compute capability 7 used by V100.
+target_compile_options(
+  mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
+
 # Suppress nvcc warnings on C++ headers.
 target_compile_options(
   mlx
@@ -123,6 +137,12 @@ target_compile_options(
 # Ignore some valid nvcc warnings, we might want to fix them in future.
 target_compile_options(
   mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=177,550">)
+
+# Add /bigobj flag for MSVC to handle large object files on Windows.
+if(MSVC)
+  target_compile_options(mlx
+                         PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>)
+endif()
 
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.
@@ -150,6 +170,44 @@ endif()
 message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
+
+# On Windows with DLLs, separable compilation doesn't work correctly because
+# device linking cannot cross shared library boundaries. Each .cu file needs its
+# own fatbin registered individually. Disable separable compilation to ensure
+# kernel registration works correctly. See:
+# https://forums.developer.nvidia.com/t/cuda-separable-compilation-shared-libraries-invalid-function-error/188476
+if(WIN32)
+  message(
+    STATUS "Disabling CUDA separable compilation for Windows DLL compatibility")
+  set_target_properties(mlx PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)
+  # Disable Identical COMDAT Folding (ICF) to prevent the linker from merging
+  # CUDA kernel registration functions. ICF can incorrectly merge registration
+  # code for different kernels if they have similar signatures. Also disable REF
+  # optimization which removes unreferenced functions - this can remove the CUDA
+  # static initializers that register kernels.
+  target_link_options(mlx PRIVATE "$<$<CONFIG:Release>:/OPT:NOICF,NOREF>"
+                      "$<$<CONFIG:RelWithDebInfo>:/OPT:NOICF,NOREF>")
+
+  # Use dynamic CUDA runtime on Windows. This is crucial because: 1. Static CUDA
+  # runtime causes deadlock when cudaSetDevice() is called during DLL loading
+  # (loader lock prevents threads from completing initialization) 2. Dynamic
+  # runtime (cudart64_*.dll) handles kernel registration correctly because the
+  # runtime is already initialized when the DLL is loaded Note:
+  # CMAKE_CUDA_RUNTIME_LIBRARY doesn't work reliably with Visual Studio
+  # generator, so we use multiple approaches to ensure dynamic linking: - Set
+  # CUDA_RUNTIME_LIBRARY property on target - Add --cudart=shared to NVCC flags
+  # - Explicitly link against CUDA::cudart (dynamic import library) Always use
+  # dynamic CUDA runtime on Windows, even for static libraries. The static
+  # cudart has issues with kernel registration when linking multiple compilation
+  # units with CUDA kernels from a static library.
+  message(STATUS "Using dynamic CUDA runtime (CUDA::cudart) for Windows")
+  set_target_properties(mlx PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+  # Add --cudart=shared to nvcc flags to ensure dynamic runtime is used
+  target_compile_options(mlx
+                         PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--cudart=shared>")
+  # Explicitly link against dynamic cudart import library
+  target_link_libraries(mlx PRIVATE CUDA::cudart)
+endif()
 
 if(MLX_BUILD_PYTHON_BINDINGS)
   set_property(
@@ -200,6 +258,9 @@ target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
 # Use cublasLt.
 target_link_libraries(mlx PRIVATE CUDA::cublasLt)
+
+# Use cuFFT.
+target_link_libraries(mlx PRIVATE CUDA::cufft)
 
 # Use NVRTC and driver APIs.
 target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)

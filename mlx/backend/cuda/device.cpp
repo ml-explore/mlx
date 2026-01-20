@@ -15,6 +15,9 @@ namespace mlx::core::cu {
 namespace {
 
 bool use_cuda_graphs() {
+  // CUDA graphs provide significant performance benefits by batching kernel
+  // launches and reducing driver overhead. Enabled by default on all platforms.
+  // Set MLX_USE_CUDA_GRAPHS=false to disable if issues are encountered.
   static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
   return use_graphs;
 }
@@ -37,15 +40,15 @@ Device::Device(int device) : device_(device) {
       &compute_capability_major_, cudaDevAttrComputeCapabilityMajor, device_));
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
       &compute_capability_minor_, cudaDevAttrComputeCapabilityMinor, device_));
-  // Validate the requirements of device.
-  int attr = 0;
+
+  // Check concurrent managed access support (used for managed memory
+  // optimization). On Windows, this is often not supported even with datacenter
+  // GPUs in TCC mode. We store this for later use but don't fail - managed
+  // memory still works, just without some optimizations.
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
-      &attr, cudaDevAttrConcurrentManagedAccess, device_));
-  if (attr != 1) {
-    throw std::runtime_error(fmt::format(
-        "Device {} does not support synchronization in managed memory.",
-        device_));
-  }
+      &concurrent_managed_access_,
+      cudaDevAttrConcurrentManagedAccess,
+      device_));
 
   // The cublasLt handle is used by matmul.
   make_current();
@@ -220,10 +223,17 @@ std::pair<int, int> get_graph_limits(Device& d) {
 CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
-      graph_(d),
+      graph_(use_cuda_graphs() ? CudaGraph(d) : CudaGraph()),
       worker_(d),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+  // Debug: Check CUDA state after full initialization
+  cudaError_t err = cudaPeekAtLastError();
+  if (err != cudaSuccess) {
+    throw std::runtime_error(fmt::format(
+        "CommandEncoder: CUDA error after initialization: {}",
+        cudaGetErrorString(err)));
+  }
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
@@ -255,10 +265,12 @@ void CommandEncoder::add_kernel_node(
     dim3 block_dim,
     uint32_t smem_bytes,
     void** params) {
+  device_.make_current();
   if (!use_cuda_graphs()) {
     node_count_++;
-    CHECK_CUDA_ERROR(cudaLaunchKernel(
-        func, grid_dim, block_dim, params, smem_bytes, stream()));
+    cudaError_t err = cudaLaunchKernel(
+        func, grid_dim, block_dim, params, smem_bytes, stream());
+    CHECK_CUDA_ERROR(err);
     return;
   }
   cudaKernelNodeParams kernel_params = {0};
@@ -276,6 +288,7 @@ void CommandEncoder::add_kernel_node(
     dim3 block_dim,
     uint32_t smem_bytes,
     void** params) {
+  device_.make_current();
   if (!use_cuda_graphs()) {
     node_count_++;
     CHECK_CUDA_ERROR(cuLaunchKernel(
@@ -409,12 +422,14 @@ void CommandEncoder::commit() {
   }
   if (use_cuda_graphs() && node_count_ > 0) {
     if (!from_nodes_.empty()) {
+      // Note: Preprocessor directives cannot be inside macro arguments (MSVC
+      // error C2121)
 #if CUDART_VERSION >= 13000
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
           graph_,
           from_nodes_.data(),
           to_nodes_.data(),
-          nullptr, // edgeData
+          nullptr, // edgeData (CUDA 13.0+)
           from_nodes_.size()));
 #else
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
