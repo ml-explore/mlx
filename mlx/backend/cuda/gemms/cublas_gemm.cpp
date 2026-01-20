@@ -72,6 +72,14 @@ CublasGemm::CublasGemm(
       batch_count,
       a_batch_stride,
       b_batch_stride);
+
+  // alpha and beta are both host pointers
+  cublasLtPointerMode_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
+  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
+      matmul_desc_,
+      CUBLASLT_MATMUL_DESC_POINTER_MODE,
+      &pointer_mode,
+      sizeof(pointer_mode)));
 }
 
 CublasGemm::CublasGemm(

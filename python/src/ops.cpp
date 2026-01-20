@@ -4288,6 +4288,8 @@ void init_ops(nb::module_& m) {
 
           * w_q (array): The quantized version of ``w``
           * scales (array): The quantization scales
+          * tensor_scale (array): The per-tensor float32 absolute max
+            scale (returned for ``mode == "nvfp4"``)
           * biases (array): The quantization biases (returned for ``mode=="affine"``).
 
         Notes:
@@ -4344,9 +4346,21 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "dequantize",
-      &mx::dequantize,
+      [](const mx::array& w,
+         const mx::array& scales,
+         const std::optional<mx::array>& tensor_scale,
+         const std::optional<mx::array>& biases,
+         std::optional<int> group_size,
+         std::optional<int> bits,
+         const std::string& mode,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::dequantize(
+            w, scales, tensor_scale, biases, group_size, bits, mode, dtype, s);
+      },
       nb::arg(),
       "scales"_a,
+      "tensor_scale"_a = nb::none(),
       "biases"_a = nb::none(),
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
@@ -4362,6 +4376,8 @@ void init_ops(nb::module_& m) {
         Args:
           w (array): Matrix to be dequantized
           scales (array): The scales to use per ``group_size`` elements of ``w``.
+          tensor_scale (array, optional): The per-tensor float32 scale used for
+            ``"nvfp4"`` quantization. Default: ``None``.
           biases (array, optional): The biases to use per ``group_size``
              elements of ``w``. Default: ``None``.
           group_size (int, optional): The size of the group in ``w`` that shares a

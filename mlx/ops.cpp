@@ -4283,11 +4283,28 @@ void validate_qqmm_inputs(
       throw std::invalid_argument(
           "[qqmm] Scales must be provided if second argument is quantized.");
     }
+    if (qmode == QuantizationMode::Nvfp4) {
+      // nvfp4 quantization requires tensor amax
+      if (!tensor_amax_w.has_value()) {
+        std::ostringstream msg;
+        msg << "[qqmm] The 'tensor_amax_w' argument must be provided"
+            << " with 'nvfp4' quantization mode.";
+        throw std::invalid_argument(msg.str());
+      }
+    }
     // if scales are provided, check compatibility with quantized w
     else {
       validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
+      // other quantization modes do not support tensor amax
+      if (tensor_amax_w.has_value()) {
+        std::ostringstream msg;
+        msg << "[qqmm] The 'tensor_amax_w' argument is only supported"
+            << " with 'nvfp4' quantization mode.";
+        throw std::invalid_argument(msg.str());
+      }
     }
   }
+
   // if w is not quantized, dtype must be in {f16, bf16, fp32}
   else {
     if (!issubdtype(w.dtype(), floating) || w.dtype() == float64) {
@@ -4303,24 +4320,6 @@ void validate_qqmm_inputs(
     msg << "[qqmm] Only real floating types except float64 are supported but "
         << "first argument dtype == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
-  }
-  // TODO: not sure if we want to support nvfp4 without tensor amax,
-  // maybe by adding a boolean variable for quantization if not amax -> set to
-  // array(1, foat32)
-  if (qmode != QuantizationMode::Nvfp4) {
-    if (tensor_amax_w.has_value()) {
-      std::ostringstream msg;
-      msg << "[qqmm] The 'tensor_amax_w' argument is only supported"
-          << " with 'nvfp4' quantization mode.";
-      throw std::invalid_argument(msg.str());
-    }
-  } else {
-    if (!tensor_amax_w.has_value()) {
-      std::ostringstream msg;
-      msg << "[qqmm] The 'tensor_amax_w' argument must be provided"
-          << " with 'nvfp4' quantization mode.";
-      throw std::invalid_argument(msg.str());
-    }
   }
 }
 
@@ -4391,7 +4390,7 @@ array qqmm(
     x = flatten(x, 0, -2, s);
   }
   // validate inputs
-  validate_qqmm_inputs(x, w, scales_w, tensor_amax_w, group_size, bits);
+  validate_qqmm_inputs(x, w, scales_w, tensor_amax_w, group_size, bits, qmode);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);

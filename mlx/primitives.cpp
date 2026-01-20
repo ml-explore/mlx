@@ -3511,6 +3511,7 @@ std::vector<array> QQMatmul::vjp(
           cotan, //  M X N
           swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
           {},
+          {},
           group_size_,
           bits_,
           qmode,
@@ -3519,6 +3520,7 @@ std::vector<array> QQMatmul::vjp(
       vjps.push_back(qqmm(
           swapaxes(cotan, -1, -2, s), // (N, M)
           swapaxes(primals[0], -1, -2, s), // (K, M)
+          {},
           {},
           group_size_,
           bits_,
