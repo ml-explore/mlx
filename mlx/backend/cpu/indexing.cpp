@@ -761,7 +761,7 @@ void masked_scatter_impl(const array& mask, const array& src, array& out) {
   const size_t mask_batch_size = mask.size() / batch_count;
   const size_t src_batch_size = src.size() / batch_count;
 
-  for (uint b = 0; b < batch_count; ++b) {
+  for (size_t b = 0; b < batch_count; ++b) {
     size_t src_consumed = 0;
     src_it.seek(b * src_batch_size);
 

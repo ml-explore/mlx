@@ -1,0 +1,18 @@
+name: 'Build on Windows'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build CPP only
+      shell: cmd
+      env:
+        # For MSVC, Ninja/Release is the only config supported by ccache.
+        CMAKE_ARGS: >-
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_RC_COMPILER=rc
+      run: |
+        cmake . -B build %CMAKE_ARGS%
+        cmake --build build -j %NUMBER_OF_PROCESSORS%
