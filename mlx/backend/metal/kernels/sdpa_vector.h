@@ -2,6 +2,8 @@
 
 #include <metal_simdgroup>
 
+#include "mlx/backend/metal/kernels/fp_quantized.h"
+
 using namespace metal;
 
 constant bool has_mask [[function_constant(20)]];
@@ -173,6 +175,243 @@ template <typename T, int D, int V = D>
     for (int i = 0; i < v_per_thread; i++) {
       out[i] = static_cast<T>(o[i]);
     }
+  }
+}
+
+template <typename T, typename U, int elem_per_thread>
+METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
+  for (int i = 0; i < elem_per_thread; i++) {
+    q[i] = scale * queries[i];
+  }
+}
+
+template <typename U, int elem_per_thread, int bits>
+[[gnu::always_inline]] METAL_FUNC U
+dot_key(const thread U* q, const device uint32_t* keys) {
+  U score = 0;
+  if (bits == 4) {
+    auto ks = (const device uint16_t*)keys;
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint16_t p = ks[j];
+      score += q[4 * j + 0] * Dequantize<4, U>{}(p & 0xF);
+      score += q[4 * j + 1] * Dequantize<4, U>{}((p >> 4) & 0xF);
+      score += q[4 * j + 2] * Dequantize<4, U>{}((p >> 8) & 0xF);
+      score += q[4 * j + 3] * Dequantize<4, U>{}(p >> 12);
+    }
+  } else { // 8-bit
+    constexpr int pack_factor = 32 / bits;
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / pack_factor; j++) {
+#pragma clang loop unroll(full)
+      for (int k = 0; k < pack_factor; k++) {
+        score += q[pack_factor * j + k] *
+            Dequantize<bits, U>{}((keys[j] >> (k * bits)) & 0x0f);
+      }
+    }
+  }
+  return score;
+}
+
+template <typename U, int elem_per_thread, int bits>
+[[gnu::always_inline]] METAL_FUNC void accumulate_values(
+    thread U* o,
+    const device uint32_t* values,
+    U factor,
+    U w_scale) {
+  if (bits == 4) {
+    auto vs = (const device uint16_t*)values;
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint16_t p = vs[j];
+      U v[] = {
+          Dequantize<4, U>{}(p & 0xF),
+          Dequantize<4, U>{}((p >> 4) & 0xF),
+          Dequantize<4, U>{}((p >> 8) & 0xF),
+          Dequantize<4, U>{}(p >> 12)};
+#pragma clang loop unroll(full)
+      for (int k = 0; k < 4; k++)
+        o[4 * j + k] = fma(o[4 * j + k], factor, v[k] * w_scale);
+    }
+  } else { // 8-bit
+    constexpr int pack_factor = 32 / bits;
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / pack_factor; j++) {
+#pragma clang loop unroll(full)
+      for (int k = 0; k < pack_factor; k++) {
+        o[j] =
+            fma(o[j],
+                factor,
+                Dequantize<8, U>{}((values[j] >> (k * bits)) & 0x0f) * w_scale);
+      }
+    }
+  }
+}
+
+template <typename T, int D, int group_size, int bits>
+[[kernel]] void quant_sdpa_vector_2pass_1(
+    const device T* queries [[buffer(0)]],
+    const device uint32_t* keys [[buffer(1)]],
+    const device uint8_t* key_scales [[buffer(2)]],
+    const device uint32_t* values [[buffer(3)]],
+    const device uint8_t* value_scales [[buffer(4)]],
+    device float* out [[buffer(5)]],
+    device float* sums [[buffer(6)]],
+    device float* maxs [[buffer(7)]],
+    const constant int& gqa_factor [[buffer(8)]],
+    const constant int& N [[buffer(9)]],
+    const constant size_t& k_stride [[buffer(10)]],
+    const constant size_t& v_stride [[buffer(11)]],
+    const constant size_t& k_group_stride [[buffer(12)]],
+    const constant size_t& v_group_stride [[buffer(13)]],
+    const constant float& scale [[buffer(14)]],
+    const device bool* bmask [[buffer(15), function_constant(bool_mask)]],
+    const device T* fmask [[buffer(16), function_constant(float_mask)]],
+    const constant int& mask_kv_seq_stride
+    [[buffer(17), function_constant(has_mask)]],
+    const constant int& mask_q_seq_stride
+    [[buffer(18), function_constant(has_mask)]],
+    const constant int& mask_head_stride
+    [[buffer(19), function_constant(has_mask)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 tpg [[threadgroups_per_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]],
+    uint quad_gid [[quadgroup_index_in_threadgroup]],
+    uint quad_lid [[thread_index_in_quadgroup]]) {
+  constexpr int BN = 16;
+  constexpr int BD = 4;
+  constexpr int elem_per_thread = D / BD;
+  constexpr int blocks = 32;
+  constexpr int pack_factor = 32 / bits;
+
+  const int stride = BN * D;
+
+  typedef float U;
+
+  thread U q[elem_per_thread];
+  thread U o[elem_per_thread] = {0};
+
+  threadgroup U outputs[BN * BD];
+  threadgroup U max_scores[BN];
+  threadgroup U sum_exp_scores[BN];
+
+  const int block_idx = tid.z;
+  const int q_batch_head_idx = tid.x;
+  const int q_seq_idx = tid.y;
+  const int kv_head_idx = q_batch_head_idx / gqa_factor;
+  const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
+  const int q_offset =
+      query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
+
+  queries += q_offset * D + quad_lid * elem_per_thread;
+
+  const int kv_idx =
+      (block_idx * BN + quad_gid) * D + quad_lid * elem_per_thread;
+  const int packed_idx = kv_idx / pack_factor;
+  const int k_group_idx = kv_head_idx * k_group_stride + kv_idx / group_size;
+  const int v_group_idx = kv_head_idx * v_group_stride + kv_idx / group_size;
+
+  keys += kv_head_idx * k_stride + packed_idx;
+  key_scales += k_group_idx;
+  values += kv_head_idx * v_stride + packed_idx;
+  value_scales += v_group_idx;
+
+  out += o_offset * blocks * D + block_idx * D + quad_lid * elem_per_thread;
+  sums += o_offset * blocks + block_idx;
+  maxs += o_offset * blocks + block_idx;
+
+  if (bool_mask) {
+    bmask += q_batch_head_idx * mask_head_stride +
+        (block_idx * BN + quad_gid) * mask_kv_seq_stride +
+        q_seq_idx * mask_q_seq_stride;
+  }
+  if (float_mask) {
+    fmask += q_batch_head_idx * mask_head_stride +
+        (block_idx * BN + quad_gid) * mask_kv_seq_stride +
+        q_seq_idx * mask_q_seq_stride;
+  }
+
+  load_queries<T, U, elem_per_thread>(queries, q, static_cast<U>(scale));
+
+  U max_score = Limits<U>::finite_min;
+  U sum_exp_score = 0;
+
+  for (int i = block_idx * BN + quad_gid; i < N; i += blocks * BN) {
+    bool use_key = true;
+    if (do_causal) {
+      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+    } else if (bool_mask) {
+      use_key = bmask[0];
+    } else if (float_mask) {
+      use_key = (fmask[0] >= Limits<T>::finite_min);
+    }
+
+    if (use_key) {
+      // Compute attention score: dot(q, dequantize(k)) * scale
+      U key_scale = dequantize_scale<U, group_size>(key_scales[0]);
+      U score = dot_key<U, elem_per_thread, bits>(q, keys) * key_scale;
+      score = quad_sum(score);
+
+      if (float_mask) {
+        score += static_cast<U>(fmask[0]);
+      }
+
+      // Online softmax update
+      U new_max = max(max_score, score);
+      U factor = fast::exp(max_score - new_max);
+      U exp_score = fast::exp(score - new_max);
+
+      max_score = new_max;
+      sum_exp_score = sum_exp_score * factor + exp_score;
+
+      U value_scale = dequantize_scale<U, group_size>(value_scales[0]);
+      U weighted_val_scale = exp_score * value_scale;
+      accumulate_values<U, elem_per_thread, bits>(
+          o, values, factor, weighted_val_scale);
+    }
+
+    keys += blocks * stride / pack_factor;
+    key_scales += blocks * stride / group_size;
+    values += blocks * stride / pack_factor;
+    value_scales += blocks * stride / group_size;
+    if (bool_mask) {
+      bmask += BN * blocks * mask_kv_seq_stride;
+    }
+    if (float_mask) {
+      fmask += BN * blocks * mask_kv_seq_stride;
+    }
+  }
+
+  if (quad_lid == 0) {
+    max_scores[quad_gid] = max_score;
+    sum_exp_scores[quad_gid] = sum_exp_score;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  max_score = (simd_lid < BN) ? max_scores[simd_lid] : Limits<U>::finite_min;
+  U new_max = simd_max(max_score);
+  U factor = fast::exp(max_score - new_max);
+  sum_exp_score = (simd_lid < BN) ? sum_exp_scores[simd_lid] : 0;
+  sum_exp_score = simd_sum(sum_exp_score * factor);
+
+  if (simd_gid == 0) {
+    sums[0] = sum_exp_score;
+    maxs[0] = new_max;
+  }
+
+  for (int i = 0; i < elem_per_thread; i++) {
+    outputs[quad_lid * BN + quad_gid] =
+        o[i] * fast::exp(max_scores[quad_gid] - new_max);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (quad_gid == 0) {
+      U output = outputs[quad_lid * BN];
+      for (int j = 1; j < BN; j++) {
+        output += outputs[quad_lid * BN + j];
+      }
+      out[i] = output;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 
