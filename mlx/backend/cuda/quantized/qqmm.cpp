@@ -13,8 +13,6 @@ namespace mlx::core {
 
 namespace {
 
-using QuantizedTensor = std::tuple<array, array, std::optional<array>>;
-
 struct GemmScalars {
   std::optional<array> alpha_device;
   std::optional<array> beta_device;
@@ -58,13 +56,14 @@ array pad_and_swizzle_scales(
   return scale_tiled;
 }
 
-QuantizedTensor quantize_input(
+std::tuple<array, array> quantize_input(
     const array& input,
     cu::CommandEncoder& encoder,
     const Stream& s,
     QuantizationMode mode,
     int bits,
-    int group_size) {
+    int group_size,
+    std::optional<array> global_scale = std::nullopt) {
   const array x = ensure_row_contiguous(input, encoder, s);
 
   // Compute output shapes
@@ -90,44 +89,14 @@ QuantizedTensor quantize_input(
       cu::malloc_async(scales_bytes, encoder), std::move(sshape), uint8);
   encoder.add_temporary(x_q);
   encoder.add_temporary(scales_x);
-
-  // For NVFP4: compute tensor-wide amax for global scaling
-  std::optional<array> tensor_amax = std::nullopt;
-  if (mode == QuantizationMode::Nvfp4) {
-    array amax(cu::malloc_async(sizeof(float), encoder), {}, float32);
-    encoder.add_temporary(amax);
-    all_reduce(encoder, x, amax, Reduce::ReduceType::AbsMax);
-    tensor_amax = amax;
-  }
-
-  fp_quantize(x, x_q, scales_x, tensor_amax, group_size, bits, encoder, s);
-  return {std::move(x_q), std::move(scales_x), std::move(tensor_amax)};
-}
-
-QuantizedTensor get_weight_tensors(
-    const std::vector<array>& inputs,
-    cu::CommandEncoder& encoder,
-    const Stream& s,
-    QuantizationMode mode,
-    int bits,
-    int group_size) {
-  // Check if weights need quantization
-  if (inputs[1].dtype() != uint32) {
-    return quantize_input(inputs[1], encoder, s, mode, bits, group_size);
-  }
-
-  // Weights are pre-quantized
-  if (mode == QuantizationMode::Nvfp4) {
-    // NVFP4: inputs = [x, w_q, scale_w, tensor_amax_w]
-    return {inputs[1], inputs[2], inputs[3]};
-  }
-  // MXFP8: inputs = [x, w_q, scale_w] (no tensor_amax)
-  return {inputs[1], inputs[2], std::nullopt};
+  // global_scale is not nullopt only for NVFP4
+  fp_quantize(x, x_q, scales_x, global_scale, group_size, bits, encoder, s);
+  return {std::move(x_q), std::move(scales_x)};
 }
 
 GemmScalars create_nvfp4_scalars(
-    const array& tensor_amax_x,
-    const array& tensor_amax_w,
+    const array& global_scale_x,
+    const array& global_scale_w,
     cu::CommandEncoder& encoder) {
   // NVFP4 requires alpha/beta as device pointers
   // alpha = amax_x * amax_w / (448 * 6)^2
@@ -204,17 +173,24 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[QQMatmul::eval_gpu] QQMM requires compute capability 10.0+");
   }
+  // input size = 2 for non-quantized w for qmode != nvfp4
+  // input size = 3 for quantized w for qmode != nvfp4
+  // input size = 4 for non-quantized w for qmode == nvfp4
+  // input size = 5 for quantized w for qmode == nvfp4
+  auto num_amax_inputs = mode_ == QuantizationMode::Nvfp4 ? 2 : 0;
+  auto size =
+      inputs[1].dtype() == uint32 ? 3 + num_amax_inputs : 2 + num_amax_inputs;
 
-  size_t expected_size = (mode_ == QuantizationMode::Nvfp4) ? 4 : 3;
-  assert(
-      (inputs.size() == expected_size && inputs[1].dtype() == uint32) ||
-      (inputs.size() == 2));
+  assert(inputs.size() == size);
 
   // Quantize inputs (or use pre-quantized)
-  auto [x_q, scale_x_pre, tensor_amax_x] =
+  auto [x_q, scale_x_pre] =
       quantize_input(inputs[0], encoder, s, mode_, bits_, group_size_);
-  auto [w_q, scale_w_pre, tensor_amax_w] =
-      get_weight_tensors(inputs, encoder, s, mode_, bits_, group_size_);
+  auto [w_q, scale_w_pre] = inputs[1].dtype() != uint32
+      ? quantize_input(inputs[1], encoder, s, mode_, bits_, group_size_)
+      : std::make_tuple(
+            ensure_row_contiguous(inputs[1], encoder, s),
+            ensure_row_contiguous(inputs[2], encoder, s));
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
@@ -233,7 +209,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   GemmScalars scalars;
   if (mode_ == QuantizationMode::Nvfp4) {
-    scalars = create_nvfp4_scalars(*tensor_amax_x, *tensor_amax_w, encoder);
+    scalars = create_nvfp4_scalars(inputs[size - 2], inputs[size - 1], encoder);
   }
 
   run_qqmm(

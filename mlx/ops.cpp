@@ -4207,6 +4207,39 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
   }
 }
 
+void validate_global_scale(const array& global_scale, QuantizationMode qmode) {
+  if (global_scale.has_value()) {
+    if (qmode != QuantizationMode::Nvfp4) {
+      std::ostringstream msg;
+      msg << "[quantize] Global scale can only be provided for 'nvfp4' "
+          << "quantization mode but mode '" << mode << "' was provided.";
+      throw std::invalid_argument(msg.str());
+    } else {
+      if (global_scale->size() != 1) {
+        std::ostringstream msg;
+        msg << "[quantize] Global scale must be a scalar but got an array "
+            << "with shape " << global_scale->shape() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+      // TODO: not sure about the type
+      if (!issubdtype(global_scale->dtype(), floating)) {
+        std::ostringstream msg;
+        msg << "[quantize] Global scale must be a floating type but got type "
+            << global_scale->dtype() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  } else {
+    if (qmode == QuantizationMode::Nvfp4) {
+      std::ostringstream msg;
+      msg << "[quantize] Global scale must be provided for 'nvfp4' "
+          << "quantization mode.";
+      throw std::invalid_argument(msg.str());
+    }
+    return;
+  }
+}
+
 array quantized_matmul(
     array x,
     array w,
@@ -4264,9 +4297,10 @@ void validate_qqmm_inputs(
     array x,
     array w,
     std::optional<array> scales_w,
-    std::optional<array> tensor_amax_w,
     int group_size,
     int bits,
+    std::optional<array> global_scale_x,
+    std::optional<array> global_scale_w,
     QuantizationMode qmode) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
@@ -4283,28 +4317,11 @@ void validate_qqmm_inputs(
       throw std::invalid_argument(
           "[qqmm] Scales must be provided if second argument is quantized.");
     }
-    if (qmode == QuantizationMode::Nvfp4) {
-      // nvfp4 quantization requires tensor amax
-      if (!tensor_amax_w.has_value()) {
-        std::ostringstream msg;
-        msg << "[qqmm] The 'tensor_amax_w' argument must be provided"
-            << " with 'nvfp4' quantization mode.";
-        throw std::invalid_argument(msg.str());
-      }
-    }
     // if scales are provided, check compatibility with quantized w
     else {
       validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
-      // other quantization modes do not support tensor amax
-      if (tensor_amax_w.has_value()) {
-        std::ostringstream msg;
-        msg << "[qqmm] The 'tensor_amax_w' argument is only supported"
-            << " with 'nvfp4' quantization mode.";
-        throw std::invalid_argument(msg.str());
-      }
     }
   }
-
   // if w is not quantized, dtype must be in {f16, bf16, fp32}
   else {
     if (!issubdtype(w.dtype(), floating) || w.dtype() == float64) {
@@ -4321,6 +4338,9 @@ void validate_qqmm_inputs(
         << "first argument dtype == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
   }
+  // validate global scales
+  validate_global_scale(global_scale_x, qmode);
+  validate_global_scale(global_scale_w, qmode);
 }
 
 std::pair<int, int> extract_qqmm_dims(
@@ -4357,10 +4377,11 @@ array qqmm(
     array in_x,
     array w,
     std::optional<array> scales_w,
-    std::optional<array> tensor_amax_w,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
+    const std::optional<array> global_scale_x /* = std::nullopt */,
+    const std::optional<array> global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   if (stream.device != Device::gpu || !cu::is_available()) {
@@ -4389,8 +4410,10 @@ array qqmm(
   } else if (w.ndim() == 2 && x.ndim() > 2) {
     x = flatten(x, 0, -2, s);
   }
+
   // validate inputs
-  validate_qqmm_inputs(x, w, scales_w, tensor_amax_w, group_size, bits, qmode);
+  validate_qqmm_inputs(
+      x, w, scales_w, group_size, bits, global_scale_x, global_scale_w);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);
@@ -4401,8 +4424,9 @@ array qqmm(
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
-  if (tensor_amax_w.has_value()) {
-    inputs.push_back(*tensor_amax_w);
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
   }
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
@@ -4539,6 +4563,7 @@ std::vector<array> fp_quantize(
     int group_size,
     int bits,
     QuantizationMode mode,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
@@ -4556,18 +4581,32 @@ std::vector<array> fp_quantize(
         << bits << ".";
     throw std::invalid_argument(msg.str());
   }
-  constexpr float F8E4M3_MAX = 448.0f;
-  constexpr float F4E2M1_MAX = 6.0f;
-  auto fallback = [bits = bits, group_size = group_size, mode = mode, s](
+  auto fallback = [bits = bits, group_size = group_size, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
-    float maxval = (bits == 4) ? F4E2M1_MAX : F8E4M3_MAX;
+    float maxval = (bits == 4) ? 6.0f : 448.0f;
     auto new_shape = w.shape();
     new_shape.back() = -1;
     auto wq = reshape(w, {-1, group_size}, s);
-    auto block_amax = max(abs(wq, s), -1, true, s);
+    auto scales =
+        divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s);
+    if (group_size == 16) {
+      // convert to e4m3
+      scales = to_fp8(scales, s);
+      wq = divide(wq, from_fp8(scales, w.dtype(), s), s);
+    } else {
+      // convert to e8m0
+      auto z = array(0, scales.dtype());
+      scales = where(
+          equal(scales, z, s),
+          z,
+          astype(round(log2(scales, s), s), int32, s),
+          s);
 
-    auto quantize_to_fp4 = [&](array& wq_in) {
+      wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
+      scales = astype(add(scales, array(127, int32), s), uint8, s);
+    }
+    if (bits == 4) {
       auto lut = array({
           +0.0f,
           +0.5f,
@@ -4587,41 +4626,11 @@ std::vector<array> fp_quantize(
           -6.0f,
       });
       lut = astype(lut, w.dtype(), s);
-      wq_in = argmin(
-          abs(subtract(expand_dims(wq_in, -1, s), lut, s), s), -1, false, s);
+      wq = argmin(
+          abs(subtract(expand_dims(wq, -1, s), lut, s), s), -1, false, s);
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
-      wq_in = reshape(wq_in, {-1, 4, 8}, s);
-      wq_in = sum(multiply(wq_in, shifts, s), -1, false, s);
-    };
-
-    if (mode == QuantizationMode::Nvfp4) {
-      auto tensor_amax = astype(max(abs(w, s), s), float32, s);
-      // Global encode scale: (448 * 6) / tensor_amax
-      auto scale_enc = divide(array(F8E4M3_MAX * F4E2M1_MAX), tensor_amax, s);
-      // Per-block decode scale: (block_amax / 6) * scale_enc
-      auto scales = multiply(
-          divide(block_amax, array(F4E2M1_MAX, w.dtype()), s), scale_enc, s);
-      // Convert to e4m3
-      scales = to_fp8(scales, s);
-      // Per-block encode scale: scale_enc / scale_dec_b
-      auto scale_enc_b = divide(scale_enc, from_fp8(scales, w.dtype(), s), s);
-      wq = multiply(wq, scale_enc_b, s);
-      quantize_to_fp4(wq);
-      wq = reshape(wq, new_shape, s);
-      scales = reshape(scales, new_shape, s);
-      return {std::move(wq), std::move(scales), std::move(tensor_amax)};
-    }
-
-    auto scales = divide(block_amax, array(maxval, w.dtype()), s);
-    auto z = array(0, scales.dtype());
-    scales = where(
-        equal(scales, z, s), z, astype(round(log2(scales, s), s), int32, s), s);
-
-    wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
-    scales = astype(add(scales, array(127, int32), s), uint8, s);
-
-    if (bits == 4) {
-      quantize_to_fp4(wq);
+      wq = reshape(wq, {-1, 4, 8}, s);
+      wq = sum(multiply(wq, shifts, s), -1, false, s);
     } else {
       wq = view(to_fp8(wq, s), uint32, s);
     }
@@ -4629,29 +4638,24 @@ std::vector<array> fp_quantize(
     scales = reshape(scales, new_shape, s);
     return {std::move(wq), std::move(scales)};
   };
+  auto inputs = std::vector<array>{w};
 
+  if (global_scale.has_value()) {
+    inputs.push_back(global_scale.value());
+  }
   if (s.device == Device::gpu) {
     auto wq_shape = w.shape();
     wq_shape.back() = w.shape(-1) * bits / 32;
     auto sshape = w.shape();
     sshape.back() = w.shape(-1) / group_size;
-    // nvfp4 fp tensor scale
-    // TODO: should we try to have w.dtype() here?
-    std::vector<Shape> shapes = {std::move(wq_shape), std::move(sshape)};
-    std::vector<Dtype> dtypes = {uint32, uint8};
-
-    if (mode == QuantizationMode::Nvfp4) {
-      shapes.push_back({});
-      dtypes.push_back(float32);
-    }
     return array::make_arrays(
-        std::move(shapes),
-        std::move(dtypes),
+        {std::move(wq_shape), std::move(sshape)},
+        {uint32, uint8},
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, false),
-        {w});
+        inputs);
   }
-  return fallback({w});
+  return fallback(inputs);
 }
 
 std::vector<array> quantize(
@@ -4659,6 +4663,7 @@ std::vector<array> quantize(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto qmode = string_to_quantization_mode(mode, "quantize");
   auto [group_size, bits] =
@@ -4686,10 +4691,12 @@ std::vector<array> quantize(
     throw std::invalid_argument(msg.str());
   }
 
+  validate_global_scale("quantize", global_scale, qmode);
+
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
   } else {
-    return fp_quantize(w, group_size, bits, qmode, to_stream(s));
+    return fp_quantize(w, group_size, bits, qmode, global_scale, to_stream(s));
   }
 }
 
@@ -4790,11 +4797,11 @@ array affine_dequantize(
 array fp_dequantize(
     const array& w,
     const array& scales,
-    const std::optional<array>& tensor_amax,
     int group_size,
     int bits,
     Dtype out_type,
     QuantizationMode mode,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
@@ -4839,15 +4846,12 @@ array fp_dequantize(
     throw std::invalid_argument(msg.str());
   }
 
-  constexpr float F8E4M3_MAX = 448.0f;
-  constexpr float F4E2M1_MAX = 6.0f;
   auto fallback =
       [wshape = std::move(wshape),
        sshape = std::move(sshape),
        group_size,
        bits,
        out_type,
-       mode,
        s](const std::vector<array>& inputs) mutable -> std::vector<array> {
     auto out = inputs[0];
     auto scales = inputs[1];
@@ -4883,16 +4887,7 @@ array fp_dequantize(
     }
     out = reshape(out, {-1, group_size}, s);
     scales = reshape(scales, {-1, 1}, s);
-    if (mode == QuantizationMode::Nvfp4) {
-      auto tensor_amax = inputs[2];
-      // scale_dec_b stored as FP8 e4m3
-      scales = from_fp8(scales, out_type, s);
-      // inv_scale_enc = tensor_amax / (448 * 6)
-      auto inv_scale_enc =
-          divide(tensor_amax, array(F8E4M3_MAX * F4E2M1_MAX, out_type), s);
-      // final scale = scale_dec_b * inv_scale_enc
-      scales = multiply(scales, inv_scale_enc, s);
-    } else if (mode == QuantizationMode::Mxfp4) {
+    if (group_size == 16) {
       scales = from_fp8(scales, out_type, s);
     } else {
       scales = subtract(astype(scales, out_type, s), array(127, out_type), s);
@@ -4903,20 +4898,12 @@ array fp_dequantize(
   if (s.device == Device::gpu) {
     auto out_shape = w.shape();
     out_shape.back() = out_size;
-    auto inputs = std::vector<array>{w, scales};
-    if (mode == QuantizationMode::Nvfp4) {
-      inputs.push_back(*tensor_amax);
-    }
-
     return array(
         std::move(out_shape),
         out_type,
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, true),
-        std::move(inputs));
-  }
-  if (mode == QuantizationMode::Nvfp4) {
-    return fallback({w, scales, *tensor_amax})[0];
+        {w, scales});
   }
   return fallback({w, scales})[0];
 }
@@ -4924,11 +4911,11 @@ array fp_dequantize(
 array dequantize(
     const array& w,
     const array& scales,
-    const std::optional<array>& tensor_amax /* = std::nullopt */,
     const std::optional<array>& biases /* = std::nullopt */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     std::optional<Dtype> dtype /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto [out_type, qmode] =
@@ -4955,6 +4942,7 @@ array dequantize(
         << "but it has only " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
+  validate_global_scale("dequantize", global_scale, qmode);
 
   if (qmode == QuantizationMode::Affine) {
     return astype(
@@ -4965,7 +4953,7 @@ array dequantize(
     return fp_dequantize(
         w,
         scales,
-        tensor_amax,
+        global_scale,
         group_size,
         bits,
         out_type,

@@ -32,20 +32,20 @@ struct Dequantize {
 };
 
 namespace cg = cooperative_groups;
-
+// TODO: global_scale type
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
 __global__ void fp_quantize(
     T* w,
     uint8_t* out,
     uint8_t* scales,
     size_t size,
-    float* tensor_amax = nullptr) {
+    float* global_scale = nullptr) {
   // NVFP4 conversion:
-  // Global encode scale: (448 × 6) / *tensor_amax
+  // Global encode scale: (448 × 6) / *global_scale
   // Per-block decode scale: S_dec_b = (block_amax / 6) × S_enc → stored as FP8
   // E4M3 Per-block encode scale: S_enc_b = S_enc / S_dec_b
   const float scale_enc =
-      !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *tensor_amax : 1.0f;
+      !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -113,7 +113,7 @@ __global__ void fp_dequantize(
     const uint8_t* scales,
     T* out,
     size_t size,
-    float* tensor_amax = nullptr) {
+    float* global_scale = nullptr) {
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
@@ -125,7 +125,7 @@ __global__ void fp_dequantize(
 
   constexpr int pack_factor = bits == 8 ? 1 : 2;
   const float inv_scale_enc =
-      use_mx_scale ? 1.0f : (*tensor_amax) / (F8E4M3_MAX * F4E2M1_MAX);
+      use_mx_scale ? 1.0f : (*global_scale) / (F8E4M3_MAX * F4E2M1_MAX);
   size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t oindex = offset * pack_factor;
 
@@ -159,14 +159,14 @@ void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
-    const std::optional<array>& tensor_amax /* = std::nullopt */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     int group_size,
     int bits,
     cu::CommandEncoder& enc,
     const Stream& s) {
   enc.set_input_array(w);
-  if (tensor_amax.has_value()) {
-    enc.set_input_array(tensor_amax.value());
+  if (global_scale.has_value()) {
+    enc.set_input_array(global_scale.value());
   }
   enc.set_output_array(wq);
   enc.set_output_array(scales);
@@ -192,8 +192,8 @@ void fp_quantize(
           gpu_ptr<uint8_t>(wq),
           gpu_ptr<uint8_t>(scales),
           w.size(),
-          tensor_amax.has_value() ? gpu_ptr<float>(tensor_amax.value())
-                                  : nullptr);
+          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                   : nullptr);
     } else {
       throw std::runtime_error(
           "[Quantize::eval_gpu] Can not quantize input with type float64.");
@@ -204,7 +204,7 @@ void fp_quantize(
 void fp_dequantize(
     const array& wq,
     const array& scales,
-    const std::optional<array>& tensor_amax /* = std::nullopt */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     array& w,
     int group_size,
     int bits,
@@ -220,8 +220,8 @@ void fp_dequantize(
 
   enc.set_input_array(wq);
   enc.set_input_array(scales);
-  if (tensor_amax.has_value()) {
-    enc.set_input_array(tensor_amax.value());
+  if (global_scale.has_value()) {
+    enc.set_input_array(global_scale.value());
   }
   enc.set_output_array(w);
   dispatch_float_types(w.dtype(), "fp_dequantize", [&](auto type_tag) {
@@ -244,8 +244,8 @@ void fp_dequantize(
           gpu_ptr<uint8_t>(scales),
           gpu_ptr<T>(w),
           w.size(),
-          tensor_amax.has_value() ? gpu_ptr<float>(tensor_amax.value())
-                                  : nullptr);
+          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                   : nullptr);
     } else {
       throw std::runtime_error(
           "[Quantize::eval_gpu] Can not dequantize to output with type float64.");

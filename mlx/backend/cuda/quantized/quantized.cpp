@@ -64,11 +64,11 @@ void fast::Quantize::eval_gpu(
     if (mode_ == QuantizationMode::Affine) {
       auto biases = ensure_row_contiguous(inputs[2], enc, s);
       affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
-    } else if (mode_ == QuantizationMode::Nvfp4) {
-      auto tensor_amax = inputs[2];
-      fp_dequantize(wq, scales, tensor_amax, w, group_size_, bits_, enc, s);
     } else {
-      fp_dequantize(wq, scales, {}, w, group_size_, bits_, enc, s);
+      // third input is global scale for nvfp4
+      auto global_scale =
+          mode_ == QuantizationMode::Nvfp4 ? inputs[2] : std::nullopt;
+      fp_dequantize(wq, scales, global_scale, w, group_size_, bits_, enc, s);
     }
   } else {
     auto w = ensure_row_contiguous(inputs[0], enc, s);
@@ -82,13 +82,10 @@ void fast::Quantize::eval_gpu(
       auto& biases = outputs[2];
       biases.set_data(cu::malloc_async(biases.nbytes(), enc));
       affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
-    } else if (mode_ == QuantizationMode::Nvfp4) {
-      auto& tensor_amax = outputs[2];
-      tensor_amax.set_data(cu::malloc_async(tensor_amax.nbytes(), enc));
-      all_reduce(enc, w, tensor_amax, Reduce::ReduceType::AbsMax);
-      fp_quantize(w, wq, scales, tensor_amax, group_size_, bits_, enc, s);
     } else {
-      fp_quantize(w, wq, scales, {}, group_size_, bits_, enc, s);
+      auto global_scale =
+          mode_ == QuantizationMode::Nvfp4 ? inputs[2] : std::nullopt;
+      fp_quantize(w, wq, scales, global_scale, group_size_, bits_, enc, s);
     }
   }
 }
