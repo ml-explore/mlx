@@ -547,7 +547,6 @@ void steel_gemm_splitk_axpby(
   int wm = 2, wn = 2;
 
   int split_k_partitions = _tk < 16 ? 2 : (_tk < 32 ? 4 : (_tk < 64 ? 8 : 16));
-  int total_bk_chunks = K / bk;
   int split_k_partition_stride = M * N;
   int gemm_k_iterations = (K / bk) / split_k_partitions;
   int split_k_partition_size = gemm_k_iterations * bk;
