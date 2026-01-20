@@ -627,6 +627,39 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_quantized_sdpa(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Quantized fast attention is only available on GPU.")
+
+        mx.random.seed(0)
+        B, Hq, Hkv = 1, 2, 1
+        Lq, Lk, D = 4, 640, 128
+
+        for mode in ["mxfp4", "mxfp8"]:
+            bits = 8 if mode == "mxfp8" else 4
+            q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
+            k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+            v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+
+            k_q, k_scales = mx.quantize(k, mode=mode)
+            v_q, v_scales = mx.quantize(v, mode=mode)
+
+            ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0)
+            out = mx.fast.quantized_scaled_dot_product_attention(
+                q,
+                k_q,
+                k_scales,
+                v_q,
+                v_scales,
+                scale=1.0,
+                mode=mode,
+                bits=bits,
+            )
+
+            self.assertEqual(out.shape, ref.shape)
+            tol = 5e-2 if bits == 4 else 2e-2
+            self.assertLess((out - ref).abs().max(), tol)
+
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":
@@ -903,7 +936,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     group_size=group_size,
                     mode=mode,
                     transpose=transpose,
-                    rhs_indices=indices
+                    rhs_indices=indices,
                 )
                 xs, idx, inv_order = gather_sort(x, indices)
                 y3 = mx.gather_mm(xs, w, rhs_indices=idx, sorted_indices=True)
@@ -915,7 +948,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     mode=mode,
                     rhs_indices=idx,
                     transpose=transpose,
-                    sorted_indices=True
+                    sorted_indices=True,
                 )
                 y3 = scatter_unsort(y3, inv_order, indices.shape)
                 y4 = scatter_unsort(y4, inv_order, indices.shape)
