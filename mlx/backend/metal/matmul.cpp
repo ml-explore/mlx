@@ -736,7 +736,7 @@ void steel_gemm_splitk_axpby_nax(
   // clang-format off
   kname << "_align_M_" << (align_M ? 't' : 'n')
         << "_align_N_" << (align_N ? 't' : 'n')
-        << "_asign_K_" << (align_K ? 't' : 'n'); // clang-format on
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
 
