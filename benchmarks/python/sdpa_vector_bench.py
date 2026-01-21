@@ -85,9 +85,6 @@ if __name__ == "__main__":
     v_quant = mx.quantize(v, bits=bits, mode=mode)
     mx.eval(k_quant, v_quant)
 
-    k = mx.dequantize(*k_quant, bits=bits, mode=mode)
-    v = mx.dequantize(*v_quant, bits=bits, mode=mode)
-
     time_self_attention_sdpa(q, k, v)
     time_self_attention_quant_sdpa(q, k_quant, v_quant, bits, mode)
     time_self_attention_primitives(q, k, v)
