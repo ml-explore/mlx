@@ -44,13 +44,15 @@ void cholesky_impl(const array& a, array& factor, bool upper, Stream stream) {
           /* lda = */ &N,
           /* info = */ &info);
 
-      // TODO: We do nothing when the matrix is not positive semi-definite
-      // because throwing an error would result in a crash. If we figure out how
-      // to catch errors from the implementation we should throw.
       if (info < 0) {
         std::stringstream msg;
-        msg << "[Cholesky::eval_cpu] Cholesky decomposition failed with error code "
+        msg << "[Cholesky::eval_cpu] Invalid argument to LAPACK potrf, error code "
             << info;
+        throw std::runtime_error(msg.str());
+      } else if (info > 0) {
+        std::stringstream msg;
+        msg << "[Cholesky::eval_cpu] Matrix is not positive semi-definite. "
+            << "The leading minor of order " << info << " is not positive definite.";
         throw std::runtime_error(msg.str());
       }
 
