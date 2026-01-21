@@ -5464,7 +5464,6 @@ void init_ops(nb::module_& m) {
       nb::arg(), // x
       nb::arg(), // w_q
       "scales"_a = nb::none(), // scales w
-      "tensor_scale"_a = nb::none(),
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "nvfp4",

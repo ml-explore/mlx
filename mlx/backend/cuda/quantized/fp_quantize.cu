@@ -85,7 +85,7 @@ __global__ void fp_quantize(
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
   auto s = ScaleType(scale_dec_b);
   uint8_t q_scale = s.__x;
-  float scale_enc_b = scale_enc / float(scale_dec_b);
+  float scale_enc_b = scale_enc / float(s);
 
   scales[thread_idx] = q_scale;
   constexpr int elem_per_byte = bits == 8 ? 1 : 2;

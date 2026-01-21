@@ -334,6 +334,7 @@ class QQLinear(Module):
             shape=(output_dims, input_dims),
         )
         self._quantized = False
+        self._use_global_scale = self.mode == "nvfp4"
 
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
@@ -346,11 +347,15 @@ class QQLinear(Module):
 
     def quantize(self):
         if not self._quantized:
+            self.global_amax_w = (
+                (self.weight).abs().max() if self._use_global_scale else None
+            )
             self.weight, self.scales = mx.quantize(
                 self.weight,
                 self.group_size,
                 self.bits,
                 mode=self.mode,
+                global_amax=self.global_amax_w,
             )
             self._quantized = True
 
@@ -362,8 +367,10 @@ class QQLinear(Module):
                 group_size=self.group_size,
                 bits=self.bits,
                 mode=self.mode,
+                global_amax=self.global_scale_w,
             )
-            self.__delattr__("scales")
+            del self.scales
+            del self.global_amax_w
             self._quantized = False
 
     def _set_training_mode(self, mode: bool):
@@ -375,13 +382,24 @@ class QQLinear(Module):
             self.quantize()
 
     def __call__(self, x):
+        # TODO: In the future we can implement different policies for amax update
+        # for the activations as well as for the weights
+        # (for example for the weights it can be ema )
+        global_scale_w = (
+            getattr(self, "global_scale_w", (self.weight).abs().max())
+            if self._use_global_scale
+            else None
+        )
+        global_scale_x = (x).abs().max() if self._use_global_scale else None
         x = mx.qqmm(
             x,
-            self["weight"],
+            self.weight,
             scales=self.get("scales"),
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_amax_x=global_scale_x,
+            global_amax_w=global_scale_w,
         )
         return x
 

@@ -4600,15 +4600,10 @@ std::vector<array> fp_quantize(
     if (group_size == 16) {
       // NVFP4: scale_dec = (group_amax / 6) * (448 * 6) / global_scale
       //                  = group_amax * 448 / global_scale
-      array scales;
-      if (mode == QuantizationMode::Nvfp4 && inputs.size() > 1) {
-        // scale_dec = group_amax * 448 / global_scale
-        scales = divide(
-            multiply(group_amax, array(448.0f, w.dtype()), s), inputs[1], s);
-      } else {
-        // Without global_scale: scale_dec = group_amax / 6
-        scales = divide(group_amax, array(maxval, w.dtype()), s);
-      }
+      array scales = (mode == QuantizationMode::Nvfp4 && inputs.size() > 1)
+          ? divide(
+                multiply(group_amax, array(448.0f, w.dtype()), s), inputs[1], s)
+          : divide(group_amax, array(maxval, w.dtype()), s);
       // convert to e4m3
       scales = to_fp8(scales, s);
       // quantized = w * 6 / group_amax

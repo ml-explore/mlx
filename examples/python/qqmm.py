@@ -38,7 +38,18 @@ def test_qqmm():
             for dtype in dtypes:
                 x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
                 w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
-                w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
+                x_amax = (
+                    mx.abs(x).max().astype(mx.float32) if group_size == 16 else None
+                )
+                w_amax = (
+                    mx.abs(w).max().astype(mx.float32) if group_size == 16 else None
+                )
+                w_q, scales_w = mx.quantize(
+                    w, group_size, bits, mode=mode, global_scale=w_amax
+                )
+                x_q, scales_x = mx.quantize(
+                    x, group_size, bits, mode=mode, global_scale=x_amax
+                )
                 w_dq = mx.dequantize(
                     w_q,
                     scales_w,
@@ -46,6 +57,7 @@ def test_qqmm():
                     bits=bits,
                     mode=mode,
                     dtype=dtype,
+                    global_scale=w_amax,
                 )
                 y_q = mx.qqmm(
                     x,
@@ -54,9 +66,11 @@ def test_qqmm():
                     group_size=group_size,
                     bits=bits,
                     mode=mode,
+                    global_scale_x=x_amax,
+                    global_scale_w=w_amax,
                 )
                 x_q, scales_x = mx.quantize(
-                    x, group_size=group_size, bits=bits, mode=mode
+                    x, group_size=group_size, bits=bits, mode=mode, global_scale=x_amax
                 )
                 x_dq = mx.dequantize(
                     x_q,
@@ -64,12 +78,16 @@ def test_qqmm():
                     group_size=group_size,
                     bits=bits,
                     mode=mode,
+                    global_scale=x_amax,
                     dtype=dtype,
                 )
                 y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
                 ulp = ulp_bf16_at(y_hat)
                 error = (y_q - y_hat).abs()
                 if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
+                    import pdb
+
+                    pdb.set_trace()
                     raise AssertionError(
                         f"qqmm test failed for shape {(M, N, K)}, "
                         f"group_size={group_size}, bits={bits}, "
@@ -89,19 +107,43 @@ def test_qqmm_vjp():
     )
     x = mx.random.normal(shape=(M, K), key=k1)
     c = mx.ones(shape=(M, N))
+    x_amax = mx.abs(x).max() if tests[0][0] == 16 else None
 
     for group_size, mode, bits in tests:
         w = mx.random.normal(shape=(N, K), key=k2)
 
+        x_amax = mx.abs(x).max() if group_size == 16 else None
+        w_amax = mx.abs(w).max() if group_size == 16 else None
+        c_amax = mx.abs(c).max() if group_size == 16 else None
+
         def fn(x):
-            return mx.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)
+            return mx.qqmm(
+                x,
+                w,
+                group_size=group_size,
+                bits=bits,
+                mode=mode,
+                global_scale_x=x_amax,
+                global_scale_w=w_amax,
+            )
 
         _, vjp_out = mx.vjp(fn, primals=(x,), cotangents=(c,))
         w_tq, scales_wt = mx.quantize(
-            mx.transpose(w), group_size=group_size, bits=bits, mode=mode
+            mx.transpose(w),
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+            global_scale=w_amax,
         )
         expected_out = mx.qqmm(
-            c, w_tq, scales_wt, group_size=group_size, bits=bits, mode=mode
+            c,
+            w_tq,
+            scales_wt,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+            global_scale_x=c_amax,
+            global_scale_w=w_amax,
         )
         ulp = ulp_bf16_at(expected_out)
         error = (vjp_out[0] - expected_out).abs()
