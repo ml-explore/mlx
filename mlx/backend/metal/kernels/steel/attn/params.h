@@ -34,6 +34,7 @@ struct AttnParams {
   int64_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
   int64_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
   int64_t O_strides[3]; ///< Output strides (B, H, L, D = 1)
+  int64_t LSE_strides[2]; ///< LSE strides (B*H, L) - logsumexp output for VJP
 };
 
 struct AttnMaskParams {
