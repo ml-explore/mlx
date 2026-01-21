@@ -22,7 +22,7 @@ target_sources(
 # Define MLX_VERSION only in the version.cpp file.
 add_library(mlx_version OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
 target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
-# mlx_version needs access to version.h for MLX_API export macro
+# mlx_version needs access to mlx_export.h for MLX_API export macro
 target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
 # On Windows shared lib builds, mlx_version also needs MLX_EXPORT for proper DLL
 # linkage
@@ -46,13 +46,14 @@ if(MSVC)
   # expression to only apply to C/CXX, not CUDA (NVCC doesn't understand /bigobj
   # directly).
   target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj>)
-endif()
-
-if(WIN32)
-  # On Windows, we use explicit __declspec(dllexport) via MLX_API macro instead
-  # of WINDOWS_EXPORT_ALL_SYMBOLS to avoid exceeding the 65535 symbol export
-  # limit (template instantiations can generate many symbols).
-  set_target_properties(mlx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS FALSE)
+  # Windows DLLs have a 65535 symbol export limit. We use explicit exports via
+  # MLX_API macro (__declspec(dllexport)) on public API functions only. This
+  # avoids exporting internal template instantiations.
+  if(BUILD_SHARED_LIBS)
+    target_compile_definitions(mlx PRIVATE MLX_EXPORT)
+  else()
+    target_compile_definitions(mlx PUBLIC MLX_STATIC)
+  endif()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)

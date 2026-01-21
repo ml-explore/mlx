@@ -220,19 +220,6 @@ if(WIN32)
     set(MLX_BUILD_GGUF OFF)
     # There is no prebuilt OpenBLAS distribution for MSVC.
     set(MLX_BUILD_BLAS_FROM_SOURCE ON)
-    # Prevent Windows.h from defining min/max macros that break
-    # std::min/std::max and CCCL headers (cuda::std::min, cuda::std::max).
-    target_compile_definitions(mlx PRIVATE NOMINMAX)
-    # Windows DLLs have a 65535 symbol export limit. We use explicit exports via
-    # MLX_API macro (__declspec(dllexport)) on public API functions only. This
-    # avoids exporting internal template instantiations.
-    if(BUILD_SHARED_LIBS)
-      message(STATUS "Building MLX as shared library - defining MLX_EXPORT")
-      target_compile_definitions(mlx PRIVATE MLX_EXPORT)
-    else()
-      message(STATUS "Building MLX as static library - defining MLX_STATIC")
-      target_compile_definitions(mlx PUBLIC MLX_STATIC)
-    endif()
   endif()
   # Windows implementation of dlfcn.h APIs.
   FetchContent_Declare(
@@ -269,14 +256,12 @@ if(MLX_BUILD_CPU)
       GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
       GIT_TAG v0.3.28
       EXCLUDE_FROM_ALL)
-    # Save BUILD_SHARED_LIBS before OpenBLAS modifies it (OpenBLAS's CMake
-    # disables BUILD_SHARED_LIBS on MSVC when BUILD_STATIC_LIBS is ON)
-    set(_MLX_SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-    set(BUILD_STATIC_LIBS ON) # link statically
+    block(PROPAGATE openblas_SOURCE_DIR)
+    set(BUILD_SHARED_LIBS OFF) # link statically
+    set(BUILD_STATIC_LIBS ON)
     set(NOFORTRAN ON) # msvc has no fortran compiler
     FetchContent_MakeAvailable(openblas)
-    # Restore BUILD_SHARED_LIBS
-    set(BUILD_SHARED_LIBS ${_MLX_SAVED_BUILD_SHARED_LIBS})
+    endblock()
     target_link_libraries(mlx PRIVATE openblas)
     target_include_directories(
       mlx PRIVATE "${openblas_SOURCE_DIR}/lapack-netlib/LAPACKE/include"
