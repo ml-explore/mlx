@@ -159,9 +159,9 @@ void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
-    const std::optional<array>& global_scale /* = std::nullopt */,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     cu::CommandEncoder& enc,
     const Stream& s) {
   enc.set_input_array(w);
@@ -204,10 +204,10 @@ void fp_quantize(
 void fp_dequantize(
     const array& wq,
     const array& scales,
-    const std::optional<array>& global_scale /* = std::nullopt */,
     array& w,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     cu::CommandEncoder& enc,
     const Stream& s) {
   constexpr int uint8_per_uint32 = 4;

@@ -66,9 +66,10 @@ void fast::Quantize::eval_gpu(
       affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
     } else {
       // third input is global scale for nvfp4
-      auto global_scale =
-          mode_ == QuantizationMode::Nvfp4 ? inputs[2] : std::nullopt;
-      fp_dequantize(wq, scales, global_scale, w, group_size_, bits_, enc, s);
+      std::optional<array> global_scale = mode_ == QuantizationMode::Nvfp4
+          ? std::make_optional(inputs[2])
+          : std::nullopt;
+      fp_dequantize(wq, scales, w, group_size_, bits_, global_scale, enc, s);
     }
   } else {
     auto w = ensure_row_contiguous(inputs[0], enc, s);
@@ -83,9 +84,10 @@ void fast::Quantize::eval_gpu(
       biases.set_data(cu::malloc_async(biases.nbytes(), enc));
       affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
     } else {
-      auto global_scale =
-          mode_ == QuantizationMode::Nvfp4 ? inputs[2] : std::nullopt;
-      fp_quantize(w, wq, scales, global_scale, group_size_, bits_, enc, s);
+      std::optional<array> global_scale = mode_ == QuantizationMode::Nvfp4
+          ? std::make_optional(inputs[1])
+          : std::nullopt;
+      fp_quantize(w, wq, scales, group_size_, bits_, global_scale, enc, s);
     }
   }
 }

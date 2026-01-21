@@ -90,7 +90,7 @@ std::tuple<array, array> quantize_input(
   encoder.add_temporary(x_q);
   encoder.add_temporary(scales_x);
   // global_scale is not nullopt only for NVFP4
-  fp_quantize(x, x_q, scales_x, global_scale, group_size, bits, encoder, s);
+  fp_quantize(x, x_q, scales_x, group_size, bits, global_scale, encoder, s);
   return {std::move(x_q), std::move(scales_x)};
 }
 
@@ -103,7 +103,7 @@ GemmScalars create_nvfp4_scalars(
   // beta = 0
   array alpha(cu::malloc_async(sizeof(float), encoder), {}, float32);
   array beta(cu::malloc_async(sizeof(float), encoder), {}, float32);
-  compute_qqmm_pointers(alpha, beta, tensor_amax_x, tensor_amax_w, encoder);
+  compute_qqmm_pointers(alpha, beta, global_scale_x, global_scale_w, encoder);
   encoder.add_temporary(alpha);
   encoder.add_temporary(beta);
   return {alpha, beta};
@@ -183,11 +183,20 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   assert(inputs.size() == size);
 
+  // For nvfp4, get global scales from inputs
+  std::optional<array> global_scale_x = std::nullopt;
+  std::optional<array> global_scale_w = std::nullopt;
+  if (mode_ == QuantizationMode::Nvfp4) {
+    global_scale_x = inputs[size - 2];
+    global_scale_w = inputs[size - 1];
+  }
+
   // Quantize inputs (or use pre-quantized)
-  auto [x_q, scale_x_pre] =
-      quantize_input(inputs[0], encoder, s, mode_, bits_, group_size_);
+  auto [x_q, scale_x_pre] = quantize_input(
+      inputs[0], encoder, s, mode_, bits_, group_size_, global_scale_x);
   auto [w_q, scale_w_pre] = inputs[1].dtype() != uint32
-      ? quantize_input(inputs[1], encoder, s, mode_, bits_, group_size_)
+      ? quantize_input(
+            inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
             ensure_row_contiguous(inputs[1], encoder, s),
             ensure_row_contiguous(inputs[2], encoder, s));
@@ -209,7 +218,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   GemmScalars scalars;
   if (mode_ == QuantizationMode::Nvfp4) {
-    scalars = create_nvfp4_scalars(inputs[size - 2], inputs[size - 1], encoder);
+    scalars = create_nvfp4_scalars(*global_scale_x, *global_scale_w, encoder);
   }
 
   run_qqmm(

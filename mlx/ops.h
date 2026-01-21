@@ -1407,31 +1407,31 @@ std::vector<array> quantize(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    const std::optional<array>& global_scale = std::nullopt,
     StreamOrDevice s = {});
 
 /** Dequantize a matrix produced by quantize() */
 array dequantize(
     const array& w,
     const array& scales,
-    const std::optional<array>& tensor_amax = std::nullopt,
     const std::optional<array>& biases = std::nullopt,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    const std::optional<array>& global_scale = std::nullopt,
     std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
 
 array qqmm(
     array x, // input activations
     array w, // maybe quantized weights
-    std::optional<array> w_scales = std::nullopt, // optional scales if w is
-                                                  // quantized
-    std::optional<array> w_tensor_scale =
-        std::nullopt, // optional tensor amax if
-                      // w is nvfp4 quantized
+    const std::optional<array> w_scales = std::nullopt, // optional scales if w
+                                                        // is quantized
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "nvfp4",
+    const std::optional<array> global_scale_x = std::nullopt,
+    const std::optional<array> global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */

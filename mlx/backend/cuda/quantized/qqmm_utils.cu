@@ -254,10 +254,10 @@ void compute_qqmm_pointers(
       dim3(1),
       dim3(1),
       0,
-      gpu_ptr<float>(alpha_out),
-      gpu_ptr<float>(beta_out),
-      gpu_ptr<float>(tensor_amax_x),
-      gpu_ptr<float>(tensor_amax_w));
+      gpu_ptr<void>(alpha_out),
+      gpu_ptr<void>(beta_out),
+      gpu_ptr<void>(tensor_amax_x),
+      gpu_ptr<void>(tensor_amax_w));
 }
 
 } // namespace mlx::core

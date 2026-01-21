@@ -30,19 +30,19 @@ void fp_quantize(
     const array& w,
     array& wq,
     array& scales,
-    const std::optional<array>& tensor_amax,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 
 void fp_dequantize(
     const array& wq,
     const array& scales,
-    const std::optional<array>& tensor_amax,
     array& w,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 
