@@ -188,27 +188,20 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
 template <typename U, int elem_per_thread, int bits>
 [[gnu::always_inline]] METAL_FUNC U
 dot_key(const thread U* q, const device uint32_t* keys) {
+  using LoadT = typename conditional<bits == 4, uint16_t, uint32_t>::type;
+
+  constexpr uint32_t mask = (1 << bits) - 1;
+  auto ks = (const device LoadT*)keys;
   U score = 0;
-  if (bits == 4) {
-    auto ks = (const device uint16_t*)keys;
+
 #pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / 4; j++) {
-      uint16_t p = ks[j];
-      score += q[4 * j + 0] * Dequantize<4, U>{}(p & 0xF);
-      score += q[4 * j + 1] * Dequantize<4, U>{}((p >> 4) & 0xF);
-      score += q[4 * j + 2] * Dequantize<4, U>{}((p >> 8) & 0xF);
-      score += q[4 * j + 3] * Dequantize<4, U>{}(p >> 12);
-    }
-  } else { // 8-bit
-    constexpr int pack_factor = 32 / bits;
-#pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / pack_factor; j++) {
-#pragma clang loop unroll(full)
-      for (int k = 0; k < pack_factor; k++) {
-        score += q[pack_factor * j + k] *
-            Dequantize<bits, U>{}((keys[j] >> (k * bits)) & 0xff);
-      }
-    }
+  for (int j = 0; j < elem_per_thread / 4; j++) {
+    LoadT p = ks[j];
+
+    score += q[4 * j + 0] * Dequantize<bits, U>{}(p & mask);
+    score += q[4 * j + 1] * Dequantize<bits, U>{}((p >> bits) & mask);
+    score += q[4 * j + 2] * Dequantize<bits, U>{}((p >> (2 * bits)) & mask);
+    score += q[4 * j + 3] * Dequantize<bits, U>{}((p >> (3 * bits)) & mask);
   }
   return score;
 }
@@ -219,32 +212,23 @@ template <typename U, int elem_per_thread, int bits>
     const device uint32_t* values,
     U factor,
     U w_scale) {
-  if (bits == 4) {
-    auto vs = (const device uint16_t*)values;
+  using LoadT = typename conditional<bits == 4, uint16_t, uint32_t>::type;
+  constexpr uint32_t mask = (1 << bits) - 1;
+  auto vs = (const device LoadT*)values;
+
 #pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / 4; j++) {
-      uint16_t p = vs[j];
-      U v[] = {
-          Dequantize<4, U>{}(p & 0xF),
-          Dequantize<4, U>{}((p >> 4) & 0xF),
-          Dequantize<4, U>{}((p >> 8) & 0xF),
-          Dequantize<4, U>{}(p >> 12)};
-#pragma clang loop unroll(full)
-      for (int k = 0; k < 4; k++)
-        o[4 * j + k] = fma(o[4 * j + k], factor, v[k] * w_scale);
-    }
-  } else { // 8-bit
-    constexpr int pack_factor = 32 / bits;
-#pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / pack_factor; j++) {
-#pragma clang loop unroll(full)
-      for (int k = 0; k < pack_factor; k++) {
-        o[pack_factor * j + k] = fma(
-            o[pack_factor * j + k],
-            factor,
-            Dequantize<bits, U>{}((values[j] >> (k * bits)) & 0xff) * w_scale);
-      }
-    }
+  for (int j = 0; j < elem_per_thread / 4; j++) {
+    LoadT p = vs[j];
+
+    U v0 = Dequantize<bits, U>{}(p & mask);
+    U v1 = Dequantize<bits, U>{}((p >> bits) & mask);
+    U v2 = Dequantize<bits, U>{}((p >> (2 * bits)) & mask);
+    U v3 = Dequantize<bits, U>{}((p >> (3 * bits)) & mask);
+
+    o[4 * j + 0] = fma(o[4 * j + 0], factor, v0 * w_scale);
+    o[4 * j + 1] = fma(o[4 * j + 1], factor, v1 * w_scale);
+    o[4 * j + 2] = fma(o[4 * j + 2], factor, v2 * w_scale);
+    o[4 * j + 3] = fma(o[4 * j + 3], factor, v3 * w_scale);
   }
 }
 
