@@ -5,6 +5,8 @@
 
 #include "mlx/backend/metal/kernels/fp4.h"
 #include "mlx/backend/metal/kernels/fp8.h"
+#include "mlx/backend/metal/kernels/steel/gemm/loader.h"
+#include "mlx/backend/metal/kernels/steel/gemm/mma.h"
 
 constant bool align_M [[function_constant(200)]];
 constant bool align_N [[function_constant(201)]];

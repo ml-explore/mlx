@@ -206,7 +206,7 @@ dot_key(const thread U* q, const device uint32_t* keys) {
 #pragma clang loop unroll(full)
       for (int k = 0; k < pack_factor; k++) {
         score += q[pack_factor * j + k] *
-            Dequantize<bits, U>{}((keys[j] >> (k * bits)) & 0x0f);
+            Dequantize<bits, U>{}((keys[j] >> (k * bits)) & 0xff);
       }
     }
   }
@@ -239,10 +239,10 @@ template <typename U, int elem_per_thread, int bits>
     for (int j = 0; j < elem_per_thread / pack_factor; j++) {
 #pragma clang loop unroll(full)
       for (int k = 0; k < pack_factor; k++) {
-        o[j] =
-            fma(o[j],
-                factor,
-                Dequantize<8, U>{}((values[j] >> (k * bits)) & 0x0f) * w_scale);
+        o[pack_factor * j + k] = fma(
+            o[pack_factor * j + k],
+            factor,
+            Dequantize<bits, U>{}((values[j] >> (k * bits)) & 0xff) * w_scale);
       }
     }
   }
