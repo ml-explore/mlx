@@ -150,10 +150,6 @@ cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
 
-# Supress warnings: note: parameter passing for argument of type
-# ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
-# 10.1
-target_compile_options(mlx PRIVATE -Wno-psabi)
 target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
 target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 

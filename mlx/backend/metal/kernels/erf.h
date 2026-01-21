@@ -2,6 +2,7 @@
 
 #pragma once
 #include <metal_math>
+#include "mlx/backend/metal/kernels/expm1f.h"
 
 /*
  * Approximation to the error function.
@@ -23,8 +24,7 @@ float erf(float a) {
     r = metal::fma(r, t, -6.34846687e-1f); // -0x1.450aa0p-1
     r = metal::fma(r, t, -1.28717512e-1f); // -0x1.079d0cp-3
     r = metal::fma(r, t, -t);
-    // TODO, replace with expm1 when implemented
-    r = 1.0f - metal::exp(r);
+    r = -expm1f(r);
     r = metal::copysign(r, a);
   } else {
     // maximum error 0.98929 ulp

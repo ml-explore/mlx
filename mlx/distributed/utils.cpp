@@ -184,7 +184,9 @@ TCPSocket TCPSocket::connect(
       break;
     }
 
-    cb(attempt, wait);
+    if (cb != nullptr) {
+      cb(attempt, wait);
+    }
     if (wait > 0) {
       std::this_thread::sleep_for(std::chrono::milliseconds(wait));
     }

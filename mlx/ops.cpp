@@ -242,11 +242,13 @@ array linspace(
   if (num == 1) {
     return astype(array({start}), dtype, s);
   }
-  array t = divide(arange(0, num, float32, s), array(num - 1, float32), s);
-  array t_bar = subtract(array(1, float32), t, s);
+  auto inner_type = dtype == float64 ? float64 : float32;
+  array t =
+      divide(arange(0, num, inner_type, s), array(num - 1, inner_type), s);
+  array t_bar = subtract(array(1, inner_type), t, s);
   return astype(
-      add(multiply(t_bar, array(start, float32), s),
-          multiply(t, array(stop, float32), s),
+      add(multiply(t_bar, array(start, inner_type), s),
+          multiply(t, array(stop, inner_type), s),
           s),
       dtype,
       s);

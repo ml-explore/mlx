@@ -121,7 +121,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto shape(int dim) const {
-    return shape().at(dim < 0 ? dim + ndim() : dim);
+    return shape().at(dim < 0 ? dim + static_cast<int>(ndim()) : dim);
   }
 
   /** The strides of the array. */
@@ -135,7 +135,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto strides(int dim) const {
-    return strides().at(dim < 0 ? dim + ndim() : dim);
+    return strides().at(dim < 0 ? dim + static_cast<int>(ndim()) : dim);
   }
 
   /** Get the arrays data type. */

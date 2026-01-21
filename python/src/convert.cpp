@@ -259,6 +259,8 @@ nb::object tolist(mx::array& a) {
       return to_list<float>(a, 0, 0);
     case mx::bfloat16:
       return to_list<mx::bfloat16_t, float>(a, 0, 0);
+    case mx::float64:
+      return to_list<double>(a, 0, 0);
     case mx::complex64:
       return to_list<std::complex<float>>(a, 0, 0);
     default:
