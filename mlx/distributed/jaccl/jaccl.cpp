@@ -27,7 +27,8 @@
 
 constexpr const char* IBV_TAG = "[jaccl]";
 constexpr int NUM_BUFFERS = 2;
-constexpr int BUFFER_SIZE = 4096;
+constexpr int BUFFER_SIZES = 8;
+constexpr int FRAME_SIZE = 4096;
 constexpr int MAX_SEND_WR = 32;
 constexpr int MAX_RECV_WR = 32;
 constexpr int SEND_WR = 1;
@@ -133,6 +134,17 @@ void* page_aligned_alloc(size_t num_bytes) {
     return nullptr;
   }
   return buf;
+}
+
+inline std::pair<int, int64_t> buffer_size_from_message(int64_t msg) {
+  if (__builtin_available(macOS 26.3, iOS 26.3, tvOS 26.3, visionOS 26.3, *)) {
+    for (int k = BUFFER_SIZES - 1; k > 0; k--) {
+      if (msg >= FRAME_SIZE * (1 << k)) {
+        return {k, FRAME_SIZE * (1 << k)};
+      }
+    }
+  }
+  return {0, FRAME_SIZE};
 }
 
 /**
@@ -586,7 +598,7 @@ class ConnectionManager {
    * Performs the connection initialization. Namely, after this call all
    * Connection objects should have a queue pair in RTS state.
    */
-  void initialize(int num_buffers, size_t num_bytes) {
+  void initialize() {
     // Create the queue pairs
     for (auto& conn : connections_) {
       if (conn.ctx == nullptr) {
@@ -597,7 +609,7 @@ class ConnectionManager {
       conn.create_queue_pair();
     }
 
-    allocate_buffers(num_buffers, num_bytes);
+    allocate_buffers();
 
     // First init all connections
     for (int peer = 0; peer < size_; peer++) {
@@ -627,48 +639,55 @@ class ConnectionManager {
     }
   }
 
-  void allocate_buffers(int num_buffers, size_t num_bytes) {
+  void allocate_buffers() {
     // Deregister any buffers and free the memory
     buffers_.clear();
 
     // Allocate the memory
-    for (int i = 0; i < num_buffers; i++) {
-      for (int j = 0; j < size_; j++) {
-        buffers_.emplace_back(num_bytes);
+    for (int k = 0; k < BUFFER_SIZES; k++) {
+      for (int i = 0; i < NUM_BUFFERS; i++) {
+        for (int j = 0; j < size_; j++) {
+          buffers_.emplace_back(FRAME_SIZE * (1 << k));
+        }
       }
     }
 
-    for (int i = 0; i < num_buffers; i++) {
-      for (int j = 0; j < size_; j++) {
-        // This is our send buffer so register it with all pds so we can send
-        // it to all connected devices.
-        if (j == rank_) {
-          for (auto& conn : connections_) {
-            if (conn.ctx != nullptr) {
-              buffers_[i * size_ + j].register_to_protection_domain(
-                  conn.protection_domain);
+    for (int k = 0; k < BUFFER_SIZES; k++) {
+      for (int i = 0; i < NUM_BUFFERS; i++) {
+        for (int j = 0; j < size_; j++) {
+          // This is our send buffer so register it with all pds so we can send
+          // it to all connected devices.
+          if (j == rank_) {
+            for (auto& conn : connections_) {
+              if (conn.ctx != nullptr) {
+                buffers_[k * NUM_BUFFERS * size_ + i * size_ + j]
+                    .register_to_protection_domain(conn.protection_domain);
+              }
             }
           }
-        }
 
-        // This is the recv buffer from rank j so register it to rank j's
-        // protection domain.
-        else {
-          buffers_[i * size_ + j].register_to_protection_domain(
-              connections_[j].protection_domain);
+          // This is the recv buffer from rank j so register it to rank j's
+          // protection domain.
+          else {
+            buffers_[k * NUM_BUFFERS * size_ + i * size_ + j]
+                .register_to_protection_domain(
+                    connections_[j].protection_domain);
+          }
         }
       }
     }
   }
 
-  void send_to(int rank, int buff) {
+  void send_to(int sz, int rank, int buff) {
     connections_[rank].post_send(
-        buffers_[buff * size_ + rank_], SEND_WR << 16 | buff << 8 | rank);
+        buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank_],
+        SEND_WR << 16 | buff << 8 | rank);
   }
 
-  void recv_from(int rank, int buff) {
+  void recv_from(int sz, int rank, int buff) {
     connections_[rank].post_recv(
-        buffers_[buff * size_ + rank], RECV_WR << 16 | buff << 8 | rank);
+        buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank],
+        RECV_WR << 16 | buff << 8 | rank);
   }
 
   /**
@@ -703,12 +722,12 @@ class ConnectionManager {
         connections_[rank].completion_queue, num_completions, work_completions);
   }
 
-  SharedBuffer& send_buffer(int buff) {
-    return buffers_[buff * size_ + rank_];
+  SharedBuffer& send_buffer(int sz, int buff) {
+    return buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank_];
   }
 
-  SharedBuffer& buffer(int rank, int buff) {
-    return buffers_[buff * size_ + rank];
+  SharedBuffer& buffer(int sz, int rank, int buff) {
+    return buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank];
   }
 
   void barrier() {
@@ -821,7 +840,7 @@ class IBVGroup : public GroupImpl {
       // Fully connected all gather
       char* data = out_ptr;
       char* our_data = out_ptr + rank_ * n_bytes;
-      constexpr int64_t N = BUFFER_SIZE;
+      auto [sz, N] = buffer_size_from_message(n_bytes);
       constexpr int PIPELINE = 2;
       constexpr int WC_NUM = PIPELINE * MAX_PEERS * 2;
       int64_t total = static_cast<int64_t>(n_bytes);
@@ -836,12 +855,12 @@ class IBVGroup : public GroupImpl {
       // Prefill the pipeline
       int buff = 0;
       while (read_offset < total && buff < PIPELINE) {
-        post_recv_all(buff);
+        post_recv_all(sz, buff);
         std::copy(
             our_data + read_offset,
             our_data + std::min(read_offset + N, total),
-            cm_.send_buffer(buff).begin<char>());
-        post_send_all(buff);
+            cm_.send_buffer(sz, buff).begin<char>());
+        post_send_all(sz, buff);
 
         buff++;
         in_flight += 2 * num_peers;
@@ -868,8 +887,8 @@ class IBVGroup : public GroupImpl {
               std::copy(
                   our_data + read_offset,
                   our_data + std::min(read_offset + N, total),
-                  cm_.send_buffer(buff).begin<char>());
-              post_send_all(buff);
+                  cm_.send_buffer(sz, buff).begin<char>());
+              post_send_all(sz, buff);
 
               completed_send_count[buff] = 0;
               in_flight += num_peers;
@@ -880,13 +899,13 @@ class IBVGroup : public GroupImpl {
           // Recv completed. If we have more chunks then post another recv.
           else if (work_type == RECV_WR) {
             std::copy(
-                cm_.buffer(rank, buff).begin<char>(),
-                cm_.buffer(rank, buff).begin<char>() +
+                cm_.buffer(sz, rank, buff).begin<char>(),
+                cm_.buffer(sz, rank, buff).begin<char>() +
                     std::min(N, total - write_offset[rank]),
                 data + rank * n_bytes + write_offset[rank]);
             write_offset[rank] += N;
             if (write_offset[rank] + N * (PIPELINE - 1) < total) {
-              cm_.recv_from(rank, buff);
+              cm_.recv_from(sz, rank, buff);
               in_flight++;
             }
           }
@@ -903,7 +922,7 @@ class IBVGroup : public GroupImpl {
     encoder.dispatch([data, n_bytes, dst, this]() {
       constexpr int PIPELINE = 2;
       constexpr int WC_NUM = PIPELINE;
-      constexpr int N = BUFFER_SIZE;
+      auto [sz, N] = buffer_size_from_message(n_bytes);
 
       int in_flight = 0;
       int64_t read_offset = 0;
@@ -914,8 +933,8 @@ class IBVGroup : public GroupImpl {
         std::copy(
             data + read_offset,
             data + std::min(read_offset + N, n_bytes),
-            cm_.send_buffer(buff).begin<char>());
-        cm_.send_to(dst, buff);
+            cm_.send_buffer(sz, buff).begin<char>());
+        cm_.send_to(sz, dst, buff);
 
         buff++;
         read_offset += N;
@@ -940,8 +959,8 @@ class IBVGroup : public GroupImpl {
             std::copy(
                 data + read_offset,
                 data + std::min(read_offset + N, n_bytes),
-                cm_.send_buffer(buff).begin<char>());
-            cm_.send_to(dst, buff);
+                cm_.send_buffer(sz, buff).begin<char>());
+            cm_.send_to(sz, dst, buff);
 
             read_offset += N;
             in_flight++;
@@ -959,7 +978,7 @@ class IBVGroup : public GroupImpl {
     encoder.dispatch([data, n_bytes, src, this]() {
       constexpr int PIPELINE = 2;
       constexpr int WC_NUM = PIPELINE;
-      constexpr int N = BUFFER_SIZE;
+      auto [sz, N] = buffer_size_from_message(n_bytes);
 
       int in_flight = 0;
       int64_t write_offset = 0;
@@ -967,7 +986,7 @@ class IBVGroup : public GroupImpl {
       // Prefill the pipeline
       int buff = 0;
       while (N * buff < n_bytes && buff < PIPELINE) {
-        cm_.recv_from(src, buff);
+        cm_.recv_from(sz, src, buff);
 
         in_flight++;
         buff++;
@@ -988,14 +1007,14 @@ class IBVGroup : public GroupImpl {
           in_flight--;
 
           std::copy(
-              cm_.buffer(src, buff).begin<char>(),
-              cm_.buffer(src, buff).begin<char>() +
+              cm_.buffer(sz, src, buff).begin<char>(),
+              cm_.buffer(sz, src, buff).begin<char>() +
                   std::min(n_bytes - write_offset, static_cast<int64_t>(N)),
               data + write_offset);
           write_offset += N;
 
           if (write_offset + (PIPELINE - 1) * N < n_bytes) {
-            cm_.recv_from(src, buff);
+            cm_.recv_from(sz, src, buff);
 
             in_flight++;
           }
@@ -1013,21 +1032,21 @@ class IBVGroup : public GroupImpl {
   }
 
  private:
-  void post_recv_all(int buffer) {
+  void post_recv_all(int sz, int buffer) {
     for (int i = 0; i < size_; i++) {
       if (i == rank_) {
         continue;
       }
-      cm_.recv_from(i, buffer);
+      cm_.recv_from(sz, i, buffer);
     }
   }
 
-  void post_send_all(int buffer) {
+  void post_send_all(int sz, int buffer) {
     for (int i = 0; i < size_; i++) {
       if (i == rank_) {
         continue;
       }
-      cm_.send_to(i, buffer);
+      cm_.send_to(sz, i, buffer);
     }
   }
 
@@ -1050,7 +1069,8 @@ class IBVGroup : public GroupImpl {
 
       // Fully connected all reduce
       T* data = out_ptr;
-      constexpr int64_t N = BUFFER_SIZE / sizeof(T);
+      auto [sz, buffer_size] = buffer_size_from_message(size * sizeof(T));
+      int64_t N = buffer_size / sizeof(T);
       constexpr int PIPELINE = 2;
       constexpr int WC_NUM = PIPELINE * MAX_PEERS * 2;
       int64_t total = static_cast<int64_t>(size);
@@ -1058,7 +1078,7 @@ class IBVGroup : public GroupImpl {
 
       // Counters to maintain the state of transfers
       int in_flight = 0;
-      int read_offset = 0;
+      int64_t read_offset = 0;
       int completed_send_count[PIPELINE] = {0};
       int completed_recv_begin[MAX_PEERS] = {0};
       int completed_recv_end[MAX_PEERS] = {0};
@@ -1066,12 +1086,12 @@ class IBVGroup : public GroupImpl {
       // Prefill the pipeline
       int buff = 0;
       while (read_offset < total && buff < PIPELINE) {
-        post_recv_all(buff);
+        post_recv_all(sz, buff);
         std::copy(
             data + read_offset,
             data + std::min(read_offset + N, total),
-            cm_.send_buffer(buff).begin<T>());
-        post_send_all(buff);
+            cm_.send_buffer(sz, buff).begin<T>());
+        post_send_all(sz, buff);
 
         buff++;
         in_flight += 2 * num_peers;
@@ -1105,8 +1125,8 @@ class IBVGroup : public GroupImpl {
               std::copy(
                   data + read_offset,
                   data + std::min(read_offset + N, total),
-                  cm_.send_buffer(buff).begin<T>());
-              post_send_all(buff);
+                  cm_.send_buffer(sz, buff).begin<T>());
+              post_send_all(sz, buff);
 
               completed_send_count[buff] = 0;
               in_flight += num_peers;
@@ -1134,13 +1154,13 @@ class IBVGroup : public GroupImpl {
           while (w < read_offset && e - s > 0) {
             int buff = s % PIPELINE;
             reduce_op(
-                cm_.buffer(r, buff).begin<T>(),
+                cm_.buffer(sz, r, buff).begin<T>(),
                 data + w,
                 std::min(N, total - w));
             w += N;
             s++;
             if (w + (PIPELINE - 1) * N < total) {
-              cm_.recv_from(r, buff);
+              cm_.recv_from(sz, r, buff);
               in_flight++;
             }
           }
@@ -1189,7 +1209,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
     throw std::runtime_error(msg.str());
   }
 
-  cm.initialize(NUM_BUFFERS, BUFFER_SIZE);
+  cm.initialize();
   cm.barrier();
 
   return std::make_shared<IBVGroup>(std::move(cm));
