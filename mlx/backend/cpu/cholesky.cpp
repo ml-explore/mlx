@@ -52,7 +52,8 @@ void cholesky_impl(const array& a, array& factor, bool upper, Stream stream) {
       } else if (info > 0) {
         std::stringstream msg;
         msg << "[Cholesky::eval_cpu] Matrix is not positive semi-definite. "
-            << "The leading minor of order " << info << " is not positive definite.";
+            << "The leading minor of order " << info
+            << " is not positive definite.";
         throw std::runtime_error(msg.str());
       }
 
