@@ -805,9 +805,9 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
-  bool is_training = detail::in_grad_tracing();
-  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
-  bool output_logsumexp = is_training && has_fast_vjp;
+  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(
+      q, stream, has_mask, has_sinks, static_cast<int>(n_kv_heads));
+  bool output_logsumexp = detail::in_grad_tracing() && has_fast_vjp;
   if (!ScaledDotProductAttention::use_fallback(
           q,
           k,
@@ -815,7 +815,6 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
-          is_training,
           output_logsumexp,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
@@ -853,10 +852,25 @@ std::vector<array> ScaledDotProductAttention::vjp(
   assert(cotangents.size() == outputs.size());
 
   auto s = stream();
-  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
-    assert(outputs.size() == 1);
+
+  // Determine if mask is present: primals = [Q, K, V, (mask), (sinks)]
+  bool has_mask = primals.size() > static_cast<size_t>(3 + has_sinks_);
+  int n_kv_heads = primals[1].shape(1); // K is at index 1
+
+  // Check if we can use Flash Attention VJP
+  if (ScaledDotProductAttentionVJP::use_fallback(
+          primals[0], s, has_mask, has_sinks_, n_kv_heads) ||
+      !output_logsumexp_) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
+
+  // When output_logsumexp_ is true, the forward pass creates 2 sibling arrays:
+  // outputs[0] = attention output, outputs[1] = logsumexp
+  // Even though only outputs[0] is returned to the user, the tape tracks both
+  // siblings.
+  assert(
+      outputs.size() >= 2 &&
+      "Expected logsumexp in outputs[1] when output_logsumexp_ is true");
 
   auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
     std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
@@ -873,8 +887,8 @@ std::vector<array> ScaledDotProductAttention::vjp(
   auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
       s, fallback, scale_, do_causal_, has_sinks_);
   std::vector<array> inputs = primals;
-  inputs.push_back(outputs[0]);
-  inputs.push_back(outputs[1]);
+  inputs.push_back(outputs[0]); // Attention output
+  inputs.push_back(outputs[1]); // Logsumexp
   inputs.push_back(cotangents[0]);
   auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
 
