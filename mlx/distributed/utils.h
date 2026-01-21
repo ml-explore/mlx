@@ -56,8 +56,7 @@ class TCPSocket {
       const address_t& addr,
       int num_retries = 1,
       int wait = 0,
-      // adding in fix as per PR 3007
-      std::function<void(int, int)> cb = [](int, int) {});
+      std::function<void(int, int)> cb = nullptr);
 
  private:
   TCPSocket(int sock);
