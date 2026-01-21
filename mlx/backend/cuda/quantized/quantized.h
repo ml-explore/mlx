@@ -2,7 +2,6 @@
 
 #include <optional>
 #include "mlx/backend/cuda/device.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -45,11 +44,5 @@ void fp_dequantize(
     const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
-
-void all_reduce(
-    cu::CommandEncoder& encoder,
-    const array& in,
-    array& out,
-    Reduce::ReduceType reduce_type);
 
 } // namespace mlx::core

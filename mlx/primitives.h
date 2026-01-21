@@ -1769,7 +1769,7 @@ class Reshape : public UnaryPrimitive {
 
 class Reduce : public UnaryPrimitive {
  public:
-  enum ReduceType { And, Or, Sum, Prod, Min, Max, AbsMax };
+  enum ReduceType { And, Or, Sum, Prod, Min, Max };
 
   explicit Reduce(
       Stream stream,
@@ -1799,8 +1799,6 @@ class Reduce : public UnaryPrimitive {
         return "Min";
       case Max:
         return "Max";
-      case AbsMax:
-        return "AbsMax";
     }
     return "<unknwon Reduce>";
   }
