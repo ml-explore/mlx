@@ -13,7 +13,6 @@ namespace mlx::core {
 
 namespace {
 
-
 struct GemmScalars {
   std::optional<array> alpha_device;
   std::optional<array> beta_device;
@@ -22,7 +21,6 @@ struct GemmScalars {
     return alpha_device.has_value();
   }
 };
-
 
 inline array
 ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {

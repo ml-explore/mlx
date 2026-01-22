@@ -115,14 +115,14 @@ __global__ void fp_quantize_columnwise(
     uint8_t* scales,
     size_t size,
     int M,
-    int K, 
+    int K,
     float* global_scale = nullptr) {
   // Input: [M, K] with strides [1, M] (M-major)
   // Quantized output: [M, K/elem_per_byte] row-major (K-major)
   // Scales: [M, K/group_size] row-major (K-major)
   // Quantize along K (last dimension, groups of group_size elements)
   const float scale_enc =
-    !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
+      !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
 
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
@@ -174,7 +174,7 @@ __global__ void fp_quantize_columnwise(
       auto pair = Tx2{thread_data[r], thread_data[r + 1]};
       abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
     }
-    float scale =
+    float scale_dec_b =
         max(fabsf(static_cast<float>(amax_2x.x)),
             fabsf(static_cast<float>(amax_2x.y)));
     scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
@@ -183,7 +183,7 @@ __global__ void fp_quantize_columnwise(
     using ScaleType =
         std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
     auto s = ScaleType(scale_dec_b);
-    scale = float(s);
+    float scale_enc_b = scale_enc / float(s);
     scales_smem[tidx][tidy] = s.__x;
 
     int shared_idx = tidx * padded_local_cols + tidy * bytes_per_group;
@@ -193,12 +193,12 @@ __global__ void fp_quantize_columnwise(
       Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
       if constexpr (bits == 8) {
         uint32_t quantized_val =
-            scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+            scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
         *reinterpret_cast<uint32_t*>(&quantized_smem[shared_idx + j * 4]) =
             quantized_val;
       } else {
         uint16_t quantized_val =
-            scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+            scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
         *reinterpret_cast<uint16_t*>(&quantized_smem[shared_idx + j * 2]) =
             quantized_val;
       }
@@ -345,7 +345,9 @@ void fp_quantize(
             gpu_ptr<uint8_t>(scales),
             w.size(),
             M,
-            K);
+            K,
+            global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                     : nullptr);
       } else {
         throw std::runtime_error(
             "[Quantize::eval_gpu] Can not quantize input with type float64.");
@@ -364,24 +366,24 @@ void fp_quantize(
         bool large = w.size() > UINT_MAX;
         auto [num_blocks, block_dims] = get_launch_args(
             w.size(), w.shape(), w.strides(), large, group_size);
-            
-    enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<T>(w),
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          w.size(),
-          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
-                                   : nullptr);
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not quantize input with type float64.");
-    }
-  });
 
+        enc.add_kernel_node(
+            kernel,
+            num_blocks,
+            block_dims,
+            0,
+            gpu_ptr<T>(w),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<uint8_t>(scales),
+            w.size(),
+            global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                     : nullptr);
+      } else {
+        throw std::runtime_error(
+            "[Quantize::eval_gpu] Can not quantize input with type float64.");
+      }
+    });
+  }
 }
 
 void fp_dequantize(
