@@ -1537,4 +1537,188 @@ void fast::ConvertFP8::eval_gpu(
   unary_op_gpu(inputs, out, name(), stream());
 }
 
+void EntropyCodedMatmul::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Extract inputs in order matching ops.cpp
+  // 0: compressed, 1: stream_lengths, 2: freq, 3: cumfreq, 4: sym_table,
+  // 5: x, 6: scales, 7: biases
+  auto compressed = ensure_row_contiguous(inputs[0], d, s);
+  auto stream_lengths = ensure_row_contiguous(inputs[1], d, s);
+  auto freq = ensure_row_contiguous(inputs[2], d, s);
+  auto cumfreq = ensure_row_contiguous(inputs[3], d, s);
+  auto sym_table = ensure_row_contiguous(inputs[4], d, s);
+  auto x = ensure_row_contiguous(inputs[5], d, s);
+  auto scales = ensure_row_contiguous(inputs[6], d, s);
+  auto biases = ensure_row_contiguous(inputs[7], d, s);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  // Get kernel name based on dtype
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname = "entropy_coded_qmv_" + type_string;
+
+  auto kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set buffers matching Metal kernel signature in entropy_coded.h
+  int c = 0;
+  compute_encoder.set_input_array(compressed, c++);      // buffer(0)
+  compute_encoder.set_input_array(stream_lengths, c++);  // buffer(1)
+  compute_encoder.set_input_array(freq, c++);            // buffer(2)
+  compute_encoder.set_input_array(cumfreq, c++);         // buffer(3)
+  compute_encoder.set_input_array(sym_table, c++);       // buffer(4)
+  compute_encoder.set_input_array(x, c++);               // buffer(5)
+  compute_encoder.set_output_array(out, c++);            // buffer(6)
+  compute_encoder.set_input_array(scales, c++);          // buffer(7)
+  compute_encoder.set_input_array(biases, c++);          // buffer(8)
+
+  // Set constants
+  auto [ns, nsym, msl, ovs, ivs, gs] = state();
+  uint n_streams = static_cast<uint>(ns);
+  uint n_symbols = static_cast<uint>(nsym);
+  uint max_stream_len = static_cast<uint>(msl);
+  uint out_vec_size = static_cast<uint>(ovs);
+  uint in_vec_size = static_cast<uint>(ivs);
+
+  compute_encoder.set_bytes(n_streams, c++);       // buffer(9)
+  compute_encoder.set_bytes(n_symbols, c++);       // buffer(10)
+  compute_encoder.set_bytes(max_stream_len, c++);  // buffer(11)
+  compute_encoder.set_bytes(out_vec_size, c++);    // buffer(12)
+  compute_encoder.set_bytes(in_vec_size, c++);     // buffer(13)
+
+  // Dispatch: one threadgroup per output row, 256 threads per group
+  constexpr int threads_per_tg = 256;
+  MTL::Size group_dims(threads_per_tg, 1, 1);
+  MTL::Size grid_dims(out_vec_size, 1, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void EntropyCodedMatmulV2::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Inputs: compressed, row_offsets, row_stream_lens, freq, cumfreq, sym_table,
+  //         x, scales, biases
+  auto compressed = ensure_row_contiguous(inputs[0], d, s);
+  auto row_offsets = ensure_row_contiguous(inputs[1], d, s);
+  auto row_stream_lens = ensure_row_contiguous(inputs[2], d, s);
+  auto freq = ensure_row_contiguous(inputs[3], d, s);
+  auto cumfreq = ensure_row_contiguous(inputs[4], d, s);
+  auto sym_table = ensure_row_contiguous(inputs[5], d, s);
+  auto x = ensure_row_contiguous(inputs[6], d, s);
+  auto scales = ensure_row_contiguous(inputs[7], d, s);
+  auto biases = ensure_row_contiguous(inputs[8], d, s);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname = "entropy_coded_qmv_v2_" + type_string;
+
+  auto kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Buffer order matches entropy_coded_v2.h
+  int c = 0;
+  compute_encoder.set_input_array(compressed, c++);      // buffer(0)
+  compute_encoder.set_input_array(row_offsets, c++);     // buffer(1)
+  compute_encoder.set_input_array(row_stream_lens, c++); // buffer(2)
+  compute_encoder.set_input_array(freq, c++);            // buffer(3)
+  compute_encoder.set_input_array(cumfreq, c++);         // buffer(4)
+  compute_encoder.set_input_array(sym_table, c++);       // buffer(5)
+  compute_encoder.set_input_array(x, c++);               // buffer(6)
+  compute_encoder.set_output_array(out, c++);            // buffer(7)
+  compute_encoder.set_input_array(scales, c++);          // buffer(8)
+  compute_encoder.set_input_array(biases, c++);          // buffer(9)
+
+  auto [ns, ivs, ovs] = state();
+  uint n_streams = static_cast<uint>(ns);
+  uint in_vec_size = static_cast<uint>(ivs);
+  uint out_vec_size = static_cast<uint>(ovs);
+
+  compute_encoder.set_bytes(n_streams, c++);    // buffer(10)
+  compute_encoder.set_bytes(in_vec_size, c++);  // buffer(11)
+  compute_encoder.set_bytes(out_vec_size, c++); // buffer(12)
+
+  // One threadgroup per row, 256 threads
+  constexpr int threads_per_tg = 256;
+  MTL::Size group_dims(threads_per_tg, 1, 1);
+  MTL::Size grid_dims(out_vec_size, 1, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void EntropyDecodeAsync::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Inputs: compressed, row_offsets, row_stream_lens, freq, cumfreq, sym_table,
+  //         scales, biases
+  auto compressed = ensure_row_contiguous(inputs[0], d, s);
+  auto row_offsets = ensure_row_contiguous(inputs[1], d, s);
+  auto row_stream_lens = ensure_row_contiguous(inputs[2], d, s);
+  auto freq = ensure_row_contiguous(inputs[3], d, s);
+  auto cumfreq = ensure_row_contiguous(inputs[4], d, s);
+  auto sym_table = ensure_row_contiguous(inputs[5], d, s);
+  auto scales = ensure_row_contiguous(inputs[6], d, s);
+  auto biases = ensure_row_contiguous(inputs[7], d, s);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  // Use different kernel based on whether we dequantize
+  auto [ns, ivs, ovs, deq] = state();
+  std::string type_string = deq ? get_type_string(scales.dtype()) : "uint8_t";
+  std::string kname = "entropy_decode_per_row_" + type_string;
+
+  auto kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Buffer order matches entropy_decode_async.h
+  int c = 0;
+  compute_encoder.set_input_array(compressed, c++);      // buffer(0)
+  compute_encoder.set_input_array(row_offsets, c++);     // buffer(1)
+  compute_encoder.set_input_array(row_stream_lens, c++); // buffer(2)
+  compute_encoder.set_input_array(freq, c++);            // buffer(3)
+  compute_encoder.set_input_array(cumfreq, c++);         // buffer(4)
+  compute_encoder.set_input_array(sym_table, c++);       // buffer(5)
+  compute_encoder.set_output_array(out, c++);            // buffer(6) - decoded indices or dequantized
+  compute_encoder.set_input_array(scales, c++);          // buffer(7)
+  compute_encoder.set_input_array(biases, c++);          // buffer(8)
+  
+  // For dequantized output, we write to the same buffer
+  // (dequantized == output in this kernel variant)
+  compute_encoder.set_output_array(out, c++);            // buffer(9) - dequantized (same as output)
+
+  uint n_streams = static_cast<uint>(ns);
+  uint in_vec_size = static_cast<uint>(ivs);
+  uint out_vec_size = static_cast<uint>(ovs);
+  bool do_dequantize = deq;
+
+  compute_encoder.set_bytes(n_streams, c++);      // buffer(10)
+  compute_encoder.set_bytes(in_vec_size, c++);    // buffer(11)
+  compute_encoder.set_bytes(out_vec_size, c++);   // buffer(12)
+  compute_encoder.set_bytes(do_dequantize, c++);  // buffer(13)
+
+  // One threadgroup per row, 256 threads
+  constexpr int threads_per_tg = 256;
+  MTL::Size group_dims(threads_per_tg, 1, 1);
+  MTL::Size grid_dims(out_vec_size, 1, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 } // namespace mlx::core

@@ -4262,6 +4262,180 @@ array quantized_matmul(
       std::move(inputs));
 }
 
+array entropy_coded_matmul(
+    const array& compressed,
+    const array& stream_lengths,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& x,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int n_symbols,
+    int max_stream_len,
+    int out_vec_size,
+    int in_vec_size,
+    int group_size /* = 64 */,
+    StreamOrDevice s /* = {} */) {
+  // Validate input types
+  if (compressed.dtype() != uint8) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] compressed must be uint8");
+  }
+  if (stream_lengths.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] stream_lengths must be uint32");
+  }
+  if (freq.dtype() != uint16 || cumfreq.dtype() != uint16) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] freq and cumfreq must be uint16");
+  }
+  if (sym_table.dtype() != uint8) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] sym_table must be uint8");
+  }
+  if (!issubdtype(x.dtype(), floating)) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] x must be a floating point type");
+  }
+  if (!issubdtype(scales.dtype(), floating) ||
+      !issubdtype(biases.dtype(), floating)) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul] scales and biases must be floating point");
+  }
+
+  auto dtype = promote_types(x.dtype(), scales.dtype());
+  dtype = promote_types(dtype, biases.dtype());
+
+  std::vector<array> inputs = {
+      compressed,
+      stream_lengths,
+      freq,
+      cumfreq,
+      sym_table,
+      astype(x, dtype),
+      astype(scales, dtype),
+      astype(biases, dtype)};
+
+  Shape out_shape = {out_vec_size};
+
+  return array(
+      std::move(out_shape),
+      dtype,
+      std::make_shared<EntropyCodedMatmul>(
+          to_stream(s),
+          n_streams,
+          n_symbols,
+          max_stream_len,
+          out_vec_size,
+          in_vec_size,
+          group_size),
+      std::move(inputs));
+}
+
+array entropy_coded_matmul_v2(
+    const array& compressed,
+    const array& row_offsets,
+    const array& row_stream_lens,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& x,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int in_vec_size,
+    int out_vec_size,
+    StreamOrDevice s /* = {} */) {
+  // Validate input types
+  if (compressed.dtype() != uint8) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul_v2] compressed must be uint8");
+  }
+  if (row_offsets.dtype() != uint32 || row_stream_lens.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul_v2] row_offsets and row_stream_lens must be uint32");
+  }
+  if (!issubdtype(x.dtype(), floating)) {
+    throw std::invalid_argument(
+        "[entropy_coded_matmul_v2] x must be floating point");
+  }
+
+  auto dtype = promote_types(x.dtype(), scales.dtype());
+  dtype = promote_types(dtype, biases.dtype());
+
+  std::vector<array> inputs = {
+      compressed,
+      row_offsets,
+      row_stream_lens,
+      freq,
+      cumfreq,
+      sym_table,
+      astype(x, dtype),
+      astype(scales, dtype),
+      astype(biases, dtype)};
+
+  Shape out_shape = {out_vec_size};
+
+  return array(
+      std::move(out_shape),
+      dtype,
+      std::make_shared<EntropyCodedMatmulV2>(
+          to_stream(s), n_streams, in_vec_size, out_vec_size),
+      std::move(inputs));
+}
+
+array entropy_decode_async(
+    const array& compressed,
+    const array& row_offsets,
+    const array& row_stream_lens,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int in_vec_size,
+    int out_vec_size,
+    bool dequantize /* = true */,
+    StreamOrDevice s /* = {} */) {
+  // Validate input types
+  if (compressed.dtype() != uint8) {
+    throw std::invalid_argument(
+        "[entropy_decode_async] compressed must be uint8");
+  }
+  if (row_offsets.dtype() != uint32 || row_stream_lens.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[entropy_decode_async] row_offsets and row_stream_lens must be uint32");
+  }
+
+  auto dtype = promote_types(scales.dtype(), biases.dtype());
+
+  std::vector<array> inputs = {
+      compressed,
+      row_offsets,
+      row_stream_lens,
+      freq,
+      cumfreq,
+      sym_table,
+      astype(scales, dtype),
+      astype(biases, dtype)};
+
+  // Output shape: [out_vec_size, in_vec_size]
+  Shape out_shape = {out_vec_size, in_vec_size};
+
+  // Output dtype: float if dequantize, uint8 if just decode
+  Dtype out_dtype = dequantize ? dtype : uint8;
+
+  return array(
+      std::move(out_shape),
+      out_dtype,
+      std::make_shared<EntropyDecodeAsync>(
+          to_stream(s), n_streams, in_vec_size, out_vec_size, dequantize),
+      std::move(inputs));
+}
+
 void validate_qqmm_inputs(
     array x,
     array w,

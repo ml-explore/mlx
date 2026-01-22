@@ -3470,6 +3470,49 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
   return {std::move(out_shape)};
 }
 
+bool EntropyCodedMatmul::is_equivalent(const Primitive& other) const {
+  const EntropyCodedMatmul& ecm_other =
+      static_cast<const EntropyCodedMatmul&>(other);
+  return n_streams_ == ecm_other.n_streams_ &&
+      n_symbols_ == ecm_other.n_symbols_ &&
+      max_stream_len_ == ecm_other.max_stream_len_ &&
+      out_vec_size_ == ecm_other.out_vec_size_ &&
+      in_vec_size_ == ecm_other.in_vec_size_ &&
+      group_size_ == ecm_other.group_size_;
+}
+
+std::vector<Shape> EntropyCodedMatmul::output_shapes(
+    const std::vector<array>& inputs) {
+  return {{out_vec_size_}};
+}
+
+bool EntropyCodedMatmulV2::is_equivalent(const Primitive& other) const {
+  const EntropyCodedMatmulV2& ecm_other =
+      static_cast<const EntropyCodedMatmulV2&>(other);
+  return n_streams_ == ecm_other.n_streams_ &&
+      in_vec_size_ == ecm_other.in_vec_size_ &&
+      out_vec_size_ == ecm_other.out_vec_size_;
+}
+
+std::vector<Shape> EntropyCodedMatmulV2::output_shapes(
+    const std::vector<array>& inputs) {
+  return {{out_vec_size_}};
+}
+
+bool EntropyDecodeAsync::is_equivalent(const Primitive& other) const {
+  const EntropyDecodeAsync& eda_other =
+      static_cast<const EntropyDecodeAsync&>(other);
+  return n_streams_ == eda_other.n_streams_ &&
+      in_vec_size_ == eda_other.in_vec_size_ &&
+      out_vec_size_ == eda_other.out_vec_size_ &&
+      dequantize_ == eda_other.dequantize_;
+}
+
+std::vector<Shape> EntropyDecodeAsync::output_shapes(
+    const std::vector<array>& inputs) {
+  return {{out_vec_size_, in_vec_size_}};
+}
+
 bool QQMatmul::is_equivalent(const Primitive& other) const {
   const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&

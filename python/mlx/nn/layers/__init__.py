@@ -93,6 +93,11 @@ from mlx.nn.layers.quantized import (
     QuantizedLinear,
     quantize,
 )
+from mlx.nn.layers.entropy_coded import (
+    EntropyCodedLinear,
+    entropy_quantize,
+    DecodeMode,
+)
 from mlx.nn.layers.recurrent import GRU, LSTM, RNN
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,
