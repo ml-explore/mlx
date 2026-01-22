@@ -5,7 +5,7 @@
 #include <optional>
 #include <variant>
 
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {

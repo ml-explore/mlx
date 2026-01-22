@@ -4,8 +4,8 @@
 
 #include <optional>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
-#include "mlx/mlx_export.h"
 
 namespace mlx::core {
 

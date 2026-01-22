@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 
 namespace mlx::core::metal {
 

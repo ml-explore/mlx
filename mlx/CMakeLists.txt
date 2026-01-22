@@ -22,7 +22,7 @@ target_sources(
 # Define MLX_VERSION only in the version.cpp file.
 add_library(mlx_version OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
 target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
-# mlx_version needs access to mlx_export.h for MLX_API export macro
+# mlx_version needs access to api.h for MLX_API export macro
 target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
 # On Windows shared lib builds, mlx_version also needs MLX_EXPORT for proper DLL
 # linkage

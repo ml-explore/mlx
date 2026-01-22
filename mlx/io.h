@@ -5,9 +5,9 @@
 #include <unordered_map>
 #include <variant>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 #include "mlx/io/load.h"
-#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"
 

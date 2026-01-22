@@ -5,8 +5,8 @@
 #include <chrono>
 #include <optional>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
-#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"
 

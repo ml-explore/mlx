@@ -5,7 +5,7 @@
 #include <complex>
 #include <cstdint>
 
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 #include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
 

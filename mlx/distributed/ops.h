@@ -4,8 +4,8 @@
 
 #include <optional>
 
+#include "mlx/api.h"
 #include "mlx/distributed/distributed.h"
-#include "mlx/mlx_export.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::distributed {

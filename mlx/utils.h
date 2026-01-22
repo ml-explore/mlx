@@ -5,10 +5,10 @@
 #include <exception>
 #include <variant>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/dtype.h"
-#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 namespace mlx::core {
@@ -135,7 +135,7 @@ inline int next_power_of_2(int n) {
 
 namespace env {
 
-MLX_API int get_var(const char* name, int default_value);
+int get_var(const char* name, int default_value);
 
 inline int bfs_max_width() {
   static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);

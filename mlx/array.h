@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "mlx/allocator.h"
+#include "mlx/api.h"
 #include "mlx/dtype.h"
 #include "mlx/event.h"
-#include "mlx/mlx_export.h"
 #include "mlx/small_vector.h"
 
 namespace mlx::core {

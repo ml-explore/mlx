@@ -4,10 +4,10 @@
 
 #include <unordered_set>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/io/load.h"
-#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 #define DEFINE_VMAP()                                                 \
@@ -46,7 +46,7 @@
 namespace mlx::core {
 
 // Abstract base class
-class MLX_API Primitive {
+class Primitive {
  public:
   explicit Primitive(Stream stream) : stream_(stream) {}
 

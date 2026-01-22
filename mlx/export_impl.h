@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/api.h"
 #include "mlx/io/load.h"
-#include "mlx/mlx_export.h"
 
 #pragma once
 

@@ -8,9 +8,9 @@
 #include <thread>
 #include <unordered_map>
 
+#include "mlx/api.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/device.h"
-#include "mlx/mlx_export.h"
 #include "mlx/stream.h"
 
 namespace mlx::core::scheduler {

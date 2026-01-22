@@ -3,7 +3,6 @@
 #include <vector>
 
 #include "mlx/array.h"
-#include "mlx/mlx_export.h"
 
 namespace mlx::core {
 
@@ -25,7 +24,7 @@ namespace mlx::core {
  * `MLX_METAL_FAST_SYNCH=1`. Fast mode also requires Metal 3.2+ (macOS 15+,
  * iOS 18+).
  */
-class MLX_API Fence {
+class Fence {
  public:
   Fence() {};
   explicit Fence(Stream stream);

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 
 namespace mlx::core::detail {
 

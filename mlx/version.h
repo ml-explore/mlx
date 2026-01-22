@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 
 #define MLX_VERSION_MAJOR 0
 #define MLX_VERSION_MINOR 30

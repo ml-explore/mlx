@@ -6,7 +6,7 @@
 
 #include "array.h"
 #include "device.h"
-#include "mlx/mlx_export.h"
+#include "mlx/api.h"
 #include "utils.h"
 
 namespace mlx::core::fft {

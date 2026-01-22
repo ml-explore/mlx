@@ -2,8 +2,8 @@
 
 #pragma once
 
+#include "mlx/api.h"
 #include "mlx/device.h"
-#include "mlx/mlx_export.h"
 
 namespace mlx::core {
 
