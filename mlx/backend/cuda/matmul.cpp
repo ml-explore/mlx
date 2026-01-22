@@ -354,6 +354,22 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
+  auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
+  if (M == 1) {
+    if (transposed_b) {
+      gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
+      return;
+    }
+  }
+
+  if (N == 1) {
+    if (!transposed_a) {
+      gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
+      return;
+    }
+  }
+
   throw std::runtime_error("NYI");
 }
 
