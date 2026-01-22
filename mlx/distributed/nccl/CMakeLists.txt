@@ -9,24 +9,17 @@ if(MLX_BUILD_CUDA)
       STATUS
         "NCCL not found, using stubs. To run distributed with NCCL backend, install NCCL."
     )
-
-    include(ExternalProject)
-    ExternalProject_Add(
+    file(
+      DOWNLOAD
+      "https://raw.githubusercontent.com/NVIDIA/nccl/refs/tags/v2.27.5-1/src/nccl.h.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/nccl.h")
+    add_library(nccl_stub OBJECT
+                ${CMAKE_CURRENT_SOURCE_DIR}/nccl_stub/nccl_stubs.cpp)
+    target_include_directories(
       nccl_stub
-      SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/nccl_stub"
-      BUILD_COMMAND ${CMAKE_COMMAND} --build . --config Release
-      INSTALL_COMMAND "")
-    # Ensure nccl_stub is built before mlx compiles nccl.cpp (needs nccl.h)
-    add_dependencies(mlx nccl_stub)
-    set(NCCL_PATH
-        "${CMAKE_CURRENT_BINARY_DIR}/nccl_stub-prefix/src/nccl_stub-build/")
-    if(WIN32)
-      # On Windows, shared libraries produce .dll and .lib (import library)
-      target_link_libraries(mlx PRIVATE ${NCCL_PATH}/Release/nccl.lib)
-    else()
-      target_link_libraries(mlx PRIVATE ${NCCL_PATH}/libnccl.so)
-    endif()
-    target_include_directories(mlx PRIVATE ${NCCL_PATH})
+      PRIVATE ${CUDAToolkit_INCLUDE_DIRS}
+      PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:nccl_stub>)
   endif()
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_nccl.cpp)

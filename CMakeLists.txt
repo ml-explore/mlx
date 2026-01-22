@@ -155,6 +155,7 @@ target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 if(MLX_BUILD_METAL)

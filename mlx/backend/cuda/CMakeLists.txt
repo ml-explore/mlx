@@ -202,7 +202,6 @@ FetchContent_MakeAvailable(nvtx3)
 target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:nvtx3-cpp>)
 
 # Make cuda runtime APIs available in non-cuda files.
-find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
 # Use cublasLt.
