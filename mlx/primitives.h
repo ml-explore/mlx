@@ -46,7 +46,7 @@
 namespace mlx::core {
 
 // Abstract base class
-class Primitive {
+class MLX_API Primitive {
  public:
   explicit Primitive(Stream stream) : stream_(stream) {}
 

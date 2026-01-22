@@ -3,11 +3,11 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/memory.h"
 #include "mlx/utils.h"
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
-#include <unistd.h>
 
 #include <cassert>
 

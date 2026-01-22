@@ -247,7 +247,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
 
   out += oindex;
 
-  uint val = w[offset];
+  uint32_t val = w[offset];
 #pragma clang loop unroll(full)
   for (int i = 0; i < pack_factor; i++) {
     uint8_t d;

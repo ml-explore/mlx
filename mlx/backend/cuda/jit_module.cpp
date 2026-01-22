@@ -12,7 +12,6 @@
 
 #include <fmt/format.h>
 #include <nvrtc.h>
-#include <unistd.h>
 
 namespace mlx::core::cu {
 
@@ -321,7 +320,7 @@ void load_module(
     const std::string& ptx,
     const std::vector<std::pair<std::string, std::string>>& ptx_kernels,
     CUmodule& module_,
-    std::unordered_map<std::string, std::tuple<CUfunction, bool, uint>>&
+    std::unordered_map<std::string, std::tuple<CUfunction, bool, uint32_t>>&
         kernels) {
   // Load module.
   char jit_log[4089] = {};
@@ -383,7 +382,7 @@ JitModule::~JitModule() {
   CHECK_CUDA_ERROR(cuModuleUnload(module_));
 }
 
-std::pair<CUfunction, uint> JitModule::get_kernel_and_dims(
+std::pair<CUfunction, uint32_t> JitModule::get_kernel_and_dims(
     const std::string& kernel_name,
     std::function<void(CUfunction)> configure_kernel) {
   auto it = kernels_.find(kernel_name);

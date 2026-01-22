@@ -123,19 +123,19 @@ std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2);
 
 // Get the num_blocks and block_dims assuming each thread handles
 // |work_per_thread| elements of |arr|.
-std::tuple<dim3, uint> get_launch_args(
+std::tuple<dim3, uint32_t> get_launch_args(
     size_t size,
     const Shape& shape,
     const Strides& strides,
     bool large,
     int work_per_thread = 1,
-    uint max_block_dim = 1024);
+    uint32_t max_block_dim = 1024);
 
-inline std::tuple<dim3, uint> get_launch_args(
+inline std::tuple<dim3, uint32_t> get_launch_args(
     const array& arr,
     bool large,
     int work_per_thread = 1,
-    uint max_block_dim = 1024) {
+    uint32_t max_block_dim = 1024) {
   return get_launch_args(
       arr.size(),
       arr.shape(),

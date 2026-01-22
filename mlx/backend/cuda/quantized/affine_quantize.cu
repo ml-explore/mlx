@@ -208,7 +208,7 @@ __global__ void affine_dequantize(
         bias;
     out[3] = static_cast<T>((w[2] >> 2) & 0x3f) * scale + bias;
   } else {
-    uint val = w[offset];
+    uint32_t val = w[offset];
 #pragma clang loop unroll(full)
     for (int i = 0; i < pack_factor; i++) {
       uint8_t d;
