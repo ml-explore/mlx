@@ -4,7 +4,7 @@ Real Model Inference Test: Entropy-Coded Quantization
 
 Tests entropy coding on a real LLM (SmolLM-135M or Qwen2.5-0.5B) and compares:
 1. Original model (float16/bfloat16)
-2. Entropy-coded model (FUSED_V2 mode)
+2. Entropy-coded model (FUSED mode)
 3. Entropy-coded model (CACHED mode)
 
 Measures:
@@ -56,7 +56,7 @@ def get_model_size_bytes(model, compressed=False) -> int:
     return total
 
 
-def convert_linear_layers(model, decode_mode: str = "fused_v2", n_streams: int = 64):
+def convert_linear_layers(model, decode_mode: str = "fused", n_streams: int = 64):
     """Convert all Linear layers to EntropyCodedLinear."""
     converted = 0
     
@@ -177,33 +177,33 @@ def main():
     n_linear = sum(1 for name, m in model.named_modules() if isinstance(m, nn.Linear))
     print(f"   Linear layers: {n_linear}")
     
-    # Create entropy-coded version (FUSED_V2)
-    print("\n3. Converting to entropy-coded (FUSED_V2 mode)...")
+    # Create entropy-coded version (FUSED)
+    print("\n3. Converting to entropy-coded (FUSED mode)...")
     
     # We need to create a fresh model and convert it
-    model_v2 = SimpleLM(vocab_size=vocab_size, dim=dim, n_layers=n_layers, n_heads=8)
+    model_fused = SimpleLM(vocab_size=vocab_size, dim=dim, n_layers=n_layers, n_heads=8)
     
     # Copy weights from original
-    model_v2.load_weights(list(model.parameters().items()))
-    mx.eval(model_v2.parameters())
+    model_fused.load_weights(list(model.parameters().items()))
+    mx.eval(model_fused.parameters())
     
     # Convert linear layers manually
     converted = 0
     compression_ratios = []
     
     # Convert output layer
-    if isinstance(model_v2.output, nn.Linear):
-        ec = EntropyCodedLinear.from_linear(model_v2.output, n_streams=64, decode_mode="fused_v2")
-        model_v2.output = ec
+    if isinstance(model_fused.output, nn.Linear):
+        ec = EntropyCodedLinear.from_linear(model_fused.output, n_streams=64, decode_mode="fused")
+        model_fused.output = ec
         converted += 1
         compression_ratios.append(ec.compression_ratio)
     
     # Convert MLP layers
-    for layer in model_v2.layers:
+    for layer in model_fused.layers:
         if hasattr(layer, 'mlp'):
             for i, sublayer in enumerate(layer.mlp.layers):
                 if isinstance(sublayer, nn.Linear):
-                    ec = EntropyCodedLinear.from_linear(sublayer, n_streams=64, decode_mode="fused_v2")
+                    ec = EntropyCodedLinear.from_linear(sublayer, n_streams=64, decode_mode="fused")
                     layer.mlp.layers[i] = ec
                     converted += 1
                     compression_ratios.append(ec.compression_ratio)
@@ -214,18 +214,18 @@ def main():
         print(f"   Average compression ratio: {avg_ratio:.2f}x over 4-bit")
         print(f"   Effective bits/weight: {4.0 / avg_ratio:.2f}")
     
-    # Benchmark FUSED_V2
-    print("\n4. Benchmarking entropy-coded model (FUSED_V2)...")
-    v2_time = benchmark_forward(model_v2, input_ids)
-    print(f"   Forward pass: {v2_time * 1000:.2f} ms")
-    print(f"   Overhead vs baseline: {v2_time / baseline_time:.2f}x")
+    # Benchmark FUSED
+    print("\n4. Benchmarking entropy-coded model (FUSED)...")
+    fused_time = benchmark_forward(model_fused, input_ids)
+    print(f"   Forward pass: {fused_time * 1000:.2f} ms")
+    print(f"   Overhead vs baseline: {fused_time / baseline_time:.2f}x")
     
     # Check output similarity
-    v2_output = model_v2(input_ids)
-    mx.eval(v2_output)
+    fused_output = model_fused(input_ids)
+    mx.eval(fused_output)
     
     # Compare outputs (they won't be identical due to quantization)
-    diff = mx.abs(baseline_output - v2_output).mean()
+    diff = mx.abs(baseline_output - fused_output).mean()
     mx.eval(diff)
     print(f"   Mean output difference: {float(diff):.4f}")
     
@@ -260,7 +260,7 @@ def main():
     print(f"{'Mode':<20} {'Time (ms)':<15} {'vs Baseline':<15} {'Memory Savings':<15}")
     print("-" * 70)
     print(f"{'Baseline (fp32)':<20} {baseline_time*1000:<15.2f} {'1.00x':<15} {'0%':<15}")
-    print(f"{'FUSED_V2':<20} {v2_time*1000:<15.2f} {v2_time/baseline_time:<15.2f}x {'~54%':<15}")
+    print(f"{'FUSED':<20} {fused_time*1000:<15.2f} {fused_time/baseline_time:<15.2f}x {'~54%':<15}")
     print(f"{'CACHED':<20} {cached_time*1000:<15.2f} {cached_time/baseline_time:<15.2f}x {'disk only':<15}")
     
     print("\n" + "=" * 70)
@@ -271,10 +271,10 @@ Entropy-coded quantization achieves:
 - {avg_ratio:.2f}x compression over 4-bit (1.84x typical)
 - ~{4.0/avg_ratio:.1f} bits per weight (vs 4 bits)
 - ~54% memory savings for weights (vs fp32)
-- FUSED_V2 overhead: {v2_time/baseline_time:.1f}x vs unquantized
+- FUSED overhead: {fused_time/baseline_time:.1f}x vs unquantized
 - CACHED is fastest for inference (weights pre-decoded)
 
-For real LLM inference, FUSED_V2 provides the best balance:
+For real LLM inference, FUSED provides the best balance:
 - Keeps weights compressed in memory
 - Only 1.1-1.5x overhead vs CACHED
 - Enables larger models on limited RAM
