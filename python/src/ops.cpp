@@ -4251,53 +4251,6 @@ void init_ops(nb::module_& m) {
       "entropy_coded_matmul",
       &mx::entropy_coded_matmul,
       nb::arg("compressed"),
-      nb::arg("stream_lengths"),
-      nb::arg("freq"),
-      nb::arg("cumfreq"),
-      nb::arg("sym_table"),
-      nb::arg("x"),
-      nb::arg("scales"),
-      nb::arg("biases"),
-      nb::arg("n_streams"),
-      nb::arg("n_symbols"),
-      nb::arg("max_stream_len"),
-      nb::arg("out_vec_size"),
-      nb::arg("in_vec_size"),
-      "group_size"_a = 64,
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def entropy_coded_matmul(compressed: array, stream_lengths: array, freq: array, cumfreq: array, sym_table: array, x: array, scales: array, biases: array, n_streams: int, n_symbols: int, max_stream_len: int, out_vec_size: int, in_vec_size: int, group_size: int = 64, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        Fused entropy-coded quantized matrix-vector multiply.
-
-        Performs rANS entropy decoding, 4-bit dequantization, and GEMV in a
-        single fused GPU kernel. Achieves ~1.84x compression over 4-bit
-        quantization using entropy coding.
-
-        Args:
-          compressed (array): Physically interleaved rANS compressed data (uint8)
-          stream_lengths (array): Length of each rANS stream (uint32)
-          freq (array): rANS frequency table for 16 symbols (uint16)
-          cumfreq (array): rANS cumulative frequency table (uint16)
-          sym_table (array): Symbol lookup table for slot->symbol (uint8)
-          x (array): Input vector for GEMV
-          scales (array): Per-row or per-group quantization scales
-          biases (array): Per-row or per-group quantization biases
-          n_streams (int): Number of parallel rANS streams (typically 256)
-          n_symbols (int): Total number of weight symbols (out_dim * in_dim)
-          max_stream_len (int): Maximum bytes per stream
-          out_vec_size (int): Output dimension
-          in_vec_size (int): Input dimension
-          group_size (int, optional): Quantization group size. Default: 64.
-
-        Returns:
-          array: Output vector of shape [out_vec_size]
-      )pbdoc");
-  m.def(
-      "entropy_coded_matmul_v2",
-      &mx::entropy_coded_matmul_v2,
-      nb::arg("compressed"),
       nb::arg("row_offsets"),
       nb::arg("row_stream_lens"),
       nb::arg("freq"),
@@ -4312,12 +4265,13 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def entropy_coded_matmul_v2(compressed: array, row_offsets: array, row_stream_lens: array, freq: array, cumfreq: array, sym_table: array, x: array, scales: array, biases: array, n_streams: int, in_vec_size: int, out_vec_size: int, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def entropy_coded_matmul(compressed: array, row_offsets: array, row_stream_lens: array, freq: array, cumfreq: array, sym_table: array, x: array, scales: array, biases: array, n_streams: int, in_vec_size: int, out_vec_size: int, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Per-row entropy-coded matmul (V2) with O(n) decode work.
+        Fused entropy-coded quantized matrix-vector multiply.
 
-        Each row is independently encoded, so the fused kernel only decodes
-        in_vec_size symbols per row instead of the entire matrix.
+        Performs per-row rANS entropy decoding, 4-bit dequantization, and GEMV
+        in a single fused GPU kernel. Each row is independently encoded, so the
+        kernel only decodes in_vec_size symbols per row (O(n) decode work).
 
         Args:
           compressed (array): All rows' compressed data concatenated (uint8)

@@ -3474,27 +3474,11 @@ bool EntropyCodedMatmul::is_equivalent(const Primitive& other) const {
   const EntropyCodedMatmul& ecm_other =
       static_cast<const EntropyCodedMatmul&>(other);
   return n_streams_ == ecm_other.n_streams_ &&
-      n_symbols_ == ecm_other.n_symbols_ &&
-      max_stream_len_ == ecm_other.max_stream_len_ &&
-      out_vec_size_ == ecm_other.out_vec_size_ &&
-      in_vec_size_ == ecm_other.in_vec_size_ &&
-      group_size_ == ecm_other.group_size_;
-}
-
-std::vector<Shape> EntropyCodedMatmul::output_shapes(
-    const std::vector<array>& inputs) {
-  return {{out_vec_size_}};
-}
-
-bool EntropyCodedMatmulV2::is_equivalent(const Primitive& other) const {
-  const EntropyCodedMatmulV2& ecm_other =
-      static_cast<const EntropyCodedMatmulV2&>(other);
-  return n_streams_ == ecm_other.n_streams_ &&
       in_vec_size_ == ecm_other.in_vec_size_ &&
       out_vec_size_ == ecm_other.out_vec_size_;
 }
 
-std::vector<Shape> EntropyCodedMatmulV2::output_shapes(
+std::vector<Shape> EntropyCodedMatmul::output_shapes(
     const std::vector<array>& inputs) {
   return {{out_vec_size_}};
 }

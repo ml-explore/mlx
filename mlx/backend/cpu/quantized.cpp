@@ -977,14 +977,6 @@ void EntropyCodedMatmul::eval_cpu(
       "Entropy-coded matmul requires GPU.");
 }
 
-void EntropyCodedMatmulV2::eval_cpu(
-    const std::vector<array>& inputs,
-    array& out) {
-  throw std::runtime_error(
-      "[EntropyCodedMatmulV2::eval_cpu] Not implemented. "
-      "Entropy-coded matmul requires GPU.");
-}
-
 void EntropyDecodeAsync::eval_cpu(
     const std::vector<array>& inputs,
     array& out) {

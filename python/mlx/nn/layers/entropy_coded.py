@@ -21,8 +21,7 @@ RANS_BYTE_L = 1 << 23
 
 class DecodeMode(Enum):
     """Decode strategy selection."""
-    FUSED = "fused"          # V1: Decode in GEMV kernel (smallest memory)
-    FUSED_V2 = "fused_v2"    # V2: Per-row decode (O(n) vs O(rows*n))
+    FUSED = "fused"          # Decode in GEMV kernel (smallest memory)
     CACHED = "cached"        # Decode at load, keep in RAM (fastest inference)
     GPU_ASYNC = "gpu_async"  # Metal async decode queue
 
@@ -50,13 +49,13 @@ class AsyncDecodePrefetcher:
     
     def start_prefetch(self, layer: 'EntropyCodedLinear'):
         """Start async decode of a layer's weights on separate stream."""
-        if layer._compressed_data_v2 is None:
+        if layer._compressed_data is None:
             return
         
         # Prepare MLX arrays if not done
-        if not hasattr(layer, '_mx_compressed_v2'):
-            layer._mx_compressed_v2 = mx.array(
-                np.frombuffer(layer._compressed_data_v2, dtype=np.uint8))
+        if not hasattr(layer, '_mx_compressed'):
+            layer._mx_compressed = mx.array(
+                np.frombuffer(layer._compressed_data, dtype=np.uint8))
             layer._mx_row_offsets = mx.array(layer._row_offsets)
             layer._mx_row_stream_lens = mx.array(layer._row_stream_lens)
             layer._mx_freq = mx.array(layer._freq.astype(np.uint16))
@@ -66,7 +65,7 @@ class AsyncDecodePrefetcher:
         # Start decode on separate stream
         with mx.stream(self._decode_stream):
             decoded = mx.entropy_decode_async(
-                layer._mx_compressed_v2,
+                layer._mx_compressed,
                 layer._mx_row_offsets,
                 layer._mx_row_stream_lens,
                 layer._mx_freq,
@@ -216,7 +215,7 @@ def entropy_encode(indices: np.ndarray, table: RANSTable, n_streams: int = 256) 
 
 def entropy_encode_v2(indices_2d: np.ndarray, table: RANSTable, n_streams: int = 256) -> Tuple[bytes, np.ndarray, np.ndarray]:
     """
-    Encode 4-bit indices using per-row interleaved rANS (V2: O(n) decode).
+    Encode 4-bit indices using per-row interleaved rANS for O(n) decode.
     
     Args:
         indices_2d: 2D array of indices [out_dim, in_dim]
@@ -324,7 +323,7 @@ class EntropyCodedLinear(Module):
         output_dims: int,
         bias: bool = True,
         n_streams: int = 256,
-        decode_mode: str = "fused_v2",
+        decode_mode: str = "fused",
         group_size: int = 64,
     ):
         super().__init__()
@@ -432,23 +431,14 @@ class EntropyCodedLinear(Module):
         counts = np.bincount(indices.flatten(), minlength=16)
         table = RANSTable.from_counts(counts)
         
-        # V2 and GPU_ASYNC use per-row encoding for O(n) decode
-        if layer.decode_mode in (DecodeMode.FUSED_V2, DecodeMode.GPU_ASYNC):
-            compressed_data_v2, row_offsets, row_stream_lens = entropy_encode_v2(
-                indices, table, n_streams
-            )
-            layer._compressed_data_v2 = compressed_data_v2
-            layer._row_offsets = row_offsets
-            layer._row_stream_lens = row_stream_lens
-            compressed_bytes = len(compressed_data_v2)
-        else:
-            compressed_data, stream_lengths, max_stream_len = entropy_encode(
-                indices.flatten(), table, n_streams
-            )
-            layer._compressed_data = compressed_data
-            layer._stream_lengths = stream_lengths
-            layer._max_stream_len = max_stream_len
-            compressed_bytes = len(compressed_data)
+        # Per-row encoding for O(n) decode
+        compressed_data, row_offsets, row_stream_lens = entropy_encode_v2(
+            indices, table, n_streams
+        )
+        layer._compressed_data = compressed_data
+        layer._row_offsets = row_offsets
+        layer._row_stream_lens = row_stream_lens
+        compressed_bytes = len(compressed_data)
         
         # Store frequency tables
         layer._freq = table.freq
@@ -523,14 +513,10 @@ class EntropyCodedLinear(Module):
         """Forward pass with entropy-coded weights."""
         
         # GPU_ASYNC mode: use prefetched weights if available
-        if self.decode_mode == DecodeMode.GPU_ASYNC and self._compressed_data_v2 is not None:
+        if self.decode_mode == DecodeMode.GPU_ASYNC and self._compressed_data is not None:
             return self._forward_gpu_async(x)
         
-        # Use fused GPU kernel V2 if available
-        if self.decode_mode == DecodeMode.FUSED_V2 and self._compressed_data_v2 is not None:
-            return self._forward_fused_v2(x)
-        
-        # Use fused GPU kernel V1 if available
+        # Use fused GPU kernel if available
         if self.decode_mode == DecodeMode.FUSED and self._compressed_data is not None:
             return self._forward_fused(x)
         
@@ -569,71 +555,11 @@ class EntropyCodedLinear(Module):
         return y
     
     def _forward_fused(self, x: mx.array) -> mx.array:
-        """Fused GPU kernel path: decode + dequant + GEMV in one kernel."""
+        """Fused GPU kernel path: per-row decode + dequant + GEMV."""
         # Convert data to MLX arrays if needed
         if not hasattr(self, '_mx_compressed'):
             self._mx_compressed = mx.array(
                 np.frombuffer(self._compressed_data, dtype=np.uint8))
-            self._mx_stream_lengths = mx.array(
-                np.array(self._stream_lengths, dtype=np.uint32))
-            self._mx_freq = mx.array(self._freq.astype(np.uint16))
-            self._mx_cumfreq = mx.array(self._cumfreq.astype(np.uint16))
-            self._mx_sym_table = mx.array(self._sym_table.astype(np.uint8))
-        
-        # Handle batched input: process each vector separately
-        # (kernel currently supports 1D input only)
-        orig_shape = x.shape
-        if x.ndim > 1:
-            batch_size = x.shape[0]
-            outputs = []
-            for i in range(batch_size):
-                y_i = mx.entropy_coded_matmul(
-                    self._mx_compressed,
-                    self._mx_stream_lengths,
-                    self._mx_freq,
-                    self._mx_cumfreq,
-                    self._mx_sym_table,
-                    x[i],
-                    self.scales.flatten(),
-                    self.biases_quant.flatten(),
-                    self.n_streams,
-                    self.output_dims * self.input_dims,
-                    self._max_stream_len,
-                    self.output_dims,
-                    self.input_dims,
-                    self.group_size
-                )
-                outputs.append(y_i)
-            y = mx.stack(outputs, axis=0)
-        else:
-            y = mx.entropy_coded_matmul(
-                self._mx_compressed,
-                self._mx_stream_lengths,
-                self._mx_freq,
-                self._mx_cumfreq,
-                self._mx_sym_table,
-                x,
-                self.scales.flatten(),
-                self.biases_quant.flatten(),
-                self.n_streams,
-                self.output_dims * self.input_dims,
-                self._max_stream_len,
-                self.output_dims,
-                self.input_dims,
-                self.group_size
-            )
-        
-        if self.bias is not None:
-            y = y + self.bias
-        
-        return y
-    
-    def _forward_fused_v2(self, x: mx.array) -> mx.array:
-        """Fused GPU kernel V2 path: per-row decode + dequant + GEMV."""
-        # Convert data to MLX arrays if needed
-        if not hasattr(self, '_mx_compressed_v2'):
-            self._mx_compressed_v2 = mx.array(
-                np.frombuffer(self._compressed_data_v2, dtype=np.uint8))
             self._mx_row_offsets = mx.array(self._row_offsets)
             self._mx_row_stream_lens = mx.array(self._row_stream_lens)
             self._mx_freq = mx.array(self._freq.astype(np.uint16))
@@ -646,8 +572,8 @@ class EntropyCodedLinear(Module):
             batch_size = x.shape[0]
             outputs = []
             for i in range(batch_size):
-                y_i = mx.entropy_coded_matmul_v2(
-                    self._mx_compressed_v2,
+                y_i = mx.entropy_coded_matmul(
+                    self._mx_compressed,
                     self._mx_row_offsets,
                     self._mx_row_stream_lens,
                     self._mx_freq,
@@ -663,8 +589,8 @@ class EntropyCodedLinear(Module):
                 outputs.append(y_i)
             y = mx.stack(outputs, axis=0)
         else:
-            y = mx.entropy_coded_matmul_v2(
-                self._mx_compressed_v2,
+            y = mx.entropy_coded_matmul(
+                self._mx_compressed,
                 self._mx_row_offsets,
                 self._mx_row_stream_lens,
                 self._mx_freq,
@@ -689,7 +615,7 @@ class EntropyCodedLinear(Module):
         
         This mode uses a separate GPU stream to decode the next layer
         while the current layer is computing. On first call, it decodes
-        inline (like FUSED_V2). On subsequent calls, it uses pre-decoded
+        inline (like FUSED). On subsequent calls, it uses pre-decoded
         weights from the prefetch buffer.
         """
         prefetcher = get_prefetcher()
@@ -708,13 +634,13 @@ class EntropyCodedLinear(Module):
                     y = y + self.bias
                 return y
         
-        # No prefetched weights - decode now using V2 kernel
+        # No prefetched weights - decode now using fused kernel
         # This happens on first call before prefetching starts
-        return self._forward_fused_v2(x)
+        return self._forward_fused(x)
     
     def prefetch_weights(self):
         """Start async prefetch of this layer's weights."""
-        if self.decode_mode == DecodeMode.GPU_ASYNC and self._compressed_data_v2 is not None:
+        if self.decode_mode == DecodeMode.GPU_ASYNC and self._compressed_data is not None:
             prefetcher = get_prefetcher()
             prefetcher.start_prefetch(self)
     
@@ -732,7 +658,7 @@ class EntropyCodedLinear(Module):
 def entropy_quantize(
     model: Module,
     n_streams: int = 256,
-    decode_mode: str = "fused_v2",
+    decode_mode: str = "fused",
     group_size: int = 64,
 ) -> None:
     """

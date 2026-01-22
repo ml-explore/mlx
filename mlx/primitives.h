@@ -1716,49 +1716,6 @@ class EntropyCodedMatmul : public UnaryPrimitive {
   explicit EntropyCodedMatmul(
       Stream stream,
       int n_streams,
-      int n_symbols,
-      int max_stream_len,
-      int out_vec_size,
-      int in_vec_size,
-      int group_size)
-      : UnaryPrimitive(stream),
-        n_streams_(n_streams),
-        n_symbols_(n_symbols),
-        max_stream_len_(max_stream_len),
-        out_vec_size_(out_vec_size),
-        in_vec_size_(in_vec_size),
-        group_size_(group_size) {}
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_NAME(EntropyCodedMatmul)
-  bool is_equivalent(const Primitive& other) const override;
-  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
-  auto state() const {
-    return std::make_tuple(
-        n_streams_,
-        n_symbols_,
-        max_stream_len_,
-        out_vec_size_,
-        in_vec_size_,
-        group_size_);
-  }
-
- private:
-  int n_streams_;
-  int n_symbols_;
-  int max_stream_len_;
-  int out_vec_size_;
-  int in_vec_size_;
-  int group_size_;
-};
-
-class EntropyCodedMatmulV2 : public UnaryPrimitive {
- public:
-  explicit EntropyCodedMatmulV2(
-      Stream stream,
-      int n_streams,
       int in_vec_size,
       int out_vec_size)
       : UnaryPrimitive(stream),
@@ -1769,7 +1726,7 @@ class EntropyCodedMatmulV2 : public UnaryPrimitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  DEFINE_NAME(EntropyCodedMatmulV2)
+  DEFINE_NAME(EntropyCodedMatmul)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {

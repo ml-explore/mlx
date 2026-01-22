@@ -1454,24 +1454,6 @@ array gather_qmm(
 /** Entropy-coded quantized matmul with fused rANS decode + dequant + GEMV */
 array entropy_coded_matmul(
     const array& compressed,
-    const array& stream_lengths,
-    const array& freq,
-    const array& cumfreq,
-    const array& sym_table,
-    const array& x,
-    const array& scales,
-    const array& biases,
-    int n_streams,
-    int n_symbols,
-    int max_stream_len,
-    int out_vec_size,
-    int in_vec_size,
-    int group_size = 64,
-    StreamOrDevice s = {});
-
-/** Per-row entropy-coded matmul (V2) - O(n) decode work */
-array entropy_coded_matmul_v2(
-    const array& compressed,
     const array& row_offsets,
     const array& row_stream_lens,
     const array& freq,
