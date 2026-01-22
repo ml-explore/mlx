@@ -24,6 +24,16 @@ inline array ensure_row_contiguous(
   }
 }
 
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
+    return x;
+  }
+  array x_copy = contiguous_copy_gpu(x, s);
+  enc.add_temporary(x_copy);
+  return x_copy;
+}
+
 inline array ensure_row_contiguous_matrix(
     const array& x,
     cu::CommandEncoder& enc,
@@ -72,7 +82,7 @@ void fast::Quantize::eval_gpu(
       fp_dequantize(wq, scales, w, group_size_, bits_, global_scale, enc, s);
     }
   } else {
-    auto w = ensure_row_contiguous(inputs[0], enc, s);
+    auto w = ensure_contiguous(inputs[0], enc, s);
     auto& wq = outputs[0];
     auto& scales = outputs[1];
 

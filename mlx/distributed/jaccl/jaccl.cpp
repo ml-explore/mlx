@@ -965,7 +965,7 @@ class IBVGroup : public GroupImpl {
 
       // Prefill the pipeline
       int buff = 0;
-      while (write_offset < n_bytes && buff < PIPELINE) {
+      while (N * buff < n_bytes && buff < PIPELINE) {
         cm_.recv_from(src, buff);
 
         in_flight++;

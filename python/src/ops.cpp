@@ -5496,8 +5496,6 @@ void init_ops(nb::module_& m) {
         w (array): Weight matrix. If quantized, it is packed in unsigned integers.
         scales (array, optional): The scales to use per ``group_size`` elements of
           ``w`` if ``w`` is quantized. Default: ``None``.
-        tensor_scale (array, optional): The tensor-wide scale to use if ``w`` is
-          quantized and ``mode="nvfp4"``. Default: ``None``.
         group_size (int, optional): Number of elements in ``x`` and ``w`` that
           share a scale. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.

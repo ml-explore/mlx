@@ -3479,7 +3479,7 @@ bool QQMatmul::is_equivalent(const Primitive& other) const {
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
   auto out_shape = inputs[0].shape();
-  int w_outer_dims = inputs[2].shape(-2);
+  int w_outer_dims = inputs[1].shape(-2);
   out_shape.back() = w_outer_dims;
   return {std::move(out_shape)};
 }
@@ -3505,23 +3505,21 @@ std::vector<array> QQMatmul::vjp(
 
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
-  std::vector<int> reorder(cotan.ndim());
-  std::iota(reorder.begin(), reorder.end(), 0);
-  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
   auto& s = stream();
   // primal[1] -- non quantized w (N, K)
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
   std::optional<array> cotan_amax =
-      is_nvfp4 ? std::make_optional(max(abs(cotan, s), s)) : std::nullopt;
+      is_nvfp4 ? std::make_optional(astype(max(abs(cotan, s), s), float32, s))
+               : std::nullopt;
 
   auto get_primal_scale = [&](int idx) {
     return is_nvfp4 ? std::make_optional(primals[idx]) : std::nullopt;
   };
+  
 
   for (auto arg : argnums) {
-    // TODO: we need a kernel that will quantize columnwise + transpose
     if (arg == 0) { // gradient wrt to x
       // We transpose weights -> quantize along N
       vjps.push_back(qqmm(
@@ -3532,7 +3530,7 @@ std::vector<array> QQMatmul::vjp(
           bits_,
           qmode,
           cotan_amax,
-          get_primal_scale(2), // global_scale_x
+          get_primal_scale(3), // global_scale_w (for w.T)
           s));
     } else if (arg == 1) { // gradient wrt to weights
       vjps.push_back(qqmm(
@@ -3543,7 +3541,7 @@ std::vector<array> QQMatmul::vjp(
           bits_,
           qmode,
           cotan_amax,
-          get_primal_scale(3), // global_scale_w
+          get_primal_scale(2), // global_scale_x (for x.T)
           s));
     }
   }

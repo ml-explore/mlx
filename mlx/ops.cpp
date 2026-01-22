@@ -4226,8 +4226,8 @@ void validate_global_scale(
             << global_scale->shape() << ".";
         throw std::invalid_argument(msg.str());
       }
-      // TODO: not sure about the type
-      if (!issubdtype(global_scale->dtype(), floating)) {
+      // TODO: not sure if type should be restricted to float32
+      if (global_scale->dtype() != float32) {
         std::ostringstream msg;
         msg << "[" << tag
             << "] Global scale must be a floating type but got type "
@@ -4431,8 +4431,9 @@ array qqmm(
     inputs.push_back(*scales_w);
   }
   if (global_scale_x.has_value() && global_scale_w.has_value()) {
-    inputs.push_back(*global_scale_x);
-    inputs.push_back(*global_scale_w);
+    // Stop gradient through global scales
+    inputs.push_back(stop_gradient(*global_scale_x));
+    inputs.push_back(stop_gradient(*global_scale_w));
   }
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;

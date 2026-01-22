@@ -13,6 +13,7 @@ namespace mlx::core {
 
 namespace {
 
+
 struct GemmScalars {
   std::optional<array> alpha_device;
   std::optional<array> beta_device;
@@ -22,11 +23,10 @@ struct GemmScalars {
   }
 };
 
-inline array ensure_row_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (x.flags().row_contiguous) {
+
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
     return x;
   }
   array x_copy = contiguous_copy_gpu(x, s);
@@ -198,8 +198,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       ? quantize_input(
             inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
-            ensure_row_contiguous(inputs[1], encoder, s),
-            ensure_row_contiguous(inputs[2], encoder, s));
+            ensure_contiguous(inputs[1], encoder, s),
+            ensure_contiguous(inputs[2], encoder, s));
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
