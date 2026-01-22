@@ -1451,6 +1451,56 @@ array gather_qmm(
     bool sorted_indices = false,
     StreamOrDevice s = {});
 
+/** Entropy-coded quantized matmul with fused rANS decode + dequant + GEMV */
+array entropy_coded_matmul(
+    const array& compressed,
+    const array& stream_lengths,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& x,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int n_symbols,
+    int max_stream_len,
+    int out_vec_size,
+    int in_vec_size,
+    int group_size = 64,
+    StreamOrDevice s = {});
+
+/** Per-row entropy-coded matmul (V2) - O(n) decode work */
+array entropy_coded_matmul_v2(
+    const array& compressed,
+    const array& row_offsets,
+    const array& row_stream_lens,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& x,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int in_vec_size,
+    int out_vec_size,
+    StreamOrDevice s = {});
+
+/** Async entropy decode - decode weights without matmul for prefetching */
+array entropy_decode_async(
+    const array& compressed,
+    const array& row_offsets,
+    const array& row_stream_lens,
+    const array& freq,
+    const array& cumfreq,
+    const array& sym_table,
+    const array& scales,
+    const array& biases,
+    int n_streams,
+    int in_vec_size,
+    int out_vec_size,
+    bool dequantize = true,
+    StreamOrDevice s = {});
+
 /** Returns a contraction of a and b over multiple dimensions. */
 array tensordot(
     const array& a,
