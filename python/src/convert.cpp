@@ -471,6 +471,7 @@ mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
   if (auto pv = std::get_if<nb::bool_>(&v); pv) {
     return mx::array(nb::cast<bool>(*pv), t.value_or(mx::bool_));
   } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
+    // Use int64_t instead of long for portability - on Windows, long is 32-bit
     auto val = nb::cast<int64_t>(*pv);
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())

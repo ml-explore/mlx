@@ -61,19 +61,6 @@ if(WIN32
   # path. CUDAToolkit_LIBRARY_DIR should be set by find_package(CUDAToolkit) in
   # the main CMakeLists.
   target_link_libraries(tests PRIVATE "${CUDAToolkit_LIBRARY_DIR}/cudart.lib")
-
-  # Copy NCCL stub DLL to tests directory (built as part of project)
-  if(NOT NCCL_FOUND)
-    set(NCCL_STUB_DLL
-        "${CMAKE_BINARY_DIR}/mlx/distributed/nccl/nccl_stub-prefix/src/nccl_stub-build/$<CONFIG>/nccl.dll"
-    )
-    add_custom_command(
-      TARGET tests
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NCCL_STUB_DLL}"
-              $<TARGET_FILE_DIR:tests>
-      COMMENT "Copying NCCL stub DLL for tests (static build)")
-  endif()
 endif()
 
 # On Windows, copy the mlx DLL to the test executable directory for runtime
@@ -87,19 +74,6 @@ if(WIN32 AND BUILD_SHARED_LIBS)
     POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mlx>
             $<TARGET_FILE_DIR:tests>)
-
-  # Copy NCCL stub DLL (built as part of project but not tracked as IMPORTED)
-  if(MLX_BUILD_CUDA AND NOT NCCL_FOUND)
-    set(NCCL_STUB_DLL
-        "${CMAKE_BINARY_DIR}/mlx/distributed/nccl/nccl_stub-prefix/src/nccl_stub-build/$<CONFIG>/nccl.dll"
-    )
-    add_custom_command(
-      TARGET tests
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NCCL_STUB_DLL}"
-              $<TARGET_FILE_DIR:tests>
-      COMMENT "Copying NCCL stub DLL for tests")
-  endif()
 
   # Copy cuDNN DLL (find_library finds .lib but DLLs are in different location)
   if(MLX_BUILD_CUDA AND CUDNN_FOUND)

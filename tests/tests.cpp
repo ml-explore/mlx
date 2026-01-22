@@ -7,6 +7,21 @@
 
 #include "mlx/mlx.h"
 
+// Use regular fp32 precision for tests (matches Python test setup)
+#ifdef _WIN32
+#define SET_ENV(name, value) _putenv_s(name, value)
+#else
+#define SET_ENV(name, value) setenv(name, value, 0)
+#endif
+
+namespace {
+struct EnvInit {
+  EnvInit() {
+    SET_ENV("MLX_ENABLE_TF32", "0");
+  }
+} env_init;
+} // namespace
+
 using namespace mlx::core;
 
 // Global test listener to reset GPU state after each test.

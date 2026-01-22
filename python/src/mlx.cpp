@@ -4,6 +4,11 @@
 
 #include "mlx/version.h"
 
+#ifdef _MSC_VER
+#include <csignal>
+#include <cstdlib>
+#endif
+
 namespace mx = mlx::core;
 namespace nb = nanobind;
 
@@ -25,6 +30,19 @@ void init_distributed(nb::module_&);
 void init_export(nb::module_&);
 
 NB_MODULE(core, m) {
+#ifdef _MSC_VER
+  // Suppress MSVC CRT abort dialog boxes for testing/debugging.
+  // This allows crashes to be handled programmatically rather than
+  // requiring user interaction with a dialog.
+  _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+
+  // Install a SIGABRT handler that exits without a dialog.
+  // This catches abort() calls from any CRT instance (including nanobind's).
+  std::signal(SIGABRT, [](int) {
+    std::_Exit(3); // Exit immediately without cleanup or dialogs
+  });
+#endif
+
   m.doc() = "mlx: A framework for machine learning on Apple silicon.";
 
   auto reprlib_fix = nb::module_::import_("mlx._reprlib_fix");
