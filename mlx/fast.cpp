@@ -872,10 +872,6 @@ array quantized_scaled_dot_product_attention(
     throw std::invalid_argument(
         "[quantized_scaled_dot_product_attention] Only fp quantization modes are supported.");
   }
-  if (qmode == QuantizationMode::Nvfp4) {
-    throw std::invalid_argument(
-        "[quantized_scaled_dot_product_attention] Mode 'nvfp4' is not supported for fast attention.");
-  }
 
   auto expected_params = [](QuantizationMode mode) -> std::pair<int, int> {
     switch (mode) {

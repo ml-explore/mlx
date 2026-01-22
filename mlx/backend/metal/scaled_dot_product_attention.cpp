@@ -583,6 +583,20 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+std::string quant_mode_to_kernel_suffix(QuantizationMode mode) {
+  switch (mode) {
+    case QuantizationMode::Mxfp4:
+      return "Mxfp4";
+    case QuantizationMode::Nvfp4:
+      return "Nvfp4";
+    case QuantizationMode::Mxfp8:
+      return "Mxfp8";
+    default:
+      throw std::invalid_argument(
+          "[quant_sdpa_vector_2pass] Unsupported quantization mode.");
+  }
+}
+
 void quant_sdpa_vector_2pass(
     const Stream& s,
     metal::Device& d,
@@ -596,7 +610,8 @@ void quant_sdpa_vector_2pass(
     int group_size,
     int bits,
     bool do_causal,
-    const std::optional<array>& mask) {
+    const std::optional<array>& mask,
+    QuantizationMode mode) {
   std::string kname;
   kname.reserve(96);
   kname += "quant_sdpa_vector_2pass_1_";
@@ -604,9 +619,7 @@ void quant_sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(q.shape(-1));
   kname += "_";
-  kname += std::to_string(group_size);
-  kname += "_";
-  kname += std::to_string(bits);
+  kname += quant_mode_to_kernel_suffix(mode);
 
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
@@ -998,7 +1011,8 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       group_size_,
       bits_,
       /* do_causal = */ false,
-      mask);
+      mask,
+      mode_);
 
   d.add_temporaries(std::move(copies), s.index);
 }

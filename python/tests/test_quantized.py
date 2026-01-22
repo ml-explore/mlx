@@ -749,30 +749,31 @@ class TestQuantized(mlx_tests.MLXTestCase):
         B, Hq, Hkv = 1, 2, 1
         Lq, Lk, D = 4, 640, 128
 
-        for mode in ["mxfp4", "mxfp8"]:
-            bits = 8 if mode == "mxfp8" else 4
-            q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
-            k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
-            v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+        for mode in ["mxfp4", "mxfp8", "nvfp4"]:
+            with self.subTest(mode=mode):
+                bits = 8 if mode == "mxfp8" else 4
+                q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
+                k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+                v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
 
-            k_q, k_scales = mx.quantize(k, mode=mode)
-            v_q, v_scales = mx.quantize(v, mode=mode)
+                k_q, k_scales = mx.quantize(k, mode=mode)
+                v_q, v_scales = mx.quantize(v, mode=mode)
 
-            ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0)
-            out = mx.fast.quantized_scaled_dot_product_attention(
-                q,
-                k_q,
-                k_scales,
-                v_q,
-                v_scales,
-                scale=1.0,
-                mode=mode,
-                bits=bits,
-            )
+                ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0)
+                out = mx.fast.quantized_scaled_dot_product_attention(
+                    q,
+                    k_q,
+                    k_scales,
+                    v_q,
+                    v_scales,
+                    scale=1.0,
+                    mode=mode,
+                    bits=bits,
+                )
 
-            self.assertEqual(out.shape, ref.shape)
-            tol = 5e-2 if bits == 4 else 2e-2
-            self.assertLess((out - ref).abs().max(), tol)
+                self.assertEqual(out.shape, ref.shape)
+                tol = 5e-2 if bits == 4 else 2e-2
+                self.assertLess((out - ref).abs().max(), tol)
 
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
