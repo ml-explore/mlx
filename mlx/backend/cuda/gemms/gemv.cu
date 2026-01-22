@@ -282,6 +282,7 @@ void gather_mv(
     dim3 block_dims{WARP_SIZE, rows_per_block};
     int rows = N;
     int cols = K;
+    uint32_t batch_size = static_cast<uint32_t>(out.size() / N);
     const DataType* mat = gpu_ptr<DataType>(mat_);
     const DataType* vec = gpu_ptr<DataType>(vec_);
 
@@ -299,7 +300,7 @@ void gather_mv(
       auto kernel = gemv_gather<DataType, rows_per_block, n_per_thread()>;
       encoder.add_kernel_node(
           kernel,
-          dim3{num_blocks_x, out.size() / N},
+          dim3{num_blocks_x, batch_size},
           block_dims,
           0,
           mat,
