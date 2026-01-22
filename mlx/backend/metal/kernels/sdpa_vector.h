@@ -215,7 +215,7 @@ template <typename T, int D, int V = D>
 
   // Adjust positions
   const int kv_head_idx = tid.x;
-  const int q_batch_idx = tid.y;
+  const int batch_idx = tid.y;
   const int block_idx = tid.z;
   const int gqa_factor = tptg.y;
   const int q_seq_len = tptg.z;
@@ -223,15 +223,17 @@ template <typename T, int D, int V = D>
   const int q_head_idx = gqa_factor * kv_head_idx + tidtg.y;
   const int num_kv_heads = tpg.x;
   const int num_q_heads = num_kv_heads * gqa_factor;
-  const int q_batch_head_idx = (q_batch_idx * num_q_heads + q_head_idx);
+  const int q_batch_head_idx = (batch_idx * num_q_heads + q_head_idx);
   const int o_offset = q_batch_head_idx * q_seq_len + q_seq_idx;
   const int q_offset =
       query_transposed ? num_q_heads * q_seq_idx + q_batch_head_idx : o_offset;
 
   queries += q_offset * D + simd_lid * qk_per_thread;
-  keys += kv_head_idx * k_head_stride + block_idx * k_seq_stride +
+
+  const int kv_batch_head_idx = batch_idx * num_kv_heads + kv_head_idx;
+  keys += kv_batch_head_idx * k_head_stride + block_idx * k_seq_stride +
       simd_lid * qk_per_thread;
-  values += kv_head_idx * v_head_stride + block_idx * v_seq_stride +
+  values += kv_batch_head_idx * v_head_stride + block_idx * v_seq_stride +
       simd_lid * v_per_thread;
   out += o_offset * blocks * V + block_idx * V + simd_lid * v_per_thread;
   if (bool_mask) {
@@ -253,7 +255,6 @@ template <typename T, int D, int V = D>
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
   if (has_sinks && block_idx == 0) {
-    int q_head_idx = q_batch_head_idx % num_q_heads;
     max_score = static_cast<U>(sinks[q_head_idx]);
     sum_exp_score = 1;
   }

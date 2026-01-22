@@ -468,8 +468,11 @@ void sdpa_vector_2pass(
       }
     }
   } else {
-    // TODO tune this for other chip sizes
-    blocks = 64;
+    if (n_simds >= 4) {
+      blocks = 64;
+    } else {
+      blocks = 32;
+    }
   }
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
