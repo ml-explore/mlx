@@ -3,6 +3,7 @@
 #include <metal_simdgroup>
 
 #include "mlx/backend/metal/kernels/fp_quantized.h"
+#include "mlx/backend/metal/kernels/quantized_utils.h"
 
 using namespace metal;
 
@@ -185,12 +186,24 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
   }
 }
 
-template <typename U, int elem_per_thread, int bits>
-[[gnu::always_inline]] METAL_FUNC U
-dot_key(const thread U* q, const device uint32_t* keys) {
-  using LoadT = typename conditional<bits == 4, uint16_t, uint32_t>::type;
+// Function constant for affine bias support
+constant bool has_affine_bias [[function_constant(26)]];
 
+// Unified dot product with keys across all QuantModes
+template <
+    typename U,
+    int elem_per_thread,
+    QuantMode mode,
+    int bits = QuantTraits<mode>::bits>
+[[gnu::always_inline]] METAL_FUNC U dot_key(
+    const thread U* q,
+    const device uint32_t* keys,
+    U scale,
+    U bias = U{0}) {
+  using Traits = QuantTraits<mode>;
+  using LoadT = typename LoadType<bits>::type;
   constexpr uint32_t mask = (1 << bits) - 1;
+
   auto ks = (const device LoadT*)keys;
   U score = 0;
 
@@ -198,41 +211,67 @@ dot_key(const thread U* q, const device uint32_t* keys) {
   for (int j = 0; j < elem_per_thread / 4; j++) {
     LoadT p = ks[j];
 
-    score += q[4 * j + 0] * Dequantize<bits, U>{}(p & mask);
-    score += q[4 * j + 1] * Dequantize<bits, U>{}((p >> bits) & mask);
-    score += q[4 * j + 2] * Dequantize<bits, U>{}((p >> (2 * bits)) & mask);
-    score += q[4 * j + 3] * Dequantize<bits, U>{}((p >> (3 * bits)) & mask);
+    uint8_t v0 = uint8_t(p & mask);
+    uint8_t v1 = uint8_t((p >> bits) & mask);
+    uint8_t v2 = uint8_t((p >> (2 * bits)) & mask);
+    uint8_t v3 = uint8_t((p >> (3 * bits)) & mask);
+
+    score += q[4 * j + 0] * Traits::template dequantize_value<U>(v0);
+    score += q[4 * j + 1] * Traits::template dequantize_value<U>(v1);
+    score += q[4 * j + 2] * Traits::template dequantize_value<U>(v2);
+    score += q[4 * j + 3] * Traits::template dequantize_value<U>(v3);
   }
-  return score;
+
+  return score * scale;
 }
 
-template <typename U, int elem_per_thread, int bits>
+template <
+    typename U,
+    int elem_per_thread,
+    QuantMode mode,
+    int bits = QuantTraits<mode>::bits>
 [[gnu::always_inline]] METAL_FUNC void accumulate_values(
     thread U* o,
     const device uint32_t* values,
     U factor,
-    U w_scale) {
-  using LoadT = typename conditional<bits == 4, uint16_t, uint32_t>::type;
+    U w_scale,
+    U bias = U{0}) {
+  using Traits = QuantTraits<mode>;
+  using LoadT = typename LoadType<bits>::type;
   constexpr uint32_t mask = (1 << bits) - 1;
+
   auto vs = (const device LoadT*)values;
 
 #pragma clang loop unroll(full)
   for (int j = 0; j < elem_per_thread / 4; j++) {
     LoadT p = vs[j];
 
-    U v0 = Dequantize<bits, U>{}(p & mask);
-    U v1 = Dequantize<bits, U>{}((p >> bits) & mask);
-    U v2 = Dequantize<bits, U>{}((p >> (2 * bits)) & mask);
-    U v3 = Dequantize<bits, U>{}((p >> (3 * bits)) & mask);
+    uint8_t v0 = uint8_t(p & mask);
+    uint8_t v1 = uint8_t((p >> bits) & mask);
+    uint8_t v2 = uint8_t((p >> (2 * bits)) & mask);
+    uint8_t v3 = uint8_t((p >> (3 * bits)) & mask);
 
-    o[4 * j + 0] = fma(o[4 * j + 0], factor, v0 * w_scale);
-    o[4 * j + 1] = fma(o[4 * j + 1], factor, v1 * w_scale);
-    o[4 * j + 2] = fma(o[4 * j + 2], factor, v2 * w_scale);
-    o[4 * j + 3] = fma(o[4 * j + 3], factor, v3 * w_scale);
+    U dq0 = Traits::template dequantize<U>(v0, w_scale, bias);
+    U dq1 = Traits::template dequantize<U>(v1, w_scale, bias);
+    U dq2 = Traits::template dequantize<U>(v2, w_scale, bias);
+    U dq3 = Traits::template dequantize<U>(v3, w_scale, bias);
+
+    o[4 * j + 0] = fma(o[4 * j + 0], factor, dq0);
+    o[4 * j + 1] = fma(o[4 * j + 1], factor, dq1);
+    o[4 * j + 2] = fma(o[4 * j + 2], factor, dq2);
+    o[4 * j + 3] = fma(o[4 * j + 3], factor, dq3);
   }
 }
 
-template <typename T, int D, int group_size, int bits>
+///////////////////////////////////////////////////////////////////////////////
+// Quantized SDPA kernel using QuantTraits
+//
+// This kernel supports all quantization modes (Mxfp4, Nvfp4, Mxfp8, Affine)
+// through the QuantMode template parameter. For Affine mode, bias buffers
+// are enabled via the has_affine_bias function constant.
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, int D, QuantMode mode, int group_size, int bits>
 [[kernel]] void quant_sdpa_vector_2pass_1(
     const device T* queries [[buffer(0)]],
     const device uint32_t* keys [[buffer(1)]],
@@ -257,12 +296,18 @@ template <typename T, int D, int group_size, int bits>
     [[buffer(18), function_constant(has_mask)]],
     const constant int& mask_head_stride
     [[buffer(19), function_constant(has_mask)]],
+    const device T* key_biases
+    [[buffer(20), function_constant(has_affine_bias)]],
+    const device T* value_biases
+    [[buffer(21), function_constant(has_affine_bias)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]],
     uint quad_gid [[quadgroup_index_in_threadgroup]],
     uint quad_lid [[thread_index_in_quadgroup]]) {
+  using Traits = QuantTraits<mode>;
+
   constexpr int BN = 16;
   constexpr int BD = 4;
   constexpr int elem_per_thread = D / BD;
@@ -301,6 +346,11 @@ template <typename T, int D, int group_size, int bits>
   values += kv_head_idx * v_stride + packed_idx;
   value_scales += v_group_idx;
 
+  if constexpr (Traits::has_bias) {
+    key_biases += k_group_idx;
+    value_biases += v_group_idx;
+  }
+
   out += o_offset * blocks * D + block_idx * D + quad_lid * elem_per_thread;
   sums += o_offset * blocks + block_idx;
   maxs += o_offset * blocks + block_idx;
@@ -332,9 +382,18 @@ template <typename T, int D, int group_size, int bits>
     }
 
     if (use_key) {
-      // Compute attention score: dot(q, dequantize(k)) * scale
-      U key_scale = dequantize_scale<U, group_size>(key_scales[0]);
-      U score = dot_key<U, elem_per_thread, bits>(q, keys) * key_scale;
+      U key_scale;
+      U key_bias = 0;
+
+      if constexpr (Traits::has_bias) {
+        key_scale = U(((const device T*)key_scales)[0]);
+        key_bias = U(key_biases[0]);
+      } else {
+        key_scale = Traits::template dequantize_scale<U>(key_scales[0]);
+      }
+
+      U score =
+          dot_key<U, elem_per_thread, mode, bits>(q, keys, key_scale, key_bias);
       score = quad_sum(score);
 
       if (float_mask) {
@@ -349,16 +408,28 @@ template <typename T, int D, int group_size, int bits>
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
 
-      U value_scale = dequantize_scale<U, group_size>(value_scales[0]);
-      U weighted_val_scale = exp_score * value_scale;
-      accumulate_values<U, elem_per_thread, bits>(
-          o, values, factor, weighted_val_scale);
+      U value_scale;
+      U value_bias = 0;
+
+      if constexpr (Traits::has_bias) {
+        value_scale = U(((const device T*)value_scales)[0]);
+        value_bias = U(value_biases[0]);
+      } else {
+        value_scale = Traits::template dequantize_scale<U>(value_scales[0]);
+      }
+
+      accumulate_values<U, elem_per_thread, mode, bits>(
+          o, values, factor, exp_score * value_scale, exp_score * value_bias);
     }
 
     keys += blocks * stride / pack_factor;
     key_scales += blocks * stride / group_size;
     values += blocks * stride / pack_factor;
     value_scales += blocks * stride / group_size;
+    if constexpr (Traits::has_bias) {
+      key_biases += blocks * stride / group_size;
+      value_biases += blocks * stride / group_size;
+    }
     if (bool_mask) {
       bmask += BN * blocks * mask_kv_seq_stride;
     }
