@@ -174,12 +174,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     x_shape = (1, N)
                     w_shape = (M, N)
 
-                    x = mx.random.normal(shape=x_shape, key=k1).astype(mx.bfloat16)
-                    x_hat = mx.dequantize(*mx.quantize(x, mode=mode), mode=mode)
+                    x = mx.random.normal(shape=x_shape, key=k1)
+                    x_hat = mx.dequantize(
+                        *mx.quantize(x, mode=mode), mode=mode, dtype=mx.float32
+                    )
 
-                    w = mx.random.normal(shape=w_shape, key=k2).astype(mx.bfloat16)
+                    w = mx.random.normal(shape=w_shape, key=k2)
                     w_q, scales = mx.quantize(w, mode=mode)
-                    w_hat = mx.dequantize(w_q, scales, mode=mode)
+                    w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=mx.float32)
                     y_q = mx.qqmm(
                         x,
                         w_q,

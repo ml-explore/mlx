@@ -1052,6 +1052,105 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+uint8_t to_fp8_e8m0(float x) {
+  if (!std::isfinite(x)) {
+    return 0xFF;
+  }
+  if (x < 0.0f) {
+    return 0x00;
+  }
+  float le = std::log2(x);
+  int n = int(std::round(le));
+
+  n = n < -127 ? -127 : n;
+  n = n > 127 ? 127 : n;
+  return static_cast<uint8_t>(n + 127);
+}
+
+uint8_t to_fp4_e2m1(float x) {
+  if (std::isnan(x)) {
+    return 0x7;
+  }
+
+  const uint8_t sign_bit = (std::signbit(x)) ? 0x8 : 0x0;
+  x = std::abs(x);
+
+  uint8_t bits;
+  if (x > 5.0f) {
+    bits = 0x7;
+  } else if (x >= 3.5f) {
+    bits = 0x6;
+  } else if (x > 2.5f) {
+    bits = 0x5;
+  } else if (x >= 1.75f) {
+    bits = 0x4;
+  } else if (x > 1.25f) {
+    bits = 0x3;
+  } else if (x >= 0.75f) {
+    bits = 0x2;
+  } else if (x > 0.25f) {
+    bits = 0x1;
+  } else {
+    bits = 0x0;
+  }
+  return bits | sign_bit;
+}
+
+template <typename T>
+void fp_quantize_dequantize(
+    const array& w_arr,
+    array& out_arr,
+    int bits,
+    int group_size,
+    size_t w_size) {
+  auto w = w_arr.data<T>();
+  auto out = out_arr.data<T>();
+
+  size_t n_groups = w_size / group_size;
+
+  for (size_t i = 0; i < n_groups; ++i) {
+    size_t idx = i * group_size;
+    float scale = -std::numeric_limits<float>::infinity();
+    for (int j = 0; j < group_size; ++j) {
+      scale = std::max(scale, std::abs(w[idx + j]));
+    }
+    scale /= bits == 4 ? 6.0f : 448.0f;
+    if (group_size == 16) {
+      scale = dequantize_scale<float, 16>(detail::ToFP8()(scale));
+    } else {
+      scale = dequantize_scale<float, 32>(to_fp8_e8m0(scale));
+    }
+
+    for (int j = 0; j < group_size; ++j) {
+      float w_el = scale == 0 ? 0.0f : w[idx + j] / scale;
+      float output;
+      if (bits == 8) {
+        output = detail::FromFP8()(detail::ToFP8()(w_el));
+      } else {
+        output = FP4_LUT[to_fp4_e2m1(w_el)];
+      }
+      out[idx + j] = static_cast<T>(scale * output);
+    }
+  }
+}
+
+void dispatch_quantize_dequantize(
+    const array& w,
+    array& out,
+    int bits,
+    int group_size) {
+  if (w.dtype() == float16) {
+    fp_quantize_dequantize<float16_t>(w, out, bits, group_size, w.size());
+  } else if (w.dtype() == bfloat16) {
+    fp_quantize_dequantize<bfloat16_t>(w, out, bits, group_size, w.size());
+  } else if (w.dtype() == float32) {
+    fp_quantize_dequantize<float>(w, out, bits, group_size, w.size());
+  } else {
+    throw std::runtime_error(
+        "[quantize_dequantize] Only supports floating point inputs");
+  }
+}
+
 template <typename T, typename U>
 void quantize(
     const T* w,
@@ -1238,6 +1337,51 @@ void fast::ConvertFP8::eval_cpu(
 }
 
 void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("QQMatmul not implemented on CPU.");
+  auto& encoder = cpu::get_command_encoder(stream());
+  auto ensure_row_contiguous = [s = stream(), &encoder](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
+    } else {
+      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
+      copy_cpu(arr, arr_cpy, CopyType::General, s);
+      encoder.add_temporary(arr_cpy);
+      return arr_cpy;
+    }
+  };
+
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  if (w_quantized && inputs[0].shape(-2) == 1) {
+    bool donate_x = inputs[0].is_donatable();
+    auto x = ensure_row_contiguous(inputs[0]);
+    auto w = ensure_row_contiguous(inputs[1]);
+    auto scales = ensure_row_contiguous(inputs[2]);
+
+    out.set_data(allocator::malloc(out.nbytes()));
+
+    // If x is a copy it should be donatable
+    donate_x |= x.is_donatable();
+    auto xhat = donate_x
+        ? x
+        : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+
+    encoder.set_input_array(x);
+    encoder.set_input_array(w);
+    encoder.set_input_array(scales);
+    encoder.set_output_array(out);
+    encoder.dispatch([out = array::unsafe_weak_copy(out),
+                      x = array::unsafe_weak_copy(x),
+                      xhat = array::unsafe_weak_copy(xhat),
+                      w = array::unsafe_weak_copy(w),
+                      scales = array::unsafe_weak_copy(scales),
+                      group_size_ = group_size_,
+                      bits_ = bits_]() mutable {
+      dispatch_quantize_dequantize(x, xhat, bits_, group_size_);
+      fp_qmm_dispatch(out, xhat, w, scales, group_size_, bits_, true);
+    });
+    return;
+  } else {
+    throw std::runtime_error("[QQMatmul] NYI for the general case");
+  }
 }
+
 } // namespace mlx::core

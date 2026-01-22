@@ -1766,7 +1766,6 @@ template <typename T, const int group_size, const int bits>
   uint8_t q_scale = s.bits;
   scale = float(s);
 
-  // Write out the scales and biases
   size_t gindex = index / group_size;
   if (index % group_size == 0) {
     scales[gindex] = q_scale;
@@ -1786,7 +1785,7 @@ template <typename T, const int group_size, const int bits>
 template <typename T, const int group_size, const int bits>
 [[kernel]] void fp_dequantize(
     const device uint8_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
+    const device uint8_t* scales [[buffer(1)]],
     device T* out [[buffer(3)]],
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
@@ -1813,4 +1812,33 @@ template <typename T, const int group_size, const int bits>
     }
     out[i] = static_cast<T>(scale * Dequantize<bits>{}(d));
   }
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_quantize_dequantize(
+    const device T* w [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    uint2 tidx [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  constexpr bool use_mx_scale = group_size == 32;
+  size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
+
+  float scale;
+  float w_thread = w[index];
+  if (use_mx_scale) {
+    scale = simd_max(abs(w_thread));
+  } else {
+    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
+    scale = tidx.x < 16 ? w_max_l : w_max_r;
+  }
+  scale /= bits == 4 ? 6.0f : 448.0f;
+
+  using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
+  auto s = ScaleType(scale);
+  scale = float(s);
+
+  uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
+
+  out[index] = static_cast<T>(scale * Dequantize<bits>{}(output));
 }

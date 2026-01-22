@@ -37,4 +37,14 @@ inline array ensure_row_contiguous_matrix(
   return x_copy;
 }
 
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
+    return x;
+  }
+  array x_copy = contiguous_copy_gpu(x, s);
+  enc.add_temporary(x_copy);
+  return x_copy;
+}
+
 } // namespace mlx::core

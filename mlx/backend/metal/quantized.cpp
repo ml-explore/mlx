@@ -1267,6 +1267,30 @@ void gather_qmm_rhs(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void dispatch_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  // It is a qmv with a small inner dimension so route to qmv_quad kernel
+  if ((K == 128 || K == 64) && is_power_of_2(bits)) {
+    qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // Run of the mill qmv
+  qmv(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+}
+
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -1310,16 +1334,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // It is a qmv with a small inner dimension so route to qmv_quad kernel
-  if (transpose_ && (K == 128 || K == 64) && is_power_of_2(bits_)) {
-    qmv_quad(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
-    return;
-  }
-
   // Run of the mill qmv
   if (transpose_) {
-    qmv(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    dispatch_qmv(
+        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
     return;
   }
 
@@ -1441,6 +1459,99 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       d,
       s,
       mode);
+}
+
+void quantize_dequantize(
+    const array& in,
+    array& out,
+    std::string mode,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  auto w = ensure_row_contiguous(in, d, s);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_output_array(out, 1);
+  auto type_string = get_type_string(in.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      mode + "_quantize_dequantize_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "quantize_dequantize", mode, type_string, group_size, bits);
+
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  constexpr int uint8_per_uint32 = 4;
+  constexpr int simd_size = 32;
+  int packs_per_int = (bits == 3 || bits == 5) ? 8 : bits == 6 ? 4 : 8 / bits;
+  int per_thread = std::max(group_size / simd_size, 1);
+  size_t nthreads = w.size() / per_thread;
+
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (thread_group_size > nthreads) {
+    thread_group_size = nthreads;
+  }
+  auto group_dims = MTL::Size(thread_group_size, 1, 1);
+  bool use_2d = nthreads > UINT_MAX;
+  auto grid_shape = w.shape();
+  grid_shape.back() /= per_thread;
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
+                               : MTL::Size(nthreads, 1, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto mode = quantization_mode_to_string(mode_);
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  if (w_quantized && inputs[0].shape(-2) == 1) {
+    out.set_data(allocator::malloc(out.nbytes()));
+
+    bool donate_x = inputs[0].is_donatable();
+    array x = ensure_row_contiguous(inputs[0], d, s);
+    // If x is a copy it should be donatable
+    donate_x |= x.is_donatable();
+    auto xhat = donate_x
+        ? x
+        : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s);
+
+    // Make sure the last two dims of w and s are contiguous
+    array w = ensure_row_contiguous_matrix(inputs[1], d, s);
+    array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+
+    bool non_batched = w.ndim() == 2;
+    int K = x.shape(-1);
+    int M = non_batched ? x.size() / K : x.shape(-2);
+    int N = out.shape(-1);
+    dispatch_qmv(
+        xhat,
+        w,
+        scales,
+        std::nullopt,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  } else {
+    throw std::runtime_error("[QQMatmul] NYI for the general case");
+  }
 }
 
 void fast::Quantize::eval_gpu(

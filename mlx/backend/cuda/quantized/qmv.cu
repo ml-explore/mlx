@@ -198,6 +198,21 @@ __global__ void fp_qmv_batched(
       mat, scales, vec, out, rows, cols);
 }
 
+template <typename F>
+void dispatch_1_2_4(int n, F&& f) {
+  switch (n) {
+    case 1:
+      f(std::integral_constant<int, 1>{});
+      break;
+    case 2:
+      f(std::integral_constant<int, 2>{});
+      break;
+    case 4:
+      f(std::integral_constant<int, 4>{});
+      break;
+  }
+}
+
 void fp_qmv(
     const array& mat,
     const array& scales,
@@ -221,20 +236,25 @@ void fp_qmv(
       uint blocks_y = (N + rows_per_block - 1) / rows_per_block;
       const uint32_t* mat_ptr = gpu_ptr<uint32_t>(mat);
       const T* vec_ptr = gpu_ptr<T>(vec);
-      // TODO deal with multiple of 16 but not 32
-      bool aligned = cu::is_aligned<4>(mat_ptr);
-      aligned &=
+      int n = 1;
+      if (K % 32 == 0 && cu::is_aligned<4>(mat_ptr) &&
           ((bits == 4 && cu::is_aligned<8>(vec_ptr)) ||
-           cu::is_aligned<4>(vec_ptr));
-      dispatch_bool(aligned, [&](auto aligned) {
+           cu::is_aligned<4>(vec_ptr))) {
+        n = 4;
+      } else if (
+          cu::is_aligned<2>(mat_ptr) &&
+          ((bits == 4 && cu::is_aligned<4>(vec_ptr)) ||
+           cu::is_aligned<2>(vec_ptr))) {
+        n = 2;
+      }
+      dispatch_1_2_4(n, [&](auto n) {
         dispatch_bool(B > 1, [&](auto batched) {
-          constexpr int n = aligned() ? 4 : 1;
           if (!batched()) {
-            auto kernel = fp_qmv_single<T, rows_per_block, n, 4, 32, true>;
+            auto kernel = fp_qmv_single<T, rows_per_block, n(), 4, 32, true>;
             if (bits == 8) {
-              kernel = fp_qmv_single<T, rows_per_block, n, 8, 32, true>;
+              kernel = fp_qmv_single<T, rows_per_block, n(), 8, 32, true>;
             } else if (group_size == 16) {
-              kernel = fp_qmv_single<T, rows_per_block, n, 4, 16, false>;
+              kernel = fp_qmv_single<T, rows_per_block, n(), 4, 16, false>;
             }
             encoder.add_kernel_node(
                 kernel,
@@ -248,11 +268,11 @@ void fp_qmv(
                 N,
                 K);
           } else {
-            auto kernel = fp_qmv_batched<T, rows_per_block, n, 4, 32, true>;
+            auto kernel = fp_qmv_batched<T, rows_per_block, n(), 4, 32, true>;
             if (bits == 8) {
-              kernel = fp_qmv_batched<T, rows_per_block, n, 8, 32, true>;
+              kernel = fp_qmv_batched<T, rows_per_block, n(), 8, 32, true>;
             } else if (group_size == 16) {
-              kernel = fp_qmv_batched<T, rows_per_block, n, 4, 16, false>;
+              kernel = fp_qmv_batched<T, rows_per_block, n(), 4, 16, false>;
             }
             encoder.add_kernel_node(
                 kernel,

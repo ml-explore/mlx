@@ -4345,10 +4345,6 @@ array qqmm(
     const std::string& mode /* = "nvfp4" */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
-  if (stream.device != Device::gpu || !cu::is_available()) {
-    throw std::invalid_argument(
-        "[qqmm] Only supported on GPU with the CUDA backend.");
-  }
   auto qmode = string_to_quantization_mode(mode, "qqmm");
   // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
   if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {

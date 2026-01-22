@@ -14,16 +14,6 @@ namespace mlx::core {
 
 namespace {
 
-inline array
-ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
-  if (x.flags().row_contiguous || x.flags().col_contiguous) {
-    return x;
-  }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
-}
-
 array pad_and_swizzle_scales(
     const array& scale,
     cu::CommandEncoder& encoder,
