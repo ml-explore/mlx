@@ -460,8 +460,7 @@ void sdpa_vector_2pass(
     blocks = 128;
     if (n_simds <= 2 && N > 8192) {
       blocks = 256;
-    }
-    else if (n_simds >= 6) {
+    } else if (n_simds >= 6) {
       if (N >= 16384 && N < 65536) {
         blocks = 512;
       } else if (N >= 65536) {

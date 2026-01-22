@@ -269,7 +269,6 @@ template <typename T, int D, int V = D>
       use_key = (fmask[0] >= Limits<T>::finite_min);
     }
     if (use_key) {
-
       // Compute the i-th score
       U score = 0;
       for (int i = 0; i < qk_per_thread; i++) {
