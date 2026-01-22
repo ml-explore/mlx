@@ -2237,6 +2237,20 @@ array min(
   return min(a, std::vector<int>{axis}, keepdims, s);
 }
 
+array abs_max(const array& a, StreamOrDevice s /* = {}*/) {
+  if (a.size() == 0) {
+    throw std::invalid_argument(
+        "[abs_max] Cannot abs_max reduce zero size array.");
+  }
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return array(
+      {},
+      float32,
+      std::make_shared<Reduce>(to_stream(s), Reduce::AbsMax, axes),
+      {a});
+}
+
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   auto result = argmin(flatten(a, s), 0, true, s);
   if (keepdims) {

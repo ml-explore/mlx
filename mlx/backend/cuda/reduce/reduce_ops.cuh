@@ -114,6 +114,18 @@ struct Max {
   }
 };
 
+struct AbsMax {
+  template <typename T>
+  __device__ __forceinline__ T operator()(T a, T b) {
+    return a > b ? a : b;
+  }
+
+  template <typename T>
+  __device__ void atomic_update(T* x, T y) {
+    atomic_reduce<T, AbsMax>(x, y);
+  }
+};
+
 // Traits to get the result type of reduce op.
 template <typename Op, typename T>
 struct ReduceResult;
@@ -152,6 +164,11 @@ struct ReduceResult<Min, T> {
 template <typename T>
 struct ReduceResult<Max, T> {
   using type = T;
+};
+
+template <typename T>
+struct ReduceResult<AbsMax, T> {
+  using type = float;
 };
 
 // Traits to get the init value of reduce op.
@@ -205,6 +222,13 @@ template <typename T>
 struct ReduceInit<Max, T> {
   static constexpr __host__ __device__ T value() {
     return Limits<T>::min();
+  }
+};
+
+template <typename T>
+struct ReduceInit<AbsMax, T> {
+  static constexpr __host__ __device__ T value() {
+    return T(0); // abs values are >= 0
   }
 };
 

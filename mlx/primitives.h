@@ -1769,7 +1769,7 @@ class Reshape : public UnaryPrimitive {
 
 class Reduce : public UnaryPrimitive {
  public:
-  enum ReduceType { And, Or, Sum, Prod, Min, Max };
+  enum ReduceType { And, Or, Sum, Prod, Min, Max, AbsMax };
 
   explicit Reduce(
       Stream stream,
