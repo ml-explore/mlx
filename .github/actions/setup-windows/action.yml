@@ -20,10 +20,6 @@ runs:
         key: ccache-${{ runner.os }}-${{ runner.arch }}-cpu
         max-size: 1GB
 
-    - uses: actions/setup-python@v6
-      with:
-        python-version: ${{ inputs.python-version }}
-
     - name: Setup Visual Studio cmd
       shell: cmd
       run: |
@@ -34,4 +30,13 @@ runs:
         :: Import VS vars.
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
         :: Export to all steps.
+        >>%GITHUB_ENV% set
+
+    - uses: astral-sh/setup-uv@v7
+
+    - name: Setup Python venv
+      shell: cmd
+      run: |
+        uv venv --python ${{ inputs.python-version }}
+        call ".venv/Scripts/activate.bat"
         >>%GITHUB_ENV% set

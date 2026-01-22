@@ -11,7 +11,7 @@ mx::array to_array(
   if (auto pv = std::get_if<nb::bool_>(&v); pv) {
     return mx::array(nb::cast<bool>(*pv), dtype.value_or(mx::bool_));
   } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    auto val = nb::cast<long>(*pv);
+    auto val = nb::cast<int64_t>(*pv);
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
         ? mx::int64
