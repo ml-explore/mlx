@@ -463,51 +463,148 @@ class EntropyCodedLinear(Module):
         
         return layer
     
+    @classmethod
+    def from_quantized(
+        cls,
+        weight: mx.array,
+        scales: mx.array,
+        biases: mx.array = None,
+        group_size: int = 64,
+        bits: int = 4,
+        n_streams: int = 256,
+        decode_mode: str = "fused",
+        bias: mx.array = None,
+    ) -> 'EntropyCodedLinear':
+        """
+        Create EntropyCodedLinear from already-quantized weights.
+        
+        This is useful for converting pre-quantized models from mlx-lm.
+        
+        Args:
+            weight: Packed quantized weight array (uint8/uint32)
+            scales: Quantization scales
+            biases: Quantization biases (zero points)
+            group_size: Quantization group size
+            bits: Bits per weight (typically 4)
+            n_streams: Number of parallel rANS streams
+            decode_mode: Decode strategy ('fused', 'cached', 'gpu_async')
+            bias: Optional layer bias (not quantization bias)
+            
+        Returns:
+            EntropyCodedLinear layer with entropy-coded weights
+        """
+        # Unpack the quantized weights to get indices
+        weight_np = np.array(weight)
+        
+        # For 4-bit: each uint8 contains 2 values, or packed differently
+        # MLX uses uint32 packing: (in_dims * bits / 32) elements per row
+        out_features = weight_np.shape[0]
+        packed_cols = weight_np.shape[1]
+        
+        if bits == 4:
+            # Each uint32 contains 8 x 4-bit values
+            in_features = packed_cols * 8
+            
+            # Unpack to indices
+            indices = np.zeros((out_features, in_features), dtype=np.uint8)
+            for i in range(8):
+                shift = i * 4
+                indices[:, i::8] = (weight_np >> shift) & 0x0F
+        else:
+            raise ValueError(f"Only 4-bit quantization supported, got {bits}")
+        
+        # Create layer
+        layer = cls(
+            input_dims=in_features,
+            output_dims=out_features,
+            bias=bias is not None,
+            n_streams=n_streams,
+            decode_mode=decode_mode,
+            group_size=group_size,
+        )
+        
+        # Entropy encode
+        counts = np.bincount(indices.flatten(), minlength=16)
+        table = RANSTable.from_counts(counts)
+        
+        # Per-row encoding for O(n) decode
+        compressed_data, row_offsets, row_stream_lens = entropy_encode_v2(
+            indices, table, n_streams
+        )
+        layer._compressed_data = compressed_data
+        layer._row_offsets = row_offsets
+        layer._row_stream_lens = row_stream_lens
+        compressed_bytes = len(compressed_data)
+        
+        # Store frequency tables
+        layer._freq = table.freq
+        layer._cumfreq = table.cumfreq
+        layer._sym_table = table.sym_table
+        
+        # Store quantization params as MLX arrays
+        layer.scales = scales
+        layer.biases_quant = biases if biases is not None else mx.zeros_like(scales)
+        
+        # Copy bias if present
+        if bias is not None:
+            layer.bias = bias
+        
+        # For CACHED mode, decode immediately
+        if layer.decode_mode == DecodeMode.CACHED:
+            layer._decode_weights()
+        
+        # Calculate compression stats
+        original_bytes = out_features * in_features * 0.5  # 4-bit
+        layer._compression_ratio = original_bytes / compressed_bytes
+        
+        return layer
+    
     def _decode_weights(self):
         """Decode compressed weights to 4-bit indices (for CACHED mode)."""
-        # This would use the GPU kernel in production
-        # For now, use Python decode
+        # Decode per-row encoded data
         data = np.frombuffer(self._compressed_data, dtype=np.uint8)
         n_streams = self.n_streams
-        n_symbols = self.output_dims * self.input_dims
-        max_stream_len = self._max_stream_len
-        stream_lengths = self._stream_lengths
+        output = np.zeros((self.output_dims, self.input_dims), dtype=np.uint8)
         
-        output = np.zeros(n_symbols, dtype=np.uint8)
+        for row in range(self.output_dims):
+            row_offset = self._row_offsets[row]
+            row_data = data[row_offset:]
+            
+            for stream_idx in range(n_streams):
+                stream_len = self._row_stream_lens[row * n_streams + stream_idx]
+                if stream_len < 4:
+                    continue
+                
+                # Read initial state (interleaved)
+                b0 = int(row_data[stream_idx + 0 * n_streams])
+                b1 = int(row_data[stream_idx + 1 * n_streams])
+                b2 = int(row_data[stream_idx + 2 * n_streams])
+                b3 = int(row_data[stream_idx + 3 * n_streams])
+                state = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+                ptr = 4
+                
+                # Decode symbols for this stream
+                symbols_per_stream = (self.input_dims - stream_idx + n_streams - 1) // n_streams
+                
+                for i in range(symbols_per_stream):
+                    col = stream_idx + i * n_streams
+                    if col >= self.input_dims:
+                        break
+                    
+                    slot = state & (PROB_SCALE - 1)
+                    s = int(self._sym_table[slot])
+                    output[row, col] = s
+                    
+                    freq_s = int(self._freq[s])
+                    start_s = int(self._cumfreq[s])
+                    state = freq_s * (state >> PROB_BITS) + slot - start_s
+                    
+                    while state < RANS_BYTE_L and ptr < stream_len:
+                        b = int(row_data[stream_idx + ptr * n_streams])
+                        state = (state << 8) | b
+                        ptr += 1
         
-        for stream_idx in range(n_streams):
-            stream_len = stream_lengths[stream_idx]
-            if stream_len < 4:
-                continue
-            
-            def read_byte(ptr: int) -> int:
-                return int(data[stream_idx + ptr * n_streams])
-            
-            ptr = 0
-            state = (read_byte(0) << 24) | (read_byte(1) << 16) | \
-                    (read_byte(2) << 8) | read_byte(3)
-            ptr = 4
-            
-            n_syms = len(range(stream_idx, n_symbols, n_streams))
-            
-            for i in range(n_syms):
-                output_idx = stream_idx + i * n_streams
-                if output_idx >= n_symbols:
-                    break
-                
-                slot = state & (PROB_SCALE - 1)
-                s = int(self._sym_table[slot])
-                output[output_idx] = s
-                
-                freq_s = int(self._freq[s])
-                start_s = int(self._cumfreq[s])
-                state = freq_s * (state >> PROB_BITS) + slot - start_s
-                
-                while state < RANS_BYTE_L and ptr < stream_len:
-                    state = (state << 8) | read_byte(ptr)
-                    ptr += 1
-        
-        self._decoded_indices = mx.array(output.reshape(self.output_dims, self.input_dims))
+        self._decoded_indices = mx.array(output)
     
     def __call__(self, x: mx.array) -> mx.array:
         """Forward pass with entropy-coded weights."""
