@@ -73,7 +73,7 @@ __global__ void fp_quantize_rowwise(
 #pragma unroll
   for (int i = 0; i < group_size; i += 2) {
     auto pair = Tx2{w_tile[i], w_tile[i + 1]};
-    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+    absmax_x2<Tx2>(amax_2x, amax_2x, pair);
   }
 
   scale_dec_b = static_cast<float>(
@@ -174,7 +174,7 @@ __global__ void fp_quantize_columnwise(
 #pragma unroll
     for (int r = 0; r < group_size; r += 2) {
       auto pair = Tx2{thread_data[r], thread_data[r + 1]};
-      abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+      absmax_x2<Tx2>(amax_2x, amax_2x, pair);
     }
     float scale_dec_b =
         max(fabsf(static_cast<float>(amax_2x.x)),

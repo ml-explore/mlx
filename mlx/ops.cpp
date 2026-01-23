@@ -2238,14 +2238,14 @@ array min(
 }
 
 // TODO: extend to row_reduce and col_reduce?
-array abs_max(const array& a, StreamOrDevice s /* = {}*/) {
+array absmax(const array& a, StreamOrDevice s /* = {}*/) {
   if (a.size() == 0) {
     throw std::invalid_argument(
-        "[abs_max] Cannot abs_max reduce zero size array.");
+        "[absmax] Cannot absmax reduce zero size array.");
   }
   if (!issubdtype(a.dtype(), floating)) {
     throw std::invalid_argument(
-        "[abs_max] abs_max supported only for floating point types.");
+        "[absmax] absmax supported only for floating point types.");
   }
   auto stream = to_stream(s);
   if (stream.device != Device::gpu || !cu::is_available()) {

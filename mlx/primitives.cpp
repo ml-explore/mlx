@@ -3511,7 +3511,7 @@ std::vector<array> QQMatmul::vjp(
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
   std::optional<array> cotan_amax =
-      is_nvfp4 ? std::make_optional(abs_max(cotan, s)) : std::nullopt;
+      is_nvfp4 ? std::make_optional(absmax(cotan, s)) : std::nullopt;
 
   auto get_primal_scale = [&](int idx) {
     return is_nvfp4 ? std::make_optional(primals[idx]) : std::nullopt;

@@ -355,7 +355,7 @@ class QQLinear(Module):
         if not self._quantized:
 
             self.global_scale_w = (
-                mx.abs_max(self.weight).astype(mx.float32)
+                mx.absmax(self.weight).astype(mx.float32)
                 if self._use_global_scale
                 else None
             )
@@ -394,12 +394,12 @@ class QQLinear(Module):
     def __call__(self, x):
 
         global_scale_w = (
-            getattr(self, "global_scale_w", mx.abs_max(self.weight).astype(mx.float32))
+            getattr(self, "global_scale_w", mx.absmax(self.weight).astype(mx.float32))
             if self._use_global_scale
             else None
         )
         global_scale_x = (
-            mx.abs_max(x).astype(mx.float32) if self._use_global_scale else None
+            mx.absmax(x).astype(mx.float32) if self._use_global_scale else None
         )
         x = mx.qqmm(
             x,

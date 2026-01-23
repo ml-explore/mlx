@@ -162,7 +162,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
         # Test nvfp4 quantize/dequantize with tensor-scale global_scale
         if not mx.metal.is_available():
-            global_scale = mx.abs_max(w).astype(mx.float32)
+            global_scale = mx.absmax(w).astype(mx.float32)
         else:
             global_scale = mx.array(1.0, dtype=mx.float32)
 

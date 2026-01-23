@@ -2403,13 +2403,13 @@ void init_ops(nb::module_& m) {
             array: The output array with the corresponding axes reduced.
       )pbdoc");
   m.def(
-      "abs_max",
-      &mx::abs_max,
+      "absmax",
+      &mx::absmax,
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def abs_max(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def absmax(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         The maximum of absolute values of all elements in the array.
 
