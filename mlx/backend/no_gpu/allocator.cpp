@@ -4,6 +4,7 @@
 #include <mutex>
 
 #include "mlx/allocator.h"
+#include "mlx/memory.h"
 
 #ifdef __APPLE__
 #include "mlx/backend/no_gpu/apple_memory.h"

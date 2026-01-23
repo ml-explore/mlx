@@ -21,4 +21,14 @@ void gemv(
     const mlx::core::Strides& b_batch_strides,
     CommandEncoder& encoder);
 
+void gather_mv(
+    const array& mat,
+    const array& vec,
+    const array& mat_indices,
+    const array& vec_indices,
+    array& out,
+    int N,
+    int K,
+    CommandEncoder& encoder);
+
 } // namespace mlx::core::cu

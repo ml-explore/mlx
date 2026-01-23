@@ -4,18 +4,19 @@
 
 #include <optional>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 
 namespace mlx::core {
 
-void async_eval(std::vector<array> outputs);
+MLX_API void async_eval(std::vector<array> outputs);
 
 template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
 void async_eval(Arrays&&... outputs) {
   async_eval(std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
-void eval(std::vector<array> outputs);
+MLX_API void eval(std::vector<array> outputs);
 
 template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
 void eval(Arrays&&... outputs) {
@@ -29,7 +30,7 @@ void eval(Arrays&&... outputs) {
  *  Jacobian of the function evaluated at the primals. Returns a pair of
  *  vectors of output arrays and VJP arrays.
  **/
-std::pair<std::vector<array>, std::vector<array>> vjp(
+MLX_API std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& cotangents);
@@ -37,7 +38,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
 /**
  *  Computes the output and vector-Jacobian product (VJP) of a unary function.
  */
-std::pair<array, array> vjp(
+MLX_API std::pair<array, array> vjp(
     const std::function<array(const array&)>& fun,
     const array& primal,
     const array& cotangent);
@@ -49,7 +50,7 @@ std::pair<array, array> vjp(
  *  evaluated at the primals with the vector of tangents. Returns a pair of
  *  vectors of output arrays and JVP arrays.
  **/
-std::pair<std::vector<array>, std::vector<array>> jvp(
+MLX_API std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& tangents);
@@ -57,7 +58,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 /**
  *  Computes the output and Jacobian-vector product (JVP) of a unary function.
  */
-std::pair<array, array> jvp(
+MLX_API std::pair<array, array> jvp(
     const std::function<array(const array&)>& fun,
     const array& primal,
     const array& tangent);
@@ -75,7 +76,7 @@ using SimpleValueAndGradFn = std::function<std::pair<array, std::vector<array>>(
  *  Returns a function which computes the value and gradient of the input
  *  function with respect to a vector of input arrays.
  **/
-ValueAndGradFn value_and_grad(
+MLX_API ValueAndGradFn value_and_grad(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<int>& argnums);
 
@@ -157,7 +158,7 @@ std::function<array(const array&)> inline grad(
 /**
  * Automatically vectorize a unary function over the requested axes.
  */
-std::function<array(const array&)> vmap(
+MLX_API std::function<array(const array&)> vmap(
     const std::function<array(const array&)>& fun,
     int in_axis = 0,
     int out_axis = 0);
@@ -165,7 +166,7 @@ std::function<array(const array&)> vmap(
 /**
  * Automatically vectorize a binary function over the requested axes.
  */
-std::function<array(const array&, const array&)> vmap(
+MLX_API std::function<array(const array&, const array&)> vmap(
     const std::function<array(const array&, const array&)>& fun,
     int in_axis_a = 0,
     int in_axis_b = 0,
@@ -180,7 +181,7 @@ std::function<array(const array&, const array&)> vmap(
  * Returns a vectorized function with the same signature as the input
  * function.
  */
-std::function<std::vector<array>(const std::vector<array>&)> vmap(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> vmap(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<int>& in_axes = {},
     const std::vector<int>& out_axes = {});
@@ -194,7 +195,8 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
  * If any transformation is not provided, then a default one is created by
  * calling `vjp`, `jvp` and `vmap` on the function directly.
  */
-std::function<std::vector<array>(const std::vector<array>&)> custom_function(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)>
+custom_function(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::optional<std::function<std::vector<array>(
         const std::vector<array>&,
@@ -212,7 +214,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
  * Return a function that behaves exactly like `fun` but if the vjp of the
  * results is computed `fun_vjp` will be used instead of `vjp(fun, ...)` .
  */
-std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::function<std::vector<array>(
         const std::vector<array>&,
@@ -223,7 +225,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
  * Checkpoint the gradient of a function. Namely, discard all intermediate
  * state and recalculate it when we need to compute the gradient.
  */
-std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
     std::function<std::vector<array>(const std::vector<array>&)> fun);
 
 } // namespace mlx::core

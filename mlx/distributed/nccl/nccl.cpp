@@ -1,9 +1,14 @@
+// NCCL distributed support currently requires Unix socket APIs
+// TODO: Add Windows Winsock2 support for Windows builds
+#ifndef _WIN32
 #include <arpa/inet.h>
-#include <cuda_runtime.h>
-#include <nccl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
+
+#include <cuda_runtime.h>
+#include <nccl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -93,6 +98,7 @@ void dispatch_dtype(const array& arr, F&& f) {
   });
 }
 
+#ifndef _WIN32
 inline void sendAll(int sock, const void* buf, size_t len) {
   const char* ptr = reinterpret_cast<const char*>(buf);
   while (len > 0) {
@@ -118,7 +124,9 @@ inline void recvAll(int sock, void* buf, size_t len) {
     len -= rec;
   }
 }
+#endif // _WIN32
 
+#ifndef _WIN32
 inline void bootstrap_unique_id(
     ncclUniqueId& id,
     int rank,
@@ -246,6 +254,16 @@ inline void bootstrap_unique_id(
     close(sock);
   }
 }
+#else // _WIN32
+inline void bootstrap_unique_id(
+    ncclUniqueId& id,
+    int rank,
+    int size,
+    const std::string& initMethod) {
+  throw std::runtime_error(
+      "[nccl] Distributed NCCL is not yet supported on Windows");
+}
+#endif // _WIN32
 
 } // namespace detail
 

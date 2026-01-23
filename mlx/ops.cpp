@@ -3185,9 +3185,9 @@ array take(
   }
 
   // Check for valid take
-  if (a.size() == 0 && indices.size() != 0) {
+  if (a.shape(axis) == 0 && indices.size() != 0) {
     throw std::invalid_argument(
-        "[take] Cannot do a non-empty take from an array with zero elements.");
+        "[take] Cannot do a non-empty take from an empty axis.");
   }
 
   // Handle negative axis

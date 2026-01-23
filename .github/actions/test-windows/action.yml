@@ -9,5 +9,5 @@ runs:
         DEVICE: cpu
       run: |
         echo "::group::CPP tests - CPU"
-        ./build/tests/tests -tce="*gguf*,test random uniform"
+        ./build/tests.exe -tce="*gguf*,test random uniform"
         echo "::endgroup::"

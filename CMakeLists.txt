@@ -40,7 +40,6 @@ option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
-option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
@@ -155,6 +154,7 @@ target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 if(MLX_BUILD_METAL)
@@ -218,14 +218,17 @@ if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
     set(MLX_BUILD_GGUF OFF)
-    # There is no prebuilt OpenBLAS distribution for MSVC.
-    set(MLX_BUILD_BLAS_FROM_SOURCE ON)
+  endif()
+  # Generate DLL and EXE in the same dir, otherwise EXE will not be able to run.
+  # This is only done when MLX is built as the top project.
+  if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   endif()
   # Windows implementation of dlfcn.h APIs.
   FetchContent_Declare(
     dlfcn-win32
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
-    GIT_TAG v1.4.1
+    GIT_TAG v1.4.2
     EXCLUDE_FROM_ALL)
   block()
   set(BUILD_SHARED_LIBS OFF)
@@ -249,20 +252,25 @@ if(MLX_BUILD_CPU)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
     add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
-  elseif(MLX_BUILD_BLAS_FROM_SOURCE)
-    # Download and build OpenBLAS from source code.
+  elseif(WIN32)
+    # Download and link prebuilt binaries of OpenBLAS. Note that we can only
+    # link with the dynamic library, the prebuilt binaries were built with MinGW
+    # so static-linking would require linking with MinGW's runtime.
     FetchContent_Declare(
       openblas
-      GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
-      GIT_TAG v0.3.28
-      EXCLUDE_FROM_ALL)
-    set(BUILD_STATIC_LIBS ON) # link statically
-    set(NOFORTRAN ON) # msvc has no fortran compiler
+      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31-x64.zip"
+    )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(mlx PRIVATE openblas)
-    target_include_directories(
-      mlx PRIVATE "${openblas_SOURCE_DIR}/lapack-netlib/LAPACKE/include"
-                  "${CMAKE_BINARY_DIR}/generated" "${CMAKE_BINARY_DIR}")
+    target_link_libraries(mlx
+                          PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.lib")
+    target_include_directories(mlx PRIVATE "${openblas_SOURCE_DIR}/include")
+    # Make sure the DLL file is placed in the same dir with executables.
+    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/libopenblas.dll")
+    add_custom_command(
+      TARGET mlx
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENBLAS_DLL_FILE}
+              ${CMAKE_BINARY_DIR})
   else()
     if(${CMAKE_HOST_APPLE})
       # The blas shipped in macOS SDK is not supported, search homebrew for
@@ -360,6 +368,15 @@ endif()
 
 # ----------------------------- Installation -----------------------------
 include(GNUInstallDirs)
+
+if(WIN32)
+  # Install DLLs to the same dir with extension file (core.pyd) on Windows.
+  set(CMAKE_INSTALL_BINDIR ".")
+  if(MLX_BUILD_CPU)
+    # Install OpenBLAS.
+    install(FILES ${OPENBLAS_DLL_FILE} TYPE BIN)
+  endif()
+endif()
 
 # Install library
 install(

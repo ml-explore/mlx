@@ -1242,6 +1242,14 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.take(a, mx.array([[1]]), axis=0)
         self.assertEqual(out.shape, (1, 1, 4))
 
+        # Take from empty array works in some cases
+        a = mx.zeros((4, 0))
+        out = mx.take(a, mx.array([1, 2]), axis=0)
+        self.assertEqual(out.shape, (2, 0))
+        self.assertEqual(out.dtype, a.dtype)
+        with self.assertRaises(ValueError):
+            mx.take(a, mx.array([[1]]), axis=1)
+
     def test_take_along_axis(self):
         a_np = np.arange(8).reshape(2, 2, 2)
         a_mlx = mx.array(a_np)
