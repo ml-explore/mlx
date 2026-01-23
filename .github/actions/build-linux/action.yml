@@ -9,6 +9,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+
     - name: Install Python package
       id: python_build
       shell: sh

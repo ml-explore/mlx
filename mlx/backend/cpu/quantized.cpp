@@ -14,6 +14,19 @@ namespace mlx::core {
 
 namespace {
 
+array ensure_row_contiguous(
+    const array& arr,
+    cpu::CommandEncoder& encoder,
+    Stream s) {
+  if (arr.flags().row_contiguous) {
+    return arr;
+  } else {
+    auto arr_cpy = contiguous_copy_cpu(arr, s);
+    encoder.add_temporary(arr_cpy);
+    return arr_cpy;
+  }
+};
+
 const static float FP4_LUT[16] = {
     +0.0f,
     +0.5f,
@@ -922,20 +935,9 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& scales_pre = inputs[2];
 
   auto& encoder = cpu::get_command_encoder(stream());
-  auto ensure_row_contiguous = [s = stream(), &encoder](const array& arr) {
-    if (arr.flags().row_contiguous) {
-      return arr;
-    } else {
-      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
-      copy_cpu(arr, arr_cpy, CopyType::General, s);
-      encoder.add_temporary(arr_cpy);
-      return arr_cpy;
-    }
-  };
-
-  auto x = ensure_row_contiguous(x_pre);
-  auto w = ensure_row_contiguous(w_pre);
-  auto scales = ensure_row_contiguous(scales_pre);
+  auto x = ensure_row_contiguous(x_pre, encoder, stream());
+  auto w = ensure_row_contiguous(w_pre, encoder, stream());
+  auto scales = ensure_row_contiguous(scales_pre, encoder, stream());
 
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -944,7 +946,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(scales);
   encoder.set_output_array(out);
   if (mode_ == QuantizationMode::Affine) {
-    auto biases = ensure_row_contiguous(inputs[3]);
+    auto biases = ensure_row_contiguous(inputs[3], encoder, stream());
     encoder.set_input_array(biases);
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
@@ -1235,15 +1237,8 @@ void dispatch_quantize(
 void fast::Quantize::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto ensure_row_contiguous = [s = stream()](const array& arr) {
-    if (arr.flags().row_contiguous) {
-      return std::make_pair(arr, false);
-    } else {
-      return std::make_pair(contiguous_copy_cpu(arr, s), true);
-    }
-  };
-
-  auto [w, copied] = ensure_row_contiguous(inputs[0]);
+  auto& encoder = cpu::get_command_encoder(stream());
+  auto w = ensure_row_contiguous(inputs[0], encoder, stream());
   auto& out = outputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -1251,10 +1246,6 @@ void fast::Quantize::eval_cpu(
   auto& biases = outputs[2];
   scales.set_data(allocator::malloc(scales.nbytes()));
   biases.set_data(allocator::malloc(biases.nbytes()));
-  auto& encoder = cpu::get_command_encoder(stream());
-  if (copied) {
-    encoder.add_temporary(w);
-  }
   encoder.set_input_array(w);
   encoder.set_input_array(scales);
   encoder.set_input_array(biases);
@@ -1338,23 +1329,13 @@ void fast::ConvertFP8::eval_cpu(
 
 void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cpu::get_command_encoder(stream());
-  auto ensure_row_contiguous = [s = stream(), &encoder](const array& arr) {
-    if (arr.flags().row_contiguous) {
-      return arr;
-    } else {
-      auto arr_cpy = array(arr.shape(), arr.dtype(), nullptr, {});
-      copy_cpu(arr, arr_cpy, CopyType::General, s);
-      encoder.add_temporary(arr_cpy);
-      return arr_cpy;
-    }
-  };
 
   bool w_quantized = (inputs[1].dtype() == uint32);
   if (w_quantized && inputs[0].shape(-2) == 1) {
     bool donate_x = inputs[0].is_donatable();
-    auto x = ensure_row_contiguous(inputs[0]);
-    auto w = ensure_row_contiguous(inputs[1]);
-    auto scales = ensure_row_contiguous(inputs[2]);
+    auto x = ensure_row_contiguous(inputs[0], encoder, stream());
+    auto w = ensure_row_contiguous(inputs[1], encoder, stream());
+    auto scales = ensure_row_contiguous(inputs[2], encoder, stream());
 
     out.set_data(allocator::malloc(out.nbytes()));
 

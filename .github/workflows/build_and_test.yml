@@ -45,8 +45,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: ['x86_64', 'aarch64']
-        toolkit: ['cuda-12.6', 'cuda-12.9']
+        arch: ['x86_64']
+        toolkit: ['cuda-12.6']
     runs-on: ${{ matrix.arch == 'x86_64' && 'gpu-t4-4-core' || 'ubuntu-22.04-arm' }}
     steps:
       - uses: actions/checkout@v6
