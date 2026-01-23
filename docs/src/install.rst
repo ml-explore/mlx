@@ -83,7 +83,7 @@ Build from source
 Build Requirements
 ^^^^^^^^^^^^^^^^^^
 
-- A C++ compiler with C++17 support (e.g. Clang >= 5.0)
+- A C++ compiler with C++20 support (e.g. Clang >= 15.0)
 - `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
 - Xcode >= 15.0 and macOS SDK >= 14.0
 

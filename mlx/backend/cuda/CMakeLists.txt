@@ -126,9 +126,9 @@ endif()
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
 
-# Suppress nvcc warnings on MLX headers.
-target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
-                                   --diag_suppress=997>)
+# Suppress nvcc warnings on C++ headers.
+target_compile_options(
+  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=997,20208">)
 
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.

@@ -1,8 +1,11 @@
 #pragma once
 
+// Required for using M_LN2 in MSVC.
+#define _USE_MATH_DEFINES
+
+#include <math.h>
 #include <stdint.h>
 #include <algorithm>
-#include <cmath>
 #include <complex>
 #include <functional>
 
