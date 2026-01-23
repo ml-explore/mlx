@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -4729,7 +4730,7 @@ std::vector<array> quantize(
         << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
-  if (s.device == Device::gpu && metal::is_available() &&
+  if (to_stream(s).device == Device::gpu && metal::is_available() &&
       global_scale.has_value()) {
     std::ostringstream msg;
     msg << "[quantize] Global scale is not supported on the Metal backend.";
@@ -4997,7 +4998,7 @@ array dequantize(
     throw std::invalid_argument(msg.str());
   }
   if (global_scale.has_value()) {
-    if (s.device == Device::gpu && metal::is_available()) {
+    if (to_stream(s).device == Device::gpu && metal::is_available()) {
       std::ostringstream msg;
       msg << "[dequantize] Global scale is not supported on the Metal backend.";
       throw std::invalid_argument(msg.str());
