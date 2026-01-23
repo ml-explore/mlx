@@ -4,11 +4,11 @@
 
 #ifndef __METAL_MEMORY_SCOPE_SYSTEM__
 #define __METAL_MEMORY_SCOPE_SYSTEM__ 3
+#endif
 namespace metal {
 constexpr constant metal::thread_scope thread_scope_system =
     static_cast<thread_scope>(__METAL_MEMORY_SCOPE_SYSTEM__);
 }
-#endif
 
 #include <metal_atomic>
 

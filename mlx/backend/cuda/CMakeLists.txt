@@ -174,7 +174,7 @@ endif()
 # Use fixed version of CCCL.
 FetchContent_Declare(
   cccl
-  URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
+  URL "https://github.com/NVIDIA/cccl/releases/download/v3.1.3/cccl-v3.1.3.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx BEFORE PRIVATE "${cccl_SOURCE_DIR}/include")
 
@@ -202,7 +202,6 @@ FetchContent_MakeAvailable(nvtx3)
 target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:nvtx3-cpp>)
 
 # Make cuda runtime APIs available in non-cuda files.
-find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
 # Use cublasLt.

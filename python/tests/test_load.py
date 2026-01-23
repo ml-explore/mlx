@@ -71,6 +71,21 @@ class TestLoad(mlx_tests.MLXTestCase):
         load_arr = mx.load(Path(save_file))
         self.assertTrue(mx.array_equal(load_arr, save_arr))
 
+    def test_load_npy_dtype(self):
+        save_file = os.path.join(self.test_dir, "mlx_path.npy")
+        a = np.random.randn(8).astype(np.float64)
+        np.save(save_file, a)
+        out = mx.load(save_file, stream=mx.cpu)
+        self.assertEqual(out.dtype, mx.float64)
+        self.assertTrue(np.array_equal(np.array(out), a))
+
+        a = np.random.randn(8).astype(np.float64)
+        b = np.random.randn(8).astype(np.float64)
+        c = a + 0j * b
+        np.save(save_file, c)
+        with self.assertRaises(Exception):
+            out = mx.load(save_file, stream=mx.cpu)
+
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):
@@ -153,8 +168,8 @@ class TestLoad(mlx_tests.MLXTestCase):
 
         expected = [
             0,
-            mx.nan,
-            mx.nan,
+            448,
+            -448,
             -0.875,
             0.4375,
             -0.005859,
@@ -164,12 +179,12 @@ class TestLoad(mlx_tests.MLXTestCase):
             -0.0039,
         ]
         expected = mx.array(expected, dtype=mx.bfloat16)
-        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00\x7f\xff\xb6.\x83\xba\xba\xbc\x82'
+        contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00~\xfe\xb6.\x83\xba\xba\xbc\x82'
         with tempfile.NamedTemporaryFile(suffix=".safetensors") as f:
             f.write(contents)
             f.seek(0)
             out = mx.load(f)["tensor"]
-        self.assertTrue(mx.allclose(out[0], expected[0], equal_nan=True))
+        self.assertTrue(mx.allclose(mx.from_fp8(out), expected))
 
     def test_save_and_load_gguf_metadata_basic(self):
         if not os.path.isdir(self.test_dir):

@@ -1669,6 +1669,25 @@ void init_ops(nb::module_& m) {
             array: The array of zeros with the specified shape.
       )pbdoc");
   m.def(
+      "asarray",
+      [](const ArrayInitType& a, std::optional<mx::Dtype> dtype) {
+        return create_array(a, dtype);
+      },
+      nb::arg(),
+      "dtype"_a = nb::none(),
+      nb::sig("def asarray(a: Union[scalar, array, Sequence], dtype: "
+              "Optional[Dtype] = None) -> array"),
+      R"pbdoc(
+        Convert the input to an array.
+
+        Args:
+            a: Input data.
+            dtype (Dtype, optional): The desired data-type for the array.
+
+        Returns:
+            array: An array interpretation of the input.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
@@ -4281,7 +4300,7 @@ void init_ops(nb::module_& m) {
             ======  ======================   ==========================  =============  =====
             affine  32, 64\ :sup:`*`, 128    2, 3, 4\ :sup:`*`, 5, 6, 8  same as input  yes
             mxfp4   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
-            mxfp8   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
+            mxfp8   32\ :sup:`*`             8\ :sup:`*`                 e8m0           no
             nvfp4   16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
             ======  ======================   ==========================  =============  =====
 
@@ -4316,7 +4335,7 @@ void init_ops(nb::module_& m) {
           size must be 16. The elements are quantized to 4-bit or 8-bit
           precision floating-point values: E2M1 for ``"fp4"`` and E4M3 for
           ``"fp8"``. There is a shared 8-bit scale per group. The ``"mx"``
-          modes us an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
+          modes use an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
           Unlike ``affine`` quantization, these modes does not have a bias
           value.
 
@@ -5460,10 +5479,10 @@ void init_ops(nb::module_& m) {
         If ``w`` is expected to receive gradients, it must be provided in
         non-quantized form.
 
-        If ``x`` and `w`` are not quantized, their data types must be ``float32``, 
+        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
-        
+
       Args:
         x (array): Input array.
         w (array): Weight matrix. If quantized, it is packed in unsigned integers.
@@ -5482,5 +5501,41 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).
+  )pbdoc");
+  m.def(
+      "from_fp8",
+      &mx::from_fp8,
+      nb::arg(),
+      "dtype"_a = mx::bfloat16,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def from_fp8(x: array, dtype: Dtype = bfloat16, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array from fp8 (e4m3) to another floating-point type.
+
+      Args:
+        x (array): The input fp8 array with type ``uint8``.
+        dtype (Dtype): The data type to convert to. Default: ``bfloat16``.
+
+      Returns:
+        array: The array converted from fp8.
+  )pbdoc");
+  m.def(
+      "to_fp8",
+      &mx::to_fp8,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def to_fp8(x: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array to fp8 (e4m3) from another floating-point type.
+
+      Args:
+        x (array): The input array.
+
+      Returns:
+        array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
 }

@@ -1973,6 +1973,58 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(hasattr(api, "array"))
         self.assertTrue(hasattr(api, "add"))
 
+    def test_array_namespace_asarray(self):
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "asarray"))
+
+        arr = xp.asarray([1, 2, 3])
+        self.assertEqual(arr.tolist(), [1, 2, 3])
+
+        arr_f32 = xp.asarray([1, 2, 3], dtype=mx.float32)
+        self.assertEqual(arr_f32.dtype, mx.float32)
+
+        existing = mx.array([4, 5, 6])
+        arr_pass = xp.asarray(existing)
+        self.assertEqual(arr_pass.tolist(), [4, 5, 6])
+
+    def test_asarray(self):
+        # List inputs
+        self.assertEqual(mx.asarray([1, 2, 3]).tolist(), [1, 2, 3])
+        self.assertEqual(mx.asarray([[1, 2], [3, 4]]).tolist(), [[1, 2], [3, 4]])
+
+        # Tuple inputs
+        self.assertEqual(mx.asarray((1, 2, 3)).tolist(), [1, 2, 3])
+        self.assertEqual(mx.asarray(((1, 2), (3, 4))).tolist(), [[1, 2], [3, 4]])
+
+        # Mixed nesting
+        self.assertEqual(mx.asarray([(1, 2), (3, 4)]).tolist(), [[1, 2], [3, 4]])
+        self.assertEqual(mx.asarray(([1, 2], [3, 4])).tolist(), [[1, 2], [3, 4]])
+
+        # Scalar inputs
+        self.assertEqual(mx.asarray(42).item(), 42)
+        self.assertEqual(mx.asarray(3.14).item(), 3.140000104904175)
+        self.assertEqual(mx.asarray(True).item(), True)
+        self.assertEqual(mx.asarray(1 + 2j).item(), (1 + 2j))
+
+        # MLX array inputs
+        arr = mx.array([1, 2, 3])
+        self.assertEqual(mx.asarray(arr).tolist(), [1, 2, 3])
+
+        arr_int = mx.array([1, 2, 3], dtype=mx.int32)
+        arr_float = mx.asarray(arr_int, dtype=mx.float32)
+        self.assertEqual(arr_float.dtype, mx.float32)
+        self.assertEqual(arr_float.tolist(), [1.0, 2.0, 3.0])
+
+        # NumPy array inputs
+        np_arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        mx_arr = mx.asarray(np_arr)
+        self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
+        self.assertEqual(mx_arr.dtype, mx.float32)
+
+        # dtype parameter
+        self.assertEqual(mx.asarray([1, 2, 3], dtype=mx.float32).dtype, mx.float32)
+        self.assertEqual(mx.asarray(42, dtype=mx.float16).dtype, mx.float16)
+
     def test_to_scalar(self):
         a = mx.array(1)
         self.assertEqual(int(a), 1)

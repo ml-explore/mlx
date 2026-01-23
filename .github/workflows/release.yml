@@ -4,18 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'test-publish/*'
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Publish to PyPI (uncheck for dry run)'
+      dry_run:
+        description: 'Dry run (do not publish to PyPi)'
         required: false
         type: boolean
-        default: true
       dev_release:
         description: 'Development release (DEV_RELEASE=1)'
         required: false
         type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -29,7 +29,7 @@ jobs:
       - uses: ./.github/actions/build-docs
 
   deploy_documentation:
-    if: inputs.publish
+    if: ${{ !inputs.dry_run }}
     needs: build_documentation
     permissions:
       pages: write
@@ -110,6 +110,11 @@ jobs:
         with:
           macos-target: 15.0
           build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Build macOS 26 package
+        uses: ./.github/actions/build-macos-release
+        with:
+          macos-target: 26.0
+          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -161,7 +166,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ inputs.publish && 'pypi' || '' }}
+      name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx
     steps:
       - uses: actions/download-artifact@v7
@@ -177,7 +182,7 @@ jobs:
       - name: Display structure of downloaded files
         run: du -ah dist
       - name: Publish package distributions to PyPI
-        if: inputs.publish
+        if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/
@@ -189,7 +194,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ inputs.publish && 'pypi' || '' }}
+      name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cuda
     steps:
       - uses: actions/download-artifact@v7
@@ -200,7 +205,7 @@ jobs:
       - name: Display structure of downloaded files
         run: du -ah dist
       - name: Publish package distributions to PyPI
-        if: inputs.publish
+        if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/
@@ -212,7 +217,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ inputs.publish && 'pypi' || '' }}
+      name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cpu
     steps:
       - uses: actions/download-artifact@v7
@@ -223,7 +228,7 @@ jobs:
       - name: Display structure of downloaded files
         run: du -ah dist
       - name: Publish package distributions to PyPI
-        if: inputs.publish
+        if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/
@@ -235,7 +240,7 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: ${{ inputs.publish && 'pypi' || '' }}
+      name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-metal
     steps:
       - uses: actions/download-artifact@v7
@@ -245,7 +250,7 @@ jobs:
       - name: Display structure of downloaded files
         run: du -ah dist
       - name: Publish package distributions to PyPI
-        if: inputs.publish
+        if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/

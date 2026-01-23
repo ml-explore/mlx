@@ -104,6 +104,68 @@ __global__ void gemv_batched(
       mat + mat_offset, vec + vec_offset, out + batch_idx * rows, rows, cols);
 }
 
+template <typename T, int rows_per_block, int n_per_thread>
+__global__ void gemv_gather(
+    const T* mat,
+    const T* vec,
+    T* out,
+    uint32_t* mat_indices,
+    uint32_t* vec_indices,
+    int rows,
+    int cols,
+    const __grid_constant__ Shape mat_batch_shape,
+    const __grid_constant__ Strides mat_batch_strides,
+    int mat_batch_ndim,
+    const __grid_constant__ Shape vec_batch_shape,
+    const __grid_constant__ Strides vec_batch_strides,
+    int vec_batch_ndim,
+    const __grid_constant__ Shape index_shape,
+    const __grid_constant__ Strides mat_index_strides,
+    const __grid_constant__ Strides vec_index_strides,
+    int index_batch_ndim) {
+  auto block = cg::this_thread_block();
+  auto indices_idx = block.group_index().y;
+  uint32_t index_mat, index_vec;
+  if (index_batch_ndim > 1) {
+    auto [mat_idx_offset, vec_idx_offset] = elem_to_loc(
+        indices_idx,
+        index_shape.data(),
+        mat_index_strides.data(),
+        vec_index_strides.data(),
+        index_batch_ndim);
+    index_mat = mat_indices[mat_idx_offset];
+    index_vec = vec_indices[vec_idx_offset];
+  } else {
+    index_mat = mat_indices[indices_idx * mat_index_strides[0]];
+    index_vec = vec_indices[indices_idx * vec_index_strides[0]];
+  }
+
+  int64_t mat_offset;
+  if (mat_batch_ndim > 1) {
+    mat_offset = elem_to_loc(
+        index_mat,
+        mat_batch_shape.data(),
+        mat_batch_strides.data(),
+        mat_batch_ndim);
+  } else {
+    mat_offset = index_mat * mat_batch_strides[0];
+  }
+
+  int64_t vec_offset;
+  if (vec_batch_ndim > 1) {
+    vec_offset = elem_to_loc(
+        index_vec,
+        vec_batch_shape.data(),
+        vec_batch_strides.data(),
+        vec_batch_ndim);
+  } else {
+    vec_offset = index_vec * vec_batch_strides[0];
+  }
+
+  gemv_impl<T, rows_per_block, n_per_thread>(
+      mat + mat_offset, vec + vec_offset, out + indices_idx * rows, rows, cols);
+}
+
 bool can_use_gemv(int M, int N, int K, bool a_transposed, bool b_transposed) {
   return K % 32 == 0 && ((M == 1 && b_transposed) || (N == 1 && !a_transposed));
 }
@@ -197,6 +259,67 @@ void gemv(
             vec_strides,
             batch_shape.size());
       }
+    });
+  });
+}
+
+void gather_mv(
+    const array& mat_,
+    const array& vec_,
+    const array& mat_indices,
+    const array& vec_indices,
+    array& out,
+    int N,
+    int K,
+    CommandEncoder& encoder) {
+  encoder.set_input_array(mat_);
+  encoder.set_input_array(vec_);
+  encoder.set_input_array(mat_indices);
+  encoder.set_input_array(vec_indices);
+  encoder.set_output_array(out);
+  dispatch_inexact_types(out.dtype(), "gather_mv", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    dim3 block_dims{WARP_SIZE, rows_per_block};
+    int rows = N;
+    int cols = K;
+    uint32_t batch_size = static_cast<uint32_t>(out.size() / N);
+    const DataType* mat = gpu_ptr<DataType>(mat_);
+    const DataType* vec = gpu_ptr<DataType>(vec_);
+
+    uint32_t num_blocks_x = (rows + rows_per_block - 1) / rows_per_block;
+    int n_per_t;
+    if (K % 128 == 0 && is_aligned<4>(mat) && is_aligned<4>(vec)) {
+      n_per_t = 4;
+    } else if (K % 64 == 0 && is_aligned<2>(mat) && is_aligned<2>(vec)) {
+      n_per_t = 2;
+    } else {
+      n_per_t = 1;
+    }
+
+    dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
+      auto kernel = gemv_gather<DataType, rows_per_block, n_per_thread()>;
+      encoder.add_kernel_node(
+          kernel,
+          dim3{num_blocks_x, batch_size},
+          block_dims,
+          0,
+          mat,
+          vec,
+          gpu_ptr<DataType>(out),
+          gpu_ptr<uint32_t>(mat_indices),
+          gpu_ptr<uint32_t>(vec_indices),
+          rows,
+          cols,
+          const_param(mat_.shape()),
+          const_param(mat_.strides()),
+          mat_.ndim() - 2,
+          const_param(vec_.shape()),
+          const_param(vec_.strides()),
+          vec_.ndim() - 2,
+          const_param(mat_indices.shape()),
+          const_param(mat_indices.strides()),
+          const_param(vec_indices.strides()),
+          mat_indices.ndim());
     });
   });
 }

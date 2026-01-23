@@ -8,6 +8,7 @@
 
 #include <nvtx3/nvtx3.hpp>
 #include <thrust/device_ptr.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <cub/device/device_segmented_radix_sort.cuh>
 

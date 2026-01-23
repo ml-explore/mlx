@@ -36,6 +36,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
       - uses: ./.github/actions/test-linux
+      - run: df -h
 
   cuda_build_and_test:
     name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
@@ -74,6 +75,18 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-macos
       - uses: ./.github/actions/build-macos
+
+  windows_build_and_test:
+    name: Windows (cpu, x86_64)
+    needs: check_lint
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-windows
+        with:
+          use-ccache: false
+      - uses: ./.github/actions/build-windows
+      - uses: ./.github/actions/test-windows
 
   build_documentation:
     name: Build Documentation

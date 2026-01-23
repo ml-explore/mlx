@@ -4,12 +4,14 @@
 
 #include <cstdlib>
 
+#include "mlx/api.h"
+
 namespace mlx::core::allocator {
 
 // Simple wrapper around buffer pointers
 // WARNING: Only Buffer objects constructed from and those that wrap
 //          raw pointers from mlx::allocator are supported.
-class Buffer {
+class MLX_API Buffer {
  private:
   void* ptr_;
 
@@ -28,7 +30,7 @@ class Buffer {
   };
 };
 
-class Allocator {
+class MLX_API Allocator {
   /** Abstract base class for a memory allocator. */
  public:
   virtual Buffer malloc(size_t size) = 0;
@@ -47,7 +49,7 @@ class Allocator {
   virtual ~Allocator() = default;
 };
 
-Allocator& allocator();
+MLX_API Allocator& allocator();
 
 inline Buffer malloc(size_t size) {
   return allocator().malloc(size);

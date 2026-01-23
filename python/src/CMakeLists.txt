@@ -37,6 +37,7 @@ if(MLX_BUILD_PYTHON_STUBS)
     MODULE
     "mlx.core"
     PYTHON_PATH
+    "$<TARGET_FILE_DIR:core>/.."
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
     PATTERN_FILE
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/_stub_patterns.txt"

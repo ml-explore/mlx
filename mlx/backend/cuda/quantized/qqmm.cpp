@@ -13,40 +13,17 @@ namespace mlx::core {
 
 namespace {
 
-inline array ensure_row_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    enc.add_temporary(x_copy);
-    return x_copy;
-  } else {
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
     return x;
-  }
-}
-
-inline array ensure_row_contiguous_matrix(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (x.ndim() < 2) {
-    if (x.strides()[0] == 1) {
-      return x;
-    }
-  } else {
-    auto stride_0 = x.strides()[x.ndim() - 2];
-    auto stride_1 = x.strides()[x.ndim() - 1];
-    if (stride_0 == x.shape(-1) && stride_1 == 1) {
-      return x;
-    }
   }
   array x_copy = contiguous_copy_gpu(x, s);
   enc.add_temporary(x_copy);
   return x_copy;
 }
 
-array pad_and_repack_scales(
+array pad_and_swizzle_scales(
     const array& scale,
     cu::CommandEncoder& encoder,
     const Stream& s) {
@@ -64,14 +41,12 @@ array pad_and_repack_scales(
       cu::malloc_async(pad_outer * pad_inner, encoder),
       Shape{pad_outer, pad_inner},
       scale.dtype());
-  repack_scales(scale, scale_tiled, encoder, s);
+  swizzle_scales(scale, scale_tiled, encoder, s);
 
   encoder.add_temporary(scale_tiled);
   return scale_tiled;
 }
-} // namespace
 
-namespace {
 void qqmm_impl(
     cu::CommandEncoder& encoder,
     int M,
@@ -133,8 +108,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto quantize = [&](const array& input,
                       cu::CommandEncoder& encoder,
                       const Stream& s) -> std::pair<array, array> {
-    const array x = ensure_row_contiguous(input, encoder, s);
-
+    auto x = ensure_contiguous(input, encoder, s);
     auto xq_shape = x.shape();
     xq_shape.back() = x.shape(-1) * bits_ / 32;
 
@@ -176,8 +150,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int K = K_packed * (32 / bits_);
 
   // Repack scales from linear to tiled layout for tensor cores
-  array scale_x = pad_and_repack_scales(scale_x_pre, encoder, s);
-  array scale_w = pad_and_repack_scales(scale_w_pre, encoder, s);
+  array scale_x = pad_and_swizzle_scales(scale_x_pre, encoder, s);
+  array scale_w = pad_and_swizzle_scales(scale_w_pre, encoder, s);
 
   bool x_transposed = false;
   bool w_transposed = true; // always transposed

@@ -26,6 +26,7 @@ ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = NO
 SKIP_FUNCTION_MACROS   = NO
+PREDEFINED             = MLX_API=
 
 ################################################################################
 # Compound extraction control.                                                 #

@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include "mlx/api.h"
+
 #define MLX_VERSION_MAJOR 0
 #define MLX_VERSION_MINOR 30
-#define MLX_VERSION_PATCH 3
+#define MLX_VERSION_PATCH 4
 #define MLX_VERSION_NUMERIC \
   (100000 * MLX_VERSION_MAJOR + 1000 * MLX_VERSION_MINOR + MLX_VERSION_PATCH)
 
@@ -15,6 +17,6 @@ namespace mlx::core {
  *
  * For dev builds, the version will include the suffix ".devYYYYMMDD+hash"
  */
-const char* version();
+MLX_API const char* version();
 
 } // namespace mlx::core

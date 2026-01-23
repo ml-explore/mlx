@@ -4,6 +4,7 @@
 
 #include <unordered_set>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/io/load.h"
@@ -123,7 +124,7 @@ class Primitive {
   Stream stream_;
 };
 
-class UnaryPrimitive : public Primitive {
+class MLX_API UnaryPrimitive : public Primitive {
   /**
    * An abstract base class for a primitive with a single output.
    */
@@ -349,7 +350,7 @@ class ArgPartition : public UnaryPrimitive {
   int axis_;
 };
 
-class ArgReduce : public UnaryPrimitive {
+class MLX_API ArgReduce : public UnaryPrimitive {
  public:
   enum ReduceType {
     ArgMin,

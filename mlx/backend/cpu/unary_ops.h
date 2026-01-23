@@ -154,24 +154,12 @@ struct ToFP8 {
 struct FromFP8 {
   template <int N>
   Simd<float, N> operator()(Simd<uint8_t, N> x) {
-    auto w = Simd<uint32_t, N>(x) << 24;
-    auto sign = w & 0x80000000;
-    auto nonsign = w & 0x7FFFFFFF;
-
-    auto renorm_shift = clz(nonsign);
-    renorm_shift = simd::select(
-        renorm_shift > Simd<uint32_t, N>{4},
-        renorm_shift - Simd<uint32_t, N>{4},
-        Simd<uint32_t, N>{0});
-
-    Simd<int32_t, N> inf_nan_mask =
-        (Simd<int32_t, N>(nonsign + 0x01000000) >> 8) & 0x7F800000;
-    auto zero_mask = Simd<int32_t, N>(nonsign - 1) >> 31;
-    auto result = sign |
-        ((((nonsign << renorm_shift >> 4) + ((0x78 - renorm_shift) << 23)) |
-          inf_nan_mask) &
-         ~zero_mask);
-    return fp32_from_bits(result);
+    auto v = Simd<uint16_t, N>(x & 127) << 7;
+    auto converted = *(Simd<float16_t, N>*)(&v);
+    converted = converted * 256.0;
+    auto sign = Simd<bool, N>(x & 128);
+    Simd<float, N> out = select(sign, -converted, converted);
+    return out;
   }
   float operator()(uint8_t x) {
     return (*this)(Simd<uint8_t, 1>(x)).value;
