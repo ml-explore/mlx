@@ -164,7 +164,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         if not mx.metal.is_available():
             global_scale = mx.absmax(w).astype(mx.float32)
         else:
-            global_scale = mx.array(1.0, dtype=mx.float32)
+            global_scale = None
 
         w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale)
         w_hat = mx.dequantize(
