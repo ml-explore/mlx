@@ -30,7 +30,7 @@ __device__ void rope_single_impl(
   float sintheta = sin(theta);
 
   // Compute the input and output indices
-  uint index_1, index_2;
+  uint32_t index_1, index_2;
   if (traditional) {
     index_1 = 2 * pos.x + pos.y * stride;
     index_2 = index_1 + 1;

@@ -1,5 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
+// Required for using M_LOG2E in MSVC.
+#define _USE_MATH_DEFINES
+
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/device/utils.cuh"

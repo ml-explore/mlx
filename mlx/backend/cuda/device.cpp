@@ -409,14 +409,17 @@ void CommandEncoder::commit() {
   }
   if (use_cuda_graphs() && node_count_ > 0) {
     if (!from_nodes_.empty()) {
+#if CUDART_VERSION >= 13000
       CHECK_CUDA_ERROR(cudaGraphAddDependencies(
           graph_,
           from_nodes_.data(),
           to_nodes_.data(),
-#if CUDART_VERSION >= 13000
           nullptr, // edgeData
-#endif // CUDART_VERSION >= 13000
           from_nodes_.size()));
+#else
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(
+          graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+#endif
     }
 
     device_.make_current();

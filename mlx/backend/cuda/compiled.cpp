@@ -258,7 +258,7 @@ void Compiled::eval_gpu(
         "mlx::core::cu::{}_contiguous<int64_t, {}>",
         lib_name(),
         work_per_thread));
-    for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
+    for (int wpt : {1, work_per_thread}) {
       for (int i = 1; i <= MAX_NDIM; ++i) {
         kernel_names.push_back(fmt::format(
             "mlx::core::cu::{}_strided<{}, uint32_t, {}>", lib_name(), i, wpt));

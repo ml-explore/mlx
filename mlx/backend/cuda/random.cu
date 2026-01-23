@@ -51,9 +51,9 @@ __global__ void rbitsc(
     bool odd,
     uint32_t bytes_per_key) {
   auto grid = cg::this_grid();
-  uint thread_index = grid.thread_rank();
-  uint index_x = thread_index % grid_dims.x;
-  uint index_y = thread_index / grid_dims.x;
+  uint32_t thread_index = grid.thread_rank();
+  uint32_t index_x = thread_index % grid_dims.x;
+  uint32_t index_y = thread_index / grid_dims.x;
   if (index_x >= grid_dims.x || index_y >= grid_dims.y) {
     return;
   }
@@ -94,9 +94,9 @@ __global__ void rbits(
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
   auto grid = cg::this_grid();
-  uint thread_index = grid.thread_rank();
-  uint index_x = thread_index % grid_dims.x;
-  uint index_y = thread_index / grid_dims.x;
+  uint32_t thread_index = grid.thread_rank();
+  uint32_t index_x = thread_index % grid_dims.x;
+  uint32_t index_y = thread_index / grid_dims.x;
   if (index_x >= grid_dims.x || index_y >= grid_dims.y) {
     return;
   }
