@@ -257,9 +257,12 @@ if(MLX_BUILD_CPU)
       GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
       GIT_TAG v0.3.28
       EXCLUDE_FROM_ALL)
-    set(BUILD_STATIC_LIBS ON) # link statically
+    block(PROPAGATE openblas_SOURCE_DIR)
+    set(BUILD_SHARED_LIBS OFF) # link statically
+    set(BUILD_STATIC_LIBS ON)
     set(NOFORTRAN ON) # msvc has no fortran compiler
     FetchContent_MakeAvailable(openblas)
+    endblock()
     target_link_libraries(mlx PRIVATE openblas)
     target_include_directories(
       mlx PRIVATE "${openblas_SOURCE_DIR}/lapack-netlib/LAPACKE/include"

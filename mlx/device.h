@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include "mlx/api.h"
+
 namespace mlx::core {
 
-struct Device {
+struct MLX_API Device {
   enum class DeviceType {
     cpu,
     gpu,
@@ -19,13 +21,13 @@ struct Device {
   int index;
 };
 
-const Device& default_device();
+MLX_API const Device& default_device();
 
-void set_default_device(const Device& d);
+MLX_API void set_default_device(const Device& d);
 
-bool operator==(const Device& lhs, const Device& rhs);
-bool operator!=(const Device& lhs, const Device& rhs);
+MLX_API bool operator==(const Device& lhs, const Device& rhs);
+MLX_API bool operator!=(const Device& lhs, const Device& rhs);
 
-bool is_available(const Device& d);
+MLX_API bool is_available(const Device& d);
 
 } // namespace mlx::core
