@@ -58,7 +58,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     out = scores @ v
     if n_repeats > 1:
         out = mx.reshape(out, [B, n_q_heads, L, -1])
-
     return out
 
 

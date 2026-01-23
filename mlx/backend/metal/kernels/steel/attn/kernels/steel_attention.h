@@ -457,6 +457,12 @@ template <
   }
 
   // Normalize output
+  // Handle case where no keys were attended (sum_score == 0)
+  // Output should be 0 (from Otile.clear()), so set sum_score to 1 to get 0/1 = 0
+  STEEL_PRAGMA_UNROLL
+  for (short i = 0; i < kRowsPT; ++i) {
+    sum_score[i] = sum_score[i] == 0 ? AccumType(1) : sum_score[i];
+  }
   Otile.template row_bin_op<DivOp>(sum_score);
   threadgroup_barrier(mem_flags::mem_none);
 
