@@ -170,12 +170,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(
             w_q, scales, group_size=16, bits=4, mode="nvfp4", global_scale=global_scale
         )
-        # self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
-        if (w - w_hat).abs().max() > 1e-5:
-            import pdb
-
-            pdb.set_trace()
-            print("Max error with global scale:", (w - w_hat).abs().max().item())
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
     def test_qmm(self):
         key = mx.random.key(0)

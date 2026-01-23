@@ -17,15 +17,15 @@ runs:
     - name: Install tests dependencies
       shell: bash -l {0}
       run: |
-        pip install numpy torch tensorflow unittest-xml-reporting
+        pip install numpy torch tensorflow
 
     - name: Run Python tests
       shell: bash -l {0}
       env:
         LOW_MEMORY: 1
       run: |
-        DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-        DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
+        DEVICE=cpu python -m unittest discover -v python/tests
+        DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m unittest discover -v python/tests
         mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
         mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
@@ -77,6 +77,4 @@ runs:
       run: |
         CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
           pip install -e . -v
-        python -m xmlrunner discover \
-            -v python/tests \
-            -o test-results/gpu_jit
+        python -m unittest discover -v python/tests

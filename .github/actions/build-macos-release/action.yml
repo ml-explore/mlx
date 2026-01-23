@@ -18,6 +18,7 @@ runs:
     - name: Build Python package
       shell: bash -l {0}
       env:
+        DEVELOPER_DIR: /Applications/Xcode-latest.app
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         pip install build
@@ -28,6 +29,7 @@ runs:
       if: ${{ inputs.build-backend }}
       shell: bash -l {0}
       env:
+        DEVELOPER_DIR: /Applications/Xcode-latest.app
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         python setup.py clean --all

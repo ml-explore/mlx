@@ -4302,7 +4302,6 @@ array quantized_matmul(
   if (x.ndim() > 2 && w.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
-  // TODO: add global scale
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   return array(
@@ -6206,5 +6205,4 @@ array contiguous(
       std::make_shared<Contiguous>(to_stream(s), allow_col_major),
       {a});
 }
-
 } // namespace mlx::core

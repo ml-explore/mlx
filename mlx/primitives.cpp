@@ -3523,7 +3523,7 @@ std::vector<array> QQMatmul::vjp(
       vjps.push_back(qqmm(
           cotan, //  M X N
           swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
-          std::nullopt,
+          {},
           group_size_,
           bits_,
           qmode,
@@ -3664,7 +3664,6 @@ std::vector<array> GatherQMM::vjp(
                             group_size_,
                             bits_,
                             quantization_mode_to_string(mode_),
-                            {}, // placeholder for amax
                             std::nullopt,
                             stream()),
                         -1,

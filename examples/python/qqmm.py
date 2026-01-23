@@ -38,12 +38,8 @@ def test_qqmm():
             for dtype in dtypes:
                 x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
                 w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
-                x_amax = (
-                    mx.abs(x).max().astype(mx.float32) if group_size == 16 else None
-                )
-                w_amax = (
-                    mx.abs(w).max().astype(mx.float32) if group_size == 16 else None
-                )
+                x_amax = mx.abs_max(x).astype(mx.float32) if group_size == 16 else None
+                w_amax = mx.abs_max(w).astype(mx.float32) if group_size == 16 else None
                 w_q, scales_w = mx.quantize(
                     w, group_size, bits, mode=mode, global_scale=w_amax
                 )

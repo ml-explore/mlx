@@ -4301,7 +4301,7 @@ void init_ops(nb::module_& m) {
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
           global_scale (array, optional): The per-input float32 scale used for
-            ``"nvfp4"`` quantization. Default: ``None``.
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
 
         Returns:
           tuple: A tuple with either two or three elements containing:
@@ -4392,7 +4392,7 @@ void init_ops(nb::module_& m) {
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           global_scale (array, optional): The per-input float32 scale used for
-            ``"nvfp4"`` quantization. Default: ``None``.
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
           dtype (Dtype, optional): The data type of the dequantized output. If
             ``None`` the return type is inferred from the scales and biases
             when possible and otherwise defaults to ``bfloat16``.
@@ -5507,6 +5507,7 @@ void init_ops(nb::module_& m) {
         If ``x`` and `w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
+        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
 
       Args:
         x (array): Input array.
@@ -5523,9 +5524,9 @@ void init_ops(nb::module_& m) {
           Supported modes are ``nvfp4`` and ``mxfp8``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
         global_scale (array, optional): The per-input float32 scale used for x
-            ``"nvfp4"`` quantization. Default: ``None``.
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
         global_scale_w (array, optional): The per-input float32 scale used for w
-            ``"nvfp4"`` quantization. Default: ``None``.
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).

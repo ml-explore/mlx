@@ -39,17 +39,18 @@ array pad_and_swizzle_scales(
   // Compute padded dimensions for full tiles (128 rows × 4 cols)
   auto [pad_outer, pad_inner] =
       get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
-
   // cuBLAS requirements for scale factor layout:
   // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
   // 2. Out-of-bounds values must be filled with zeros
   // 3. Starting addresses must be 16-byte aligned
   // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
+  // Note: cu::malloc_async already provides 256-byte alignment
   array scale_tiled(
       cu::malloc_async(pad_outer * pad_inner, encoder),
       Shape{pad_outer, pad_inner},
       scale.dtype());
   swizzle_scales(scale, scale_tiled, encoder, s);
+
   encoder.add_temporary(scale_tiled);
   return scale_tiled;
 }
@@ -162,8 +163,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
-
-  // Check compute capability (requires Blackwell or newer)
   auto& device = encoder.device();
   int cc = device.compute_capability_major() * 100 +
       device.compute_capability_minor() * 10;
