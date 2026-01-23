@@ -4,8 +4,11 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/device.h"
+#include "mlx/device_info.h"
 #include "mlx/utils.h"
 
 namespace mx = mlx::core;
@@ -63,4 +66,29 @@ void init_device(nb::module_& m) {
       &mx::is_available,
       "device"_a,
       R"pbdoc(Check if a back-end is available for the given device.)pbdoc");
+  m.def(
+      "device_count",
+      &mx::device_count,
+      R"pbdoc(
+      Get the number of available GPU devices.
+
+      Returns:
+          int: Number of GPU devices.
+      )pbdoc");
+  m.def(
+      "device_info",
+      &mx::device_info,
+      nb::arg("device_index") = 0,
+      R"pbdoc(
+      Get information about a GPU device.
+
+      Returns a dictionary with device properties. Available keys depend
+      on the backend. Common keys include ``device_name`` and ``architecture``.
+
+      Args:
+          device_index (int): Device index (default 0).
+
+      Returns:
+          dict: Device information.
+      )pbdoc");
 }

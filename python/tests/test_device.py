@@ -113,5 +113,28 @@ class TestStream(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), b.item())
 
 
+class TestDeviceInfo(mlx_tests.MLXTestCase):
+    def test_device_count(self):
+        count = mx.device_count()
+        self.assertIsInstance(count, int)
+        self.assertGreaterEqual(count, 0)
+
+    @unittest.skipIf(mx.device_count() == 0, "No devices available")
+    def test_device_info_returns_dict(self):
+        info = mx.device_info()
+        self.assertIsInstance(info, dict)
+
+    @unittest.skipIf(mx.device_count() == 0, "No devices available")
+    def test_has_device_name(self):
+        info = mx.device_info()
+        self.assertIn("device_name", info)
+        self.assertTrue(len(info["device_name"]) > 0)
+
+    @unittest.skipIf(mx.device_count() == 0, "No devices available")
+    def test_has_architecture(self):
+        info = mx.device_info()
+        self.assertIn("architecture", info)
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
