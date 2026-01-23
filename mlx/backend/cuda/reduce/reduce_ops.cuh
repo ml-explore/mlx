@@ -227,8 +227,8 @@ struct ReduceInit<Max, T> {
 
 template <typename T>
 struct ReduceInit<AbsMax, T> {
-  static constexpr __host__ __device__ T value() {
-    return T(0); // abs values are >= 0
+  static constexpr __host__ __device__ auto value() {
+    return typename ReduceResult<AbsMax, T>::type(0); // abs values are >= 0
   }
 };
 

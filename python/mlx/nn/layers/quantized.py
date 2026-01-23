@@ -386,11 +386,11 @@ class QQLinear(Module):
         # for the activations as well as for the weights
         # (for example for the weights it can be ema )
         global_scale_w = (
-            getattr(self, "global_scale_w", (self.weight).abs().max())
+            getattr(self, "global_scale_w", mx.abs_max(self.weight))
             if self._use_global_scale
             else None
         )
-        global_scale_x = (x).abs().max() if self._use_global_scale else None
+        global_scale_x = mx.abs_max(x) if self._use_global_scale else None
         x = mx.qqmm(
             x,
             self["weight"],
