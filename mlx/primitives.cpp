@@ -3665,6 +3665,7 @@ std::vector<array> GatherQMM::vjp(
                             bits_,
                             quantization_mode_to_string(mode_),
                             std::nullopt,
+                            std::nullopt, // amax placeholder
                             stream()),
                         -1,
                         {-1, group_size_},
