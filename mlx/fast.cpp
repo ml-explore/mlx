@@ -720,8 +720,8 @@ array scaled_dot_product_attention(
         if (do_causal) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
-          int q_off = (kL - qL) < 0 ? 0 : (kL - qL);
-          auto q_idx = arange(q_off, q_off + qL, s);
+          int offset = kL - qL;
+          auto q_idx = add(arange(0, qL, s), array(offset, int32), s);
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);
@@ -757,6 +757,18 @@ array scaled_dot_product_attention(
       scores = concatenate({broadcast_to(sinks, bsx_shape, s), scores}, -1, s);
     }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
+    if (do_causal) {
+      int kL = k.shape(-2);
+      int qL = q.shape(-2);
+      if (qL > kL) {
+        auto mask_rows = less(arange(qL, s), array(qL - kL, int32), s);
+        for (int i = 0; i < scores.ndim() - 2; i++) {
+          mask_rows = expand_dims(mask_rows, 0, s);
+        }
+        mask_rows = expand_dims(mask_rows, -1, s);
+        scores = where(mask_rows, zeros_like(scores, s), scores, s);
+      }
+    }
     if (has_sinks) {
       // Slice off scores
       auto start = Shape(scores.ndim(), 0);
