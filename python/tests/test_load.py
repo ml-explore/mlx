@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import os
+import platform
 import tempfile
 import unittest
 from pathlib import Path
@@ -126,6 +127,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
@@ -186,6 +188,7 @@ class TestLoad(mlx_tests.MLXTestCase):
             out = mx.load(f)["tensor"]
         self.assertTrue(mx.allclose(mx.from_fp8(out), expected))
 
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_basic(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
@@ -218,6 +221,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         self.assertTrue("meta" in meta_load_dict)
         self.assertEqual(meta_load_dict["meta"], "data")
 
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_arrays(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
@@ -253,6 +257,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                 metadata = {"meta": arr}
                 mx.save_gguf(save_file_mlx, save_dict, metadata)
 
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_mixed(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
@@ -395,6 +400,9 @@ class TestLoad(mlx_tests.MLXTestCase):
         mx.save_safetensors(save_file, {"a": a})
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))
+
+        if platform.system() == "Windows":
+            return
 
         save_file = os.path.join(self.test_dir, "a.gguf")
         mx.save_gguf(save_file, {"a": a})

@@ -3,6 +3,13 @@ name: 'Run tests on Windows'
 runs:
   using: 'composite'
   steps:
+    - name: Run Python tests - CPU
+      shell: bash
+      run: |
+        echo "::group::Python tests - CPU"
+        python -m unittest discover python/tests -v
+        echo "::endgroup::"
+
     - name: Run CPP tests - CPU
       shell: bash
       env:

@@ -3,7 +3,8 @@ name: 'Build on Windows'
 runs:
   using: 'composite'
   steps:
-    - name: Build CPP only
+    - name: Install Python package
+      id: python-build
       shell: cmd
       env:
         # For MSVC, Ninja/Release is the only config supported by ccache.
@@ -14,5 +15,12 @@ runs:
           -DCMAKE_CXX_COMPILER=cl
           -DCMAKE_RC_COMPILER=rc
       run: |
-        cmake . -B build %CMAKE_ARGS%
+        uv pip install ".[dev]" -v
+        :: Pass the CMAKE_ARGS to following steps.
+        >>%GITHUB_OUTPUT% ECHO CMAKE_ARGS=%CMAKE_ARGS%
+
+    - name: Build CPP only
+      shell: cmd
+      run: |
+        cmake . -B build ${{ steps.python-build.outputs.CMAKE_ARGS }}
         cmake --build build -j %NUMBER_OF_PROCESSORS%
