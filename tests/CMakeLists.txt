@@ -40,15 +40,5 @@ target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 
-# On Windows, copy the mlx DLL to the test executable directory for runtime
-# loading
-if(WIN32 AND BUILD_SHARED_LIBS)
-  add_custom_command(
-    TARGET tests
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mlx>
-            $<TARGET_FILE_DIR:tests>)
-endif()
-
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)
