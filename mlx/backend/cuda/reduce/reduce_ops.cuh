@@ -115,8 +115,21 @@ struct Max {
 };
 
 struct AbsMax {
+  // abs is applied inside all_reduce kernel
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(a.real()) || isnan(a.imag())) {
+        return a;
+      }
+      if (isnan(b.real()) || isnan(b.imag())) {
+        return b;
+      }
+    } else if constexpr (!cuda::std::is_integral_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return cuda::std::numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a > b ? a : b;
   }
 
@@ -168,7 +181,7 @@ struct ReduceResult<Max, T> {
 
 template <typename T>
 struct ReduceResult<AbsMax, T> {
-  using type = float;
+  using type = T;
 };
 
 // Traits to get the init value of reduce op.

@@ -44,8 +44,9 @@ __global__ void fp_quantize_rowwise(
   // Global encode scale: (448 × 6) / *global_scale
   // Per-block decode scale: S_dec_b = (block_amax / 6) × S_enc → stored as FP8
   // E4M3 Per-block encode scale: S_enc_b = S_enc / S_dec_b
+  const bool use_global_scale = global_scale != nullptr;
   const float scale_enc =
-      !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
+      use_global_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
 
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
@@ -121,8 +122,9 @@ __global__ void fp_quantize_columnwise(
   // Quantized output: [M, K/elem_per_byte] row-major (K-major)
   // Scales: [M, K/group_size] row-major (K-major)
   // Quantize along K (last dimension, groups of group_size elements)
+  const bool use_global_scale = global_scale != nullptr;
   const float scale_enc =
-      !use_mx_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
+      use_global_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
 
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
@@ -257,8 +259,10 @@ __global__ void fp_dequantize(
   auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = bits == 8 ? 1 : 2;
-  const float inv_scale_enc =
-      use_mx_scale ? 1.0f : (*global_scale) / (F8E4M3_MAX * F4E2M1_MAX);
+  const bool use_global_scale = global_scale != nullptr;
+  const float inv_scale_enc = use_mx_scale
+      ? 1.0f
+      : (use_global_scale ? (*global_scale) / (F8E4M3_MAX * F4E2M1_MAX) : 1.0f);
   size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t oindex = offset * pack_factor;
 

@@ -160,6 +160,23 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+        # Test nvfp4 quantize/dequantize with tensor-scale global_scale
+        if not mx.metal.is_available():
+            global_scale = mx.abs_max(w).astype(mx.float32)
+        else:
+            global_scale = mx.array(1.0, dtype=mx.float32)
+
+        w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale)
+        w_hat = mx.dequantize(
+            w_q, scales, group_size=16, bits=4, mode="nvfp4", global_scale=global_scale
+        )
+        # self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+        if (w - w_hat).abs().max() > 1e-5:
+            import pdb
+
+            pdb.set_trace()
+            print("Max error with global scale:", (w - w_hat).abs().max().item())
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

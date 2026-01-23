@@ -2237,17 +2237,26 @@ array min(
   return min(a, std::vector<int>{axis}, keepdims, s);
 }
 
+// TODO: extend to row_reduce and col_reduce?
 array abs_max(const array& a, StreamOrDevice s /* = {}*/) {
   if (a.size() == 0) {
     throw std::invalid_argument(
         "[abs_max] Cannot abs_max reduce zero size array.");
   }
+  if (!issubdtype(a.dtype(), floating)) {
+    throw std::invalid_argument(
+        "[abs_max] abs_max supported only for floating point types.");
+  }
+  auto stream = to_stream(s);
+  if (stream.device != Device::gpu || !cu::is_available()) {
+    return max(abs(a, s), false, s);
+  }
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
   return array(
       {},
-      float32,
-      std::make_shared<Reduce>(to_stream(s), Reduce::AbsMax, axes),
+      a.dtype(),
+      std::make_shared<Reduce>(stream, Reduce::AbsMax, axes),
       {a});
 }
 
@@ -4243,20 +4252,11 @@ void validate_global_scale(
       // TODO: not sure if type should be restricted to float32
       if (global_scale->dtype() != float32) {
         std::ostringstream msg;
-        msg << "[" << tag
-            << "] Global scale must be a floating type but got type "
+        msg << "[" << tag << "] Global scale must have dtype float32 but got "
             << global_scale->dtype() << ".";
         throw std::invalid_argument(msg.str());
       }
     }
-  } else {
-    if (qmode == QuantizationMode::Nvfp4) {
-      std::ostringstream msg;
-      msg << "[" << tag << "] Global scale must be provided for 'nvfp4' "
-          << "quantization mode.";
-      throw std::invalid_argument(msg.str());
-    }
-    return;
   }
 }
 
@@ -4361,6 +4361,16 @@ void validate_qqmm_inputs(
   // validate global scales
   validate_global_scale("qqmm", qmode, global_scale_x);
   validate_global_scale("qqmm", qmode, global_scale_w);
+  // For nvfp4 mode, both global scales must be provided together or neither
+  if (qmode == QuantizationMode::Nvfp4) {
+    bool has_x = global_scale_x.has_value();
+    bool has_w = global_scale_w.has_value();
+    if (has_x != has_w) {
+      throw std::invalid_argument(
+          "[qqmm] For nvfp4 mode, either both global_scale_x and "
+          "global_scale_w must be provided, or neither.");
+    }
+  }
 }
 
 std::pair<int, int> extract_qqmm_dims(
@@ -4444,9 +4454,13 @@ array qqmm(
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
-  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+  // if
+  if (global_scale_x.has_value()) {
     // Stop gradient through global scales
     inputs.push_back(stop_gradient(*global_scale_x));
+  }
+  if (global_scale_w.has_value()) {
+    // Stop gradient through global scales
     inputs.push_back(stop_gradient(*global_scale_w));
   }
   auto out_shape = inputs[0].shape();
@@ -4602,30 +4616,41 @@ std::vector<array> fp_quantize(
         << bits << ".";
     throw std::invalid_argument(msg.str());
   }
-  auto fallback = [bits = bits, group_size = group_size, mode = mode, s](
-                      const std::vector<array>& inputs) -> std::vector<array> {
-    auto w = inputs[0];
-    float maxval = (bits == 4) ? 6.0f : 448.0f;
 
+  auto inputs = std::vector<array>{w};
+  if (global_scale.has_value()) {
+    inputs.push_back(global_scale.value());
+  }
+
+  auto fallback = [bits = bits, group_size = group_size, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto scale_encode =
+        inputs.size() > 1 ? 448.0f * 6.0f / inputs[1] : array(1.0f, float32);
+    float maxval = (bits == 4) ? 6.0f : 448.0f;
     auto new_shape = w.shape();
     new_shape.back() = -1;
     auto wq = reshape(w, {-1, group_size}, s);
-    auto group_amax = max(abs(wq, s), -1, true, s);
-
+    auto scales =
+        divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s) *
+        scale_encode;
     if (group_size == 16) {
-      // NVFP4: scale_dec = (group_amax / 6) * (448 * 6) / global_scale
-      //                  = group_amax * 448 / global_scale
-      array scales = (mode == QuantizationMode::Nvfp4 && inputs.size() > 1)
-          ? divide(
-                multiply(group_amax, array(448.0f, w.dtype()), s), inputs[1], s)
-          : divide(group_amax, array(maxval, w.dtype()), s);
       // convert to e4m3
       scales = to_fp8(scales, s);
-      // quantized = w * 6 / group_amax
-      wq = divide(multiply(wq, array(maxval, w.dtype()), s), group_amax, s);
-      wq = reshape(wq, new_shape, s);
-      scales = reshape(scales, new_shape, s);
+      wq = divide(wq, from_fp8(scales, w.dtype(), s), s) * scale_encode;
+    } else {
+      // convert to e8m0
+      auto z = array(0, scales.dtype());
+      scales = where(
+          equal(scales, z, s),
+          z,
+          astype(round(log2(scales, s), s), int32, s),
+          s);
 
+      wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
+      scales = astype(add(scales, array(127, int32), s), uint8, s);
+    }
+    if (bits == 4) {
       auto lut = array({
           +0.0f,
           +0.5f,
@@ -4650,32 +4675,14 @@ std::vector<array> fp_quantize(
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
       wq = reshape(wq, {-1, 4, 8}, s);
       wq = sum(multiply(wq, shifts, s), -1, false, s);
-      wq = reshape(wq, new_shape, s);
-
-      return {std::move(wq), std::move(scales)};
     } else {
-      auto scales = divide(group_amax, array(maxval, w.dtype()), s);
-      auto z = array(0, scales.dtype());
-      scales = where(
-          equal(scales, z, s),
-          z,
-          astype(round(log2(scales, s), s), int32, s),
-          s);
-
-      wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
-      scales = astype(add(scales, array(127, int32), s), uint8, s);
-
       wq = view(to_fp8(wq, s), uint32, s);
-      wq = reshape(wq, new_shape, s);
-      scales = reshape(scales, new_shape, s);
-      return {std::move(wq), std::move(scales)};
     }
+    wq = reshape(wq, new_shape, s);
+    scales = reshape(scales, new_shape, s);
+    return {std::move(wq), std::move(scales)};
   };
-  auto inputs = std::vector<array>{w};
 
-  if (global_scale.has_value()) {
-    inputs.push_back(global_scale.value());
-  }
   if (s.device == Device::gpu) {
     auto wq_shape = w.shape();
     wq_shape.back() = w.shape(-1) * bits / 32;
@@ -4878,16 +4885,23 @@ array fp_dequantize(
     throw std::invalid_argument(msg.str());
   }
 
+  auto inputs = std::vector<array>{w, scales};
+  if (global_scale.has_value()) {
+    inputs.push_back(global_scale.value());
+  }
+
   auto fallback =
       [wshape = std::move(wshape),
        sshape = std::move(sshape),
        group_size,
        bits,
        out_type,
-       mode = mode,
        s](const std::vector<array>& inputs) mutable -> std::vector<array> {
     auto out = inputs[0];
     auto scales = inputs[1];
+    array inv_scale_enc = inputs.size() > 2
+        ? divide(inputs[2], array(448.0f * 6.0f, out_type), s)
+        : array(1.0f, out_type);
     if (bits == 4) {
       auto lut = array(
           {
@@ -4921,27 +4935,16 @@ array fp_dequantize(
     out = reshape(out, {-1, group_size}, s);
     scales = reshape(scales, {-1, 1}, s);
     if (group_size == 16) {
-      // NVFP4: decode scale from fp8 e4m3
-      scales = from_fp8(scales, out_type, s);
-      // For nvfp4 with global_scale: effective_scale = scale * global_scale /
-      // (448 * 6)
-      if (mode == QuantizationMode::Nvfp4 && inputs.size() > 2) {
-        scales = divide(
-            multiply(scales, inputs[2], s), array(448.0f * 6.0f, out_type), s);
-      }
+      // NVFP4: scales are E4M3, apply inv_scale_enc
+      scales = multiply(from_fp8(scales, out_type, s), inv_scale_enc, s);
     } else {
-      // MXFP8: decode e8m0 scale
+      // MXFP: scales are E8M0 (power of 2)
       scales = subtract(astype(scales, out_type, s), array(127, out_type), s);
       scales = power(array(2.0f, out_type), scales, s);
     }
-    out = reshape(multiply(out, scales, s), wshape, s);
-
-    return {out};
+    return {reshape(multiply(out, scales, s), wshape, s)};
   };
-  auto inputs = std::vector<array>{w, scales};
-  if (global_scale.has_value()) {
-    inputs.push_back(global_scale.value());
-  }
+
   if (s.device == Device::gpu) {
     auto out_shape = w.shape();
     out_shape.back() = out_size;

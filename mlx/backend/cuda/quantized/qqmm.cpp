@@ -62,7 +62,7 @@ std::tuple<array, array> quantize_input(
     int bits,
     int group_size,
     std::optional<array> global_scale = std::nullopt) {
-  const array x = ensure_row_contiguous(input, encoder, s);
+  const array x = ensure_contiguous(input, encoder, s);
 
   // Compute output shapes
   auto xq_shape = x.shape();
@@ -171,28 +171,29 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(
         "[QQMatmul::eval_gpu] QQMM requires compute capability 10.0+");
   }
-  // input size = 2 for non-quantized w for qmode != nvfp4
-  // input size = 3 for quantized w for qmode != nvfp4
-  // input size = 4 for non-quantized w for qmode == nvfp4
-  // input size = 5 for quantized w for qmode == nvfp4
-  auto num_amax_inputs = mode_ == QuantizationMode::Nvfp4 ? 2 : 0;
-  auto size =
-      inputs[1].dtype() == uint32 ? 3 + num_amax_inputs : 2 + num_amax_inputs;
 
-  assert(inputs.size() == size);
+  // - 2 inputs: x, w (non-quantized w)
+  // - 3 inputs: x, w, scales_w (quantized w)
+  bool w_is_quantized = inputs[1].dtype() == uint32;
+  int base_size = w_is_quantized ? 3 : 2;
 
-  // For nvfp4, get global scales from inputs
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
+
+  // For nvfp4, get global scales from inputs if present
   std::optional<array> global_scale_x = std::nullopt;
   std::optional<array> global_scale_w = std::nullopt;
-  if (mode_ == QuantizationMode::Nvfp4) {
-    global_scale_x = inputs[size - 2];
-    global_scale_w = inputs[size - 1];
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
   }
 
   // Quantize inputs (or use pre-quantized)
   auto [x_q, scale_x_pre] = quantize_input(
       inputs[0], encoder, s, mode_, bits_, group_size_, global_scale_x);
-  auto [w_q, scale_w_pre] = inputs[1].dtype() != uint32
+  auto [w_q, scale_w_pre] = !w_is_quantized
       ? quantize_input(
             inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
@@ -215,7 +216,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   array scale_w = pad_and_swizzle_scales(scale_w_pre, encoder, s);
 
   GemmScalars scalars;
-  if (mode_ == QuantizationMode::Nvfp4) {
+  if (has_global_scales) {
     scalars = create_nvfp4_scalars(*global_scale_x, *global_scale_w, encoder);
   }
 

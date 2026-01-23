@@ -1799,6 +1799,8 @@ class Reduce : public UnaryPrimitive {
         return "Min";
       case Max:
         return "Max";
+      case AbsMax:
+        return "AbsMax";
     }
     return "<unknwon Reduce>";
   }
