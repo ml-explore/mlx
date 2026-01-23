@@ -212,6 +212,9 @@ Simd<T, 1> maximum(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
   if constexpr (!std::is_integral_v<T>) {
+    if (std::isnan(b)) {
+      return b;
+    }
     if (std::isnan(a)) {
       return a;
     }
@@ -224,6 +227,9 @@ Simd<T, 1> minimum(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
   if constexpr (!std::is_integral_v<T>) {
+    if (std::isnan(b)) {
+      return b;
+    }
     if (std::isnan(a)) {
       return a;
     }

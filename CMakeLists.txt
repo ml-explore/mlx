@@ -250,7 +250,86 @@ if(MLX_BUILD_CPU)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
     add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
-  elseif(MLX_BUILD_BLAS_FROM_SOURCE)
+  else()
+    # x86 SIMD optimizations (when not using Accelerate/NEON)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x86")
+      include(CheckCXXCompilerFlag)
+
+      # SIMD level options - enable exactly one (each level includes all lower
+      # levels) AVX-512: Includes AVX2, AVX, SSE AVX2:    Includes AVX, SSE SSE:
+      # SSE4.2 baseline
+      option(MLX_ENABLE_X86_AVX512 "Enable AVX-512 SIMD (includes AVX2, SSE)"
+             OFF)
+      option(MLX_ENABLE_X86_AVX2 "Enable AVX2 SIMD (includes SSE)" OFF)
+      option(MLX_ENABLE_X86_SSE "Enable SSE4.2 SIMD" ON)
+
+      set(MLX_SIMD_FLAGS "")
+
+      # Determine SIMD level (highest takes precedence)
+      if(MLX_ENABLE_X86_AVX512)
+        check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORTS_AVX512)
+        if(COMPILER_SUPPORTS_AVX512)
+          if(NOT MSVC)
+            # Core AVX-512 extensions (Foundation, CD, VL, DQ, BW)
+            set(MLX_SIMD_FLAGS
+                "-mavx512f;-mavx512cd;-mavx512vl;-mavx512dq;-mavx512bw")
+
+            # Check for optional AVX-512 BF16 support
+            check_cxx_compiler_flag("-mavx512bf16" COMPILER_SUPPORTS_AVX512BF16)
+            if(COMPILER_SUPPORTS_AVX512BF16)
+              message(STATUS "AVX-512 BF16 support detected")
+              list(APPEND MLX_SIMD_FLAGS "-mavx512bf16")
+            endif()
+
+            # Check for optional AVX-512 FP16 support
+            check_cxx_compiler_flag("-mavx512fp16" COMPILER_SUPPORTS_AVX512FP16)
+            if(COMPILER_SUPPORTS_AVX512FP16)
+              message(STATUS "AVX-512 FP16 support detected")
+              list(APPEND MLX_SIMD_FLAGS "-mavx512fp16")
+            endif()
+          endif()
+          message(STATUS "x86 SIMD: AVX-512")
+        else()
+          message(WARNING "AVX-512 requested but not supported by compiler")
+        endif()
+      elseif(MLX_ENABLE_X86_AVX2)
+        check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+        if(COMPILER_SUPPORTS_AVX2)
+          if(NOT MSVC)
+            set(MLX_SIMD_FLAGS "-mavx2;-mfma")
+          endif()
+          message(STATUS "x86 SIMD: AVX2")
+        else()
+          message(WARNING "AVX2 requested but not supported by compiler")
+        endif()
+      elseif(MLX_ENABLE_X86_SSE)
+        if(MSVC)
+          set(COMPILER_SUPPORTS_SSE42 TRUE)
+        else()
+          check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE42)
+        endif()
+
+        if(COMPILER_SUPPORTS_SSE42)
+          if(NOT MSVC)
+            set(MLX_SIMD_FLAGS "-msse4.2")
+          endif()
+          message(STATUS "x86 SIMD: SSE4.2")
+        else()
+          message(WARNING "SSE4.2 requested but not supported by compiler")
+        endif()
+      else()
+        message(STATUS "x86 SIMD: disabled")
+      endif()
+
+      # Apply the SIMD flags
+      if(MLX_SIMD_FLAGS AND NOT MSVC)
+        separate_arguments(MLX_SIMD_FLAGS)
+        target_compile_options(mlx PRIVATE ${MLX_SIMD_FLAGS})
+      endif()
+    endif()
+  endif()
+
+  if(MLX_BUILD_BLAS_FROM_SOURCE)
     # Download and build OpenBLAS from source code.
     FetchContent_Declare(
       openblas

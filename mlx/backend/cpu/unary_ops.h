@@ -88,7 +88,7 @@ struct Sign {
   Simd<T, N> operator()(Simd<T, N> x) {
     auto z = Simd<T, N>{0};
     auto o = Simd<T, N>{1};
-    auto m = Simd<T, N>{-1};
+    auto m = Simd<T, N>{T(-1)};
     if constexpr (std::is_unsigned_v<T>) {
       return simd::select(x == z, z, o);
     } else if constexpr (std::is_same_v<T, complex64_t>) {
