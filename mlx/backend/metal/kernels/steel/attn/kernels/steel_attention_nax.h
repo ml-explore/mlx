@@ -461,32 +461,10 @@ template <
   metal::vec<AccumType, kRowsPT> rcp;
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
-    // Handle case where no keys were attended (sum_score == 0)
-    // Set reciprocal to 0 so output becomes Otile * 0 = 0
-    rcp[i] = sum_score[i] == 0 ? AccumType(0) : (1.f / sum_score[i]);
+    rcp[i] = 1.f / sum_score[i];
   }
 
   Otile.template row_bin_op<MulOp>(rcp);
-
-  // Zero out rows where query has no keys to attend (row_pos < 0 for all columns)
-  if (do_causal) {
-    using otile_t = decltype(Otile);
-    const int base_row = tid.x * BQ + params->qL_off + tm + sm;
-    STEEL_PRAGMA_UNROLL
-    for (short iq = 0; iq < TQ; iq++) {
-      const int row_pos = base_row + iq * UQ;
-      if (row_pos < 0) {
-        STEEL_PRAGMA_UNROLL
-        for (short id = 0; id < TD; id++) {
-          thread auto& fg = Otile.subtile_at(iq, id).frag_at(0, 0);
-          STEEL_PRAGMA_UNROLL
-          for (short ii = 0; ii < otile_t::NAXSubTile_t::kElemsPerFrag; ii++) {
-            fg[ii] = AccumType(0);
-          }
-        }
-      }
-    }
-  }
 
   // Store results
   O += (tm + sm) * int(params->O_strides[2]) + sn;

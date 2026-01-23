@@ -457,33 +457,7 @@ template <
   }
 
   // Normalize output
-  // Handle case where no keys were attended (sum_score == 0)
-  // Output should be 0 (from Otile.clear()), so set sum_score to 1 to get 0/1 = 0
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < kRowsPT; ++i) {
-    sum_score[i] = sum_score[i] == 0 ? AccumType(1) : sum_score[i];
-  }
   Otile.template row_bin_op<DivOp>(sum_score);
-
-  // Zero out rows where query has no keys to attend (row_pos < 0 for all columns)
-  if (do_causal) {
-    using otile_t = decltype(Otile);
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < otile_t::kTileRows; i++) {
-      const int row_pos =
-          tid.x * BQ + params->qL_off + tm + sm + (i * otile_t::kFragRows);
-      if (row_pos < 0) {
-        STEEL_PRAGMA_UNROLL
-        for (short j = 0; j < otile_t::kTileCols; j++) {
-          STEEL_PRAGMA_UNROLL
-          for (short jj = 0; jj < otile_t::MMAFrag_t::kElemCols; jj++) {
-            Otile.frag_at(i, j)[jj] = AccumType(0);
-          }
-        }
-      }
-    }
-  }
-
   threadgroup_barrier(mem_flags::mem_none);
 
   // Store results
