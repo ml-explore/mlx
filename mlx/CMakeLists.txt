@@ -3,6 +3,7 @@ target_sources(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/export.cpp

@@ -17,3 +17,5 @@ Devices and Streams
    set_default_stream
    stream
    synchronize
+   device_count
+   device_info
