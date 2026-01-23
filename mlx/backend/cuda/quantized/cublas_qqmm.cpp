@@ -137,9 +137,6 @@ CublasQQMM::CublasQQMM(
       batch_count,
       c_batch_stride);
 }
-// Supported overloads:
-// alpha float
-// alpha device ptr
 
 void CublasQQMM::run(
     cu::CommandEncoder& encoder,

@@ -168,7 +168,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       device.compute_capability_minor() * 10;
   if (cc < 1000) {
     throw std::runtime_error(
-        "[QQMatmul::eval_gpu] QQMM requires compute capability 10.0+");
+        "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
   }
 
   // - 2 inputs: x, w (non-quantized w)

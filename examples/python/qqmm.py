@@ -81,9 +81,6 @@ def test_qqmm():
                 ulp = ulp_bf16_at(y_hat)
                 error = (y_q - y_hat).abs()
                 if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
-                    import pdb
-
-                    pdb.set_trace()
                     raise AssertionError(
                         f"qqmm test failed for shape {(M, N, K)}, "
                         f"group_size={group_size}, bits={bits}, "
