@@ -1,18 +1,16 @@
 // Copyright © 2025 Apple Inc.
 
+#include <numeric>
+
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/rocm/device/cast_op.hpp"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 
 #include <hip/hip_runtime.h>
-#include <hip/hip_cooperative_groups.h>
-#include <rocprim/block/block_load.hpp>
 
 namespace mlx::core {
 
 namespace rocm {
-
-namespace cg = cooperative_groups;
 
 struct ColReduceArgs {
   // The size of the contiguous column reduction.
@@ -20,248 +18,175 @@ struct ColReduceArgs {
   int64_t reduction_stride;
 
   // Input shape and strides excluding the reduction axes.
-  Shape shape;
-  Strides strides;
+  int shape[MAX_NDIM];
+  int64_t strides[MAX_NDIM];
   int ndim;
 
   // Input shape and strides of the reduction axes (including last dimension).
-  Shape reduce_shape;
-  Strides reduce_strides;
+  int reduce_shape[MAX_NDIM];
+  int64_t reduce_strides[MAX_NDIM];
   int reduce_ndim;
 
   // The number of column we are reducing. Namely prod(reduce_shape).
   size_t non_col_reductions;
-
-  ColReduceArgs(
-      const array& in,
-      const ReductionPlan& plan,
-      const std::vector<int>& axes) {
-    assert(!plan.shape.empty());
-    reduction_size = plan.shape.back();
-    reduction_stride = plan.strides.back();
-
-    int64_t stride_back = 1;
-    auto [shape_vec, strides_vec] = shapes_without_reduction_axes(in, axes);
-    while (!shape_vec.empty() && stride_back < reduction_stride) {
-      stride_back *= shape_vec.back();
-      shape_vec.pop_back();
-      strides_vec.pop_back();
-    }
-    std::tie(shape_vec, strides_vec) =
-        collapse_contiguous_dims(shape_vec, strides_vec);
-    shape = const_param(shape_vec);
-    strides = const_param(strides_vec);
-    ndim = shape_vec.size();
-
-    reduce_shape = const_param(plan.shape);
-    reduce_strides = const_param(plan.strides);
-    reduce_ndim = plan.shape.size();
-
-    non_col_reductions = 1;
-    for (int i = 0; i < reduce_ndim - 1; i++) {
-      non_col_reductions *= reduce_shape[i];
-    }
-  }
 };
 
-template <typename T, typename U, typename Op, int NDIM, int N_READS = 4>
-__global__ void col_reduce_small(
-    const T* in,
-    U* out,
-    const ColReduceArgs args) {
-  auto grid = cg::this_grid();
-  auto block = cg::this_thread_block();
-
-  int column =
-      grid.block_index().x * block.dim_threads().x + block.thread_index().x;
-  if (column * N_READS >= args.reduction_stride) {
-    return;
+// Warp reduce helper
+template <typename T, typename Op>
+__device__ T warp_reduce_col(T val, Op op) {
+  for (int offset = 32; offset > 0; offset /= 2) {
+    T other = __shfl_xor(val, offset);
+    val = op(val, other);
   }
-
-  int out_idx = grid.block_rank() / grid.dim_blocks().x;
-  in += elem_to_loc(out_idx, args.shape.data(), args.strides.data(), args.ndim);
-
-  Op op;
-  U totals[N_READS];
-  for (int i = 0; i < N_READS; i++) {
-    totals[i] = ReduceInit<Op, T>::value();
-  }
-
-  // Read input to local.
-  LoopedElemToLoc<NDIM, (NDIM > 2)> loop(args.reduce_ndim);
-  loop.next(
-      block.thread_index().y,
-      args.reduce_shape.data(),
-      args.reduce_strides.data());
-  for (size_t r = block.thread_index().y;
-       r < args.non_col_reductions * args.reduction_size;
-       r += block.dim_threads().y) {
-    U vals[N_READS];
-    rocprim::block_load_direct_blocked(
-        column,
-        make_cast_iterator<U>(in + loop.location()),
-        vals,
-        args.reduction_stride,
-        ReduceInit<Op, T>::value());
-    for (int i = 0; i < N_READS; i++) {
-      totals[i] = op(vals[i], totals[i]);
-    }
-    loop.next(
-        block.dim_threads().y,
-        args.reduce_shape.data(),
-        args.reduce_strides.data());
-  }
-
-  // Do block reduce when each column has more than 1 element to reduce.
-  if (block.dim_threads().y > 1) {
-    __shared__ U shared_vals[32 * 8 * N_READS];
-    size_t col =
-        block.thread_index().y * block.dim_threads().x + block.thread_index().x;
-    for (int i = 0; i < N_READS; i++) {
-      shared_vals[col * N_READS + i] = totals[i];
-    }
-    block.sync();
-    if (block.thread_index().y == 0) {
-      for (int i = 0; i < N_READS; i++) {
-        totals[i] = shared_vals[block.thread_index().x * N_READS + i];
-      }
-      for (int j = 1; j < block.dim_threads().y; j++) {
-        col = j * block.dim_threads().x + block.thread_index().x;
-        for (int i = 0; i < N_READS; i++) {
-          totals[i] = op(shared_vals[col * N_READS + i], totals[i]);
-        }
-      }
-    }
-  }
-
-  // Write result.
-  if (block.thread_index().y == 0) {
-    rocprim::block_store_direct_blocked(
-        column,
-        out + out_idx * args.reduction_stride,
-        totals,
-        args.reduction_stride);
-  }
+  return val;
 }
 
-template <
-    typename T,
-    typename U,
-    typename Op,
-    int NDIM,
-    int BM,
-    int BN,
-    int N_READS = 4>
-__global__ void col_reduce_looped(
-    const T* in,
-    U* out,
-    const ColReduceArgs args) {
-  auto grid = cg::this_grid();
-  auto block = cg::this_thread_block();
-  auto warp = cg::tiled_partition<WARP_SIZE>(block);
-
-  constexpr int n_warps = BN / N_READS;
-
-  int out_idx = grid.block_rank() / grid.dim_blocks().x;
-  in += elem_to_loc(out_idx, args.shape.data(), args.strides.data(), args.ndim);
-
-  Op op;
-  U totals[N_READS];
-  for (int i = 0; i < N_READS; i++) {
-    totals[i] = ReduceInit<Op, T>::value();
-  }
-
-  // Read input to local.
-  int r = block.thread_rank() / n_warps;
-  int column = block.thread_rank() % n_warps;
-  int in_offset = grid.block_index().x * BN;
-  LoopedElemToLoc<NDIM, (NDIM > 2)> loop(args.reduce_ndim);
-  loop.next(r, args.reduce_shape.data(), args.reduce_strides.data());
-  for (; r < args.non_col_reductions * args.reduction_size; r += BM) {
-    U vals[N_READS];
-    rocprim::block_load_direct_blocked(
-        column,
-        make_cast_iterator<U>(in + loop.location() + in_offset),
-        vals,
-        args.reduction_stride - in_offset,
-        ReduceInit<Op, T>::value());
-    for (int i = 0; i < N_READS; i++) {
-      totals[i] = op(vals[i], totals[i]);
-    }
-    loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
-  }
-
-  // Do warp reduce for each output.
-  constexpr int n_outputs = BN / n_warps;
-  static_assert(BM == 32 && n_outputs == N_READS);
-  __shared__ U shared_vals[BM * BN];
-  size_t col = block.thread_index().y * BN + block.thread_index().x * N_READS;
-  for (int i = 0; i < N_READS; i++) {
-    shared_vals[col + i] = totals[i];
-  }
-  block.sync();
-  col = warp.thread_rank() * BN + warp.meta_group_rank() * n_outputs;
-  for (int i = 0; i < n_outputs; i++) {
-    totals[i] = cg::reduce(warp, shared_vals[col + i], op);
-  }
-
-  // Write result.
-  if (warp.thread_rank() == 0) {
-    size_t out_offset = grid.block_index().x * BN;
-    rocprim::block_store_direct_blocked(
-        warp.meta_group_rank(),
-        out + out_idx * args.reduction_stride + out_offset,
-        totals,
-        args.reduction_stride - out_offset);
-  }
-}
-
-// Utility functions and templates
-template <int NDIM, bool USE_FAST_PATH>
-struct LoopedElemToLoc {
-  size_t location;
-  
-  __device__ LoopedElemToLoc(int reduce_ndim) : location(0) {}
-  
-  __device__ void next(size_t step, const int* shape, const size_t* strides) {
-    // Simplified implementation - actual would handle multi-dimensional indexing
-    location += step;
-  }
-};
-
-template <typename T>
-__device__ inline T* make_cast_iterator(const T* ptr) {
-  return const_cast<T*>(ptr);
-}
-
-__device__ inline size_t elem_to_loc(
-    size_t elem,
+// Element to location helper
+__device__ int64_t elem_to_loc_col(
+    int64_t elem,
     const int* shape,
-    const size_t* strides,
+    const int64_t* strides,
     int ndim) {
-  size_t loc = 0;
+  int64_t loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
-    size_t q = elem / shape[i];
-    size_t r = elem % shape[i];
-    loc += r * strides[i];
-    elem = q;
+    loc += (elem % shape[i]) * strides[i];
+    elem /= shape[i];
   }
   return loc;
 }
 
-} // namespace rocm
+template <typename T, typename U, typename Op, int BM, int BN, int N_READS = 4>
+__global__ void col_reduce_looped_kernel(
+    const T* in,
+    U* out,
+    ColReduceArgs args) {
+  // Compute the indices for the tile
+  size_t tile_idx = blockIdx.x + blockIdx.y * gridDim.x;
+  size_t n_inner_blocks = (args.reduction_stride + BN - 1) / BN;
+  size_t tile_x = tile_idx % n_inner_blocks;
+  size_t tile_y = tile_idx / n_inner_blocks;
 
-inline auto output_grid_for_col_reduce(
-    const array& out,
-    const rocm::ColReduceArgs& args) {
-  auto out_shape = out.shape();
-  auto out_strides = out.strides();
-  while (!out_shape.empty() && out_strides.back() < args.reduction_stride) {
-    out_shape.pop_back();
-    out_strides.pop_back();
+  // Compute the indices for the thread within the tile
+  int threads_per_row = BN / N_READS;
+  int thread_x = threadIdx.x % threads_per_row;
+  int thread_y = threadIdx.x / threads_per_row;
+
+  // Move the input pointer
+  int64_t in_offset = elem_to_loc_col(tile_y, args.shape, args.strides, args.ndim);
+  in += in_offset + tile_x * BN;
+
+  // Initialize the running totals
+  Op op;
+  U totals[N_READS];
+  for (int i = 0; i < N_READS; i++) {
+    totals[i] = ReduceInit<Op, T>::value();
   }
-  return get_2d_grid_dims(out_shape, out_strides);
+
+  // Loop over reductions
+  size_t total = args.non_col_reductions * args.reduction_size;
+  
+  int64_t reduce_loc = 0;
+  int64_t reduce_idx = thread_y;
+  
+  // Compute initial reduce location
+  {
+    int64_t tmp = reduce_idx;
+    for (int i = args.reduce_ndim - 1; i >= 0; --i) {
+      reduce_loc += (tmp % args.reduce_shape[i]) * args.reduce_strides[i];
+      tmp /= args.reduce_shape[i];
+    }
+  }
+
+  for (size_t r = thread_y; r < total; r += BM) {
+    // Load values
+    int base_idx = thread_x * N_READS;
+    int remaining = args.reduction_stride - tile_x * BN;
+    
+    for (int i = 0; i < N_READS; i++) {
+      int idx = base_idx + i;
+      if (idx < remaining) {
+        totals[i] = op(totals[i], static_cast<U>(in[reduce_loc + idx]));
+      }
+    }
+    
+    // Update reduce location for next iteration
+    reduce_idx += BM;
+    if (reduce_idx < total) {
+      reduce_loc = 0;
+      int64_t tmp = reduce_idx;
+      for (int i = args.reduce_ndim - 1; i >= 0; --i) {
+        reduce_loc += (tmp % args.reduce_shape[i]) * args.reduce_strides[i];
+        tmp /= args.reduce_shape[i];
+      }
+    }
+  }
+
+  // Do warp reduce for each output
+  constexpr int n_outputs = BN / threads_per_row;
+  __shared__ U shared_vals[BM * BN];
+  
+  int s_idx = thread_y * BN + thread_x * N_READS;
+  for (int i = 0; i < N_READS; i++) {
+    shared_vals[s_idx + i] = totals[i];
+  }
+  __syncthreads();
+  
+  // Reduce across warps
+  int lane = threadIdx.x % 64;
+  int warp_id = threadIdx.x / 64;
+  
+  if (warp_id == 0) {
+    s_idx = lane * BN / 64;
+    for (int i = 0; i < n_outputs; i++) {
+      U val = (lane < BM) ? shared_vals[lane * BN + warp_id * n_outputs + i] : ReduceInit<Op, T>::value();
+      for (int j = 1; j < BM && j + lane * BM / 64 < BM; j++) {
+        int read_idx = (lane + j * 64 / BM) * BN + warp_id * n_outputs + i;
+        if (read_idx < BM * BN) {
+          val = op(val, shared_vals[read_idx]);
+        }
+      }
+      totals[i] = warp_reduce_col(val, op);
+    }
+  }
+  __syncthreads();
+
+  // Write result
+  if (threadIdx.x < BN) {
+    int out_idx = tile_y * args.reduction_stride + tile_x * BN + threadIdx.x;
+    if (tile_x * BN + threadIdx.x < args.reduction_stride) {
+      // Simple version: first thread writes
+      if (thread_y == 0) {
+        U final_val = ReduceInit<Op, T>::value();
+        for (int j = 0; j < BM; j++) {
+          final_val = op(final_val, shared_vals[j * BN + threadIdx.x]);
+        }
+        out[out_idx] = final_val;
+      }
+    }
+  }
 }
+
+// Simpler column reduction kernel for contiguous strided reduce
+template <typename T, typename U, typename Op>
+__global__ void col_reduce_simple_kernel(
+    const T* in,
+    U* out,
+    int n_rows,
+    int n_cols) {
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+  if (col >= n_cols) return;
+  
+  Op op;
+  U val = ReduceInit<Op, T>::value();
+  
+  for (int row = 0; row < n_rows; row++) {
+    val = op(val, static_cast<U>(in[row * n_cols + col]));
+  }
+  
+  out[col] = val;
+}
+
+} // namespace rocm
 
 void col_reduce(
     rocm::CommandEncoder& encoder,
@@ -270,42 +195,87 @@ void col_reduce(
     Reduce::ReduceType reduce_type,
     const std::vector<int>& axes,
     const ReductionPlan& plan) {
-  rocm::ColReduceArgs args(in, plan, axes);
-
-  encoder.launch_kernel([&](hipStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, {
-      using InType = hip_type_t<CTYPE>;
-      MLX_SWITCH_REDUCE_OPS(reduce_type, OP, {
-        using OutType = rocm::ReduceResult<OP, InType>::type;
-        MLX_SWITCH_REDUCE_NDIM(args.reduce_ndim, NDIM, {
-          constexpr int N_READS = 4;
-          dim3 block_dims;
-          dim3 num_blocks = output_grid_for_col_reduce(out, args);
-          num_blocks.z = num_blocks.y;
-          num_blocks.y = num_blocks.x;
-          auto kernel =
-              rocm::col_reduce_small<InType, OutType, OP, NDIM, N_READS>;
-          size_t total = args.non_col_reductions * args.reduction_size;
-          if (total < 32) {
-            size_t stride_blocks =
-                hip_ceil_div(args.reduction_stride, N_READS);
-            block_dims.x = std::min(stride_blocks, 32ul);
-            block_dims.y = std::min(total, 8ul);
-            num_blocks.x = hip_ceil_div(stride_blocks, block_dims.x);
-          } else {
-            constexpr int BM = 32;
-            constexpr int BN = 32;
-            block_dims.x = BM * BN / N_READS;
-            num_blocks.x = hip_ceil_div(args.reduction_stride, BN);
-            kernel = rocm::
-                col_reduce_looped<InType, OutType, OP, NDIM, BM, BN, N_READS>;
+  
+  // Allocate output
+  out.set_data(allocator::malloc(out.nbytes()));
+  
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  
+  // For simple contiguous strided reduce (most common case in VJP)
+  if (plan.type == ReductionOpType::ContiguousStridedReduce && 
+      plan.shape.size() == 1) {
+    int n_rows = plan.shape[0];
+    int n_cols = out.size();
+    
+    int block_size = 256;
+    int num_blocks = (n_cols + block_size - 1) / block_size;
+    
+    encoder.launch_kernel([&](hipStream_t stream) {
+      switch (in.dtype()) {
+        case float32:
+          switch (reduce_type) {
+            case Reduce::Sum:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<float, float, rocm::Sum>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<float>(), out.data<float>(), n_rows, n_cols);
+              break;
+            case Reduce::Max:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<float, float, rocm::Max>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<float>(), out.data<float>(), n_rows, n_cols);
+              break;
+            case Reduce::Min:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<float, float, rocm::Min>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<float>(), out.data<float>(), n_rows, n_cols);
+              break;
+            case Reduce::Prod:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<float, float, rocm::Prod>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<float>(), out.data<float>(), n_rows, n_cols);
+              break;
+            default:
+              throw std::runtime_error("Unsupported reduce type for col_reduce");
           }
-          hipLaunchKernelGGL(kernel, num_blocks, block_dims, 0, stream,
-              in.data<InType>(), out.data<OutType>(), args);
-        });
-      });
+          break;
+        case float16:
+          switch (reduce_type) {
+            case Reduce::Sum:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<__half, __half, rocm::Sum>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<__half>(), out.data<__half>(), n_rows, n_cols);
+              break;
+            default:
+              throw std::runtime_error("Unsupported reduce type for col_reduce float16");
+          }
+          break;
+        case bfloat16:
+          switch (reduce_type) {
+            case Reduce::Sum:
+              hipLaunchKernelGGL(
+                  (rocm::col_reduce_simple_kernel<__hip_bfloat16, __hip_bfloat16, rocm::Sum>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), n_rows, n_cols);
+              break;
+            default:
+              throw std::runtime_error("Unsupported reduce type for col_reduce bfloat16");
+          }
+          break;
+        default:
+          throw std::runtime_error("Unsupported dtype for col_reduce");
+      }
     });
-  });
+    return;
+  }
+  
+  // General case - build args and use looped kernel
+  throw std::runtime_error("General col_reduce not yet implemented for ROCm");
 }
 
-} // namespace mlx::core 
+} // namespace mlx::core

@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -17,182 +17,89 @@ namespace mlx::core {
 
 namespace rocm {
 
-// Gather kernel - gathers elements from src using indices
-template <typename T, typename IdxT, int NIDX>
-__global__ void gather_kernel(
+// Simple gather kernel for axis-based gather
+template <typename T, typename IdxT>
+__global__ void gather_axis_kernel(
     const T* src,
+    const IdxT* idx,
     T* out,
-    const void** indices,
-    IdxT out_size,
-    const int* src_shape,
-    const int64_t* src_strides,
-    int src_ndim,
-    const int* slice_sizes,
-    int slice_size,
-    const int* axes,
-    const int* idx_shapes,
-    const int64_t* idx_strides,
-    int idx_ndim) {
-  IdxT gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid >= out_size) return;
+    int64_t idx_size_pre,
+    int64_t idx_size_axis,
+    int64_t idx_size_post,
+    int64_t src_axis_size,
+    int64_t src_axis_stride,
+    int64_t idx_axis_stride,
+    int64_t out_axis_stride) {
+  int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
+  if (gid >= total) return;
   
-  // Compute output coordinates
-  IdxT out_idx = gid / slice_size;
-  IdxT slice_idx = gid % slice_size;
+  // Decompose index
+  int64_t post = gid % idx_size_post;
+  int64_t axis = (gid / idx_size_post) % idx_size_axis;
+  int64_t pre = gid / (idx_size_post * idx_size_axis);
   
-  // Compute source index
-  int64_t src_offset = 0;
+  // Get index value
+  int64_t idx_offset = pre * idx_size_axis * idx_size_post + axis * idx_size_post + post;
+  IdxT idx_val = idx[idx_offset * idx_axis_stride / idx_size_post];
   
-  // Add contributions from indices
-  for (int i = 0; i < NIDX; ++i) {
-    // Get the index value
-    IdxT idx_offset = 0;
-    IdxT tmp = out_idx;
-    for (int d = idx_ndim - 1; d >= 0; --d) {
-      IdxT coord = tmp % idx_shapes[i * idx_ndim + d];
-      idx_offset += coord * idx_strides[i * idx_ndim + d];
-      tmp /= idx_shapes[i * idx_ndim + d];
-    }
-    
-    const int32_t* idx_ptr = static_cast<const int32_t*>(indices[i]);
-    int32_t idx_val = idx_ptr[idx_offset];
-    src_offset += idx_val * src_strides[axes[i]];
+  // Handle negative indices
+  if (idx_val < 0) {
+    idx_val += src_axis_size;
   }
   
-  // Add contribution from slice position
-  IdxT tmp = slice_idx;
-  for (int d = src_ndim - 1; d >= 0; --d) {
-    IdxT coord = tmp % slice_sizes[d];
-    src_offset += coord * src_strides[d];
-    tmp /= slice_sizes[d];
-  }
+  // Compute source and output offsets
+  int64_t src_offset = pre * src_axis_stride * src_axis_size + 
+                       idx_val * src_axis_stride + post;
+  int64_t out_offset = pre * out_axis_stride * idx_size_axis +
+                       axis * out_axis_stride + post;
   
-  out[gid] = src[src_offset];
+  out[out_offset] = src[src_offset];
 }
 
-// Scatter kernel - scatters update values into out using indices
-template <typename T, typename IdxT, int NIDX, typename Op>
-__global__ void scatter_kernel(
+// Simple scatter kernel for axis-based scatter
+template <typename T, typename IdxT, bool IS_SUM>
+__global__ void scatter_axis_kernel(
     const T* upd,
+    const IdxT* idx,
     T* out,
-    const void** indices,
-    IdxT upd_size,
-    const int* upd_shape,
-    const int64_t* upd_strides,
-    int upd_ndim,
-    IdxT upd_post_idx_size,
-    const int* out_shape,
-    const int64_t* out_strides,
-    int out_ndim,
-    const int* axes,
-    const int* idx_shapes,
-    const int64_t* idx_strides,
-    int idx_ndim,
-    Op op) {
-  IdxT gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid >= upd_size) return;
+    int64_t idx_size_pre,
+    int64_t idx_size_axis,
+    int64_t idx_size_post,
+    int64_t out_axis_size,
+    int64_t upd_axis_stride,
+    int64_t idx_axis_stride,
+    int64_t out_axis_stride) {
+  int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+  int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
+  if (gid >= total) return;
   
-  // Compute update coordinates
-  IdxT idx_part = gid / upd_post_idx_size;
-  IdxT post_part = gid % upd_post_idx_size;
+  // Decompose index
+  int64_t post = gid % idx_size_post;
+  int64_t axis = (gid / idx_size_post) % idx_size_axis;
+  int64_t pre = gid / (idx_size_post * idx_size_axis);
   
-  // Compute output index
-  int64_t out_offset = 0;
+  // Get index value
+  int64_t idx_offset = pre * idx_size_axis * idx_size_post + axis * idx_size_post + post;
+  IdxT idx_val = idx[idx_offset * idx_axis_stride / idx_size_post];
   
-  // Add contributions from indices
-  for (int i = 0; i < NIDX; ++i) {
-    IdxT idx_offset = 0;
-    IdxT tmp = idx_part;
-    for (int d = idx_ndim - 1; d >= 0; --d) {
-      IdxT coord = tmp % idx_shapes[i * idx_ndim + d];
-      idx_offset += coord * idx_strides[i * idx_ndim + d];
-      tmp /= idx_shapes[i * idx_ndim + d];
-    }
-    
-    const int32_t* idx_ptr = static_cast<const int32_t*>(indices[i]);
-    int32_t idx_val = idx_ptr[idx_offset];
-    out_offset += idx_val * out_strides[axes[i]];
+  // Handle negative indices
+  if (idx_val < 0) {
+    idx_val += out_axis_size;
   }
   
-  // Add contribution from post-index position
-  IdxT tmp = post_part;
-  for (int d = out_ndim - 1; d >= idx_ndim; --d) {
-    IdxT coord = tmp % out_shape[d];
-    out_offset += coord * out_strides[d];
-    tmp /= out_shape[d];
-  }
+  // Compute update and output offsets
+  int64_t upd_offset = pre * upd_axis_stride * idx_size_axis +
+                       axis * upd_axis_stride + post;
+  int64_t out_offset = pre * out_axis_stride * out_axis_size +
+                       idx_val * out_axis_stride + post;
   
-  // Compute update offset
-  int64_t upd_offset = 0;
-  tmp = gid;
-  for (int d = upd_ndim - 1; d >= 0; --d) {
-    IdxT coord = tmp % upd_shape[d];
-    upd_offset += coord * upd_strides[d];
-    tmp /= upd_shape[d];
+  if constexpr (IS_SUM) {
+    atomicAdd(&out[out_offset], upd[upd_offset]);
+  } else {
+    out[out_offset] = upd[upd_offset];
   }
-  
-  // Apply operation
-  op(out + out_offset, upd[upd_offset]);
 }
-
-// Scatter operations
-struct ScatterAssign {
-  template <typename T>
-  __device__ void operator()(T* dst, T val) const {
-    *dst = val;
-  }
-};
-
-struct ScatterSum {
-  template <typename T>
-  __device__ void operator()(T* dst, T val) const {
-    atomicAdd(dst, val);
-  }
-};
-
-struct ScatterMax {
-  template <typename T>
-  __device__ void operator()(T* dst, T val) const {
-    // Atomic max for floats needs special handling
-    T old = *dst;
-    while (val > old) {
-      T assumed = old;
-      old = atomicCAS(reinterpret_cast<unsigned int*>(dst),
-                      __float_as_uint(assumed),
-                      __float_as_uint(val));
-      if (old == assumed) break;
-    }
-  }
-};
-
-struct ScatterMin {
-  template <typename T>
-  __device__ void operator()(T* dst, T val) const {
-    T old = *dst;
-    while (val < old) {
-      T assumed = old;
-      old = atomicCAS(reinterpret_cast<unsigned int*>(dst),
-                      __float_as_uint(assumed),
-                      __float_as_uint(val));
-      if (old == assumed) break;
-    }
-  }
-};
-
-struct ScatterProd {
-  template <typename T>
-  __device__ void operator()(T* dst, T val) const {
-    // Atomic multiply needs CAS loop
-    T old = *dst;
-    T assumed;
-    do {
-      assumed = old;
-      old = atomicCAS(reinterpret_cast<unsigned int*>(dst),
-                      __float_as_uint(assumed),
-                      __float_as_uint(assumed * val));
-    } while (old != assumed);
-  }
-};
 
 } // namespace rocm
 
@@ -205,28 +112,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  int nidx = inputs.size() - 1;
-  
-  auto& s = stream();
-  auto& encoder = rocm::get_command_encoder(s);
-  
-  for (const auto& in : inputs) {
-    encoder.set_input_array(in);
-  }
-  encoder.set_output_array(out);
-  
-  // For now, use a simple fallback implementation
-  // A full implementation would need JIT compilation for arbitrary nidx
-  if (nidx > 4) {
-    throw std::runtime_error("Gather with more than 4 index arrays not yet supported on ROCm");
-  }
-  
-  uint32_t slice_size = std::accumulate(
-      slice_sizes_.begin(), slice_sizes_.end(), 1, std::multiplies<uint32_t>());
-  
-  // Simple implementation: copy to CPU, do gather, copy back
-  // This is a placeholder - a proper implementation would use the kernel above
-  throw std::runtime_error("Gather::eval_gpu requires JIT compilation support for ROCm");
+  // For now, only support simple cases
+  // Full implementation requires JIT compilation
+  throw std::runtime_error("Gather::eval_gpu requires JIT compilation support for ROCm - use GatherAxis instead");
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -244,23 +132,12 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   copy_gpu(inputs[0], out, copy_type);
 
-  // Empty update
   if (upd.size() == 0) {
     return;
   }
 
-  int nidx = axes_.size();
-  
-  auto& s = stream();
-  auto& encoder = rocm::get_command_encoder(s);
-  
-  for (const auto& in : inputs) {
-    encoder.set_input_array(in);
-  }
-  encoder.set_output_array(out);
-  
-  // For now, throw error - proper implementation needs JIT
-  throw std::runtime_error("Scatter::eval_gpu requires JIT compilation support for ROCm");
+  // Full implementation requires JIT compilation
+  throw std::runtime_error("Scatter::eval_gpu requires JIT compilation support for ROCm - use ScatterAxis instead");
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -279,9 +156,54 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(src);
   encoder.set_input_array(idx);
   encoder.set_output_array(out);
+
+  size_t idx_size_pre = 1;
+  size_t idx_size_post = 1;
+  for (int i = 0; i < axis_; ++i) {
+    idx_size_pre *= idx.shape(i);
+  }
+  for (int i = axis_ + 1; i < idx.ndim(); ++i) {
+    idx_size_post *= idx.shape(i);
+  }
+  size_t idx_size_axis = idx.shape(axis_);
   
-  // For now, throw error - proper implementation needs specialized kernel
-  throw std::runtime_error("GatherAxis::eval_gpu not yet fully implemented for ROCm");
+  int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
+  int block_size = 256;
+  int num_blocks = (total + block_size - 1) / block_size;
+  
+  encoder.launch_kernel([&](hipStream_t stream) {
+    switch (src.dtype()) {
+      case float32:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<float, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<float>(), idx.data<int32_t>(), out.data<float>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case int32:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<int32_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<int32_t>(), idx.data<int32_t>(), out.data<int32_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case float16:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<__half, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<__half>(), idx.data<int32_t>(), out.data<__half>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      default:
+        throw std::runtime_error("Unsupported dtype for GatherAxis");
+    }
+  });
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -301,7 +223,6 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   copy_gpu(src, out, copy_type);
 
-  // Empty update
   if (upd.size() == 0) {
     return;
   }
@@ -309,13 +230,75 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = rocm::get_command_encoder(s);
   
-  for (const auto& in : inputs) {
-    encoder.set_input_array(in);
-  }
+  encoder.set_input_array(upd);
+  encoder.set_input_array(idx);
   encoder.set_output_array(out);
+
+  size_t idx_size_pre = 1;
+  size_t idx_size_post = 1;
+  for (int i = 0; i < axis_; ++i) {
+    idx_size_pre *= idx.shape(i);
+  }
+  for (int i = axis_ + 1; i < idx.ndim(); ++i) {
+    idx_size_post *= idx.shape(i);
+  }
+  size_t idx_size_axis = idx.shape(axis_);
   
-  // For now, throw error - proper implementation needs specialized kernel
-  throw std::runtime_error("ScatterAxis::eval_gpu not yet fully implemented for ROCm");
+  int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
+  int block_size = 256;
+  int num_blocks = (total + block_size - 1) / block_size;
+  
+  bool is_sum = (reduce_type_ == ScatterAxis::Sum);
+  
+  encoder.launch_kernel([&](hipStream_t stream) {
+    if (is_sum) {
+      switch (upd.dtype()) {
+        case float32:
+          hipLaunchKernelGGL(
+              (rocm::scatter_axis_kernel<float, int32_t, true>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              upd.data<float>(), idx.data<int32_t>(), out.data<float>(),
+              idx_size_pre, idx_size_axis, idx_size_post,
+              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
+              out.strides(axis_));
+          break;
+        default:
+          throw std::runtime_error("Unsupported dtype for ScatterAxis Sum");
+      }
+    } else {
+      switch (upd.dtype()) {
+        case float32:
+          hipLaunchKernelGGL(
+              (rocm::scatter_axis_kernel<float, int32_t, false>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              upd.data<float>(), idx.data<int32_t>(), out.data<float>(),
+              idx_size_pre, idx_size_axis, idx_size_post,
+              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
+              out.strides(axis_));
+          break;
+        case int32:
+          hipLaunchKernelGGL(
+              (rocm::scatter_axis_kernel<int32_t, int32_t, false>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              upd.data<int32_t>(), idx.data<int32_t>(), out.data<int32_t>(),
+              idx_size_pre, idx_size_axis, idx_size_post,
+              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
+              out.strides(axis_));
+          break;
+        case float16:
+          hipLaunchKernelGGL(
+              (rocm::scatter_axis_kernel<__half, int32_t, false>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              upd.data<__half>(), idx.data<int32_t>(), out.data<__half>(),
+              idx_size_pre, idx_size_axis, idx_size_post,
+              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
+              out.strides(axis_));
+          break;
+        default:
+          throw std::runtime_error("Unsupported dtype for ScatterAxis Assign");
+      }
+    }
+  });
 }
 
 } // namespace mlx::core

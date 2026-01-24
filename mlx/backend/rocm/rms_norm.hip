@@ -390,8 +390,9 @@ void RMSNormVJP::eval_gpu(
 
   // Reduce gw_temp to gw if we have weights
   if (has_w) {
-    // TODO: Implement proper column reduction
-    gw.set_data(allocator::malloc(gw.nbytes()));
+    ReductionPlan plan(
+        ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
+    col_reduce(encoder, gw_temp, gw, Reduce::ReduceType::Sum, {0}, plan);
   }
 }
 
