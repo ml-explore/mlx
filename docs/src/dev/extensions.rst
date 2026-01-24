@@ -777,11 +777,11 @@ with the naive :meth:`simple_axpby` we first defined.
             mx.eval(z)
 
         # Timed run
-        s = time.time()
+        s = time.perf_counter()
         for i in range(100):
             z = f(x, y, alpha, beta)
             mx.eval(z)
-        e = time.time()
+        e = time.perf_counter()
         return 1000 * (e - s) / 100
 
     simple_time = bench(simple_axpby)

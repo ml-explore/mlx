@@ -95,6 +95,11 @@ Compiled::Compiled(
   std::ostringstream os;
   std::ostringstream constant_hasher;
 
+  std::unordered_set<uintptr_t> output_ids;
+  for (auto& o : outputs_) {
+    output_ids.insert(o.id());
+  }
+
   // Fill the input names. This is not really necessary, I just like having A,
   // B, C, ... as the inputs.
   for (const auto& x : inputs_) {
@@ -106,6 +111,12 @@ Compiled::Compiled(
   for (const auto& a : tape_) {
     // name and type of output
     os << namer.get_name(a) << kindof(a.dtype()) << a.itemsize();
+    // whether or not it's an output
+    if (output_ids.find(a.id()) != output_ids.end()) {
+      os << "O";
+    } else {
+      os << "I";
+    }
     // computation performed
     os << a.primitive().name();
     // name of inputs to the function
@@ -202,7 +213,7 @@ namespace detail {
 
 CompileMode& compile_mode() {
   auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILE")) {
+    if (std::getenv("MLX_DISABLE_COMPILE")) {
       return CompileMode::disabled;
     } else {
       return CompileMode::enabled;
@@ -271,7 +282,7 @@ array split_one(
     }
   }
 
-  return std::move(y);
+  return y;
 }
 
 template <typename T, typename... U>
@@ -296,6 +307,7 @@ class CompilerCache {
     std::vector<array> tape;
     bool empty{true};
     std::vector<uint64_t> constants;
+    std::shared_ptr<void> extra;
   };
 
   // Returns a reference to a CacheEntry which can be updated
@@ -376,8 +388,9 @@ CompilerCache& compiler_cache() {
   return compiler_cache_;
 }
 
-std::pair<std::vector<array>, std::vector<array>> compile_trace(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+std::tuple<std::vector<array>, std::vector<array>, std::shared_ptr<void>>
+compile_trace(
+    const ArrayFnWithExtra& fun,
     const std::vector<array>& inputs,
     bool shapeless) {
   // Set the global tracing flag.
@@ -391,59 +404,158 @@ std::pair<std::vector<array>, std::vector<array>> compile_trace(
     in.set_tracer(true);
     tracer_inputs.push_back(std::move(in));
   }
-  return {tracer_inputs, fun(tracer_inputs)};
+
+  auto output = fun(tracer_inputs);
+  return {tracer_inputs, output.first, output.second};
 }
 
 // Traverses the graph to build a tape and a map of array ids to their parents
 std::pair<std::vector<array>, ParentsMap> compile_dfs(
     const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
+    std::vector<array>& outputs,
     const std::vector<array>& original_inputs) {
-  std::function<void(const array&)> recurse;
   std::vector<array> tape;
-  std::unordered_set<std::uintptr_t> input_set;
-  std::unordered_set<std::uintptr_t> original_input_set;
   std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
       parents_map;
-  for (int i = 0; i < inputs.size(); ++i) {
-    input_set.insert(inputs[i].id());
-    original_input_set.insert(original_inputs[i].id());
+  {
+    std::function<void(const array&)> recurse;
+    std::unordered_set<std::uintptr_t> input_set;
+    std::unordered_set<std::uintptr_t> original_input_set;
+    for (int i = 0; i < inputs.size(); ++i) {
+      input_set.insert(inputs[i].id());
+      original_input_set.insert(original_inputs[i].id());
+    }
+
+    // DFS the graph to build the tape, and log parents and scalars
+    std::unordered_set<std::uintptr_t> cache;
+    recurse = [&](const array& a) {
+      auto id = a.id();
+      if (original_input_set.find(id) != original_input_set.end()) {
+        throw std::invalid_argument(
+            "[compile] Attempting to compile a function with uncaptured inputs is not allowed.");
+      }
+      if (cache.find(id) != cache.end()) {
+        return;
+      }
+      for (int i = 0; i < a.inputs().size(); i++) {
+        auto& in = a.inputs()[i];
+        parents_map[in.id()].push_back({a, i});
+        for (auto& s : a.siblings()) {
+          parents_map[in.id()].push_back({s, i});
+        }
+        // Don't recurse on inputs (but add them to the tape for the purpose
+        // of future optimizations)
+        if (input_set.find(a.id()) == input_set.end()) {
+          recurse(in);
+        }
+      }
+      cache.insert(id);
+      for (auto& s : a.siblings()) {
+        cache.insert(s.id());
+      }
+      tape.push_back(a);
+    };
+    for (auto& a : outputs) {
+      recurse(a);
+    }
   }
 
-  // DFS the graph to build the tape, and log parents and scalars
-  std::unordered_set<std::uintptr_t> cache;
-  recurse = [&](const array& a) {
-    auto id = a.id();
-    if (original_input_set.find(id) != original_input_set.end()) {
-      throw std::invalid_argument(
-          "[compile] Attempting to compile a function with uncaptured inputs is not allowed.");
+  // Deep copy the tape and parents map while preserving inputs and outputs
+  std::vector<array> new_tape;
+  std::unordered_set<uintptr_t> io_set;
+  std::unordered_map<uintptr_t, array> old_to_new;
+  for (auto& o : outputs) {
+    old_to_new.insert({o.id(), o});
+    io_set.insert(o.id());
+    for (auto& s : o.siblings()) {
+      old_to_new.insert({s.id(), s});
+      io_set.insert(s.id());
     }
-    if (cache.find(id) != cache.end()) {
-      return;
-    }
-    for (int i = 0; i < a.inputs().size(); i++) {
-      auto& in = a.inputs()[i];
-      parents_map[in.id()].push_back({a, i});
-      for (auto& s : a.siblings()) {
-        parents_map[in.id()].push_back({s, i});
-      }
-      // Don't recurse on inputs (but add them to the tape for the purpose
-      // of future optimizations)
-      if (input_set.find(a.id()) == input_set.end()) {
-        recurse(in);
-      }
-    }
-    cache.insert(id);
-    for (auto& s : a.siblings()) {
-      cache.insert(s.id());
-    }
-    tape.push_back(a);
-  };
-  for (auto& a : outputs) {
-    recurse(a);
   }
+  for (auto& i : inputs) {
+    io_set.insert(i.id());
+    old_to_new.insert({i.id(), i});
+  }
+
+  new_tape.reserve(tape.size());
+  for (auto& arr : tape) {
+    if (!arr.has_primitive() || (io_set.find(arr.id()) != io_set.end())) {
+      old_to_new.insert({arr.id(), arr});
+      new_tape.push_back(arr);
+      continue;
+    }
+    std::vector<array> inputs;
+    inputs.reserve(arr.inputs().size());
+    for (auto& i : arr.inputs()) {
+      inputs.push_back(old_to_new.find(i.id())->second);
+    }
+    if (arr.siblings().size() > 0) {
+      std::vector<Dtype> types;
+      std::vector<Shape> shapes;
+      auto out = arr.outputs();
+      for (auto& o : out) {
+        types.push_back(o.dtype());
+        shapes.push_back(o.shape());
+      }
+      auto as = array::make_arrays(
+          std::move(shapes), types, arr.primitive_ptr(), std::move(inputs));
+      for (int i = 0; i < out.size(); ++i) {
+        old_to_new.insert({out[i].id(), as[i]});
+      }
+      new_tape.push_back(as[arr.sibling_position()]);
+    } else {
+      auto a = array(
+          arr.shape(), arr.dtype(), arr.primitive_ptr(), std::move(inputs));
+      old_to_new.insert({arr.id(), a});
+      new_tape.push_back(a);
+    }
+  }
+  io_set.clear();
+  for (auto& o : outputs) {
+    if (!(io_set.insert(o.id()).second)) {
+      continue;
+    }
+    for (auto& i : o.inputs()) {
+      i = old_to_new.find(i.id())->second;
+    }
+    for (auto& s : o.siblings()) {
+      io_set.insert(s.id());
+      for (auto& i : s.inputs()) {
+        i = old_to_new.find(i.id())->second;
+      }
+    }
+  }
+  tape = std::move(new_tape);
+
+  std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
+      new_parents_map;
+  for (auto& [id, vec] : parents_map) {
+    for (auto& [a, _] : vec) {
+      a = old_to_new.find(a.id())->second;
+    }
+    new_parents_map[old_to_new.find(id)->second.id()] = std::move(vec);
+  }
+  parents_map = std::move(new_parents_map);
   return {tape, parents_map};
 }
+
+static inline uint64_t splitmix64(uint64_t x) noexcept {
+  x += 0x9e3779b97f4a7c15ull;
+  x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+  x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+  return x ^ (x >> 31);
+}
+
+struct VecU64Hash {
+  size_t operator()(const std::vector<uint64_t>& s) const noexcept {
+    uint64_t h =
+        0x243f6a8885a308d3ull ^ (uint64_t)s.size() * 0x9e3779b97f4a7c15ull;
+    for (uint64_t x : s) {
+      h = splitmix64(x ^ splitmix64(h + 0x9e3779b97f4a7c15ull));
+    }
+    return (size_t)h;
+  }
+};
 
 // Simplify the tape. Note, this function modifies in-place both the tape,
 // the parents map to remove orphaned arrays, and potentially the outputs
@@ -460,7 +572,6 @@ void compile_simplify(
   };
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;
-    int dtype;
     switch (a.dtype().size()) {
       case 1:
         v = *a.data<uint8_t>();
@@ -569,29 +680,73 @@ void compile_simplify(
         if (parents != parents_map.end()) {
           auto N = parents->second.size();
           std::vector<bool> mask(N, false);
-          for (int i = 0; i < N; i++) {
-            if (mask[i]) {
-              continue;
+
+          auto try_merge = [&](int dst_idx, int src_idx) {
+            if (tape_order[parents->second[src_idx].first.id()] <
+                tape_order[parents->second[dst_idx].first.id()]) {
+              std::swap(src_idx, dst_idx);
             }
-            for (int j = i + 1; j < N; j++) {
-              if (mask[j]) {
+            auto& src = parents->second[src_idx].first;
+            auto& dst = parents->second[dst_idx].first;
+            if (src.id() != dst.id() && array_equivalent(src, dst) &&
+                output_set.find(src.id()) == output_set.end()) {
+              merge(dst, src, parents_map);
+              mask[src_idx] = true;
+            }
+          };
+
+          if (N > 100) {
+            std::unordered_map<
+                std::vector<uint64_t>,
+                std::vector<int>,
+                VecU64Hash>
+                dst_map;
+            // Find possibly mergeable groups
+            for (int i = 0; i < N; i++) {
+              // Make the hash key
+              std::vector<uint64_t> key;
+              auto& curr = parents->second[i].first;
+              key.reserve(curr.inputs().size() + 2);
+              for (auto& in : curr.inputs()) {
+                key.push_back(in.id());
+              }
+              auto& p = curr.primitive();
+              key.push_back(curr.inputs().size());
+              key.push_back(typeid(p).hash_code());
+              auto it = dst_map.find(key);
+              if (it == dst_map.end()) {
+                bool _;
+                std::tie(it, _) = dst_map.insert({key, std::vector<int>{}});
+              }
+              it->second.push_back(i);
+            }
+            for (auto& [_, group] : dst_map) {
+              for (int i = 0; i < group.size(); ++i) {
+                if (mask[group[i]]) {
+                  continue;
+                }
+                for (int j = i + 1; j < group.size(); ++j) {
+                  if (mask[group[j]]) {
+                    continue;
+                  }
+                  try_merge(group[i], group[j]);
+                }
+              }
+            }
+          } else {
+            for (int i = 0; i < N; ++i) {
+              if (mask[i]) {
                 continue;
               }
-              auto src_idx = j;
-              auto dst_idx = i;
-              if (tape_order[parents->second[src_idx].first.id()] <
-                  tape_order[parents->second[dst_idx].first.id()]) {
-                std::swap(src_idx, dst_idx);
-              }
-              auto& src = parents->second[src_idx].first;
-              auto& dst = parents->second[dst_idx].first;
-              if (src.id() != dst.id() && array_equivalent(src, dst) &&
-                  output_set.find(src.id()) == output_set.end()) {
-                merge(dst, src, parents_map);
-                mask[src_idx] = true;
+              for (int j = i + 1; j < N; ++j) {
+                if (mask[j]) {
+                  continue;
+                }
+                try_merge(i, j);
               }
             }
           }
+
           // Erase orphaned parents so we don't keep fusing with them
           for (int i = N - 1; i >= 0; --i) {
             if (mask[i]) {
@@ -727,7 +882,11 @@ void compile_fuse(
       }
     };
 
-    if (arr.has_primitive()) {
+    // This will be the result of the fused operation so it needs
+    //   a) to not be already computed ie have a primitive
+    //   b) that primitive to not be a broadcast since it will unnecessarily
+    //      cast to a contiguous array potentially blowing up memory
+    if (arr.has_primitive() && !is_broadcast(arr.primitive())) {
       Stream s = arr.primitive().stream();
       recurse(arr, 0, s, arr.shape());
     }
@@ -928,8 +1087,8 @@ bool skip_compile() {
       !(compile_available_for_device(default_device()));
 }
 
-std::function<std::vector<array>(const std::vector<array>&)> compile(
-    std::function<std::vector<array>(const std::vector<array>&)> fun,
+ArrayFnWithExtra compile(
+    ArrayFnWithExtra fun,
     std::uintptr_t fun_id,
     bool shapeless /* = false */,
     std::vector<uint64_t> constants /* = {} */) {
@@ -962,7 +1121,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // Set the constants
       entry.constants = std::move(constants);
       // Trace to build the graph
-      std::tie(entry.inputs, entry.outputs) =
+      std::tie(entry.inputs, entry.outputs, entry.extra) =
           compile_trace(fun, inputs, shapeless);
 
       // DFS the graph and get a tape, and a map of array id to (parent,
@@ -987,8 +1146,37 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 
     // At this point we must have a tape, now replace the placeholders
     // with real arrays that can be evaluated
-    return compile_replace(
-        entry.tape, entry.inputs, entry.outputs, inputs, shapeless);
+    return ArraysAndExtra{
+        compile_replace(
+            entry.tape, entry.inputs, entry.outputs, inputs, shapeless),
+        entry.extra};
+  };
+}
+
+std::function<std::vector<array>(const std::vector<array>&)> compile(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::uintptr_t fun_id,
+    bool shapeless /* = false */,
+    std::vector<uint64_t> constants /* = {} */) {
+  if (skip_compile()) {
+    return fun;
+  }
+  if (!fun) {
+    throw std::invalid_argument(
+        "[compile] Cannot compile a function without a target.");
+  }
+
+  ArrayFnWithExtra fun_with_extra =
+      [fun = std::move(fun)](const std::vector<array>& inputs) {
+        return ArraysAndExtra{fun(inputs), nullptr};
+      };
+
+  auto compiled_fun = compile(
+      std::move(fun_with_extra), fun_id, shapeless, std::move(constants));
+
+  return [compiled_fun =
+              std::move(compiled_fun)](const std::vector<array>& inputs) {
+    return compiled_fun(inputs).first;
   };
 }
 

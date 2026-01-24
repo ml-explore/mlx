@@ -24,6 +24,16 @@ inline array ensure_row_contiguous(
   }
 }
 
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
+  if (x.flags().row_contiguous || x.flags().col_contiguous) {
+    return x;
+  }
+  array x_copy = contiguous_copy_gpu(x, s);
+  enc.add_temporary(x_copy);
+  return x_copy;
+}
+
 inline array ensure_row_contiguous_matrix(
     const array& x,
     cu::CommandEncoder& enc,
@@ -57,23 +67,30 @@ void fast::Quantize::eval_gpu(
   if (dequantize_) {
     auto wq = ensure_row_contiguous(inputs[0], enc, s);
     auto scales = ensure_row_contiguous(inputs[1], enc, s);
-    auto biases = ensure_row_contiguous(inputs[2], enc, s);
     auto& w = outputs[0];
 
-    w.set_data(allocator::malloc(w.nbytes()));
+    w.set_data(cu::malloc_async(w.nbytes(), enc));
 
-    affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
+    if (mode_ == QuantizationMode::Affine) {
+      auto biases = ensure_row_contiguous(inputs[2], enc, s);
+      affine_dequantize(wq, scales, biases, w, group_size_, bits_, enc, s);
+    } else {
+      fp_dequantize(wq, scales, w, group_size_, bits_, enc, s);
+    }
   } else {
-    auto w = ensure_row_contiguous(inputs[0], enc, s);
+    auto w = ensure_contiguous(inputs[0], enc, s);
     auto& wq = outputs[0];
     auto& scales = outputs[1];
-    auto& biases = outputs[2];
 
-    wq.set_data(allocator::malloc(wq.nbytes()));
-    scales.set_data(allocator::malloc(scales.nbytes()));
-    biases.set_data(allocator::malloc(biases.nbytes()));
-
-    affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
+    wq.set_data(cu::malloc_async(wq.nbytes(), enc));
+    scales.set_data(cu::malloc_async(scales.nbytes(), enc));
+    if (mode_ == QuantizationMode::Affine) {
+      auto& biases = outputs[2];
+      biases.set_data(cu::malloc_async(biases.nbytes(), enc));
+      affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
+    } else {
+      fp_quantize(w, wq, scales, group_size_, bits_, enc, s);
+    }
   }
 }
 

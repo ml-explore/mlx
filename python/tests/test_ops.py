@@ -775,6 +775,39 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.mean(x, axis=0).tolist(), [2, 3])
         self.assertEqual(mx.mean(x, axis=1).tolist(), [1.5, 3.5])
 
+    def test_median(self):
+        x = mx.array([])
+        with self.assertRaises(ValueError):
+            mx.median(x, axis=0)
+        x = mx.array([0, 1, 2, 3, 4])
+        with self.assertRaises(ValueError):
+            mx.median(x, axis=(0, 1))
+        with self.assertRaises(ValueError):
+            mx.median(x, axis=(0, 0))
+
+        out = mx.median(x)
+        self.assertEqual(out.shape, ())
+        self.assertEqual(out.item(), 2)
+        out = mx.median(x, keepdims=True)
+        self.assertEqual(out.shape, (1,))
+
+        x = mx.array([0, 1, 2, 3, 4, 5])
+        out = mx.median(x)
+        self.assertEqual(out.item(), 2.5)
+
+        x = mx.random.normal((5, 5, 5, 5))
+        out = mx.median(x, axis=(0, 2), keepdims=True)
+        out_np = np.median(x, axis=(0, 2), keepdims=True)
+        self.assertTrue(np.allclose(out, out_np))
+
+        out = mx.median(x, axis=(1, 3), keepdims=True)
+        out_np = np.median(x, axis=(1, 3), keepdims=True)
+        self.assertTrue(np.allclose(out, out_np))
+
+        out = mx.median(x, axis=(0, 1, 3), keepdims=True)
+        out_np = np.median(x, axis=(0, 1, 3), keepdims=True)
+        self.assertTrue(np.allclose(out, out_np))
+
     def test_var(self):
         x = mx.array(
             [
@@ -1041,6 +1074,12 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = 1 / (1 + np.exp(-a, dtype=np.float32))
         self.assertTrue(np.allclose(result, expected))
 
+        # Low precision
+        a = mx.array(-8.0).astype(mx.float16)
+        self.assertNotEqual(mx.sigmoid(a).item(), 0.0)
+        a = mx.array(8.0).astype(mx.float16)
+        self.assertNotEqual(mx.sigmoid(a).item(), 1.0)
+
     def test_allclose(self):
         a = mx.array(1.0)
         b = mx.array(1.0)
@@ -1203,6 +1242,14 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.take(a, mx.array([[1]]), axis=0)
         self.assertEqual(out.shape, (1, 1, 4))
 
+        # Take from empty array works in some cases
+        a = mx.zeros((4, 0))
+        out = mx.take(a, mx.array([1, 2]), axis=0)
+        self.assertEqual(out.shape, (2, 0))
+        self.assertEqual(out.dtype, a.dtype)
+        with self.assertRaises(ValueError):
+            mx.take(a, mx.array([[1]]), axis=1)
+
     def test_take_along_axis(self):
         a_np = np.arange(8).reshape(2, 2, 2)
         a_mlx = mx.array(a_np)
@@ -1221,7 +1268,6 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_put_along_axis(self):
         for ax in [None, 0, 1, 2]:
-
             a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
             a_mlx = mx.array(a_np)
 
@@ -1405,23 +1451,22 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(a.tolist(), expected)
 
     def test_unary_ops(self):
-        def test_ops(npop, mlxop, x, y, atol):
+        def test_ops(npop, mlxop, x, y, atol, rtol):
             r_np = npop(x)
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
-
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
+            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, rtol=rtol))
 
         x = np.random.rand(18, 28, 38)
         for op in ["abs", "exp", "log", "square", "sqrt"]:
             with self.subTest(op=op):
-                float_dtypes = [("float16", 1e-3), ("float32", 1e-6)]
+                float_dtypes = [("float16", 1e-3, 1e-3), ("float32", 1e-6, 1e-5)]
 
-                for dtype, atol in float_dtypes:
+                for dtype, atol, rtol in float_dtypes:
                     with self.subTest(dtype=dtype):
                         x_ = x.astype(getattr(np, dtype))
                         y_ = mx.array(x_)
-                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol)
+                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol, rtol)
 
     def test_unary_ops_from_non_array(self):
         unary_ops = [
@@ -1473,12 +1518,14 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(expected, np.array(out), equal_nan=True))
 
     def test_trig_ops(self):
-        def test_ops(npop, mlxop, x, y, atol):
+        def test_ops(npop, mlxop, x, y, atol, rtol):
             r_np = npop(x)
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
 
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, equal_nan=True))
+            self.assertTrue(
+                np.allclose(r_np, r_mlx, atol=atol, rtol=rtol, equal_nan=True)
+            )
 
         x = np.random.rand(9, 12, 18)
         xi = np.random.rand(9, 12, 18)
@@ -1488,34 +1535,34 @@ class TestOps(mlx_tests.MLXTestCase):
 
         for op in all_fwd_ops:
             with self.subTest(op=op):
-                float_dtypes = [("float16", 1e-3), ("float32", 1e-6)]
+                float_dtypes = [("float16", 1e-3, 1e-3), ("float32", 1e-6, 1e-5)]
 
-                for dtype, atol in float_dtypes:
+                for dtype, atol, rtol in float_dtypes:
                     with self.subTest(dtype=dtype):
                         x_ = x.astype(getattr(np, dtype))
                         y_ = mx.array(x_)
-                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol)
+                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol, rtol)
 
             with self.subTest(op=op):
-                float_dtypes = [("complex64", 1e-5)]
-
-                for dtype, atol in float_dtypes:
-                    with self.subTest(dtype=dtype):
-                        x_ = x + 1.0j * xi
-                        x_ = x_.astype(getattr(np, dtype))
-                        y_ = mx.array(x_)
-                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol)
+                dtype = "complex64"
+                with self.subTest(dtype=dtype):
+                    x_ = x + 1.0j * xi
+                    x_ = x_.astype(getattr(np, dtype))
+                    y_ = mx.array(x_)
+                    test_ops(getattr(np, op), getattr(mx, op), x_, y_, 1e-5, 1e-5)
 
             with self.subTest(op="arc" + op):
-                float_dtypes = [("float16", 1e-3), ("float32", 1e-6)]
+                float_dtypes = [("float16", 1e-3, 1e-3), ("float32", 1e-6, 1e-5)]
                 op_inv = "arc" + op
 
-                for dtype, atol in float_dtypes:
+                for dtype, atol, rtol in float_dtypes:
                     with self.subTest(dtype=dtype):
                         np_op_fwd = getattr(np, op)
                         x_ = np_op_fwd(x).astype(getattr(np, dtype))
                         y_ = mx.array(x_)
-                        test_ops(getattr(np, op_inv), getattr(mx, op_inv), x_, y_, atol)
+                        test_ops(
+                            getattr(np, op_inv), getattr(mx, op_inv), x_, y_, atol, rtol
+                        )
 
         # Test grads
         np_vjp_funcs = {
@@ -1541,11 +1588,10 @@ class TestOps(mlx_tests.MLXTestCase):
                     x_ = x.astype(np.float32)
                     y_ = mx.array(x_)
                     op_ = op
-                    atol_ = 1e-5
 
                     np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
                     mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
-                    test_ops(np_vjp, mx_vjp, x_, y_, atol_)
+                    test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
                 with self.subTest(op="arc" + op):
                     np_op_fwd = getattr(np, op)
@@ -1561,11 +1607,10 @@ class TestOps(mlx_tests.MLXTestCase):
                     x_ = x.astype(np.float32)
                     y_ = mx.array(x_)
                     op_ = "arc" + op
-                    atol_ = 1e-5
 
                     np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
                     mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
-                    test_ops(np_vjp, mx_vjp, x_, y_, atol_)
+                    test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
     def test_binary_ops(self):
         def test_ops(npop, mlxop, x1, x2, y1, y2, atol):
@@ -3019,6 +3064,11 @@ class TestOps(mlx_tests.MLXTestCase):
         out = a[::-1]
         self.assertTrue(mx.array_equal(out[-1, :], a[0, :]))
 
+        a = mx.arange(8)
+        for _ in range(4):
+            a = a[::-1]
+        self.assertTrue(mx.array_equal(a, mx.arange(8)))
+
     def test_complex_ops(self):
         x = mx.array(
             [
@@ -3094,8 +3144,67 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.depends(b, c)
         self.assertTrue(mx.array_equal(out, b))
 
+    def test_masked_scatter(self):
+        # boolean mask updates matching numpy semantics
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = mx.array([True, False, True])
+        src = mx.array([5.0, 6.0])
+        expected = mx.array([5.0, 2.0, 6.0])
+        a[mask] = src
+        self.assertTrue(mx.array_equal(a, expected))
 
-class TestBroadcast(mlx_tests.MLXTestCase):
+        # non-boolean mask raises
+        b = mx.array([1.0, 2.0, 3.0])
+        bad_mask = mx.array([1, 0, 1])
+        src = mx.array([4.0, 5.0])
+        with self.assertRaises((TypeError, ValueError)):
+            b[bad_mask] = src
+
+        # mask matching leading dimension selects entire trailing slices
+        c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        mask = mx.array([True, False])
+        src = mx.array([2.0, 3.0, 4.0])
+        expected = mx.array([[2.0, 3.0, 4.0], [1.0, 1.0, 1.0]])
+        c[mask] = src
+        self.assertTrue(mx.array_equal(c, expected))
+
+        # scalar source applies to all selected entries
+        c = mx.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+        mask = mx.array([True, False])
+        src = 2.0
+        expected = mx.array([[2.0, 2.0, 2.0], [1.0, 1.0, 1.0]])
+        c[mask] = src
+        self.assertTrue(mx.array_equal(c, expected))
+
+        # mask with no updates leaves values unchanged
+        d = mx.array([[7.0, 8.0], [9.0, 10.0]])
+        mask = mx.zeros_like(d).astype(mx.bool_)
+        src = mx.array([1.0])
+        d[mask] = src
+        self.assertTrue(mx.array_equal(d, mx.array([[7.0, 8.0], [9.0, 10.0]])))
+
+        # empty mask leaves array unchanged
+        e = mx.zeros((0,), dtype=mx.float32)
+        mask = mx.zeros((0,), dtype=mx.bool_)
+        src = mx.zeros((0,), dtype=mx.float32)
+        e[mask] = src
+        self.assertTrue(mx.array_equal(e, mx.zeros((0,), dtype=mx.float32)))
+
+        # strided target, mask, and source derived from slices
+        target = mx.arange(10.0, dtype=mx.float32)[1::2]
+        mask = mx.array(
+            [False, True, False, False, True, False, False, True, False, False],
+            dtype=mx.bool_,
+        )[1::2]
+        src = mx.arange(-4.0, 0.0, dtype=mx.float32)[::2]
+
+        target[mask] = src
+        self.assertTrue(
+            mx.array_equal(
+                target, mx.array([-4.0, 3.0, 5.0, -2.0, 9.0], dtype=mx.float32)
+            )
+        )
+
     def test_broadcast_shapes(self):
         # Basic broadcasting
         self.assertEqual(mx.broadcast_shapes((1, 2, 3), (3,)), (1, 2, 3))
@@ -3133,6 +3242,19 @@ class TestBroadcast(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.broadcast_shapes()
+
+    def test_sort_nan(self):
+        x = mx.array([3.0, mx.nan, 2.0, 0.0])
+        expected = mx.array([0.0, 2.0, 3.0, mx.nan])
+        self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+        x = mx.array([3.0, mx.nan, 2.0, 0.0]) + 1j * mx.array([1.0] * 4)
+
+    def test_to_from_fp8(self):
+        vals = mx.array(
+            [448, 256, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3, 2, 0.015625]
+        )
+        self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
+        self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
 
 if __name__ == "__main__":

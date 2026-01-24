@@ -8,6 +8,7 @@
 #include "mlx/backend/metal/kernels/cexpf.h"
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
+#include "mlx/backend/metal/kernels/fp8.h"
 
 namespace {
 constant float inf = metal::numeric_limits<float>::infinity();
@@ -225,8 +226,7 @@ struct Floor {
 };
 
 struct Imag {
-  template <typename T>
-  T operator()(T x) {
+  float operator()(complex64_t x) {
     return x.imag;
   };
 };
@@ -290,8 +290,7 @@ struct Negative {
 };
 
 struct Real {
-  template <typename T>
-  T operator()(T x) {
+  float operator()(complex64_t x) {
     return x.real;
   };
 };
@@ -309,8 +308,8 @@ struct Round {
 struct Sigmoid {
   template <typename T>
   T operator()(T x) {
-    auto y = 1 / (1 + metal::exp(-metal::abs(x)));
-    return (x < 0) ? 1 - y : y;
+    auto y = 1 / (1 + metal::exp(metal::abs(x)));
+    return (x < 0) ? y : 1 - y;
   }
 };
 
@@ -439,4 +438,17 @@ complex64_t ArcTan::operator()(complex64_t x) {
   auto i = complex64_t{0.0, 1.0};
   auto ix = i * x;
   return (1.0 / complex64_t{0.0, 2.0}) * Log{}((1.0 + ix) / (1.0 - ix));
+};
+
+struct ToFP8 {
+  template <typename T>
+  uint8_t operator()(T f) {
+    return fp8_e4m3(f).bits;
+  }
+};
+
+struct FromFP8 {
+  float operator()(uint8_t x) {
+    return float(*(thread fp8_e4m3*)(&x));
+  }
 };

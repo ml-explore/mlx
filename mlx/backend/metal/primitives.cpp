@@ -182,7 +182,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // organize into grid nkeys x elem_per_key
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   auto group_dims = get_block_dims(num_keys, half_size + odd, 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -238,6 +237,10 @@ void LUF::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
+}
+
+void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& output) {
+  throw std::runtime_error("[QQMatmul::eval_gpu] Metal QQMatmul NYI.");
 }
 
 } // namespace mlx::core

@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Any
+from typing import Any, Optional
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -70,7 +70,12 @@ class Linear(Module):
             x = x @ self["weight"].T
         return x
 
-    def to_quantized(self, group_size: int = 64, bits: int = 4, mode: str = "affine"):
+    def to_quantized(
+        self,
+        group_size: Optional[int] = None,
+        bits: Optional[int] = None,
+        mode: str = "affine",
+    ):
         """Return a :obj:`QuantizedLinear` layer that approximates this layer."""
         return QuantizedLinear.from_linear(self, group_size, bits, mode)
 

@@ -1,8 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
+#include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/unary.h"
+#include "mlx/backend/cpu/unary_ops.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -11,7 +14,7 @@ namespace mlx::core {
 
 namespace {
 
-const static float MXFP4_LUT[16] = {
+const static float FP4_LUT[16] = {
     +0.0f,
     +0.5f,
     +1.0f,
@@ -29,15 +32,19 @@ const static float MXFP4_LUT[16] = {
     -4.0f,
     -6.0f};
 
-template <typename T>
+template <typename T, int group_size>
 static inline T dequantize_scale(uint8_t s) {
-  using FOrI = union {
-    bfloat16_t f;
-    uint16_t i;
-  };
-  FOrI out;
-  out.i = (s == 0 ? 0x40 : (static_cast<uint16_t>(s) << 7));
-  return static_cast<T>(out.f);
+  if constexpr (group_size == 16) {
+    return static_cast<T>(detail::FromFP8{}(s));
+  } else {
+    using FOrI = union {
+      bfloat16_t f;
+      uint16_t i;
+    };
+    FOrI out;
+    out.i = (s == 0 ? 0x40 : (static_cast<uint16_t>(s) << 7));
+    return static_cast<T>(out.f);
+  }
 }
 
 inline constexpr short get_pack_factor(int bits, int wsize = 8) {
@@ -434,8 +441,8 @@ void _qmm_dispatch(
   }
 }
 
-template <typename T>
-void mxfp4_qmm(
+template <typename T, int group_size, int bits>
+void fp_qmm(
     T* result,
     const T* x,
     const uint32_t* w,
@@ -443,9 +450,7 @@ void mxfp4_qmm(
     int M,
     int N,
     int K) {
-  constexpr int group_size = 32;
-  constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
+  constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -459,25 +464,27 @@ void mxfp4_qmm(
       T xi = *x++;
 
       for (int n = 0; n < N; n += group_size) {
-        T scale = dequantize_scale<T>(*scales_local++);
+        T scale = dequantize_scale<T, group_size>(*scales_local++);
         for (int ng = 0; ng < packs_in_group; ng++) {
-          uint8_t wi = *w_local++;
-#pragma clang loop unroll(full)
-          for (int p = 0; p < pack_factor; p++) {
+          if constexpr (bits == 4) {
             (*result_local++) +=
-                xi * scale * static_cast<T>(MXFP4_LUT[wi & 0xf]);
-            wi >>= 4;
+                xi * scale * static_cast<T>(FP4_LUT[w_local[0] & 0xf]);
+            (*result_local++) +=
+                xi * scale * static_cast<T>(FP4_LUT[(w_local[0] >> 4) & 0xf]);
+          } else {
+            (*result_local++) +=
+                xi * scale * static_cast<T>(detail::FromFP8{}(w_local[0]));
           }
+          w_local++;
         }
       }
     }
-
     result += N;
   }
 }
 
-template <typename T>
-void mxfp4_qmm_t(
+template <typename T, int group_size, int bits>
+void fp_qmm_t(
     T* result,
     const T* x,
     const uint32_t* w,
@@ -485,9 +492,7 @@ void mxfp4_qmm_t(
     int M,
     int N,
     int K) {
-  constexpr int group_size = 32;
-  constexpr int pack_factor = get_pack_factor(4, 8);
-  constexpr int bytes_per_pack = get_bytes_per_pack(4);
+  constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int packs_in_group = group_size / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -498,16 +503,19 @@ void mxfp4_qmm_t(
       const T* x_local = x;
       T sum = 0;
       for (int k = 0; k < K; k += group_size) {
-        T scale = dequantize_scale<T>(*scales_local++);
+        T scale = dequantize_scale<T, group_size>(*scales_local++);
 
         T gsum = 0;
         for (int kw = 0; kw < packs_in_group; kw++) {
-          uint8_t wi = *w_local++;
-#pragma clang loop unroll(full)
-          for (int p = 0; p < pack_factor; p++) {
-            gsum += (*x_local++) * static_cast<T>(MXFP4_LUT[wi & 0xf]);
-            wi >>= 4;
+          if constexpr (bits == 4) {
+            gsum += (*x_local++) * static_cast<T>(FP4_LUT[w_local[0] & 0xf]);
+            gsum +=
+                (*x_local++) * static_cast<T>(FP4_LUT[(w_local[0] >> 4) & 0xf]);
+          } else {
+            gsum +=
+                (*x_local++) * static_cast<T>(detail::FromFP8{}(w_local[0]));
           }
+          w_local++;
         }
         sum += scale * gsum;
       }
@@ -519,9 +527,9 @@ void mxfp4_qmm_t(
   }
 }
 
-template <int S>
-simd::Simd<float, S> mxfp4_extract_bits_simd(const uint32_t* w) {
-  if constexpr (S == 8) {
+template <int S, int bits>
+simd::Simd<float, S> fp_extract_bits_simd(const uint32_t* w) {
+  if constexpr (S == 8 && bits == 4) {
     constexpr std::array<uint32_t, 8> shifts_ = {{0, 4, 8, 12, 16, 20, 24, 28}};
     auto shifts(*(simd::Simd<uint32_t, S>*)&shifts_);
     auto wi = simd::Simd<uint32_t, S>(*w);
@@ -529,17 +537,20 @@ simd::Simd<float, S> mxfp4_extract_bits_simd(const uint32_t* w) {
     wi = wi & 0xf;
     simd::Simd<float, S> w_out;
     for (int i = 0; i < S; ++i) {
-      w_out[i] = MXFP4_LUT[wi[i]];
+      w_out[i] = FP4_LUT[wi[i]];
     }
     return w_out;
+  } else if constexpr (S == 8 && bits == 8) {
+    auto w_out = simd::load<uint8_t, S>(reinterpret_cast<const uint8_t*>(w));
+    return detail::FromFP8{}(w_out);
   } else {
     // Appease compiler.. but should never get here
     throw std::runtime_error("Unsupported combination for simd qmm.");
   }
 }
 
-template <typename T>
-void mxfp4_qmm_t_simd(
+template <typename T, int group_size, int bits>
+void fp_qmm_t_simd(
     T* result,
     const T* x,
     const uint32_t* w,
@@ -547,8 +558,7 @@ void mxfp4_qmm_t_simd(
     int M,
     int N,
     int K) {
-  constexpr int group_size = 32;
-  constexpr int pack_factor = 32 / 4;
+  constexpr int pack_factor = get_pack_factor(bits, 32);
   constexpr int packs_in_group = group_size / pack_factor;
   constexpr int S = simd::max_size<T>;
   static_assert(
@@ -563,12 +573,12 @@ void mxfp4_qmm_t_simd(
       simd::Simd<float, S> acc(0);
       auto x_local = x;
       for (int k = 0; k < K; k += group_size) {
-        T scale = dequantize_scale<T>(*scales_local++);
+        T scale = dequantize_scale<T, group_size>(*scales_local++);
 
         simd::Simd<float, S> g_acc(0);
         for (int kw = 0; kw < packs_in_group; kw += packs_per_simd) {
           // Extract bits
-          auto wf = mxfp4_extract_bits_simd<S>(w_local);
+          auto wf = fp_extract_bits_simd<S, bits>(w_local);
           w_local += packs_per_simd;
           simd::Simd<float, S> x_simd = simd::load<T, S>(x_local);
           g_acc = g_acc + x_simd * wf;
@@ -584,8 +594,8 @@ void mxfp4_qmm_t_simd(
   }
 }
 
-template <typename T>
-void mxfp4_qmm_dispatch_transpose(
+template <typename T, int group_size, int bits>
+void fp_qmm_dispatch_transpose(
     T* result,
     const T* x,
     const uint32_t* w,
@@ -597,17 +607,17 @@ void mxfp4_qmm_dispatch_transpose(
   if (transposed_w) {
     // the simd size must be a multiple of the number of elements per word
     if constexpr (simd::max_size<T> % 8 == 0) {
-      mxfp4_qmm_t_simd<T>(result, x, w, scales, M, N, K);
+      fp_qmm_t_simd<T, group_size, bits>(result, x, w, scales, M, N, K);
     } else {
-      mxfp4_qmm_t<T>(result, x, w, scales, M, N, K);
+      fp_qmm_t<T, group_size, bits>(result, x, w, scales, M, N, K);
     }
   } else {
-    mxfp4_qmm<T>(result, x, w, scales, M, N, K);
+    fp_qmm<T, group_size, bits>(result, x, w, scales, M, N, K);
   }
 }
 
-template <typename T>
-void mxfp4_qmm_dispatch_typed(
+template <typename T, int group_size, int bits>
+void fp_qmm_dispatch_mode(
     array& out,
     const array& x,
     const array& w,
@@ -625,7 +635,7 @@ void mxfp4_qmm_dispatch_typed(
   auto w_ptr = w.data<uint32_t>();
   auto scales_ptr = scales.data<uint8_t>();
   for (int i = 0; i < batch_size; i++) {
-    mxfp4_qmm_dispatch_transpose<T>(
+    fp_qmm_dispatch_transpose<T, group_size, bits>(
         out_ptr + i * M * N,
         x_ptr + elem_to_loc(i * M * K, x.shape(), x.strides()),
         w_ptr + elem_to_loc(i * w_els, w.shape(), w.strides()),
@@ -637,21 +647,44 @@ void mxfp4_qmm_dispatch_typed(
   }
 }
 
-void mxfp4_qmm_dispatch(
+template <typename T>
+void fp_qmm_dispatch_typed(
     array& out,
     const array& x,
     const array& w,
     const array& scales,
+    int group_size,
+    int bits,
+    bool transposed_w) {
+  if (bits == 8) {
+    fp_qmm_dispatch_mode<T, 32, 8>(out, x, w, scales, transposed_w);
+  } else if (group_size == 32) {
+    fp_qmm_dispatch_mode<T, 32, 4>(out, x, w, scales, transposed_w);
+  } else {
+    fp_qmm_dispatch_mode<T, 16, 4>(out, x, w, scales, transposed_w);
+  }
+}
+
+void fp_qmm_dispatch(
+    array& out,
+    const array& x,
+    const array& w,
+    const array& scales,
+    int group_size,
+    int bits,
     bool transposed_w) {
   switch (x.dtype()) {
     case bfloat16:
-      mxfp4_qmm_dispatch_typed<bfloat16_t>(out, x, w, scales, transposed_w);
+      fp_qmm_dispatch_typed<bfloat16_t>(
+          out, x, w, scales, group_size, bits, transposed_w);
       break;
     case float16:
-      mxfp4_qmm_dispatch_typed<float16_t>(out, x, w, scales, transposed_w);
+      fp_qmm_dispatch_typed<float16_t>(
+          out, x, w, scales, group_size, bits, transposed_w);
       break;
     case float32:
-      mxfp4_qmm_dispatch_typed<float>(out, x, w, scales, transposed_w);
+      fp_qmm_dispatch_typed<float>(
+          out, x, w, scales, group_size, bits, transposed_w);
       break;
     default:
       throw std::invalid_argument(
@@ -764,9 +797,8 @@ void _bs_qmm_dispatch(
           "[quantized_matmul] only floating types are supported");
   }
 }
-
-template <typename T>
-void mxfp4_bs_qmm_dispatch_typed(
+template <typename T, int group_size, int bits>
+void fp_bs_qmm_dispatch_mode(
     array& out,
     const array& x,
     const array& w,
@@ -793,7 +825,7 @@ void mxfp4_bs_qmm_dispatch_typed(
         i, lhs_indices.shape(), lhs_indices.strides())];
     int w_idx = rhs_indices_ptr[elem_to_loc(
         i, rhs_indices.shape(), rhs_indices.strides())];
-    mxfp4_qmm_dispatch_transpose<T>(
+    fp_qmm_dispatch_transpose<T, group_size, bits>(
         out_ptr + i * M * N,
         x_ptr + elem_to_loc(x_idx * M * K, x.shape(), x.strides()),
         w_ptr + elem_to_loc(w_idx * w_els, w.shape(), w.strides()),
@@ -806,26 +838,75 @@ void mxfp4_bs_qmm_dispatch_typed(
   }
 }
 
-void mxfp4_bs_qmm_dispatch(
+template <typename T>
+void fp_bs_qmm_dispatch_typed(
     array& out,
     const array& x,
     const array& w,
     const array& scales,
     const array& lhs_indices,
     const array& rhs_indices,
+    int group_size,
+    int bits,
+    bool transposed_w) {
+  if (bits == 8) {
+    fp_bs_qmm_dispatch_mode<T, 32, 8>(
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+  } else if (group_size == 32) {
+    fp_bs_qmm_dispatch_mode<T, 32, 4>(
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+  } else {
+    fp_bs_qmm_dispatch_mode<T, 16, 4>(
+        out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+  }
+}
+
+void fp_bs_qmm_dispatch(
+    array& out,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    int group_size,
+    int bits,
     bool transposed_w) {
   switch (x.dtype()) {
     case float32:
-      mxfp4_bs_qmm_dispatch_typed<float>(
-          out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+      fp_bs_qmm_dispatch_typed<float>(
+          out,
+          x,
+          w,
+          scales,
+          lhs_indices,
+          rhs_indices,
+          group_size,
+          bits,
+          transposed_w);
       break;
     case float16:
-      mxfp4_bs_qmm_dispatch_typed<float16_t>(
-          out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+      fp_bs_qmm_dispatch_typed<float16_t>(
+          out,
+          x,
+          w,
+          scales,
+          lhs_indices,
+          rhs_indices,
+          group_size,
+          bits,
+          transposed_w);
       break;
     case bfloat16:
-      mxfp4_bs_qmm_dispatch_typed<bfloat16_t>(
-          out, x, w, scales, lhs_indices, rhs_indices, transposed_w);
+      fp_bs_qmm_dispatch_typed<bfloat16_t>(
+          out,
+          x,
+          w,
+          scales,
+          lhs_indices,
+          rhs_indices,
+          group_size,
+          bits,
+          transposed_w);
       break;
     default:
       throw std::invalid_argument(
@@ -880,8 +961,10 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
                       x = array::unsafe_weak_copy(x),
                       w = array::unsafe_weak_copy(w),
                       scales = array::unsafe_weak_copy(scales),
+                      group_size_ = group_size_,
+                      bits_ = bits_,
                       transpose_ = transpose_]() mutable {
-      mxfp4_qmm_dispatch(out, x, w, scales, transpose_);
+      fp_qmm_dispatch(out, x, w, scales, group_size_, bits_, transpose_);
     });
   }
 }
@@ -952,9 +1035,19 @@ void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                       scales = array::unsafe_weak_copy(scales),
                       lhs_indices = array::unsafe_weak_copy(lhs_indices),
                       rhs_indices = array::unsafe_weak_copy(rhs_indices),
+                      group_size_ = group_size_,
+                      bits_ = bits_,
                       transpose_ = transpose_]() mutable {
-      mxfp4_bs_qmm_dispatch(
-          out, x, w, scales, lhs_indices, rhs_indices, transpose_);
+      fp_bs_qmm_dispatch(
+          out,
+          x,
+          w,
+          scales,
+          lhs_indices,
+          rhs_indices,
+          group_size_,
+          bits_,
+          transpose_);
     });
   }
 }
@@ -1104,4 +1197,47 @@ void fast::Quantize::eval_cpu(
   });
 }
 
+void fast::ConvertFP8::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& in = inputs[0];
+  auto& out = outputs[0];
+  set_unary_output_data(in, out);
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.dispatch([in = array::unsafe_weak_copy(in),
+                    out = array::unsafe_weak_copy(out),
+                    to_fp8 = to_fp8_]() mutable {
+    if (to_fp8) {
+      switch (in.dtype()) {
+        case float16:
+          unary_op<float16_t, uint8_t>(in, out, detail::ToFP8());
+          break;
+        case bfloat16:
+          unary_op<bfloat16_t, uint8_t>(in, out, detail::ToFP8());
+          break;
+        default:
+          unary_op<float, uint8_t>(in, out, detail::ToFP8());
+          break;
+      }
+    } else {
+      switch (out.dtype()) {
+        case float16:
+          unary_op<uint8_t, float16_t>(in, out, detail::FromFP8());
+          break;
+        case bfloat16:
+          unary_op<uint8_t, bfloat16_t>(in, out, detail::FromFP8());
+          break;
+        default:
+          unary_op<uint8_t, float>(in, out, detail::FromFP8());
+          break;
+      }
+    }
+  });
+}
+
+void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("QQMatmul not implemented on CPU.");
+}
 } // namespace mlx::core

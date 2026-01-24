@@ -12,7 +12,6 @@
 
 #include <fmt/format.h>
 #include <nvrtc.h>
-#include <unistd.h>
 
 namespace mlx::core::cu {
 
@@ -27,55 +26,47 @@ void check_nvrtc_error(const char* name, nvrtcResult err) {
   }
 }
 
-// Return the location of the CUDA toolkit.
-const std::string& cuda_home() {
-  static std::string home = []() -> std::string {
-    const char* home = std::getenv("CUDA_HOME");
-    if (home) {
-      return home;
-    }
-    home = std::getenv("CUDA_PATH");
-    if (home) {
-      return home;
-    }
-#if defined(__linux__)
-    home = "/usr/local/cuda";
-    if (std::filesystem::exists(home)) {
-      return home;
-    }
-#endif
-    throw std::runtime_error(
-        "Environment variable CUDA_HOME or CUDA_PATH is not set.");
-  }();
-  return home;
-}
-
-// Return the location of CCCL headers shipped with the distribution.
-const std::string& cccl_dir() {
-  static std::string dir = []() {
-    std::filesystem::path path;
+// Return the --include-path args used for invoking NVRTC.
+const std::vector<std::string>& include_path_args() {
+  static std::vector<std::string> cached_args = []() {
+    std::vector<std::string> args;
+    // Add path to bundled CCCL headers.
+    auto root_dir = current_binary_dir().parent_path();
+    auto path = root_dir / "include" / "cccl";
 #if defined(MLX_CCCL_DIR)
-    // First search the install dir if defined.
-    path = MLX_CCCL_DIR;
-    if (std::filesystem::exists(path)) {
-      return path.string();
+    if (!std::filesystem::exists(path)) {
+      path = MLX_CCCL_DIR;
     }
 #endif
-    // Then search dynamically from the dir of libmlx.so file.
-    path = current_binary_dir().parent_path() / "include" / "cccl";
     if (std::filesystem::exists(path)) {
-      return path.string();
+      args.push_back(fmt::format("--include-path={}", path.string()));
     }
-    // Finally check the environment variable.
-    if (const char* env = std::getenv("MLX_CCCL_DIR"); env) {
-      path = env;
-      if (!path.empty() && std::filesystem::exists(path)) {
-        return path.string();
+    // Add path to CUDA runtime headers, try local-installed python package
+    // first and then system-installed headers.
+    path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
+    if (std::filesystem::exists(path)) {
+      args.push_back(fmt::format("--include-path={}", path.string()));
+    } else {
+      const char* home = std::getenv("CUDA_HOME");
+      if (!home) {
+        home = std::getenv("CUDA_PATH");
+      }
+#if defined(__linux__)
+      if (!home) {
+        home = "/usr/local/cuda";
+      }
+#endif
+      if (home && std::filesystem::exists(home)) {
+        args.push_back(fmt::format("--include-path={}/include", home));
+      } else {
+        throw std::runtime_error(
+            "Can not find locations of CUDA headers, please set environment "
+            "variable CUDA_HOME or CUDA_PATH.");
       }
     }
-    return std::string();
+    return args;
   }();
-  return dir;
+  return cached_args;
 }
 
 // Get the cache directory for storing compiled results.
@@ -99,6 +90,30 @@ const std::filesystem::path& ptx_cache_dir() {
   return cache;
 }
 
+std::filesystem::path get_ptx_path(
+    const std::filesystem::path& cache_dir,
+    const std::string& module_name) {
+#ifdef _WIN32
+  constexpr int max_file_name_length = 140;
+#else
+  constexpr int max_file_name_length = 245;
+#endif
+
+  if (module_name.size() <= max_file_name_length) {
+    return cache_dir / (module_name + ".ptx");
+  }
+
+  auto ptx_path = cache_dir;
+  int offset = 0;
+  while (module_name.size() - offset > max_file_name_length) {
+    ptx_path /= module_name.substr(offset, max_file_name_length);
+    offset += max_file_name_length;
+  }
+  ptx_path /= module_name.substr(offset) + ".ptx";
+
+  return ptx_path;
+}
+
 // Try to read the cached |ptx| and |ptx_kernels| from |cache_dir|.
 bool read_cached_ptx(
     const std::filesystem::path& cache_dir,
@@ -109,7 +124,7 @@ bool read_cached_ptx(
     return false;
   }
 
-  auto ptx_path = cache_dir / (module_name + ".ptx");
+  auto ptx_path = get_ptx_path(cache_dir, module_name);
   std::error_code error;
   auto ptx_size = std::filesystem::file_size(ptx_path, error);
   if (error) {
@@ -122,7 +137,7 @@ bool read_cached_ptx(
   ptx.resize(ptx_size);
   ptx_file.read(ptx.data(), ptx_size);
 
-  std::ifstream txt_file(cache_dir / (module_name + ".txt"), std::ios::binary);
+  std::ifstream txt_file(ptx_path.replace_extension(".txt"), std::ios::binary);
   std::string line;
   while (std::getline(txt_file, line)) {
     auto tab = line.find('\t');
@@ -144,16 +159,26 @@ void write_cached_ptx(
     return;
   }
 
-  std::ofstream ptx_file(cache_dir / (module_name + ".ptx"), std::ios::binary);
+  auto ptx_path = get_ptx_path(cache_dir, module_name);
+
+  // Ensure that the directory exists
+  auto parent = ptx_path.parent_path();
+  if (parent != cache_dir) {
+    std::filesystem::create_directories(parent);
+  }
+
+  // Write the compiled code and mangled names
+  std::ofstream ptx_file(ptx_path, std::ios::binary);
   if (!ptx.empty()) {
     ptx_file.write(&ptx.front(), ptx.size());
   }
-  std::ofstream txt_file(cache_dir / (module_name + ".txt"), std::ios::binary);
+  std::ofstream txt_file(ptx_path.replace_extension(".txt"), std::ios::binary);
   for (const auto& [name, mangled] : ptx_kernels) {
     txt_file << name << "\t" << mangled << std::endl;
   }
 
-  std::ofstream source_file(cache_dir / (module_name + ".cu"));
+  // Write the generated code
+  std::ofstream source_file(ptx_path.replace_extension(".cu"));
   source_file << source_code;
 }
 
@@ -245,20 +270,18 @@ void compile(
   // Compile program.
   std::vector<const char*> args;
   bool use_sass = compiler_supports_device_sass(device);
+  auto cc = device.compute_capability_major();
+  std::string arch_tag = (cc == 90 || cc == 100 || cc == 121) ? "a" : "";
   std::string compute = fmt::format(
-      "--gpu-architecture={}_{}{}",
+      "--gpu-architecture={}_{}{}{}",
       use_sass ? "sm" : "compute",
-      device.compute_capability_major(),
-      device.compute_capability_minor());
+      cc,
+      device.compute_capability_minor(),
+      arch_tag);
   args.push_back(compute.c_str());
-  std::string cccl_include = cccl_dir();
-  if (!cccl_include.empty()) {
-    cccl_include = fmt::format("--include-path={}", cccl_include);
-    args.push_back(cccl_include.c_str());
+  for (const auto& include : include_path_args()) {
+    args.push_back(include.c_str());
   }
-  std::string cuda_include =
-      fmt::format("--include-path={}/include", cuda_home());
-  args.push_back(cuda_include.c_str());
   nvrtcResult compile_result =
       nvrtcCompileProgram(prog, args.size(), args.data());
   if (compile_result != NVRTC_SUCCESS) {
@@ -297,7 +320,8 @@ void load_module(
     const std::string& ptx,
     const std::vector<std::pair<std::string, std::string>>& ptx_kernels,
     CUmodule& module_,
-    std::unordered_map<std::string, std::pair<CUfunction, bool>>& kernels) {
+    std::unordered_map<std::string, std::tuple<CUfunction, bool, uint32_t>>&
+        kernels) {
   // Load module.
   char jit_log[4089] = {};
   CUjit_option options[] = {
@@ -314,7 +338,7 @@ void load_module(
   for (const auto& [name, mangled] : ptx_kernels) {
     CUfunction kernel;
     CHECK_CUDA_ERROR(cuModuleGetFunction(&kernel, module_, mangled.c_str()));
-    kernels[name] = std::make_pair(kernel, false);
+    kernels[name] = std::make_tuple(kernel, false, 0);
   }
 }
 
@@ -358,7 +382,7 @@ JitModule::~JitModule() {
   CHECK_CUDA_ERROR(cuModuleUnload(module_));
 }
 
-CUfunction JitModule::get_kernel(
+std::pair<CUfunction, uint32_t> JitModule::get_kernel_and_dims(
     const std::string& kernel_name,
     std::function<void(CUfunction)> configure_kernel) {
   auto it = kernels_.find(kernel_name);
@@ -369,14 +393,22 @@ CUfunction JitModule::get_kernel(
 
   // If it is the first time we run this kernel then configure it. Do it only
   // once!
-  if (!it->second.second) {
+  auto kernel = std::get<0>(it->second);
+  if (!std::get<1>(it->second)) {
     if (configure_kernel) {
-      configure_kernel(it->second.first);
+      configure_kernel(kernel);
     }
-    it->second.second = true;
+    std::get<1>(it->second) = true;
+    std::get<2>(it->second) = max_occupancy_block_dim(kernel);
   }
 
-  return it->second.first;
+  return {kernel, std::get<2>(it->second)};
+}
+
+CUfunction JitModule::get_kernel(
+    const std::string& kernel_name,
+    std::function<void(CUfunction)> configure_kernel) {
+  return get_kernel_and_dims(kernel_name, std::move(configure_kernel)).first;
 }
 
 std::unordered_map<std::string, JitModule>& get_jit_module_cache() {

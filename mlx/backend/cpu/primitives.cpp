@@ -291,6 +291,17 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
                     num_keys,
                     kshape = keys.shape(),
                     kstrides = keys.strides()]() mutable {
+    auto copy_remaining = [&](char* cptr, size_t loc, uint32_t v) {
+      if (4 * loc + 4 <= bytes_per_key) {
+        reinterpret_cast<uint32_t*>(cptr)[loc] = v;
+      } else {
+        std::copy(
+            reinterpret_cast<char*>(&v),
+            reinterpret_cast<char*>(&v) + bytes_per_key - 4 * loc,
+            cptr + 4 * loc);
+      }
+    };
+
     size_t out_skip = (bytes_per_key + 4 - 1) / 4;
     auto half_size = out_skip / 2;
     bool even = out_skip % 2 == 0;
@@ -310,18 +321,12 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
       if (count.first < half_size) {
         auto rb = random::threefry2x32_hash(key, count);
         ptr[count.first++] = rb.first;
-        if (bytes_per_key % 4 > 0) {
-          std::copy(
-              reinterpret_cast<char*>(&rb.second),
-              reinterpret_cast<char*>(&rb.second) + bytes_per_key % 4,
-              cptr + 4 * count.second);
-        } else {
-          ptr[count.second] = rb.second;
-        }
+        copy_remaining(cptr, count.second, rb.second);
       }
       if (!even) {
         count.second = 0;
-        ptr[half_size] = random::threefry2x32_hash(key, count).first;
+        copy_remaining(
+            cptr, half_size, random::threefry2x32_hash(key, count).first);
       }
     }
   });
@@ -333,7 +338,7 @@ void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
   auto& in = inputs[0];
@@ -361,7 +366,7 @@ void DynamicSliceUpdate::eval_cpu(
     const std::vector<array>& inputs,
     array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -396,7 +401,7 @@ void DynamicSliceUpdate::eval_cpu(
 void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 

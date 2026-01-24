@@ -150,7 +150,6 @@ FFTPlan plan_fft(int n) {
       }
       // See if we can use Rader's algorithm to Stockham decompose n - 1
       auto rader_factors = prime_factors(factor - 1);
-      int last_factor = -1;
       for (int rf : rader_factors) {
         // We don't nest Rader's algorithm so if `factor - 1`
         // isn't Stockham decomposable we give up and do Bluestein's.
@@ -313,8 +312,6 @@ std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
   // w_k = np.exp(-1j * np.pi / N * (np.arange(-N + 1, N) ** 2))
   // w_q = np.fft.fft(1/w_k)
   // return w_k, w_q
-  int length = 2 * n - 1;
-
   std::vector<std::complex<float>> w_k_vec(n);
   std::vector<std::complex<float>> w_q_vec(bluestein_n, 0);
 
@@ -484,8 +481,6 @@ void four_step_fft(
     std::vector<array>& copies,
     const Stream& s,
     bool in_place) {
-  auto& d = metal::device(s.device);
-
   if (plan.bluestein_n == -1) {
     // Fast no transpose implementation for powers of 2.
     FourStepParams four_step_params = {
@@ -773,9 +768,12 @@ void nd_fft_op(
     const Stream& s) {
   // Perform ND FFT on GPU as a series of 1D FFTs
   auto temp_shape = inverse ? in.shape() : out.shape();
-  array temp1(temp_shape, complex64, nullptr, {});
-  array temp2(temp_shape, complex64, nullptr, {});
-  std::vector<array> temp_arrs = {temp1, temp2};
+  std::vector<array> temp_arrs;
+  temp_arrs.emplace_back(temp_shape, complex64, nullptr, std::vector<array>{});
+  if (axes.size() > 2) {
+    temp_arrs.emplace_back(
+        temp_shape, complex64, nullptr, std::vector<array>{});
+  }
   for (int i = axes.size() - 1; i >= 0; i--) {
     int reverse_index = axes.size() - i - 1;
     // For 5D and above, we don't want to reallocate our two temporary arrays
@@ -786,9 +784,8 @@ void nd_fft_op(
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
     bool step_real = (real && index == axes.size() - 1);
-    auto step_shape = inverse ? out.shape(axis) : in.shape(axis);
-    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[1 - i % 2];
-    array& out_arr = i == 0 ? out : temp_arrs[i % 2];
+    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[i % 2];
+    array& out_arr = i == 0 ? out : temp_arrs[1 - i % 2];
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 

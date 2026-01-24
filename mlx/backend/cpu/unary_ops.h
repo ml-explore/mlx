@@ -77,7 +77,8 @@ struct Real {
 struct Sigmoid {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {
-    return 1.0f / (1.0f + simd::exp(-x));
+    auto y = 1.0f / (1.0f + simd::exp(simd::abs(x)));
+    return simd::select(x < Simd<T, N>{0}, y, Simd<T, N>{1} - y);
   }
   SINGLE()
 };
@@ -107,4 +108,61 @@ struct Square {
   SINGLE()
 };
 
+template <int N>
+Simd<float, N> fp32_from_bits(Simd<uint32_t, N> x) {
+  return *(Simd<float, N>*)(&x);
+}
+template <int N>
+Simd<uint32_t, N> fp32_to_bits(Simd<float, N> x) {
+  return *(Simd<uint32_t, N>*)(&x);
+}
+
+struct ToFP8 {
+  template <typename T, int N>
+  Simd<uint8_t, N> operator()(Simd<T, N> f) {
+    uint32_t fp8_max = 543 << 21;
+    auto denorm_mask = Simd<uint32_t, N>(141 << 23);
+    Simd<uint32_t, N> f_bits;
+    Simd<float, N> f32 = f;
+    f_bits = fp32_to_bits(f32);
+    Simd<uint8_t, N> result = 0u;
+    auto sign = f_bits & 0x80000000;
+    f_bits = f_bits ^ sign;
+
+    auto f_bits_low =
+        fp32_to_bits(fp32_from_bits(f_bits) + fp32_from_bits(denorm_mask));
+    auto result_low = Simd<uint8_t, N>(f_bits_low - denorm_mask);
+
+    auto mant_odd = Simd<uint8_t, N>((f_bits >> 20) & 1);
+    auto f_bits_high = f_bits + (((uint32_t)(7 - 127) << 23) + 0x7FFFF);
+    f_bits_high = f_bits_high + Simd<uint32_t, N>(mant_odd);
+
+    auto result_high = Simd<uint8_t, N>(f_bits_high >> 20);
+    result = select(f_bits < (121 << 23), result_low, result_high);
+
+    auto result_sat = Simd<uint8_t, N>(0x7E);
+    result = select(f_bits >= fp8_max, result_sat, result);
+    return result | Simd<uint8_t, N>(sign >> 24);
+  }
+
+  template <typename T>
+  uint8_t operator()(T x) {
+    return (*this)(Simd<T, 1>(x)).value;
+  }
+};
+
+struct FromFP8 {
+  template <int N>
+  Simd<float, N> operator()(Simd<uint8_t, N> x) {
+    auto v = Simd<uint16_t, N>(x & 127) << 7;
+    auto converted = *(Simd<float16_t, N>*)(&v);
+    converted = converted * 256.0;
+    auto sign = Simd<bool, N>(x & 128);
+    Simd<float, N> out = select(sign, -converted, converted);
+    return out;
+  }
+  float operator()(uint8_t x) {
+    return (*this)(Simd<uint8_t, 1>(x)).value;
+  }
+};
 } // namespace mlx::core::detail

@@ -57,9 +57,16 @@ Shape get_shape(const gguf_tensor& tensor) {
 }
 
 std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+  if (tensor == nullptr) {
+    throw std::invalid_argument(
+        "[extract_tensor_data] Input tensor pointer is null.");
+  }
   std::optional<Dtype> equivalent_dtype = gguf_type_to_dtype(tensor->type);
   // If there's an equivalent type, we can simply copy.
   if (equivalent_dtype.has_value()) {
+    if (tensor->weights_data == nullptr) {
+      throw std::runtime_error("[load_gguf] NULL tensor data pointer");
+    }
     allocator::Buffer buffer = allocator::malloc(tensor->bsize);
     memcpy(
         buffer.raw_ptr(),
@@ -434,7 +441,7 @@ void save_gguf(
     const char* tensorname = key.c_str();
     const uint64_t namelen = key.length();
     const uint32_t num_dim = arr.ndim();
-    uint64_t dim[num_dim];
+    std::vector<uint64_t> dim(num_dim);
     for (int i = 0; i < num_dim; i++) {
       dim[i] = arr.shape()[num_dim - 1 - i];
     }
@@ -443,7 +450,7 @@ void save_gguf(
             tensorname,
             namelen,
             num_dim,
-            dim,
+            dim.data(),
             gguf_type.value(),
             tensor_offset)) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_info failed");

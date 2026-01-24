@@ -15,6 +15,22 @@ inline constexpr __device__ short get_bytes_per_pack() {
   return power_of_2_bits ? (wsize / 8) : (bits == 5 ? 5 : 3);
 }
 
+template <typename T>
+__device__ __forceinline__ void abs_max_x2(T& out, const T& x1, const T& x2) {
+  if constexpr (
+      (std::is_same<T, __nv_bfloat162>::value) ||
+      (std::is_same<T, __half2>::value)) {
+    T a = x1;
+    T b = x2;
+    out = __hmax2(__habs2(a), __habs2(b));
+  } else if constexpr (std::is_same<T, float2>::value) {
+    float2 a = x1;
+    float2 b = x2;
+    out.x = fmaxf(fabsf(a.x), fabsf(b.x));
+    out.y = fmaxf(fabsf(a.y), fabsf(b.y));
+  }
+}
+
 } // namespace cu
 
 template <typename F>

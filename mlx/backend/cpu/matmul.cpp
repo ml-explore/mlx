@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include "mlx/array.h"
+#include "mlx/backend/cpu/binary.h"
+#include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/gemm.h"
@@ -91,7 +93,6 @@ void matmul_general(
   auto [b_transposed, ldb, b] = check_transpose(b_pre);
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
-  size_t K = a.shape(-1);
   if (M == 0 || N == 0) {
     return;
   }
@@ -107,6 +108,9 @@ void matmul_general(
         a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
   } else if (out.dtype() == float64) {
     matmul_dispatch<double>(
+        a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
+  } else if (out.dtype() == complex64) {
+    matmul_dispatch<complex64_t>(
         a, b, out, a_transposed, b_transposed, lda, ldb, alpha, beta, stream);
   } else {
     throw std::runtime_error("[Matmul::eval_cpu] Invalid type.");
@@ -128,12 +132,25 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
-  if (out.dtype() != float32) {
-    throw std::runtime_error(
-        "[AddMM::eval_cpu] Currently only supports float32.");
-  }
   if (out.size() == 0) {
     out.set_data(allocator::malloc(out.nbytes()));
+    return;
+  }
+
+  // Handle empty matrix case (K=0)
+  if (inputs[0].shape(-1) == 0) {
+    auto& c = inputs[2];
+    if (beta_ == 1.0f) {
+      CopyType ctype = c.data_size() == 1
+          ? CopyType::Scalar
+          : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+      copy_cpu(c, out, ctype, stream());
+    } else {
+      array beta_scalar = array(beta_, c.dtype());
+      auto& encoder = cpu::get_command_encoder(stream());
+      binary_float_op_cpu(c, beta_scalar, out, detail::Multiply(), stream());
+      encoder.add_temporary(std::move(beta_scalar));
+    }
     return;
   }
 
@@ -143,9 +160,6 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy_cpu(c, out, ctype, stream());
-  if (inputs[0].shape(-1) == 0) {
-    return;
-  }
   matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 

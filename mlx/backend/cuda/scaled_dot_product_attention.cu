@@ -1,15 +1,14 @@
 // Copyright © 2025 Apple Inc.
 
+// Required for using M_LOG2E in MSVC.
+#define _USE_MATH_DEFINES
+
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
-#include "mlx/fast_primitives.h"
-#include "mlx/transforms_impl.h"
-
-#include <nvtx3/nvtx3.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -513,11 +512,11 @@ void sdpa_vector_1pass_fallback(
             grid_dim,
             block_dim,
             0,
-            q.data<DataType>(),
-            k.data<DataType>(),
-            v.data<DataType>(),
-            o.data<DataType>(),
-            sinks ? (*sinks).data<DataType>() : nullptr,
+            gpu_ptr<DataType>(q),
+            gpu_ptr<DataType>(k),
+            gpu_ptr<DataType>(v),
+            gpu_ptr<DataType>(o),
+            sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
             params);
       });
     });
@@ -565,9 +564,9 @@ void sdpa_vector_2pass_fallback(
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
 
-  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  sums.set_data(allocator::malloc(sums.nbytes()));
-  maxs.set_data(allocator::malloc(maxs.nbytes()));
+  intermediate.set_data(cu::malloc_async(intermediate.nbytes(), encoder));
+  sums.set_data(cu::malloc_async(sums.nbytes(), encoder));
+  maxs.set_data(cu::malloc_async(maxs.nbytes(), encoder));
 
   encoder.add_temporary(intermediate);
   encoder.add_temporary(sums);
@@ -601,13 +600,13 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              q.data<DataType>(),
-              k.data<DataType>(),
-              v.data<DataType>(),
-              sinks ? (*sinks).data<DataType>() : nullptr,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
+              gpu_ptr<DataType>(q),
+              gpu_ptr<DataType>(k),
+              gpu_ptr<DataType>(v),
+              sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
               params);
         }
 
@@ -628,10 +627,10 @@ void sdpa_vector_2pass_fallback(
               grid_dim,
               block_dim,
               0,
-              intermediate.data<float>(),
-              sums.data<float>(),
-              maxs.data<float>(),
-              o.data<DataType>(),
+              gpu_ptr<float>(intermediate),
+              gpu_ptr<float>(sums),
+              gpu_ptr<float>(maxs),
+              gpu_ptr<DataType>(o),
               params);
         }
       });
@@ -662,21 +661,16 @@ void sdpa_vector_fallback(
 
 } // namespace
 
-namespace fast {
-
-bool ScaledDotProductAttention::use_fallback(
+bool supports_sdpa_vector(
     const array& q,
     const array& k,
     const array& v,
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
-    Stream s) {
-  if (detail::in_grad_tracing()) {
-    return true;
-  }
-  if (s.device == Device::cpu) {
-    return true;
+    bool output_logsumexp) {
+  if (output_logsumexp) {
+    return false;
   }
 
   const int value_head_dim = v.shape(-1);
@@ -690,29 +684,24 @@ bool ScaledDotProductAttention::use_fallback(
   const bool supported_vector_config =
       sdpa_supported_head_dim && query_sequence_length < 4;
 
-  const bool supported_config = supported_vector_config;
-
-  return has_arr_mask || !supported_config;
+  return supported_vector_config && !has_arr_mask;
 }
 
-void ScaledDotProductAttention::eval_gpu(
-    const std::vector<array>& inputs,
-    array& out) {
-  nvtx3::scoped_range r("ScaledDotProductAttention::eval_gpu");
-
-  auto& s = stream();
+void sdpa_vector(
+    const array& q_pre,
+    const array& k_pre,
+    const array& v_pre,
+    float scale,
+    array& o,
+    bool do_causal,
+    const std::optional<array>& sinks_pre,
+    Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-
-  auto& q_pre = inputs[0];
-  auto& k_pre = inputs[1];
-  auto& v_pre = inputs[2];
-  auto& o = out;
-
   std::vector<array> copies;
 
   // Define some copy functions to ensure the layout of the inputs is as
   // expected.
-  copies.reserve(inputs.size());
+  copies.reserve(4);
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
     if (!predicate(arr)) {
@@ -730,8 +719,8 @@ void ScaledDotProductAttention::eval_gpu(
   };
 
   std::optional<array> sinks = std::nullopt;
-  if (has_sinks_) {
-    sinks = copy_unless(is_matrix_contiguous, inputs.back());
+  if (sinks_pre) {
+    sinks = copy_unless(is_matrix_contiguous, sinks_pre.value());
   }
 
   // We are in vector mode ie single query
@@ -787,7 +776,7 @@ void ScaledDotProductAttention::eval_gpu(
       };
 
       o.set_data(
-          allocator::malloc(o.nbytes()),
+          cu::malloc_async(o.nbytes(), encoder),
           o.size(),
           {str_oB, str_oH, str_oL, str_oD},
           flags);
@@ -797,8 +786,7 @@ void ScaledDotProductAttention::eval_gpu(
       encoder.add_temporary(cp);
     }
 
-    return sdpa_vector_fallback(
-        s, encoder, q, k, v, scale_, o, do_causal_, sinks);
+    sdpa_vector_fallback(s, encoder, q, k, v, scale, o, do_causal, sinks);
   }
 
   // Full attention mode should never reach here
@@ -806,7 +794,5 @@ void ScaledDotProductAttention::eval_gpu(
     throw std::runtime_error("Doesn't support matrix yet.");
   }
 }
-
-} // namespace fast
 
 } // namespace mlx::core

@@ -16,12 +16,11 @@ silicon computer is
 To install from PyPI your system must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
-- Using a native Python >= 3.9
-- macOS >= 13.5
+- Using a native Python >= 3.10
+- macOS >= 14.0
 
 .. note::
-    MLX is only available on devices running macOS >= 13.5
-    It is highly recommended to use macOS 14 (Sonoma)
+    MLX is only available on devices running macOS >= 14.0 and higher.
 
 CUDA
 ^^^^
@@ -30,17 +29,20 @@ MLX has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
-    pip install mlx[cuda]
+    pip install mlx[cuda12]
+
 
 To install the CUDA package from PyPi your system must meet the following
 requirements:
 
-- Nvidia architecture >= SM 7.0 (Volta)
+- Nvidia architecture >= SM 7.5
 - Nvidia driver >= 550.54.14
 - CUDA toolkit >= 12.0
 - Linux distribution with glibc >= 2.35
-- Python >= 3.9
+- Python >= 3.10
 
+For CUDA 13 use ``pip install mlx[cuda13]``. The CUDA 13 package requires
+an Nvidia driver >= 580 or an appropriate CUDA compatibility package.
 
 CPU-only (Linux)
 ^^^^^^^^^^^^^^^^
@@ -55,7 +57,7 @@ To install the CPU-only package from PyPi your system must meet the following
 requirements:
 
 - Linux distribution with glibc >= 2.35
-- Python >= 3.9
+- Python >= 3.10
 
 
 Troubleshooting
@@ -81,7 +83,7 @@ Build from source
 Build Requirements
 ^^^^^^^^^^^^^^^^^^
 
-- A C++ compiler with C++17 support (e.g. Clang >= 5.0)
+- A C++ compiler with C++20 support (e.g. Clang >= 15.0)
 - `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
 - Xcode >= 15.0 and macOS SDK >= 14.0
 
@@ -125,13 +127,6 @@ Run the tests with:
 .. code-block:: shell
 
   python -m unittest discover python/tests
-
-Optional: Install stubs to enable auto completions and type checking from your
-IDE:
-
-.. code-block:: shell
-
-  python setup.py generate_stubs
 
 C++ API
 ^^^^^^^

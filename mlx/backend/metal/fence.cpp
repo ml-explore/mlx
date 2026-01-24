@@ -31,7 +31,7 @@ struct FenceImpl {
       auto p = metal::new_scoped_memory_pool();
       static_cast<MTL::SharedEvent*>(fence)->release();
     } else {
-      allocator::free(static_cast<MTL::Buffer*>(fence));
+      allocator::free(allocator::Buffer{static_cast<MTL::Buffer*>(fence)});
     }
   }
   bool use_fast{false};
@@ -99,7 +99,7 @@ void Fence::wait(Stream stream, const array& x) {
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
-void Fence::update(Stream stream, const array& x) {
+void Fence::update(Stream stream, const array& x, bool cross_device) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
   f.count++;
 
@@ -130,21 +130,23 @@ void Fence::update(Stream stream, const array& x) {
 
   // Launch input visibility kernels
   auto& compute_encoder = d.get_command_encoder(idx);
-  auto kernel = d.get_kernel("input_coherent");
-  uint32_t nthreads =
-      (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) / sizeof(uint32_t);
-  MTL::Size group_dims = MTL::Size(1024, 1, 1);
-  MTL::Size grid_dims = MTL::Size((nthreads + 1024 - 1) / 1024, 1, 1);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(x, 0);
-  compute_encoder.set_bytes(nthreads, 1);
-  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  if (cross_device) {
+    auto kernel = d.get_kernel("input_coherent");
+    uint32_t nthreads = (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) /
+        sizeof(uint32_t);
+    MTL::Size group_dims = MTL::Size(1024, 1, 1);
+    MTL::Size grid_dims = MTL::Size((nthreads + 1024 - 1) / 1024, 1, 1);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(x, 0);
+    compute_encoder.set_bytes(nthreads, 1);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  }
 
   // Barrier on previous kernels
   compute_encoder.barrier();
 
   // Launch value update kernel
-  kernel = d.get_kernel("fence_update");
+  auto kernel = d.get_kernel("fence_update");
   MTL::Size kernel_dims = MTL::Size(1, 1, 1);
   compute_encoder.set_compute_pipeline_state(kernel);
 

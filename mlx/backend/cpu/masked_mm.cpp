@@ -215,18 +215,18 @@ void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
 
   encoder.set_input_array(a);
   encoder.set_input_array(b);
-  const void* a_mask_ptr;
-  const void* b_mask_ptr;
-  const void* out_mask_ptr;
+  const void* a_mask_ptr = nullptr;
+  const void* b_mask_ptr = nullptr;
+  const void* out_mask_ptr = nullptr;
   Shape a_mask_shape;
   Shape b_mask_shape;
   Shape out_mask_shape;
   Strides a_mask_strides;
   Strides b_mask_strides;
   Strides out_mask_strides;
-  bool a_mask_bool;
-  bool b_mask_bool;
-  bool out_mask_bool;
+  bool a_mask_bool = false;
+  bool b_mask_bool = false;
+  bool out_mask_bool = false;
   if (has_op_mask) {
     auto& a_mask = inputs[inputs.size() - 2];
     auto& b_mask = inputs[inputs.size() - 1];
@@ -423,7 +423,6 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& rhs_indices = inputs[3];
 
   auto batch_shape = get_batch_dims(out.shape());
-  int batch_ndim = batch_shape.size();
 
   auto batch_shape_A = get_batch_dims(a.shape());
   auto batch_strides_A = get_batch_dims(a.strides());

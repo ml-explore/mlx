@@ -31,7 +31,7 @@ struct KernelArgs {
   }
 
   void append(const array& a) {
-    append(reinterpret_cast<CUdeviceptr>(a.data<void>()));
+    append(reinterpret_cast<CUdeviceptr>(gpu_ptr<void>(a)));
   }
 
   template <typename T>
@@ -99,10 +99,14 @@ class JitModule {
   CUfunction get_kernel(
       const std::string& kernel_name,
       std::function<void(CUfunction)> configure_kernel = nullptr);
+  std::pair<CUfunction, uint32_t> get_kernel_and_dims(
+      const std::string& kernel_name,
+      std::function<void(CUfunction)> configure_kernel = nullptr);
 
  private:
   CUmodule module_{nullptr};
-  std::unordered_map<std::string, std::pair<CUfunction, bool>> kernels_;
+  std::unordered_map<std::string, std::tuple<CUfunction, bool, uint32_t>>
+      kernels_;
 };
 
 std::unordered_map<std::string, JitModule>& get_jit_module_cache();

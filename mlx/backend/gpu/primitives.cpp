@@ -83,7 +83,7 @@ void Depends::eval_gpu(
 void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("DynamicSlice::eval_gpu");
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -112,7 +112,7 @@ void DynamicSliceUpdate::eval_gpu(
     array& out) {
   MLX_PROFILER_RANGE("DynamicSliceUpdate::eval_gpu");
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -209,7 +209,7 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Slice::eval_gpu");
   assert(inputs.size() == 1);
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -220,7 +220,7 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
 void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 

@@ -77,8 +77,8 @@ void copy_contiguous(
             num_blocks,
             block_dims,
             0,
-            in.data<InType>() + in_offset,
-            out.data<OutType>() + out_offset,
+            gpu_ptr<InType>(in) + in_offset,
+            gpu_ptr<OutType>(out) + out_offset,
             out.data_size());
       });
     });

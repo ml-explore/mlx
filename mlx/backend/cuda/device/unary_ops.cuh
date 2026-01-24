@@ -5,7 +5,9 @@
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/device/utils.cuh"
 
+#include <cuda_fp8.h>
 #include <math_constants.h>
+#include <cuda/std/cmath>
 
 namespace mlx::core::cu {
 
@@ -15,7 +17,7 @@ struct Abs {
     if constexpr (cuda::std::is_unsigned_v<T>) {
       return x;
     } else {
-      return abs(x);
+      return cuda::std::abs(x);
     }
   }
 };
@@ -23,42 +25,42 @@ struct Abs {
 struct ArcCos {
   template <typename T>
   __device__ T operator()(T x) {
-    return acos(x);
+    return cuda::std::acos(x);
   }
 };
 
 struct ArcCosh {
   template <typename T>
   __device__ T operator()(T x) {
-    return acosh(x);
+    return cuda::std::acosh(x);
   }
 };
 
 struct ArcSin {
   template <typename T>
   __device__ T operator()(T x) {
-    return asin(x);
+    return cuda::std::asin(x);
   }
 };
 
 struct ArcSinh {
   template <typename T>
   __device__ T operator()(T x) {
-    return asinh(x);
+    return cuda::std::asinh(x);
   }
 };
 
 struct ArcTan {
   template <typename T>
   __device__ T operator()(T x) {
-    return atan(x);
+    return cuda::std::atan(x);
   }
 };
 
 struct ArcTanh {
   template <typename T>
   __device__ T operator()(T x) {
-    return atanh(x);
+    return cuda::std::atanh(x);
   }
 };
 
@@ -75,9 +77,9 @@ struct Ceil {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x;
     } else if constexpr (is_complex_v<T>) {
-      return T{ceil(x.real()), ceil(x.imag())};
+      return T{cuda::std::ceil(x.real()), cuda::std::ceil(x.imag())};
     } else {
-      return ceil(x);
+      return cuda::std::ceil(x);
     }
   }
 };
@@ -85,21 +87,21 @@ struct Ceil {
 struct Conjugate {
   template <typename T>
   __device__ complex_t<T> operator()(complex_t<T> x) {
-    return conj(x);
+    return cuda::std::conj(x);
   }
 };
 
 struct Cos {
   template <typename T>
   __device__ T operator()(T x) {
-    return cos(x);
+    return cuda::std::cos(x);
   }
 };
 
 struct Cosh {
   template <typename T>
   __device__ T operator()(T x) {
-    return cosh(x);
+    return cuda::std::cosh(x);
   }
 };
 
@@ -132,20 +134,14 @@ struct ErfInv {
 struct Exp {
   template <typename T>
   __device__ T operator()(T x) {
-    return exp(x);
+    return cuda::std::exp(x);
   }
 };
 
 struct Expm1 {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (cuda::std::is_same_v<T, __half>) {
-      return expm1(__half2float(x));
-    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-      return expm1(__bfloat162float(x));
-    } else {
-      return expm1(x);
-    }
+    return cuda::std::expm1(x);
   }
 };
 
@@ -155,9 +151,9 @@ struct Floor {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x;
     } else if constexpr (is_complex_v<T>) {
-      return T{floor(x.real()), floor(x.imag())};
+      return T{cuda::std::floor(x.real()), cuda::std::floor(x.imag())};
     } else {
-      return floor(x);
+      return cuda::std::floor(x);
     }
   }
 };
@@ -172,7 +168,7 @@ struct Imag {
 struct Log {
   template <typename T>
   __device__ T operator()(T x) {
-    return log(x);
+    return cuda::std::log(x);
   }
 };
 
@@ -183,7 +179,7 @@ struct Log2 {
       auto y = Log{}(x);
       return {y.real() / CUDART_LN2_F, y.imag() / CUDART_LN2_F};
     } else {
-      return log2(x);
+      return cuda::std::log2(x);
     }
   }
 };
@@ -191,7 +187,7 @@ struct Log2 {
 struct Log10 {
   template <typename T>
   __device__ T operator()(T x) {
-    return log10(x);
+    return cuda::std::log10(x);
   }
 };
 
@@ -214,7 +210,7 @@ struct Log1p {
         return {logf(z0), theta};
       }
     } else {
-      return log1p(z);
+      return cuda::std::log1p(z);
     }
   }
 };
@@ -247,9 +243,9 @@ struct Round {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (is_complex_v<T>) {
-      return {rint(x.real()), rint(x.imag())};
+      return {cuda::std::rint(x.real()), cuda::std::rint(x.imag())};
     } else {
-      return rint(x);
+      return cuda::std::rint(x);
     }
   }
 };
@@ -257,8 +253,8 @@ struct Round {
 struct Sigmoid {
   template <typename T>
   __device__ T operator()(T x) {
-    T y = 1 / (1 + exp(-abs(x)));
-    return (x < 0) ? 1 - y : y;
+    T y = 1 / (1 + cuda::std::exp(cuda::std::abs(x)));
+    return (x < 0) ? y : 1 - y;
   }
 };
 
@@ -284,14 +280,14 @@ struct Sign {
 struct Sin {
   template <typename T>
   __device__ T operator()(T x) {
-    return sin(x);
+    return cuda::std::sin(x);
   }
 };
 
 struct Sinh {
   template <typename T>
   __device__ T operator()(T x) {
-    return sinh(x);
+    return cuda::std::sinh(x);
   }
 };
 
@@ -305,7 +301,7 @@ struct Square {
 struct Sqrt {
   template <typename T>
   __device__ T operator()(T x) {
-    return sqrt(x);
+    return cuda::std::sqrt(x);
   }
 };
 
@@ -314,6 +310,10 @@ struct Rsqrt {
   __device__ T operator()(T x) {
     if constexpr (is_complex_v<T>) {
       return 1.0f / Sqrt{}(x);
+    } else if constexpr (cuda::std::is_same_v<T, __half>) {
+      return rsqrt(__half2float(x));
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+      return rsqrt(__bfloat162float(x));
     } else {
       return rsqrt(x);
     }
@@ -323,14 +323,27 @@ struct Rsqrt {
 struct Tan {
   template <typename T>
   __device__ T operator()(T x) {
-    return tan(x);
+    return cuda::std::tan(x);
   }
 };
 
 struct Tanh {
   template <typename T>
   __device__ T operator()(T x) {
-    return tanh(x);
+    return cuda::std::tanh(x);
+  }
+};
+
+struct ToFP8 {
+  template <typename T>
+  __device__ uint8_t operator()(T x) {
+    return __nv_fp8_e4m3(x).__x;
+  }
+};
+
+struct FromFP8 {
+  __device__ float operator()(uint8_t x) {
+    return float(*(__nv_fp8_e4m3*)(&x));
   }
 };
 

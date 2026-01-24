@@ -30,13 +30,13 @@ def loss_fn(w):
 
 grad_fn = mx.grad(loss_fn)
 
-tic = time.time()
+tic = time.perf_counter()
 for _ in range(num_iters):
     grad = grad_fn(w)
     w = w - lr * grad
     mx.eval(w)
 
-toc = time.time()
+toc = time.perf_counter()
 
 loss = loss_fn(w)
 final_preds = (X @ w) > 0

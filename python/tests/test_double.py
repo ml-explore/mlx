@@ -292,6 +292,15 @@ class TestDouble(mlx_tests.MLXTestCase):
         b = np.array(a)
         self.assertTrue(np.array_equal(a, b))
 
+        a = mx.array([1.0, 2.0], mx.float64)
+        b = a.tolist()
+        self.assertEqual(b, [1.0, 2.0])
+
+    def test_linspace(self):
+        with mx.stream(mx.cpu):
+            vals = mx.linspace(0, math.pi, 2, mx.float64)
+            self.assertEqual(vals.tolist()[1], math.pi)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

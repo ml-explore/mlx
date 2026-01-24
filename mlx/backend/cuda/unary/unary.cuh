@@ -108,6 +108,12 @@ constexpr bool supports_unary_op() {
   if (std::is_same_v<Op, LogicalNot>) {
     return std::is_same_v<In, Out> && std::is_same_v<In, bool>;
   }
+  if (std::is_same_v<Op, ToFP8>) {
+    return std::is_same_v<Out, uint8_t> && is_floating_v<In>;
+  }
+  if (std::is_same_v<Op, FromFP8>) {
+    return std::is_same_v<In, uint8_t> && is_floating_v<Out>;
+  }
   return false;
 }
 
@@ -152,8 +158,8 @@ void unary_op_gpu_inplace(
                 num_blocks,
                 block_dims,
                 0,
-                in.data<InType>(),
-                out.data<OutType>(),
+                gpu_ptr<InType>(in),
+                gpu_ptr<OutType>(out),
                 out.data_size());
           } else {
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
@@ -176,8 +182,8 @@ void unary_op_gpu_inplace(
                 {num_blocks_x, num_blocks_y},
                 block_dims,
                 0,
-                in.data<InType>(),
-                out.data<OutType>(),
+                gpu_ptr<InType>(in),
+                gpu_ptr<OutType>(out),
                 rest,
                 const_param(shape),
                 const_param(strides),
@@ -201,7 +207,9 @@ void unary_op_gpu(
     array& out,
     const char* op,
     const Stream& s) {
-  set_unary_output_data(inputs[0], out);
+  auto& encoder = cu::get_command_encoder(s);
+  set_unary_output_data(
+      inputs[0], out, [&](auto n) { return cu::malloc_async(n, encoder); });
   unary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 

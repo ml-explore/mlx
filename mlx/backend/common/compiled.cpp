@@ -114,7 +114,9 @@ void compiled_allocate_outputs(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
     const std::function<bool(size_t)>& is_constant,
-    bool contiguous) {
+    bool contiguous,
+    const std::function<allocator::Buffer(size_t)>&
+        mallocfn /* = allocator::malloc */) {
   if (contiguous) {
     int o = 0;
     Strides strides;
@@ -128,7 +130,7 @@ void compiled_allocate_outputs(
       // - Donatable
       // - Not a constant
       if (in.itemsize() == outputs[o].itemsize() && !is_scalar(in) &&
-          in.is_donatable() && is_constant(i)) {
+          in.is_donatable() && !is_constant(i)) {
         outputs[o++].copy_shared_buffer(in);
       }
       // Get representative input flags to properly set non-donated outputs
@@ -140,7 +142,7 @@ void compiled_allocate_outputs(
     }
     for (; o < outputs.size(); ++o) {
       outputs[o].set_data(
-          allocator::malloc(data_size * outputs[o].itemsize()),
+          mallocfn(data_size * outputs[o].itemsize()),
           data_size,
           strides,
           flags);
@@ -156,14 +158,14 @@ void compiled_allocate_outputs(
       // - Not a constant
       if (in.flags().row_contiguous && in.size() == outputs[o].size() &&
           in.itemsize() == outputs[o].itemsize() && in.is_donatable() &&
-          is_constant(i)) {
+          !is_constant(i)) {
         outputs[o].copy_shared_buffer(
             in, outputs[o].strides(), in.flags(), in.data_size());
         o++;
       }
     }
     for (; o < outputs.size(); ++o) {
-      outputs[o].set_data(allocator::malloc(outputs[o].nbytes()));
+      outputs[o].set_data(mallocfn(outputs[o].nbytes()));
     }
   }
 }

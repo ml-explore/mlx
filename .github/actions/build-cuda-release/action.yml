@@ -1,0 +1,31 @@
+name: 'Build CUDA wheel'
+description: 'Build CUDA wheel'
+
+inputs:
+  arch:
+    description: 'Platform architecture tag'
+    required: true
+    type: choice
+    options:
+      - x86_64
+      - aarch64
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build package
+      shell: bash
+      env:
+        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON
+      run: |
+        pip install auditwheel build patchelf setuptools
+        python setup.py clean --all
+        MLX_BUILD_STAGE=2 python -m build -w
+
+        auditwheel repair dist/mlx_cuda*.whl \
+          --plat manylinux_2_35_${{ inputs.arch }} \
+          --exclude libcublas* \
+          --exclude libcuda* \
+          --exclude libcudnn* \
+          --exclude libnccl* \
+          --exclude libnvrtc*

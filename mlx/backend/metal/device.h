@@ -265,4 +265,23 @@ Device& device(mlx::core::Device);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
+inline bool is_nax_available() {
+#ifdef MLX_METAL_NO_NAX
+  return false;
+#else
+  auto _check_nax = []() {
+    bool can_use_nax = false;
+    if (__builtin_available(
+            macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+      can_use_nax = true;
+    }
+    can_use_nax &=
+        metal::device(mlx::core::Device::gpu).get_architecture_gen() >= 17;
+    return can_use_nax;
+  };
+  static bool is_nax_available_ = _check_nax();
+  return is_nax_available_;
+#endif
+}
+
 } // namespace mlx::core::metal

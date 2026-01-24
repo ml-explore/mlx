@@ -1,0 +1,24 @@
+name: 'Setup macOS Environment'
+description: 'Install dependencies for macOS builds'
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.10'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Homebrew packages
+      shell: sh
+      run: /opt/homebrew/bin/brew install openmpi
+    
+    - name: Verify MetalToolchain installed
+      shell: bash
+      run: xcodebuild -showComponent MetalToolchain
+
+    - uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniconda-version: "latest"
+        python-version: ${{ inputs.python-version }}

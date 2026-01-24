@@ -1,6 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-// This file must not include any host-only code, utilies that work under both
+// This file must not include any host-only code, utilities that work under both
 // host and device can be put here.
 //
 // See more about the requirements at:
@@ -202,7 +202,7 @@ struct Limits<
   }
 };
 
-// CUDA 11 does not have host side arithmatic operators for half types.
+// CUDA 11 does not have host side arithmetic operators for half types.
 template <typename T>
 struct Limits<
     T,

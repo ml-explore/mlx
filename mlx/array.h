@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "mlx/allocator.h"
+#include "mlx/api.h"
 #include "mlx/dtype.h"
 #include "mlx/event.h"
 #include "mlx/small_vector.h"
@@ -22,7 +23,7 @@ using ShapeElem = int32_t;
 using Shape = SmallVector<ShapeElem>;
 using Strides = SmallVector<int64_t>;
 
-class array {
+class MLX_API array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc
    * object */
 
@@ -56,6 +57,16 @@ class array {
       std::initializer_list<T> data,
       Shape shape,
       Dtype dtype = TypeToDtype<T>());
+
+  /* Build an array from a raw pointer. The constructor will attempt to use the
+   * input data without a copy. The deleter will be called when the array no
+   * longer needs the underlying memory - after the array is destroyed in the
+   * no-copy case and after the copy otherwise. */
+  explicit array(
+      void* data,
+      Shape shape,
+      Dtype dtype,
+      const std::function<void(void*)>& deleter);
 
   /* Build an array from a buffer */
   explicit array(
@@ -111,7 +122,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto shape(int dim) const {
-    return shape().at(dim < 0 ? dim + ndim() : dim);
+    return shape().at(dim < 0 ? dim + static_cast<int>(ndim()) : dim);
   }
 
   /** The strides of the array. */
@@ -125,7 +136,7 @@ class array {
    *  This function supports negative indexing and provides
    *  bounds checking. */
   auto strides(int dim) const {
-    return strides().at(dim < 0 ? dim + ndim() : dim);
+    return strides().at(dim < 0 ? dim + static_cast<int>(ndim()) : dim);
   }
 
   /** Get the arrays data type. */
@@ -143,7 +154,7 @@ class array {
   template <typename T>
   T item() const;
 
-  struct ArrayIterator {
+  struct MLX_API ArrayIterator {
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = size_t;
     using value_type = const array;
@@ -294,6 +305,11 @@ class array {
     return array_desc_->siblings;
   }
 
+  /** The array's position in the sibling list. */
+  int sibling_position() const {
+    return array_desc_->position;
+  }
+
   void set_siblings(std::vector<array> siblings, uint16_t position) {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;
@@ -349,15 +365,23 @@ class array {
     return array_desc_->data;
   }
 
-  // Return a raw pointer to the arrays data
+  // Return a raw pointer to the arrays data. This function may do a copy if
+  // the underlying buffer is not accessible on the CPU. When accessing the
+  // data for GPU kernels, be sure to use the correct method / function for the
+  // given backend to access the GPU pointer.
   template <typename T>
   T* data() {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return reinterpret_cast<T*>(
+        (static_cast<char*>(buffer().raw_ptr()) + array_desc_->offset));
   }
 
   template <typename T>
   const T* data() const {
-    return static_cast<T*>(array_desc_->data_ptr);
+    return const_cast<array&>(*this).data<T>();
+  }
+
+  int64_t offset() const {
+    return array_desc_->offset;
   }
 
   enum Status {
@@ -426,7 +450,7 @@ class array {
       const Strides& strides,
       Flags flags,
       size_t data_size,
-      size_t offset = 0);
+      int64_t offset = 0);
 
   void copy_shared_buffer(const array& other);
 
@@ -441,7 +465,7 @@ class array {
   template <typename It>
   void init(const It src);
 
-  struct ArrayDesc {
+  struct MLX_API ArrayDesc {
     Shape shape;
     Strides strides;
     size_t size;
@@ -461,8 +485,8 @@ class array {
     // can share the underlying data buffer.
     std::shared_ptr<Data> data;
 
-    // Properly offset data pointer
-    void* data_ptr{nullptr};
+    // Offset from beginning of data pointer
+    int64_t offset{0};
 
     // The size in elements of the data buffer the array accesses
     size_t data_size;

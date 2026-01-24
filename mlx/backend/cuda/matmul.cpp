@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
+#include "mlx/backend/cuda/gemms/grouped_gemm.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
 
@@ -26,6 +27,38 @@ check_transpose(cu::CommandEncoder& enc, const Stream& s, const array& arr) {
     array arr_copy = contiguous_copy_gpu(arr, s);
     enc.add_temporary(arr_copy);
     return std::make_tuple(false, arr.shape(-1), arr_copy);
+  }
+}
+
+std::tuple<bool, int64_t, array>
+ensure_batch_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
+  if (x.flags().row_contiguous) {
+    return std::make_tuple(false, x.strides(-2), x);
+  }
+
+  bool rc = true;
+  for (int i = 0; i < x.ndim() - 3; i++) {
+    rc &= (x.strides(i + 1) * x.shape(i)) == x.strides(i);
+  }
+  if (rc) {
+    return check_transpose(encoder, s, x);
+  }
+
+  array x_copy = contiguous_copy_gpu(x, s);
+  encoder.add_temporary(x_copy);
+  return std::make_tuple(false, x_copy.strides(-2), x_copy);
+}
+
+array ensure_row_contiguous(
+    const array& x,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    encoder.add_temporary(x_copy);
+    return x_copy;
+  } else {
+    return x;
   }
 }
 
@@ -93,10 +126,48 @@ void gemm_and_bias(
       a_batch_strides.back(),
       b_batch_strides.back());
   if (bias) {
+    if (a.dtype() == complex64) {
+      throw std::runtime_error(
+          "[gemm_and_bias] complex64 bias epilogue isn’t supported in cublasLtMatmul.");
+    }
     gemm.set_bias(encoder, *bias);
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
+}
+
+void gather_mm_rhs(
+    const array& a_,
+    const array& b_,
+    const array& indices_,
+    array& out,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  if (a_.size() / a_.shape(-2) / a_.shape(-1) != indices_.size()) {
+    throw std::runtime_error("[gather_mm] Broadcasting lhs is not supported.");
+  }
+
+  int group_count = b_.size() / b_.shape(-1) / b_.shape(-2);
+  if (group_count > 1024) {
+    throw std::runtime_error(
+        "[gather_mm] Group count can not be larger than 1024.");
+  }
+
+  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_, encoder, s);
+  auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_, encoder, s);
+  auto indices = ensure_row_contiguous(indices_, encoder, s);
+
+  cutlass_grouped_gemm_unaligned(
+      a_transposed,
+      lda,
+      b_transposed,
+      ldb,
+      group_count,
+      a,
+      b,
+      indices,
+      out,
+      encoder);
 }
 
 } // namespace
@@ -117,7 +188,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
@@ -157,8 +228,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Dispatch to GEMM with epilogue or AddMM
 
-  if (beta_ == 1 && c.strides(-1) == 1 && c.data_size() == out.shape(-1)) {
-    out.set_data(allocator::malloc(out.nbytes()));
+  if (beta_ == 1 && a.dtype() != complex64 && c.strides(-1) == 1 &&
+      c.data_size() == out.shape(-1)) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
     gemm_and_bias(
         encoder,
         M,
@@ -182,10 +254,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto sty = c.strides()[c.ndim() - 1];
     if (sty == 1 && stx == c.shape(-1)) {
       ldc = stx;
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
     } else if (sty == 1 && stx == 0) {
       ldc = 0;
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(cu::malloc_async(out.nbytes(), encoder));
     } else {
       // Copy C into out and set C to out
       ldc = c.shape(-1);
@@ -247,6 +319,55 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       c_batch_strides,
       alpha_,
       beta_);
+}
+
+void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GatherMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 4);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  // Return 0s if either input is empty.
+  if (a.size() == 0 || b.size() == 0) {
+    array zero(0, a.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  // Extract shapes from inputs.
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  // We are walking a in order and b is also in order so we can batch up the
+  // matmuls and reuse reading a and b.
+  if (M == 1 && right_sorted_ == true) {
+    gather_mm_rhs(a, b, rhs_indices, out, encoder, s);
+    return;
+  }
+
+  auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
+  auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
+  auto use_gemv = cu::can_use_gemv(M, N, K, transposed_a, transposed_b);
+  if (M == 1 && use_gemv) {
+    gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
+    return;
+  }
+
+  if (N == 1 && use_gemv) {
+    gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
+    return;
+  }
+
+  throw std::runtime_error("NYI");
 }
 
 } // namespace mlx::core

@@ -18,8 +18,8 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(mx.set_cache_limit(old_limit), old_limit)
 
         old_limit = mx.set_memory_limit(10)
-        self.assertTrue(mx.set_memory_limit(old_limit), 10)
-        self.assertTrue(mx.set_memory_limit(old_limit), old_limit)
+        self.assertEqual(mx.set_memory_limit(old_limit), 10)
+        self.assertEqual(mx.set_memory_limit(old_limit), old_limit)
 
         # Query active and peak memory
         a = mx.zeros((4096,))
@@ -57,6 +57,20 @@ class TestMemory(mlx_tests.MLXTestCase):
         max_size = mx.metal.device_info()["max_recommended_working_set_size"]
         with self.assertRaises(ValueError):
             mx.set_wired_limit(max_size + 10)
+
+    def test_active_memory_count(self):
+        mx.synchronize()
+        mx.clear_cache()
+        init_mem = mx.get_active_memory()
+        a = mx.zeros((128, 128))
+        mx.eval(a)
+        mx.synchronize()
+        del a
+        a = mx.zeros((90, 128))
+        mx.eval(a)
+        mx.synchronize()
+        del a
+        self.assertEqual(init_mem, mx.get_active_memory())
 
 
 if __name__ == "__main__":

@@ -1,9 +1,14 @@
+// NCCL distributed support currently requires Unix socket APIs
+// TODO: Add Windows Winsock2 support for Windows builds
+#ifndef _WIN32
 #include <arpa/inet.h>
-#include <cuda_runtime.h>
-#include <nccl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
+
+#include <cuda_runtime.h>
+#include <nccl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,6 +25,9 @@
 #include "mlx/utils.h"
 
 namespace mlx::core::distributed::nccl {
+
+// Can be tuned with MLX_NCCL_TIMEOUT
+constexpr int nccl_timeout = 300000; // miliseconds
 
 #define CHECK_CUDA(cmd)              \
   do {                               \
@@ -90,6 +98,7 @@ void dispatch_dtype(const array& arr, F&& f) {
   });
 }
 
+#ifndef _WIN32
 inline void sendAll(int sock, const void* buf, size_t len) {
   const char* ptr = reinterpret_cast<const char*>(buf);
   while (len > 0) {
@@ -115,7 +124,9 @@ inline void recvAll(int sock, void* buf, size_t len) {
     len -= rec;
   }
 }
+#endif // _WIN32
 
+#ifndef _WIN32
 inline void bootstrap_unique_id(
     ncclUniqueId& id,
     int rank,
@@ -181,8 +192,9 @@ inline void bootstrap_unique_id(
     close(sock);
 
   } else {
-    // Here just wanted to make show that rank 0 has enough time to bind
-    // so we will retry to connect until max attempts
+    // Here we want to make sure that rank 0 has enough time to bind
+    // so we will retry to connect until elapsed time exceeds nccl_timeout
+    // this is particularity important for multinode setup
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -200,32 +212,41 @@ inline void bootstrap_unique_id(
     memcpy(&serv.sin_addr, he->h_addr_list[0], he->h_length);
     serv.sin_port = htons(port);
 
-    const int max_retries = 30;
-    int attempt = 0;
+    const int timeout_ms = env::nccl_timeout(nccl_timeout);
     bool connected = false;
 
-    bool do_log = std::getenv("NCCL_DEBUG") == "INFO";
-    for (attempt = 0; attempt < max_retries; ++attempt) {
+    const char* dbg = std::getenv("NCCL_DEBUG");
+    bool do_log = (dbg && std::string(dbg) == "INFO");
+
+    auto start = std::chrono::steady_clock::now();
+    int attempt = 0;
+
+    while (true) {
+      auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+      if (elapsed_ms > timeout_ms)
+        break;
       if (connect(sock, reinterpret_cast<sockaddr*>(&serv), sizeof(serv)) ==
           0) {
         connected = true;
         if (do_log) {
-          std::cout << "[Rank " << rank
-                    << "] Connected successfully on attempt " << attempt + 1
-                    << std::endl;
+          std::cout << "[Rank " << rank << "] Connected successfully after "
+                    << elapsed_ms << " miliseconds" << std::endl;
           break;
         }
       }
       if (errno != ECONNREFUSED) {
         break;
       }
+      ++attempt;
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     if (!connected) {
       std::ostringstream msg;
-      msg << "[Rank " << rank << "] connect() failed after " << attempt
-          << " retries: " << strerror(errno);
+      msg << "[Rank " << rank << "] connect() failed after " << timeout_ms
+          << " milliseconds and " << attempt << " retries: " << strerror(errno);
       close(sock);
       throw std::runtime_error(msg.str());
     }
@@ -233,6 +254,16 @@ inline void bootstrap_unique_id(
     close(sock);
   }
 }
+#else // _WIN32
+inline void bootstrap_unique_id(
+    ncclUniqueId& id,
+    int rank,
+    int size,
+    const std::string& initMethod) {
+  throw std::runtime_error(
+      "[nccl] Distributed NCCL is not yet supported on Windows");
+}
+#endif // _WIN32
 
 } // namespace detail
 
@@ -256,7 +287,6 @@ class NCCLGroup : public GroupImpl {
 
   ~NCCLGroup() {
     ncclCommDestroy(comm_);
-    ncclGroupEnd();
     initialized_ = false;
   }
 
@@ -284,8 +314,17 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error(
-        "[nccl] All gather not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclAllGather(
+          gpu_ptr<T>(input),
+          gpu_ptr<T>(output),
+          input.size(),
+          dt,
+          comm_,
+          encoder.stream()));
+    });
   }
 
   void send(const array& input, int dst, Stream stream) override {
@@ -297,11 +336,24 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All max not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMax);
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All min not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMin);
+    });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      reduce_scatter_impl<T>(input, output, stream, dt, ncclSum);
+    });
   }
 
   template <typename T>
@@ -314,9 +366,28 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclAllReduce(
-        input.data<T>(),
-        output.data<T>(),
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
         input.size(),
+        dt,
+        op,
+        comm_,
+        encoder.stream()));
+  }
+
+  template <typename T>
+  void reduce_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclReduceScatter(
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
+        output.size(),
         dt,
         op,
         comm_,

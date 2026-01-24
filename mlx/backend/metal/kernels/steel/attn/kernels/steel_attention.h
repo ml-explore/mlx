@@ -1,5 +1,7 @@
 // Copyright © 2024-25 Apple Inc.
 
+#include "mlx/backend/metal/kernels/steel/attn/attn.h"
+
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -347,7 +349,7 @@ template <
           MMAFrag_mask_t::load_safe(
               mfrag,
               mask,
-              int(mask_params->M_strides[2]),
+              int64_t(mask_params->M_strides[2]),
               Int<1>{},
               params->qL,
               params->kL,

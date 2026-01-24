@@ -23,8 +23,7 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
   constexpr float eps = 1e-7;
   constexpr int simd_size = WARP_SIZE;
   constexpr float n_bins = (1 << bits) - 1;
@@ -141,8 +140,7 @@ __global__ void affine_dequantize(
   auto tidx = block_idx.x * block_size.x + idx_in_block.x;
   auto tidy = block_idx.y * block_size.y + idx_in_block.y;
 
-  auto grid_dim_x =
-      cg::this_grid().dim_blocks().x * cg::this_grid().block_index().x;
+  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
   constexpr int pack_factor = get_pack_factor<bits, 8>();
   constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
@@ -210,7 +208,7 @@ __global__ void affine_dequantize(
         bias;
     out[3] = static_cast<T>((w[2] >> 2) & 0x3f) * scale + bias;
   } else {
-    uint val = w[offset];
+    uint32_t val = w[offset];
 #pragma clang loop unroll(full)
     for (int i = 0; i < pack_factor; i++) {
       uint8_t d;
@@ -262,10 +260,10 @@ void affine_quantize(
             num_blocks,
             block_dims,
             0,
-            w.data<T>(),
-            wq.data<uint8_t>(),
-            scales.data<T>(),
-            biases.data<T>(),
+            gpu_ptr<T>(w),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<T>(scales),
+            gpu_ptr<T>(biases),
             w.size());
       });
     });
@@ -306,7 +304,7 @@ void affine_dequantize(
   enc.set_input_array(scales);
   enc.set_input_array(biases);
   enc.set_output_array(w);
-  dispatch_float_types(w.dtype(), "affine_quantize", [&](auto type_tag) {
+  dispatch_float_types(w.dtype(), "affine_dequantize", [&](auto type_tag) {
     dispatch_groups(group_size_, [&](auto group_size) {
       dispatch_bits(bits_, [&](auto bits) {
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
@@ -318,10 +316,10 @@ void affine_dequantize(
             num_blocks,
             block_dims,
             0,
-            wq.data<uint8_t>(),
-            scales.data<T>(),
-            biases.data<T>(),
-            w.data<T>(),
+            gpu_ptr<uint8_t>(wq),
+            gpu_ptr<T>(scales),
+            gpu_ptr<T>(biases),
+            gpu_ptr<T>(w),
             w.size());
       });
     });

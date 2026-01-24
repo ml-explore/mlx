@@ -45,9 +45,7 @@
 INSTANTIATE_LAPACK_REAL(geqrf)
 INSTANTIATE_LAPACK_REAL(orgqr)
 INSTANTIATE_LAPACK_REAL(syevd)
-INSTANTIATE_LAPACK_REAL(geev)
 INSTANTIATE_LAPACK_REAL(potrf)
-INSTANTIATE_LAPACK_REAL(gesdd)
 INSTANTIATE_LAPACK_REAL(getrf)
 INSTANTIATE_LAPACK_REAL(getri)
 INSTANTIATE_LAPACK_REAL(trtri)
@@ -63,3 +61,20 @@ INSTANTIATE_LAPACK_REAL(trtri)
   }
 
 INSTANTIATE_LAPACK_COMPLEX(heevd)
+
+#define INSTANTIATE_LAPACK_ALL(FUNC)                                \
+  template <typename T, typename... Args>                           \
+  void FUNC(Args... args) {                                         \
+    if constexpr (std::is_same_v<T, float>) {                       \
+      MLX_LAPACK_FUNC(s##FUNC)(std::forward<Args>(args)...);        \
+    } else if constexpr (std::is_same_v<T, double>) {               \
+      MLX_LAPACK_FUNC(d##FUNC)(std::forward<Args>(args)...);        \
+    } else if constexpr (std::is_same_v<T, std::complex<float>>) {  \
+      MLX_LAPACK_FUNC(c##FUNC)(std::forward<Args>(args)...);        \
+    } else if constexpr (std::is_same_v<T, std::complex<double>>) { \
+      MLX_LAPACK_FUNC(z##FUNC)(std::forward<Args>(args)...);        \
+    }                                                               \
+  }
+
+INSTANTIATE_LAPACK_ALL(geev)
+INSTANTIATE_LAPACK_ALL(gesdd)

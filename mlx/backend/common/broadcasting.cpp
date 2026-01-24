@@ -6,7 +6,7 @@ namespace mlx::core {
 
 void broadcast(const array& in, array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
   Strides strides(out.ndim(), 0);

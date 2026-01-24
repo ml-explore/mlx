@@ -58,12 +58,19 @@ void ternary_op_gpu_inplace(
     if (large) {
       kernel_name += "large";
     }
-  } else if (large) {
-    kernel_name = "v2";
-  } else if (work_per_thread > 1) {
-    kernel_name = "vn";
   } else {
-    kernel_name = "v";
+    if (topt == TernaryOpType::VectorScalarVector) {
+      kernel_name = "sv";
+    } else if (topt == TernaryOpType::VectorVectorScalar) {
+      kernel_name = "vs";
+    } else {
+      kernel_name = "v";
+    }
+    if (large) {
+      kernel_name += "2";
+    } else if (work_per_thread > 1) {
+      kernel_name += "n";
+    }
   }
   concatenate(kernel_name, "_", op, type_to_name(b));
 

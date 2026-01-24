@@ -21,12 +21,12 @@ constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto get_metal_version() {
   auto get_metal_version_ = []() {
-    if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
+    if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
+      return MTL::LanguageVersion4_0;
+    } else if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
       return MTL::LanguageVersion3_2;
-    } else if (__builtin_available(macOS 14, iOS 17, tvOS 17, visionOS 1, *)) {
-      return MTL::LanguageVersion3_1;
     } else {
-      return MTL::LanguageVersion3_0;
+      return MTL::LanguageVersion3_1;
     }
   };
   static auto metal_version_ = get_metal_version_();
@@ -72,6 +72,19 @@ MTL::Library* try_load_bundle(
   }
   return nullptr;
 }
+
+MTL::Library* try_load_framework(
+    MTL::Device* device,
+    NS::URL* url,
+    const std::string& lib_name) {
+  std::string resource_path = std::string(url->fileSystemRepresentation()) +
+      "/" + lib_name + ".metallib";
+  auto [lib, error] = load_library_from_path(device, resource_path.c_str());
+  if (lib) {
+    return lib;
+  }
+  return nullptr;
+}
 #endif
 
 // Firstly, search for the metallib in the same path as this binary
@@ -101,6 +114,19 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
     library = try_load_bundle(device, bundle->resourceURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
+    }
+  }
+  // if SWIFTPM_BUNDLE is a framework identifier, try loading from that
+  auto frameworks = NS::Bundle::allFrameworks();
+  for (int i = 0, c = (int)frameworks->count(); i < c; i++) {
+    const auto bundle = reinterpret_cast<NS::Bundle*>(frameworks->object(i));
+    const auto identifier = bundle->bundleIdentifier();
+    if (identifier != nullptr &&
+        !strcmp(identifier->utf8String(), SWIFTPM_BUNDLE)) {
+      library = try_load_framework(device, bundle->resourceURL(), lib_name);
+      if (library != nullptr) {
+        return {library, nullptr};
+      }
     }
   }
 #endif
@@ -198,7 +224,7 @@ MTL::Library* load_library(
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
       << "We attempted to load it from <" << current_binary_dir() << "/"
-      << lib_name << ".metallib" << ">";
+      << lib_name << ".metallib>";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";
 #endif
@@ -235,10 +261,7 @@ void CommandEncoder::set_input_array(
   needs_barrier_ =
       needs_barrier_ | (prev_outputs_.find(r_buf) != prev_outputs_.end());
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-  auto base_offset = a.data<char>() -
-      static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
-  base_offset += offset;
-  enc_->setBuffer(a_buf, base_offset, idx);
+  enc_->setBuffer(a_buf, a.offset() + offset, idx);
 }
 
 void CommandEncoder::set_output_array(
@@ -359,11 +382,8 @@ MTL::CommandQueue* Device::get_queue(Stream stream) {
 
 bool Device::command_buffer_needs_commit(int index) {
   auto& stream = get_stream_(index);
-  if (stream.buffer_ops > max_ops_per_buffer_ ||
-      (stream.buffer_sizes >> 20) > max_mb_per_buffer_) {
-    return true;
-  }
-  return false;
+  return (stream.buffer_ops > max_ops_per_buffer_) ||
+      ((stream.buffer_sizes >> 20) > max_mb_per_buffer_);
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
@@ -422,10 +442,8 @@ void Device::end_encoding(int index) {
     auto& enc = *stream.encoder;
     // Remove temporaries from inputs and outputs
     for (auto& t : stream.temporaries) {
-      if (t.data<void>() != nullptr) {
-        enc.outputs().erase(t.buffer().ptr());
-        enc.inputs().erase(t.buffer().ptr());
-      }
+      enc.outputs().erase(t.buffer().ptr());
+      enc.inputs().erase(t.buffer().ptr());
     }
 
     // Keep references to the fences we waited on and put them
@@ -471,6 +489,10 @@ void Device::end_encoding(int index) {
 CommandEncoder& Device::get_command_encoder(int index) {
   auto& stream = get_stream_(index);
   if (stream.encoder == nullptr) {
+    // Ensure there is an active command buffer
+    if (stream.buffer == nullptr) {
+      get_command_buffer(index);
+    }
     stream.encoder = std::make_unique<CommandEncoder>(stream);
     stream.fence = std::make_shared<Fence>(device_->newFence());
   }
@@ -507,6 +529,11 @@ MTL::Library* Device::build_library_(const std::string& source_string) {
   auto options = MTL::CompileOptions::alloc()->init();
   options->setFastMathEnabled(false);
   options->setLanguageVersion(get_metal_version());
+#ifndef NDEBUG
+  if (options->languageVersion() >= MTL::LanguageVersion3_2) {
+    options->setEnableLogging(true);
+  }
+#endif
   auto mtl_lib = device_->newLibrary(ns_code, options, &error);
   options->release();
 
@@ -724,7 +751,7 @@ MTL::ComputePipelineState* Device::get_kernel_(
   mtl_linked_funcs->release();
 
   // Add kernel to cache
-  auto inserted = kernel_map_.insert({hash_name, kernel});
+  kernel_map_.insert({hash_name, kernel});
 
   return kernel;
 }

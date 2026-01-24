@@ -64,7 +64,7 @@ array array::unsafe_weak_copy(const array& other) {
       other.strides(),
       other.flags(),
       [](auto) {});
-  cpy.array_desc_->data_ptr = other.array_desc_->data_ptr;
+  cpy.array_desc_->offset = other.array_desc_->offset;
   return cpy;
 }
 
@@ -80,6 +80,28 @@ array::array(std::initializer_list<int> data, Dtype dtype)
           Shape{static_cast<ShapeElem>(data.size())},
           dtype)) {
   init(data.begin());
+}
+
+array::array(
+    void* data,
+    Shape shape,
+    Dtype dtype,
+    const std::function<void(void*)>& deleter)
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
+  auto buffer = allocator::make_buffer(data, nbytes());
+  if (buffer.ptr() == nullptr) {
+    set_data(allocator::malloc(nbytes()));
+    auto ptr = static_cast<char*>(data);
+    std::copy(ptr, ptr + nbytes(), this->data<char>());
+    deleter(data);
+  } else {
+    auto wrapped_deleter = [deleter](allocator::Buffer buffer) {
+      auto ptr = buffer.raw_ptr();
+      allocator::release(buffer);
+      return deleter(ptr);
+    };
+    set_data(buffer, std::move(wrapped_deleter));
+  }
 }
 
 /* Build an array from a shared buffer */
@@ -141,7 +163,7 @@ bool array::is_tracer() const {
 
 void array::set_data(allocator::Buffer buffer, Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
-  array_desc_->data_ptr = buffer.raw_ptr();
+  array_desc_->offset = 0;
   array_desc_->data_size = size();
   array_desc_->flags.contiguous = true;
   array_desc_->flags.row_contiguous = true;
@@ -156,7 +178,7 @@ void array::set_data(
     Flags flags,
     Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
-  array_desc_->data_ptr = buffer.raw_ptr();
+  array_desc_->offset = 0;
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);
   array_desc_->flags = flags;
@@ -167,14 +189,13 @@ void array::copy_shared_buffer(
     const Strides& strides,
     Flags flags,
     size_t data_size,
-    size_t offset /* = 0 */) {
+    int64_t offset /* = 0 */) {
   array_desc_->data = other.array_desc_->data;
   array_desc_->strides = strides;
   array_desc_->flags = flags;
   array_desc_->data_size = data_size;
-  auto char_offset = sizeof(char) * itemsize() * offset;
-  array_desc_->data_ptr = static_cast<void*>(
-      static_cast<char*>(other.array_desc_->data_ptr) + char_offset);
+  array_desc_->offset =
+      sizeof(char) * itemsize() * offset + other.array_desc_->offset;
 }
 
 void array::copy_shared_buffer(const array& other) {
@@ -241,8 +262,8 @@ array::ArrayDesc::ArrayDesc(
     std::vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
-      status(Status::unscheduled),
       primitive(std::move(primitive)),
+      status(Status::unscheduled),
       inputs(std::move(inputs)) {
   init();
 }

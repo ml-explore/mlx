@@ -77,6 +77,19 @@ void dispatch_float_types(Dtype dt, std::string_view tag, F&& f) {
 }
 
 template <typename F>
+void dispatch_inexact_types(Dtype dt, std::string_view tag, F&& f) {
+  switch (dt) {
+    MLX_INTERNAL_DTYPE_SWITCH_FLOATS();
+    MLX_INTERNAL_DTYPE_SWITCH_CASE(complex64, complex64_t);
+    default:
+      std::ostringstream msg;
+      msg << tag << " Only inexact (float/complex) types supported but " << dt
+          << " was provided";
+      throw std::invalid_argument(msg.str());
+  }
+}
+
+template <typename F>
 void dispatch_int_float_types(Dtype dt, std::string_view tag, F&& f) {
   switch (dt) {
     MLX_INTERNAL_DTYPE_SWITCH_INTS();

@@ -127,4 +127,30 @@ class Recv : public DistPrimitive {
   int src_;
 };
 
+class ReduceScatter : public DistPrimitive {
+ public:
+  enum ReduceType { Sum, Min, Max };
+  ReduceScatter(Stream stream, Group group, ReduceType reduce_type)
+      : DistPrimitive(stream, group), reduce_type_(reduce_type) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  const char* name() const override {
+    switch (reduce_type_) {
+      case Sum:
+        return "Sum ReduceScatter";
+      case Min:
+        return "Min ReduceScatter";
+      case Max:
+        return "Max ReduceScatter";
+    }
+    return "<unknwon ReduceScatter>";
+  }
+
+ private:
+  ReduceType reduce_type_;
+};
 } // namespace mlx::core::distributed

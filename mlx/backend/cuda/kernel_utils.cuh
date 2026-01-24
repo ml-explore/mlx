@@ -1,14 +1,15 @@
 // Copyright © 2025 Apple Inc.
 
-// This file includes host-only utilies for writing CUDA kernels, the difference
-// from backend/cuda/device/utils.cuh is that the latter file only include
-// device-only code.
+// This file includes host-only utilities for writing CUDA kernels, the
+// difference from backend/cuda/device/utils.cuh is that the latter file only
+// include device-only code.
 
 #pragma once
 
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuda.h>
@@ -120,19 +121,28 @@ dim3 get_2d_grid_dims(
     size_t divisor);
 std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2);
 
-// Get the num_blocks and block_dims that maximize occupancy for |kernel|,
-// assuming each thread handles |work_per_thread| elements of |arr|.
-std::tuple<dim3, uint> get_launch_args(
+// Get the num_blocks and block_dims assuming each thread handles
+// |work_per_thread| elements of |arr|.
+std::tuple<dim3, uint32_t> get_launch_args(
     size_t size,
     const Shape& shape,
     const Strides& strides,
     bool large,
-    int work_per_thread = 1);
+    int work_per_thread = 1,
+    uint32_t max_block_dim = 1024);
 
-inline std::tuple<dim3, uint>
-get_launch_args(const array& arr, bool large, int work_per_thread = 1) {
+inline std::tuple<dim3, uint32_t> get_launch_args(
+    const array& arr,
+    bool large,
+    int work_per_thread = 1,
+    uint32_t max_block_dim = 1024) {
   return get_launch_args(
-      arr.size(), arr.shape(), arr.strides(), large, work_per_thread);
+      arr.size(),
+      arr.shape(),
+      arr.strides(),
+      large,
+      work_per_thread,
+      max_block_dim);
 }
 
 } // namespace mlx::core
