@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
 #include <sstream>
 
@@ -8,7 +8,6 @@
 #include <nanobind/stl/variant.h>
 
 #include "mlx/device.h"
-#include "mlx/device_info.h"
 #include "mlx/utils.h"
 
 namespace mx = mlx::core;
@@ -69,24 +68,29 @@ void init_device(nb::module_& m) {
   m.def(
       "device_count",
       &mx::device_count,
+      "device_type"_a,
       R"pbdoc(
-      Get the number of available GPU devices.
+      Get the number of available devices for the given device type.
+
+      Args:
+          device_type (DeviceType): The type of device to query (cpu or gpu).
 
       Returns:
-          int: Number of GPU devices.
+          int: Number of devices.
       )pbdoc");
   m.def(
       "device_info",
       &mx::device_info,
-      nb::arg("device_index") = 0,
+      nb::arg("d") = mx::default_device(),
       R"pbdoc(
-      Get information about a GPU device.
+      Get information about a device.
 
       Returns a dictionary with device properties. Available keys depend
-      on the backend. Common keys include ``device_name`` and ``architecture``.
+      on the backend and device type. Common keys include ``device_name``,
+      ``architecture``, and ``total_memory`` (or ``memory_size``).
 
       Args:
-          device_index (int): Device index (default 0).
+          d (Device): The device to query (defaults to the default device).
 
       Returns:
           dict: Device information.
