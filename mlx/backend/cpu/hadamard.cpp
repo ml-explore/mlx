@@ -96,7 +96,7 @@ void Hadamard::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (in.flags().row_contiguous && in.is_donatable()) {
     out.copy_shared_buffer(in);
   } else {
-    copy(
+    copy_cpu(
         in,
         out,
         in.flags().row_contiguous ? CopyType::Vector : CopyType::General,

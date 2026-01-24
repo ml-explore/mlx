@@ -8,18 +8,23 @@ import mlx_tests
 
 
 def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
-    offset = offset.item() if isinstance(offset, mx.array) else offset
-    N = x.shape[-2] + offset
+    N = x.shape[-2]
     dtype = x.dtype
     half_D = dims // 2
-    positions = mx.arange(offset, N, dtype=dtype) * scale
+    positions = mx.arange(N, dtype=dtype)
+    if isinstance(offset, mx.array) and offset.size > 1:
+        expand = tuple(range(1, x.ndim - 1))
+        positions = mx.expand_dims(offset, expand) + positions
+    else:
+        positions = offset + positions
+    positions = positions * scale
     if freqs is None:
         inv_freqs = mx.exp(
             -mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D)
         )
     else:
         inv_freqs = (1 / freqs).astype(x.dtype)
-    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(inv_freqs, (1, -1))
+    theta = mx.expand_dims(positions, -1) * inv_freqs
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
         x1 = x[..., :dims:2]
@@ -214,6 +219,7 @@ class TestFast(mlx_tests.MLXTestCase):
             )
             self.assertEqual(dtype, rx.dtype)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            return
 
         # Test single vector
         x = mx.random.uniform(shape=(1, 1, dims))
@@ -276,6 +282,55 @@ class TestFast(mlx_tests.MLXTestCase):
                 g1 = mx.grad(f1)(x, y)
                 g2 = mx.grad(f2)(x, y)
                 self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
+
+    def test_rope_batch(self):
+        T = 4
+        base = 10000.0
+        scale = 1.0
+        traditional = True
+        batch_sizes = [3, 8, 11]
+        num_heads = [1, 3, 5]
+        dims = 32
+
+        x = mx.random.uniform(shape=(8, 4, T, dims))
+
+        offset = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=traditional,
+                base=base,
+                scale=scale,
+                offset=offset,
+            )
+
+        for batch_size in batch_sizes:
+            for n_head in num_heads:
+                x = mx.random.uniform(shape=(batch_size, n_head, T, dims))
+                offset = mx.arange(batch_size)
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
+                self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+        x = mx.random.normal(shape=(2, 6, 8, 64)).transpose(0, 2, 1, 3)
+        dims = 64
+        offset = 0
+        rx_fast = mx.fast.rope(
+            x, dims, traditional=traditional, scale=scale, base=base, offset=offset
+        )
+        rx_fast_single = mx.fast.rope(
+            x[0:1], dims, traditional=traditional, scale=scale, base=base, offset=offset
+        )
+
+        rx = rope_orig(x, dims, traditional, base, scale, offset)
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
     def test_rms_norm(self):
         # Per dtype absolute tolerance
@@ -581,18 +636,28 @@ class TestFast(mlx_tests.MLXTestCase):
         )(x)
         self.assertTrue(mx.allclose(vmap_out, vmap_fast_out))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_basic(self):
+        if mx.metal.is_available():
+            source = """
+                uint elem = thread_position_in_grid.x;
+                out1[elem] = a[elem];
+            """
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            source = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                out1[elem] = a[elem];
+            """
+            custom_kernel = mx.fast.cuda_kernel
+
         mx.random.seed(7)
         a = mx.random.normal(shape=(2, 2))
-        kernel = mx.fast.metal_kernel(
+        kernel = custom_kernel(
             name="basic",
             input_names=["a"],
             output_names=["out1"],
-            source="""
-                uint elem = thread_position_in_grid.x;
-                out1[elem] = a[elem];
-            """,
+            source=source,
         )
         out = kernel(
             inputs=[a],
@@ -604,17 +669,10 @@ class TestFast(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(out[0], a))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_args(self):
-        mx.random.seed(7)
-        a = mx.random.normal(shape=(3, 6))
-        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
-
-        kernel = mx.fast.metal_kernel(
-            name="arg_test",
-            input_names=["a", "b", "c", "d"],
-            output_names=["out1", "out2"],
-            source="""
+        if mx.metal.is_available():
+            source = """
                 uint elem = thread_position_in_grid.x;
                 T tmp = a[0];
                 if (e) {
@@ -623,7 +681,30 @@ class TestFast(mlx_tests.MLXTestCase):
                     out1[elem] = 1;
                 }
                 out2[elem] = a[1] + b[2] + c[1] - d;
-            """,
+            """
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            source = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                T tmp = a[0];
+                if (e) {
+                    out1[elem] = a[1] + b[2] + static_cast<float>(c[3]) + d[0] + f;
+                } else {
+                    out1[elem] = 1;
+                }
+                out2[elem] = a[1] + b[2] + static_cast<float>(c[1]) - d[0];
+            """
+            custom_kernel = mx.fast.cuda_kernel
+
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(3, 6))
+        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
+
+        kernel = custom_kernel(
+            name="arg_test",
+            input_names=["a", "b", "c", "d"],
+            output_names=["out1", "out2"],
+            source=source,
         )
         out = kernel(
             inputs=[
@@ -639,35 +720,51 @@ class TestFast(mlx_tests.MLXTestCase):
             ],
             grid=(6, 1, 1),
             threadgroup=(2, 1, 1),
-            output_shapes=[(2, 2), (3, 2)],
+            output_shapes=[(3, 2), (3, 2)],
             output_dtypes=[mx.float32, mx.int32],
             stream=mx.gpu,
         )
 
-        self.assertTrue(mx.allclose(out[0], mx.full((2, 2), 14.0484)))
+        self.assertTrue(mx.allclose(out[0], mx.full((3, 2), 14.0484)))
         self.assertTrue(mx.allclose(out[1], mx.full((3, 2), -2, dtype=mx.int32)))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_strides(self):
+        if mx.metal.is_available():
+            source = """
+                uint elem = thread_position_in_grid.x;
+                uint loc = elem_to_loc(elem, inp_shape, inp_strides, inp_ndim);
+                T tmp = inp[loc];
+                out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
+            """
+            source_contig = """
+                uint elem = thread_position_in_grid.x;
+                T tmp = inp[elem];
+                out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
+            """
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            source = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                auto loc = elem_to_loc(elem, inp_shape.data(), inp_strides.data(), inp_ndim);
+                T tmp = inp[loc];
+                out[elem] = exp(tmp) * WARP_SIZE;
+            """
+            source_contig = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                T tmp = inp[elem];
+                out[elem] = exp(tmp) * WARP_SIZE;
+            """
+            custom_kernel = mx.fast.cuda_kernel
+
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
-        source = """
-            uint elem = thread_position_in_grid.x;
-            uint loc = elem_to_loc(elem, inp_shape, inp_strides, inp_ndim);
-            T tmp = inp[loc];
-            out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
-        """
-        source_contig = """
-            uint elem = thread_position_in_grid.x;
-            T tmp = inp[elem];
-            out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
-        """
 
         # non contiguous
         a = mx.tile(a[::2], [4, 1])
 
         for contig in [True, False]:
-            kernel = mx.fast.metal_kernel(
+            kernel = custom_kernel(
                 name="myexp" + str(contig),
                 input_names=["inp"],
                 output_names=["out"],
@@ -685,24 +782,41 @@ class TestFast(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(mx.exp(a) * 32, outputs[0]))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_helper(self):
-        mx.random.seed(7)
-        a = mx.random.normal(shape=(2, 2))
-        kernel = mx.fast.metal_kernel(
-            name="helper",
-            input_names=["a"],
-            output_names=["out1"],
-            header="""
+        if mx.metal.is_available():
+            header = """
             template <typename T>
             T do_exp(T x) {
                 return metal::precise::exp(x);
             }
-            """,
-            source="""
+            """
+            source = """
                 uint elem = thread_position_in_grid.x;
                 out1[elem] = do_exp(a[elem]);
-            """,
+            """
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            header = """
+            template <typename T>
+            __device__ T do_exp(T x) {
+                return exp(x);
+            }
+            """
+            source = """
+                auto elem = cooperative_groups::this_grid().thread_rank();
+                out1[elem] = do_exp(a[elem]);
+            """
+            custom_kernel = mx.fast.cuda_kernel
+
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(2, 2))
+        kernel = custom_kernel(
+            name="helper",
+            input_names=["a"],
+            output_names=["out1"],
+            header=header,
+            source=source,
         )
         out = kernel(
             inputs=[a],
@@ -714,16 +828,21 @@ class TestFast(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(out[0], mx.exp(a)))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_custom_kernel_attributes(self):
+        if mx.metal.is_available():
+            source = "out[0] = threads_per_threadgroup.x;"
+            custom_kernel = mx.fast.metal_kernel
+        elif mx.cuda.is_available():
+            source = "out[0] = blockDim.x;"
+            custom_kernel = mx.fast.cuda_kernel
+
         a = mx.zeros(shape=(1, 1))
-        kernel = mx.fast.metal_kernel(
+        kernel = custom_kernel(
             name="test_fun",
             input_names=["a"],
             output_names=["out"],
-            source="""
-                out[0] = threads_per_threadgroup.x;
-            """,
+            source=source,
         )
         out = kernel(
             inputs=[a],

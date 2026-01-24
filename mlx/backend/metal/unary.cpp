@@ -8,7 +8,7 @@
 
 #define UNARY_GPU(func)                                               \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    unary_op_gpu(inputs, out, get_primitive_string(this));            \
+    unary_op_gpu(inputs, out, name());                                \
   }
 
 namespace mlx::core {
@@ -16,7 +16,7 @@ namespace mlx::core {
 void unary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   auto& in = inputs[0];
   bool contig = in.flags().contiguous;
@@ -98,7 +98,7 @@ void unary_op_gpu_inplace(
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const char* op,
     const Stream& s) {
   set_unary_output_data(inputs[0], out);
   unary_op_gpu_inplace(inputs, out, op, s);
@@ -107,7 +107,7 @@ void unary_op_gpu(
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op) {
+    const char* op) {
   auto& s = out.primitive().stream();
   unary_op_gpu(inputs, out, op, s);
 }
@@ -146,13 +146,13 @@ UNARY_GPU(Tanh)
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (base_) {
     case Base::e:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
     case Base::two:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
     case Base::ten:
-      unary_op_gpu(inputs, out, get_primitive_string(this));
+      unary_op_gpu(inputs, out, name());
       break;
   }
 }
@@ -161,7 +161,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu(inputs, out, get_primitive_string(this));
+    unary_op_gpu(inputs, out, name());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);

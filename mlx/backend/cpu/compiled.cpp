@@ -15,6 +15,7 @@
 #include "mlx/backend/cpu/jit_compiler.h"
 #include "mlx/device.h"
 #include "mlx/graph_utils.h"
+#include "mlx/version.h"
 
 namespace mlx::core {
 
@@ -94,7 +95,11 @@ void* compile(
     kernel_file_name = kernel_name;
   }
 
-  auto output_dir = std::filesystem::temp_directory_path();
+  auto output_dir =
+      std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";
+  if (!std::filesystem::exists(output_dir)) {
+    std::filesystem::create_directories(output_dir);
+  }
 
   std::string shared_lib_name = "lib" + kernel_file_name + ".so";
   auto shared_lib_path = (output_dir / shared_lib_name).string();
@@ -157,10 +162,12 @@ inline void build_kernel(
 #endif
 
   // Start the kernel
-  os << "void " << kernel_name << "(void** args) {" << std::endl;
+  os << "void " << kernel_name
+     << "(int* shape, int64_t** strides, void** args) {" << std::endl;
 
   // Add the input arguments
   int cnt = 0;
+  int strides_index = 1;
   for (size_t i = 0; i < inputs.size(); ++i) {
     // Skip constants from the input list
     if (is_constant(i)) {
@@ -175,8 +182,8 @@ inline void build_kernel(
        << "];" << std::endl;
     // Scalars and contiguous need no strides
     if (!is_scalar(x) && !contiguous) {
-      os << "  const size_t* " << xname << "_strides = (size_t*)args[" << cnt++
-         << "];" << std::endl;
+      os << "  const int64_t* " << xname << "_strides = strides["
+         << strides_index++ << "];" << std::endl;
     }
   }
 
@@ -186,10 +193,8 @@ inline void build_kernel(
     os << "  " << tstr << "* " << namer.get_name(x) << " = (" << tstr
        << "*)args[" << cnt++ << "];" << std::endl;
   }
-  // Add output strides and shape to extract the indices.
-  if (!contiguous) {
-    os << "  const int* shape = (int*)args[" << cnt++ << "];" << std::endl;
-  } else {
+  // Add output size
+  if (contiguous) {
     os << "  const size_t size = (size_t)args[" << cnt++ << "];" << std::endl;
   }
 
@@ -231,7 +236,7 @@ inline void build_kernel(
       os << "static_cast<" << get_type_string(x.dtype()) << ">(tmp_"
          << namer.get_name(x.inputs()[0]) << ");" << std::endl;
     } else {
-      x.primitive().print(os);
+      os << x.primitive().name();
       os << "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
         os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
@@ -290,7 +295,6 @@ void Compiled::eval_cpu(
 
   // Collect function input arguments.
   std::vector<void*> args;
-  int strides_index = 1;
   for (size_t i = 0; i < inputs.size(); ++i) {
     if (is_constant_(i)) {
       continue;
@@ -298,9 +302,6 @@ void Compiled::eval_cpu(
     const auto& x = inputs[i];
     encoder.set_input_array(x);
     args.push_back((void*)x.data<void>());
-    if (!contiguous && !is_scalar(x)) {
-      args.push_back(strides[strides_index++].data());
-    }
   }
 
   // Get the kernel name from the lib
@@ -335,16 +336,20 @@ void Compiled::eval_cpu(
     args.push_back(x.data<void>());
     encoder.set_output_array(x);
   }
-  if (!contiguous) {
-    args.push_back((void*)shape.data());
-  } else {
+  if (contiguous) {
     args.push_back((void*)outputs[0].data_size());
   }
-  auto fun = (void (*)(void**))fn_ptr;
+  auto fun = reinterpret_cast<void (*)(int*, int64_t**, void**)>(fn_ptr);
   encoder.dispatch([fun,
                     args = std::move(args),
                     strides = std::move(strides),
-                    shape = std::move(shape)]() mutable { fun(args.data()); });
+                    shape = std::move(shape)]() mutable {
+    SmallVector<int64_t*> strides_ptrs;
+    for (auto& s : strides) {
+      strides_ptrs.push_back(s.data());
+    }
+    fun(shape.data(), strides_ptrs.data(), args.data());
+  });
 }
 
 } // namespace mlx::core

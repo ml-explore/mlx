@@ -42,7 +42,9 @@ option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
+option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 
 # --------------------- Processor tests -------------------------
 message(
@@ -65,10 +67,17 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
   endif()
-
 else()
   set(MLX_BUILD_METAL OFF)
-  message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
+endif()
+
+if(MLX_USE_CCACHE)
+  find_program(CCACHE_PROGRAM ccache)
+  if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  endif()
 endif()
 
 # ----------------------------- Lib -----------------------------
@@ -78,12 +87,6 @@ include(FetchContent)
 cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
-
-if(MLX_BUILD_METAL)
-  set(METAL_LIB "-framework Metal")
-  set(FOUNDATION_LIB "-framework Foundation")
-  set(QUARTZ_LIB "-framework QuartzCore")
-endif()
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
@@ -107,7 +110,8 @@ elseif(MLX_BUILD_METAL)
   # Throw an error if xcrun not found
   execute_process(
     COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
-    OUTPUT_VARIABLE MACOS_SDK_VERSION COMMAND_ERROR_IS_FATAL ANY)
+    OUTPUT_VARIABLE MACOS_SDK_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 
   if(${MACOS_SDK_VERSION} LESS 14.0)
     message(
@@ -134,6 +138,12 @@ elseif(MLX_BUILD_METAL)
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
                $<INSTALL_INTERFACE:include/metal_cpp>)
   target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # With newer clang/gcc versions following libs are implicitly linked, but when
+  # building on old distributions they need to be explicitly listed.
+  target_link_libraries(mlx PRIVATE dl pthread)
 endif()
 
 if(WIN32)
@@ -239,12 +249,16 @@ target_include_directories(
 # Do not add mlx_EXPORTS define for shared library.
 set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
 
-FetchContent_Declare(
-  fmt
-  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-  GIT_TAG 10.2.1
-  EXCLUDE_FROM_ALL)
-FetchContent_MakeAvailable(fmt)
+if(USE_SYSTEM_FMT)
+  find_package(fmt REQUIRED)
+else()
+  FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 10.2.1
+    EXCLUDE_FROM_ALL)
+  FetchContent_MakeAvailable(fmt)
+endif()
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 
 if(MLX_BUILD_PYTHON_BINDINGS)

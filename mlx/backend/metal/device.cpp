@@ -1,19 +1,17 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cstdlib>
-#include <filesystem>
 #include <sstream>
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
-
-namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
@@ -80,12 +78,7 @@ MTL::Library* try_load_bundle(
 std::pair<MTL::Library*, NS::Error*> load_colocated_library(
     MTL::Device* device,
     const std::string& relative_path) {
-  std::string binary_dir = get_binary_directory();
-  if (binary_dir.size() == 0) {
-    return {nullptr, nullptr};
-  }
-
-  auto path = fs::path(binary_dir) / relative_path;
+  auto path = current_binary_dir() / relative_path;
   if (!path.has_extension()) {
     path.replace_extension(".metallib");
   }
@@ -115,7 +108,7 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
-  NS::Error* error[4];
+  NS::Error* error[5];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
   std::tie(lib, error[0]) = load_colocated_library(device, "mlx");
@@ -134,12 +127,19 @@ MTL::Library* load_default_library(MTL::Device* device) {
     return lib;
   }
 
+  // Try lo load resources from Framework resources if SwiftPM wrapped as a
+  // dynamic framework.
+  std::tie(lib, error[3]) = load_colocated_library(device, "Resources/default");
+  if (lib) {
+    return lib;
+  }
+
   // Finally try default_mtllib_path
-  std::tie(lib, error[3]) = load_library_from_path(device, default_mtllib_path);
+  std::tie(lib, error[4]) = load_library_from_path(device, default_mtllib_path);
   if (!lib) {
     std::ostringstream msg;
     msg << "Failed to load the default metallib. ";
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       if (error[i] != nullptr) {
         msg << error[i]->localizedDescription()->utf8String() << " ";
       }
@@ -197,7 +197,7 @@ MTL::Library* load_library(
 
   std::ostringstream msg;
   msg << "Failed to load the metallib " << lib_name << ".metallib. "
-      << "We attempted to load it from <" << get_binary_directory() << "/"
+      << "We attempted to load it from <" << current_binary_dir() << "/"
       << lib_name << ".metallib" << ">";
 #ifdef SWIFTPM_BUNDLE
   msg << " and from the Swift PM bundle.";

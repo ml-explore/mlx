@@ -80,7 +80,7 @@ class TestBase(mlx_tests.MLXTestCase):
                 self.weights = {"w1": mx.zeros((2, 2)), "w2": mx.ones((2, 2))}
 
         model = DictModule()
-        params = dict(tree_flatten(model.parameters()))
+        params = tree_flatten(model.parameters(), destination={})
         self.assertEqual(len(params), 2)
         self.assertTrue(mx.array_equal(params["weights.w1"], mx.zeros((2, 2))))
         self.assertTrue(mx.array_equal(params["weights.w2"], mx.ones((2, 2))))
@@ -198,6 +198,12 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
 
+        nn.quantize(m, group_size=32, mode="mxfp4")
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.layers[2].scales, mx.array))
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()
@@ -258,6 +264,43 @@ class TestBase(mlx_tests.MLXTestCase):
             m = m.update_modules({"test": "hi"})
         with self.assertRaises(ValueError):
             m = m.update_modules({"list": ["hi"]})
+
+        # Allow updating a strict subset
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules({"layers": [{}, nn.Linear(3, 4)]})
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
+        # Using leaf_modules in the update should always work
+        class MyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stuff = [nn.Linear(2, 2), 0, nn.Linear(2, 2)]
+                self.more_stuff = {"hi": nn.Linear(2, 2), "bye": 0}
+
+        m = MyModel()
+        m.update_modules(m.leaf_modules())
+
+    def test_parameter_deletion(self):
+        m = nn.Linear(32, 32)
+        del m.weight
+        self.assertFalse(hasattr(m, "weight"))
+
+    def test_circular_leaks(self):
+        y = mx.random.uniform(1)
+        mx.eval(y)
+
+        def make_and_update():
+            model = nn.Linear(1024, 512)
+            mx.eval(model.parameters())
+            leaves = {}
+            model.update_modules(leaves)
+
+        mx.synchronize()
+        pre = mx.get_active_memory()
+        make_and_update()
+        mx.synchronize()
+        post = mx.get_active_memory()
+        self.assertEqual(pre, post)
 
 
 class TestLayers(mlx_tests.MLXTestCase):

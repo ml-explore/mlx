@@ -18,8 +18,12 @@ std::string get_type_string(Dtype d);
 template <typename T>
 void print_float_constant(std::ostream& os, const array& x) {
   auto old_precision = os.precision();
-  os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-     << x.item<T>() << std::setprecision(old_precision);
+  if constexpr (std::is_same_v<T, double>) {
+    os << std::setprecision(std::numeric_limits<double>::digits10 + 1);
+  } else {
+    os << std::setprecision(std::numeric_limits<float>::digits10 + 1);
+  }
+  os << x.item<T>() << std::setprecision(old_precision);
 }
 
 template <typename T>

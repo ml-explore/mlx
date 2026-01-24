@@ -23,8 +23,6 @@ struct ndarray_traits<mx::float16_t> {
   static constexpr bool is_int = false;
   static constexpr bool is_signed = true;
 };
-
-static constexpr dlpack::dtype bfloat16{4, 16, 1};
 }; // namespace nanobind
 
 int check_shape_dim(int64_t dim) {
@@ -51,6 +49,7 @@ mx::array nd_array_to_mlx(
     std::optional<mx::Dtype> dtype) {
   // Compute the shape and size
   mx::Shape shape;
+  shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
@@ -205,6 +204,8 @@ nb::object to_scalar(mx::array& a) {
       return nb::cast(static_cast<float>(a.item<mx::bfloat16_t>()));
     case mx::complex64:
       return nb::cast(a.item<std::complex<float>>());
+    case mx::float64:
+      return nb::cast(a.item<double>());
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }

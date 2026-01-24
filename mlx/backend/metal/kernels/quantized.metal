@@ -3,6 +3,7 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
+#include "mlx/backend/metal/kernels/quantized_utils.h"
 #include "mlx/backend/metal/kernels/quantized.h"
 
 #define instantiate_quantized(name, type, group_size, bits)     \
@@ -79,40 +80,40 @@
   instantiate_quantized_batched(name, type, group_size, bits, 0)
 
 #define instantiate_quantized_all_batched(type, group_size, bits) \
-  instantiate_quantized_batched_wrap(qmv_fast, type, group_size, bits)     \
-  instantiate_quantized_batched_wrap(qmv, type, group_size, bits)     \
-  instantiate_quantized_batched_wrap(qvm, type, group_size, bits)     \
-  instantiate_quantized_batched_wrap(qmm_n, type, group_size, bits)
+  instantiate_quantized_batched_wrap(affine_qmv_fast, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(affine_qmv, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(affine_qvm, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(affine_qmm_n, type, group_size, bits)
 
 #define instantiate_quantized_all_single(type, group_size, bits) \
   instantiate_quantized(affine_quantize, type, group_size, bits) \
   instantiate_quantized(affine_dequantize, type, group_size, bits)     \
-  instantiate_quantized(gather_qmv_fast, type, group_size, bits)     \
-  instantiate_quantized(gather_qmv, type, group_size, bits)     \
-  instantiate_quantized(gather_qvm, type, group_size, bits)     \
-  instantiate_quantized(gather_qmm_n, type, group_size, bits)
+  instantiate_quantized(affine_gather_qmv_fast, type, group_size, bits)     \
+  instantiate_quantized(affine_gather_qmv, type, group_size, bits)     \
+  instantiate_quantized(affine_gather_qvm, type, group_size, bits)     \
+  instantiate_quantized(affine_gather_qmm_n, type, group_size, bits)
 
 #define instantiate_quantized_all_aligned(type, group_size, bits)   \
-  instantiate_quantized_aligned(gather_qmm_t, type, group_size, bits, true) \
-  instantiate_quantized_aligned(gather_qmm_t, type, group_size, bits, false) \
-  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 1) \
-  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 0) \
-  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, false, 1) \
-  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, false, 0)
+  instantiate_quantized_aligned(affine_gather_qmm_t, type, group_size, bits, true) \
+  instantiate_quantized_aligned(affine_gather_qmm_t, type, group_size, bits, false) \
+  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, true, 1) \
+  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, true, 0) \
+  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, false, 1) \
+  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, false, 0)
 
 #define instantiate_quantized_all_quad(type, group_size, bits)   \
-  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 64, 1)   \
-  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 64, 0)  \
-  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 128, 1)  \
-  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 128, 0)
+  instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 64, 1)   \
+  instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 64, 0)   \
+  instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 128, 1)  \
+  instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 128, 0)
 
 #define instantiate_quantized_all_splitk(type, group_size, bits)   \
-  instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 8)   \
-  instantiate_quantized_split_k(qvm_split_k, type, group_size, bits, 32)
+  instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 8)   \
+  instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 32)
 
 #define instantiate_quantized_all_rhs(type, group_size, bits) \
-  instantiate_gather_qmm_rhs(gather_qmm_rhs, gather_qmm_rhs_nt, type, group_size, bits, 16, 32, 32, 1, 2, true) \
-  instantiate_gather_qmm_rhs(gather_qmm_rhs, gather_qmm_rhs_nn, type, group_size, bits, 16, 32, 32, 1, 2, false)
+  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs, affine_gather_qmm_rhs_nt, type, group_size, bits, 16, 32, 32, 1, 2, true) \
+  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs, affine_gather_qmm_rhs_nn, type, group_size, bits, 16, 32, 32, 1, 2, false)
 
 #define instantiate_quantized_funcs(type, group_size, bits) \
   instantiate_quantized_all_single(type, group_size, bits)  \

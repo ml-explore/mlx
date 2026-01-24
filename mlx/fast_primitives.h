@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <optional>
+#include <variant>
 
 #include "mlx/primitives.h"
 
@@ -58,7 +59,7 @@ class RMSNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RMSNorm)
+  DEFINE_NAME(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
 
@@ -85,7 +86,7 @@ class RMSNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(RMSNormVJP)
+  DEFINE_NAME(RMSNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
@@ -118,7 +119,7 @@ class LayerNorm : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(LayerNorm)
+  DEFINE_NAME(LayerNorm)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -144,7 +145,7 @@ class LayerNormVJP : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(LayerNormVJP)
+  DEFINE_NAME(LayerNormVJP)
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_pair(nullptr, eps_);
@@ -186,7 +187,7 @@ class RoPE : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
-  DEFINE_PRINT(RoPE)
+  DEFINE_NAME(RoPE)
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
@@ -207,9 +208,13 @@ class ScaledDotProductAttention : public Custom {
   explicit ScaledDotProductAttention(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      const float scale,
-      const bool do_causal)
-      : Custom(stream, fallback), scale_(scale), do_causal_(do_causal) {}
+      float scale,
+      bool do_causal,
+      bool has_sinks)
+      : Custom(stream, fallback),
+        scale_(scale),
+        do_causal_(do_causal),
+        has_sinks_(has_sinks) {}
 
   static bool use_fallback(
       const array& q,
@@ -233,28 +238,31 @@ class ScaledDotProductAttention : public Custom {
   void eval_gpu(const std::vector<array>& inputs, array& out);
   bool is_equivalent(const Primitive& other) const override;
 
-  DEFINE_PRINT(ScaledDotProductAttention);
+  DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_tuple(nullptr, scale_, do_causal_);
+    return std::make_tuple(nullptr, scale_, do_causal_, has_sinks_);
   }
 
  private:
   float scale_;
   bool do_causal_;
+  bool has_sinks_;
 };
 
-class AffineQuantize : public Custom {
+class Quantize : public Custom {
  public:
-  explicit AffineQuantize(
+  explicit Quantize(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       int group_size,
       int bits,
+      QuantizationMode mode,
       bool dequantize)
       : Custom(stream, fallback),
         group_size_(group_size),
         bits_(bits),
+        mode_(mode),
         dequantize_(dequantize) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -263,17 +271,18 @@ class AffineQuantize : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(AffineQuantize);
+  DEFINE_NAME(Quantize);
 
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(nullptr, group_size_, bits_, dequantize_);
+    return std::make_tuple(nullptr, group_size_, bits_, mode_, dequantize_);
   }
 
  private:
   int group_size_;
   int bits_;
+  QuantizationMode mode_;
   bool dequantize_;
 };
 
@@ -282,6 +291,8 @@ struct CustomKernelShapeInfo {
   bool strides = false;
   bool ndim = false;
 };
+
+using ScalarArg = std::variant<bool, int, float>;
 
 class CustomKernel : public Primitive {
  public:
@@ -293,7 +304,10 @@ class CustomKernel : public Primitive {
       std::tuple<int, int, int> threadgroup,
       std::vector<CustomKernelShapeInfo> shape_infos,
       bool ensure_row_contiguous,
-      std::optional<float> init_value)
+      std::optional<float> init_value,
+      std::vector<ScalarArg> scalar_arguments,
+      bool is_precompiled,
+      int shared_memory)
       : Primitive(stream),
         source_(std::move(source)),
         name_(std::move(name)),
@@ -301,17 +315,20 @@ class CustomKernel : public Primitive {
         threadgroup_(threadgroup),
         shape_infos_(std::move(shape_infos)),
         ensure_row_contiguous_(ensure_row_contiguous),
-        init_value_(init_value) {}
+        init_value_(init_value),
+        scalar_arguments_(std::move(scalar_arguments)),
+        is_precompiled_(is_precompiled),
+        shared_memory_(shared_memory) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    throw std::runtime_error("Custom Metal kernels only run on GPU.");
+    throw std::runtime_error("Custom kernels only run on GPU.");
   }
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_PRINT(CustomKernel);
+  DEFINE_NAME(CustomKernel);
 
  private:
   std::string source_;
@@ -321,6 +338,9 @@ class CustomKernel : public Primitive {
   std::vector<CustomKernelShapeInfo> shape_infos_;
   bool ensure_row_contiguous_;
   std::optional<float> init_value_;
+  std::vector<ScalarArg> scalar_arguments_;
+  bool is_precompiled_;
+  int shared_memory_;
 };
 
 } // namespace mlx::core::fast

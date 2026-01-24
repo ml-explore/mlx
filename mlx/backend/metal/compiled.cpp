@@ -212,9 +212,7 @@ inline void build_kernel(
           get_type_string(x.dtype()),
           namer.get_name(x.inputs()[0]));
     } else {
-      std::ostringstream ss;
-      x.primitive().print(ss);
-      os += ss.str();
+      os += x.primitive().name();
       os += "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
         os += fmt::format("tmp_{0}, ", namer.get_name(x.inputs()[i]));

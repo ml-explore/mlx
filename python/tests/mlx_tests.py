@@ -1,6 +1,13 @@
 # Copyright © 2023 Apple Inc.
 
 import os
+
+# Use regular fp32 precision for tests
+os.environ["MLX_ENABLE_TF32"] = "0"
+
+# Do not abort on cache thrashing
+os.environ["MLX_ENABLE_CACHE_THRASHING_CHECK"] = "0"
+
 import platform
 import unittest
 from typing import Any, Callable, List, Tuple, Union

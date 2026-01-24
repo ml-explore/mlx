@@ -1,14 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <dlfcn.h>
+
 #include "mlx/backend/common/utils.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
-std::string get_primitive_string(Primitive* primitive) {
-  std::ostringstream op_t;
-  primitive->print(op_t);
-  return op_t.str();
+std::filesystem::path current_binary_dir() {
+  static std::filesystem::path binary_dir = []() {
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
+      throw std::runtime_error("Unable to get current binary dir.");
+    }
+    return std::filesystem::path(info.dli_fname).parent_path();
+  }();
+  return binary_dir;
 }
 
 std::tuple<Shape, std::vector<Strides>> collapse_contiguous_dims(
@@ -199,11 +205,14 @@ Dims get_2d_grid_dims_common(
       }
     }
   }
-  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX || divisor > 1) {
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
     throw std::runtime_error("Unable to safely factor shape.");
   }
   if (grid_y > grid_x) {
     std::swap(grid_x, grid_y);
+  }
+  if (divisor > 1) {
+    grid_x = ((grid_x + divisor - 1) / divisor) * divisor;
   }
   return std::make_tuple(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);

@@ -1,7 +1,8 @@
 // Copyright © 2025 Apple Inc.
+
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/iterators/strided_iterator.cuh"
+#include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -43,8 +44,11 @@ struct ArgMin {
   }
 
   template <int N>
-  __device__ IndexValPair<T>
-  reduce_many(IndexValPair<T> best, T (&vals)[N], uint32_t offset) {
+  __device__ IndexValPair<T> reduce_many(
+      IndexValPair<T> best,
+      const AlignedVector<T, N>& vals,
+      uint32_t offset) {
+#pragma unroll
     for (int i = 0; i < N; i++) {
       if (vals[i] < best.val) {
         best.val = vals[i];
@@ -73,8 +77,11 @@ struct ArgMax {
   }
 
   template <int N>
-  __device__ IndexValPair<T>
-  reduce_many(IndexValPair<T> best, T (&vals)[N], uint32_t offset) {
+  __device__ IndexValPair<T> reduce_many(
+      IndexValPair<T> best,
+      const AlignedVector<T, N>& vals,
+      uint32_t offset) {
+#pragma unroll
     for (int i = 0; i < N; i++) {
       if (vals[i] > best.val) {
         best.val = vals[i];
@@ -105,16 +112,15 @@ __global__ void arg_reduce_general(
 
   int64_t in_idx = elem_to_loc(index, shape.data(), in_strides.data(), ndim);
   int64_t out_idx = elem_to_loc(index, shape.data(), out_strides.data(), ndim);
+  in += in_idx;
 
   Op op;
   T init = op.init();
   IndexValPair<T> best{0, init};
 
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
-    T vals[N_READS];
     auto tid = r * BLOCK_DIM + block.thread_index().x;
-    cub::LoadDirectBlocked(
-        tid, strided_iterator(in + in_idx, axis_stride), vals, axis_size, init);
+    auto vals = load_vector<N_READS>(in, tid, axis_size, axis_stride, init);
     best = op.reduce_many(best, vals, tid * N_READS);
   }
 
@@ -151,36 +157,30 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_REAL_TYPES_CHECKED(in.dtype(), "ArgReduce", CTYPE, {
-      using InType = cuda_type_t<CTYPE>;
-      constexpr uint32_t N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
-        dim3 block_dims{BLOCK_DIM, 1, 1};
-        auto kernel = &cu::arg_reduce_general<
-            InType,
-            cu::ArgMax<InType>,
-            BLOCK_DIM,
-            N_READS>;
-        if (reduce_type_ == ArgReduce::ArgMin) {
-          kernel = &cu::arg_reduce_general<
-              InType,
-              cu::ArgMin<InType>,
-              BLOCK_DIM,
-              N_READS>;
-        }
-        kernel<<<num_blocks, block_dims, 0, stream>>>(
-            in.data<InType>(),
-            out.data<uint32_t>(),
-            out.size(),
-            const_param(shape),
-            const_param(in_strides),
-            const_param(out_strides),
-            ndim,
-            axis_stride,
-            axis_size);
-      });
+  dispatch_real_types(in.dtype(), "ArgReduce", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr uint32_t N_READS = 4;
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
+      auto kernel =
+          cu::arg_reduce_general<T, cu::ArgMax<T>, block_dim(), N_READS>;
+      if (reduce_type_ == ArgReduce::ArgMin) {
+        kernel = cu::arg_reduce_general<T, cu::ArgMin<T>, block_dim(), N_READS>;
+      }
+      encoder.add_kernel_node(
+          kernel,
+          num_blocks,
+          block_dim(),
+          0,
+          in.data<T>(),
+          out.data<uint32_t>(),
+          out.size(),
+          const_param(shape),
+          const_param(in_strides),
+          const_param(out_strides),
+          ndim,
+          axis_stride,
+          axis_size);
     });
   });
 }

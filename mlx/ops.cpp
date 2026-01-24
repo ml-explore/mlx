@@ -10,7 +10,7 @@
 #include <set>
 #include <sstream>
 
-#include "mlx/fast.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -76,7 +76,7 @@ std::pair<int, int> extract_quantized_matmul_dims(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases,
     bool transpose,
     int group_size,
     int bits) {
@@ -87,11 +87,11 @@ std::pair<int, int> extract_quantized_matmul_dims(
     throw std::invalid_argument(msg.str());
   }
 
-  if (scales.shape() != biases.shape()) {
+  if (biases && scales.shape() != biases->shape()) {
     std::ostringstream msg;
     msg << "[" << tag << "] Scales and biases should have the same shape. "
         << "Received scales with shape " << scales.shape()
-        << " and biases with " << biases.shape();
+        << " and biases with " << biases->shape();
     throw std::invalid_argument(msg.str());
   }
 
@@ -99,9 +99,9 @@ std::pair<int, int> extract_quantized_matmul_dims(
           w.shape().begin(), w.shape().end() - 2, scales.shape().begin())) {
     std::ostringstream msg;
     msg << "[" << tag
-        << "] Weight, scales and biases should have the same batch shape. "
+        << "] Weight and scales should have the same batch shape. "
         << "Received weight with shape " << w.shape() << ", scales with "
-        << scales.shape() << " and biases with " << biases.shape();
+        << scales.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
@@ -2381,9 +2381,20 @@ array logsumexp(
     throw std::invalid_argument(
         "[logsumexp] Received non-empty axes for array with 0 dimensions.");
   }
+  bool reduce_last_dim =
+      !axes.empty() && (axes.back() == a.ndim() - 1 || axes.back() == -1);
+  if (reduce_last_dim) {
+    // For more than 2 axes check if axes is [0, 1, ..., NDIM - 1] and shape
+    // is [1, 1, ..., N].
+    for (int i = axes.size() - 2; i >= 0; --i) {
+      if ((axes[i] + 1 != axes[i + 1]) || (a.shape(axes[i]) != 1)) {
+        reduce_last_dim = false;
+        break;
+      }
+    }
+  }
   bool is_complex = issubdtype(a.dtype(), complexfloating);
-  if (!is_complex && axes.size() == 1 &&
-      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+  if (!is_complex && reduce_last_dim) {
     auto dtype = at_least_float(a.dtype());
     auto out_shape = a.shape();
     out_shape.back() = 1;
@@ -2960,7 +2971,7 @@ array gather(
   }
   for (auto& x : indices) {
     if (x.dtype() == bool_) {
-      throw("[Gather] Boolean indices not supported.");
+      throw std::invalid_argument("[Gather] Boolean indices not supported.");
     }
   }
 
@@ -3027,9 +3038,9 @@ array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   }
 
   int ndim = std::max(a.ndim(), b.ndim());
-  std::vector<int> a_shape(2 * ndim, 1);
-  std::vector<int> b_shape(2 * ndim, 1);
-  std::vector<int> out_shape(ndim, 1);
+  Shape a_shape(2 * ndim, 1);
+  Shape b_shape(2 * ndim, 1);
+  Shape out_shape(ndim, 1);
 
   for (int i = ndim - 1, j = a.ndim() - 1; j >= 0; j--, i--) {
     a_shape[2 * i] = a.shape(j);
@@ -3403,10 +3414,20 @@ array softmax(
     throw std::invalid_argument(
         "[softmax] Received non-empty axes for array with 0 dimensions.");
   }
-
+  bool reduce_last_dim =
+      !axes.empty() && (axes.back() == a.ndim() - 1 || axes.back() == -1);
+  if (reduce_last_dim) {
+    // For more than 2 axes check if axes is [0, 1, ..., NDIM - 1] and shape
+    // is [1, 1, ..., N].
+    for (int i = axes.size() - 2; i >= 0; --i) {
+      if ((axes[i] + 1 != axes[i + 1]) || (a.shape(axes[i]) != 1)) {
+        reduce_last_dim = false;
+        break;
+      }
+    }
+  }
   bool is_complex = issubdtype(a.dtype(), complexfloating);
-  if (!is_complex && axes.size() == 1 &&
-      (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
+  if (!is_complex && reduce_last_dim) {
     auto dtype = at_least_float(a.dtype());
     return array(
         a.shape(),
@@ -3558,110 +3579,6 @@ array logcumsumexp(
 /** Convolution operations */
 
 namespace {
-
-// Conv helpers
-inline int conv_out_axis_size(int in_dim, int wt_dim, int stride, int padding) {
-  return ((in_dim + padding - wt_dim) / stride) + 1;
-}
-
-// Conv helpers
-inline int dilate_size(int dim, int dil) {
-  return 1 + dil * (dim - 1);
-}
-
-Shape conv_out_shape(
-    const Shape& in_shape,
-    const Shape& wt_shape,
-    const std::vector<int>& strides,
-    const std::vector<int>& pads_lo,
-    const std::vector<int>& pads_hi,
-    const std::vector<int>& kernel_dilation,
-    const std::vector<int>& input_dilation) {
-  int N = in_shape[0];
-  int O = wt_shape[0];
-  Shape out_shape(in_shape.size());
-  int i = 0;
-  out_shape[i++] = N;
-
-  int spatial_dims = in_shape.size() - 2;
-
-  if (strides.size() != spatial_dims) {
-    std::ostringstream msg;
-    msg << "[conv] Invalid strides " << strides << " for " << spatial_dims
-        << "D convolution.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
-    std::ostringstream msg;
-    msg << "[conv] Invalid padding " << pads_lo << " | " << pads_hi << " for "
-        << spatial_dims << "D convolution.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (kernel_dilation.size() != spatial_dims) {
-    std::ostringstream msg;
-    msg << "[conv] Invalid kernel dilation " << kernel_dilation << " for "
-        << spatial_dims << "D convolution.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (input_dilation.size() != spatial_dims) {
-    std::ostringstream msg;
-    msg << "[conv] Invalid input dilation " << input_dilation << " for "
-        << spatial_dims << "D convolution.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  for (; i < in_shape.size() - 1; i++) {
-    if (kernel_dilation[i - 1] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Kernel dilation sizes must be positive."
-          << " Got kernel dilation " << kernel_dilation << ".";
-      throw std::invalid_argument(msg.str());
-    }
-
-    if (input_dilation[i - 1] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Input dilation sizes must be positive."
-          << " Got input dilation " << input_dilation << ".";
-      throw std::invalid_argument(msg.str());
-    }
-
-    if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
-      std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
-          << pads_lo << " | " << pads_hi << ".";
-      throw std::invalid_argument(msg.str());
-    }
-
-    if (strides[i - 1] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive." << " Got strides "
-          << strides << ".";
-      throw std::invalid_argument(msg.str());
-    }
-
-    int kd = dilate_size(wt_shape[i], kernel_dilation[i - 1]);
-    int id = dilate_size(in_shape[i], input_dilation[i - 1]);
-
-    out_shape[i] = conv_out_axis_size(
-        id, kd, strides[i - 1], pads_lo[i - 1] + pads_hi[i - 1]);
-
-    if (out_shape[i] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Spatial dimensions of input after padding"
-          << " cannot be smaller than weight spatial dimensions."
-          << " Got error at axis " << i << " for input with shape " << in_shape
-          << ", padding low " << pads_lo << ", padding high " << pads_hi
-          << ", and weight of shape " << wt_shape << ".";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-  out_shape[i] = O;
-
-  return out_shape;
-}
 
 inline void
 run_conv_checks(const array& in, const array& wt, int n_dim, int groups) {
@@ -3976,7 +3893,7 @@ array conv_general(
   }
 
   // Get output shapes
-  auto out_shape = conv_out_shape(
+  auto out_shape = Convolution::conv_out_shape(
       in.shape(),
       wt.shape(),
       stride,
@@ -4000,30 +3917,76 @@ array conv_general(
       {in, wt});
 }
 
+void validate_mode(std::string_view tag, const std::string& mode) {
+  if (mode != "affine" && mode != "mxfp4") {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Invalid quantization mode '" << mode << "'.";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+Dtype validate_mode_with_type(
+    std::string_view tag,
+    const array& scales,
+    const std::optional<array>& biases,
+    const std::string& mode) {
+  validate_mode(tag, mode);
+  if (mode == "affine") {
+    if (!biases) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Biases must be provided for affine quantization.";
+      throw std::invalid_argument(msg.str());
+    }
+    auto dtype = result_type(scales, *biases);
+    if (!issubdtype(dtype, floating)) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Only real floating types are supported but "
+          << "scales.dtype() == " << scales.dtype()
+          << " and biases.dtype() == " << biases->dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    return dtype;
+  }
+  if (biases) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Biases must be null for quantization mode '" << mode
+        << "'.";
+    throw std::invalid_argument(msg.str());
+  }
+  return bfloat16;
+}
+
 array quantized_matmul(
     array x,
     array w,
     array scales,
-    array biases,
+    std::optional<array> biases /* = std::nullopt */,
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  auto dtype = result_type(x, scales, biases);
+  auto dtype =
+      validate_mode_with_type("quantized_matmul", scales, biases, mode);
+  dtype = promote_types(x.dtype(), dtype);
+
   if (!issubdtype(dtype, floating)) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Only real floating types are supported but "
-        << "the passed types where x.dtype() == " << x.dtype()
-        << ", scales.dtype() == " << scales.dtype()
-        << " and biases.dtype() == " << biases.dtype();
+        << "x.dtype() == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
   }
-  std::vector<array> inputs = {
-      astype(x, dtype), w, astype(scales, dtype), astype(biases, dtype)};
+  std::vector<array> inputs;
+  if (mode == "affine") {
+    inputs = {
+        astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
+  } else {
+    inputs = {x, w, scales};
+  }
 
   if (x.ndim() > 2 && w.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
@@ -4035,47 +3998,446 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, transpose),
+          to_stream(s),
+          group_size,
+          bits,
+          string_to_quantization_mode(mode),
+          transpose),
       std::move(inputs));
 }
 
-std::tuple<array, array, array> quantize(
+array pack_and_quantize(
+    array& packed_w,
+    const array& scales,
+    const array& biases,
+    int bits,
+    const Stream& s) {
+  int el_per_int = 32 / bits;
+  array zero(0, packed_w.dtype());
+  array n_bins((1 << bits) - 1, packed_w.dtype()); // 2**bits - 1
+  packed_w = astype(
+      clip(
+          round(divide(subtract(packed_w, biases, s), scales, s), s),
+          zero,
+          n_bins,
+          s),
+      uint32,
+      s);
+  if (is_power_of_2(bits)) {
+    array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
+    packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
+    packed_w = sum(
+        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+  } else {
+    // This is slow but we have fast GPU/CPU versions of this function so we
+    // shouldn't be here often.
+    packed_w = expand_dims(packed_w, /* axis= */ -1, s);
+    packed_w = bitwise_and(
+        right_shift(packed_w, arange(bits, uint32, s), s),
+        array({1}, uint32),
+        s);
+    auto new_shape = packed_w.shape();
+    new_shape[new_shape.size() - 2] = -1;
+    new_shape.back() = 32;
+    packed_w = reshape(packed_w, new_shape, s);
+    array shifts = arange(32, uint32, s);
+    packed_w =
+        sum(left_shift(packed_w, shifts, s),
+            /* axis= */ -1,
+            /* keepdims= */ false,
+            s);
+  }
+  return packed_w;
+}
+
+std::vector<array>
+affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
+  auto s = to_stream(s_);
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested group size " << group_size
+        << " is not supported. The supported group sizes are 32, 64, and 128.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (bits < 2 || bits > 8 || bits == 7) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested number of bits " << bits
+        << " is not supported. The supported bits are 2, 3, 4, 5, 6 and 8.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto fallback = [group_size, bits, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto wshape = w.shape();
+    wshape.back() = -1;
+
+    array zero(0, float32);
+    array n_bins((1 << bits) - 1, float32); // 2**bits - 1
+    array eps(1e-7, float32);
+
+    array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
+
+    array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    w_max = astype(w_max, float32, s);
+    w_min = astype(w_min, float32, s);
+
+    array mask = greater(abs(w_min, s), abs(w_max, s), s);
+    array scales =
+        maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
+    scales = where(mask, scales, negative(scales, s), s);
+    array edge = where(mask, w_min, w_max, s);
+    array q0 = round(divide(edge, scales, s), s);
+    scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+    array biases = where(equal(q0, zero, s), zero, edge, s);
+
+    packed_w = pack_and_quantize(packed_w, scales, biases, bits, s);
+
+    scales = astype(scales, w.dtype(), s);
+    biases = astype(biases, w.dtype(), s);
+    return {
+        reshape(packed_w, wshape, s),
+        reshape(scales, wshape, s),
+        reshape(biases, wshape, s),
+    };
+  };
+
+  auto wq_shape = w.shape();
+  wq_shape.back() = w.shape(-1) * bits / 32;
+  auto sshape = w.shape();
+  sshape.back() = w.shape(-1) / group_size;
+  return array::make_arrays(
+      {std::move(wq_shape), sshape, sshape},
+      {uint32, w.dtype(), w.dtype()},
+      std::make_shared<fast::Quantize>(
+          s, fallback, group_size, bits, QuantizationMode::Affine, false),
+      {w});
+}
+
+std::vector<array> quantize(
     const array& w,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
-  return fast::affine_quantize(w, group_size, bits, s);
+  validate_mode("quantize", mode);
+  if (!issubdtype(w.dtype(), floating)) {
+    std::ostringstream msg;
+    msg << "[quantize] Only real floating types can be quantized "
+        << "but w has type " << w.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if ((w.shape(-1) % group_size) != 0) {
+    std::ostringstream msg;
+    msg << "[quantize] The last dimension of the matrix needs to be divisible by "
+        << "the quantization group size " << group_size
+        << ". However the provided " << " matrix has shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (mode == "affine") {
+    return affine_quantize(w, group_size, bits, s);
+  } else {
+    if (group_size != 32) {
+      std::ostringstream msg;
+      msg << "[quantize] mxfp4 quantization requires group size 32 "
+          << "but got " << group_size << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (bits != 4) {
+      std::ostringstream msg;
+      msg << "[quantize] mxfp4 quantization requires bits to be 4 "
+          << "but got " << bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    auto lut = array({
+        +0.0f,
+        +0.5f,
+        +1.0f,
+        +1.5f,
+        +2.0f,
+        +3.0f,
+        +4.0f,
+        +6.0f,
+        -0.0f,
+        -0.5f,
+        -1.0f,
+        -1.5f,
+        -2.0f,
+        -3.0f,
+        -4.0f,
+        -6.0f,
+    });
+    lut = astype(lut, w.dtype(), s);
+
+    auto new_shape = w.shape();
+    new_shape.back() = -1;
+    auto wq = reshape(w, {-1, group_size}, s);
+    auto scales =
+        divide(max(abs(wq, s), -1, true, s), array(6.0f, w.dtype()), s);
+    scales = astype(log2(scales, s), int32, s);
+    wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
+    scales = astype(add(scales, array(127, int32), s), uint8, s);
+    wq = argmin(abs(subtract(expand_dims(wq, -1, s), lut, s), s), -1, false, s);
+    auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
+    wq = reshape(wq, {-1, group_size / 8, 8}, s);
+    wq = sum(multiply(wq, shifts, s), -1, false, s);
+    wq = reshape(wq, new_shape, s);
+    scales = reshape(scales, new_shape, s);
+    return {std::move(wq), std::move(scales)};
+  }
+}
+
+array affine_dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    StreamOrDevice s_) {
+  if (w.ndim() < 2 || scales.ndim() < 2 || biases.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto wshape = w.shape();
+  auto sshape = scales.shape();
+  auto bshape = biases.shape();
+  wshape.back() = -1;
+  sshape.back() = -1;
+  bshape.back() = -1;
+
+  if (wshape != sshape || wshape != bshape) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales and biases does not match the matrix");
+  }
+
+  // Packing into uint32
+  int out_size = w.shape(-1) * 32 / bits;
+
+  if (out_size != scales.shape(-1) * group_size) {
+    std::ostringstream msg;
+    msg << "[dequantize] Shape of scales and biases does not match the matrix "
+        << "given the quantization parameters. Provided matrix of shape "
+        << w.shape() << " and scales/biases of shape " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+
+  auto fallback =
+      [wshape = std::move(wshape),
+       sshape = std::move(sshape),
+       group_size,
+       bits,
+       s](const std::vector<array>& inputs) mutable -> std::vector<array> {
+    auto w = inputs[0];
+    auto& scales = inputs[1];
+    auto& biases = inputs[2];
+    if (is_power_of_2(bits)) {
+      std::vector<array> parts;
+      for (int start = 0; start < 32; start += bits) {
+        int shift_left = 32 - (start + bits);
+        int shift_right = shift_left + start;
+
+        parts.push_back(expand_dims(
+            right_shift(
+                left_shift(w, array(32 - (start + bits), uint32), s),
+                array(32 - bits, uint32),
+                s),
+            -1,
+            s));
+      }
+      w = concatenate(parts, -1, s);
+    } else {
+      w = expand_dims(w, /* axis= */ -1, s);
+      w = bitwise_and(
+          right_shift(w, arange(32, uint32, s), s), array({1}, uint32), s);
+      auto new_shape = w.shape();
+      new_shape[new_shape.size() - 2] = -1;
+      new_shape.back() = bits;
+      w = reshape(w, new_shape, s);
+      array shifts = arange(bits, uint32, s);
+      w = sum(
+          left_shift(w, shifts, s), /* axis= */ -1, /* keepdims= */ false, s);
+    }
+
+    // Dequantize
+    wshape.push_back(group_size);
+    w = reshape(w, wshape, s);
+    w = multiply(w, expand_dims(scales, -1, s), s);
+    w = add(w, expand_dims(biases, -1, s), s);
+    w = reshape(w, sshape, s);
+
+    return {w};
+  };
+
+  if (s.device == Device::gpu) {
+    auto out_shape = w.shape();
+    out_shape.back() = out_size;
+    return array(
+        std::move(out_shape),
+        scales.dtype(),
+        std::make_shared<fast::Quantize>(
+            s, fallback, group_size, bits, QuantizationMode::Affine, true),
+        {w, scales, biases});
+  }
+  return fallback({w, scales, biases})[0];
 }
 
 array dequantize(
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases /* = std::nullopt */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     StreamOrDevice s /* = {} */) {
-  return fast::affine_dequantize(w, scales, biases, group_size, bits, s);
+  validate_mode_with_type("dequantize", scales, biases, mode);
+  if (bits <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for bits: " << bits;
+    throw std::invalid_argument(msg.str());
+  }
+  if (group_size <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for group_size: " << group_size;
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[dequantize] The matrix should be given as a uint32");
+  }
+
+  if (mode == "affine") {
+    return affine_dequantize(w, scales, *biases, group_size, bits, s);
+  } else {
+    if (group_size != 32) {
+      std::ostringstream msg;
+      msg << "[dequantize] mxfp4 quantization requires group size 32 "
+          << "but got " << group_size << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (bits != 4) {
+      std::ostringstream msg;
+      msg << "[dequantize] mxfp4 quantization requires bits to be 4 "
+          << "but got " << bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (w.ndim() < 2 || scales.ndim() < 2) {
+      std::ostringstream msg;
+      msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+          << "but it has only " << w.ndim() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    auto wshape = w.shape();
+    auto sshape = scales.shape();
+    wshape.back() = -1;
+    sshape.back() = -1;
+
+    if (wshape != sshape) {
+      throw std::invalid_argument(
+          "[dequantize] Shape of scales does not match the matrix");
+    }
+
+    if (w.dtype() != uint32) {
+      throw std::invalid_argument(
+          "[dequantize] The matrix should be given as a uint32");
+    }
+
+    // Packing into uint32
+    int out_size = w.shape(-1) * 32 / bits;
+
+    if (out_size != scales.shape(-1) * group_size) {
+      std::ostringstream msg;
+      msg << "[dequantize] Shape of scales does not match the matrix "
+          << "given the quantization parameters. Provided matrix of shape "
+          << w.shape() << " and scales of shape " << scales.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    auto dtype = bfloat16;
+    auto lut = array(
+        {
+            +0.0f,
+            +0.5f,
+            +1.0f,
+            +1.5f,
+            +2.0f,
+            +3.0f,
+            +4.0f,
+            +6.0f,
+            -0.0f,
+            -0.5f,
+            -1.0f,
+            -1.5f,
+            -2.0f,
+            -3.0f,
+            -4.0f,
+            -6.0f,
+        },
+        dtype);
+
+    auto what = view(reshape(w, {-1, group_size / 8}, s), int8, s);
+
+    auto idx_lo = bitwise_and(what, array(0x0F, int8), s);
+    auto idx_hi = right_shift(what, array(4, int8), s);
+    auto lo = gather(lut, idx_lo, 0, {1}, s);
+    auto hi = gather(lut, idx_hi, 0, {1}, s);
+    what = flatten(concatenate({lo, hi}, -1, s), -2, -1, s);
+    auto exponent = subtract(astype(scales, dtype, s), array(127, dtype), s);
+    exponent = reshape(exponent, {-1, 1}, s);
+    return reshape(
+        multiply(power(array(2.0f, dtype), exponent, s), what, s), wshape, s);
+  }
 }
 
 array gather_qmm(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases /* = std::nullopt */,
     std::optional<array> lhs_indices_ /* = std::nullopt */,
     std::optional<array> rhs_indices_ /* = std::nullopt */,
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
+    const std::string& mode /* = "affine" */,
     bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size, bits, s);
+        x, w, scales, biases, transpose, group_size, bits, mode, s);
   }
 
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
+
+  auto out_type = validate_mode_with_type("gather_qmm", scales, biases, mode);
+  out_type = promote_types(x.dtype(), out_type);
+
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[gather_qmm] Only real floating types are supported but "
+        << "x.dtype() == " << x.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   // Extract indices and broadcast them
   array lhs_indices = indices_or_default(lhs_indices_, x, s);
@@ -4092,6 +4454,12 @@ array gather_qmm(
     throw std::invalid_argument(
         "[gather_qmm] Got rhs_indices with invalid dtype. Indices must be integral.");
   }
+  if (x.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[gather_qmm] Non-quantized input must have at least two"
+        << " dimensions but got input with shape " << x.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   lhs_indices = astype(lhs_indices, uint32, s);
   rhs_indices = astype(rhs_indices, uint32, s);
@@ -4100,10 +4468,23 @@ array gather_qmm(
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);
-
-  // and output type
-  auto out_type = result_type(x, scales, biases);
-
+  std::vector<array> inputs;
+  if (mode == "affine") {
+    inputs = {
+        astype(x, out_type, s),
+        std::move(w),
+        astype(scales, out_type, s),
+        astype(*biases, out_type, s),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  } else {
+    inputs = {
+        astype(x, out_type, s),
+        std::move(w),
+        std::move(scales),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
+  }
   return array(
       std::move(out_shape),
       out_type,
@@ -4111,15 +4492,11 @@ array gather_qmm(
           to_stream(s),
           group_size,
           bits,
+          string_to_quantization_mode(mode),
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
-      {astype(x, out_type, s),
-       std::move(w),
-       astype(scales, out_type, s),
-       astype(biases, out_type, s),
-       std::move(lhs_indices),
-       std::move(rhs_indices)});
+      std::move(inputs));
 }
 
 array tensordot(
@@ -4647,6 +5024,54 @@ array gather_mm(
     axes.push_back(out.ndim() - 1);
   }
   return axes.empty() ? out : squeeze(out, axes, s);
+}
+
+array segmented_mm(
+    array a,
+    array b,
+    array segments,
+    StreamOrDevice s /* = {} */) {
+  if (a.ndim() != 2 || b.ndim() != 2) {
+    throw std::invalid_argument("[segmented_mm] Batched matmul not supported");
+  }
+
+  if (segments.ndim() < 1 || segments.shape().back() != 2) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] The segments should have shape (..., 2) but "
+        << segments.shape() << " was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type(a, b);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (!issubdtype(segments.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[segmented_mm] Got segments with invalid dtype. Segments must be integral.");
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  segments = astype(segments, uint32, s);
+
+  Shape out_shape = segments.shape();
+  out_shape.pop_back();
+  out_shape.push_back(a.shape(0));
+  out_shape.push_back(b.shape(1));
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<SegmentedMM>(to_stream(s)),
+      {std::move(a), std::move(b), std::move(segments)});
 }
 
 array diagonal(

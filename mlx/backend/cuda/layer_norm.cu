@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/iterators/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
 #include "mlx/backend/gpu/copy.h"
@@ -11,8 +10,6 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <nvtx3/nvtx3.hpp>
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_reduce.cuh>
 
 namespace mlx::core {
 
@@ -75,9 +72,11 @@ __global__ void layer_norm(
   float sum = 0;
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T xn[N_READS] = {};
-    cub::LoadDirectBlocked(index, x, xn, axis_size);
-    sum += static_cast<float>(cub::ThreadReduce(xn, cuda::std::plus<>{}));
+    auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      sum += static_cast<float>(xn[i]);
+    }
   }
   sum = BlockReduceT{block, temp}.Sum(sum);
 
@@ -88,11 +87,18 @@ __global__ void layer_norm(
   float normalizer = 0;
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T xn[N_READS];
-    cub::LoadDirectBlocked(index, x, xn, axis_size, mean);
-    for (int i = 0; i < N_READS; ++i) {
-      float t = static_cast<float>(xn[i]) - mean;
-      normalizer += t * t;
+    if ((index + 1) * N_READS <= axis_size) {
+      auto xn = load_vector<N_READS>(x, index);
+#pragma unroll
+      for (int i = 0; i < N_READS; ++i) {
+        float t = static_cast<float>(xn[i]) - mean;
+        normalizer += t * t;
+      }
+    } else {
+      for (int i = index * N_READS; i < axis_size; ++i) {
+        float t = static_cast<float>(x[i]) - mean;
+        normalizer += t * t;
+      }
     }
   }
   normalizer = BlockReduceT{block, temp}.Sum(normalizer);
@@ -101,17 +107,15 @@ __global__ void layer_norm(
   // Outputs.
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T xn[N_READS];
-    T wn[N_READS];
-    T bn[N_READS];
-    cub::LoadDirectBlocked(index, x, xn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(b, b_stride), bn, axis_size);
+    auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
+    auto wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+    auto bn = load_vector<N_READS>(b, index, axis_size, b_stride, T(0));
+#pragma unroll
     for (int i = 0; i < N_READS; ++i) {
       float norm = (static_cast<float>(xn[i]) - mean) * normalizer;
       xn[i] = wn[i] * static_cast<T>(norm) + bn[i];
     }
-    cub::StoreDirectBlocked(index, out, xn, axis_size);
+    store_vector<N_READS>(out, index, xn, axis_size);
   }
 }
 
@@ -144,9 +148,11 @@ __global__ void layer_norm_vjp(
   float sum = 0;
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T xn[N_READS] = {};
-    cub::LoadDirectBlocked(index, x, xn, axis_size);
-    sum += static_cast<float>(cub::ThreadReduce(xn, cuda::std::plus<>{}));
+    auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      sum += static_cast<float>(xn[i]);
+    }
   }
   sum = BlockReduceF{block, temp.f}.Sum(sum);
 
@@ -156,19 +162,28 @@ __global__ void layer_norm_vjp(
   // Normalizer.
   float3 factors = {};
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
-    T xn[N_READS];
-    T wn[N_READS] = {};
-    T gn[N_READS] = {};
     auto index = r * BLOCK_DIM + block.thread_rank();
-    cub::LoadDirectBlocked(index, x, xn, axis_size, mean);
-    cub::LoadDirectBlocked(index, g, gn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
-    for (int i = 0; i < N_READS; i++) {
-      float t = static_cast<float>(xn[i]) - mean;
-      float wi = wn[i];
-      float gi = gn[i];
-      float wg = wi * gi;
-      factors = plus_f3(factors, {wg, wg * t, t * t});
+    auto gn = load_vector<N_READS>(g, index, axis_size, T(0));
+    auto wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+
+    if ((index + 1) * N_READS <= axis_size) {
+      auto xn = load_vector<N_READS>(x, index);
+#pragma unroll
+      for (int i = 0; i < N_READS; ++i) {
+        float t = static_cast<float>(xn[i]) - mean;
+        float wi = wn[i];
+        float gi = gn[i];
+        float wg = wi * gi;
+        factors = plus_f3(factors, {wg, wg * t, t * t});
+      }
+    } else {
+      for (int i = index * N_READS; i < axis_size; ++i) {
+        float t = static_cast<float>(x[i]) - mean;
+        float wi = wn[i];
+        float gi = gn[i];
+        float wg = wi * gi;
+        factors = plus_f3(factors, {wg, wg * t, t * t});
+      }
     }
   }
   factors = BlockReduceF3{block, temp.f3}.Reduce(factors, plus_f3, {});
@@ -180,12 +195,10 @@ __global__ void layer_norm_vjp(
   // Outputs.
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); ++r) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T xn[N_READS];
-    T wn[N_READS];
-    T gn[N_READS];
-    cub::LoadDirectBlocked(index, x, xn, axis_size);
-    cub::LoadDirectBlocked(index, g, gn, axis_size);
-    cub::LoadDirectBlocked(index, strided_iterator(w, w_stride), wn, axis_size);
+    auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
+    auto gn = load_vector<N_READS>(g, index, axis_size, T(0));
+    auto wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
+
     for (int i = 0; i < N_READS; i++) {
       float xi = (static_cast<float>(xn[i]) - mean) * normalizer;
       float wi = wn[i];
@@ -195,9 +208,9 @@ __global__ void layer_norm_vjp(
         wn[i] = gi * xi;
       }
     }
-    cub::StoreDirectBlocked(index, gx, xn, axis_size);
+    store_vector<N_READS>(gx, index, xn, axis_size);
     if constexpr (HAS_W) {
-      cub::StoreDirectBlocked(index, gw, wn, axis_size);
+      store_vector<N_READS>(gw, index, wn, axis_size);
     }
   }
 }
@@ -237,8 +250,7 @@ void LayerNorm::eval_gpu(
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -258,22 +270,24 @@ void LayerNorm::eval_gpu(
   encoder.set_input_array(w);
   encoder.set_input_array(b);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "layernorm", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr uint32_t N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = cu::layer_norm<DataType, BLOCK_DIM, N_READS>;
-        kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-            x.data<DataType>(),
-            w.data<DataType>(),
-            b.data<DataType>(),
-            out.data<DataType>(),
-            eps_,
-            axis_size,
-            w_stride,
-            b_stride);
-      });
+  dispatch_float_types(out.dtype(), "layernorm", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr int N_READS = 16 / sizeof(DataType);
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      auto kernel = cu::layer_norm<DataType, block_dim(), N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          block_dim(),
+          0,
+          x.data<DataType>(),
+          w.data<DataType>(),
+          b.data<DataType>(),
+          out.data<DataType>(),
+          eps_,
+          axis_size,
+          w_stride,
+          b_stride);
     });
   });
 }
@@ -288,21 +302,23 @@ void LayerNormVJP::eval_gpu(
   // Ensure row contiguity. We could relax this step by checking that the array
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
-  auto check_input = [&s](const array& x) -> std::pair<array, bool> {
+  auto check_input = [&s](const array& x, bool& copied) {
     if (x.flags().row_contiguous) {
-      return {x, false};
+      copied = false;
+      return x;
     }
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
-    return {x_copy, true};
+    copied = true;
+    return contiguous_copy_gpu(x, s);
   };
   bool donate_x = inputs[0].is_donatable();
   bool donate_g = inputs[3].is_donatable();
-  auto [x, copied] = check_input(inputs[0]);
+  bool copied;
+  auto x = check_input(inputs[0], copied);
   donate_x |= copied;
   const array& w = inputs[1];
   const array& b = inputs[2];
-  auto [g, g_copied] = check_input(inputs[3]);
+  bool g_copied;
+  auto g = check_input(inputs[3], g_copied);
   donate_g |= g_copied;
   array& gx = outputs[0];
   array& gw = outputs[1];
@@ -333,47 +349,59 @@ void LayerNormVJP::eval_gpu(
   // gradient accumulators.
   array gw_temp =
       (has_w) ? array({n_rows, x.shape().back()}, gw.dtype(), nullptr, {}) : w;
+  bool g_in_gw = false;
   if (has_w) {
     if (!g_in_gx && donate_g) {
+      g_in_gw = true;
       gw_temp.copy_shared_buffer(g);
     } else {
       gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
       encoder.add_temporary(gw_temp);
     }
   }
-  gw.set_data(allocator::malloc(gw.nbytes()));
-  gb.set_data(allocator::malloc(gb.nbytes()));
 
-  // Finish with the gradient for b in case we had a b.
-  if (gb.ndim() == 1 && gb.size() == axis_size) {
+  // The gradient for b in case we had a b.
+  bool has_gb = (gb.ndim() == 1 && gb.size() == axis_size);
+  if (has_gb) {
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     col_reduce(encoder, g, gb, Reduce::ReduceType::Sum, {0}, plan);
   }
 
+  // Insert dependency if `g` was donated
+  if ((g_in_gx || g_in_gw) && has_gb) {
+    encoder.set_input_array(gb);
+  }
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(g);
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
-  encoder.launch_kernel([&, x = x, g = g](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(gx.dtype(), "layernorm_vjp", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr int N_READS = 4;
-      MLX_SWITCH_BOOL(has_w, HAS_W, {
-        MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-          auto kernel = cu::layer_norm_vjp<DataType, HAS_W, BLOCK_DIM, N_READS>;
-          kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-              x.data<DataType>(),
-              w.data<DataType>(),
-              g.data<DataType>(),
-              gx.data<DataType>(),
-              gw_temp.data<DataType>(),
-              eps_,
-              axis_size,
-              w_stride);
-        });
-      });
+  dispatch_float_types(gx.dtype(), "layernorm_vjp", [&](auto type_tag) {
+    dispatch_bool(has_w, [&](auto has_w_constant) {
+      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+      constexpr int N_READS = 16 / sizeof(DataType);
+      dispatch_block_dim(
+          cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+            auto kernel = cu::layer_norm_vjp<
+                DataType,
+                has_w_constant.value,
+                block_dim(),
+                N_READS>;
+            encoder.add_kernel_node(
+                kernel,
+                n_rows,
+                block_dim(),
+                0,
+                x.data<DataType>(),
+                w.data<DataType>(),
+                g.data<DataType>(),
+                gx.data<DataType>(),
+                gw_temp.data<DataType>(),
+                eps_,
+                axis_size,
+                w_stride);
+          });
     });
   });
 

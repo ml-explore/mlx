@@ -14,6 +14,10 @@ Event::Event(Stream stream) : stream_(stream) {
   auto p = metal::new_scoped_memory_pool();
   event_ = std::shared_ptr<void>(
       metal::device(Device::gpu).mtl_device()->newSharedEvent(), dtor);
+  if (event_ == nullptr) {
+    throw std::runtime_error(
+        "[Event::Event] Failed to create Metal shared event.");
+  }
 }
 
 void Event::wait() {

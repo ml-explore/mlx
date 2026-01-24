@@ -3,8 +3,6 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
-#include <dlfcn.h>
-#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -15,21 +13,7 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 
-namespace fs = std::filesystem;
-
 namespace mlx::core::metal {
-
-// Note, this function must be left inline in a header so that it is not
-// dynamically linked.
-inline std::string get_binary_directory() {
-  Dl_info info;
-  std::string directory;
-  int success = dladdr((void*)get_binary_directory, &info);
-  if (success) {
-    directory = fs::path(info.dli_fname).remove_filename().c_str();
-  }
-  return directory;
-}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
@@ -76,12 +60,12 @@ struct CommandEncoder {
     enc_->updateFence(fence);
   }
 
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
+    enc_->setBytes(vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, int idx) {
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, int idx) {
     return set_vector_bytes(vec, vec.size(), idx);
   }
 
@@ -110,7 +94,7 @@ struct CommandEncoder {
   };
 
   // Outputs of all kernels in the encoder including temporaries
-  std::unordered_set<const void*> outputs() {
+  std::unordered_set<const void*>& outputs() {
     return all_outputs_;
   };
 

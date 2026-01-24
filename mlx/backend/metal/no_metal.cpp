@@ -26,15 +26,15 @@ device_info() {
 
 namespace fast {
 
-MetalKernelFunction metal_kernel(
+CustomKernelFunction metal_kernel(
     const std::string&,
     const std::vector<std::string>&,
     const std::vector<std::string>&,
     const std::string&,
     const std::string&,
-    bool ensure_row_contiguous,
-    bool atomic_outputs) {
-  throw std::runtime_error("[metal_kernel] No GPU back-end.");
+    bool,
+    bool) {
+  throw std::runtime_error("[metal_kernel] No Metal back-end.");
 }
 
 } // namespace fast

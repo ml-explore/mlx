@@ -15,12 +15,11 @@ bool is_available() {
 }
 
 void new_stream(Stream s) {
-  // Force initalization of cuda, so cuda runtime get destroyed at last.
-  cudaFree(nullptr);
+  // Force initalization of CUDA by creating an event, so the CUDA runtime and
+  // our CUDA event pool get destroyed last.
+  cu::CudaEvent(cudaEventDefault);
   // Ensure the static stream objects get created.
   cu::get_command_encoder(s);
-  // The main thread is safe to free buffers.
-  cu::allocator().register_this_thread();
 }
 
 void eval(array& arr) {
@@ -37,22 +36,17 @@ void eval(array& arr) {
   }
 
   auto& encoder = cu::get_command_encoder(arr.primitive().stream());
-  if (encoder.has_gpu_work()) {
-    // Keep used buffers alive until kernel finishes running.
-    std::unordered_set<std::shared_ptr<array::Data>> buffers;
-    for (auto& in : arr.inputs()) {
-      buffers.insert(in.data_shared_ptr());
+  // Keep used buffers alive until kernel finishes running.
+  for (auto& in : arr.inputs()) {
+    // Except for the donated one.
+    if (in.data_shared_ptr() != arr.data_shared_ptr()) {
+      encoder.add_temporary(in);
     }
-    for (auto& s : arr.siblings()) {
-      buffers.insert(s.data_shared_ptr());
-    }
-    // Remove the output if it was donated to by an input.
-    if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-      buffers.erase(it);
-    }
-    encoder.add_completed_handler([buffers = std::move(buffers)]() {});
   }
-  encoder.end_encoding();
+  for (auto& s : arr.siblings()) {
+    encoder.add_temporary(s);
+  }
+  encoder.maybe_commit();
 }
 
 void finalize(Stream s) {
@@ -62,7 +56,7 @@ void finalize(Stream s) {
 
 void synchronize(Stream s) {
   nvtx3::scoped_range r("gpu::synchronize");
-  cu::get_stream(s).synchronize();
+  cu::get_command_encoder(s).synchronize();
 }
 
 } // namespace mlx::core::gpu

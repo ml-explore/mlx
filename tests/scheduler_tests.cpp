@@ -16,7 +16,7 @@ TEST_CASE("test stream management") {
   CHECK_NE(s1, s2);
 
   // Check that default streams have the correct devices
-  if (metal::is_available()) {
+  if (gpu::is_available()) {
     auto s_gpu = default_stream(Device::gpu);
     CHECK_EQ(s_gpu.device, Device::gpu);
   } else {
@@ -28,7 +28,7 @@ TEST_CASE("test stream management") {
   s_cpu = new_stream(Device::cpu);
   CHECK_EQ(s_cpu.device, Device::cpu);
 
-  if (metal::is_available()) {
+  if (gpu::is_available()) {
     auto s_gpu = new_stream(Device::gpu);
     CHECK_EQ(s_gpu.device, Device::gpu);
   } else {

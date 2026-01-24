@@ -20,29 +20,6 @@
 
 namespace mlx::core {
 
-namespace {
-
-void reshape(const array& in, array& out, Stream s) {
-  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
-  if (copy_necessary) {
-    out.set_data(allocator::malloc(out.nbytes()));
-    copy_gpu_inplace(
-        in,
-        out,
-        in.shape(),
-        in.strides(),
-        make_contiguous_strides(in.shape()),
-        0,
-        0,
-        CopyType::General,
-        s);
-  } else {
-    shared_buffer_reshape(in, out_strides, out);
-  }
-}
-
-} // namespace
-
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
   eval(inputs, out);
@@ -103,6 +80,74 @@ void Depends::eval_gpu(
   eval(inputs, outputs);
 }
 
+void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
+  MLX_PROFILER_RANGE("DynamicSlice::eval_gpu");
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& start = inputs[1];
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto s = stream();
+  auto in_offset = compute_dynamic_offset(start, in.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ in,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ out.shape(),
+      /* const Strides& i_strides = */ in.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* std::optional<array> dynamic_i_offset = */ std::move(in_offset),
+      /* std::optional<array> dynamic_o_offset = */ std::nullopt);
+}
+
+void DynamicSliceUpdate::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  MLX_PROFILER_RANGE("DynamicSliceUpdate::eval_gpu");
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+  auto& start_indices = inputs[2];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  // Copy or donate input to output
+  auto s = stream();
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
+
+  auto out_offset =
+      compute_dynamic_offset(start_indices, out.strides(), axes_, s);
+  copy_gpu_inplace(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const Shape& data_shape = */ upd.shape(),
+      /* const Strides& i_strides = */ upd.strides(),
+      /* const Strides& o_strides = */ out.strides(),
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ 0,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ s,
+      /* std::optional<array> dynamic_i_offset = */ std::nullopt,
+      /* std::optional<array> dynamic_o_offset = */ std::move(out_offset));
+}
+
 void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("ExpandDims::eval_gpu");
   eval(inputs, out);
@@ -124,7 +169,7 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Flatten::eval_gpu");
-  reshape(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, stream());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -133,6 +178,7 @@ void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
+  MLX_PROFILER_RANGE("Pad::eval_gpu");
   // Inputs must be base input array and scalar val array
   assert(inputs.size() == 2);
   auto& in = inputs[0];
@@ -149,7 +195,7 @@ void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Reshape::eval_gpu");
-  reshape(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, stream());
 }
 
 void Split::eval_gpu(
@@ -223,7 +269,7 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("Unflatten::eval_gpu");
-  reshape(inputs[0], out, stream());
+  reshape_gpu(inputs[0], out, stream());
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {

@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/device/complex.cuh"
 #include "mlx/backend/cuda/device/config.h"
 
-#include <cuComplex.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda/std/array>
@@ -27,6 +27,141 @@ namespace mlx::core::cu {
 // known at compile time.
 using Shape = cuda::std::array<int32_t, MAX_NDIM>;
 using Strides = cuda::std::array<int64_t, MAX_NDIM>;
+
+// Vectorized load/store.
+template <typename T, int N>
+struct alignas(sizeof(T) * N) AlignedVector {
+  T val[N];
+
+  __device__ T& operator[](int i) {
+    return val[i];
+  }
+
+  __device__ T operator[](int i) const {
+    return val[i];
+  }
+};
+
+template <int N, typename T>
+inline __host__ __device__ bool is_aligned(T* x) {
+  return (reinterpret_cast<uintptr_t>(x) % (N * sizeof(T))) == 0;
+}
+
+template <int N, typename T>
+inline __device__ AlignedVector<T, N> unsafe_load_vector(
+    const T* ptr,
+    uint32_t offset) {
+  auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+  return from[offset];
+}
+
+template <int N, typename T>
+inline __device__ AlignedVector<T, N> load_vector(
+    const T* ptr,
+    uint32_t offset) {
+  if (is_aligned<N>(ptr)) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] = ptr[offset * N + i];
+    }
+    return v;
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ AlignedVector<T, N>
+load_vector(const T* ptr, uint32_t offset, SizeT size, T fallback) {
+  if (is_aligned<N>(ptr) && (offset + 1) * N <= size) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] = (N * offset + i) < size ? ptr[offset * N + i] : fallback;
+    }
+    return v;
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ AlignedVector<T, N> load_vector(
+    const T* ptr,
+    uint32_t offset,
+    SizeT size,
+    int64_t stride,
+    T fallback) {
+  if (is_aligned<N>(ptr) && stride == 1 && (offset + 1) * N <= size) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  } else {
+    AlignedVector<T, N> v;
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      v[i] =
+          (N * offset + i) < size ? ptr[stride * (offset * N + i)] : fallback;
+    }
+    return v;
+  }
+}
+
+template <int N, typename T>
+inline __device__ void
+unsafe_store_vector(T* ptr, uint32_t offset, const AlignedVector<T, N>& vec) {
+  auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+  to[offset] = vec;
+}
+
+template <int N, typename T>
+inline __device__ void
+store_vector(T* ptr, uint32_t offset, const AlignedVector<T, N>& vec) {
+  if (is_aligned<N>(ptr)) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+#pragma unroll
+    for (int i = 0; i < N; ++i) {
+      ptr[offset * N + i] = vec[i];
+    }
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ void store_vector(
+    T* ptr,
+    uint32_t offset,
+    const AlignedVector<T, N>& vec,
+    SizeT size) {
+  if (is_aligned<N>(ptr) && (offset + 1) * N <= size) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+    for (int i = 0; (offset * N + i) < size && i < N; ++i) {
+      ptr[offset * N + i] = vec[i];
+    }
+  }
+}
+
+template <int N, typename T, typename SizeT>
+inline __device__ void store_vector(
+    T* ptr,
+    uint32_t offset,
+    const AlignedVector<T, N>& vec,
+    SizeT size,
+    int64_t stride) {
+  if (is_aligned<N>(ptr) && (offset + 1) * N <= size && stride == 1) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+    for (int i = 0; (offset * N + i) < size && i < N; ++i) {
+      ptr[stride * (offset * N + i)] = vec[i];
+    }
+  }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
@@ -78,20 +213,20 @@ struct Limits<
     return cuda::std::numeric_limits<T>::infinity();
   }
   static constexpr __host__ __device__ T min() {
-#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
-    return -cuda::std::numeric_limits<T>::infinity();
-#else
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
     return -cuda::std::numeric_limits<float>::infinity();
+#else
+    return -cuda::std::numeric_limits<T>::infinity();
 #endif
   }
   static constexpr __host__ __device__ T finite_max() {
     return cuda::std::numeric_limits<T>::max();
   }
   static constexpr __host__ __device__ T finite_min() {
-#if defined(__CUDA_ARCH__) || CUDART_VERSION >= 12000
-    return cuda::std::numeric_limits<T>::lowest();
-#else
+#if CUDART_VERSION < 12000 && __CUDA_ARCH__ < 800
     return cuda::std::numeric_limits<float>::lowest();
+#else
+    return cuda::std::numeric_limits<T>::lowest();
 #endif
   }
 };
@@ -106,13 +241,13 @@ struct Limits<bool> {
   }
 };
 
-template <>
-struct Limits<cuComplex> {
-  static constexpr __host__ __device__ cuComplex max() {
-    return {Limits<float>::max(), Limits<float>::max()};
+template <typename T>
+struct Limits<complex_t<T>> {
+  static constexpr __host__ __device__ complex_t<T> max() {
+    return {Limits<T>::max(), Limits<T>::max()};
   }
-  static constexpr __host__ __device__ cuComplex min() {
-    return {Limits<float>::min(), Limits<float>::min()};
+  static constexpr __host__ __device__ complex_t<T> min() {
+    return {Limits<T>::min(), Limits<T>::min()};
   }
 };
 
@@ -155,8 +290,8 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_nd(
 #pragma unroll
   for (int i = NDIM - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc);
@@ -175,28 +310,16 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_nd(
 #pragma unroll
   for (int i = NDIM - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
-    c_loc += dim_idx * c_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
+    c_loc += dim_idx * IdxT(c_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc, c_loc);
 }
 
-// Optimized version when ndim is larger than 4.
 template <typename IdxT = int64_t>
-inline __host__ __device__ IdxT
-elem_to_loc_4d(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
-  IdxT loc = 0;
-  for (int i = ndim - 1; i >= 0; --i) {
-    loc += (elem % shape[i]) * IdxT(strides[i]);
-    elem /= shape[i];
-  }
-  return loc;
-}
-
-template <typename IdxT = int64_t>
-inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
+inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc(
     IdxT elem,
     const int* shape,
     const int64_t* a_strides,
@@ -206,15 +329,15 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT> elem_to_loc_4d(
   IdxT b_loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc);
 }
 
 template <typename IdxT = int64_t>
-inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_4d(
+inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc(
     IdxT elem,
     const int* shape,
     const int64_t* a_strides,
@@ -226,9 +349,9 @@ inline __host__ __device__ cuda::std::tuple<IdxT, IdxT, IdxT> elem_to_loc_4d(
   IdxT c_loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
     int dim_idx = elem % shape[i];
-    a_loc += dim_idx * a_strides[i];
-    b_loc += dim_idx * b_strides[i];
-    c_loc += dim_idx * c_strides[i];
+    a_loc += dim_idx * IdxT(a_strides[i]);
+    b_loc += dim_idx * IdxT(b_strides[i]);
+    c_loc += dim_idx * IdxT(c_strides[i]);
     elem /= shape[i];
   }
   return cuda::std::make_tuple(a_loc, b_loc, c_loc);
@@ -337,22 +460,5 @@ struct LoopedElemToLoc<1, false, OffsetT> {
     return offset;
   }
 };
-
-inline __device__ cuComplex log1p(cuComplex in) {
-  float x = cuCrealf(in);
-  float y = cuCimagf(in);
-  float zabs = sqrt(x * x + y * y);
-  float theta = atan2f(y, x + 1);
-  if (zabs < 0.5f) {
-    float r = x * (2 + x) + y * y;
-    if (r == 0) { // handle underflow
-      return {x, theta};
-    }
-    return {0.5f * log1pf(r), theta};
-  } else {
-    auto z0 = sqrt((x + 1) * (x + 1) + y * y);
-    return {log(z0), theta};
-  }
-}
 
 } // namespace mlx::core::cu

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <tuple>
 #include <vector>
 
@@ -9,7 +10,8 @@
 
 namespace mlx::core {
 
-std::string get_primitive_string(Primitive* primitive);
+// Return the directory that contains current shared library.
+std::filesystem::path current_binary_dir();
 
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
@@ -195,7 +197,7 @@ void shared_buffer_reshape(
     array& out);
 
 template <typename T>
-inline std::vector<T> remove_index(std::vector<T> vec, size_t index) {
+inline SmallVector<T> remove_index(SmallVector<T> vec, size_t index) {
   vec.erase(std::next(vec.begin(), index));
   return vec;
 }

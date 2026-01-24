@@ -83,7 +83,7 @@ struct Conv2DInputBlockLoaderSmallChannels {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_hw;
+  int weight_hw;
 
   const device T* src[n_rows];
 

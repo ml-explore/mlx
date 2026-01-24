@@ -4,6 +4,7 @@
 
 #include "mlx/array.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/gpu/available.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/compile.h"
 #include "mlx/device.h"

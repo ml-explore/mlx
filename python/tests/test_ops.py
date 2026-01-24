@@ -1478,7 +1478,7 @@ class TestOps(mlx_tests.MLXTestCase):
             r_mlx = mlxop(y)
             mx.eval(r_mlx)
 
-            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
+            self.assertTrue(np.allclose(r_np, r_mlx, atol=atol, equal_nan=True))
 
         x = np.random.rand(9, 12, 18)
         xi = np.random.rand(9, 12, 18)
@@ -2189,6 +2189,12 @@ class TestOps(mlx_tests.MLXTestCase):
         x = np.random.uniform(size=(1, 4, 8, 1)).astype(np.float32)
         y_np = np.sort(x, axis=-2)
         y_mx = mx.sort(mx.array(x), axis=-2)
+        self.assertTrue(np.array_equal(y_np, y_mx))
+
+        # Test many segments
+        a = mx.random.uniform(shape=(512, 128))
+        y_mx = mx.sort(a, axis=-1)
+        y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
 
     def test_partition(self):
@@ -3048,6 +3054,45 @@ class TestOps(mlx_tests.MLXTestCase):
 
         out = mx.power(mx.array(0j), float("nan"))
         self.assertTrue(mx.isnan(out))
+
+    def test_irregular_alignments(self):
+        # Unaligned unary op
+        a = mx.ones((64, 1))
+        b = -a[1:]
+        self.assertTrue(mx.all(b == -1.0))
+
+        # Unaligned binary op
+        a = mx.ones((64, 1))
+        b = a[1:]
+        c = b + b
+        self.assertTrue(mx.all(c == 2.0))
+
+        # Unaligned ternary op
+        a = mx.ones((64, 1))
+        b = mx.zeros((63, 1))
+        c = mx.ones((63, 1)).astype(mx.bool_)
+        d = mx.where(c, a[1:], b)
+        self.assertTrue(mx.all(d == 1.0))
+
+    def test_integer_power(self):
+        x = mx.power(2, mx.array([8, 8, 8, 8, 8, 8, 8, 8]))
+        self.assertTrue(mx.all(x == 256))
+
+        # Doesn't hang
+        x = mx.power(2, -1)
+
+    def test_depends(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.exp(a)
+        c = mx.log(a)
+        out = mx.depends([b], [c])[0]
+        self.assertTrue(mx.array_equal(out, b))
+
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.exp(a)
+        c = mx.log(a)
+        out = mx.depends(b, c)
+        self.assertTrue(mx.array_equal(out, b))
 
 
 class TestBroadcast(mlx_tests.MLXTestCase):

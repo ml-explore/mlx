@@ -71,6 +71,7 @@ set(STEEL_HEADERS
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_gather.h
     steel/gemm/kernels/steel_gemm_masked.h
+    steel/gemm/kernels/steel_gemm_segmented.h
     steel/gemm/kernels/steel_gemm_splitk.h
     steel/utils/type_traits.h
     steel/utils/integral_constant.h)
@@ -107,7 +108,8 @@ if(NOT MLX_METAL_JIT)
     reduction/reduce_all.h
     reduction/reduce_col.h
     reduction/reduce_row.h)
-  build_kernel(quantized quantized.h ${STEEL_HEADERS})
+  build_kernel(quantized quantized.h quantized_utils.h ${STEEL_HEADERS})
+  build_kernel(fp4_quantized fp4_quantized.h quantized_utils.h ${STEEL_HEADERS})
   build_kernel(scan scan.h)
   build_kernel(softmax softmax.h)
   build_kernel(logsumexp logsumexp.h)
@@ -120,6 +122,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
+  build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
   build_kernel(gemv_masked steel/utils.h)
 endif()
 

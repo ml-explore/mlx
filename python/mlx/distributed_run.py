@@ -20,6 +20,8 @@ from select import select
 from subprocess import PIPE, Popen, run
 from typing import Optional
 
+import mlx.core as mx
+
 
 @dataclass
 class Host:
@@ -51,6 +53,11 @@ def parse_hardware_ports(ports_string):
             ports[port_name] = l.strip()[8:]
             port_name = None
     return ports
+
+
+def get_num_nvidia_gpus():
+    result = run(["nvidia-smi", "-L"], capture_output=True, text=True, check=True)
+    return len(result.stdout.strip().split("\n"))
 
 
 def extract_rings(hosts, index):
@@ -415,6 +422,57 @@ def launch_mpi(parser, hosts, args, command):
             pass
 
 
+def launch_nccl(parser, hosts, args, command):
+    master_host = hosts[0].ips[0]
+
+    if master_host != "127.0.0.1":
+        raise ValueError("The NCCL backend only supports localhost for now.")
+    master_port = args.nccl_port
+    world_size = len(hosts)
+
+    base_env = os.environ.copy()
+    base_env.update(
+        {
+            "NCCL_DEBUG": base_env.get(
+                "NCCL_DEBUG", "INFO" if args.verbose else "DEBUG"
+            ),
+            "NCCL_SOCKET_IFNAME": "lo",  # Use loopback for local communication
+            "NCCL_HOST_IP": master_host,
+            "NCCL_PORT": str(master_port),
+            "MLX_WORLD_SIZE": str(world_size),
+        }
+    )
+    procs = []
+    num_gpus = get_num_nvidia_gpus()
+    if num_gpus == 0:
+        raise RuntimeError("Cannot run NCCL backend with no GPUs.")
+    if args.repeat_hosts > num_gpus:
+        raise RuntimeError("NCCL requires a separate GPU per process.")
+
+    try:
+        for rank in range(world_size):
+            env = base_env.copy()
+            mlx_rank = str(rank % args.repeat_hosts)
+            env["MLX_RANK"] = mlx_rank
+            env["CUDA_VISIBLE_DEVICES"] = mlx_rank
+            p = Popen(command, env=env)
+            procs.append(p)
+
+        for p in procs:
+            ret = p.wait()
+            if ret != 0:
+                raise RuntimeError(f"Rank process exited with {ret}")
+
+    except (RuntimeError, KeyboardInterrupt) as err:
+        for p in procs:
+            if p.poll() is None:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+        raise
+
+
 def check_ssh_connections(hosts):
     results = [False] * len(hosts)
 
@@ -665,8 +723,8 @@ def distributed_config():
     )
     parser.add_argument(
         "--backend",
-        choices=["ring", "mpi"],
-        default="ring",
+        choices=["ring", "mpi", "nccl"],
+        default="nccl" if mx.cuda.is_available() else "ring",
         help="Which distributed backend to configure",
     )
     parser.add_argument(
@@ -737,8 +795,8 @@ def main():
     parser.add_argument("--hostfile", help="The file containing the hosts")
     parser.add_argument(
         "--backend",
-        choices=["ring", "mpi"],
-        default="ring",
+        choices=["ring", "mpi", "nccl"],
+        default="nccl" if mx.cuda.is_available() else "ring",
         help="Which distributed backend to launch",
     )
     parser.add_argument(
@@ -769,9 +827,14 @@ def main():
     parser.add_argument(
         "--cwd", help="Set the working directory on each node to the provided one"
     )
+    parser.add_argument(
+        "--nccl-port",
+        type=int,
+        default=12345,
+        help="The port to use for the NCCL communication (only for nccl backend)",
+    )
+
     args, rest = parser.parse_known_args()
-    if rest[0] == "--":
-        rest.pop(0)
 
     if args.print_python:
         print(sys.executable)
@@ -799,8 +862,10 @@ def main():
     # Launch
     if args.backend == "ring":
         launch_ring(parser, hosts, args, rest)
-    elif args.backend == "mpi":
+    if args.backend == "mpi":
         launch_mpi(parser, hosts, args, rest)
+    if args.backend == "nccl":
+        launch_nccl(parser, hosts, args, rest)
 
 
 if __name__ == "__main__":

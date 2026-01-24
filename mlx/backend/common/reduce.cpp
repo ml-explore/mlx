@@ -5,11 +5,9 @@
 namespace mlx::core {
 
 std::pair<Shape, Strides> shapes_without_reduction_axes(
-    const array& x,
+    Shape shape,
+    Strides strides,
     const std::vector<int>& axes) {
-  auto shape = x.shape();
-  auto strides = x.strides();
-
   for (int i = axes.size() - 1; i >= 0; i--) {
     int a = axes[i];
     shape.erase(shape.begin() + a);
@@ -17,6 +15,15 @@ std::pair<Shape, Strides> shapes_without_reduction_axes(
   }
 
   return std::make_pair(shape, strides);
+}
+
+std::pair<Shape, Strides> shapes_without_reduction_axes(
+    const array& x,
+    const std::vector<int>& axes) {
+  auto shape = x.shape();
+  auto strides = x.strides();
+  return shapes_without_reduction_axes(
+      std::move(shape), std::move(strides), axes);
 }
 
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {

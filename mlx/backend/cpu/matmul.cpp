@@ -81,7 +81,7 @@ void matmul_general(
       return std::make_tuple(true, sty, arr);
     } else {
       temps.push_back(array(arr.shape(), arr.dtype(), nullptr, {}));
-      copy(arr, temps.back(), CopyType::General, stream);
+      copy_cpu(arr, temps.back(), CopyType::General, stream);
       stx = arr.shape(-1);
       return std::make_tuple(false, stx, temps.back());
     }
@@ -142,7 +142,7 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   CopyType ctype = c.data_size() == 1
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-  copy(c, out, ctype, stream());
+  copy_cpu(c, out, ctype, stream());
   if (inputs[0].shape(-1) == 0) {
     return;
   }

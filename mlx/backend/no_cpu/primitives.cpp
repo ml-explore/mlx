@@ -105,6 +105,7 @@ NO_CPU(Scan)
 NO_CPU(Scatter)
 NO_CPU(ScatterAxis)
 NO_CPU(Select)
+NO_CPU(SegmentedMM)
 NO_CPU(Sigmoid)
 NO_CPU(Sign)
 NO_CPU(Sin)
@@ -128,7 +129,7 @@ NO_CPU(Inverse)
 NO_CPU(View)
 
 namespace fast {
-NO_CPU_MULTI(AffineQuantize)
+NO_CPU_MULTI(Quantize)
 } // namespace fast
 
 namespace distributed {

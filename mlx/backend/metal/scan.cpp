@@ -30,21 +30,11 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
           in.flags());
     }
   } else {
-    array arr_copy(in.shape(), in.dtype(), nullptr, {});
-    copy_gpu(in, arr_copy, CopyType::General, s);
-    in = std::move(arr_copy);
+    in = contiguous_copy_gpu(in, s);
     out.copy_shared_buffer(in);
   }
 
   bool contiguous = in.strides()[axis_] == 1;
-
-  std::ostringstream kname;
-  kname << (contiguous ? "contig_" : "strided_");
-  kname << "scan_";
-  if (reverse_) {
-    kname << "reverse_";
-  }
-  kname << ((inclusive_) ? "inclusive_" : "exclusive_");
 
   std::string reduce_type;
   switch (reduce_type_) {
@@ -64,9 +54,22 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       reduce_type = "logaddexp";
       break;
   }
-  kname << reduce_type << "_" << type_to_name(in) << "_" << type_to_name(out);
-  auto kernel = get_scan_kernel(
-      d, kname.str(), reverse_, inclusive_, reduce_type, in, out);
+
+  std::string kname;
+  concatenate(
+      kname,
+      contiguous ? "contig_" : "strided_",
+      "scan_",
+      reverse_ ? "reverse_" : "",
+      (inclusive_) ? "inclusive_" : "exclusive_",
+      reduce_type,
+      "_",
+      type_to_name(in),
+      "_",
+      type_to_name(out));
+
+  auto kernel =
+      get_scan_kernel(d, kname, reverse_, inclusive_, reduce_type, in, out);
 
   if (contiguous) {
     auto& compute_encoder = d.get_command_encoder(s.index);

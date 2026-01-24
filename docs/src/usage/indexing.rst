@@ -107,8 +107,20 @@ same array:
   >>> a
   array([1, 2, 0], dtype=int32)
 
+Note that unlike NumPy, slicing an array creates a copy, not a view. So
+mutating it does not mutate the original array:
 
-Note, unlike NumPy, updates to the same location are nondeterministic:
+.. code-block:: shell
+
+  >>> a = mx.array([1, 2, 3])
+  >>> b = a[:]
+  >>> b[2] = 0
+  >>> b
+  array([1, 2, 0], dtype=int32)
+  >>> a
+  array([1, 2, 3], dtype=int32)
+
+Also unlike NumPy, updates to the same location are nondeterministic:
 
 .. code-block:: shell
 

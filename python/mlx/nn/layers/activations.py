@@ -36,6 +36,24 @@ def relu(x):
 
 
 @partial(mx.compile, shapeless=True)
+def relu2(x):
+    r"""Applies the ReLU² activation function.
+
+    Applies :math:`\max(0, x)^2` element wise.
+    """
+    return mx.square(mx.maximum(x, 0))
+
+
+@partial(mx.compile, shapeless=True)
+def relu6(x):
+    r"""Applies the Rectified Linear Unit 6.
+
+    Applies :math:`\min(\max(x, 0), 6)` element wise.
+    """
+    return mx.minimum(mx.maximum(x, 0), 6.0)
+
+
+@partial(mx.compile, shapeless=True)
 def leaky_relu(x, negative_slope=0.01):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -60,15 +78,6 @@ def elu(x, alpha=1.0):
     Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
     return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
-
-
-@partial(mx.compile, shapeless=True)
-def relu6(x):
-    r"""Applies the Rectified Linear Unit 6.
-
-    Applies :math:`\min(\max(x, 0), 6)` element wise.
-    """
-    return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
 @partial(mx.compile, shapeless=True)
@@ -377,6 +386,22 @@ class ReLU(Module):
     """
 
 
+@_make_activation_module(relu2)
+class ReLU2(Module):
+    r"""Applies the ReLU² activation function.
+
+    See :func:`relu2` for the functional equivalent.
+    """
+
+
+@_make_activation_module(relu6)
+class ReLU6(Module):
+    r"""Applies the Rectified Linear Unit 6.
+
+    See :func:`relu6` for the functional equivalent.
+    """
+
+
 class LeakyReLU(Module):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -410,14 +435,6 @@ class ELU(Module):
 
     def __call__(self, x):
         return elu(x, self._alpha)
-
-
-@_make_activation_module(relu6)
-class ReLU6(Module):
-    r"""Applies the Rectified Linear Unit 6.
-
-    See :func:`relu6` for the functional equivalent.
-    """
 
 
 @_make_activation_module(softmax)
@@ -546,7 +563,7 @@ class GELU(Module):
 
     See :func:`gelu`, :func:`gelu_approx` and :func:`gelu_fast_approx` for the
     functional equivalents and information regarding error bounds.
-    
+
 
     Args:
         approx ('none' | 'precise' | 'fast'): Which approximation to gelu to use if any.
@@ -554,20 +571,19 @@ class GELU(Module):
 
     def __init__(self, approx="none"):
         super().__init__()
-
-        if approx == "none":
-            self._act = gelu
-        elif approx == "precise" or approx == "tanh":
-            self._act = gelu_approx
-        elif approx == "fast":
-            self._act = gelu_fast_approx
-        else:
+        self._approx = approx
+        allowed = ["none", "precise", "tanh", "fast"]
+        if approx not in allowed:
             raise ValueError(
-                f"The approximation should be in ['none', 'precise', 'tanh', 'fast'] but '{approx}' was given"
+                f"The approximation should be in {allowed} but '{approx}' was given"
             )
 
     def __call__(self, x):
-        return self._act(x)
+        if self._approx == "none":
+            return gelu(x)
+        elif self._approx in ["precise", "tanh"]:
+            return gelu_approx(x)
+        return gelu_fast_approx(x)
 
 
 @_make_activation_module(tanh)

@@ -11,7 +11,6 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <nvtx3/nvtx3.hpp>
-#include <cub/block/block_load.cuh>
 
 #include <cassert>
 
@@ -43,22 +42,23 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
   // Thread reduce.
   AccT prevmax;
   AccT maxval = Limits<AccT>::finite_min();
-  AccT normalizer = 0;
+  AccT normalizer = cast_to<AccT>(0);
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
-    AccT vals[N_READS];
-    cub::LoadDirectBlocked(
-        r * BLOCK_DIM + block.thread_rank(),
-        make_cast_iterator<AccT>(in),
-        vals,
-        axis_size,
-        Limits<AccT>::finite_min());
+    auto index = r * BLOCK_DIM + block.thread_rank();
+    auto vals = load_vector<N_READS>(in, index, axis_size, Limits<T>::min());
     prevmax = maxval;
-    maxval = max_op(maxval, cub::ThreadReduce(vals, max_op));
+#pragma unroll
+    for (int i = 0; i < N_READS; ++i) {
+      maxval = max_op(maxval, static_cast<AccT>(vals[i]));
+    }
+
     // Online normalizer calculation for softmax:
     // https://github.com/NVIDIA/online-softmax
     normalizer = normalizer * softmax_exp(prevmax - maxval);
+#pragma unroll
     for (int i = 0; i < N_READS; i++) {
-      normalizer = normalizer + softmax_exp(vals[i] - maxval);
+      normalizer =
+          normalizer + softmax_exp(static_cast<AccT>(vals[i]) - maxval);
     }
   }
 
@@ -79,7 +79,7 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
   block.sync();
   maxval = warp.thread_rank() < warp.meta_group_size()
       ? local_max[warp.thread_rank()]
-      : Limits<AccT>::finite_min();
+      : Limits<AccT>::min();
   maxval = cg::reduce(warp, maxval, max_op);
   normalizer = normalizer * softmax_exp(prevmax - maxval);
   if (warp.thread_rank() == 0) {
@@ -95,12 +95,11 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
   // Write output.
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
     auto index = r * BLOCK_DIM + block.thread_rank();
-    T vals[N_READS];
-    cub::LoadDirectBlocked(index, in, vals, axis_size);
+    auto vals = load_vector<N_READS>(in, index, axis_size, T(0));
     for (int i = 0; i < N_READS; i++) {
       vals[i] = softmax_exp(static_cast<AccT>(vals[i]) - maxval) * normalizer;
     }
-    cub::StoreDirectBlocked(index, out, vals, axis_size);
+    store_vector<N_READS>(out, index, vals, axis_size);
   }
 }
 
@@ -125,8 +124,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -141,18 +139,22 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "softmax", CTYPE, {
-      using DataType = cuda_type_t<CTYPE>;
-      constexpr int N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(cuda::ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = cu::softmax<DataType, DataType, BLOCK_DIM, N_READS>;
-        if (precise) {
-          kernel = cu::softmax<DataType, float, BLOCK_DIM, N_READS>;
-        }
-        kernel<<<n_rows, BLOCK_DIM, 0, stream>>>(
-            in.data<DataType>(), out.data<DataType>(), axis_size);
-      });
+  dispatch_float_types(out.dtype(), "softmax", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr int N_READS = 16 / sizeof(DataType);
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      auto kernel = cu::softmax<DataType, DataType, block_dim(), N_READS>;
+      if (precise) {
+        kernel = cu::softmax<DataType, float, block_dim(), N_READS>;
+      }
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          block_dim(),
+          0,
+          in.data<DataType>(),
+          out.data<DataType>(),
+          axis_size);
     });
   });
 }

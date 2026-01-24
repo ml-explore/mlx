@@ -13,7 +13,7 @@ silicon computer is
 
     pip install mlx
 
-To install from PyPI you must meet the following requirements:
+To install from PyPI your system must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
 - Using a native Python >= 3.9
@@ -23,12 +23,39 @@ To install from PyPI you must meet the following requirements:
     MLX is only available on devices running macOS >= 13.5
     It is highly recommended to use macOS 14 (Sonoma)
 
+CUDA
+^^^^
 
-MLX is also available on conda-forge. To install MLX with conda do:
+MLX has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
-   conda install conda-forge::mlx
+    pip install mlx[cuda]
+
+To install the CUDA package from PyPi your system must meet the following
+requirements:
+
+- Nvidia architecture >= SM 7.0 (Volta)
+- Nvidia driver >= 550.54.14
+- CUDA toolkit >= 12.0
+- Linux distribution with glibc >= 2.35
+- Python >= 3.9
+
+
+CPU-only (Linux)
+^^^^^^^^^^^^^^^^
+
+For a CPU-only version of MLX that runs on Linux use:
+
+.. code-block:: shell
+
+    pip install mlx[cpu]
+
+To install the CPU-only package from PyPi your system must meet the following
+requirements:
+
+- Linux distribution with glibc >= 2.35
+- Python >= 3.9
 
 
 Troubleshooting
@@ -65,6 +92,8 @@ Build Requirements
 Python API
 ^^^^^^^^^^
 
+.. _python install:
+
 To build and install the MLX python library from source, first, clone MLX from
 `its GitHub repo <https://github.com/ml-explore/mlx>`_:
 
@@ -76,20 +105,20 @@ Then simply build and install MLX using pip:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install .
+  pip install .
 
 For developing, install the package with development dependencies, and use an
 editable install:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e ".[dev]"
+  pip install -e ".[dev]"
 
 Once the development dependencies are installed, you can build faster with:
 
 .. code-block:: shell
 
- CMAKE_BUILD_PARALLEL_LEVEL=8 python setup.py build_ext --inplace
+ python setup.py build_ext --inplace
 
 Run the tests with:
 
@@ -106,6 +135,8 @@ IDE:
 
 C++ API
 ^^^^^^^
+
+.. _cpp install:
 
 Currently, MLX must be built and installed from source.
 
@@ -185,6 +216,7 @@ should point to the path to the built metal library.
 
       xcrun -sdk macosx --show-sdk-version
 
+
 Binary Size Minimization
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -212,6 +244,50 @@ on a given machine. Note run-time compilation incurs a cold-start cost which can
 be anwywhere from a few hundred millisecond to a few seconds depending on the
 application. Once a kernel is compiled, it will be cached by the system. The
 Metal kernel cache persists across reboots.
+
+Linux
+^^^^^
+
+To build from source on Linux (CPU only), install the BLAS and LAPACK headers.
+For example on Ubuntu, run the following:
+
+.. code-block:: shell
+
+   apt-get update -y
+   apt-get install libblas-dev liblapack-dev liblapacke-dev -y
+
+From here follow the instructions to install either the :ref:`Python <python
+install>` or :ref:`C++ <cpp install>` APIs.
+
+CUDA
+^^^^
+
+To build from source on Linux with CUDA, install the BLAS and LAPACK headers
+and the CUDA toolkit. For example on Ubuntu, run the following:
+
+.. code-block:: shell
+
+   wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+   dpkg -i cuda-keyring_1.1-1_all.deb
+   apt-get update -y
+   apt-get -y install cuda-toolkit-12-9
+   apt-get install libblas-dev liblapack-dev liblapacke-dev libcudnn9-dev-cuda-12 -y
+
+
+When building either the Python or C++ APIs make sure to pass the cmake flag
+``MLX_BUILD_CUDA=ON``. For example, to build the Python API run:
+
+.. code-block:: shell
+
+  CMAKE_ARGS="-DMLX_BUILD_CUDA=ON" pip install -e ".[dev]"
+
+To build the C++ package run:
+
+.. code-block:: shell
+
+   mkdir -p build && cd build
+   cmake .. -DMLX_BUILD_CUDA=ON && make -j
+
 
 Troubleshooting
 ^^^^^^^^^^^^^^^

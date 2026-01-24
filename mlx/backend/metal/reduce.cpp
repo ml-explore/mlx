@@ -247,15 +247,25 @@ std::pair<Dtype, Dtype> remap_reduce_types(
     const std::string& op_name) {
   if (op_name == "sum" || op_name == "prod") {
     if (issubdtype(in.dtype(), integer)) {
-      switch (in.dtype().size()) {
-        case 1:
+      switch (in.dtype()) {
+        case uint8:
+          return {uint8, uint32};
+        case uint16:
+          return {uint16, uint32};
+        case uint32:
+          return {uint32, uint32};
+        case uint64:
+          return {uint64, uint64};
+        case int8:
           return {int8, int32};
-        case 2:
+        case int16:
           return {int16, int32};
-        case 4:
+        case int32:
           return {int32, int32};
-        case 8:
+        case int64:
           return {int64, int64};
+        default:
+          throw std::runtime_error("Unsupported integer type");
       }
     }
     if (in.dtype() == bool_) {
@@ -989,8 +999,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     //       input for the axes with stride smaller than the minimum reduction
     //       stride.
     if (plan.type == GeneralReduce) {
-      array in_copy(in.shape(), in.dtype(), nullptr, {});
-      copy_gpu(in, in_copy, CopyType::General, s);
+      array in_copy = contiguous_copy_gpu(in, s);
       d.add_temporary(in_copy, s.index);
       in = in_copy;
       plan = get_reduction_plan(in, axes_);

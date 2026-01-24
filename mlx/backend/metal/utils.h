@@ -40,7 +40,7 @@ inline void debug_set_primitive_buffer_label(
   if (auto cbuf_label = command_buffer->label(); cbuf_label) {
     label << cbuf_label->utf8String();
   }
-  primitive.print(label);
+  label << primitive.name();
   command_buffer->setLabel(make_string(label));
 #endif
 }

@@ -17,6 +17,7 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/mlx_func.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
@@ -51,7 +52,6 @@ set_target_properties(
              ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY})
 
 target_link_libraries(core PRIVATE mlx)
-target_compile_definitions(core PRIVATE _VERSION_=${MLX_VERSION})
 
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

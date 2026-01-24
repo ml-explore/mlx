@@ -10,7 +10,7 @@ using namespace mlx::core;
 
 TEST_CASE("test device placement") {
   auto device = default_device();
-  Device d = metal::is_available() ? Device::gpu : Device::cpu;
+  Device d = gpu::is_available() ? Device::gpu : Device::cpu;
   if (std::getenv("DEVICE") == nullptr) {
     CHECK_EQ(device, d);
   }
@@ -18,7 +18,7 @@ TEST_CASE("test device placement") {
   array x(1.0f);
   array y(1.0f);
   auto z = add(x, y, default_device());
-  if (metal::is_available()) {
+  if (gpu::is_available()) {
     z = add(x, y, Device::gpu);
     z = add(x, y, Device(Device::gpu, 0));
   } else {

@@ -1,20 +1,34 @@
+mlx.core.__prefix__:
+  from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+  import sys
+  if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+  else:
+    from typing_extensions import TypeAlias
+
+mlx.core.__suffix__:
+  from typing import Union
+  scalar: TypeAlias = Union[int, float, bool]
+  list_or_scalar: TypeAlias = Union[scalar, list["list_or_scalar"]]
+  bool_: Dtype = ...
+
 mlx.core.distributed.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core import array, Dtype, Device, Stream, scalar
   from mlx.core.distributed import Group
   from typing import Sequence, Optional, Union
 
 mlx.core.fast.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core import array, Dtype, Device, Stream, scalar
   from typing import Sequence, Optional, Union
 
 mlx.core.linalg.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core import array, Dtype, Device, Stream, scalar
   from typing import Sequence, Optional, Tuple, Union
 
 mlx.core.metal.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core import array, Dtype, Device, Stream, scalar
   from typing import Sequence, Optional, Union
 
 mlx.core.random.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core import array, Dtype, Device, Stream, scalar, float32, int32
   from typing import Sequence, Optional, Union

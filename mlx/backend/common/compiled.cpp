@@ -14,6 +14,8 @@ void print_constant(std::ostream& os, const array& x) {
       return print_float_constant<float16_t>(os, x);
     case bfloat16:
       return print_float_constant<bfloat16_t>(os, x);
+    case float64:
+      return print_float_constant<double>(os, x);
     case complex64:
       return print_complex_constant<complex64_t>(os, x);
     case int8:
@@ -50,6 +52,8 @@ std::string get_type_string(Dtype d) {
       return "float16_t";
     case bfloat16:
       return "bfloat16_t";
+    case float64:
+      return "double";
     case complex64:
       return "complex64_t";
     case bool_:

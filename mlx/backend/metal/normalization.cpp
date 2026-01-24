@@ -40,8 +40,7 @@ void RMSNorm::eval_gpu(
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -107,9 +106,7 @@ void RMSNormVJP::eval_gpu(
     if (x.flags().row_contiguous) {
       return {x, false};
     }
-
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     return {x_copy, true};
   };
   bool donate_x = inputs[0].is_donatable();
@@ -241,8 +238,7 @@ void LayerNorm::eval_gpu(
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -319,8 +315,7 @@ void LayerNormVJP::eval_gpu(
     if (x.flags().row_contiguous) {
       return {x, false};
     }
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
+    array x_copy = contiguous_copy_gpu(x, s);
     return {x_copy, true};
   };
   bool donate_x = inputs[0].is_donatable();

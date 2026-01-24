@@ -196,6 +196,13 @@ class TestOptimizers(mlx_tests.MLXTestCase):
                 )
             )
 
+        # Test for correct gradient type propagation
+        params = tree_map(lambda x: x.astype(mx.float16), params)
+        grads = tree_map(lambda x: x.astype(mx.float16), grads)
+        optim = opt.Adam(1e-2, bias_correction=True)
+        new_params = optim.apply_gradients(grads, params)
+        self.assertTrue(tree_equal(lambda p: p.dtype == mx.float16, new_params))
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_adamw_matches_pytorch(self):
         mx.random.seed(0)
@@ -278,6 +285,53 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             self.assertEqual(xp["x"].dtype, x.dtype)
             self.assertEqual(xp["x"].shape, x.shape)
         self.assertEqual(optimizer.state["step"], 2)
+
+    def test_muon(self):
+        params = {
+            "first": [mx.zeros((10, 5)), mx.zeros((1,))],
+            "second": mx.zeros((3, 3)),
+            "conv": mx.zeros((16, 8, 3, 3)),
+        }
+        grads = tree_map(lambda x: mx.ones_like(x), params)
+
+        # Explicit init
+        optim = opt.Muon(learning_rate=1e-2, momentum=0.95, nesterov=True)
+        optim.init(params)
+        self.assertTrue(
+            tree_equal(
+                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                params,
+                optim.state,
+            )
+        )
+
+        # Test update
+        updated_params = optim.apply_gradients(grads, params)
+
+        # Check that shapes are preserved
+        self.assertTrue(
+            tree_equal(
+                lambda p, u: p.shape == u.shape,
+                params,
+                updated_params,
+            )
+        )
+
+        # Check that parameters actually changed
+        self.assertFalse(
+            tree_equal(
+                lambda p, u: mx.array_equal(p, u),
+                params,
+                updated_params,
+            )
+        )
+
+        # Test with different configurations
+        optim_no_nesterov = opt.Muon(learning_rate=1e-2, momentum=0.95, nesterov=False)
+        optim_no_nesterov.apply_gradients(grads, params)
+
+        optim_no_momentum = opt.Muon(learning_rate=1e-2, momentum=0.0)
+        optim_no_momentum.apply_gradients(grads, params)
 
     def test_compiled_optimizer(self):
         model = nn.Linear(10, 10)

@@ -172,7 +172,7 @@ std::string write_template(
   return template_def.str();
 }
 
-MetalKernelFunction metal_kernel(
+CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -316,7 +316,10 @@ MetalKernelFunction metal_kernel(
             threadgroup,
             shape_infos,
             ensure_row_contiguous,
-            init_value),
+            init_value,
+            std::vector<ScalarArg>{},
+            false,
+            0),
         std::move(inputs));
   };
 }
