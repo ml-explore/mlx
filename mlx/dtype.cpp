@@ -92,6 +92,21 @@ Dtype::Kind kindof(const Dtype& t) {
   return type_kinds[static_cast<int>(t.val())];
 }
 
+template class MLX_API TypeToDtype<bool>;
+template class MLX_API TypeToDtype<uint8_t>;
+template class MLX_API TypeToDtype<uint16_t>;
+template class MLX_API TypeToDtype<uint32_t>;
+template class MLX_API TypeToDtype<uint64_t>;
+template class MLX_API TypeToDtype<int8_t>;
+template class MLX_API TypeToDtype<int16_t>;
+template class MLX_API TypeToDtype<int32_t>;
+template class MLX_API TypeToDtype<int64_t>;
+template class MLX_API TypeToDtype<float16_t>;
+template class MLX_API TypeToDtype<float>;
+template class MLX_API TypeToDtype<double>;
+template class MLX_API TypeToDtype<bfloat16_t>;
+template class MLX_API TypeToDtype<complex64_t>;
+
 template <>
 TypeToDtype<bool>::operator Dtype() {
   return bool_;
