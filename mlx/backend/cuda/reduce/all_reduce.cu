@@ -14,11 +14,11 @@ namespace cu {
 namespace cg = cooperative_groups;
 
 template <typename T>
-__device__ __forceinline__ T absmax(T x) {
+__device__ __forceinline__ auto absmax(T x) {
   if constexpr (cuda::std::is_unsigned_v<T>) {
     return x; // No-op for unsigned types
   } else {
-    return abs(x); // Uses cu::abs for half types, ::abs for others
+    return cuda::std::abs(x);
   }
 }
 

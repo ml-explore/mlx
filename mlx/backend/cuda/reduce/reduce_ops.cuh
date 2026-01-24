@@ -114,30 +114,8 @@ struct Max {
   }
 };
 
-struct AbsMax {
-  // abs is applied inside all_reduce kernel
-  template <typename T>
-  __device__ __forceinline__ T operator()(T a, T b) {
-    if constexpr (is_complex_v<T>) {
-      if (isnan(a.real()) || isnan(a.imag())) {
-        return a;
-      }
-      if (isnan(b.real()) || isnan(b.imag())) {
-        return b;
-      }
-    } else if constexpr (!cuda::std::is_integral_v<T>) {
-      if (isnan(a) || isnan(b)) {
-        return cuda::std::numeric_limits<float>::quiet_NaN();
-      }
-    }
-    return a > b ? a : b;
-  }
-
-  template <typename T>
-  __device__ void atomic_update(T* x, T y) {
-    atomic_reduce<T, AbsMax>(x, y);
-  }
-};
+// AbsMax reuses Max logic; abs is applied inside all_reduce kernel
+struct AbsMax : Max {};
 
 // Traits to get the result type of reduce op.
 template <typename Op, typename T>
