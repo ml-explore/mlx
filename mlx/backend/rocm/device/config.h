@@ -2,13 +2,42 @@
 
 #pragma once
 
-// ROCm/HIP specific configuration
-#define ROCM_MAX_THREADS_PER_BLOCK 1024
-#define ROCM_WARP_SIZE 64
-#define ROCM_MAX_BLOCKS_PER_GRID 65535
-
 namespace mlx::core::rocm {
-constexpr int kMaxThreadsPerBlock = ROCM_MAX_THREADS_PER_BLOCK;
-constexpr int kWarpSize = ROCM_WARP_SIZE;
-constexpr int kMaxBlocksPerGrid = ROCM_MAX_BLOCKS_PER_GRID;
+
+// Configuration constants for ROCm kernels
+
+// Default thread block size
+constexpr int kDefaultBlockSize = 256;
+
+// Maximum threads per block (typical for AMD GPUs)
+constexpr int kMaxThreadsPerBlock = 1024;
+
+// Warp size (wavefront size on AMD GPUs is typically 64)
+constexpr int kWarpSize = 64;
+
+// Maximum shared memory per block (in bytes)
+constexpr int kMaxSharedMemoryPerBlock = 65536;
+
+// Maximum number of dimensions supported
+constexpr int kMaxNdim = 8;
+
+// Reduce constants
+constexpr int kReduceBlockSize = 256;
+constexpr int kReduceMaxBlocks = 1024;
+
+// Copy constants
+constexpr int kCopyBlockSize = 256;
+
+// Softmax constants
+constexpr int kSoftmaxBlockSize = 256;
+
+// Layer norm constants
+constexpr int kLayerNormBlockSize = 256;
+
+// RMS norm constants
+constexpr int kRMSNormBlockSize = 256;
+
+// Attention constants
+constexpr int kAttentionBlockSize = 256;
+
 } // namespace mlx::core::rocm

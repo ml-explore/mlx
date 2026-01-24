@@ -1,23 +1,62 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/random.h"
+#include "mlx/primitives.h"
+
 #include <hip/hip_runtime.h>
+#include <hiprand/hiprand_kernel.h>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
-__global__ void random_uniform_kernel(float* output, int n, unsigned int seed) {
+namespace rocm {
+
+template <typename T>
+__global__ void random_uniform_kernel(
+    T* out,
+    size_t size,
+    T low,
+    T high,
+    unsigned long long seed) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < n) {
-    // Simple LCG placeholder - real implementation would use rocRAND
-    unsigned int state = seed + idx;
-    state = state * 1103515245 + 12345;
-    output[idx] = (float)(state & 0x7FFFFFFF) / (float)0x7FFFFFFF;
-  }
+  if (idx >= size) return;
+  
+  hiprandState state;
+  hiprand_init(seed, idx, 0, &state);
+  
+  float r = hiprand_uniform(&state);
+  out[idx] = static_cast<T>(low + r * (high - low));
 }
 
-void launch_random_uniform(float* output, int n, unsigned int seed, hipStream_t stream) {
-  int threads = 256;
-  int blocks = (n + threads - 1) / threads;
-  hipLaunchKernelGGL(random_uniform_kernel, dim3(blocks), dim3(threads), 0, stream, output, n, seed);
+template <typename T>
+__global__ void random_normal_kernel(
+    T* out,
+    size_t size,
+    T mean,
+    T stddev,
+    unsigned long long seed) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= size) return;
+  
+  hiprandState state;
+  hiprand_init(seed, idx, 0, &state);
+  
+  float r = hiprand_normal(&state);
+  out[idx] = static_cast<T>(mean + r * stddev);
 }
 
-} // namespace mlx::core::rocm 
+} // namespace rocm
+
+void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+  
+  out.set_data(allocator::malloc(out.nbytes()));
+  
+  // For now, use a simple random implementation
+  // TODO: Implement proper random bits generation
+  throw std::runtime_error("RandomBits not yet fully implemented for ROCm");
+}
+
+} // namespace mlx::core

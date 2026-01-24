@@ -2,216 +2,313 @@
 
 #pragma once
 
-#include <hip/hip_bfloat16.h>
-#include <hip/hip_fp16.h>
+#include "mlx/backend/rocm/device/unary_ops.hpp"
+
 #include <hip/hip_runtime.h>
-#include <hipcomplex.h>
 
 namespace mlx::core::rocm {
 
-// Arithmetic operations
 struct Add {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a + b;
+  __device__ T operator()(T x, T y) {
+    return x + y;
   }
 };
 
-struct Subtract {
+struct FloorDivide {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a - b;
-  }
-};
-
-struct Multiply {
-  template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a * b;
+  __device__ T operator()(T x, T y) {
+    if constexpr (std::is_integral_v<T>) {
+      return x / y;
+    } else {
+      return truncf(x / y);
+    }
   }
 };
 
 struct Divide {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a / b;
-  }
-};
-
-struct Power {
-  template <typename T>
-  __device__ T operator()(T a, T b) {
-    return powf(a, b);
-  }
-
-  __device__ double operator()(double a, double b) {
-    return pow(a, b);
+  __device__ T operator()(T x, T y) {
+    return x / y;
   }
 };
 
 struct Remainder {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return fmodf(a, b);
-  }
-
-  __device__ double operator()(double a, double b) {
-    return fmod(a, b);
+  __device__ T operator()(T x, T y) {
+    if constexpr (std::is_integral_v<T>) {
+      if constexpr (std::is_signed_v<T>) {
+        auto r = x % y;
+        if (r != 0 && (r < 0 != y < 0)) {
+          r += y;
+        }
+        return r;
+      } else {
+        return x % y;
+      }
+    } else if constexpr (is_complex_v<T>) {
+      // Complex modulo not typically defined, return x
+      return x;
+    } else {
+      T r = fmodf(x, y);
+      if (r != 0 && (r < 0 != y < 0)) {
+        r = r + y;
+      }
+      return r;
+    }
   }
 };
 
-// Comparison operations
 struct Equal {
   template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a == b;
-  }
-};
-
-struct NotEqual {
-  template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a != b;
-  }
-};
-
-struct Greater {
-  template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a > b;
-  }
-};
-
-struct GreaterEqual {
-  template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a >= b;
-  }
-};
-
-struct Less {
-  template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a < b;
-  }
-};
-
-struct LessEqual {
-  template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return a <= b;
+  __device__ bool operator()(T x, T y) {
+    return x == y;
   }
 };
 
 struct NaNEqual {
   template <typename T>
-  __device__ bool operator()(T a, T b) {
-    return (isnan(a) && isnan(b)) || (a == b);
+  __device__ bool operator()(T x, T y) {
+    if constexpr (is_complex_v<T>) {
+      return (x.x == y.x && x.y == y.y) ||
+          (isnan(x.x) && isnan(y.x) && isnan(x.y) && isnan(y.y)) ||
+          (x.x == y.x && isnan(x.y) && isnan(y.y)) ||
+          (isnan(x.x) && isnan(y.x) && x.y == y.y);
+    } else {
+      return x == y || (isnan(x) && isnan(y));
+    }
   }
 };
 
-// Logic operations
-struct LogicalAnd {
-  __device__ bool operator()(bool a, bool b) {
-    return a && b;
-  }
-};
-
-struct LogicalOr {
-  __device__ bool operator()(bool a, bool b) {
-    return a || b;
-  }
-};
-
-// Math operations
-struct Maximum {
+struct Greater {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return fmaxf(a, b);
-  }
-
-  __device__ double operator()(double a, double b) {
-    return fmax(a, b);
+  __device__ bool operator()(T x, T y) {
+    return x > y;
   }
 };
 
-struct Minimum {
+struct GreaterEqual {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return fminf(a, b);
+  __device__ bool operator()(T x, T y) {
+    return x >= y;
   }
+};
 
-  __device__ double operator()(double a, double b) {
-    return fmin(a, b);
+struct Less {
+  template <typename T>
+  __device__ bool operator()(T x, T y) {
+    return x < y;
+  }
+};
+
+struct LessEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) {
+    return x <= y;
   }
 };
 
 struct LogAddExp {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    T max_val = fmaxf(a, b);
-    T min_val = fminf(a, b);
-    if (isinf(max_val)) {
-      return max_val;
+  __device__ T operator()(T x, T y) {
+    if constexpr (is_complex_v<T>) {
+      if (isnan(x.x) || isnan(x.y) || isnan(y.x) || isnan(y.y)) {
+        return {
+            numeric_limits<float>::quiet_NaN(),
+            numeric_limits<float>::quiet_NaN()};
+      }
+      auto maxv = x.x > y.x ? x : y;
+      auto minv = x.x < y.x ? x : y;
+      auto min_real = minv.x;
+      auto max_real = maxv.x;
+      if (!isfinite(min_real) && (min_real == max_real)) {
+        if (min_real < 0) {
+          return minv;
+        } else {
+          return Log{}(hipCaddf(Exp{}(minv), Exp{}(maxv)));
+        }
+      } else {
+        return hipCaddf(Log1p{}(Exp{}(hipCsubf(minv, maxv))), maxv);
+      }
+    } else {
+      if (isnan(x) || isnan(y)) {
+        return numeric_limits<T>::quiet_NaN();
+      }
+      T maxval = fmaxf(x, y);
+      T minval = fminf(x, y);
+      return (minval == -numeric_limits<T>::infinity() ||
+              maxval == numeric_limits<T>::infinity())
+          ? maxval
+          : T(float(maxval) + log1pf(expf(minval - maxval)));
     }
-    return max_val + log1pf(expf(min_val - max_val));
-  }
-
-  __device__ double operator()(double a, double b) {
-    double max_val = fmax(a, b);
-    double min_val = fmin(a, b);
-    if (isinf(max_val)) {
-      return max_val;
-    }
-    return max_val + log1p(exp(min_val - max_val));
-  }
+  };
 };
 
-struct ArcTan2 {
+struct Maximum {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return atan2f(a, b);
-  }
-
-  __device__ double operator()(double a, double b) {
-    return atan2(a, b);
+  __device__ T operator()(T x, T y) {
+    if constexpr (std::is_integral_v<T>) {
+      return max(x, y);
+    } else if constexpr (is_complex_v<T>) {
+      if (isnan(x.x) || isnan(x.y)) {
+        return x;
+      }
+      // Compare by real part first, then imaginary
+      if (x.x > y.x || (x.x == y.x && x.y > y.y)) {
+        return x;
+      }
+      return y;
+    } else {
+      if (isnan(x)) {
+        return x;
+      }
+      return x > y ? x : y;
+    }
   }
 };
 
-// Bitwise operations
+struct Minimum {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    if constexpr (std::is_integral_v<T>) {
+      return min(x, y);
+    } else if constexpr (is_complex_v<T>) {
+      if (isnan(x.x) || isnan(x.y)) {
+        return x;
+      }
+      // Compare by real part first, then imaginary
+      if (x.x < y.x || (x.x == y.x && x.y < y.y)) {
+        return x;
+      }
+      return y;
+    } else {
+      if (isnan(x)) {
+        return x;
+      }
+      return x < y ? x : y;
+    }
+  }
+};
+
+struct Multiply {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    return x * y;
+  }
+};
+
+struct NotEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) {
+    if constexpr (is_complex_v<T>) {
+      return x.x != y.x || x.y != y.y;
+    } else {
+      return x != y;
+    }
+  }
+};
+
+struct Power {
+  template <typename T>
+  __device__ T operator()(T base, T exp) {
+    if constexpr (std::is_integral_v<T>) {
+      T res = 1;
+      // Raising an integer to a negative power is undefined
+      if constexpr (std::is_signed_v<T>) {
+        if (exp < 0) {
+          return 0;
+        }
+      }
+      while (exp) {
+        if (exp & 1) {
+          res *= base;
+        }
+        exp >>= 1;
+        base *= base;
+      }
+      return res;
+    } else if constexpr (is_complex_v<T>) {
+      // Complex power: base^exp = exp(exp * log(base))
+      float r = hypotf(base.x, base.y);
+      float theta = atan2f(base.y, base.x);
+      float log_r = logf(r);
+      float new_r = expf(exp.x * log_r - exp.y * theta);
+      float new_theta = exp.x * theta + exp.y * log_r;
+      return make_hipFloatComplex(new_r * cosf(new_theta), new_r * sinf(new_theta));
+    } else {
+      return powf(base, exp);
+    }
+  }
+};
+
+struct Subtract {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    return x - y;
+  }
+};
+
+struct LogicalAnd {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    return x && y;
+  };
+};
+
+struct LogicalOr {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    return x || y;
+  };
+};
+
 struct BitwiseAnd {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a & b;
-  }
+  __device__ T operator()(T x, T y) {
+    return x & y;
+  };
 };
 
 struct BitwiseOr {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a | b;
-  }
+  __device__ T operator()(T x, T y) {
+    return x | y;
+  };
 };
 
 struct BitwiseXor {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a ^ b;
-  }
+  __device__ T operator()(T x, T y) {
+    return x ^ y;
+  };
 };
 
 struct LeftShift {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a << b;
-  }
+  __device__ T operator()(T x, T y) {
+    return x << y;
+  };
 };
 
 struct RightShift {
   template <typename T>
-  __device__ T operator()(T a, T b) {
-    return a >> b;
+  __device__ T operator()(T x, T y) {
+    return x >> y;
+  };
+};
+
+struct ArcTan2 {
+  template <typename T>
+  __device__ T operator()(T y, T x) {
+    return atan2f(y, x);
   }
+};
+
+struct DivMod {
+  template <typename T>
+  __device__ hip_array<T, 2> operator()(T x, T y) {
+    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+  };
 };
 
 } // namespace mlx::core::rocm

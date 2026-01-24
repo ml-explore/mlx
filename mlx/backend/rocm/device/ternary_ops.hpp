@@ -8,8 +8,8 @@ namespace mlx::core::rocm {
 
 struct Select {
   template <typename T>
-  __device__ T operator()(bool condition, T a, T b) const {
-    return condition ? a : b;
+  __device__ T operator()(bool condition, T x, T y) {
+    return condition ? x : y;
   }
 };
 

@@ -8,13 +8,11 @@
 
 namespace mlx::core {
 
-HipStream::HipStream(rocm::Device& device) {
-  device.make_current();
-  CHECK_HIP_ERROR(hipStreamCreateWithFlags(&stream_, hipStreamNonBlocking));
-}
-
-HipStream::~HipStream() {
-  CHECK_HIP_ERROR(hipStreamDestroy(stream_));
+void check_rocblas_error(const char* name, rocblas_status err) {
+  if (err != rocblas_status_success) {
+    throw std::runtime_error(
+        fmt::format("{} failed with code: {}.", name, static_cast<int>(err)));
+  }
 }
 
 void check_hip_error(const char* name, hipError_t err) {
@@ -25,22 +23,58 @@ void check_hip_error(const char* name, hipError_t err) {
 }
 
 const char* dtype_to_hip_type(const Dtype& dtype) {
-  if (dtype == float16) {
-    return "__half";
+  switch (dtype) {
+    case bool_:
+      return "bool";
+    case int8:
+      return "int8_t";
+    case int16:
+      return "int16_t";
+    case int32:
+      return "int32_t";
+    case int64:
+      return "int64_t";
+    case uint8:
+      return "uint8_t";
+    case uint16:
+      return "uint16_t";
+    case uint32:
+      return "uint32_t";
+    case uint64:
+      return "uint64_t";
+    case float16:
+      return "__half";
+    case bfloat16:
+      return "__hip_bfloat16";
+    case float32:
+      return "float";
+    case float64:
+      return "double";
+    case complex64:
+      return "complex64_t";
+    default:
+      return "unknown";
   }
-  if (dtype == bfloat16) {
-    return "__hip_bfloat16";
-  }
-  if (dtype == complex64) {
-    return "hipFloatComplex";
-  }
-#define SPECIALIZE_DtypeToString(CPP_TYPE, DTYPE) \
-  if (dtype == DTYPE) {                           \
-    return #CPP_TYPE;                             \
-  }
-  MLX_FORALL_DTYPES(SPECIALIZE_DtypeToString)
-#undef SPECIALIZE_DtypeToString
-  return nullptr;
+}
+
+HipGraph::HipGraph(rocm::Device& device) {
+  device.make_current();
+  CHECK_HIP_ERROR(hipGraphCreate(&handle_, 0));
+}
+
+void HipGraph::end_capture(hipStream_t stream) {
+  assert(handle_ == nullptr);
+  CHECK_HIP_ERROR(hipStreamEndCapture(stream, &handle_));
+}
+
+void HipGraphExec::instantiate(hipGraph_t graph) {
+  assert(handle_ == nullptr);
+  CHECK_HIP_ERROR(hipGraphInstantiate(&handle_, graph, nullptr, nullptr, 0));
+}
+
+HipStream::HipStream(rocm::Device& device) {
+  device.make_current();
+  CHECK_HIP_ERROR(hipStreamCreateWithFlags(&handle_, hipStreamNonBlocking));
 }
 
 } // namespace mlx::core

@@ -1,28 +1,24 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/primitives.h"
+
 #include <hip/hip_runtime.h>
+#include <rocprim/rocprim.hpp>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
-__global__ void argmax_kernel(float* input, int* output, int n) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  // For now, use a simple implementation
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
   
-  // Simple argmax placeholder
-  if (idx == 0) {
-    int max_idx = 0;
-    float max_val = input[0];
-    for (int i = 1; i < n; i++) {
-      if (input[i] > max_val) {
-        max_val = input[i];
-        max_idx = i;
-      }
-    }
-    output[0] = max_idx;
-  }
+  const array& in = inputs[0];
+  out.set_data(allocator::malloc(out.nbytes()));
+  
+  // TODO: Implement proper arg reduce using rocPrim
+  throw std::runtime_error("ArgReduce not yet fully implemented for ROCm");
 }
 
-void launch_argmax(float* input, int* output, int n, hipStream_t stream) {
-  hipLaunchKernelGGL(argmax_kernel, dim3(1), dim3(1), 0, stream, input, output, n);
-}
-
-} // namespace mlx::core::rocm 
+} // namespace mlx::core

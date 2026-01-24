@@ -2,10 +2,10 @@
 
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/utils.h"
-#include "mlx/backend/rocm/worker.h"
+#include "mlx/utils.h"
 
-#include <fmt/format.h>
 #include <hip/hip_runtime.h>
+#include <fmt/format.h>
 #include <unistd.h>
 
 #include <cassert>
@@ -14,14 +14,68 @@ namespace mlx::core {
 
 namespace rocm {
 
+constexpr int page_size = 16384;
+
+// Any allocations smaller than this will try to use the small pool
+constexpr int small_block_size = 8;
+
+// The small pool size in bytes. This should be a multiple of the host page
+// size and small_block_size.
+constexpr int small_pool_size = 4 * page_size;
+
+SmallSizePool::SmallSizePool() {
+  auto num_blocks = small_pool_size / small_block_size;
+  buffer_ = new Block[num_blocks];
+
+  next_free_ = buffer_;
+
+  CHECK_HIP_ERROR(hipMallocManaged(&data_, small_pool_size));
+  CHECK_HIP_ERROR(
+      hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0));
+
+  auto curr = next_free_;
+  for (size_t i = 1; i < num_blocks; ++i) {
+    curr->next = buffer_ + i;
+    curr = curr->next;
+  }
+  curr->next = nullptr;
+}
+
+SmallSizePool::~SmallSizePool() {
+  CHECK_HIP_ERROR(hipFree(data_));
+  delete[] buffer_;
+}
+
+RocmBuffer* SmallSizePool::malloc() {
+  if (next_free_ == nullptr) {
+    return nullptr;
+  }
+  Block* b = next_free_;
+  uint64_t i = next_free_ - buffer_;
+  next_free_ = next_free_->next;
+  b->buf.data = static_cast<char*>(data_) + i * small_block_size;
+  b->buf.size = small_block_size;
+  return &b->buf;
+}
+
+void SmallSizePool::free(RocmBuffer* buf) {
+  auto b = reinterpret_cast<Block*>(buf);
+  b->next = next_free_;
+  next_free_ = b;
+}
+
+bool SmallSizePool::in_pool(RocmBuffer* buf) {
+  constexpr int num_blocks = (small_pool_size / small_block_size);
+  auto b = reinterpret_cast<Block*>(buf);
+  int64_t block_num = b - buffer_;
+  return block_num >= 0 && block_num < num_blocks;
+}
+
 RocmAllocator::RocmAllocator()
     : buffer_cache_(
-          getpagesize(),
+          page_size,
           [](RocmBuffer* buf) { return buf->size; },
-          [this](RocmBuffer* buf) {
-            rocm_free(buf->data);
-            delete buf;
-          }) {
+          [this](RocmBuffer* buf) { rocm_free(buf); }) {
   // TODO: Set memory limit for multi-device.
   size_t free, total;
   CHECK_HIP_ERROR(hipMemGetInfo(&free, &total));
@@ -31,22 +85,37 @@ RocmAllocator::RocmAllocator()
 
 Buffer RocmAllocator::malloc(size_t size) {
   // Find available buffer from cache.
+  auto orig_size = size;
   std::unique_lock lock(mutex_);
+  if (size <= small_block_size) {
+    size = 8;
+  } else if (size < page_size) {
+    size = next_power_of_2(size);
+  } else {
+    size = page_size * ((size + page_size - 1) / page_size);
+  }
+
   RocmBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
-    // If we have a lot of memory pressure or are over the maximum cache size,
-    // try to reclaim memory from the cache.
-    size_t mem_required = get_active_memory() + get_cache_memory() + size;
-    if (mem_required >= memory_limit_) {
-      buffer_cache_.release_cached_buffers(mem_required - memory_limit_);
+    // If we have a lot of memory pressure try to reclaim memory from the cache.
+    int64_t mem_to_free =
+        get_active_memory() + get_cache_memory() + size - memory_limit_;
+    if (mem_to_free > 0) {
+      buffer_cache_.release_cached_buffers(mem_to_free);
     }
 
+    // Try the scalar pool first
+    if (size <= small_block_size) {
+      buf = scalar_pool_.malloc();
+    }
     lock.unlock();
-    buf = new RocmBuffer{nullptr, size};
-    hipError_t err = hipMallocManaged(&buf->data, size);
-    if (err != hipSuccess && err != hipErrorMemoryAllocation) {
-      throw std::runtime_error(
-          fmt::format("hipMallocManaged failed: {}.", hipGetErrorString(err)));
+    if (!buf) {
+      buf = new RocmBuffer{nullptr, size};
+      hipError_t err = hipMallocManaged(&buf->data, size);
+      if (err != hipSuccess && err != hipErrorMemoryAllocation) {
+        throw std::runtime_error(fmt::format(
+            "hipMallocManaged failed: {}.", hipGetErrorString(err)));
+      }
     }
     lock.lock();
   }
@@ -57,7 +126,6 @@ Buffer RocmAllocator::malloc(size_t size) {
   if (get_cache_memory() > max_pool_size_) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
-
   return Buffer{buf};
 }
 
@@ -72,9 +140,7 @@ void RocmAllocator::free(Buffer buffer) {
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
-    lock.unlock();
-    rocm_free(buf->data);
-    delete buf;
+    rocm_free(buf);
   }
 }
 
@@ -86,28 +152,14 @@ size_t RocmAllocator::size(Buffer buffer) const {
   return buf->size;
 }
 
-void RocmAllocator::register_this_thread() {
-  std::lock_guard lock(worker_mutex_);
-  allowed_threads_.insert(std::this_thread::get_id());
-}
-
-void RocmAllocator::rocm_free(void* buf) {
-  // If rocm_free() is called from a unregistered thread, reschedule the call to
-  // worker.
-  {
-    std::lock_guard lock(worker_mutex_);
-    if (allowed_threads_.count(std::this_thread::get_id()) == 0) {
-      if (!worker_) {
-        worker_.reset(new Worker);
-      }
-      worker_->add_task([this, buf]() { this->rocm_free(buf); });
-      worker_->end_batch();
-      worker_->commit();
-      return;
-    }
+// This must be called with mutex_ acquired
+void RocmAllocator::rocm_free(RocmBuffer* buf) {
+  if (scalar_pool_.in_pool(buf)) {
+    scalar_pool_.free(buf);
+  } else {
+    hipFree(buf->data);
+    delete buf;
   }
-
-  hipFree(buf);
 }
 
 size_t RocmAllocator::get_active_memory() const {

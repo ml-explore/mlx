@@ -2,61 +2,118 @@
 
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/rocm/device/hip_complex_math.hpp"
 #include "mlx/backend/rocm/device/unary_ops.hpp"
-#include "mlx/backend/rocm/iterators/general_iterator.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
-#include <rocthrust/device_ptr.h>
-#include <rocthrust/transform.h>
+#include <hip/hip_cooperative_groups.h>
 
 namespace mlx::core {
 
 namespace rocm {
 
+namespace cg = cooperative_groups;
+
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
+__global__ void unary_v(const In* in, Out* out, IdxT size) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  IdxT stride = blockDim.x * gridDim.x;
+
+  for (IdxT i = index * N_READS; i < size; i += stride * N_READS) {
+    if (i + N_READS <= size) {
+      #pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        out[i + j] = Op{}(in[i + j]);
+      }
+    } else {
+      for (IdxT j = i; j < size; ++j) {
+        out[j] = Op{}(in[j]);
+      }
+    }
+  }
+}
+
+template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
+__global__ void unary_g(
+    const In* in,
+    Out* out,
+    IdxT size_rest,
+    const int* shape,
+    const int64_t* strides,
+    int ndim) {
+  IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
+  if (index_rest >= size_rest) {
+    return;
+  }
+
+  auto shape_x = shape[ndim - 1];
+  auto stride_x = strides[ndim - 1];
+  IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  // Compute base offset for this row
+  IdxT idx = 0;
+  IdxT tmp = index_rest * shape_x;
+  for (int i = ndim - 1; i >= 0; --i) {
+    idx += (tmp % shape[i]) * strides[i];
+    tmp /= shape[i];
+  }
+  
+  // Process elements in this row
+  for (IdxT i = index_x * N_READS; i < shape_x; i += blockDim.x * gridDim.x * N_READS) {
+    if (i + N_READS <= shape_x) {
+      #pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        IdxT in_idx = idx + (i + j) * stride_x;
+        out[shape_x * index_rest + i + j] = Op{}(in[in_idx]);
+      }
+    } else {
+      for (IdxT j = i; j < shape_x; ++j) {
+        IdxT in_idx = idx + j * stride_x;
+        out[shape_x * index_rest + j] = Op{}(in[in_idx]);
+      }
+    }
+  }
+}
+
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {
-  if (std::is_same_v<Op, Abs> || std::is_same_v<Op, Negative> ||
-      std::is_same_v<Op, Sign>) {
+  if constexpr (std::is_same_v<Op, Abs> || std::is_same_v<Op, Negative> ||
+      std::is_same_v<Op, Sign> || std::is_same_v<Op, Square>) {
     return std::is_same_v<In, Out>;
   }
-  if (std::is_same_v<Op, ArcCos> || std::is_same_v<Op, ArcCosh> ||
-      std::is_same_v<Op, ArcSin> || std::is_same_v<Op, ArcSinh> ||
-      std::is_same_v<Op, ArcTan> || std::is_same_v<Op, ArcTanh> ||
-      std::is_same_v<Op, Erf> || std::is_same_v<Op, ErfInv> ||
-      std::is_same_v<Op, Expm1> || std::is_same_v<Op, Sigmoid> ||
-      std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Rsqrt>) {
-    return std::is_same_v<In, Out> && is_floating_v<In>;
+  if constexpr (std::is_same_v<Op, ArcCosh> || std::is_same_v<Op, ArcSinh> ||
+      std::is_same_v<Op, ArcTanh> || std::is_same_v<Op, Erf> ||
+      std::is_same_v<Op, ErfInv> || std::is_same_v<Op, Expm1> ||
+      std::is_same_v<Op, Sigmoid>) {
+    return std::is_same_v<In, Out> && std::is_floating_point_v<In>;
   }
-  if (std::is_same_v<Op, Log> || std::is_same_v<Op, Log2> ||
-      std::is_same_v<Op, Log10> || std::is_same_v<Op, Log1p>) {
-    return std::is_same_v<In, Out> && is_inexact_v<In>;
-  }
-  if (std::is_same_v<Op, BitwiseInvert>) {
+  if constexpr (std::is_same_v<Op, BitwiseInvert>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
         !std::is_same_v<In, bool>;
   }
-  if (std::is_same_v<Op, Ceil> || std::is_same_v<Op, Floor> ||
-      std::is_same_v<Op, Square>) {
-    return std::is_same_v<In, Out> && !std::is_same_v<In, complex64_t>;
+  if constexpr (std::is_same_v<Op, Ceil> || std::is_same_v<Op, Floor>) {
+    return std::is_same_v<In, Out> && !is_complex_v<In>;
   }
-  if (std::is_same_v<Op, Conjugate>) {
-    return std::is_same_v<In, Out> && std::is_same_v<In, complex64_t>;
+  if constexpr (std::is_same_v<Op, Conjugate>) {
+    return std::is_same_v<In, Out> && is_complex_v<In>;
   }
-  if (std::is_same_v<Op, Cos> || std::is_same_v<Op, Cosh> ||
-      std::is_same_v<Op, Exp> || std::is_same_v<Op, Round> ||
-      std::is_same_v<Op, Sin> || std::is_same_v<Op, Sinh> ||
-      std::is_same_v<Op, Tan> || std::is_same_v<Op, Tanh>) {
-    return std::is_same_v<In, Out> &&
-        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+  if constexpr (std::is_same_v<Op, ArcCos> || std::is_same_v<Op, ArcSin> ||
+      std::is_same_v<Op, ArcTan> || std::is_same_v<Op, Cos> ||
+      std::is_same_v<Op, Cosh> || std::is_same_v<Op, Exp> ||
+      std::is_same_v<Op, Log> || std::is_same_v<Op, Log2> ||
+      std::is_same_v<Op, Log10> || std::is_same_v<Op, Log1p> ||
+      std::is_same_v<Op, Round> || std::is_same_v<Op, Rsqrt> ||
+      std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Sin> ||
+      std::is_same_v<Op, Sinh> || std::is_same_v<Op, Tan> ||
+      std::is_same_v<Op, Tanh>) {
+    return std::is_same_v<In, Out>;
   }
-  if (std::is_same_v<Op, Imag> || std::is_same_v<Op, Real>) {
-    return std::is_same_v<In, complex64_t> && std::is_same_v<Out, float>;
+  if constexpr (std::is_same_v<Op, Imag> || std::is_same_v<Op, Real>) {
+    return is_complex_v<In> && std::is_same_v<Out, float>;
   }
-  if (std::is_same_v<Op, LogicalNot>) {
+  if constexpr (std::is_same_v<Op, LogicalNot>) {
     return std::is_same_v<In, Out> && std::is_same_v<In, bool>;
   }
   return false;
@@ -68,60 +125,102 @@ template <typename Op>
 void unary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   auto& in = inputs[0];
   if (in.size() == 0) {
     return;
   }
+  bool contig = in.flags().contiguous;
+  bool large;
+  if (!contig) {
+    large = in.data_size() > INT32_MAX || out.size() > INT32_MAX;
+  } else {
+    large = in.data_size() > UINT32_MAX;
+  }
 
   auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](hipStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, {
-      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, {
-        if constexpr (rocm::supports_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
-          using InType = hip_type_t<CTYPE_IN>;
-          using OutType = hip_type_t<CTYPE_OUT>;
-          auto policy = rocm::thrust_policy(stream);
-          auto in_ptr = rocthrust::device_pointer_cast(in.data<InType>());
-          auto out_ptr = rocthrust::device_pointer_cast(out.data<OutType>());
-          if (in.flags().contiguous) {
-            rocthrust::transform(
-                policy, in_ptr, in_ptr + in.data_size(), out_ptr, Op());
-          } else {
-            auto [shape, strides] = collapse_contiguous_dims(in);
-            auto [in_begin, in_end] = rocm::make_general_iterators<int64_t>(
-                in_ptr, in.size(), shape, strides);
-            rocthrust::transform(policy, in_begin, in_end, out_ptr, Op());
-          }
-        } else {
-          throw std::runtime_error(fmt::format(
-              "Can not do unary op {} on input of {} with output of {}.",
-              op,
-              dtype_to_string(in.dtype()),
-              dtype_to_string(out.dtype())));
-        }
-      });
+  
+  // Simple dispatch for common types
+  auto launch_kernel = [&](auto in_ptr, auto out_ptr, auto size) {
+    using InType = std::remove_pointer_t<decltype(in_ptr)>;
+    using OutType = std::remove_pointer_t<decltype(out_ptr)>;
+    
+    constexpr int N_READS = 4;
+    int block_size = 256;
+    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+    num_blocks = std::min(num_blocks, 65535);
+    
+    encoder.launch_kernel([&](hipStream_t stream) {
+      if (large) {
+        hipLaunchKernelGGL(
+            (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            in_ptr, out_ptr, static_cast<int64_t>(size));
+      } else {
+        hipLaunchKernelGGL(
+            (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            in_ptr, out_ptr, static_cast<uint32_t>(size));
+      }
     });
-  });
+  };
+  
+  // Type dispatch
+  switch (in.dtype()) {
+    case float32:
+      launch_kernel(in.data<float>(), out.data<float>(), out.data_size());
+      break;
+    case float16:
+      launch_kernel(in.data<__half>(), out.data<__half>(), out.data_size());
+      break;
+    case bfloat16:
+      launch_kernel(in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), out.data_size());
+      break;
+    case int32:
+      launch_kernel(in.data<int32_t>(), out.data<int32_t>(), out.data_size());
+      break;
+    case int64:
+      launch_kernel(in.data<int64_t>(), out.data<int64_t>(), out.data_size());
+      break;
+    case uint32:
+      launch_kernel(in.data<uint32_t>(), out.data<uint32_t>(), out.data_size());
+      break;
+    case uint64:
+      launch_kernel(in.data<uint64_t>(), out.data<uint64_t>(), out.data_size());
+      break;
+    case int8:
+      launch_kernel(in.data<int8_t>(), out.data<int8_t>(), out.data_size());
+      break;
+    case uint8:
+      launch_kernel(in.data<uint8_t>(), out.data<uint8_t>(), out.data_size());
+      break;
+    case bool_:
+      launch_kernel(in.data<bool>(), out.data<bool>(), out.data_size());
+      break;
+    default:
+      throw std::runtime_error(fmt::format(
+          "Unsupported type {} for unary op {}.",
+          dtype_to_string(in.dtype()), op));
+  }
 }
 
 template <typename Op>
 void unary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   set_unary_output_data(inputs[0], out);
   unary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
-#define UNARY_GPU(func)                                                 \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {   \
-    auto& s = out.primitive().stream();                                 \
-    unary_op_gpu<rocm::func>(inputs, out, get_primitive_string(this), s); \
+#define UNARY_GPU(func)                                               \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    auto& s = out.primitive().stream();                               \
+    unary_op_gpu<rocm::func>(inputs, out, name(), s);                 \
   }
 
 UNARY_GPU(Abs)
@@ -156,16 +255,15 @@ UNARY_GPU(Tanh)
 
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = out.primitive().stream();
-  auto op = get_primitive_string(this);
   switch (base_) {
     case Base::e:
-      unary_op_gpu<rocm::Log>(inputs, out, op, s);
+      unary_op_gpu<rocm::Log>(inputs, out, name(), s);
       break;
     case Base::two:
-      unary_op_gpu<rocm::Log2>(inputs, out, op, s);
+      unary_op_gpu<rocm::Log2>(inputs, out, name(), s);
       break;
     case Base::ten:
-      unary_op_gpu<rocm::Log10>(inputs, out, op, s);
+      unary_op_gpu<rocm::Log10>(inputs, out, name(), s);
       break;
   }
 }
@@ -175,7 +273,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   auto& s = out.primitive().stream();
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu<rocm::Round>(inputs, out, get_primitive_string(this), s);
+    unary_op_gpu<rocm::Round>(inputs, out, name(), s);
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
@@ -192,31 +290,3 @@ void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 } // namespace mlx::core
-
-__global__ void relu_kernel(float* input, float* output, int n) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < n) {
-    output[idx] = fmaxf(0.0f, input[idx]);
-  }
-}
-
-__global__ void sigmoid_kernel(float* input, float* output, int n) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < n) {
-    output[idx] = 1.0f / (1.0f + expf(-input[idx]));
-  }
-}
-
-void launch_relu(float* input, float* output, int n, hipStream_t stream) {
-  int threads = 256;
-  int blocks = (n + threads - 1) / threads;
-  hipLaunchKernelGGL(relu_kernel, dim3(blocks), dim3(threads), 0, stream, input, output, n);
-}
-
-void launch_sigmoid(float* input, float* output, int n, hipStream_t stream) {
-  int threads = 256;
-  int blocks = (n + threads - 1) / threads;
-  hipLaunchKernelGGL(sigmoid_kernel, dim3(blocks), dim3(threads), 0, stream, input, output, n);
-}
-
-} // namespace mlx::core::rocm 

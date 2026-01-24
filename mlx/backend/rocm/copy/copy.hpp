@@ -2,59 +2,74 @@
 
 #pragma once
 
+#include "mlx/array.h"
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/gpu/copy.h"
+
 #include <hip/hip_runtime.h>
-#include <cstddef>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
-// Copy function declarations
+namespace rocm {
+
+// Cast operation for copy
+template <typename Out, typename In>
+__device__ Out cast_to(In x) {
+  return static_cast<Out>(x);
+}
+
+// Specializations for half types
+template <>
+__device__ inline float cast_to<float, __half>(__half x) {
+  return __half2float(x);
+}
+
+template <>
+__device__ inline __half cast_to<__half, float>(float x) {
+  return __float2half(x);
+}
+
+template <>
+__device__ inline float cast_to<float, __hip_bfloat16>(__hip_bfloat16 x) {
+  return __bfloat162float(x);
+}
+
+template <>
+__device__ inline __hip_bfloat16 cast_to<__hip_bfloat16, float>(float x) {
+  return __float2bfloat16(x);
+}
+
+} // namespace rocm
+
+// Forward declarations
 void copy_contiguous(
-    const void* src,
-    void* dst,
-    size_t size,
-    hipStream_t stream);
-
-void copy_general(
-    const void* src,
-    void* dst,
-    const int* src_shape,
-    const size_t* src_strides,
-    const int* dst_shape,
-    const size_t* dst_strides,
-    int ndim,
-    size_t size,
-    size_t dtype_size,
-    hipStream_t stream);
-
-void copy_general_dynamic(
-    const void* src,
-    void* dst,
-    const int* src_shape,
-    const size_t* src_strides,
-    const int* dst_shape,
-    const size_t* dst_strides,
-    int ndim,
-    size_t size,
-    size_t dtype_size,
-    hipStream_t stream);
+    rocm::CommandEncoder& encoder,
+    CopyType ctype,
+    const array& in,
+    array& out,
+    int64_t in_offset,
+    int64_t out_offset);
 
 void copy_general_input(
-    const void* src,
-    void* dst,
-    const int* src_shape,
-    const size_t* src_strides,
-    const int* dst_shape,
-    const size_t* dst_strides,
-    int ndim,
-    size_t size,
-    size_t dtype_size,
-    hipStream_t stream);
+    rocm::CommandEncoder& encoder,
+    CopyType ctype,
+    const array& in,
+    array& out,
+    int64_t in_offset,
+    int64_t out_offset,
+    const Shape& shape,
+    const Strides& strides_in);
 
-// Utility functions for element location calculation
-__device__ size_t
-elem_to_loc(size_t elem, const int* shape, const size_t* strides, int ndim);
+void copy_general(
+    rocm::CommandEncoder& encoder,
+    CopyType ctype,
+    const array& in,
+    array& out,
+    int64_t in_offset,
+    int64_t out_offset,
+    const Shape& shape,
+    const Strides& strides_in,
+    const Strides& strides_out);
 
-__device__ size_t
-loc_to_elem(size_t loc, const int* shape, const size_t* strides, int ndim);
-
-} // namespace mlx::core::rocm
+} // namespace mlx::core

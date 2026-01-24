@@ -8,9 +8,9 @@ namespace mlx::core::rocm {
 
 template <typename T>
 __global__ void arange_kernel(T* out, T start, T step, size_t size) {
-  size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < size) {
-    out[tid] = start + static_cast<T>(tid) * step;
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < size) {
+    out[idx] = start + static_cast<T>(idx) * step;
   }
 }
 

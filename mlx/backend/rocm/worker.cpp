@@ -1,73 +1,76 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/worker.h"
-#include "mlx/backend/rocm/utils.h"
+#include "mlx/backend/rocm/device.h"
 
 namespace mlx::core::rocm {
 
-Worker::Worker() : worker_thread_(&Worker::worker_loop, this) {}
+Worker::Worker()
+    : signal_stream_(device(mlx::core::Device::gpu)),
+      signal_event_(hipEventDisableTiming | hipEventBlockingSync),
+      worker_(&Worker::thread_fn, this) {}
 
 Worker::~Worker() {
   {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard lock(mtx_);
     stop_ = true;
   }
-  cv_.notify_all();
-  if (worker_thread_.joinable()) {
-    worker_thread_.join();
-  }
+  cond_.notify_one();
+  worker_.join();
 }
 
 void Worker::add_task(std::function<void()> task) {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    tasks_.push(task);
-  }
-  cv_.notify_one();
+  pending_tasks_.push_back(std::move(task));
 }
 
-void Worker::consume_in_this_thread() {
-  std::queue<std::function<void()>> local_tasks;
+void Worker::signal(void* data) {
+  auto w = static_cast<Worker*>(data);
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    local_tasks.swap(tasks_);
+    std::lock_guard lock(w->mtx_);
+    w->signaled_batch_++;
   }
-
-  while (!local_tasks.empty()) {
-    auto task = local_tasks.front();
-    local_tasks.pop();
-    task();
-  }
+  w->cond_.notify_one();
 }
 
 void Worker::commit(hipStream_t stream) {
-  // Synchronize with stream and then process tasks
-  CHECK_HIP_ERROR(hipStreamSynchronize(stream));
-  consume_in_this_thread();
+  // Move pending tasks into tasks
+  if (pending_tasks_.empty()) {
+    return;
+  }
+  {
+    std::lock_guard lock(mtx_);
+    // Move pending tasks into ready tasks
+    worker_tasks_[++committed_batch_] = std::move(pending_tasks_);
+  }
+  signal_event_.record(stream);
+  signal_event_.wait(signal_stream_);
+  hipLaunchHostFunc(signal_stream_, signal, this);
 }
 
-void Worker::commit() {
-  cv_.notify_all();
-}
-
-void Worker::worker_loop() {
-  while (true) {
-    std::function<void()> task;
+void Worker::thread_fn() {
+  while (!stop_) {
+    uint64_t current_batch = 0;
+    Tasks tasks;
     {
-      std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
-
-      if (stop_) {
-        break;
+      std::unique_lock<std::mutex> lk(mtx_);
+      cond_.wait(lk, [this, &current_batch] {
+        return this->signaled_batch_ > current_batch || this->stop_;
+      });
+      current_batch = signaled_batch_;
+      auto end = worker_tasks_.upper_bound(current_batch);
+      for (auto it = worker_tasks_.begin(); it != end; ++it) {
+        if (tasks.empty()) {
+          tasks = std::move(it->second);
+        } else {
+          std::move(
+              it->second.begin(), it->second.end(), std::back_inserter(tasks));
+        }
       }
-
-      if (!tasks_.empty()) {
-        task = tasks_.front();
-        tasks_.pop();
-      }
+      worker_tasks_.erase(worker_tasks_.begin(), end);
     }
-
-    if (task) {
+    // Make sure tasks are cleared before the next wait
+    for (size_t i = 0; i < tasks.size(); ++i) {
+      auto task = std::move(tasks[i]);
       task();
     }
   }

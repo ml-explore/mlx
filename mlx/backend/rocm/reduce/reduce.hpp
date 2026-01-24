@@ -2,118 +2,231 @@
 
 #pragma once
 
+#include "mlx/array.h"
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/utils.hpp"
+#include "mlx/backend/common/reduce.h"
+
 #include <hip/hip_runtime.h>
-#include <cstddef>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
-// Reduction operation types
-template <typename Op, typename T>
-struct ReduceInit {
-  static constexpr T value();
-};
+namespace rocm {
 
-template <typename T>
-struct ReduceInit<struct Sum, T> {
-  static constexpr T value() {
-    return T(0);
-  }
-};
-
-template <typename T>
-struct ReduceInit<struct Max, T> {
-  static constexpr T value() {
-    return -std::numeric_limits<T>::infinity();
-  }
-};
-
-template <typename T>
-struct ReduceInit<struct Min, T> {
-  static constexpr T value() {
-    return std::numeric_limits<T>::infinity();
-  }
-};
-
-// Reduction operations
-struct Sum {
+// Reduce operations
+struct ReduceSum {
   template <typename T>
-  __device__ T operator()(T a, T b) const {
-    return a + b;
-  }
-};
-
-struct Max {
+  __device__ T operator()(T a, T b) const { return a + b; }
+  
   template <typename T>
-  __device__ T operator()(T a, T b) const {
-    return fmax(a, b);
-  }
+  __device__ T init() const { return T(0); }
 };
 
-struct Min {
+struct ReduceProd {
   template <typename T>
-  __device__ T operator()(T a, T b) const {
-    return fmin(a, b);
-  }
-};
-
-struct Prod {
+  __device__ T operator()(T a, T b) const { return a * b; }
+  
   template <typename T>
-  __device__ T operator()(T a, T b) const {
-    return a * b;
-  }
+  __device__ T init() const { return T(1); }
 };
 
-// Utility functions for reductions
-template <typename T>
-__device__ T warp_reduce(T val, T (*op)(T, T)) {
-  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
-    val = op(val, __shfl_down(val, offset));
+struct ReduceMax {
+  template <typename T>
+  __device__ T operator()(T a, T b) const { return a > b ? a : b; }
+  
+  template <typename T>
+  __device__ T init() const { return numeric_limits<T>::lowest(); }
+};
+
+struct ReduceMin {
+  template <typename T>
+  __device__ T operator()(T a, T b) const { return a < b ? a : b; }
+  
+  template <typename T>
+  __device__ T init() const { return numeric_limits<T>::max(); }
+};
+
+struct ReduceAnd {
+  __device__ bool operator()(bool a, bool b) const { return a && b; }
+  __device__ bool init() const { return true; }
+};
+
+struct ReduceOr {
+  __device__ bool operator()(bool a, bool b) const { return a || b; }
+  __device__ bool init() const { return false; }
+};
+
+// Warp-level reduction using shuffle
+template <typename T, typename Op>
+__device__ T warp_reduce(T val, Op op) {
+  constexpr int warp_size = 64;  // AMD wavefront size
+  for (int offset = warp_size / 2; offset > 0; offset /= 2) {
+    val = op(val, __shfl_xor(val, offset));
   }
   return val;
 }
 
-template <typename T>
-__device__ T block_reduce(T val, T (*op)(T, T)) {
-  static __shared__ T shared[32];
-  int lane = threadIdx.x % warpSize;
-  int wid = threadIdx.x / warpSize;
-
+// Block-level reduction
+template <typename T, typename Op, int BLOCK_SIZE>
+__device__ T block_reduce(T val, Op op) {
+  __shared__ T shared[BLOCK_SIZE / 64];  // One slot per warp
+  
+  int lane = threadIdx.x % 64;
+  int warp_id = threadIdx.x / 64;
+  
+  // Warp-level reduction
   val = warp_reduce(val, op);
-
-  if (lane == 0)
-    shared[wid] = val;
+  
+  // Write reduced value to shared memory
+  if (lane == 0) {
+    shared[warp_id] = val;
+  }
   __syncthreads();
-
-  val = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : 0;
-  if (wid == 0)
+  
+  // Final reduction in first warp
+  if (warp_id == 0) {
+    val = (lane < BLOCK_SIZE / 64) ? shared[lane] : op.template init<T>();
     val = warp_reduce(val, op);
-
+  }
+  
   return val;
 }
 
-// Column reduction arguments
-struct ColReduceArgs {
-  size_t reduction_size;
-  int64_t reduction_stride;
-  int* shape;
-  size_t* strides;
-  int ndim;
-  int* reduce_shape;
-  size_t* reduce_strides;
-  int reduce_ndim;
-  size_t non_col_reductions;
-};
+// All reduce kernel - reduces entire input to single value
+template <typename T, typename Op, typename IdxT>
+__global__ void all_reduce_kernel(
+    const T* input,
+    T* output,
+    IdxT size,
+    Op op) {
+  constexpr int BLOCK_SIZE = 256;
+  
+  __shared__ T shared[BLOCK_SIZE / 64];
+  
+  T val = op.template init<T>();
+  
+  // Grid-stride loop
+  IdxT idx = blockIdx.x * blockDim.x + threadIdx.x;
+  IdxT stride = blockDim.x * gridDim.x;
+  
+  for (IdxT i = idx; i < size; i += stride) {
+    val = op(val, input[i]);
+  }
+  
+  // Block reduction
+  int lane = threadIdx.x % 64;
+  int warp_id = threadIdx.x / 64;
+  
+  val = warp_reduce(val, op);
+  
+  if (lane == 0) {
+    shared[warp_id] = val;
+  }
+  __syncthreads();
+  
+  if (warp_id == 0) {
+    val = (lane < BLOCK_SIZE / 64) ? shared[lane] : op.template init<T>();
+    val = warp_reduce(val, op);
+    
+    if (lane == 0) {
+      atomicAdd(output, val);  // Atomic accumulation across blocks
+    }
+  }
+}
 
-// Row reduction arguments
-struct RowReduceArgs {
-  size_t reduction_size;
-  int64_t reduction_stride;
-  int* shape;
-  size_t* strides;
-  int ndim;
-  int* reduce_shape;
-  size_t* reduce_strides;
-  int reduce_ndim;
-};
+// Row reduce kernel - reduces along last dimension
+template <typename T, typename Op, typename IdxT>
+__global__ void row_reduce_kernel(
+    const T* input,
+    T* output,
+    IdxT reduce_size,
+    IdxT out_size,
+    Op op) {
+  IdxT out_idx = blockIdx.x;
+  if (out_idx >= out_size) return;
+  
+  T val = op.template init<T>();
+  
+  // Each thread reduces multiple elements
+  for (IdxT i = threadIdx.x; i < reduce_size; i += blockDim.x) {
+    val = op(val, input[out_idx * reduce_size + i]);
+  }
+  
+  // Block reduction
+  constexpr int BLOCK_SIZE = 256;
+  __shared__ T shared[BLOCK_SIZE / 64];
+  
+  int lane = threadIdx.x % 64;
+  int warp_id = threadIdx.x / 64;
+  
+  val = warp_reduce(val, op);
+  
+  if (lane == 0) {
+    shared[warp_id] = val;
+  }
+  __syncthreads();
+  
+  if (warp_id == 0) {
+    val = (lane < BLOCK_SIZE / 64) ? shared[lane] : op.template init<T>();
+    val = warp_reduce(val, op);
+    
+    if (lane == 0) {
+      output[out_idx] = val;
+    }
+  }
+}
 
-} // namespace mlx::core::rocm
+// Col reduce kernel - reduces along non-contiguous dimension
+template <typename T, typename Op, typename IdxT>
+__global__ void col_reduce_kernel(
+    const T* input,
+    T* output,
+    IdxT reduce_size,
+    IdxT reduce_stride,
+    IdxT out_size,
+    Op op) {
+  IdxT out_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (out_idx >= out_size) return;
+  
+  T val = op.template init<T>();
+  
+  // Reduce along strided dimension
+  for (IdxT i = 0; i < reduce_size; ++i) {
+    val = op(val, input[out_idx + i * reduce_stride]);
+  }
+  
+  output[out_idx] = val;
+}
+
+} // namespace rocm
+
+// Forward declarations
+void init_reduce(
+    rocm::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
+
+void all_reduce(
+    rocm::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type);
+
+void row_reduce(
+    rocm::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type,
+    const std::vector<int>& axes,
+    const ReductionPlan& plan);
+
+void col_reduce(
+    rocm::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    Reduce::ReduceType reduce_type,
+    const std::vector<int>& axes,
+    const ReductionPlan& plan);
+
+} // namespace mlx::core

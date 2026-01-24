@@ -2,86 +2,273 @@
 
 #pragma once
 
-#include <hip/hip_fp16.h>
 #include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
 
 namespace mlx::core::rocm {
 
-// HIP/ROCm equivalents of CUDA half precision math functions
-inline __device__ __half2 h2sin(__half2 x) {
-  return __half2{hsin(x.x), hsin(x.y)};
+// Half-precision math functions for HIP
+
+// Abs for half types
+__device__ inline __half abs(__half x) {
+  return __habs(x);
 }
 
-inline __device__ __half2 h2cos(__half2 x) {
-  return __half2{hcos(x.x), hcos(x.y)};
+__device__ inline __hip_bfloat16 abs(__hip_bfloat16 x) {
+  return __habs(x);
 }
 
-inline __device__ __half2 h2exp(__half2 x) {
-  return __half2{hexp(x.x), hexp(x.y)};
+// Sqrt for half types
+__device__ inline __half sqrt(__half x) {
+  return hsqrt(x);
 }
 
-inline __device__ __half2 h2log(__half2 x) {
-  return __half2{hlog(x.x), hlog(x.y)};
+__device__ inline __hip_bfloat16 sqrt(__hip_bfloat16 x) {
+  return hsqrt(x);
 }
 
-inline __device__ __half2 h2sqrt(__half2 x) {
-  return __half2{hsqrt(x.x), hsqrt(x.y)};
+// Rsqrt for half types
+__device__ inline __half rsqrt(__half x) {
+  return hrsqrt(x);
 }
 
-inline __device__ __half2 h2rsqrt(__half2 x) {
-  return __half2{hrsqrt(x.x), hrsqrt(x.y)};
+__device__ inline __hip_bfloat16 rsqrt(__hip_bfloat16 x) {
+  return hrsqrt(x);
 }
 
-inline __device__ __half2 h2ceil(__half2 x) {
-  return __half2{hceil(x.x), hceil(x.y)};
+// Exp for half types
+__device__ inline __half exp(__half x) {
+  return hexp(x);
 }
 
-inline __device__ __half2 h2floor(__half2 x) {
-  return __half2{hfloor(x.x), hfloor(x.y)};
+__device__ inline __hip_bfloat16 exp(__hip_bfloat16 x) {
+  return hexp(x);
 }
 
-inline __device__ __half2 h2rint(__half2 x) {
-  return __half2{hrint(x.x), hrint(x.y)};
+// Log for half types
+__device__ inline __half log(__half x) {
+  return hlog(x);
 }
 
-inline __device__ __half2 h2trunc(__half2 x) {
-  return __half2{htrunc(x.x), htrunc(x.y)};
+__device__ inline __hip_bfloat16 log(__hip_bfloat16 x) {
+  return hlog(x);
 }
 
-// Additional math functions for half precision
-inline __device__ __half habs(__half x) {
-  return __half{fabsf(__half2float(x))};
+// Log2 for half types
+__device__ inline __half log2(__half x) {
+  return hlog2(x);
 }
 
-inline __device__ __half2 h2abs(__half2 x) {
-  return __half2{habs(x.x), habs(x.y)};
+__device__ inline __hip_bfloat16 log2(__hip_bfloat16 x) {
+  return hlog2(x);
 }
 
-inline __device__ __half hneg(__half x) {
-  return __half{-__half2float(x)};
+// Log10 for half types
+__device__ inline __half log10(__half x) {
+  return hlog10(x);
 }
 
-inline __device__ __half2 h2neg(__half2 x) {
-  return __half2{hneg(x.x), hneg(x.y)};
+__device__ inline __hip_bfloat16 log10(__hip_bfloat16 x) {
+  return hlog10(x);
 }
 
-// BFloat16 support functions
-#ifdef __HIP_BFLOAT16__
-inline __device__ __hip_bfloat16 habs(__hip_bfloat16 x) {
-  return __hip_bfloat16{fabsf(__bfloat162float(x))};
+// Sin for half types
+__device__ inline __half sin(__half x) {
+  return hsin(x);
 }
 
-inline __device__ __hip_bfloat162 h2abs(__hip_bfloat162 x) {
-  return __hip_bfloat162{habs(x.x), habs(x.y)};
+__device__ inline __hip_bfloat16 sin(__hip_bfloat16 x) {
+  return hsin(x);
 }
 
-inline __device__ __hip_bfloat16 hneg(__hip_bfloat16 x) {
-  return __hip_bfloat16{-__bfloat162float(x)};
+// Cos for half types
+__device__ inline __half cos(__half x) {
+  return hcos(x);
 }
 
-inline __device__ __hip_bfloat162 h2neg(__hip_bfloat162 x) {
-  return __hip_bfloat162{hneg(x.x), hneg(x.y)};
+__device__ inline __hip_bfloat16 cos(__hip_bfloat16 x) {
+  return hcos(x);
 }
-#endif
+
+// Ceil for half types
+__device__ inline __half ceil(__half x) {
+  return hceil(x);
+}
+
+__device__ inline __hip_bfloat16 ceil(__hip_bfloat16 x) {
+  return hceil(x);
+}
+
+// Floor for half types
+__device__ inline __half floor(__half x) {
+  return hfloor(x);
+}
+
+__device__ inline __hip_bfloat16 floor(__hip_bfloat16 x) {
+  return hfloor(x);
+}
+
+// Rint (round to nearest integer) for half types
+__device__ inline __half rint(__half x) {
+  return hrint(x);
+}
+
+__device__ inline __hip_bfloat16 rint(__hip_bfloat16 x) {
+  return hrint(x);
+}
+
+// Trunc for half types
+__device__ inline __half trunc(__half x) {
+  return htrunc(x);
+}
+
+__device__ inline __hip_bfloat16 trunc(__hip_bfloat16 x) {
+  return htrunc(x);
+}
+
+// Conversion helpers
+__device__ inline float half2float(__half x) {
+  return __half2float(x);
+}
+
+__device__ inline __half float2half(float x) {
+  return __float2half(x);
+}
+
+__device__ inline float bfloat162float(__hip_bfloat16 x) {
+  return __bfloat162float(x);
+}
+
+__device__ inline __hip_bfloat16 float2bfloat16(float x) {
+  return __float2bfloat16(x);
+}
+
+// Erf for half types (compute in float)
+__device__ inline __half erf(__half x) {
+  return __float2half(erff(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 erf(__hip_bfloat16 x) {
+  return __float2bfloat16(erff(__bfloat162float(x)));
+}
+
+// Erfinv for half types (compute in float)
+__device__ inline __half erfinv(__half x) {
+  return __float2half(erfinvf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 erfinv(__hip_bfloat16 x) {
+  return __float2bfloat16(erfinvf(__bfloat162float(x)));
+}
+
+// Expm1 for half types (compute in float)
+__device__ inline __half expm1(__half x) {
+  return __float2half(expm1f(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 expm1(__hip_bfloat16 x) {
+  return __float2bfloat16(expm1f(__bfloat162float(x)));
+}
+
+// Log1p for half types (compute in float)
+__device__ inline __half log1p(__half x) {
+  return __float2half(log1pf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 log1p(__hip_bfloat16 x) {
+  return __float2bfloat16(log1pf(__bfloat162float(x)));
+}
+
+// Tanh for half types
+__device__ inline __half tanh(__half x) {
+  // HIP may not have htanh, compute in float
+  return __float2half(tanhf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 tanh(__hip_bfloat16 x) {
+  return __float2bfloat16(tanhf(__bfloat162float(x)));
+}
+
+// Sinh for half types
+__device__ inline __half sinh(__half x) {
+  return __float2half(sinhf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 sinh(__hip_bfloat16 x) {
+  return __float2bfloat16(sinhf(__bfloat162float(x)));
+}
+
+// Cosh for half types
+__device__ inline __half cosh(__half x) {
+  return __float2half(coshf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 cosh(__hip_bfloat16 x) {
+  return __float2bfloat16(coshf(__bfloat162float(x)));
+}
+
+// Asin for half types
+__device__ inline __half asin(__half x) {
+  return __float2half(asinf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 asin(__hip_bfloat16 x) {
+  return __float2bfloat16(asinf(__bfloat162float(x)));
+}
+
+// Acos for half types
+__device__ inline __half acos(__half x) {
+  return __float2half(acosf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 acos(__hip_bfloat16 x) {
+  return __float2bfloat16(acosf(__bfloat162float(x)));
+}
+
+// Atan for half types
+__device__ inline __half atan(__half x) {
+  return __float2half(atanf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 atan(__hip_bfloat16 x) {
+  return __float2bfloat16(atanf(__bfloat162float(x)));
+}
+
+// Asinh for half types
+__device__ inline __half asinh(__half x) {
+  return __float2half(asinhf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 asinh(__hip_bfloat16 x) {
+  return __float2bfloat16(asinhf(__bfloat162float(x)));
+}
+
+// Acosh for half types
+__device__ inline __half acosh(__half x) {
+  return __float2half(acoshf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 acosh(__hip_bfloat16 x) {
+  return __float2bfloat16(acoshf(__bfloat162float(x)));
+}
+
+// Atanh for half types
+__device__ inline __half atanh(__half x) {
+  return __float2half(atanhf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 atanh(__hip_bfloat16 x) {
+  return __float2bfloat16(atanhf(__bfloat162float(x)));
+}
+
+// Tan for half types
+__device__ inline __half tan(__half x) {
+  return __float2half(tanf(__half2float(x)));
+}
+
+__device__ inline __hip_bfloat16 tan(__hip_bfloat16 x) {
+  return __float2bfloat16(tanf(__bfloat162float(x)));
+}
 
 } // namespace mlx::core::rocm

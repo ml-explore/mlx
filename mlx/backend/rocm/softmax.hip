@@ -9,16 +9,12 @@
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
-#include <hip/hip_cooperative_groups.h>
-#include <rocprim/block/block_load.hpp>
 
 #include <cassert>
 
 namespace mlx::core {
 
 namespace rocm {
-
-namespace cg = cooperative_groups;
 
 template <typename T>
 inline __device__ T softmax_exp(T x) {
@@ -27,101 +23,104 @@ inline __device__ T softmax_exp(T x) {
   return __expf(x);
 }
 
+// Warp reduce for max
+template <typename T>
+__device__ T warp_reduce_max(T val) {
+  for (int offset = 32; offset > 0; offset /= 2) {
+    T other = __shfl_xor(val, offset);
+    val = val > other ? val : other;
+  }
+  return val;
+}
+
+// Warp reduce for sum
+template <typename T>
+__device__ T warp_reduce_sum(T val) {
+  for (int offset = 32; offset > 0; offset /= 2) {
+    val += __shfl_xor(val, offset);
+  }
+  return val;
+}
+
 template <typename T, typename AccT, int BLOCK_DIM, int N_READS = 4>
-__global__ void softmax(const T* in, T* out, int axis_size) {
-  auto grid = cg::this_grid();
-  auto block = cg::this_thread_block();
-  auto warp = cg::tiled_partition<WARP_SIZE>(block);
+__global__ void softmax_kernel(const T* in, T* out, int axis_size) {
+  int row = blockIdx.x;
+  
+  in += row * axis_size;
+  out += row * axis_size;
 
-  in += grid.block_rank() * axis_size;
-  out += grid.block_rank() * axis_size;
-
-  // Thread reduce.
-  AccT prevmax;
-  AccT maxval = -INFINITY;
-  AccT normalizer = 0;
-  for (int r = 0; r < hip_ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
-    AccT vals[N_READS];
-    rocprim::block_load_direct_blocked(
-        r * BLOCK_DIM + block.thread_rank(),
-        make_cast_iterator<AccT>(in),
-        vals,
-        axis_size,
-        -INFINITY);
-    prevmax = maxval;
-    maxval = fmax(maxval, rocprim::thread_reduce(vals, hip_max<AccT>()));
-    // Online normalizer calculation for softmax:
-    // https://github.com/NVIDIA/online-softmax
-    normalizer = normalizer * softmax_exp(prevmax - maxval);
-    for (int i = 0; i < N_READS; i++) {
-      normalizer = normalizer + softmax_exp(vals[i] - maxval);
+  // Thread reduce for max
+  AccT maxval = -1e38f;  // Very small number
+  for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
+    #pragma unroll
+    for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
+      AccT val = static_cast<AccT>(in[i + j]);
+      maxval = val > maxval ? val : maxval;
     }
   }
 
-  // First warp reduce.
-  prevmax = maxval;
-  maxval = cg::reduce(warp, maxval, hip_max<AccT>());
-  normalizer = normalizer * softmax_exp(prevmax - maxval);
-  normalizer = cg::reduce(warp, normalizer, hip_plus<AccT>());
-
-  __shared__ AccT local_max[WARP_SIZE];
-  __shared__ AccT local_normalizer[WARP_SIZE];
-
-  // Write to shared memory and do second warp reduce.
-  prevmax = maxval;
-  if (warp.thread_rank() == 0) {
-    local_max[warp.meta_group_rank()] = maxval;
+  // Block reduce for max
+  __shared__ AccT shared_max[BLOCK_DIM / 64 + 1];
+  
+  AccT warp_max = warp_reduce_max(maxval);
+  int lane = threadIdx.x % 64;
+  int warp_id = threadIdx.x / 64;
+  
+  if (lane == 0) {
+    shared_max[warp_id] = warp_max;
   }
-  block.sync();
-  maxval = warp.thread_rank() < warp.meta_group_size()
-      ? local_max[warp.thread_rank()]
-      : -INFINITY;
-  maxval = cg::reduce(warp, maxval, hip_max<AccT>());
-  normalizer = normalizer * softmax_exp(prevmax - maxval);
-  if (warp.thread_rank() == 0) {
-    local_normalizer[warp.meta_group_rank()] = normalizer;
+  __syncthreads();
+  
+  if (warp_id == 0) {
+    maxval = (lane < (BLOCK_DIM + 63) / 64) ? shared_max[lane] : -1e38f;
+    maxval = warp_reduce_max(maxval);
   }
-  block.sync();
-  normalizer = warp.thread_rank() < warp.meta_group_size()
-      ? local_normalizer[warp.thread_rank()]
-      : AccT{};
-  normalizer = cg::reduce(warp, normalizer, hip_plus<AccT>());
-  normalizer = 1 / normalizer;
+  __syncthreads();
+  
+  if (threadIdx.x == 0) {
+    shared_max[0] = maxval;
+  }
+  __syncthreads();
+  maxval = shared_max[0];
 
-  // Write output.
-  for (int r = 0; r < hip_ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
-    auto index = r * BLOCK_DIM + block.thread_rank();
-    T vals[N_READS];
-    rocprim::block_load_direct_blocked(index, in, vals, axis_size);
-    for (int i = 0; i < N_READS; i++) {
-      vals[i] = softmax_exp(static_cast<AccT>(vals[i]) - maxval) * normalizer;
+  // Thread reduce for sum of exp(x - max)
+  AccT sumval = 0;
+  for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
+    #pragma unroll
+    for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
+      sumval += softmax_exp(static_cast<AccT>(in[i + j]) - maxval);
     }
-    rocprim::block_store_direct_blocked(index, out, vals, axis_size);
   }
-}
 
-// Utility functions for ROCm
-template <typename T>
-struct hip_max {
-  __device__ T operator()(const T& a, const T& b) const {
-    return fmax(a, b);
+  // Block reduce for sum
+  __shared__ AccT shared_sum[BLOCK_DIM / 64 + 1];
+  
+  AccT warp_sum = warp_reduce_sum(sumval);
+  
+  if (lane == 0) {
+    shared_sum[warp_id] = warp_sum;
   }
-};
-
-template <typename T>
-struct hip_plus {
-  __device__ T operator()(const T& a, const T& b) const {
-    return a + b;
+  __syncthreads();
+  
+  if (warp_id == 0) {
+    sumval = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
+    sumval = warp_reduce_sum(sumval);
   }
-};
+  __syncthreads();
+  
+  if (threadIdx.x == 0) {
+    shared_sum[0] = sumval;
+  }
+  __syncthreads();
+  AccT normalizer = 1.0f / shared_sum[0];
 
-inline __device__ int hip_ceil_div(int a, int b) {
-  return (a + b - 1) / b;
-}
-
-template <typename T>
-__device__ inline T* make_cast_iterator(const T* ptr) {
-  return const_cast<T*>(ptr);
+  // Write output
+  for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
+    #pragma unroll
+    for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
+      out[i + j] = static_cast<T>(softmax_exp(static_cast<AccT>(in[i + j]) - maxval) * normalizer);
+    }
+  }
 }
 
 } // namespace rocm
@@ -144,8 +143,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
       return x;
     } else {
-      auto x_copy = array(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
+      array x_copy = contiguous_copy_gpu(x, s);
       out.copy_shared_buffer(x_copy);
       return x_copy;
     }
@@ -160,20 +158,48 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
+  
+  constexpr int BLOCK_DIM = 256;
+  constexpr int N_READS = 4;
+  
   encoder.launch_kernel([&](hipStream_t stream) {
-    MLX_SWITCH_FLOAT_TYPES_CHECKED(out.dtype(), "softmax", CTYPE, {
-      using DataType = hip_type_t<CTYPE>;
-      constexpr int N_READS = 4;
-      MLX_SWITCH_BLOCK_DIM(rocm::hip_ceil_div(axis_size, N_READS), BLOCK_DIM, {
-        auto kernel = rocm::softmax<DataType, DataType, BLOCK_DIM, N_READS>;
+    switch (out.dtype()) {
+      case float32:
+        hipLaunchKernelGGL(
+            (rocm::softmax_kernel<float, float, BLOCK_DIM, N_READS>),
+            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+            in.data<float>(), out.data<float>(), axis_size);
+        break;
+      case float16:
         if (precise) {
-          kernel = rocm::softmax<DataType, float, BLOCK_DIM, N_READS>;
+          hipLaunchKernelGGL(
+              (rocm::softmax_kernel<__half, float, BLOCK_DIM, N_READS>),
+              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+              in.data<__half>(), out.data<__half>(), axis_size);
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::softmax_kernel<__half, __half, BLOCK_DIM, N_READS>),
+              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+              in.data<__half>(), out.data<__half>(), axis_size);
         }
-        hipLaunchKernelGGL(kernel, n_rows, BLOCK_DIM, 0, stream,
-            in.data<DataType>(), out.data<DataType>(), axis_size);
-      });
-    });
+        break;
+      case bfloat16:
+        if (precise) {
+          hipLaunchKernelGGL(
+              (rocm::softmax_kernel<__hip_bfloat16, float, BLOCK_DIM, N_READS>),
+              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+              in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), axis_size);
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::softmax_kernel<__hip_bfloat16, __hip_bfloat16, BLOCK_DIM, N_READS>),
+              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+              in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), axis_size);
+        }
+        break;
+      default:
+        throw std::runtime_error("Unsupported type for softmax");
+    }
   });
 }
 
-} // namespace mlx::core 
+} // namespace mlx::core

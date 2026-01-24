@@ -14,9 +14,6 @@ struct Abs {
   __device__ T operator()(T x) {
     if constexpr (std::is_unsigned_v<T>) {
       return x;
-    } else if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {
-          sqrt(hipCrealf(x) * hipCrealf(x) + hipCimagf(x) * hipCimagf(x)), 0};
     } else {
       return abs(x);
     }
@@ -77,6 +74,8 @@ struct Ceil {
   __device__ T operator()(T x) {
     if constexpr (std::is_integral_v<T>) {
       return x;
+    } else if constexpr (is_complex_v<T>) {
+      return T{ceil(x.x), ceil(x.y)};
     } else {
       return ceil(x);
     }
@@ -84,34 +83,23 @@ struct Ceil {
 };
 
 struct Conjugate {
-  __device__ hipFloatComplex operator()(hipFloatComplex x) {
-    return {hipCrealf(x), -hipCimagf(x)};
+  template <typename T>
+  __device__ complex_t<T> operator()(complex_t<T> x) {
+    return hipConjf(x);
   }
 };
 
 struct Cos {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {
-          cos(hipCrealf(x)) * cosh(hipCimagf(x)),
-          -sin(hipCrealf(x)) * sinh(hipCimagf(x))};
-    } else {
-      return cos(x);
-    }
+    return cos(x);
   }
 };
 
 struct Cosh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {
-          cosh(hipCrealf(x)) * cos(hipCimagf(x)),
-          sinh(hipCrealf(x)) * sin(hipCimagf(x))};
-    } else {
-      return cosh(x);
-    }
+    return cosh(x);
   }
 };
 
@@ -119,11 +107,11 @@ struct Erf {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
-      return erf(__half2float(x));
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
-      return erf(__bfloat162float(x));
-    } else {
       return erf(x);
+    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+      return erf(x);
+    } else {
+      return erff(x);
     }
   }
 };
@@ -132,11 +120,11 @@ struct ErfInv {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
-      return erfinv(__half2float(x));
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
-      return erfinv(__bfloat162float(x));
-    } else {
       return erfinv(x);
+    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+      return erfinv(x);
+    } else {
+      return erfinvf(x);
     }
   }
 };
@@ -144,12 +132,7 @@ struct ErfInv {
 struct Exp {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      auto m = exp(hipCrealf(x));
-      return {m * cos(hipCimagf(x)), m * sinh(hipCimagf(x))};
-    } else {
-      return exp(x);
-    }
+    return exp(x);
   }
 };
 
@@ -157,11 +140,11 @@ struct Expm1 {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
-      return expm1(__half2float(x));
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
-      return expm1(__bfloat162float(x));
-    } else {
       return expm1(x);
+    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+      return expm1(x);
+    } else {
+      return expm1f(x);
     }
   }
 };
@@ -171,6 +154,8 @@ struct Floor {
   __device__ T operator()(T x) {
     if constexpr (std::is_integral_v<T>) {
       return x;
+    } else if constexpr (is_complex_v<T>) {
+      return T{floor(x.x), floor(x.y)};
     } else {
       return floor(x);
     }
@@ -178,30 +163,26 @@ struct Floor {
 };
 
 struct Imag {
-  __device__ float operator()(hipFloatComplex x) {
-    return hipCimagf(x);
+  template <typename T>
+  __device__ auto operator()(complex_t<T> x) {
+    return x.y;
   }
 };
 
 struct Log {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      auto r = log(hipCrealf(Abs{}(x)));
-      auto i = atan2f(hipCimagf(x), hipCrealf(x));
-      return {r, i};
-    } else {
-      return log(x);
-    }
+    return log(x);
   }
 };
 
 struct Log2 {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
+    if constexpr (is_complex_v<T>) {
       auto y = Log{}(x);
-      return {hipCrealf(y) / M_LN2, hipCimagf(y) / M_LN2};
+      constexpr float ln2 = 0.693147180559945309417232121458176568f;
+      return {y.x / ln2, y.y / ln2};
     } else {
       return log2(x);
     }
@@ -211,19 +192,31 @@ struct Log2 {
 struct Log10 {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      auto y = Log{}(x);
-      return {hipCrealf(y) / M_LN10, hipCimagf(y) / M_LN10};
-    } else {
-      return log10(x);
-    }
+    return log10(x);
   }
 };
 
 struct Log1p {
   template <typename T>
-  __device__ T operator()(T x) {
-    return log1p(x);
+  __device__ T operator()(T z) {
+    if constexpr (is_complex_v<T>) {
+      float x = z.x;
+      float y = z.y;
+      float zabs = Abs{}(z).x;
+      float theta = atan2f(y, x + 1);
+      if (zabs < 0.5f) {
+        float r = x * (2 + x) + y * y;
+        if (r == 0) { // handle underflow
+          return {x, theta};
+        }
+        return {0.5f * log1pf(r), theta};
+      } else {
+        float z0 = hypotf(x + 1, y);
+        return {logf(z0), theta};
+      }
+    } else {
+      return log1p(z);
+    }
   }
 };
 
@@ -236,8 +229,8 @@ struct LogicalNot {
 struct Negative {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return 0 - x;
+    if constexpr (is_complex_v<T>) {
+      return make_hipFloatComplex(-x.x, -x.y);
     } else {
       return -x;
     }
@@ -245,26 +238,20 @@ struct Negative {
 };
 
 struct Real {
-  __device__ float operator()(hipFloatComplex x) {
-    return hipCrealf(x);
+  template <typename T>
+  __device__ auto operator()(complex_t<T> x) {
+    return x.x;
   }
 };
 
 struct Round {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {rint(hipCrealf(x)), rint(hipCimagf(x))};
+    if constexpr (is_complex_v<T>) {
+      return {rint(x.x), rint(x.y)};
     } else {
       return rint(x);
     }
-  }
-};
-
-struct Rsqrt {
-  template <typename T>
-  __device__ T operator()(T x) {
-    return rsqrt(x);
   }
 };
 
@@ -281,11 +268,11 @@ struct Sign {
   __device__ T operator()(T x) {
     if constexpr (std::is_unsigned_v<T>) {
       return x != 0;
-    } else if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      if (hipCrealf(x) == 0 && hipCimagf(x) == 0) {
+    } else if constexpr (is_complex_v<T>) {
+      if (x.x == 0 && x.y == 0) {
         return x;
       } else {
-        return x / Abs()(x);
+        return hipCdivf(x, Abs()(x));
       }
     } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
       return static_cast<float>((x > T(0.f)) - (x < T(0.f)));
@@ -298,26 +285,14 @@ struct Sign {
 struct Sin {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {
-          sin(hipCrealf(x)) * cosh(hipCimagf(x)),
-          cos(hipCrealf(x)) * sinh(hipCimagf(x))};
-    } else {
-      return sin(x);
-    }
+    return sin(x);
   }
 };
 
 struct Sinh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      return {
-          sinh(hipCrealf(x)) * cos(hipCimagf(x)),
-          cosh(hipCrealf(x)) * sin(hipCimagf(x))};
-    } else {
-      return sinh(x);
-    }
+    return sinh(x);
   }
 };
 
@@ -335,33 +310,28 @@ struct Sqrt {
   }
 };
 
+struct Rsqrt {
+  template <typename T>
+  __device__ T operator()(T x) {
+    if constexpr (is_complex_v<T>) {
+      return hipCdivf(make_hipFloatComplex(1.0f, 0.0f), Sqrt{}(x));
+    } else {
+      return rsqrt(x);
+    }
+  }
+};
+
 struct Tan {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      float tan_a = tan(hipCrealf(x));
-      float tanh_b = tanh(hipCimagf(x));
-      float t1 = tan_a * tanh_b;
-      float denom = 1. + t1 * t1;
-      return {(tan_a - tanh_b * t1) / denom, (tanh_b + tan_a * t1) / denom};
-    } else {
-      return tan(x);
-    }
+    return tan(x);
   }
 };
 
 struct Tanh {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, hipFloatComplex>) {
-      float tanh_a = tanh(hipCrealf(x));
-      float tan_b = tan(hipCimagf(x));
-      float t1 = tanh_a * tan_b;
-      float denom = 1. + t1 * t1;
-      return {(tanh_a + tan_b * t1) / denom, (tan_b - tanh_a * t1) / denom};
-    } else {
-      return tanh(x);
-    }
+    return tanh(x);
   }
 };
 

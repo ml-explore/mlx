@@ -1,111 +1,86 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/metal/metal.h"
-#include "mlx/backend/rocm/worker.h"
+#include "mlx/backend/rocm/utils.h"
+#include "mlx/utils.h"
 
 #include <fmt/format.h>
+#include <future>
 
-namespace mlx::core {
+namespace mlx::core::rocm {
 
-namespace rocm {
+namespace {
 
-DeviceStream::DeviceStream(Device& device) : device_(device), stream_(device) {}
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER
+constexpr int default_max_ops_per_buffer = 20;
 
-void DeviceStream::synchronize() {
-  CHECK_HIP_ERROR(hipStreamSynchronize(stream_));
-}
-
-hipStream_t DeviceStream::schedule_hip_stream() {
-  // TODO: Return a stream that maximizes parallelism.
-  return stream_;
-}
-
-hipStream_t DeviceStream::last_hip_stream() {
-  return stream_;
-}
-
-CommandEncoder& DeviceStream::get_encoder() {
-  if (!encoder_) {
-    encoder_ = std::make_unique<CommandEncoder>(*this);
-  }
-  return *encoder_;
-}
+} // namespace
 
 Device::Device(int device) : device_(device) {
-  CHECK_HIP_ERROR(hipDeviceGetAttribute(
-      &compute_capability_major_,
-      hipDeviceAttributeComputeCapabilityMajor,
-      device_));
-  CHECK_HIP_ERROR(hipDeviceGetAttribute(
-      &compute_capability_minor_,
-      hipDeviceAttributeComputeCapabilityMinor,
-      device_));
-
-  // Validate device requirements
-  int attr = 0;
-  CHECK_HIP_ERROR(hipDeviceGetAttribute(
-      &attr, hipDeviceAttributeConcurrentManagedAccess, device_));
-  if (attr != 1) {
-    // ROCm unified memory might not be available on all devices
-    // This is a warning rather than an error for ROCm
-    // TODO: Add proper ROCm unified memory checking
-  }
-
-  // Create rocBLAS handle
   make_current();
-  CHECK_HIP_ERROR(
-      static_cast<hipError_t>(rocblas_create_handle(&rocblas_handle_)));
+  CHECK_ROCBLAS_ERROR(rocblas_create_handle(&rocblas_));
 }
 
 Device::~Device() {
-  if (rocblas_handle_) {
-    rocblas_destroy_handle(rocblas_handle_);
-  }
+  CHECK_ROCBLAS_ERROR(rocblas_destroy_handle(rocblas_));
 }
 
 void Device::make_current() {
-  // Cache current device to reduce HIP API calls
-  static int current = 0;
+  // We need to set/get current HIP device very frequently, cache it to reduce
+  // actual calls of HIP APIs. This function assumes single-thread in host.
+  static int current = -1;
   if (current != device_) {
     CHECK_HIP_ERROR(hipSetDevice(device_));
     current = device_;
   }
 }
 
-DeviceStream& Device::get_stream(Stream s) {
-  auto it = streams_.find(s.index);
-  if (it == streams_.end()) {
-    it = streams_.try_emplace(s.index, *this).first;
+CommandEncoder& Device::get_command_encoder(Stream s) {
+  auto it = encoders_.find(s.index);
+  if (it == encoders_.end()) {
+    it = encoders_.try_emplace(s.index, *this).first;
   }
   return it->second;
 }
 
-CommandEncoder::CommandEncoder(DeviceStream& s)
-    : device_(s.device()), stream_(s) {}
+CommandEncoder::CommandEncoder(Device& d)
+    : device_(d), stream_(d) {}
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_.add_task(std::move(task));
 }
 
-void CommandEncoder::end_encoding() {
-  if (!temporaries_.empty()) {
-    add_completed_handler([temporaries = std::move(temporaries_)]() {});
-  }
+void CommandEncoder::set_input_array(const array& arr) {
+  // For now, no-op - can be used for dependency tracking
+}
 
-  // There is no kernel running, run completion handlers immediately.
-  if (!has_gpu_work_) {
-    worker_.consume_in_this_thread();
-    return;
-  }
-  has_gpu_work_ = false;
+void CommandEncoder::set_output_array(const array& arr) {
+  // For now, no-op - can be used for dependency tracking
+}
 
-  // Commit tasks
-  commit();
+void CommandEncoder::maybe_commit() {
+  if (node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer)) {
+    commit();
+  }
 }
 
 void CommandEncoder::commit() {
-  worker_.commit(stream_.last_hip_stream());
+  if (!temporaries_.empty()) {
+    add_completed_handler([temporaries = std::move(temporaries_)]() {});
+  }
+  node_count_ = 0;
+  
+  // Put completion handlers in a batch.
+  worker_.commit(stream_);
+}
+
+void CommandEncoder::synchronize() {
+  hipStreamSynchronize(stream_);
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  commit();
+  f.wait();
 }
 
 Device& device(mlx::core::Device device) {
@@ -117,14 +92,8 @@ Device& device(mlx::core::Device device) {
   return it->second;
 }
 
-DeviceStream& get_stream(Stream s) {
-  return device(s.device).get_stream(s);
-}
-
 CommandEncoder& get_command_encoder(Stream s) {
-  return get_stream(s).get_encoder();
+  return device(s.device).get_command_encoder(s);
 }
 
-} // namespace rocm
-
-} // namespace mlx::core
+} // namespace mlx::core::rocm

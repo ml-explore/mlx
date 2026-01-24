@@ -2,47 +2,68 @@
 
 #pragma once
 
-#include <hip/hip_runtime.h>
+#include "mlx/allocator.h"
+#include "mlx/backend/rocm/utils.h"
+#include "mlx/stream.h"
 
-#include <condition_variable>
 #include <memory>
-#include <mutex>
+
+#include <hip/hip_runtime.h>
 
 namespace mlx::core::rocm {
 
-// HIP event managed with RAII.
+// RAII-managed move-only wrapper of hipEvent_t.
+struct HipEventHandle : public HipHandle<hipEvent_t, hipEventDestroy> {
+  HipEventHandle(int flags);
+  int flags;
+};
+
+// Wrapper of native HIP event. It can synchronize between GPU streams, or wait
+// on GPU stream in CPU stream, but can not wait on CPU stream.
 class HipEvent {
  public:
-  HipEvent();
+  explicit HipEvent(int flags);
   ~HipEvent();
+
+  HipEvent(HipEvent&&) = default;
+  HipEvent& operator=(HipEvent&&) = default;
 
   HipEvent(const HipEvent&) = delete;
   HipEvent& operator=(const HipEvent&) = delete;
 
-  void record(hipStream_t stream);
   void wait();
-  bool query() const;
+  void wait(hipStream_t stream);
+  void record(hipStream_t stream);
 
-  operator hipEvent_t() const {
-    return event_;
-  }
+  // Return whether the recorded kernels have completed. Note that this method
+  // returns true if record() has not been called.
+  bool completed() const;
 
  private:
-  hipEvent_t event_;
+  HipEventHandle event_;
 };
 
-// Shared event for worker thread synchronization.
-class SharedEvent {
+// Event that can synchronize between CPU and GPU. It is much slower than
+// HipEvent so the latter should always be preferred when possible.
+class AtomicEvent {
  public:
-  SharedEvent();
+  AtomicEvent();
 
-  void notify();
-  void wait();
+  void wait(uint64_t value);
+  void wait(hipStream_t stream, uint64_t value);
+  void wait(Stream s, uint64_t value);
+  void signal(uint64_t value);
+  void signal(hipStream_t stream, uint64_t value);
+  void signal(Stream s, uint64_t value);
+  bool is_signaled(uint64_t value) const;
+  uint64_t value() const;
 
  private:
-  std::mutex mutex_;
-  std::condition_variable cv_;
-  bool ready_{false};
+  std::atomic<uint64_t>* atomic() const {
+    return static_cast<std::atomic<uint64_t>*>(buf_->raw_ptr());
+  }
+
+  std::shared_ptr<allocator::Buffer> buf_;
 };
 
 } // namespace mlx::core::rocm

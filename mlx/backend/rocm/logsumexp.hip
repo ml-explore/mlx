@@ -1,13 +1,18 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/reduce/reduce.hpp"
+#include "mlx/backend/gpu/copy.h"
+#include "mlx/primitives.h"
+
 #include <hip/hip_runtime.h>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
-__global__ void logsumexp_kernel(float* input, float* output, int n) {
-  // Placeholder implementation
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  (void)input; (void)output; (void)n; (void)idx;
+void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
+  // LogSumExp = log(sum(exp(x - max(x)))) + max(x)
+  // For now, throw an error - this requires a specialized kernel
+  throw std::runtime_error("LogSumExp not yet implemented for ROCm");
 }
 
-} // namespace mlx::core::rocm 
+} // namespace mlx::core

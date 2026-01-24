@@ -8,19 +8,84 @@
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
-#include <rocthrust/device_ptr.h>
-#include <rocthrust/transform.h>
 
 namespace mlx::core {
 
 namespace rocm {
 
-template <typename Op, typename Condition, typename A, typename B, typename Out>
-constexpr bool supports_ternary_op() {
-  if (std::is_same_v<Op, Select>) {
-    return std::is_same_v<Condition, bool> && std::is_same_v<A, Out> && std::is_same_v<B, Out>;
+template <typename Op, typename T, typename IdxT, int N_READS>
+__global__ void
+ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  IdxT stride = blockDim.x * gridDim.x;
+
+  for (IdxT i = index * N_READS; i < size; i += stride * N_READS) {
+    if (i + N_READS <= size) {
+      #pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        out[i + j] = Op{}(a[i + j], b[i + j], c[i + j]);
+      }
+    } else {
+      for (IdxT j = i; j < size; ++j) {
+        out[j] = Op{}(a[j], b[j], c[j]);
+      }
+    }
   }
-  return false;
+}
+
+template <typename Op, typename T, typename IdxT, int N_READS>
+__global__ void ternary_g(
+    const bool* a,
+    const T* b,
+    const T* c,
+    T* out,
+    IdxT size_rest,
+    const int* shape,
+    const int64_t* a_strides,
+    const int64_t* b_strides,
+    const int64_t* c_strides,
+    int ndim) {
+  IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
+  if (index_rest >= size_rest) {
+    return;
+  }
+
+  auto shape_x = shape[ndim - 1];
+  auto a_stride_x = a_strides[ndim - 1];
+  auto b_stride_x = b_strides[ndim - 1];
+  auto c_stride_x = c_strides[ndim - 1];
+  IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  // Compute base offsets for this row
+  IdxT a_idx = 0, b_idx = 0, c_idx = 0;
+  IdxT tmp = index_rest * shape_x;
+  for (int i = ndim - 1; i >= 0; --i) {
+    IdxT coord = tmp % shape[i];
+    a_idx += coord * a_strides[i];
+    b_idx += coord * b_strides[i];
+    c_idx += coord * c_strides[i];
+    tmp /= shape[i];
+  }
+  
+  // Process elements in this row
+  for (IdxT i = index_x * N_READS; i < shape_x; i += blockDim.x * gridDim.x * N_READS) {
+    if (i + N_READS <= shape_x) {
+      #pragma unroll
+      for (int j = 0; j < N_READS; ++j) {
+        IdxT a_offset = a_idx + (i + j) * a_stride_x;
+        IdxT b_offset = b_idx + (i + j) * b_stride_x;
+        IdxT c_offset = c_idx + (i + j) * c_stride_x;
+        out[shape_x * index_rest + i + j] = Op{}(a[a_offset], b[b_offset], c[c_offset]);
+      }
+    } else {
+      for (IdxT j = i; j < shape_x; ++j) {
+        IdxT a_offset = a_idx + j * a_stride_x;
+        IdxT b_offset = b_idx + j * b_stride_x;
+        IdxT c_offset = c_idx + j * c_stride_x;
+        out[shape_x * index_rest + j] = Op{}(a[a_offset], b[b_offset], c[c_offset]);
+      }
+    }
+  }
 }
 
 } // namespace rocm
@@ -29,120 +94,102 @@ template <typename Op>
 void ternary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
     const Stream& s) {
-  auto& condition = inputs[0];
-  auto& a = inputs[1];
-  auto& b = inputs[2];
-  
-  if (condition.size() == 0) {
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  const auto& c = inputs[2];
+  if (out.size() == 0) {
     return;
   }
 
   auto& encoder = rocm::get_command_encoder(s);
-  encoder.set_input_array(condition);
   encoder.set_input_array(a);
   encoder.set_input_array(b);
+  encoder.set_input_array(c);
   encoder.set_output_array(out);
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(condition.dtype(), CONDITION_TYPE, {
-      MLX_SWITCH_ALL_TYPES(a.dtype(), A_TYPE, {
-        MLX_SWITCH_ALL_TYPES(b.dtype(), B_TYPE, {
-          MLX_SWITCH_ALL_TYPES(out.dtype(), OUT_TYPE, {
-            if constexpr (rocm::supports_ternary_op<Op, CONDITION_TYPE, A_TYPE, B_TYPE, OUT_TYPE>()) {
-              using ConditionType = hip_type_t<CONDITION_TYPE>;
-              using AType = hip_type_t<A_TYPE>;
-              using BType = hip_type_t<B_TYPE>;
-              using OutType = hip_type_t<OUT_TYPE>;
-              
-              auto policy = rocm::thrust_policy(stream);
-              auto condition_ptr = rocthrust::device_pointer_cast(condition.data<ConditionType>());
-              auto a_ptr = rocthrust::device_pointer_cast(a.data<AType>());
-              auto b_ptr = rocthrust::device_pointer_cast(b.data<BType>());
-              auto out_ptr = rocthrust::device_pointer_cast(out.data<OutType>());
-              
-              if (condition.flags().contiguous && a.flags().contiguous && b.flags().contiguous) {
-                auto ternary_op = [=] __device__ (const auto& tuple) -> OutType {
-                  return Op{}(rocthrust::get<0>(tuple), rocthrust::get<1>(tuple), rocthrust::get<2>(tuple));
-                };
-                
-                auto zip_begin = rocthrust::make_zip_iterator(
-                    rocthrust::make_tuple(condition_ptr, a_ptr, b_ptr));
-                auto zip_end = rocthrust::make_zip_iterator(
-                    rocthrust::make_tuple(condition_ptr + condition.data_size(), 
-                                         a_ptr + a.data_size(), 
-                                         b_ptr + b.data_size()));
-                
-                rocthrust::transform(policy, zip_begin, zip_end, out_ptr, ternary_op);
-              } else {
-                // Handle non-contiguous arrays with general iterators
-                auto [condition_shape, condition_strides] = collapse_contiguous_dims(condition);
-                auto [a_shape, a_strides] = collapse_contiguous_dims(a);
-                auto [b_shape, b_strides] = collapse_contiguous_dims(b);
-                
-                auto [condition_begin, condition_end] = rocm::make_general_iterators<int64_t>(
-                    condition_ptr, condition.size(), condition_shape, condition_strides);
-                auto [a_begin, a_end] = rocm::make_general_iterators<int64_t>(
-                    a_ptr, a.size(), a_shape, a_strides);
-                auto [b_begin, b_end] = rocm::make_general_iterators<int64_t>(
-                    b_ptr, b.size(), b_shape, b_strides);
-                
-                auto ternary_op = [=] __device__ (const auto& tuple) -> OutType {
-                  return Op{}(rocthrust::get<0>(tuple), rocthrust::get<1>(tuple), rocthrust::get<2>(tuple));
-                };
-                
-                auto zip_begin = rocthrust::make_zip_iterator(
-                    rocthrust::make_tuple(condition_begin, a_begin, b_begin));
-                auto zip_end = rocthrust::make_zip_iterator(
-                    rocthrust::make_tuple(condition_end, a_end, b_end));
-                
-                rocthrust::transform(policy, zip_begin, zip_end, out_ptr, ternary_op);
-              }
-            } else {
-              throw std::runtime_error(fmt::format(
-                  "Can not do ternary op {} on inputs of {}, {}, {} with output of {}.",
-                  op,
-                  dtype_to_string(condition.dtype()),
-                  dtype_to_string(a.dtype()),
-                  dtype_to_string(b.dtype()),
-                  dtype_to_string(out.dtype())));
-            }
-          });
-        });
-      });
+  auto topt = get_ternary_op_type(a, b, c);
+  bool large = out.data_size() > UINT32_MAX;
+  
+  // Simple dispatch for common types
+  auto launch_kernel = [&](auto b_ptr, auto c_ptr, auto out_ptr, auto size) {
+    using DType = std::remove_pointer_t<decltype(b_ptr)>;
+    
+    constexpr int N_READS = 4;
+    int block_size = 256;
+    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+    num_blocks = std::min(num_blocks, 65535);
+    
+    encoder.launch_kernel([&](hipStream_t stream) {
+      if (large) {
+        hipLaunchKernelGGL(
+            (rocm::ternary_v<Op, DType, int64_t, N_READS>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            a.data<bool>(), b_ptr, c_ptr, out_ptr, static_cast<int64_t>(size));
+      } else {
+        hipLaunchKernelGGL(
+            (rocm::ternary_v<Op, DType, uint32_t, N_READS>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            a.data<bool>(), b_ptr, c_ptr, out_ptr, static_cast<uint32_t>(size));
+      }
     });
-  });
+  };
+  
+  // Type dispatch
+  switch (out.dtype()) {
+    case float32:
+      launch_kernel(b.data<float>(), c.data<float>(), out.data<float>(), out.data_size());
+      break;
+    case float16:
+      launch_kernel(b.data<__half>(), c.data<__half>(), out.data<__half>(), out.data_size());
+      break;
+    case bfloat16:
+      launch_kernel(b.data<__hip_bfloat16>(), c.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), out.data_size());
+      break;
+    case int32:
+      launch_kernel(b.data<int32_t>(), c.data<int32_t>(), out.data<int32_t>(), out.data_size());
+      break;
+    case int64:
+      launch_kernel(b.data<int64_t>(), c.data<int64_t>(), out.data<int64_t>(), out.data_size());
+      break;
+    case uint32:
+      launch_kernel(b.data<uint32_t>(), c.data<uint32_t>(), out.data<uint32_t>(), out.data_size());
+      break;
+    case uint64:
+      launch_kernel(b.data<uint64_t>(), c.data<uint64_t>(), out.data<uint64_t>(), out.data_size());
+      break;
+    case int8:
+      launch_kernel(b.data<int8_t>(), c.data<int8_t>(), out.data<int8_t>(), out.data_size());
+      break;
+    case uint8:
+      launch_kernel(b.data<uint8_t>(), c.data<uint8_t>(), out.data<uint8_t>(), out.data_size());
+      break;
+    case bool_:
+      launch_kernel(b.data<bool>(), c.data<bool>(), out.data<bool>(), out.data_size());
+      break;
+    default:
+      throw std::runtime_error(fmt::format(
+          "Unsupported type {} for ternary op.",
+          dtype_to_string(out.dtype())));
+  }
 }
 
 template <typename Op>
 void ternary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
     const Stream& s) {
-  set_ternary_output_data(inputs, out);
-  ternary_op_gpu_inplace<Op>(inputs, out, op, s);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& c = inputs[2];
+  auto topt = get_ternary_op_type(a, b, c);
+  set_ternary_op_output_data(a, b, c, out, topt);
+  ternary_op_gpu_inplace<Op>(inputs, out, s);
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = out.primitive().stream();
-  ternary_op_gpu<rocm::Select>(inputs, out, get_primitive_string(this), s);
+  ternary_op_gpu<rocm::Select>(inputs, out, s);
 }
 
 } // namespace mlx::core
-
-__global__ void select_kernel(float* condition, float* a, float* b, float* output, int n) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < n) {
-    output[idx] = (condition[idx] != 0.0f) ? a[idx] : b[idx];
-  }
-}
-
-void launch_select(float* condition, float* a, float* b, float* output, int n, hipStream_t stream) {
-  int threads = 256;
-  int blocks = (n + threads - 1) / threads;
-  hipLaunchKernelGGL(select_kernel, dim3(blocks), dim3(threads), 0, stream, condition, a, b, output, n);
-}
-
-} // namespace mlx::core::rocm 
