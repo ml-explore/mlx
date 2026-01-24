@@ -83,20 +83,21 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         encoder.add_temporary(discard);
 
         size_t size;
-        CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortPairs(
-            nullptr,
-            size,
-            gpu_ptr<Type>(in),
-            gpu_ptr<Type>(discard),
-            gpu_ptr<uint32_t>(indices),
-            gpu_ptr<uint32_t>(out),
-            in.data_size(),
-            in.data_size() / nsort,
-            offsets,
-            offsets + 1,
-            0,
-            sizeof(Type) * 8,
-            stream));
+        CHECK_CUDA_ERROR(
+            cub::DeviceSegmentedRadixSort::SortPairs(
+                nullptr,
+                size,
+                gpu_ptr<Type>(in),
+                gpu_ptr<Type>(discard),
+                gpu_ptr<uint32_t>(indices),
+                gpu_ptr<uint32_t>(out),
+                in.data_size(),
+                in.data_size() / nsort,
+                offsets,
+                offsets + 1,
+                0,
+                sizeof(Type) * 8,
+                stream));
 
         array temp(
             cu::malloc_async(size, encoder), {static_cast<int>(size)}, uint8);
@@ -111,34 +112,36 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             thrust::device_pointer_cast(gpu_ptr<uint32_t>(indices)),
             ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
 
-        CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortPairs(
-            gpu_ptr<void>(temp),
-            size,
-            gpu_ptr<Type>(in),
-            gpu_ptr<Type>(discard),
-            gpu_ptr<uint32_t>(indices),
-            gpu_ptr<uint32_t>(out),
-            in.data_size(),
-            in.data_size() / nsort,
-            offsets,
-            offsets + 1,
-            0,
-            sizeof(Type) * 8,
-            stream));
+        CHECK_CUDA_ERROR(
+            cub::DeviceSegmentedRadixSort::SortPairs(
+                gpu_ptr<void>(temp),
+                size,
+                gpu_ptr<Type>(in),
+                gpu_ptr<Type>(discard),
+                gpu_ptr<uint32_t>(indices),
+                gpu_ptr<uint32_t>(out),
+                in.data_size(),
+                in.data_size() / nsort,
+                offsets,
+                offsets + 1,
+                0,
+                sizeof(Type) * 8,
+                stream));
       } else {
         size_t size;
-        CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortKeys(
-            nullptr,
-            size,
-            gpu_ptr<Type>(in),
-            gpu_ptr<Type>(out),
-            in.data_size(),
-            in.data_size() / nsort,
-            offsets,
-            offsets + 1,
-            0,
-            sizeof(Type) * 8,
-            stream));
+        CHECK_CUDA_ERROR(
+            cub::DeviceSegmentedRadixSort::SortKeys(
+                nullptr,
+                size,
+                gpu_ptr<Type>(in),
+                gpu_ptr<Type>(out),
+                in.data_size(),
+                in.data_size() / nsort,
+                offsets,
+                offsets + 1,
+                0,
+                sizeof(Type) * 8,
+                stream));
 
         array temp(
             cu::malloc_async(size, encoder), {static_cast<int>(size)}, uint8);
@@ -146,18 +149,19 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
 
         // Start capturing after allocations
         auto capture = encoder.capture_context();
-        CHECK_CUDA_ERROR(cub::DeviceSegmentedRadixSort::SortKeys(
-            gpu_ptr<void>(temp),
-            size,
-            gpu_ptr<Type>(in),
-            gpu_ptr<Type>(out),
-            in.data_size(),
-            in.data_size() / nsort,
-            offsets,
-            offsets + 1,
-            0,
-            sizeof(Type) * 8,
-            stream));
+        CHECK_CUDA_ERROR(
+            cub::DeviceSegmentedRadixSort::SortKeys(
+                gpu_ptr<void>(temp),
+                size,
+                gpu_ptr<Type>(in),
+                gpu_ptr<Type>(out),
+                in.data_size(),
+                in.data_size() / nsort,
+                offsets,
+                offsets + 1,
+                0,
+                sizeof(Type) * 8,
+                stream));
       }
     } else {
       throw std::runtime_error(

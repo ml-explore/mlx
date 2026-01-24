@@ -62,8 +62,9 @@ inline fe::DataType_t dtype_to_cudnn_type(Dtype dtype) {
     case float64:
       return fe::DataType_t::DOUBLE;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in cuDNN: {}.", dtype_to_string(dtype)));
+      throw std::runtime_error(
+          fmt::format(
+              "Unsupported dtype in cuDNN: {}.", dtype_to_string(dtype)));
   }
 }
 
@@ -124,13 +125,14 @@ class DnnGraph : public fe::graph::Graph {
 
   // Create a cuDNN tensor for scalar.
   auto scalar(const char* name, int64_t uid, Dtype dtype) {
-    return Graph::tensor(fe::graph::Tensor_attributes()
-                             .set_name(name)
-                             .set_uid(uid)
-                             .set_dim({1, 1, 1, 1})
-                             .set_stride({1, 1, 1, 1})
-                             .set_is_pass_by_value(true)
-                             .set_data_type(dtype_to_cudnn_type(dtype)));
+    return Graph::tensor(
+        fe::graph::Tensor_attributes()
+            .set_name(name)
+            .set_uid(uid)
+            .set_dim({1, 1, 1, 1})
+            .set_stride({1, 1, 1, 1})
+            .set_is_pass_by_value(true)
+            .set_data_type(dtype_to_cudnn_type(dtype)));
   }
 
   // Call this before setting notes.
