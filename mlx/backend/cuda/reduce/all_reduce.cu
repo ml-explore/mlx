@@ -14,7 +14,7 @@ namespace cu {
 namespace cg = cooperative_groups;
 
 template <typename T>
-__device__ __forceinline__ auto abs_val(T x) {
+__device__ __forceinline__ T abs_val(T x) {
   if constexpr (cuda::std::is_unsigned_v<T>) {
     return x; // No-op for unsigned types
   } else {
