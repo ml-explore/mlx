@@ -151,16 +151,46 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-if(MLX_BUILD_PYTHON_BINDINGS)
-  set_property(
-    TARGET mlx
-    APPEND
-    PROPERTY INSTALL_RPATH
-             # The paths here should match the install_requires in setup.py.
-             "$ORIGIN/../../nvidia/cublas/lib"
-             "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
-             "$ORIGIN/../../nvidia/cudnn/lib"
-             "$ORIGIN/../../nvidia/nccl/lib")
+# Search CUDA libs from installed python packages.
+if(WIN32)
+  # Resolve paths of unfound DLL at runtime.
+  if(BUILD_SHARED_LIBS)
+    target_link_libraries(mlx PRIVATE "delayimp.lib")
+    target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/delayload.cpp)
+  else()
+    # For static library the delayload must be compiled into final executables.
+    target_link_libraries(mlx PUBLIC "delayimp.lib")
+    target_sources(
+      mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/delayload.cpp>)
+  endif()
+  # Get all the CUDA DLLs we could link with.
+  file(
+    GLOB CUDA_DLL_NAMES
+    RELATIVE "${CUDAToolkit_BIN_DIR}/x64"
+    "${CUDAToolkit_BIN_DIR}/x64/*.dll")
+  # Delay load CUDA and cuDNN libs.
+  foreach(CUDA_DLL ${CUDA_DLL_NAMES} ${CUDNN_DLL_NAMES})
+    target_link_options(mlx PUBLIC "/DELAYLOAD:${CUDA_DLL}")
+  endforeach()
+  # Pass the locations where CUDA DLLs are placed.
+  if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    target_compile_definitions(
+      mlx PUBLIC MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
+                 MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
+  endif()
+else()
+  # For POSIX we rely on RPATH to search for CUDA libs.
+  if(MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    set_property(
+      TARGET mlx
+      APPEND
+      PROPERTY INSTALL_RPATH
+               # The paths here should match the install_requires in setup.py.
+               "$ORIGIN/../../nvidia/cublas/lib"
+               "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
+               "$ORIGIN/../../nvidia/cudnn/lib"
+               "$ORIGIN/../../nvidia/nccl/lib")
+  endif()
 endif()
 
 # ------------------------ Dependencies ------------------------
