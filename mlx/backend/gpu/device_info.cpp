@@ -1,20 +1,19 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/device_info.h"
+#include "mlx/backend/gpu/available.h"
 
 #if defined(MLX_USE_METAL)
 #include "mlx/backend/metal/metal.h"
 #elif defined(MLX_USE_CUDA)
 #include <cuda_runtime.h>
-
 #include "mlx/backend/cuda/cuda.h"
 #endif
 
-namespace mlx::core {
+namespace mlx::core::gpu {
 
 int device_count() {
 #if defined(MLX_USE_METAL)
-  return metal::is_available() ? 1 : 0;
+  return 1;
 #elif defined(MLX_USE_CUDA)
   int count = 0;
   cudaGetDeviceCount(&count);
@@ -37,4 +36,4 @@ device_info(int device_index) {
 #endif
 }
 
-} // namespace mlx::core
+} // namespace mlx::core::gpu

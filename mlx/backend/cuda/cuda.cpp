@@ -3,10 +3,10 @@
 #include "mlx/backend/cuda/cuda.h"
 
 #include <cuda_runtime.h>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -36,26 +36,9 @@ struct NVMLState {
       nullptr;
   nvmlReturn_t (*nvmlDeviceGetMemoryInfo)(nvmlDevice_t, nvmlMemory_t*) =
       nullptr;
-  bool initialized = false;
 };
 
-NVMLState& nvml_state() {
-  static NVMLState state;
-  return state;
-}
-
-std::mutex& nvml_mutex() {
-  static std::mutex m;
-  return m;
-}
-
-bool nvml_init() {
-  std::lock_guard<std::mutex> lock(nvml_mutex());
-  auto& nvml = nvml_state();
-  if (nvml.initialized)
-    return nvml.handle != nullptr;
-  nvml.initialized = true;
-
+bool nvml_init(NVMLState& nvml) {
 #ifdef _WIN32
   nvml.handle = LoadLibraryA("nvml.dll");
   if (!nvml.handle) {
@@ -92,8 +75,11 @@ bool nvml_init() {
   return nvml.nvmlInit_v2() == 0;
 }
 
-bool nvml_get_memory(const char* uuid, size_t* free, size_t* total) {
-  auto& nvml = nvml_state();
+bool nvml_get_memory(
+    NVMLState& nvml,
+    const char* uuid,
+    size_t* free,
+    size_t* total) {
   if (!nvml.handle)
     return false;
   nvmlDevice_t device;
@@ -132,6 +118,24 @@ std::string format_uuid(const cudaUUID_t& uuid) {
   return buf;
 }
 
+// Helper function to get memory info (NVML or cudaMemGetInfo)
+void get_memory_info(
+    int device_index,
+    const std::string& uuid,
+    NVMLState& nvml,
+    size_t* free_mem,
+    size_t* total_mem) {
+  if (nvml_get_memory(nvml, uuid.c_str(), free_mem, total_mem)) {
+    return;
+  }
+  // Fallback to cudaMemGetInfo
+  int prev_device;
+  cudaGetDevice(&prev_device);
+  cudaSetDevice(device_index);
+  cudaMemGetInfo(free_mem, total_mem);
+  cudaSetDevice(prev_device);
+}
+
 } // anonymous namespace
 
 bool is_available() {
@@ -140,69 +144,95 @@ bool is_available() {
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info(int device_index) {
-  // Cache per device (static info doesn't change, memory refreshed)
-  static std::unordered_map<
-      int,
-      std::unordered_map<std::string, std::variant<std::string, size_t>>>
-      cache;
-  static std::mutex cache_mutex;
+  // Static cache of device properties including UUID (needed for NVML lookup)
+  static auto all_devices = []() {
+    // Get device count
+    int count = 0;
+    cudaGetDeviceCount(&count);
 
-  std::lock_guard<std::mutex> lock(cache_mutex);
+    // Collect info for all devices
+    struct DeviceInfo {
+      std::unordered_map<std::string, std::variant<std::string, size_t>> info;
+      std::string uuid;
+    };
 
-  auto it = cache.find(device_index);
-  if (it != cache.end()) {
-    // Refresh memory info
-    std::string uuid = std::get<std::string>(it->second["uuid"]);
-    size_t free_mem, total_mem;
-    if (nvml_get_memory(uuid.c_str(), &free_mem, &total_mem)) {
-      it->second["free_memory"] = free_mem;
-      it->second["total_memory"] = total_mem;
+    std::vector<DeviceInfo> devices;
+
+    for (int i = 0; i < count; ++i) {
+      cudaDeviceProp prop;
+      cudaGetDeviceProperties(&prop, i);
+
+      DeviceInfo dev;
+      dev.info["device_name"] = std::string(prop.name);
+      dev.uuid = format_uuid(prop.uuid);
+      dev.info["uuid"] = dev.uuid;
+
+      // Architecture string (e.g., "sm_89")
+      char arch[16];
+      snprintf(arch, sizeof(arch), "sm_%d%d", prop.major, prop.minor);
+      dev.info["architecture"] = std::string(arch);
+
+      // PCI bus ID (domain:bus:device.function)
+      char pci_id[32];
+      snprintf(
+          pci_id,
+          sizeof(pci_id),
+          "%04x:%02x:%02x.0",
+          prop.pciDomainID,
+          prop.pciBusID,
+          prop.pciDeviceID);
+      dev.info["pci_bus_id"] = std::string(pci_id);
+
+      // Compute capability as size_t (to match Metal's variant type)
+      dev.info["compute_capability_major"] = static_cast<size_t>(prop.major);
+      dev.info["compute_capability_minor"] = static_cast<size_t>(prop.minor);
+
+      devices.push_back(std::move(dev));
     }
-    return it->second;
+    return devices;
+  }();
+
+  // Initialize NVML once for fresh memory reads
+  static NVMLState nvml;
+  static bool nvml_initialized = nvml_init(nvml);
+
+  if (device_index < 0 ||
+      device_index >= static_cast<int>(all_devices.size())) {
+    static auto empty =
+        std::unordered_map<std::string, std::variant<std::string, size_t>>();
+    return empty;
   }
 
-  cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, device_index);
+  // Return a copy with fresh memory info
+  // Using thread_local to avoid locks while keeping free_memory fresh
+  thread_local auto device_info_copy =
+      std::unordered_map<std::string, std::variant<std::string, size_t>>();
 
-  auto& info = cache[device_index];
-  info["device_name"] = std::string(prop.name);
-  info["uuid"] = format_uuid(prop.uuid);
+  device_info_copy = all_devices[device_index].info;
 
-  // Architecture string (e.g., "sm_89")
-  char arch[16];
-  snprintf(arch, sizeof(arch), "sm_%d%d", prop.major, prop.minor);
-  info["architecture"] = std::string(arch);
-
-  // PCI bus ID (domain:bus:device.function)
-  char pci_id[32];
-  snprintf(
-      pci_id,
-      sizeof(pci_id),
-      "%04x:%02x:%02x.0",
-      prop.pciDomainID,
-      prop.pciBusID,
-      prop.pciDeviceID);
-  info["pci_bus_id"] = std::string(pci_id);
-
-  // Compute capability as size_t (to match Metal's variant type)
-  info["compute_capability_major"] = static_cast<size_t>(prop.major);
-  info["compute_capability_minor"] = static_cast<size_t>(prop.minor);
-
-  // Memory - try NVML first, fallback to cudaMemGetInfo
-  nvml_init();
+  // Get fresh memory info - try NVML first (system-wide), fallback to cudaMemGetInfo (process-level)
   size_t free_mem, total_mem;
-  std::string uuid = std::get<std::string>(info["uuid"]);
-  if (!nvml_get_memory(uuid.c_str(), &free_mem, &total_mem)) {
+
+  if (nvml_initialized &&
+      nvml_get_memory(
+          nvml,
+          all_devices[device_index].uuid.c_str(),
+          &free_mem,
+          &total_mem)) {
+    // NVML succeeded - use system-wide memory
+  } else {
+    // Fallback to cudaMemGetInfo (process-scoped)
     int prev_device;
     cudaGetDevice(&prev_device);
     cudaSetDevice(device_index);
     cudaMemGetInfo(&free_mem, &total_mem);
     cudaSetDevice(prev_device);
   }
-  info["free_memory"] = free_mem;
-  info["total_memory"] = total_mem;
 
-  return cache[device_index];
+  device_info_copy["free_memory"] = free_mem;
+  device_info_copy["total_memory"] = total_mem;
+
+  return device_info_copy;
 }
 
 } // namespace mlx::core::cu

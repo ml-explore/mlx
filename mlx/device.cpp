@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
 #include <stdexcept>
 
@@ -42,6 +42,31 @@ bool is_available(const Device& d) {
   }
   // appease compiler
   return false;
+}
+
+int device_count(Device::DeviceType type) {
+  switch (type) {
+    case Device::cpu:
+      return cpu::device_count();
+    case Device::gpu:
+      return gpu::device_count();
+  }
+  // appease compiler
+  return 0;
+}
+
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
+device_info(const Device& d) {
+  switch (d.type) {
+    case Device::cpu:
+      return cpu::device_info(d.index);
+    case Device::gpu:
+      return gpu::device_info(d.index);
+  }
+  // appease compiler
+  static std::unordered_map<std::string, std::variant<std::string, size_t>>
+      empty;
+  return empty;
 }
 
 } // namespace mlx::core
