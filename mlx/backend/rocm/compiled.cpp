@@ -1,9 +1,410 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/compiled.h"
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/jit_module.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/graph_utils.h"
+#include "mlx/primitives.h"
+
+#include <fmt/format.h>
+
+namespace mlx::core {
+
+namespace rocm {
+
+struct FusedKernelBuilder {
+  std::string os;
+  const std::string& kernel_name;
+  const std::vector<array>& inputs;
+  const std::vector<array>& outputs;
+  const std::vector<array>& tape;
+  const std::function<bool(size_t)>& is_constant;
+
+  void build(const char* name, bool contiguous) {
+    NodeNamer namer;
+
+    // Function parameters.
+    std::vector<std::string> params;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      if (is_constant(i)) {
+        continue;
+      }
+      const auto& x = inputs[i];
+      const std::string& xname = namer.get_name(x);
+      params.push_back(
+          fmt::format("const {}* {}", dtype_to_hip_type(x.dtype()), xname));
+      if (!is_scalar(x) && !contiguous) {
+        params.push_back(fmt::format(
+            "const hip::std::array<int64_t, NDIM> {}_strides",
+            xname));
+      }
+    }
+    for (const auto& x : outputs) {
+      params.push_back(fmt::format(
+          "{}* {}", dtype_to_hip_type(x.dtype()), namer.get_name(x)));
+    }
+    if (!contiguous) {
+      params.push_back(
+          "const hip::std::array<int32_t, NDIM> shape");
+    }
+    params.push_back("IdxT size");
+
+    // Build function signature.
+    if (contiguous) {
+      os += "template <typename IdxT = uint32_t, int work_per_thread = 1>\n";
+    } else {
+      os +=
+          "template <int NDIM, typename IdxT = uint32_t, int work_per_thread = 1>\n";
+    }
+    os += fmt::format("__global__ void {}(\n", kernel_name + name);
+    for (size_t i = 0; i < params.size(); ++i) {
+      os += "    ";
+      os += params[i];
+      if (i != params.size() - 1) {
+        os += ",\n";
+      }
+    }
+    os += ") {\n";
+
+    // Index. For non contiguous kernels we create a separate index
+    // variable per variable otherwise everyone uses `index`.
+    os +=
+        "  IdxT index = (blockIdx.x * blockDim.x + threadIdx.x) * work_per_thread;\n"
+        "  if (index >= size) {\n"
+        "    return;\n"
+        "  }\n";
+    if (!contiguous) {
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        const auto& x = inputs[i];
+        const std::string& xname = namer.get_name(x);
+        if (is_scalar(x) || is_constant(i)) {
+          continue;
+        }
+        os += "  IdxT " + xname + "_idx = 0;\n";
+      }
+      os += "  {\n";
+      os += "    IdxT loc = index;\n";
+      os +=
+          "    #pragma unroll\n"
+          "    for (int i = NDIM - 1; i >= 0; i--) {\n";
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        const auto& x = inputs[i];
+        const std::string& xname = namer.get_name(x);
+        if (is_scalar(x) || is_constant(i)) {
+          continue;
+        }
+        os += "      " + xname + "_idx += (loc \% shape[i]) * IdxT(" + xname +
+            "_strides[i]);\n";
+      }
+      os +=
+          "      loc /= shape[i];\n"
+          "    }\n"
+          "  }\n";
+    }
+
+    // Work loop
+    if (!contiguous) {
+      os +=
+          "\n"
+          "  for (int i = 0; i < work_per_thread && index + i < size; i++) {\n";
+    } else {
+      os +=
+          "\n"
+          "  #pragma unroll\n"
+          "  for (int i = 0; i < work_per_thread; i++) {\n"
+          "    if (index + i >= size) break;\n";
+    }
+
+    // Read inputs.
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      const auto& x = inputs[i];
+      const std::string& xname = namer.get_name(x);
+      std::string type = dtype_to_hip_type(x.dtype());
+      std::string value;
+      if (is_constant(i)) {
+        std::ostringstream ss;
+        print_constant(ss, x);
+        value = fmt::format("static_cast<{}>({})", type, ss.str());
+      } else if (is_scalar(x)) {
+        value = fmt::format("{}[0]", xname);
+      } else if (contiguous) {
+        value = fmt::format("{}[index + i]", xname);
+      } else {
+        value = fmt::format("{}[{}_idx]", xname, xname);
+      }
+      os += fmt::format("    {} tmp_{} = {};\n", type, xname, value);
+    }
+
+    // Write tape.
+    for (const auto& x : tape) {
+      const std::string& xname = namer.get_name(x);
+      std::string type = dtype_to_hip_type(x.dtype());
+      std::string value;
+      if (is_static_cast(x.primitive())) {
+        value = fmt::format(
+            "static_cast<{}>(tmp_{})", type, namer.get_name(x.inputs()[0]));
+      } else {
+        value = x.primitive().name();
+        value += "{}(";
+        for (size_t i = 0; i < x.inputs().size() - 1; ++i) {
+          value += fmt::format("tmp_{}, ", namer.get_name(x.inputs()[i]));
+        }
+        value += fmt::format("tmp_{})", namer.get_name(x.inputs().back()));
+      }
+      os += fmt::format("    {} tmp_{} = {};\n", type, xname, value);
+    }
+
+    // Write output.
+    for (const auto& x : outputs) {
+      if (contiguous) {
+        os += fmt::format("    {0}[index + i] = tmp_{0};\n", namer.get_name(x));
+      } else {
+        os += fmt::format("    {0}[index] = tmp_{0};\n", namer.get_name(x));
+      }
+    }
+
+    // End of work loop
+    if (!contiguous) {
+      os += "\n";
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        const auto& x = inputs[i];
+        const std::string& xname = namer.get_name(x);
+        if (is_scalar(x) || is_constant(i)) {
+          continue;
+        }
+        os += fmt::format("    {0}_idx += {0}_strides[NDIM - 1];\n", xname);
+      }
+      os += "    index++;\n";
+    }
+    os += "  }\n";
+
+    os += "}\n";
+  }
+};
+
+} // namespace rocm
+
+constexpr const char* g_jit_includes = R"(
+#include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
+#include <hip/std/array>
+#include <hip/std/limits>
+
+// Include device operations
 namespace mlx::core::rocm {
 
-void compile() {
-  // Placeholder for ROCm compilation
-}
+// Binary ops
+struct Add {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x + y; }
+};
+
+struct Subtract {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x - y; }
+};
+
+struct Multiply {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x * y; }
+};
+
+struct Divide {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x / y; }
+};
+
+struct Maximum {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x > y ? x : y; }
+};
+
+struct Minimum {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x < y ? x : y; }
+};
+
+// Unary ops
+struct Abs {
+  template <typename T>
+  __device__ T operator()(T x) { return abs(x); }
+};
+
+struct Exp {
+  template <typename T>
+  __device__ T operator()(T x) { return exp(x); }
+};
+
+struct Log {
+  template <typename T>
+  __device__ T operator()(T x) { return log(x); }
+};
+
+struct Sqrt {
+  template <typename T>
+  __device__ T operator()(T x) { return sqrt(x); }
+};
+
+struct Negative {
+  template <typename T>
+  __device__ T operator()(T x) { return -x; }
+};
+
+struct Square {
+  template <typename T>
+  __device__ T operator()(T x) { return x * x; }
+};
+
+struct Sigmoid {
+  template <typename T>
+  __device__ T operator()(T x) {
+    T y = 1 / (1 + exp(-abs(x)));
+    return (x < 0) ? 1 - y : y;
+  }
+};
+
+struct Tanh {
+  template <typename T>
+  __device__ T operator()(T x) { return tanh(x); }
+};
+
+// Ternary ops
+struct Select {
+  template <typename T>
+  __device__ T operator()(bool c, T x, T y) { return c ? x : y; }
+};
 
 } // namespace mlx::core::rocm
+
+#define inf hip::std::numeric_limits<float>::infinity()
+)";
+
+void Compiled::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& s = stream();
+
+  // Determine the work per thread for the vectorized reads/writes.
+  int max_size = 1;
+  for (const auto& x : outputs) {
+    max_size = (max_size > x.itemsize()) ? max_size : x.itemsize();
+  }
+  int work_per_thread = 16 / max_size;
+
+  rocm::JitModule& mod = rocm::get_jit_module(s.device, lib_name(), [&]() {
+    // Build source code.
+    rocm::FusedKernelBuilder builder{
+        g_jit_includes, lib_name(), inputs_, outputs_, tape_, is_constant_};
+    builder.os +=
+        "namespace mlx::core::rocm {\n\n";
+    builder.build("_contiguous", true);
+    builder.os += "\n";
+    builder.build("_strided", false);
+    builder.os += "\n} // namespace mlx::core::rocm\n";
+    
+    // Build kernel names.
+    std::vector<std::string> kernel_names;
+    kernel_names.push_back(fmt::format(
+        "mlx::core::rocm::{}_contiguous<uint32_t, {}>",
+        lib_name(),
+        work_per_thread));
+    kernel_names.push_back(fmt::format(
+        "mlx::core::rocm::{}_contiguous<int64_t, {}>",
+        lib_name(),
+        work_per_thread));
+    for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
+      for (int i = 1; i <= rocm::MAX_NDIM; ++i) {
+        kernel_names.push_back(fmt::format(
+            "mlx::core::rocm::{}_strided<{}, uint32_t, {}>", lib_name(), i, wpt));
+        kernel_names.push_back(fmt::format(
+            "mlx::core::rocm::{}_strided<{}, int64_t, {}>", lib_name(), i, wpt));
+      }
+    }
+
+    return std::make_tuple(
+        false, std::move(builder.os), std::move(kernel_names));
+  });
+
+  // Collapse contiguous dims to route to a faster kernel if possible.
+  auto [contiguous, shape, strides_vec] =
+      compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
+
+  // Whether to use large index.
+  bool large = compiled_use_large_index(inputs, outputs, contiguous);
+
+  rocm::KernelArgs args;
+  // Put inputs.
+  int strides_index = 1;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    if (is_constant_(i)) {
+      continue;
+    }
+    const auto& x = inputs[i];
+    args.append(x);
+    if (!contiguous && !is_scalar(x)) {
+      args.append_ptr(strides_vec[strides_index++].data());
+    }
+  }
+
+  // Put outputs.
+  compiled_allocate_outputs(inputs, outputs, is_constant_, contiguous);
+  for (auto& x : outputs) {
+    args.append(x);
+  }
+
+  // Put shape and size.
+  if (!contiguous) {
+    args.append_ptr(shape.data());
+  }
+  if (large) {
+    args.append<int64_t>(outputs[0].data_size());
+  } else {
+    args.append<uint32_t>(outputs[0].data_size());
+  }
+
+  // Choose work per thread
+  if (!contiguous && shape.back() % work_per_thread != 0) {
+    work_per_thread = 1;
+  }
+
+  // Launch kernel.
+  const char* index_type = large ? "int64_t" : "uint32_t";
+  std::string kernel_name = fmt::format("mlx::core::rocm::{}", lib_name());
+  if (contiguous) {
+    kernel_name +=
+        fmt::format("_contiguous<{}, {}>", index_type, work_per_thread);
+  } else {
+    kernel_name += fmt::format(
+        "_strided<{}, {}, {}>", shape.size(), index_type, work_per_thread);
+  }
+  
+  auto& encoder = rocm::get_command_encoder(s);
+  for (const auto& in : inputs) {
+    encoder.set_input_array(in);
+  }
+  for (const auto& out : outputs) {
+    encoder.set_output_array(out);
+  }
+
+  auto kernel = mod.get_kernel(kernel_name);
+  
+  // Calculate launch configuration
+  int block_size = 256;
+  int64_t total_work = (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
+  int num_blocks = (total_work + block_size - 1) / block_size;
+  
+  encoder.launch_kernel([&](hipStream_t stream) {
+    hipModuleLaunchKernel(
+        kernel,
+        num_blocks, 1, 1,
+        block_size, 1, 1,
+        0,
+        stream,
+        args.args(),
+        nullptr);
+  });
+}
+
+} // namespace mlx::core

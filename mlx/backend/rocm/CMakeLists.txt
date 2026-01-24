@@ -6,34 +6,37 @@
 target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/rocm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp
+          # HIP files
+          ${CMAKE_CURRENT_SOURCE_DIR}/arange.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/binary.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/unary.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/binary.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/ternary.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/random.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/softmax.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/rope.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/scan.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/softmax.hip
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/random.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/arange.hip
-          ${CMAKE_CURRENT_SOURCE_DIR}/scan.hip)
+          ${CMAKE_CURRENT_SOURCE_DIR}/ternary.hip
+          ${CMAKE_CURRENT_SOURCE_DIR}/unary.hip)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
 
@@ -55,9 +58,10 @@ find_package(hip REQUIRED)
 find_package(rocblas REQUIRED)
 find_package(rocthrust REQUIRED)
 find_package(rocprim REQUIRED)
+find_package(hiprand REQUIRED)
 
 # Link ROCm libraries
-target_link_libraries(mlx PRIVATE hip::host roc::rocblas roc::rocthrust roc::rocprim)
+target_link_libraries(mlx PRIVATE hip::host roc::rocblas roc::rocthrust roc::rocprim hip::hiprand)
 
 # Include ROCm headers
 target_include_directories(mlx PRIVATE ${HIP_INCLUDE_DIRS})
