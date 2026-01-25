@@ -936,7 +936,7 @@ array quantized_scaled_dot_product_attention(
     }
   }
 
-  if (bits != 4 && bits != 8) {
+  if (!is_affine && bits != 4 && bits != 8) {
     std::ostringstream msg;
     msg << "[quantized_scaled_dot_product_attention] Unsupported bits " << bits
         << ". Supported bits are 4 and 8.";
@@ -955,7 +955,8 @@ array quantized_scaled_dot_product_attention(
         "[quantized_scaled_dot_product_attention] Keys and values must be packed quantized arrays of type uint32.");
   }
 
-  auto el_per_int = 32 / bits;
+  auto key_head_dim = (keys.shape(-1) * 32) / bits;
+  auto value_head_dim = (values.shape(-1) * 32) / bits;
 
   const size_t batch_dim = queries.shape(0);
   for (const auto& tensor : {keys, values, key_scales, value_scales}) {
@@ -984,14 +985,14 @@ array quantized_scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  if (queries.shape(-1) != keys.shape(-1) * el_per_int) {
+  if (queries.shape(-1) != key_head_dim) {
     std::ostringstream msg;
     msg << "[quantized_scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
         << queries.shape() << " for keys shape " << keys.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
-  if (queries.shape(-1) != values.shape(-1) * el_per_int) {
+  if (queries.shape(-1) != value_head_dim) {
     std::ostringstream msg;
     msg << "[quantized_scaled_dot_product_attention] query, values expected to have matching last dimension; found query shape "
         << queries.shape() << " for values shape " << values.shape() << ".";
@@ -1178,7 +1179,7 @@ array quantized_scaled_dot_product_attention(
     inputs.back() = broadcast_to(inputs.back(), mask_shape, stream);
   }
 
-  int out_dim = values.shape(-1) * el_per_int;
+  int out_dim = value_head_dim;
   Shape out_shape{
       queries.shape(0), queries.shape(1), queries.shape(2), out_dim};
 

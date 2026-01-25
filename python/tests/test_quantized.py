@@ -784,7 +784,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         Lq, Lk, D = 4, 640, 128
 
         for group_size in [32, 64, 128]:
-            for bits in [4, 8]:
+            for bits in [2, 3, 4, 5, 6, 8]:
                 with self.subTest(group_size=group_size, bits=bits):
                     q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
                     k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
@@ -813,7 +813,16 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     )
 
                     self.assertEqual(out.shape, ref.shape)
-                    tol = 5e-2 if bits == 4 else 2e-2
+                    if bits <= 3:
+                        tol = 3e-1
+                    elif bits == 5:
+                        tol = 1.5e-1
+                    elif bits == 6:
+                        tol = 1e-1
+                    elif bits == 4:
+                        tol = 5e-2
+                    else:
+                        tol = 2e-2
                     self.assertLess((out - ref).abs().max(), tol)
 
     def test_gather_qmm(self):
