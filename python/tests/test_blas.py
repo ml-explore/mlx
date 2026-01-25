@@ -293,6 +293,15 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out_npy = vec_npy @ mat_npy
                 out_mlx = vec_mlx @ mat_mlx
 
+            # Due to some bug, numpy sometimes has NaNs on macOS
+            # See https://github.com/ml-explore/mlx/pull/3063
+            nans = np.isnan(out_npy)
+            if np.any(nans):
+                nan_ids = np.where(nans)
+                mlx_nan_ids = tuple(mx.array(n) for n in nan_ids)
+                out_npy[nan_ids] = 0.0
+                out_mlx[mlx_nan_ids] = 0.0
+
             self.assertListEqual(list(out_npy.shape), list(out_mlx.shape))
             self.assertTrue(np.allclose(out_mlx, out_npy, atol=1e-5))
 
