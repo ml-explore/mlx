@@ -177,7 +177,7 @@ void unary_op_gpu_inplace(
       launch_kernel(in.data<__half>(), out.data<__half>(), out.data_size());
       break;
     case bfloat16:
-      launch_kernel(in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), out.data_size());
+      launch_kernel(in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
       break;
     case int32:
       launch_kernel(in.data<int32_t>(), out.data<int32_t>(), out.data_size());
@@ -201,9 +201,8 @@ void unary_op_gpu_inplace(
       launch_kernel(in.data<bool>(), out.data<bool>(), out.data_size());
       break;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported type {} for unary op {}.",
-          dtype_to_string(in.dtype()), op));
+      throw std::runtime_error(
+          std::string("Unsupported type for unary op ") + op);
   }
 }
 

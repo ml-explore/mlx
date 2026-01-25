@@ -14,7 +14,8 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
-#include <fmt/format.h>
+#include <sstream>
+#include <stdexcept>
 
 namespace mlx::core {
 
@@ -78,7 +79,7 @@ struct CTypeToHipType<float16_t> {
 
 template <>
 struct CTypeToHipType<bfloat16_t> {
-  using type = __hip_bfloat16;
+  using type = hip_bfloat16;
 };
 
 template <>
@@ -108,8 +109,9 @@ inline constexpr bool is_inexact_v = is_floating_v<T> || is_complex_v<T>;
 template <int NDIM = MAX_NDIM, typename T = int32_t>
 inline rocm::hip_array<T, NDIM> const_param(const SmallVector<T>& vec) {
   if (vec.size() > NDIM) {
-    throw std::runtime_error(
-        fmt::format("ndim can not be larger than {}.", NDIM));
+    std::ostringstream oss;
+    oss << "ndim can not be larger than " << NDIM << ".";
+    throw std::runtime_error(oss.str());
   }
   rocm::hip_array<T, NDIM> result;
   std::copy_n(vec.begin(), vec.size(), result.data_);

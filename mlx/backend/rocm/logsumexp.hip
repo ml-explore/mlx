@@ -180,9 +180,9 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
       case bfloat16:
         hipLaunchKernelGGL(
-            (rocm::logsumexp_kernel<__hip_bfloat16, float, BLOCK_DIM, N_READS>),
+            (rocm::logsumexp_kernel<hip_bfloat16, float, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), axis_size);
+            in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), axis_size);
         break;
       default:
         throw std::runtime_error("Unsupported type for logsumexp");
@@ -191,3 +191,4 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 } // namespace mlx::core
+ 

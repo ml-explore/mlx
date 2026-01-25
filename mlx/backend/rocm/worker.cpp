@@ -1,14 +1,12 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/worker.h"
-#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/utils.h"
 
 namespace mlx::core::rocm {
 
 Worker::Worker()
-    : signal_stream_(device(mlx::core::Device::gpu)),
-      signal_event_(hipEventDisableTiming | hipEventBlockingSync),
-      worker_(&Worker::thread_fn, this) {}
+    : worker_(&Worker::thread_fn, this) {}
 
 Worker::~Worker() {
   {
@@ -42,9 +40,8 @@ void Worker::commit(hipStream_t stream) {
     // Move pending tasks into ready tasks
     worker_tasks_[++committed_batch_] = std::move(pending_tasks_);
   }
-  signal_event_.record(stream);
-  signal_event_.wait(signal_stream_);
-  hipLaunchHostFunc(signal_stream_, signal, this);
+  // Use hipLaunchHostFunc to signal when stream operations complete
+  hipLaunchHostFunc(stream, signal, this);
 }
 
 void Worker::thread_fn() {

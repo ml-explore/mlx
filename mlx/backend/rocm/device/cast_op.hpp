@@ -40,38 +40,38 @@ struct Cast<__half, __half> {
 
 // Specializations for bfloat16 types
 template <typename To>
-struct Cast<__hip_bfloat16, To> {
-  __device__ To operator()(__hip_bfloat16 x) {
-    return static_cast<To>(__bfloat162float(x));
+struct Cast<hip_bfloat16, To> {
+  __device__ To operator()(hip_bfloat16 x) {
+    return static_cast<To>(static_cast<float>(x));
   }
 };
 
 template <typename From>
-struct Cast<From, __hip_bfloat16> {
-  __device__ __hip_bfloat16 operator()(From x) {
-    return __float2bfloat16(static_cast<float>(x));
+struct Cast<From, hip_bfloat16> {
+  __device__ hip_bfloat16 operator()(From x) {
+    return hip_bfloat16(static_cast<float>(x));
   }
 };
 
 template <>
-struct Cast<__hip_bfloat16, __hip_bfloat16> {
-  __device__ __hip_bfloat16 operator()(__hip_bfloat16 x) {
+struct Cast<hip_bfloat16, hip_bfloat16> {
+  __device__ hip_bfloat16 operator()(hip_bfloat16 x) {
     return x;
   }
 };
 
 // Conversion between half and bfloat16
 template <>
-struct Cast<__half, __hip_bfloat16> {
-  __device__ __hip_bfloat16 operator()(__half x) {
-    return __float2bfloat16(__half2float(x));
+struct Cast<__half, hip_bfloat16> {
+  __device__ hip_bfloat16 operator()(__half x) {
+    return hip_bfloat16(__half2float(x));
   }
 };
 
 template <>
-struct Cast<__hip_bfloat16, __half> {
-  __device__ __half operator()(__hip_bfloat16 x) {
-    return __float2half(__bfloat162float(x));
+struct Cast<hip_bfloat16, __half> {
+  __device__ __half operator()(hip_bfloat16 x) {
+    return __float2half(static_cast<float>(x));
   }
 };
 

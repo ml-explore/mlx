@@ -259,9 +259,9 @@ void col_reduce(
           switch (reduce_type) {
             case Reduce::Sum:
               hipLaunchKernelGGL(
-                  (rocm::col_reduce_simple_kernel<__hip_bfloat16, __hip_bfloat16, rocm::Sum>),
+                  (rocm::col_reduce_simple_kernel<hip_bfloat16, hip_bfloat16, rocm::Sum>),
                   dim3(num_blocks), dim3(block_size), 0, stream,
-                  in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), n_rows, n_cols);
+                  in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), n_rows, n_cols);
               break;
             default:
               throw std::runtime_error("Unsupported reduce type for col_reduce bfloat16");

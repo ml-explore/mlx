@@ -3,20 +3,33 @@
 #pragma once
 
 #include "mlx/array.h"
-#include "mlx/backend/rocm/worker.h"
+#include "mlx/backend/rocm/utils.h"
 #include "mlx/stream.h"
 
 #include <hip/hip_runtime.h>
 #include <rocblas/rocblas.h>
+
+// Only include thrust headers when compiling with HIP compiler
+// (thrust headers have dependencies on CUDA/HIP-specific headers)
+#ifdef __HIPCC__
 #include <thrust/execution_policy.h>
+#endif
 
 #include <unordered_map>
+#include <functional>
+#include <memory>
+#include <vector>
 
 namespace mlx::core::rocm {
+
+// Forward declaration
+class Device;
+class Worker;
 
 class CommandEncoder {
  public:
   explicit CommandEncoder(Device& d);
+  ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -25,10 +38,7 @@ class CommandEncoder {
   void set_output_array(const array& arr);
 
   template <typename F>
-  void launch_kernel(F&& func) {
-    device_.make_current();
-    func(stream_);
-  }
+  void launch_kernel(F&& func);
 
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
@@ -52,7 +62,7 @@ class CommandEncoder {
  private:
   Device& device_;
   HipStream stream_;
-  Worker worker_;
+  std::unique_ptr<Worker> worker_;
   int node_count_{0};
   std::vector<std::shared_ptr<array::Data>> temporaries_;
 };
@@ -74,22 +84,32 @@ class Device {
     return device_;
   }
   
-  rocblas_handle rocblas_handle() const {
+  rocblas_handle get_rocblas_handle() const {
     return rocblas_;
   }
 
  private:
   int device_;
-  rocblas_handle rocblas_;
-  std::unordered_map<int, CommandEncoder> encoders_;
+  rocblas_handle rocblas_{nullptr};
+  std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
 };
 
 Device& device(mlx::core::Device device);
 CommandEncoder& get_command_encoder(Stream s);
 
 // Return an execution policy that does not sync for result.
+// Only available when compiling with HIP compiler
+#ifdef __HIPCC__
 inline auto thrust_policy(hipStream_t stream) {
   return thrust::hip::par.on(stream);
+}
+#endif
+
+// Template implementation (must be after Device is defined)
+template <typename F>
+void CommandEncoder::launch_kernel(F&& func) {
+  device_.make_current();
+  func(stream_);
 }
 
 } // namespace mlx::core::rocm

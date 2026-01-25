@@ -4,10 +4,12 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/primitives.h"
+#include "mlx/types/half_types.h"
 
 #include <hip/hip_runtime.h>
 #include <rocblas/rocblas.h>
 
+#include <cstring>
 #include <numeric>
 
 namespace mlx::core {
@@ -45,7 +47,7 @@ void gemm_rocblas(
     float beta = 0.0f) {
   
   auto& device = encoder.device();
-  rocblas_handle handle = device.rocblas_handle();
+  rocblas_handle handle = device.get_rocblas_handle();
   
   // rocBLAS uses column-major, so we swap A and B and compute B^T * A^T = (A * B)^T
   // But since we want row-major output, we compute C = A * B by doing C^T = B^T * A^T
@@ -98,9 +100,11 @@ void gemm_rocblas(
       }
       case float16: {
         rocblas_half alpha_h, beta_h;
-        // Convert float to rocblas_half
-        alpha_h = rocblas_float_to_half(alpha);
-        beta_h = rocblas_float_to_half(beta);
+        // Convert float to rocblas_half using memcpy
+        float16_t alpha_f16 = static_cast<float16_t>(alpha);
+        float16_t beta_f16 = static_cast<float16_t>(beta);
+        std::memcpy(&alpha_h, &alpha_f16, sizeof(rocblas_half));
+        std::memcpy(&beta_h, &beta_f16, sizeof(rocblas_half));
         rocblas_hgemm(
             handle,
             trans_a,
@@ -109,12 +113,12 @@ void gemm_rocblas(
             M,
             K,
             &alpha_h,
-            reinterpret_cast<const rocblas_half*>(b.data<__half>()),
+            reinterpret_cast<const rocblas_half*>(b.data<float16_t>()),
             b_transposed ? K : N,
-            reinterpret_cast<const rocblas_half*>(a.data<__half>()),
+            reinterpret_cast<const rocblas_half*>(a.data<float16_t>()),
             a_transposed ? M : K,
             &beta_h,
-            reinterpret_cast<rocblas_half*>(out.data<__half>()),
+            reinterpret_cast<rocblas_half*>(out.data<float16_t>()),
             N);
         break;
       }
@@ -176,7 +180,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       // For simplicity, we use pointer arithmetic in the kernel
       encoder.launch_kernel([&, a_offset, b_offset, batch](hipStream_t stream) {
         auto& device = encoder.device();
-        rocblas_handle handle = device.rocblas_handle();
+        rocblas_handle handle = device.get_rocblas_handle();
         rocblas_set_stream(handle, stream);
         
         rocblas_operation trans_a = b_transposed ? rocblas_operation_none : rocblas_operation_transpose;

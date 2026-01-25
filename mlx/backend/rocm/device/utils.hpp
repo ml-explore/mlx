@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <limits>
 
 namespace mlx::core::rocm {
 
@@ -26,22 +27,68 @@ inline constexpr bool is_complex_v = is_complex<T>::value;
 template <typename T>
 using complex_t = hipFloatComplex;
 
+// Strides type
+using Strides = int64_t[8];
+
+// HIP array type (similar to cuda::std::array)
+// This is usable from both host and device code
+template <typename T, int N>
+struct hip_array {
+  T data_[N];
+  
+#ifdef __HIPCC__
+  __host__ __device__ T& operator[](int i) { return data_[i]; }
+  __host__ __device__ const T& operator[](int i) const { return data_[i]; }
+  __host__ __device__ constexpr int size() const { return N; }
+#else
+  T& operator[](int i) { return data_[i]; }
+  const T& operator[](int i) const { return data_[i]; }
+  constexpr int size() const { return N; }
+#endif
+};
+
+// Ceil division - available on both host and device
+template <typename T>
+#ifdef __HIPCC__
+__host__ __device__
+#endif
+T ceildiv(T a, T b) {
+  return (a + b - 1) / b;
+}
+
+// ============================================================================
+// Device-only code below - only compiled when using HIP compiler
+// ============================================================================
+#ifdef __HIPCC__
+
 // Numeric limits for device code
 template <typename T>
 struct numeric_limits;
 
 template <>
 struct numeric_limits<float> {
-  __device__ static constexpr float infinity() { return __int_as_float(0x7f800000); }
-  __device__ static constexpr float quiet_NaN() { return __int_as_float(0x7fc00000); }
+  __device__ static float infinity() { 
+    unsigned int i = 0x7f800000;
+    return *reinterpret_cast<float*>(&i);
+  }
+  __device__ static float quiet_NaN() { 
+    unsigned int i = 0x7fc00000;
+    return *reinterpret_cast<float*>(&i);
+  }
   __device__ static constexpr float lowest() { return -3.402823466e+38f; }
   __device__ static constexpr float max() { return 3.402823466e+38f; }
 };
 
 template <>
 struct numeric_limits<double> {
-  __device__ static constexpr double infinity() { return __longlong_as_double(0x7ff0000000000000LL); }
-  __device__ static constexpr double quiet_NaN() { return __longlong_as_double(0x7ff8000000000000LL); }
+  __device__ static double infinity() { 
+    unsigned long long i = 0x7ff0000000000000ULL;
+    return *reinterpret_cast<double*>(&i);
+  }
+  __device__ static double quiet_NaN() { 
+    unsigned long long i = 0x7ff8000000000000ULL;
+    return *reinterpret_cast<double*>(&i);
+  }
   __device__ static constexpr double lowest() { return -1.7976931348623158e+308; }
   __device__ static constexpr double max() { return 1.7976931348623158e+308; }
 };
@@ -55,11 +102,27 @@ struct numeric_limits<__half> {
 };
 
 template <>
-struct numeric_limits<__hip_bfloat16> {
-  __device__ static __hip_bfloat16 infinity() { return __ushort_as_bfloat16(0x7f80); }
-  __device__ static __hip_bfloat16 quiet_NaN() { return __ushort_as_bfloat16(0x7fc0); }
-  __device__ static __hip_bfloat16 lowest() { return __ushort_as_bfloat16(0xff7f); }
-  __device__ static __hip_bfloat16 max() { return __ushort_as_bfloat16(0x7f7f); }
+struct numeric_limits<hip_bfloat16> {
+  __device__ static hip_bfloat16 infinity() { 
+    hip_bfloat16 val;
+    val.data = 0x7f80;
+    return val;
+  }
+  __device__ static hip_bfloat16 quiet_NaN() { 
+    hip_bfloat16 val;
+    val.data = 0x7fc0;
+    return val;
+  }
+  __device__ static hip_bfloat16 lowest() { 
+    hip_bfloat16 val;
+    val.data = 0xff7f;
+    return val;
+  }
+  __device__ static hip_bfloat16 max() { 
+    hip_bfloat16 val;
+    val.data = 0x7f7f;
+    return val;
+  }
 };
 
 template <>
@@ -85,25 +148,6 @@ struct numeric_limits<uint64_t> {
   __device__ static constexpr uint64_t lowest() { return 0; }
   __device__ static constexpr uint64_t max() { return UINT64_MAX; }
 };
-
-// Strides type
-using Strides = int64_t[8];
-
-// HIP array type (similar to cuda::std::array)
-template <typename T, int N>
-struct hip_array {
-  T data_[N];
-  
-  __host__ __device__ T& operator[](int i) { return data_[i]; }
-  __host__ __device__ const T& operator[](int i) const { return data_[i]; }
-  __host__ __device__ constexpr int size() const { return N; }
-};
-
-// Ceil division
-template <typename T>
-__host__ __device__ T ceildiv(T a, T b) {
-  return (a + b - 1) / b;
-}
 
 // Elem to loc conversion
 template <typename IdxT = int64_t>
@@ -134,5 +178,7 @@ __device__ inline int block_index() {
 __device__ inline int global_thread_index() {
   return thread_index() + block_index() * (blockDim.x * blockDim.y * blockDim.z);
 }
+
+#endif // __HIPCC__
 
 } // namespace mlx::core::rocm

@@ -63,7 +63,8 @@ struct ReduceResult {
   using type = T;
 };
 
-template <typename T>
+// Specialization for Sum with bool - result is int32_t
+template <>
 struct ReduceResult<Sum, bool> {
   using type = int32_t;
 };

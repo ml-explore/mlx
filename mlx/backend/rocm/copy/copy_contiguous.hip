@@ -107,7 +107,7 @@ void copy_contiguous(
         launch_kernel(in.data<__half>(), out.data<__half>(), out.data_size());
         break;
       case bfloat16:
-        launch_kernel(in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), out.data_size());
+        launch_kernel(in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
         break;
       case int32:
         launch_kernel(in.data<int32_t>(), out.data<int32_t>(), out.data_size());
@@ -131,9 +131,8 @@ void copy_contiguous(
         launch_kernel(in.data<bool>(), out.data<bool>(), out.data_size());
         break;
       default:
-        throw std::runtime_error(fmt::format(
-            "Unsupported type {} for copy.",
-            dtype_to_string(in.dtype())));
+        throw std::runtime_error(
+            std::string("Unsupported type for copy: ") + dtype_to_string(in.dtype()));
     }
   } else {
     // Cross-type copy - handle common conversions

@@ -278,9 +278,9 @@ void binary_op_gpu_inplace(
       break;
     case bfloat16:
       if (out.dtype() == bool_) {
-        launch_kernel(a.data<__hip_bfloat16>(), b.data<__hip_bfloat16>(), out.data<bool>(), out.data_size());
+        launch_kernel(a.data<hip_bfloat16>(), b.data<hip_bfloat16>(), out.data<bool>(), out.data_size());
       } else {
-        launch_kernel(a.data<__hip_bfloat16>(), b.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), out.data_size());
+        launch_kernel(a.data<hip_bfloat16>(), b.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
       }
       break;
     case int32:
@@ -329,9 +329,8 @@ void binary_op_gpu_inplace(
       launch_kernel(a.data<bool>(), b.data<bool>(), out.data<bool>(), out.data_size());
       break;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported type {} for binary op {}.",
-          dtype_to_string(a.dtype()), op));
+      throw std::runtime_error(
+          std::string("Unsupported type for binary op ") + op);
   }
 }
 
@@ -348,22 +347,17 @@ void binary_op_gpu(
   binary_op_gpu_inplace<Op>(inputs, out, op, s);
 }
 
-#define BINARY_GPU(func)                                              \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+#define BINARY_GPU(prim)                                              \
+  void prim::eval_gpu(const std::vector<array>& inputs, array& out) { \
     auto& s = out.primitive().stream();                               \
-    binary_op_gpu<rocm::func>(inputs, out, name(), s);                \
+    binary_op_gpu<rocm::prim>(inputs, out, name(), s);                \
   }
 
 BINARY_GPU(Add)
 BINARY_GPU(ArcTan2)
-BINARY_GPU(BitwiseAnd)
-BINARY_GPU(BitwiseOr)
-BINARY_GPU(BitwiseXor)
 BINARY_GPU(Divide)
-BINARY_GPU(Equal)
 BINARY_GPU(Greater)
 BINARY_GPU(GreaterEqual)
-BINARY_GPU(LeftShift)
 BINARY_GPU(Less)
 BINARY_GPU(LessEqual)
 BINARY_GPU(LogAddExp)
@@ -372,16 +366,41 @@ BINARY_GPU(LogicalOr)
 BINARY_GPU(Maximum)
 BINARY_GPU(Minimum)
 BINARY_GPU(Multiply)
-BINARY_GPU(NaNEqual)
 BINARY_GPU(NotEqual)
 BINARY_GPU(Power)
 BINARY_GPU(Remainder)
-BINARY_GPU(RightShift)
 BINARY_GPU(Subtract)
 
-void FloorDivide::eval_gpu(const std::vector<array>& inputs, array& out) {
+#undef BINARY_GPU
+
+void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = out.primitive().stream();
-  binary_op_gpu<rocm::FloorDivide>(inputs, out, name(), s);
+  if (equal_nan_) {
+    binary_op_gpu<rocm::NaNEqual>(inputs, out, name(), s);
+  } else {
+    binary_op_gpu<rocm::Equal>(inputs, out, name(), s);
+  }
+}
+
+void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = out.primitive().stream();
+  switch (op_) {
+    case BitwiseBinary::And:
+      binary_op_gpu<rocm::BitwiseAnd>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::Or:
+      binary_op_gpu<rocm::BitwiseOr>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::Xor:
+      binary_op_gpu<rocm::BitwiseXor>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::LeftShift:
+      binary_op_gpu<rocm::LeftShift>(inputs, out, name(), s);
+      break;
+    case BitwiseBinary::RightShift:
+      binary_op_gpu<rocm::RightShift>(inputs, out, name(), s);
+      break;
+  }
 }
 
 void DivMod::eval_gpu(

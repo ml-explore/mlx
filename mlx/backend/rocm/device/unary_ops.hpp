@@ -65,7 +65,12 @@ struct ArcTanh {
 struct BitwiseInvert {
   template <typename T>
   __device__ T operator()(T x) {
-    return ~x;
+    if constexpr (std::is_integral_v<T>) {
+      return ~x;
+    } else {
+      // BitwiseInvert only makes sense for integral types
+      return T{};
+    }
   }
 };
 
@@ -84,8 +89,13 @@ struct Ceil {
 
 struct Conjugate {
   template <typename T>
-  __device__ complex_t<T> operator()(complex_t<T> x) {
-    return hipConjf(x);
+  __device__ T operator()(T x) {
+    if constexpr (is_complex_v<T>) {
+      return hipConjf(x);
+    } else {
+      // For non-complex types, conjugate is identity
+      return x;
+    }
   }
 };
 
@@ -108,7 +118,7 @@ struct Erf {
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
       return erf(x);
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return erf(x);
     } else {
       return erff(x);
@@ -121,7 +131,7 @@ struct ErfInv {
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
       return erfinv(x);
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return erfinv(x);
     } else {
       return erfinvf(x);
@@ -141,7 +151,7 @@ struct Expm1 {
   __device__ T operator()(T x) {
     if constexpr (std::is_same_v<T, __half>) {
       return expm1(x);
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return expm1(x);
     } else {
       return expm1f(x);
@@ -164,8 +174,13 @@ struct Floor {
 
 struct Imag {
   template <typename T>
-  __device__ auto operator()(complex_t<T> x) {
-    return x.y;
+  __device__ auto operator()(T x) {
+    if constexpr (is_complex_v<T>) {
+      return x.y;
+    } else {
+      // For non-complex types, imaginary part is 0
+      return T(0);
+    }
   }
 };
 
@@ -239,8 +254,13 @@ struct Negative {
 
 struct Real {
   template <typename T>
-  __device__ auto operator()(complex_t<T> x) {
-    return x.x;
+  __device__ auto operator()(T x) {
+    if constexpr (is_complex_v<T>) {
+      return x.x;
+    } else {
+      // For non-complex types, real part is the value itself
+      return x;
+    }
   }
 };
 
@@ -258,8 +278,19 @@ struct Round {
 struct Sigmoid {
   template <typename T>
   __device__ T operator()(T x) {
-    T y = 1 / (1 + exp(-abs(x)));
-    return (x < 0) ? 1 - y : y;
+    if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float y = 1.0f / (1.0f + expf(-fabsf(fx)));
+      return T((fx < 0.0f) ? 1.0f - y : y);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float y = 1.0f / (1.0f + expf(-fabsf(fx)));
+      return __float2half((fx < 0.0f) ? 1.0f - y : y);
+    } else {
+      float fx = static_cast<float>(x);
+      float y = 1.0f / (1.0f + expf(-fabsf(fx)));
+      return T((fx < 0.0f) ? 1.0f - y : y);
+    }
   }
 };
 
@@ -274,8 +305,12 @@ struct Sign {
       } else {
         return hipCdivf(x, Abs()(x));
       }
-    } else if constexpr (std::is_same_v<T, __hip_bfloat16>) {
-      return static_cast<float>((x > T(0.f)) - (x < T(0.f)));
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      return T((fx > 0.0f) - (fx < 0.0f));
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      return __float2half((fx > 0.0f) - (fx < 0.0f));
     } else {
       return (x > T(0)) - (x < T(0));
     }

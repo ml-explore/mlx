@@ -309,7 +309,7 @@ JitModule& get_jit_module(
   auto& map = get_jit_module_cache();
   auto it = map.find(name);
   if (it == map.end()) {
-    it = map.try_emplace(name, device(mlx_device.index), name, builder, cache).first;
+    it = map.try_emplace(name, device(mlx_device), name, builder, cache).first;
   }
   return it->second;
 }

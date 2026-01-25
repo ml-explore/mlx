@@ -314,9 +314,9 @@ void LayerNorm::eval_gpu(
         break;
       case bfloat16:
         hipLaunchKernelGGL(
-            (rocm::layer_norm_kernel<__hip_bfloat16, BLOCK_DIM, N_READS>),
+            (rocm::layer_norm_kernel<hip_bfloat16, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            x.data<__hip_bfloat16>(), w.data<__hip_bfloat16>(), b.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(),
+            x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), b.data<hip_bfloat16>(), out.data<hip_bfloat16>(),
             eps_, axis_size, w_stride, b_stride);
         break;
       default:
@@ -429,10 +429,10 @@ void LayerNormVJP::eval_gpu(
           break;
         case bfloat16:
           hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<__hip_bfloat16, true, BLOCK_DIM, N_READS>),
+              (rocm::layer_norm_vjp_kernel<hip_bfloat16, true, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<__hip_bfloat16>(), w.data<__hip_bfloat16>(), g.data<__hip_bfloat16>(),
-              gx.data<__hip_bfloat16>(), gw_temp.data<__hip_bfloat16>(),
+              x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), g.data<hip_bfloat16>(),
+              gx.data<hip_bfloat16>(), gw_temp.data<hip_bfloat16>(),
               eps_, axis_size, w_stride);
           break;
         default:
@@ -458,10 +458,10 @@ void LayerNormVJP::eval_gpu(
           break;
         case bfloat16:
           hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<__hip_bfloat16, false, BLOCK_DIM, N_READS>),
+              (rocm::layer_norm_vjp_kernel<hip_bfloat16, false, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<__hip_bfloat16>(), w.data<__hip_bfloat16>(), g.data<__hip_bfloat16>(),
-              gx.data<__hip_bfloat16>(), nullptr,
+              x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), g.data<hip_bfloat16>(),
+              gx.data<hip_bfloat16>(), nullptr,
               eps_, axis_size, w_stride);
           break;
         default:

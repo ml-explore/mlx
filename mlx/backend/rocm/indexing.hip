@@ -8,10 +8,10 @@
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
-#include <fmt/format.h>
 
 #include <cassert>
 #include <numeric>
+#include <sstream>
 
 namespace mlx::core {
 

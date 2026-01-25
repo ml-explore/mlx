@@ -159,7 +159,26 @@ if(MLX_BUILD_CUDA)
 endif()
 
 if(MLX_BUILD_ROCM)
-  enable_language(HIP)
+  # Set HIP architectures - these will be used by the ROCm backend CMakeLists.txt
+  if(DEFINED MLX_ROCM_ARCHITECTURES)
+    set(CMAKE_HIP_ARCHITECTURES ${MLX_ROCM_ARCHITECTURES} CACHE STRING "HIP architectures" FORCE)
+  else()
+    set(CMAKE_HIP_ARCHITECTURES "gfx906;gfx908;gfx90a;gfx1030;gfx1100" CACHE STRING "HIP architectures" FORCE)
+  endif()
+  message(STATUS "Setting CMAKE_HIP_ARCHITECTURES to: ${CMAKE_HIP_ARCHITECTURES}")
+  # Note: We don't enable_language(HIP) here because it causes CMake to add -x hip
+  # to all CXX files in targets that link to HIP libraries. Instead, we compile
+  # HIP files using custom commands in the ROCm backend CMakeLists.txt.
+  # Find the HIP compiler
+  find_program(CMAKE_HIP_COMPILER 
+    NAMES hipcc clang++
+    PATHS /opt/rocm/bin /opt/rocm-6.0.0/bin /opt/rocm/llvm/bin
+    PATH_SUFFIXES bin
+    DOC "HIP compiler")
+  if(NOT CMAKE_HIP_COMPILER)
+    message(FATAL_ERROR "Could not find HIP compiler (hipcc or clang++)")
+  endif()
+  message(STATUS "Found HIP compiler: ${CMAKE_HIP_COMPILER}")
 endif()
 
 if(MLX_BUILD_METAL)
@@ -290,10 +309,12 @@ if(MLX_BUILD_CPU)
       message(FATAL_ERROR "Must have LAPACK installed")
     endif()
     find_path(LAPACK_INCLUDE_DIRS lapacke.h /usr/include /usr/local/include
-              /usr/local/opt/openblas/include)
+              /usr/local/opt/openblas/include /usr/include/openblas)
     message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
     message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
-    target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+    if(LAPACK_INCLUDE_DIRS)
+      target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+    endif()
     target_link_libraries(mlx PRIVATE ${LAPACK_LIBRARIES})
     # List blas after lapack otherwise we may accidentally incldue an old
     # version of lapack.h from the include dirs of blas.

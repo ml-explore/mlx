@@ -20,15 +20,20 @@ template <typename T>
 inline __device__ T softmax_exp(T x) {
   // Softmax doesn't need high precision exponential cause x is gonna be in
   // (-oo, 0] anyway and subsequently it will be divided by sum(exp(x_i)).
-  return __expf(x);
+  if constexpr (std::is_same_v<T, float>) {
+    return __expf(x);
+  } else {
+    return T(expf(static_cast<float>(x)));
+  }
 }
 
 // Warp reduce for max
 template <typename T>
 __device__ T warp_reduce_max(T val) {
   for (int offset = 32; offset > 0; offset /= 2) {
-    T other = __shfl_xor(val, offset);
-    val = val > other ? val : other;
+    float fval = static_cast<float>(val);
+    float other = __shfl_xor(fval, offset);
+    val = fval > other ? val : T(other);
   }
   return val;
 }
@@ -37,7 +42,9 @@ __device__ T warp_reduce_max(T val) {
 template <typename T>
 __device__ T warp_reduce_sum(T val) {
   for (int offset = 32; offset > 0; offset /= 2) {
-    val += __shfl_xor(val, offset);
+    float fval = static_cast<float>(val);
+    float other = __shfl_xor(fval, offset);
+    val = T(fval + other);
   }
   return val;
 }
@@ -50,7 +57,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
   out += row * axis_size;
 
   // Thread reduce for max
-  AccT maxval = -1e38f;  // Very small number
+  AccT maxval = AccT(-1e38f);  // Very small number
   for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
     #pragma unroll
     for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
@@ -72,7 +79,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
   __syncthreads();
   
   if (warp_id == 0) {
-    maxval = (lane < (BLOCK_DIM + 63) / 64) ? shared_max[lane] : -1e38f;
+    maxval = (lane < (BLOCK_DIM + 63) / 64) ? shared_max[lane] : AccT(-1e38f);
     maxval = warp_reduce_max(maxval);
   }
   __syncthreads();
@@ -84,7 +91,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
   maxval = shared_max[0];
 
   // Thread reduce for sum of exp(x - max)
-  AccT sumval = 0;
+  AccT sumval = AccT(0);
   for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
     #pragma unroll
     for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
@@ -103,7 +110,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
   __syncthreads();
   
   if (warp_id == 0) {
-    sumval = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
+    sumval = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : AccT(0);
     sumval = warp_reduce_sum(sumval);
   }
   __syncthreads();
@@ -112,7 +119,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
     shared_sum[0] = sumval;
   }
   __syncthreads();
-  AccT normalizer = 1.0f / shared_sum[0];
+  AccT normalizer = AccT(1.0f) / shared_sum[0];
 
   // Write output
   for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
@@ -186,14 +193,14 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       case bfloat16:
         if (precise) {
           hipLaunchKernelGGL(
-              (rocm::softmax_kernel<__hip_bfloat16, float, BLOCK_DIM, N_READS>),
+              (rocm::softmax_kernel<hip_bfloat16, float, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), axis_size);
+              in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), axis_size);
         } else {
           hipLaunchKernelGGL(
-              (rocm::softmax_kernel<__hip_bfloat16, __hip_bfloat16, BLOCK_DIM, N_READS>),
+              (rocm::softmax_kernel<hip_bfloat16, hip_bfloat16, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              in.data<__hip_bfloat16>(), out.data<__hip_bfloat16>(), axis_size);
+              in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), axis_size);
         }
         break;
       default:
@@ -203,3 +210,4 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 } // namespace mlx::core
+ 

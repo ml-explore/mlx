@@ -20,6 +20,10 @@ struct FloorDivide {
   __device__ T operator()(T x, T y) {
     if constexpr (std::is_integral_v<T>) {
       return x / y;
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return hip_bfloat16(truncf(static_cast<float>(x) / static_cast<float>(y)));
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return __float2half(truncf(__half2float(x) / __half2float(y)));
     } else {
       return truncf(x / y);
     }
@@ -49,6 +53,22 @@ struct Remainder {
     } else if constexpr (is_complex_v<T>) {
       // Complex modulo not typically defined, return x
       return x;
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float fy = static_cast<float>(y);
+      float r = fmodf(fx, fy);
+      if (r != 0 && (r < 0 != fy < 0)) {
+        r = r + fy;
+      }
+      return hip_bfloat16(r);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float fy = __half2float(y);
+      float r = fmodf(fx, fy);
+      if (r != 0 && (r < 0 != fy < 0)) {
+        r = r + fy;
+      }
+      return __float2half(r);
     } else {
       T r = fmodf(x, y);
       if (r != 0 && (r < 0 != y < 0)) {
@@ -71,11 +91,19 @@ struct NaNEqual {
   __device__ bool operator()(T x, T y) {
     if constexpr (is_complex_v<T>) {
       return (x.x == y.x && x.y == y.y) ||
-          (isnan(x.x) && isnan(y.x) && isnan(x.y) && isnan(y.y)) ||
-          (x.x == y.x && isnan(x.y) && isnan(y.y)) ||
-          (isnan(x.x) && isnan(y.x) && x.y == y.y);
+          (__isnanf(x.x) && __isnanf(y.x) && __isnanf(x.y) && __isnanf(y.y)) ||
+          (x.x == y.x && __isnanf(x.y) && __isnanf(y.y)) ||
+          (__isnanf(x.x) && __isnanf(y.x) && x.y == y.y);
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float fy = static_cast<float>(y);
+      return fx == fy || (__isnanf(fx) && __isnanf(fy));
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float fy = __half2float(y);
+      return fx == fy || (__isnanf(fx) && __isnanf(fy));
     } else {
-      return x == y || (isnan(x) && isnan(y));
+      return x == y || (__isnanf(x) && __isnanf(y));
     }
   }
 };
@@ -111,7 +139,10 @@ struct LessEqual {
 struct LogAddExp {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    if constexpr (is_complex_v<T>) {
+    if constexpr (std::is_integral_v<T>) {
+      // LogAddExp doesn't make sense for integers, but handle it gracefully
+      return x > y ? x : y;
+    } else if constexpr (is_complex_v<T>) {
       if (isnan(x.x) || isnan(x.y) || isnan(y.x) || isnan(y.y)) {
         return {
             numeric_limits<float>::quiet_NaN(),
@@ -130,6 +161,32 @@ struct LogAddExp {
       } else {
         return hipCaddf(Log1p{}(Exp{}(hipCsubf(minv, maxv))), maxv);
       }
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float fy = static_cast<float>(y);
+      if (isnan(fx) || isnan(fy)) {
+        return hip_bfloat16(numeric_limits<float>::quiet_NaN());
+      }
+      float maxval = fmaxf(fx, fy);
+      float minval = fminf(fx, fy);
+      float result = (minval == -numeric_limits<float>::infinity() ||
+              maxval == numeric_limits<float>::infinity())
+          ? maxval
+          : maxval + log1pf(expf(minval - maxval));
+      return hip_bfloat16(result);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float fy = __half2float(y);
+      if (isnan(fx) || isnan(fy)) {
+        return __float2half(numeric_limits<float>::quiet_NaN());
+      }
+      float maxval = fmaxf(fx, fy);
+      float minval = fminf(fx, fy);
+      float result = (minval == -numeric_limits<float>::infinity() ||
+              maxval == numeric_limits<float>::infinity())
+          ? maxval
+          : maxval + log1pf(expf(minval - maxval));
+      return __float2half(result);
     } else {
       if (isnan(x) || isnan(y)) {
         return numeric_limits<T>::quiet_NaN();
@@ -150,7 +207,7 @@ struct Maximum {
     if constexpr (std::is_integral_v<T>) {
       return max(x, y);
     } else if constexpr (is_complex_v<T>) {
-      if (isnan(x.x) || isnan(x.y)) {
+      if (__isnanf(x.x) || __isnanf(x.y)) {
         return x;
       }
       // Compare by real part first, then imaginary
@@ -158,8 +215,22 @@ struct Maximum {
         return x;
       }
       return y;
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float fy = static_cast<float>(y);
+      if (__isnanf(fx)) {
+        return x;
+      }
+      return fx > fy ? x : y;
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float fy = __half2float(y);
+      if (__isnanf(fx)) {
+        return x;
+      }
+      return fx > fy ? x : y;
     } else {
-      if (isnan(x)) {
+      if (__isnanf(x)) {
         return x;
       }
       return x > y ? x : y;
@@ -173,7 +244,7 @@ struct Minimum {
     if constexpr (std::is_integral_v<T>) {
       return min(x, y);
     } else if constexpr (is_complex_v<T>) {
-      if (isnan(x.x) || isnan(x.y)) {
+      if (__isnanf(x.x) || __isnanf(x.y)) {
         return x;
       }
       // Compare by real part first, then imaginary
@@ -181,8 +252,22 @@ struct Minimum {
         return x;
       }
       return y;
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      float fx = static_cast<float>(x);
+      float fy = static_cast<float>(y);
+      if (__isnanf(fx)) {
+        return x;
+      }
+      return fx < fy ? x : y;
+    } else if constexpr (std::is_same_v<T, __half>) {
+      float fx = __half2float(x);
+      float fy = __half2float(y);
+      if (__isnanf(fx)) {
+        return x;
+      }
+      return fx < fy ? x : y;
     } else {
-      if (isnan(x)) {
+      if (__isnanf(x)) {
         return x;
       }
       return x < y ? x : y;
@@ -235,6 +320,10 @@ struct Power {
       float new_r = expf(exp.x * log_r - exp.y * theta);
       float new_theta = exp.x * theta + exp.y * log_r;
       return make_hipFloatComplex(new_r * cosf(new_theta), new_r * sinf(new_theta));
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return hip_bfloat16(powf(static_cast<float>(base), static_cast<float>(exp)));
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return __float2half(powf(__half2float(base), __half2float(exp)));
     } else {
       return powf(base, exp);
     }
@@ -250,57 +339,102 @@ struct Subtract {
 
 struct LogicalAnd {
   template <typename T>
-  __device__ T operator()(T x, T y) {
-    return x && y;
+  __device__ bool operator()(T x, T y) {
+    if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return (static_cast<float>(x) != 0.0f) && (static_cast<float>(y) != 0.0f);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return (__half2float(x) != 0.0f) && (__half2float(y) != 0.0f);
+    } else if constexpr (std::is_floating_point_v<T>) {
+      return (x != T(0)) && (y != T(0));
+    } else {
+      return x && y;
+    }
   };
 };
 
 struct LogicalOr {
   template <typename T>
-  __device__ T operator()(T x, T y) {
-    return x || y;
+  __device__ bool operator()(T x, T y) {
+    if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return (static_cast<float>(x) != 0.0f) || (static_cast<float>(y) != 0.0f);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return (__half2float(x) != 0.0f) || (__half2float(y) != 0.0f);
+    } else if constexpr (std::is_floating_point_v<T>) {
+      return (x != T(0)) || (y != T(0));
+    } else {
+      return x || y;
+    }
   };
 };
 
 struct BitwiseAnd {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x & y;
+    if constexpr (std::is_integral_v<T>) {
+      return x & y;
+    } else {
+      // This branch should never be taken due to supports_binary_op filtering
+      return T{};
+    }
   };
 };
 
 struct BitwiseOr {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x | y;
+    if constexpr (std::is_integral_v<T>) {
+      return x | y;
+    } else {
+      return T{};
+    }
   };
 };
 
 struct BitwiseXor {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x ^ y;
+    if constexpr (std::is_integral_v<T>) {
+      return x ^ y;
+    } else {
+      return T{};
+    }
   };
 };
 
 struct LeftShift {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x << y;
+    if constexpr (std::is_integral_v<T>) {
+      return x << y;
+    } else {
+      return T{};
+    }
   };
 };
 
 struct RightShift {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x >> y;
+    if constexpr (std::is_integral_v<T>) {
+      return x >> y;
+    } else {
+      return T{};
+    }
   };
 };
 
 struct ArcTan2 {
   template <typename T>
   __device__ T operator()(T y, T x) {
-    return atan2f(y, x);
+    if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return hip_bfloat16(atan2f(static_cast<float>(y), static_cast<float>(x)));
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return __float2half(atan2f(__half2float(y), __half2float(x)));
+    } else if constexpr (std::is_same_v<T, double>) {
+      return atan2(y, x);
+    } else {
+      return atan2f(y, x);
+    }
   }
 };
 

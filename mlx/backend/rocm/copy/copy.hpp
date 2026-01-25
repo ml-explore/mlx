@@ -31,13 +31,13 @@ __device__ inline __half cast_to<__half, float>(float x) {
 }
 
 template <>
-__device__ inline float cast_to<float, __hip_bfloat16>(__hip_bfloat16 x) {
-  return __bfloat162float(x);
+__device__ inline float cast_to<float, hip_bfloat16>(hip_bfloat16 x) {
+  return static_cast<float>(x);
 }
 
 template <>
-__device__ inline __hip_bfloat16 cast_to<__hip_bfloat16, float>(float x) {
-  return __float2bfloat16(x);
+__device__ inline hip_bfloat16 cast_to<hip_bfloat16, float>(float x) {
+  return hip_bfloat16(x);
 }
 
 } // namespace rocm

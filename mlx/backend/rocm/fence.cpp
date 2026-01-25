@@ -20,7 +20,7 @@ void Fence::wait(Stream s, const array&) {
   fence->event.wait(fence->count);
 }
 
-void Fence::update(Stream s, const array&) {
+void Fence::update(Stream s, const array&, bool cross_device) {
   auto* fence = static_cast<FenceImpl*>(fence_.get());
   fence->count++;
   fence->event.signal(s, fence->count);

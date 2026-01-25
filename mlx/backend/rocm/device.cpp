@@ -1,11 +1,12 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/worker.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/utils.h"
 
-#include <fmt/format.h>
 #include <future>
+#include <sstream>
 
 namespace mlx::core::rocm {
 
@@ -22,7 +23,9 @@ Device::Device(int device) : device_(device) {
 }
 
 Device::~Device() {
-  CHECK_ROCBLAS_ERROR(rocblas_destroy_handle(rocblas_));
+  if (rocblas_) {
+    rocblas_destroy_handle(rocblas_);
+  }
 }
 
 void Device::make_current() {
@@ -38,16 +41,19 @@ void Device::make_current() {
 CommandEncoder& Device::get_command_encoder(Stream s) {
   auto it = encoders_.find(s.index);
   if (it == encoders_.end()) {
-    it = encoders_.try_emplace(s.index, *this).first;
+    auto [inserted_it, success] = encoders_.emplace(s.index, std::make_unique<CommandEncoder>(*this));
+    it = inserted_it;
   }
-  return it->second;
+  return *it->second;
 }
 
 CommandEncoder::CommandEncoder(Device& d)
-    : device_(d), stream_(d) {}
+    : device_(d), stream_(d), worker_(std::make_unique<Worker>()) {}
+
+CommandEncoder::~CommandEncoder() = default;
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
-  worker_.add_task(std::move(task));
+  worker_->add_task(std::move(task));
 }
 
 void CommandEncoder::set_input_array(const array& arr) {
@@ -71,7 +77,7 @@ void CommandEncoder::commit() {
   node_count_ = 0;
   
   // Put completion handlers in a batch.
-  worker_.commit(stream_);
+  worker_->commit(stream_);
 }
 
 void CommandEncoder::synchronize() {

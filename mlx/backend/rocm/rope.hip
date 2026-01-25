@@ -3,7 +3,7 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/primitives.h"
+#include "mlx/fast_primitives.h"
 
 #include <hip/hip_runtime.h>
 
@@ -13,10 +13,10 @@ namespace rocm {
 
 template <typename T>
 __global__ void rope_kernel(
-    const T* x,
-    const T* cos_freq,
-    const T* sin_freq,
-    T* out,
+    const T* __restrict__ x,
+    const T* __restrict__ cos_freq,
+    const T* __restrict__ sin_freq,
+    T* __restrict__ out,
     int offset,
     float scale,
     int n_heads,
@@ -32,30 +32,37 @@ __global__ void rope_kernel(
   int s = (idx / head_dim) % seq_len;
   int h = idx / (head_dim * seq_len);
   
+  // Only apply RoPE to the first half of dimensions
   int half_dim = head_dim / 2;
-  int d_pair = (d < half_dim) ? d + half_dim : d - half_dim;
+  if (d >= half_dim * 2) {
+    out[idx] = x[idx];
+    return;
+  }
   
-  int freq_idx = (s + offset) * half_dim + (d % half_dim);
-  
+  int freq_idx = s * half_dim + (d % half_dim);
   float cos_val = static_cast<float>(cos_freq[freq_idx]);
   float sin_val = static_cast<float>(sin_freq[freq_idx]);
   
   float x_val = static_cast<float>(x[idx]);
-  float x_pair = static_cast<float>(x[h * seq_len * head_dim + s * head_dim + d_pair]);
-  
   float result;
-  if (forward) {
-    if (d < half_dim) {
+  
+  if (d < half_dim) {
+    // First half: x * cos - x_pair * sin
+    int pair_idx = idx + half_dim;
+    float x_pair = static_cast<float>(x[pair_idx]);
+    if (forward) {
       result = x_val * cos_val - x_pair * sin_val;
     } else {
       result = x_val * cos_val + x_pair * sin_val;
     }
   } else {
-    // Backward pass
-    if (d < half_dim) {
-      result = x_val * cos_val + x_pair * sin_val;
+    // Second half: x_pair * sin + x * cos
+    int pair_idx = idx - half_dim;
+    float x_pair = static_cast<float>(x[pair_idx]);
+    if (forward) {
+      result = x_pair * sin_val + x_val * cos_val;
     } else {
-      result = x_val * cos_val - x_pair * sin_val;
+      result = -x_pair * sin_val + x_val * cos_val;
     }
   }
   
@@ -82,16 +89,12 @@ void RoPE::eval_gpu(
   
   out.set_data(allocator::malloc(out.nbytes()));
   
+  auto& encoder = rocm::get_command_encoder(s);
+  
   int n_heads = x.shape(-3);
   int seq_len = x.shape(-2);
   int head_dim = x.shape(-1);
   int total = n_heads * seq_len * head_dim;
-  
-  auto& encoder = rocm::get_command_encoder(s);
-  encoder.set_input_array(x);
-  encoder.set_input_array(cos_freq);
-  encoder.set_input_array(sin_freq);
-  encoder.set_output_array(out);
   
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
@@ -103,14 +106,14 @@ void RoPE::eval_gpu(
             rocm::rope_kernel<float>,
             dim3(num_blocks), dim3(block_size), 0, stream,
             x.data<float>(), cos_freq.data<float>(), sin_freq.data<float>(),
-            out.data<float>(), offset_, scale_, n_heads, head_dim, seq_len, forward_);
+            out.data<float>(), 0, scale_, n_heads, head_dim, seq_len, forward_);
         break;
       case float16:
         hipLaunchKernelGGL(
             rocm::rope_kernel<__half>,
             dim3(num_blocks), dim3(block_size), 0, stream,
             x.data<__half>(), cos_freq.data<__half>(), sin_freq.data<__half>(),
-            out.data<__half>(), offset_, scale_, n_heads, head_dim, seq_len, forward_);
+            out.data<__half>(), 0, scale_, n_heads, head_dim, seq_len, forward_);
         break;
       default:
         throw std::runtime_error("Unsupported type for RoPE");

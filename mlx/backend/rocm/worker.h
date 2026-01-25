@@ -2,15 +2,20 @@
 
 #pragma once
 
-#include "mlx/backend/rocm/event.h"
+#include <hip/hip_runtime.h>
 
 #include <condition_variable>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 namespace mlx::core::rocm {
+
+// Forward declarations
+class HipEvent;
 
 // Run tasks in worker thread, synchronized with HIP stream.
 class Worker {
@@ -37,10 +42,6 @@ class Worker {
 
   uint64_t committed_batch_{0};
   uint64_t signaled_batch_{0};
-
-  // HIP stream and event for signaling kernel completion.
-  HipStream signal_stream_;
-  HipEvent signal_event_;
 
   bool stop_{false};
 

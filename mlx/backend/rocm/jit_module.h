@@ -11,11 +11,10 @@
 
 #include <deque>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <variant>
-
-#include <fmt/format.h>
 
 namespace mlx::core::rocm {
 
@@ -36,7 +35,9 @@ struct KernelArgs {
   }
 
   void append(const array& a) {
-    append(reinterpret_cast<hipDeviceptr_t>(a.data<void>()));
+    // Use const_cast since HIP APIs expect non-const pointers but we know
+    // the data won't be modified for input arrays
+    append(reinterpret_cast<hipDeviceptr_t>(const_cast<void*>(a.data<void>())));
   }
 
   template <typename T>
@@ -60,8 +61,9 @@ struct KernelArgs {
   template <size_t NDIM = MAX_NDIM, typename T>
   void append_ndim(SmallVector<T> vec) {
     if (vec.size() > NDIM) {
-      throw std::runtime_error(
-          fmt::format("ndim can not be larger than {}.", NDIM));
+      std::ostringstream oss;
+      oss << "ndim can not be larger than " << NDIM << ".";
+      throw std::runtime_error(oss.str());
     }
     vec.resize(NDIM);
     append(std::move(vec));
