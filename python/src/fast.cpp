@@ -298,12 +298,61 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "quantized_scaled_dot_product_attention",
-      &mx::fast::quantized_scaled_dot_product_attention,
+      [](const mx::array& q,
+         const mx::array& k,
+         const mx::array& k_scales,
+         const mx::array& v,
+         const mx::array& v_scales,
+         const std::optional<mx::array>& k_biases,
+         const std::optional<mx::array>& v_biases,
+         const float scale,
+         const std::optional<mx::array>& mask,
+         std::optional<int> group_size,
+         std::optional<int> bits,
+         const std::string& mode,
+         mx::StreamOrDevice s) {
+        return mx::fast::quantized_scaled_dot_product_attention(
+            q,
+            k,
+            k_scales,
+            k_biases,
+            v,
+            v_scales,
+            v_biases,
+            scale,
+            mask,
+            group_size,
+            bits,
+            mode,
+            s);
+      },
       "q"_a,
       "k"_a,
       "k_scales"_a,
       "v"_a,
       "v_scales"_a,
+      nb::kw_only(),
+      "k_biases"_a = nb::none(),
+      "v_biases"_a = nb::none(),
+      "scale"_a,
+      "mask"_a = nb::none(),
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "mxfp4",
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, v: array, v_scales: array, *, k_biases: Optional[array] = None, v_biases: Optional[array] = None, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", stream: Union[None, Stream, Device] = None) -> array"));
+
+  m.def(
+      "quantized_scaled_dot_product_attention",
+      &mx::fast::quantized_scaled_dot_product_attention,
+      "q"_a,
+      "k"_a,
+      "k_scales"_a,
+      "k_biases"_a = nb::none(),
+      "v"_a,
+      "v_scales"_a,
+      "v_biases"_a = nb::none(),
       nb::kw_only(),
       "scale"_a,
       "mask"_a = nb::none(),
@@ -312,7 +361,7 @@ void init_fast(nb::module_& parent_module) {
       "mode"_a = "mxfp4",
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, v: array, v_scales: array, *, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, k_biases: Optional[array] = None, v: array, v_scales: array, v_biases: Optional[array] = None, *, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention where the keys and values are quantized.
 
@@ -321,14 +370,16 @@ void init_fast(nb::module_& parent_module) {
         Args:
             q (array): Input query array.
             k (array): Input keys array.
-            k_scales (array): ``uint8`` scales for the fp-quantized keys array.
+            k_scales (array): Scales for the quantized keys array.
+            k_biases (array or None): Biases for the affine-quantized keys array. Required for affine mode, None for fp modes.
             v (array): Input values array.
-            v_scales (array): ``uint8`` scales for the fp-quantized values array.
+            v_scales (array): Scales for the quantized values array.
+            v_biases (array or None): Biases for the affine-quantized values array. Required for affine mode, None for fp modes.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
             mask (array, optional): An additive or boolean mask to apply to the query-key scores.
             group_size (int, optional): The group size used in the KV quantization. Defaults follow the quantization ``mode``.
             bits (int, optional): The bits used in the KV quantization. Defaults follow the quantization ``mode``.
-            mode (str, optional): The fp quantization mode, ``"mxfp4"`` or ``"mxfp8"``.
+            mode (str, optional): The quantization mode: ``"mxfp4"``, ``"mxfp8"``, ``"nvfp4"``, or ``"affine"``.
         Returns:
             array: The output array.
       )pbdoc");
