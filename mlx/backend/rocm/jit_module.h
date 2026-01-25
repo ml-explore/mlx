@@ -103,7 +103,7 @@ class JitModule {
 
   JitModule(const JitModule&) = delete;
   JitModule& operator=(const JitModule&) = delete;
-  
+
   hipFunction_t get_kernel(
       const std::string& kernel_name,
       std::function<void(hipFunction_t)> configure_kernel = nullptr);

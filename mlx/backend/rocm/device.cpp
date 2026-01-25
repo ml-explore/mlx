@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/rocm/worker.h"
 #include "mlx/backend/rocm/utils.h"
+#include "mlx/backend/rocm/worker.h"
 #include "mlx/utils.h"
 
 #include <future>
@@ -41,7 +41,8 @@ void Device::make_current() {
 CommandEncoder& Device::get_command_encoder(Stream s) {
   auto it = encoders_.find(s.index);
   if (it == encoders_.end()) {
-    auto [inserted_it, success] = encoders_.emplace(s.index, std::make_unique<CommandEncoder>(*this));
+    auto [inserted_it, success] =
+        encoders_.emplace(s.index, std::make_unique<CommandEncoder>(*this));
     it = inserted_it;
   }
   return *it->second;
@@ -75,7 +76,7 @@ void CommandEncoder::commit() {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   node_count_ = 0;
-  
+
   // Put completion handlers in a batch.
   worker_->commit(stream_);
 }

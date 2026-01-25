@@ -32,13 +32,17 @@ __device__ inline void atomic_add<int>(int* addr, int val) {
 
 // Specialization for unsigned int
 template <>
-__device__ inline void atomic_add<unsigned int>(unsigned int* addr, unsigned int val) {
+__device__ inline void atomic_add<unsigned int>(
+    unsigned int* addr,
+    unsigned int val) {
   atomicAdd(addr, val);
 }
 
 // Specialization for unsigned long long
 template <>
-__device__ inline void atomic_add<unsigned long long>(unsigned long long* addr, unsigned long long val) {
+__device__ inline void atomic_add<unsigned long long>(
+    unsigned long long* addr,
+    unsigned long long val) {
   atomicAdd(addr, val);
 }
 

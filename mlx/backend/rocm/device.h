@@ -15,9 +15,9 @@
 #include <thrust/execution_policy.h>
 #endif
 
-#include <unordered_map>
 #include <functional>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace mlx::core::rocm {
@@ -83,7 +83,7 @@ class Device {
   int hip_device() const {
     return device_;
   }
-  
+
   rocblas_handle get_rocblas_handle() const {
     return rocblas_;
   }

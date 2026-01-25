@@ -159,18 +159,25 @@ if(MLX_BUILD_CUDA)
 endif()
 
 if(MLX_BUILD_ROCM)
-  # Set HIP architectures - these will be used by the ROCm backend CMakeLists.txt
+  # Set HIP architectures - these will be used by the ROCm backend
+  # CMakeLists.txt
   if(DEFINED MLX_ROCM_ARCHITECTURES)
-    set(CMAKE_HIP_ARCHITECTURES ${MLX_ROCM_ARCHITECTURES} CACHE STRING "HIP architectures" FORCE)
+    set(CMAKE_HIP_ARCHITECTURES
+        ${MLX_ROCM_ARCHITECTURES}
+        CACHE STRING "HIP architectures" FORCE)
   else()
-    set(CMAKE_HIP_ARCHITECTURES "gfx906;gfx908;gfx90a;gfx1030;gfx1100" CACHE STRING "HIP architectures" FORCE)
+    set(CMAKE_HIP_ARCHITECTURES
+        "gfx906;gfx908;gfx90a;gfx1030;gfx1100"
+        CACHE STRING "HIP architectures" FORCE)
   endif()
-  message(STATUS "Setting CMAKE_HIP_ARCHITECTURES to: ${CMAKE_HIP_ARCHITECTURES}")
-  # Note: We don't enable_language(HIP) here because it causes CMake to add -x hip
-  # to all CXX files in targets that link to HIP libraries. Instead, we compile
-  # HIP files using custom commands in the ROCm backend CMakeLists.txt.
+  message(
+    STATUS "Setting CMAKE_HIP_ARCHITECTURES to: ${CMAKE_HIP_ARCHITECTURES}")
+  # Note: We don't enable_language(HIP) here because it causes CMake to add -x
+  # hip to all CXX files in targets that link to HIP libraries. Instead, we
+  # compile HIP files using custom commands in the ROCm backend CMakeLists.txt.
   # Find the HIP compiler
-  find_program(CMAKE_HIP_COMPILER 
+  find_program(
+    CMAKE_HIP_COMPILER
     NAMES hipcc clang++
     PATHS /opt/rocm/bin /opt/rocm-6.0.0/bin /opt/rocm/llvm/bin
     PATH_SUFFIXES bin

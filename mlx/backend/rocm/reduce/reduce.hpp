@@ -17,44 +17,68 @@ namespace rocm {
 // Reduce operations for ROCm
 struct And {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a && b; }
+  __device__ T operator()(T a, T b) const {
+    return a && b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return true; }
+  __device__ static constexpr T init() {
+    return true;
+  }
 };
 
 struct Or {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a || b; }
+  __device__ T operator()(T a, T b) const {
+    return a || b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return false; }
+  __device__ static constexpr T init() {
+    return false;
+  }
 };
 
 struct Sum {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a + b; }
+  __device__ T operator()(T a, T b) const {
+    return a + b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return T(0); }
+  __device__ static constexpr T init() {
+    return T(0);
+  }
 };
 
 struct Prod {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a * b; }
+  __device__ T operator()(T a, T b) const {
+    return a * b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return T(1); }
+  __device__ static constexpr T init() {
+    return T(1);
+  }
 };
 
 struct Max {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a > b ? a : b; }
+  __device__ T operator()(T a, T b) const {
+    return a > b ? a : b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return numeric_limits<T>::lowest(); }
+  __device__ static constexpr T init() {
+    return numeric_limits<T>::lowest();
+  }
 };
 
 struct Min {
   template <typename T>
-  __device__ T operator()(T a, T b) const { return a < b ? a : b; }
+  __device__ T operator()(T a, T b) const {
+    return a < b ? a : b;
+  }
   template <typename T>
-  __device__ static constexpr T init() { return numeric_limits<T>::max(); }
+  __device__ static constexpr T init() {
+    return numeric_limits<T>::max();
+  }
 };
 
 // Reduce result type mapping
@@ -72,37 +96,51 @@ struct ReduceResult<Sum, bool> {
 // Reduce init value
 template <typename Op, typename T>
 struct ReduceInit {
-  static __device__ T value() { return Op::template init<T>(); }
+  static __device__ T value() {
+    return Op::template init<T>();
+  }
 };
 
 template <typename T>
 struct ReduceInit<Sum, T> {
-  static __device__ T value() { return T(0); }
+  static __device__ T value() {
+    return T(0);
+  }
 };
 
 template <typename T>
 struct ReduceInit<Prod, T> {
-  static __device__ T value() { return T(1); }
+  static __device__ T value() {
+    return T(1);
+  }
 };
 
 template <typename T>
 struct ReduceInit<Max, T> {
-  static __device__ T value() { return numeric_limits<T>::lowest(); }
+  static __device__ T value() {
+    return numeric_limits<T>::lowest();
+  }
 };
 
 template <typename T>
 struct ReduceInit<Min, T> {
-  static __device__ T value() { return numeric_limits<T>::max(); }
+  static __device__ T value() {
+    return numeric_limits<T>::max();
+  }
 };
 
 template <typename T>
 struct ReduceInit<And, T> {
-  static __device__ T value() { return true; }
+  static __device__ T value() {
+    return true;
+  }
 };
 
 template <typename T>
 struct ReduceInit<Or, T> {
-  static __device__ T value() { return false; }
+  static __device__ T value() {
+    return false;
+  }
 };
 
 } // namespace rocm

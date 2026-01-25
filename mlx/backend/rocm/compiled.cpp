@@ -36,7 +36,8 @@ struct FusedKernelBuilder {
           std::string("const ") + dtype_to_hip_type(x.dtype()) + "* " + xname);
       if (!is_scalar(x) && !contiguous) {
         params.push_back(
-            std::string("const hip::std::array<int64_t, NDIM> ") + xname + "_strides");
+            std::string("const hip::std::array<int64_t, NDIM> ") + xname +
+            "_strides");
       }
     }
     for (const auto& x : outputs) {
@@ -44,8 +45,7 @@ struct FusedKernelBuilder {
           std::string(dtype_to_hip_type(x.dtype())) + "* " + namer.get_name(x));
     }
     if (!contiguous) {
-      params.push_back(
-          "const hip::std::array<int32_t, NDIM> shape");
+      params.push_back("const hip::std::array<int32_t, NDIM> shape");
     }
     params.push_back("IdxT size");
 
@@ -132,7 +132,8 @@ struct FusedKernelBuilder {
       } else {
         value = xname + "[" + xname + "_idx]";
       }
-      os += std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
+      os +=
+          std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
     }
 
     // Write tape.
@@ -141,8 +142,8 @@ struct FusedKernelBuilder {
       std::string type = dtype_to_hip_type(x.dtype());
       std::string value;
       if (is_static_cast(x.primitive())) {
-        value = std::string("static_cast<") + type + ">(tmp_" + 
-                namer.get_name(x.inputs()[0]) + ")";
+        value = std::string("static_cast<") + type + ">(tmp_" +
+            namer.get_name(x.inputs()[0]) + ")";
       } else {
         value = x.primitive().name();
         value += "{}(";
@@ -151,14 +152,16 @@ struct FusedKernelBuilder {
         }
         value += "tmp_" + namer.get_name(x.inputs().back()) + ")";
       }
-      os += std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
+      os +=
+          std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
     }
 
     // Write output.
     for (const auto& x : outputs) {
       std::string xname = namer.get_name(x);
       if (contiguous) {
-        os += std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
+        os +=
+            std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       } else {
         os += std::string("    ") + xname + "[index] = tmp_" + xname + ";\n";
       }
@@ -173,7 +176,8 @@ struct FusedKernelBuilder {
         if (is_scalar(x) || is_constant(i)) {
           continue;
         }
-        os += std::string("    ") + xname + "_idx += " + xname + "_strides[NDIM - 1];\n";
+        os += std::string("    ") + xname + "_idx += " + xname +
+            "_strides[NDIM - 1];\n";
       }
       os += "    index++;\n";
     }
@@ -297,28 +301,27 @@ void Compiled::eval_gpu(
     // Build source code.
     rocm::FusedKernelBuilder builder{
         g_jit_includes, lib_name(), inputs_, outputs_, tape_, is_constant_};
-    builder.os +=
-        "namespace mlx::core::rocm {\n\n";
+    builder.os += "namespace mlx::core::rocm {\n\n";
     builder.build("_contiguous", true);
     builder.os += "\n";
     builder.build("_strided", false);
     builder.os += "\n} // namespace mlx::core::rocm\n";
-    
+
     // Build kernel names.
     std::vector<std::string> kernel_names;
     kernel_names.push_back(
-        std::string("mlx::core::rocm::") + lib_name() + "_contiguous<uint32_t, " + 
-        std::to_string(work_per_thread) + ">");
+        std::string("mlx::core::rocm::") + lib_name() +
+        "_contiguous<uint32_t, " + std::to_string(work_per_thread) + ">");
     kernel_names.push_back(
-        std::string("mlx::core::rocm::") + lib_name() + "_contiguous<int64_t, " + 
-        std::to_string(work_per_thread) + ">");
+        std::string("mlx::core::rocm::") + lib_name() +
+        "_contiguous<int64_t, " + std::to_string(work_per_thread) + ">");
     for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
       for (int i = 1; i <= rocm::MAX_NDIM; ++i) {
         kernel_names.push_back(
-            std::string("mlx::core::rocm::") + lib_name() + "_strided<" + 
+            std::string("mlx::core::rocm::") + lib_name() + "_strided<" +
             std::to_string(i) + ", uint32_t, " + std::to_string(wpt) + ">");
         kernel_names.push_back(
-            std::string("mlx::core::rocm::") + lib_name() + "_strided<" + 
+            std::string("mlx::core::rocm::") + lib_name() + "_strided<" +
             std::to_string(i) + ", int64_t, " + std::to_string(wpt) + ">");
       }
     }
@@ -373,13 +376,13 @@ void Compiled::eval_gpu(
   const char* index_type = large ? "int64_t" : "uint32_t";
   std::string kernel_name = std::string("mlx::core::rocm::") + lib_name();
   if (contiguous) {
-    kernel_name += std::string("_contiguous<") + index_type + ", " + 
-                   std::to_string(work_per_thread) + ">";
+    kernel_name += std::string("_contiguous<") + index_type + ", " +
+        std::to_string(work_per_thread) + ">";
   } else {
-    kernel_name += std::string("_strided<") + std::to_string(shape.size()) + 
-                   ", " + index_type + ", " + std::to_string(work_per_thread) + ">";
+    kernel_name += std::string("_strided<") + std::to_string(shape.size()) +
+        ", " + index_type + ", " + std::to_string(work_per_thread) + ">";
   }
-  
+
   auto& encoder = rocm::get_command_encoder(s);
   for (const auto& in : inputs) {
     encoder.set_input_array(in);
@@ -389,17 +392,22 @@ void Compiled::eval_gpu(
   }
 
   auto kernel = mod.get_kernel(kernel_name);
-  
+
   // Calculate launch configuration
   int block_size = 256;
-  int64_t total_work = (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
+  int64_t total_work =
+      (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
   int num_blocks = (total_work + block_size - 1) / block_size;
-  
+
   encoder.launch_kernel([&](hipStream_t stream) {
     hipModuleLaunchKernel(
         kernel,
-        num_blocks, 1, 1,
-        block_size, 1, 1,
+        num_blocks,
+        1,
+        1,
+        block_size,
+        1,
+        1,
         0,
         stream,
         args.args(),

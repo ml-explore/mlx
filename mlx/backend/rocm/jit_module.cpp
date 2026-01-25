@@ -117,7 +117,8 @@ void write_cached_hsaco(
     return;
   }
 
-  std::ofstream hsaco_file(cache_dir / (module_name + ".hsaco"), std::ios::binary);
+  std::ofstream hsaco_file(
+      cache_dir / (module_name + ".hsaco"), std::ios::binary);
   if (!hsaco.empty()) {
     hsaco_file.write(&hsaco.front(), hsaco.size());
   }
@@ -157,11 +158,11 @@ void compile(
       0,
       nullptr,
       nullptr));
-  
+
   std::unique_ptr<hiprtcProgram, void (*)(hiprtcProgram*)> prog_freer(
       &prog,
       [](hiprtcProgram* p) { CHECK_HIPRTC_ERROR(hiprtcDestroyProgram(p)); });
-  
+
   for (const auto& name : kernel_names) {
     CHECK_HIPRTC_ERROR(hiprtcAddNameExpression(prog, name.c_str()));
   }
@@ -169,25 +170,25 @@ void compile(
   // Compile program.
   std::vector<const char*> args;
   std::vector<std::string> arg_strings;
-  
+
   // Add standard flags
   arg_strings.push_back("--std=c++17");
   arg_strings.push_back("-O3");
   arg_strings.push_back("-DMLX_USE_ROCM");
-  
+
   // Add GPU architecture
   std::string gpu_arch = get_gpu_arch();
   std::string arch_flag = "--offload-arch=" + gpu_arch;
   arg_strings.push_back(arch_flag);
-  
+
   // Add include paths
   std::string rocm_include = "-I" + rocm_home() + "/include";
   arg_strings.push_back(rocm_include);
-  
+
   for (const auto& arg : arg_strings) {
     args.push_back(arg.c_str());
   }
-  
+
   hiprtcResult compile_result =
       hiprtcCompileProgram(prog, args.size(), args.data());
   if (compile_result != HIPRTC_SUCCESS) {
@@ -224,8 +225,8 @@ void load_module(
   hipError_t load_result = hipModuleLoadData(&module_, hsaco.data());
   if (load_result != hipSuccess) {
     std::ostringstream oss;
-    oss << "Failed to load compiled " << module_name << " kernel: " 
-        << hipGetErrorString(load_result) << ".";
+    oss << "Failed to load compiled " << module_name
+        << " kernel: " << hipGetErrorString(load_result) << ".";
     throw std::runtime_error(oss.str());
   }
 
@@ -249,7 +250,8 @@ JitModule::JitModule(
   std::vector<std::pair<std::string, std::string>> hsaco_kernels;
 
   // Try to load them from the file cache
-  if (!read_cached_hsaco(hsaco_cache_dir(), module_name, hsaco, hsaco_kernels)) {
+  if (!read_cached_hsaco(
+          hsaco_cache_dir(), module_name, hsaco, hsaco_kernels)) {
     auto [precompiled, source_code, kernel_names] = builder();
 
     // Get the HSACO (AMD GPU binary)
@@ -259,7 +261,8 @@ JitModule::JitModule(
         hsaco_kernels.emplace_back(name, name);
       }
     } else {
-      compile(device, module_name, source_code, kernel_names, hsaco, hsaco_kernels);
+      compile(
+          device, module_name, source_code, kernel_names, hsaco, hsaco_kernels);
     }
 
     // If requested save them in the file cache for the next launch

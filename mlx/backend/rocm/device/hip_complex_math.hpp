@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include <hip/hip_runtime.h>
 #include <hip/hip_complex.h>
+#include <hip/hip_runtime.h>
 
 namespace mlx::core::rocm {
 
@@ -36,22 +36,30 @@ __device__ inline float abs(hipFloatComplex z) {
 }
 
 // Complex addition
-__device__ inline hipFloatComplex operator+(hipFloatComplex a, hipFloatComplex b) {
+__device__ inline hipFloatComplex operator+(
+    hipFloatComplex a,
+    hipFloatComplex b) {
   return hipCaddf(a, b);
 }
 
 // Complex subtraction
-__device__ inline hipFloatComplex operator-(hipFloatComplex a, hipFloatComplex b) {
+__device__ inline hipFloatComplex operator-(
+    hipFloatComplex a,
+    hipFloatComplex b) {
   return hipCsubf(a, b);
 }
 
 // Complex multiplication
-__device__ inline hipFloatComplex operator*(hipFloatComplex a, hipFloatComplex b) {
+__device__ inline hipFloatComplex operator*(
+    hipFloatComplex a,
+    hipFloatComplex b) {
   return hipCmulf(a, b);
 }
 
 // Complex division
-__device__ inline hipFloatComplex operator/(hipFloatComplex a, hipFloatComplex b) {
+__device__ inline hipFloatComplex operator/(
+    hipFloatComplex a,
+    hipFloatComplex b) {
   return hipCdivf(a, b);
 }
 
@@ -98,7 +106,8 @@ __device__ inline hipFloatComplex exp(hipFloatComplex z) {
 
 // Complex logarithm
 __device__ inline hipFloatComplex log(hipFloatComplex z) {
-  return make_hipFloatComplex(logf(hipCabsf(z)), atan2f(hipCimagf(z), hipCrealf(z)));
+  return make_hipFloatComplex(
+      logf(hipCabsf(z)), atan2f(hipCimagf(z), hipCrealf(z)));
 }
 
 // Complex square root
@@ -153,7 +162,9 @@ __device__ inline hipFloatComplex tanh(hipFloatComplex z) {
 }
 
 // Complex power
-__device__ inline hipFloatComplex pow(hipFloatComplex base, hipFloatComplex exp) {
+__device__ inline hipFloatComplex pow(
+    hipFloatComplex base,
+    hipFloatComplex exp) {
   // base^exp = exp(exp * log(base))
   return rocm::exp(hipCmulf(exp, rocm::log(base)));
 }

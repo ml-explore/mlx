@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
-// This file includes host-only utilities for writing HIP kernels, the difference
-// from backend/rocm/device/utils.hpp is that the latter file only include
-// device-only code.
+// This file includes host-only utilities for writing HIP kernels, the
+// difference from backend/rocm/device/utils.hpp is that the latter file only
+// include device-only code.
 
 #pragma once
 
@@ -11,9 +11,9 @@
 #include "mlx/array.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 
-#include <hip/hip_runtime.h>
-#include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_runtime.h>
 #include <sstream>
 #include <stdexcept>
 
@@ -98,8 +98,8 @@ inline constexpr bool is_floating_v =
 
 // Type traits for detecting complex numbers.
 template <typename T>
-inline constexpr bool is_complex_v = std::is_same_v<T, complex64_t> ||
-    std::is_same_v<T, complex128_t>;
+inline constexpr bool is_complex_v =
+    std::is_same_v<T, complex64_t> || std::is_same_v<T, complex128_t>;
 
 // Type traits for detecting complex or real floating point numbers.
 template <typename T>
@@ -123,10 +123,10 @@ inline dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10) {
   int block_x = 1;
   int block_y = 1;
   int block_z = 1;
-  
+
   // Try to maximize occupancy while respecting dimension sizes
-  int total_threads = 1 << pow2;  // Default to 1024 threads
-  
+  int total_threads = 1 << pow2; // Default to 1024 threads
+
   // Distribute threads across dimensions
   while (block_x < dim0 && block_x < 32) {
     block_x *= 2;
@@ -137,7 +137,7 @@ inline dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10) {
   while (block_z < dim2 && block_x * block_y * block_z < total_threads) {
     block_z *= 2;
   }
-  
+
   return dim3(block_x, block_y, block_z);
 }
 
@@ -145,30 +145,28 @@ inline dim3 get_2d_grid_dims(const Shape& shape, const Strides& strides) {
   if (shape.empty()) {
     return dim3(1, 1, 1);
   }
-  
+
   int dim0 = shape.back();
   int rest = 1;
   for (size_t i = 0; i < shape.size() - 1; ++i) {
     rest *= shape[i];
   }
-  
+
   return dim3((dim0 + 255) / 256, rest, 1);
 }
 
-inline dim3 get_2d_grid_dims(
-    const Shape& shape,
-    const Strides& strides,
-    size_t divisor) {
+inline dim3
+get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor) {
   if (shape.empty()) {
     return dim3(1, 1, 1);
   }
-  
+
   int dim0 = (shape.back() + divisor - 1) / divisor;
   int rest = 1;
   for (size_t i = 0; i < shape.size() - 1; ++i) {
     rest *= shape[i];
   }
-  
+
   return dim3((dim0 + 255) / 256, rest, 1);
 }
 

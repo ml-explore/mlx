@@ -5,8 +5,7 @@
 
 namespace mlx::core::rocm {
 
-Worker::Worker()
-    : worker_(&Worker::thread_fn, this) {}
+Worker::Worker() : worker_(&Worker::thread_fn, this) {}
 
 Worker::~Worker() {
   {

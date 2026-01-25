@@ -1,10 +1,10 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/backend/gpu/available.h"
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/event.h"
-#include "mlx/backend/gpu/available.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::gpu {

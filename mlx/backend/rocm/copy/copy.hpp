@@ -3,9 +3,9 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
-#include "mlx/backend/gpu/copy.h"
 
 #include <hip/hip_runtime.h>
 

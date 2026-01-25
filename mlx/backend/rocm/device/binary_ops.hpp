@@ -21,7 +21,8 @@ struct FloorDivide {
     if constexpr (std::is_integral_v<T>) {
       return x / y;
     } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
-      return hip_bfloat16(truncf(static_cast<float>(x) / static_cast<float>(y)));
+      return hip_bfloat16(
+          truncf(static_cast<float>(x) / static_cast<float>(y)));
     } else if constexpr (std::is_same_v<T, __half>) {
       return __float2half(truncf(__half2float(x) / __half2float(y)));
     } else {
@@ -170,7 +171,7 @@ struct LogAddExp {
       float maxval = fmaxf(fx, fy);
       float minval = fminf(fx, fy);
       float result = (minval == -numeric_limits<float>::infinity() ||
-              maxval == numeric_limits<float>::infinity())
+                      maxval == numeric_limits<float>::infinity())
           ? maxval
           : maxval + log1pf(expf(minval - maxval));
       return hip_bfloat16(result);
@@ -183,7 +184,7 @@ struct LogAddExp {
       float maxval = fmaxf(fx, fy);
       float minval = fminf(fx, fy);
       float result = (minval == -numeric_limits<float>::infinity() ||
-              maxval == numeric_limits<float>::infinity())
+                      maxval == numeric_limits<float>::infinity())
           ? maxval
           : maxval + log1pf(expf(minval - maxval));
       return __float2half(result);
@@ -319,9 +320,11 @@ struct Power {
       float log_r = logf(r);
       float new_r = expf(exp.x * log_r - exp.y * theta);
       float new_theta = exp.x * theta + exp.y * log_r;
-      return make_hipFloatComplex(new_r * cosf(new_theta), new_r * sinf(new_theta));
+      return make_hipFloatComplex(
+          new_r * cosf(new_theta), new_r * sinf(new_theta));
     } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
-      return hip_bfloat16(powf(static_cast<float>(base), static_cast<float>(exp)));
+      return hip_bfloat16(
+          powf(static_cast<float>(base), static_cast<float>(exp)));
     } else if constexpr (std::is_same_v<T, __half>) {
       return __float2half(powf(__half2float(base), __half2float(exp)));
     } else {

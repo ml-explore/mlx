@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/matmul.h"
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/primitives.h"
 #include "mlx/types/half_types.h"
 
@@ -45,18 +45,20 @@ void gemm_rocblas(
     const array& b,
     float alpha = 1.0f,
     float beta = 0.0f) {
-  
   auto& device = encoder.device();
   rocblas_handle handle = device.get_rocblas_handle();
-  
-  // rocBLAS uses column-major, so we swap A and B and compute B^T * A^T = (A * B)^T
-  // But since we want row-major output, we compute C = A * B by doing C^T = B^T * A^T
-  rocblas_operation trans_a = b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-  rocblas_operation trans_b = a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-  
+
+  // rocBLAS uses column-major, so we swap A and B and compute B^T * A^T = (A *
+  // B)^T But since we want row-major output, we compute C = A * B by doing C^T
+  // = B^T * A^T
+  rocblas_operation trans_a =
+      b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+  rocblas_operation trans_b =
+      a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+
   encoder.launch_kernel([&](hipStream_t stream) {
     rocblas_set_stream(handle, stream);
-    
+
     switch (a.dtype()) {
       case float32: {
         float alpha_f = alpha;
@@ -65,17 +67,17 @@ void gemm_rocblas(
             handle,
             trans_a,
             trans_b,
-            N,  // m (rows of op(B))
-            M,  // n (cols of op(A))
-            K,  // k
+            N, // m (rows of op(B))
+            M, // n (cols of op(A))
+            K, // k
             &alpha_f,
             b.data<float>(),
-            b_transposed ? K : N,  // lda for B
+            b_transposed ? K : N, // lda for B
             a.data<float>(),
-            a_transposed ? M : K,  // ldb for A
+            a_transposed ? M : K, // ldb for A
             &beta_f,
             out.data<float>(),
-            N);  // ldc
+            N); // ldc
         break;
       }
       case float64: {
@@ -137,7 +139,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
-  
+
   // Return 0s if either input is empty.
   if (a_pre.size() == 0 || b_pre.size() == 0) {
     array zero(0, a_pre.dtype());
@@ -161,7 +163,8 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   if (batch_count == 1) {
     // Simple single GEMM
-    gemm_rocblas(encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+    gemm_rocblas(
+        encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
   } else {
     // Batched GEMM - for now, loop over batches
     // TODO: Use rocblas_sgemm_strided_batched for better performance
@@ -175,25 +178,29 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         a_offset += idx * a_batch_strides[i];
         b_offset += idx * b_batch_strides[i];
       }
-      
+
       // Create views for this batch
       // For simplicity, we use pointer arithmetic in the kernel
       encoder.launch_kernel([&, a_offset, b_offset, batch](hipStream_t stream) {
         auto& device = encoder.device();
         rocblas_handle handle = device.get_rocblas_handle();
         rocblas_set_stream(handle, stream);
-        
-        rocblas_operation trans_a = b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-        rocblas_operation trans_b = a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-        
+
+        rocblas_operation trans_a =
+            b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+        rocblas_operation trans_b =
+            a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+
         float alpha = 1.0f, beta = 0.0f;
-        
+
         if (a.dtype() == float32) {
           rocblas_sgemm(
               handle,
               trans_a,
               trans_b,
-              N, M, K,
+              N,
+              M,
+              K,
               &alpha,
               b.data<float>() + b_offset,
               b_transposed ? K : N,
@@ -226,9 +233,22 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Copy C into out first, then do GEMM with beta
   copy_gpu(c, out, CopyType::General, s);
-  
+
   // Do GEMM with alpha and beta
-  gemm_rocblas(encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b, alpha_, beta_);
+  gemm_rocblas(
+      encoder,
+      M,
+      N,
+      K,
+      a_transposed,
+      lda,
+      b_transposed,
+      ldb,
+      out,
+      a,
+      b,
+      alpha_,
+      beta_);
 }
 
 } // namespace mlx::core

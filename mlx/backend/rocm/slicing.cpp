@@ -1,9 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/slicing.h"
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/dtype_utils.h"
 
 #include <numeric>

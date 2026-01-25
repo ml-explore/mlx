@@ -2,14 +2,15 @@
 
 #pragma once
 
-#include <hip/hip_runtime.h>
-#include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_runtime.h>
 
 namespace mlx::core::rocm {
 
 // Half-precision math functions for HIP
-// Note: bfloat16 operations are computed in float since HIP doesn't have native bfloat16 math
+// Note: bfloat16 operations are computed in float since HIP doesn't have native
+// bfloat16 math
 
 // Helper to convert bfloat16 to float and back
 __device__ inline float bf16_to_float(hip_bfloat16 x) {
