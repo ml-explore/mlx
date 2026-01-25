@@ -4,21 +4,23 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/dtype_utils.h"
 
-#include <fmt/format.h>
+#include <sstream>
 
 namespace mlx::core {
 
 void check_rocblas_error(const char* name, rocblas_status err) {
   if (err != rocblas_status_success) {
-    throw std::runtime_error(
-        fmt::format("{} failed with code: {}.", name, static_cast<int>(err)));
+    std::ostringstream oss;
+    oss << name << " failed with code: " << static_cast<int>(err) << ".";
+    throw std::runtime_error(oss.str());
   }
 }
 
 void check_hip_error(const char* name, hipError_t err) {
   if (err != hipSuccess) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}", name, hipGetErrorString(err)));
+    std::ostringstream oss;
+    oss << name << " failed: " << hipGetErrorString(err);
+    throw std::runtime_error(oss.str());
   }
 }
 

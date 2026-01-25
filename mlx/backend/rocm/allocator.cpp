@@ -5,10 +5,10 @@
 #include "mlx/utils.h"
 
 #include <hip/hip_runtime.h>
-#include <fmt/format.h>
 #include <unistd.h>
 
 #include <cassert>
+#include <sstream>
 
 namespace mlx::core {
 
@@ -113,8 +113,9 @@ Buffer RocmAllocator::malloc(size_t size) {
       buf = new RocmBuffer{nullptr, size};
       hipError_t err = hipMallocManaged(&buf->data, size);
       if (err != hipSuccess && err != hipErrorMemoryAllocation) {
-        throw std::runtime_error(fmt::format(
-            "hipMallocManaged failed: {}.", hipGetErrorString(err)));
+        std::ostringstream oss;
+        oss << "hipMallocManaged failed: " << hipGetErrorString(err) << ".";
+        throw std::runtime_error(oss.str());
       }
     }
     lock.lock();

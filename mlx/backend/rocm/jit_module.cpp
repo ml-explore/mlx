@@ -11,7 +11,6 @@
 #include <mutex>
 #include <sstream>
 
-#include <fmt/format.h>
 #include <hip/hiprtc.h>
 #include <unistd.h>
 
@@ -23,8 +22,9 @@ namespace {
 
 void check_hiprtc_error(const char* name, hiprtcResult err) {
   if (err != HIPRTC_SUCCESS) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}", name, hiprtcGetErrorString(err)));
+    std::ostringstream oss;
+    oss << name << " failed: " << hiprtcGetErrorString(err);
+    throw std::runtime_error(oss.str());
   }
 }
 
@@ -136,7 +136,9 @@ std::string get_gpu_arch() {
   int device_id;
   CHECK_HIP_ERROR(hipGetDevice(&device_id));
   CHECK_HIP_ERROR(hipGetDeviceProperties(&props, device_id));
-  return fmt::format("gfx{}", props.gcnArchName);
+  std::ostringstream oss;
+  oss << "gfx" << props.gcnArchName;
+  return oss.str();
 }
 
 void compile(
@@ -175,10 +177,11 @@ void compile(
   
   // Add GPU architecture
   std::string gpu_arch = get_gpu_arch();
-  arg_strings.push_back(fmt::format("--offload-arch={}", gpu_arch));
+  std::string arch_flag = "--offload-arch=" + gpu_arch;
+  arg_strings.push_back(arch_flag);
   
   // Add include paths
-  std::string rocm_include = fmt::format("-I{}/include", rocm_home());
+  std::string rocm_include = "-I" + rocm_home() + "/include";
   arg_strings.push_back(rocm_include);
   
   for (const auto& arg : arg_strings) {
@@ -192,8 +195,9 @@ void compile(
     CHECK_HIPRTC_ERROR(hiprtcGetProgramLogSize(prog, &log_size));
     std::vector<char> log(log_size + 1, 0);
     CHECK_HIPRTC_ERROR(hiprtcGetProgramLog(prog, log.data()));
-    throw std::runtime_error(
-        fmt::format("Failed to compile kernel: {}.", log.data()));
+    std::ostringstream oss;
+    oss << "Failed to compile kernel: " << log.data() << ".";
+    throw std::runtime_error(oss.str());
   }
 
   // Get mangled names of kernel names.
@@ -219,10 +223,10 @@ void load_module(
   // Load module.
   hipError_t load_result = hipModuleLoadData(&module_, hsaco.data());
   if (load_result != hipSuccess) {
-    throw std::runtime_error(fmt::format(
-        "Failed to load compiled {} kernel: {}.", 
-        module_name, 
-        hipGetErrorString(load_result)));
+    std::ostringstream oss;
+    oss << "Failed to load compiled " << module_name << " kernel: " 
+        << hipGetErrorString(load_result) << ".";
+    throw std::runtime_error(oss.str());
   }
 
   // Load kernels.
@@ -281,7 +285,7 @@ hipFunction_t JitModule::get_kernel(
   auto it = kernels_.find(kernel_name);
   if (it == kernels_.end()) {
     throw std::runtime_error(
-        fmt::format("There is no kernel named {}.", kernel_name));
+        std::string("There is no kernel named ") + kernel_name + ".");
   }
 
   // If it is the first time we run this kernel then configure it. Do it only

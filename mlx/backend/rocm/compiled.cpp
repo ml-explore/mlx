@@ -7,7 +7,7 @@
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 
-#include <fmt/format.h>
+#include <sstream>
 
 namespace mlx::core {
 
@@ -33,16 +33,15 @@ struct FusedKernelBuilder {
       const auto& x = inputs[i];
       const std::string& xname = namer.get_name(x);
       params.push_back(
-          fmt::format("const {}* {}", dtype_to_hip_type(x.dtype()), xname));
+          std::string("const ") + dtype_to_hip_type(x.dtype()) + "* " + xname);
       if (!is_scalar(x) && !contiguous) {
-        params.push_back(fmt::format(
-            "const hip::std::array<int64_t, NDIM> {}_strides",
-            xname));
+        params.push_back(
+            std::string("const hip::std::array<int64_t, NDIM> ") + xname + "_strides");
       }
     }
     for (const auto& x : outputs) {
-      params.push_back(fmt::format(
-          "{}* {}", dtype_to_hip_type(x.dtype()), namer.get_name(x)));
+      params.push_back(
+          std::string(dtype_to_hip_type(x.dtype())) + "* " + namer.get_name(x));
     }
     if (!contiguous) {
       params.push_back(
@@ -57,7 +56,7 @@ struct FusedKernelBuilder {
       os +=
           "template <int NDIM, typename IdxT = uint32_t, int work_per_thread = 1>\n";
     }
-    os += fmt::format("__global__ void {}(\n", kernel_name + name);
+    os += "__global__ void " + kernel_name + name + "(\n";
     for (size_t i = 0; i < params.size(); ++i) {
       os += "    ";
       os += params[i];
@@ -125,15 +124,15 @@ struct FusedKernelBuilder {
       if (is_constant(i)) {
         std::ostringstream ss;
         print_constant(ss, x);
-        value = fmt::format("static_cast<{}>({})", type, ss.str());
+        value = std::string("static_cast<") + type + ">(" + ss.str() + ")";
       } else if (is_scalar(x)) {
-        value = fmt::format("{}[0]", xname);
+        value = xname + "[0]";
       } else if (contiguous) {
-        value = fmt::format("{}[index + i]", xname);
+        value = xname + "[index + i]";
       } else {
-        value = fmt::format("{}[{}_idx]", xname, xname);
+        value = xname + "[" + xname + "_idx]";
       }
-      os += fmt::format("    {} tmp_{} = {};\n", type, xname, value);
+      os += std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
     }
 
     // Write tape.
@@ -142,25 +141,26 @@ struct FusedKernelBuilder {
       std::string type = dtype_to_hip_type(x.dtype());
       std::string value;
       if (is_static_cast(x.primitive())) {
-        value = fmt::format(
-            "static_cast<{}>(tmp_{})", type, namer.get_name(x.inputs()[0]));
+        value = std::string("static_cast<") + type + ">(tmp_" + 
+                namer.get_name(x.inputs()[0]) + ")";
       } else {
         value = x.primitive().name();
         value += "{}(";
         for (size_t i = 0; i < x.inputs().size() - 1; ++i) {
-          value += fmt::format("tmp_{}, ", namer.get_name(x.inputs()[i]));
+          value += "tmp_" + namer.get_name(x.inputs()[i]) + ", ";
         }
-        value += fmt::format("tmp_{})", namer.get_name(x.inputs().back()));
+        value += "tmp_" + namer.get_name(x.inputs().back()) + ")";
       }
-      os += fmt::format("    {} tmp_{} = {};\n", type, xname, value);
+      os += std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
     }
 
     // Write output.
     for (const auto& x : outputs) {
+      std::string xname = namer.get_name(x);
       if (contiguous) {
-        os += fmt::format("    {0}[index + i] = tmp_{0};\n", namer.get_name(x));
+        os += std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       } else {
-        os += fmt::format("    {0}[index] = tmp_{0};\n", namer.get_name(x));
+        os += std::string("    ") + xname + "[index] = tmp_" + xname + ";\n";
       }
     }
 
@@ -173,7 +173,7 @@ struct FusedKernelBuilder {
         if (is_scalar(x) || is_constant(i)) {
           continue;
         }
-        os += fmt::format("    {0}_idx += {0}_strides[NDIM - 1];\n", xname);
+        os += std::string("    ") + xname + "_idx += " + xname + "_strides[NDIM - 1];\n";
       }
       os += "    index++;\n";
     }
@@ -306,20 +306,20 @@ void Compiled::eval_gpu(
     
     // Build kernel names.
     std::vector<std::string> kernel_names;
-    kernel_names.push_back(fmt::format(
-        "mlx::core::rocm::{}_contiguous<uint32_t, {}>",
-        lib_name(),
-        work_per_thread));
-    kernel_names.push_back(fmt::format(
-        "mlx::core::rocm::{}_contiguous<int64_t, {}>",
-        lib_name(),
-        work_per_thread));
+    kernel_names.push_back(
+        std::string("mlx::core::rocm::") + lib_name() + "_contiguous<uint32_t, " + 
+        std::to_string(work_per_thread) + ">");
+    kernel_names.push_back(
+        std::string("mlx::core::rocm::") + lib_name() + "_contiguous<int64_t, " + 
+        std::to_string(work_per_thread) + ">");
     for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
       for (int i = 1; i <= rocm::MAX_NDIM; ++i) {
-        kernel_names.push_back(fmt::format(
-            "mlx::core::rocm::{}_strided<{}, uint32_t, {}>", lib_name(), i, wpt));
-        kernel_names.push_back(fmt::format(
-            "mlx::core::rocm::{}_strided<{}, int64_t, {}>", lib_name(), i, wpt));
+        kernel_names.push_back(
+            std::string("mlx::core::rocm::") + lib_name() + "_strided<" + 
+            std::to_string(i) + ", uint32_t, " + std::to_string(wpt) + ">");
+        kernel_names.push_back(
+            std::string("mlx::core::rocm::") + lib_name() + "_strided<" + 
+            std::to_string(i) + ", int64_t, " + std::to_string(wpt) + ">");
       }
     }
 
@@ -371,13 +371,13 @@ void Compiled::eval_gpu(
 
   // Launch kernel.
   const char* index_type = large ? "int64_t" : "uint32_t";
-  std::string kernel_name = fmt::format("mlx::core::rocm::{}", lib_name());
+  std::string kernel_name = std::string("mlx::core::rocm::") + lib_name();
   if (contiguous) {
-    kernel_name +=
-        fmt::format("_contiguous<{}, {}>", index_type, work_per_thread);
+    kernel_name += std::string("_contiguous<") + index_type + ", " + 
+                   std::to_string(work_per_thread) + ">";
   } else {
-    kernel_name += fmt::format(
-        "_strided<{}, {}, {}>", shape.size(), index_type, work_per_thread);
+    kernel_name += std::string("_strided<") + std::to_string(shape.size()) + 
+                   ", " + index_type + ", " + std::to_string(work_per_thread) + ">";
   }
   
   auto& encoder = rocm::get_command_encoder(s);
