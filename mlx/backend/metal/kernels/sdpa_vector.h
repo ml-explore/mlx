@@ -192,95 +192,186 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
 // Function constant for affine bias support
 constant bool has_affine_bias [[function_constant(26)]];
 
-// Unified dot product with keys across all QuantModes
-template <
-    typename U,
-    int elem_per_thread,
-    QuantMode mode,
-    int bits = QuantTraits<mode>::bits>
-[[gnu::always_inline]] METAL_FUNC U dot_key(
-    const thread U* q,
-    const device uint32_t* keys,
-    U scale,
-    U bias = U{0}) {
-  using Traits = QuantTraits<mode>;
-  using LoadT = typename LoadType<bits>::type;
-  constexpr uint32_t mask = (1 << bits) - 1;
+///////////////////////////////////////////////////////////////////////////////
+// Fused Quantized SDPA Operations
+//
+// SdpaQuantOps provides compile-time specialized fused dequant+compute
+// operations for SDPA kernels. Uses optimal memory access patterns
+// (uint32_t/uint16_t loads) and avoids intermediate arrays.
+///////////////////////////////////////////////////////////////////////////////
 
-  auto ks = (const device LoadT*)keys;
-  U score = 0;
+template <QuantMode mode, int bits>
+struct SdpaQuantOps;
+
+// Optimized path for MXFP4: uint16_t loads, 4 elements at a time
+// Uses Dequantize functor for consistent codegen with other kernels
+template <>
+struct SdpaQuantOps<QuantMode::Mxfp4, 4> {
+  // Fused dot product: sum(q[i] * dequant(packed_k[i]))
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static U
+  dot(const thread U* q, const device uint32_t* keys, U scale, U /*bias*/) {
+    auto ks = reinterpret_cast<const device uint16_t*>(keys);
+    U score = 0;
 
 #pragma clang loop unroll(full)
-  for (int j = 0; j < elem_per_thread / 4; j++) {
-    LoadT p = ks[j];
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint16_t p = ks[j];
 
-    uint8_t v0 = uint8_t(p & mask);
-    uint8_t v1 = uint8_t((p >> bits) & mask);
-    uint8_t v2 = uint8_t((p >> (2 * bits)) & mask);
-    uint8_t v3 = uint8_t((p >> (3 * bits)) & mask);
-
-    // For affine mode, apply full dequantization: scale * v + bias
-    // For other modes, dequantize_value returns the decoded value and we scale
-    // at the end
-    if constexpr (Traits::has_bias) {
-      score += q[4 * j + 0] * Traits::template dequantize<U>(v0, scale, bias);
-      score += q[4 * j + 1] * Traits::template dequantize<U>(v1, scale, bias);
-      score += q[4 * j + 2] * Traits::template dequantize<U>(v2, scale, bias);
-      score += q[4 * j + 3] * Traits::template dequantize<U>(v3, scale, bias);
-    } else {
-      score += q[4 * j + 0] * Traits::template dequantize_value<U>(v0);
-      score += q[4 * j + 1] * Traits::template dequantize_value<U>(v1);
-      score += q[4 * j + 2] * Traits::template dequantize_value<U>(v2);
-      score += q[4 * j + 3] * Traits::template dequantize_value<U>(v3);
+      score += q[4 * j + 0] * Dequantize<4, U>{}(p & 0xf);
+      score += q[4 * j + 1] * Dequantize<4, U>{}((p >> 4) & 0xf);
+      score += q[4 * j + 2] * Dequantize<4, U>{}((p >> 8) & 0xf);
+      score += q[4 * j + 3] * Dequantize<4, U>{}((p >> 12) & 0xf);
     }
-  }
-
-  // For non-affine modes, apply scale at the end
-  // For affine mode, dequantization is already applied inline
-  if constexpr (Traits::has_bias) {
-    return score;
-  } else {
     return score * scale;
   }
-}
 
-template <
-    typename U,
-    int elem_per_thread,
-    QuantMode mode,
-    int bits = QuantTraits<mode>::bits>
-[[gnu::always_inline]] METAL_FUNC void accumulate_values(
-    thread U* o,
-    const device uint32_t* values,
-    U factor,
-    U w_scale,
-    U bias = U{0}) {
-  using Traits = QuantTraits<mode>;
-  using LoadT = typename LoadType<bits>::type;
-  constexpr uint32_t mask = (1 << bits) - 1;
-
-  auto vs = (const device LoadT*)values;
+  // Fused accumulate: o[i] = o[i] * factor + dequant(packed_v[i]) * w_scale
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static void accumulate(
+      thread U* o,
+      const device uint32_t* values,
+      U factor,
+      U w_scale,
+      U /*bias*/) {
+    auto vs = reinterpret_cast<const device uint16_t*>(values);
 
 #pragma clang loop unroll(full)
-  for (int j = 0; j < elem_per_thread / 4; j++) {
-    LoadT p = vs[j];
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint16_t p = vs[j];
 
-    uint8_t v0 = uint8_t(p & mask);
-    uint8_t v1 = uint8_t((p >> bits) & mask);
-    uint8_t v2 = uint8_t((p >> (2 * bits)) & mask);
-    uint8_t v3 = uint8_t((p >> (3 * bits)) & mask);
+      U v0 = Dequantize<4, U>{}(p & 0xf);
+      U v1 = Dequantize<4, U>{}((p >> 4) & 0xf);
+      U v2 = Dequantize<4, U>{}((p >> 8) & 0xf);
+      U v3 = Dequantize<4, U>{}((p >> 12) & 0xf);
 
-    U dq0 = Traits::template dequantize<U>(v0, w_scale, bias);
-    U dq1 = Traits::template dequantize<U>(v1, w_scale, bias);
-    U dq2 = Traits::template dequantize<U>(v2, w_scale, bias);
-    U dq3 = Traits::template dequantize<U>(v3, w_scale, bias);
-
-    o[4 * j + 0] = fma(o[4 * j + 0], factor, dq0);
-    o[4 * j + 1] = fma(o[4 * j + 1], factor, dq1);
-    o[4 * j + 2] = fma(o[4 * j + 2], factor, dq2);
-    o[4 * j + 3] = fma(o[4 * j + 3], factor, dq3);
+      o[4 * j + 0] = fma(o[4 * j + 0], factor, v0 * w_scale);
+      o[4 * j + 1] = fma(o[4 * j + 1], factor, v1 * w_scale);
+      o[4 * j + 2] = fma(o[4 * j + 2], factor, v2 * w_scale);
+      o[4 * j + 3] = fma(o[4 * j + 3], factor, v3 * w_scale);
+    }
   }
-}
+};
+
+// Optimized path for NVFP4: same as MXFP4 (both use fp4_e2m1)
+template <>
+struct SdpaQuantOps<QuantMode::Nvfp4, 4> {
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static U
+  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
+    return SdpaQuantOps<QuantMode::Mxfp4, 4>::template dot<U, elem_per_thread>(
+        q, keys, scale, bias);
+  }
+
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static void accumulate(
+      thread U* o,
+      const device uint32_t* values,
+      U factor,
+      U w_scale,
+      U bias) {
+    SdpaQuantOps<QuantMode::Mxfp4, 4>::template accumulate<U, elem_per_thread>(
+        o, values, factor, w_scale, bias);
+  }
+};
+
+// Optimized path for MXFP8: uint32_t loads, 4 elements at a time
+// Uses Dequantize functor for consistent codegen with other kernels
+template <>
+struct SdpaQuantOps<QuantMode::Mxfp8, 8> {
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static U
+  dot(const thread U* q, const device uint32_t* keys, U scale, U /*bias*/) {
+    U score = 0;
+
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint32_t p = keys[j];
+
+      score += q[4 * j + 0] * Dequantize<8, U>{}(p & 0xff);
+      score += q[4 * j + 1] * Dequantize<8, U>{}((p >> 8) & 0xff);
+      score += q[4 * j + 2] * Dequantize<8, U>{}((p >> 16) & 0xff);
+      score += q[4 * j + 3] * Dequantize<8, U>{}((p >> 24) & 0xff);
+    }
+    return score * scale;
+  }
+
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static void accumulate(
+      thread U* o,
+      const device uint32_t* values,
+      U factor,
+      U w_scale,
+      U /*bias*/) {
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread / 4; j++) {
+      uint32_t p = values[j];
+
+      U v0 = Dequantize<8, U>{}(p & 0xff);
+      U v1 = Dequantize<8, U>{}((p >> 8) & 0xff);
+      U v2 = Dequantize<8, U>{}((p >> 16) & 0xff);
+      U v3 = Dequantize<8, U>{}((p >> 24) & 0xff);
+
+      o[4 * j + 0] = fma(o[4 * j + 0], factor, v0 * w_scale);
+      o[4 * j + 1] = fma(o[4 * j + 1], factor, v1 * w_scale);
+      o[4 * j + 2] = fma(o[4 * j + 2], factor, v2 * w_scale);
+      o[4 * j + 3] = fma(o[4 * j + 3], factor, v3 * w_scale);
+    }
+  }
+};
+
+// Generic path for Affine quantization (supports all bit widths)
+// Uses PackReader for non-power-of-2 bit widths (3, 5, 6)
+template <int bits>
+struct SdpaQuantOps<QuantMode::Affine, bits> {
+  static constant constexpr int pack_factor = PackInfo<bits>::pack_factor;
+  static constant constexpr int bytes_per_pack = PackInfo<bits>::bytes_per_pack;
+
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static U
+  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
+    auto ks = reinterpret_cast<const device uint8_t*>(keys);
+    thread uint8_t raw[pack_factor];
+    U score = 0;
+
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread; j += pack_factor) {
+      PackReader<bits>::load(ks, raw);
+
+#pragma clang loop unroll(full)
+      for (int t = 0; t < pack_factor; ++t) {
+        score += q[j + t] * fma(scale, U(raw[t]), bias);
+      }
+
+      ks += bytes_per_pack;
+    }
+    return score;
+  }
+
+  template <typename U, int elem_per_thread>
+  [[gnu::always_inline]] static void accumulate(
+      thread U* o,
+      const device uint32_t* values,
+      U factor,
+      U w_scale,
+      U bias) {
+    auto vs = reinterpret_cast<const device uint8_t*>(values);
+    thread uint8_t raw[pack_factor];
+
+#pragma clang loop unroll(full)
+    for (int j = 0; j < elem_per_thread; j += pack_factor) {
+      PackReader<bits>::load(vs, raw);
+
+#pragma clang loop unroll(full)
+      for (int t = 0; t < pack_factor; ++t) {
+        U dq = fma(w_scale, U(raw[t]), bias);
+        o[j + t] = fma(o[j + t], factor, dq);
+      }
+
+      vs += bytes_per_pack;
+    }
+  }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Quantized SDPA kernel using QuantTraits
@@ -331,7 +422,8 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   constexpr int BD = 4;
   constexpr int elem_per_thread = D / BD;
   constexpr int blocks = 32;
-  constexpr int pack_factor = 32 / bits;
+  constexpr int pack_factor = PackInfo<bits>::pack_factor;
+  constexpr int bytes_per_pack = PackInfo<bits>::bytes_per_pack;
 
   const int stride = BN * D;
 
@@ -360,8 +452,13 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   const int k_group_idx = kv_head_idx * k_group_stride + kv_idx / group_size;
   const int v_group_idx = kv_head_idx * v_group_stride + kv_idx / group_size;
 
-  keys += kv_head_idx * k_stride + packed_idx;
-  values += kv_head_idx * v_stride + packed_idx;
+  // Use uint32_t pointers for optimal memory bandwidth
+  // For 4-bit: pack_factor=8, so we advance by elem_per_thread/8 uint32_t words
+  // For 8-bit: pack_factor=4, so we advance by elem_per_thread/4 uint32_t words
+  auto key_ptr =
+      keys + kv_head_idx * k_stride + packed_idx * bytes_per_pack / 4;
+  auto value_ptr =
+      values + kv_head_idx * v_stride + packed_idx * bytes_per_pack / 4;
 
   key_scales += k_group_idx;
   value_scales += v_group_idx;
@@ -411,8 +508,8 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
         key_scale = Traits::template dequantize_scale<U>(key_scales[0]);
       }
 
-      U score =
-          dot_key<U, elem_per_thread, mode, bits>(q, keys, key_scale, key_bias);
+      U score = SdpaQuantOps<mode, bits>::template dot<U, elem_per_thread>(
+          q, key_ptr, key_scale, key_bias);
       score = quad_sum(score);
 
       if (float_mask) {
@@ -437,12 +534,18 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
         value_scale = Traits::template dequantize_scale<U>(value_scales[0]);
       }
 
-      accumulate_values<U, elem_per_thread, mode, bits>(
-          o, values, factor, exp_score * value_scale, exp_score * value_bias);
+      SdpaQuantOps<mode, bits>::template accumulate<U, elem_per_thread>(
+          o,
+          value_ptr,
+          factor,
+          exp_score * value_scale,
+          exp_score * value_bias);
     }
 
-    keys += blocks * stride / pack_factor;
-    values += blocks * stride / pack_factor;
+    // Advance pointers by blocks * BN * D elements
+    // For uint32_t*, advance by (blocks * stride * bits) / 32
+    key_ptr += blocks * stride * bits / 32;
+    value_ptr += blocks * stride * bits / 32;
     key_scales += blocks * stride / group_size;
     value_scales += blocks * stride / group_size;
     if constexpr (Traits::has_bias) {
