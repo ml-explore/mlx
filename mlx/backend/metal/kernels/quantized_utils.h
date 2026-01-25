@@ -21,10 +21,19 @@ struct QuantTraits<QuantMode::Affine> {
   static constant constexpr int group_size = default_group_size;
   static constant constexpr int bits = default_bits;
   static constant constexpr bool has_bias = true;
+  template <typename T>
+  using scale_type = T;
 
   template <typename T>
   static inline T dequantize_scale(T s) {
     return s;
+  }
+
+  // Single-arg version returns raw value (for use in dot_key where
+  // dequantization is applied separately)
+  template <typename T>
+  static inline T dequantize_value(uint8_t v) {
+    return T(v);
   }
 
   template <typename T>
@@ -44,6 +53,8 @@ struct QuantTraits<QuantMode::Mxfp4> {
   static constant constexpr int group_size = 32;
   static constant constexpr int bits = 4;
   static constant constexpr bool has_bias = false;
+  template <typename T>
+  using scale_type = uint8_t;
 
   template <typename T>
   static inline T dequantize_scale(uint8_t s) {
@@ -67,6 +78,8 @@ struct QuantTraits<QuantMode::Nvfp4> {
   static constant constexpr int group_size = 16;
   static constant constexpr int bits = 4;
   static constant constexpr bool has_bias = false;
+  template <typename T>
+  using scale_type = uint8_t;
 
   template <typename T>
   static inline T dequantize_scale(uint8_t s) {
@@ -90,6 +103,8 @@ struct QuantTraits<QuantMode::Mxfp8> {
   static constant constexpr int group_size = 32;
   static constant constexpr int bits = 8;
   static constant constexpr bool has_bias = false;
+  template <typename T>
+  using scale_type = uint8_t;
 
   template <typename T>
   static inline T dequantize_scale(uint8_t s) {
