@@ -15,6 +15,9 @@ constant bool float_mask [[function_constant(24)]];
 constant bool has_sinks [[function_constant(25)]];
 constant int blocks [[function_constant(26)]];
 
+template <QuantMode mode, typename T>
+using ScaleTypeT = typename QuantTraits<mode>::template scale_type<T>;
+
 template <typename T, int D, int V = D>
 [[kernel]] void sdpa_vector(
     const device T* queries [[buffer(0)]],
@@ -216,13 +219,29 @@ template <
     uint8_t v2 = uint8_t((p >> (2 * bits)) & mask);
     uint8_t v3 = uint8_t((p >> (3 * bits)) & mask);
 
-    score += q[4 * j + 0] * Traits::template dequantize_value<U>(v0);
-    score += q[4 * j + 1] * Traits::template dequantize_value<U>(v1);
-    score += q[4 * j + 2] * Traits::template dequantize_value<U>(v2);
-    score += q[4 * j + 3] * Traits::template dequantize_value<U>(v3);
+    // For affine mode, apply full dequantization: scale * v + bias
+    // For other modes, dequantize_value returns the decoded value and we scale
+    // at the end
+    if constexpr (Traits::has_bias) {
+      score += q[4 * j + 0] * Traits::template dequantize<U>(v0, scale, bias);
+      score += q[4 * j + 1] * Traits::template dequantize<U>(v1, scale, bias);
+      score += q[4 * j + 2] * Traits::template dequantize<U>(v2, scale, bias);
+      score += q[4 * j + 3] * Traits::template dequantize<U>(v3, scale, bias);
+    } else {
+      score += q[4 * j + 0] * Traits::template dequantize_value<U>(v0);
+      score += q[4 * j + 1] * Traits::template dequantize_value<U>(v1);
+      score += q[4 * j + 2] * Traits::template dequantize_value<U>(v2);
+      score += q[4 * j + 3] * Traits::template dequantize_value<U>(v3);
+    }
   }
 
-  return score * scale;
+  // For non-affine modes, apply scale at the end
+  // For affine mode, dequantization is already applied inline
+  if constexpr (Traits::has_bias) {
+    return score;
+  } else {
+    return score * scale;
+  }
 }
 
 template <
@@ -275,9 +294,9 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
 [[kernel]] void quant_sdpa_vector_2pass_1(
     const device T* queries [[buffer(0)]],
     const device uint32_t* keys [[buffer(1)]],
-    const device uint8_t* key_scales [[buffer(2)]],
+    const device ScaleTypeT<mode, T>* key_scales [[buffer(2)]],
     const device uint32_t* values [[buffer(3)]],
-    const device uint8_t* value_scales [[buffer(4)]],
+    const device ScaleTypeT<mode, T>* value_scales [[buffer(4)]],
     device float* out [[buffer(5)]],
     device float* sums [[buffer(6)]],
     device float* maxs [[buffer(7)]],
@@ -342,10 +361,10 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   const int v_group_idx = kv_head_idx * v_group_stride + kv_idx / group_size;
 
   keys += kv_head_idx * k_stride + packed_idx;
-  key_scales += k_group_idx;
   values += kv_head_idx * v_stride + packed_idx;
-  value_scales += v_group_idx;
 
+  key_scales += k_group_idx;
+  value_scales += v_group_idx;
   if constexpr (Traits::has_bias) {
     key_biases += k_group_idx;
     value_biases += v_group_idx;
@@ -386,7 +405,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
       U key_bias = 0;
 
       if constexpr (Traits::has_bias) {
-        key_scale = U(((const device T*)key_scales)[0]);
+        key_scale = U(key_scales[0]);
         key_bias = U(key_biases[0]);
       } else {
         key_scale = Traits::template dequantize_scale<U>(key_scales[0]);
@@ -412,7 +431,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
       U value_bias = 0;
 
       if constexpr (Traits::has_bias) {
-        value_scale = U(((const device T*)value_scales)[0]);
+        value_scale = U(value_scales[0]);
         value_bias = U(value_biases[0]);
       } else {
         value_scale = Traits::template dequantize_scale<U>(value_scales[0]);
@@ -423,8 +442,8 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     }
 
     keys += blocks * stride / pack_factor;
-    key_scales += blocks * stride / group_size;
     values += blocks * stride / pack_factor;
+    key_scales += blocks * stride / group_size;
     value_scales += blocks * stride / group_size;
     if constexpr (Traits::has_bias) {
       key_biases += blocks * stride / group_size;

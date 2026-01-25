@@ -585,6 +585,8 @@ void sdpa_vector_2pass(
 
 std::string quant_mode_to_kernel_suffix(QuantizationMode mode) {
   switch (mode) {
+    case QuantizationMode::Affine:
+      return "Affine";
     case QuantizationMode::Mxfp4:
       return "Mxfp4";
     case QuantizationMode::Nvfp4:
@@ -603,8 +605,10 @@ void quant_sdpa_vector_2pass(
     const array& q,
     const array& k,
     const array& k_scales,
+    const std::optional<array>& k_biases,
     const array& v,
     const array& v_scales,
+    const std::optional<array>& v_biases,
     array& out,
     float scale,
     int group_size,
@@ -620,6 +624,10 @@ void quant_sdpa_vector_2pass(
   kname += std::to_string(q.shape(-1));
   kname += "_";
   kname += quant_mode_to_kernel_suffix(mode);
+  kname += "_";
+  kname += std::to_string(group_size);
+  kname += "_";
+  kname += std::to_string(bits);
 
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
@@ -658,6 +666,7 @@ void quant_sdpa_vector_2pass(
   bool float_mask = has_mask && !bool_mask;
   bool query_transposed = !q.flags().row_contiguous;
   bool has_sinks = false;
+  bool has_affine_bias = mode == QuantizationMode::Affine;
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
@@ -665,11 +674,13 @@ void quant_sdpa_vector_2pass(
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
+      {&has_affine_bias, MTL::DataType::DataTypeBool, 26},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
+  hash_name += has_affine_bias ? "_affine" : "_noaffine";
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
@@ -701,6 +712,11 @@ void quant_sdpa_vector_2pass(
     compute_encoder.set_bytes(kv_seq_stride, 17);
     compute_encoder.set_bytes(q_seq_stride, 18);
     compute_encoder.set_bytes(head_stride, 19);
+  }
+
+  if (has_affine_bias) {
+    compute_encoder.set_input_array(*k_biases, 20);
+    compute_encoder.set_input_array(*v_biases, 21);
   }
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -928,11 +944,25 @@ void QuantizedScaledDotProductAttention::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  bool is_affine = mode_ == QuantizationMode::Affine;
+
+  // Inputs layout:
+  // [q, k, k_scales, k_biases (if affine), v, v_scales, v_biases (if affine),
+  // mask (if present)]
   auto& q_pre = inputs[0];
   auto& k_pre = inputs[1];
   auto& k_scales_pre = inputs[2];
-  auto& v_pre = inputs[3];
-  auto& v_scales_pre = inputs[4];
+  int idx = 3;
+  const array* k_biases_pre = nullptr;
+  if (is_affine) {
+    k_biases_pre = &inputs[idx++];
+  }
+  auto& v_pre = inputs[idx++];
+  auto& v_scales_pre = inputs[idx++];
+  const array* v_biases_pre = nullptr;
+  if (is_affine) {
+    v_biases_pre = &inputs[idx++];
+  }
   auto& o = outputs[0];
 
   std::vector<array> copies;
@@ -978,8 +1008,16 @@ void QuantizedScaledDotProductAttention::eval_gpu(
   const auto& q = copy_unless(q_copy_unless, q_pre);
   const auto& k = copy_unless(kv_copy_unless, k_pre);
   const auto& k_scales = copy_unless(kv_copy_unless, k_scales_pre);
+  std::optional<array> k_biases = std::nullopt;
+  if (is_affine) {
+    k_biases = copy_unless(kv_copy_unless, *k_biases_pre);
+  }
   const auto& v = copy_unless(kv_copy_unless, v_pre);
   const auto& v_scales = copy_unless(kv_copy_unless, v_scales_pre);
+  std::optional<array> v_biases = std::nullopt;
+  if (is_affine) {
+    v_biases = copy_unless(kv_copy_unless, *v_biases_pre);
+  }
 
   std::optional<array> mask = std::nullopt;
   if (needs_mask_) {
@@ -1004,8 +1042,10 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       q,
       k,
       k_scales,
+      k_biases,
       v,
       v_scales,
+      v_biases,
       o,
       scale_,
       group_size_,
