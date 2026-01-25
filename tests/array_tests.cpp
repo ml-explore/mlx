@@ -591,6 +591,7 @@ TEST_CASE("test array shared buffer") {
   array b = array(buf_b, shape, float32, deleter);
 
   eval(a + b);
+  synchronize(); // ensure all operations complete before test ends
 }
 
 TEST_CASE("test make empty array") {
