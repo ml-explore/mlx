@@ -25,6 +25,21 @@ target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
 target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
+# Do not export symbols by default.
+set_target_properties(
+  mlx mlx_version
+  PROPERTIES VISIBILITY_INLINES_HIDDEN ON
+             CXX_VISIBILITY_PRESET hidden
+             CUDA_VISIBILITY_PRESET hidden)
+
+# Define MLX_EXPORT for shared libraries.
+set_target_properties(mlx mlx_version PROPERTIES DEFINE_SYMBOL MLX_EXPORT)
+# Define MLX_STATIC for static libraries.
+if(NOT BUILD_SHARED_LIBS)
+  target_compile_definitions(mlx PUBLIC MLX_STATIC)
+  target_compile_definitions(mlx_version PUBLIC MLX_STATIC)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   # Supress warnings: note: parameter passing for argument of type
   # 'std::pair<float, float>' when C++17 is enabled changed to match C++14 in
@@ -33,16 +48,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 if(MSVC)
-  # Windows DLLs have a 65535 symbol export limit. We use explicit exports via
-  # MLX_API macro (__declspec(dllexport)) on public API functions only. This
-  # avoids exporting internal template instantiations.
-  if(BUILD_SHARED_LIBS)
-    target_compile_definitions(mlx PRIVATE MLX_EXPORT)
-    target_compile_definitions(mlx_version PRIVATE MLX_EXPORT)
-  else()
-    target_compile_definitions(mlx PUBLIC MLX_STATIC)
-    target_compile_definitions(mlx_version PRIVATE MLX_STATIC)
-  endif()
   # Some of CUDA's headers include windows.h, which defines min/max macros.
   target_compile_definitions(mlx PRIVATE NOMINMAX)
   # Disable some MSVC warnings to speed up compilation.

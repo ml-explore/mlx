@@ -20,7 +20,7 @@ using MTLFCList =
 
 struct DeviceStream;
 
-struct CommandEncoder {
+struct MLX_API CommandEncoder {
   explicit CommandEncoder(DeviceStream& stream);
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -146,7 +146,7 @@ struct DeviceStream {
   std::vector<array> temporaries;
 };
 
-class Device {
+class MLX_API Device {
  public:
   Device();
   Device(const Device&) = delete;
@@ -261,7 +261,7 @@ class Device {
   int max_mb_per_buffer_;
 };
 
-Device& device(mlx::core::Device);
+MLX_API Device& device(mlx::core::Device);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 

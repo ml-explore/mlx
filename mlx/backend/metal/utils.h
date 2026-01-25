@@ -10,8 +10,8 @@
 
 namespace mlx::core {
 
-std::string type_to_name(const Dtype& t);
-std::string type_to_name(const array& a);
+MLX_API std::string type_to_name(const Dtype& t);
+MLX_API std::string type_to_name(const array& a);
 
 // Compute the grid and block dimensions, check backend/common/utils.h for docs.
 MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
