@@ -113,22 +113,16 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
-# CUDA 12.8 emits warning #20280-D for copy kernels which is a false positive.
-# Explicitly pass this flag to suppress the warning, it is safe to set it to
-# true but the warning wouldn't be suppressed.
-if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0)
-  target_compile_options(
-    mlx
-    PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--static-global-template-stub=false>")
-endif()
-
-# Suppress warning when building for compute capability 7 used by V100.
-target_compile_options(
-  mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
-
 # Suppress nvcc warnings on C++ headers.
 target_compile_options(
-  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=997,20208">)
+  mlx
+  PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=27,997,1394,20011,20208">
+)
+
+# Ignore some valid nvcc warnings, we might want to fix them in future.
+target_compile_options(
+  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=177,550">)
 
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.

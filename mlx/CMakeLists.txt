@@ -22,13 +22,7 @@ target_sources(
 # Define MLX_VERSION only in the version.cpp file.
 add_library(mlx_version OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
 target_compile_definitions(mlx_version PRIVATE MLX_VERSION="${MLX_VERSION}")
-# mlx_version needs access to api.h for MLX_API export macro
 target_include_directories(mlx_version PRIVATE ${PROJECT_SOURCE_DIR})
-# On Windows shared lib builds, mlx_version also needs MLX_EXPORT for proper DLL
-# linkage
-if(WIN32 AND BUILD_SHARED_LIBS)
-  target_compile_definitions(mlx_version PRIVATE MLX_EXPORT)
-endif()
 target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_version>)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -39,21 +33,40 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 if(MSVC)
-  # Disable some MSVC warnings to speed up compilation.
-  target_compile_options(mlx PUBLIC /wd4068 /wd4244 /wd4267 /wd4804)
-  # Enable /bigobj for heavily templated code (e.g., binary.cpp) that exceeds
-  # the default 65,535 section limit in COFF object files. Use generator
-  # expression to only apply to C/CXX, not CUDA (NVCC doesn't understand /bigobj
-  # directly).
-  target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj>)
   # Windows DLLs have a 65535 symbol export limit. We use explicit exports via
   # MLX_API macro (__declspec(dllexport)) on public API functions only. This
   # avoids exporting internal template instantiations.
   if(BUILD_SHARED_LIBS)
     target_compile_definitions(mlx PRIVATE MLX_EXPORT)
+    target_compile_definitions(mlx_version PRIVATE MLX_EXPORT)
   else()
     target_compile_definitions(mlx PUBLIC MLX_STATIC)
+    target_compile_definitions(mlx_version PRIVATE MLX_STATIC)
   endif()
+  # Some of CUDA's headers include windows.h, which defines min/max macros.
+  target_compile_definitions(mlx PRIVATE NOMINMAX)
+  # Disable some MSVC warnings to speed up compilation.
+  target_compile_options(
+    mlx
+    PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/wd4068
+           /wd4244
+           /wd4267
+           /wd4700
+           /wd4804>
+           $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/wd4068
+           -Xcompiler=/wd4244
+           -Xcompiler=/wd4267
+           -Xcompiler=/wd4700
+           -Xcompiler=/wd4804>)
+  # Enable /bigobj for heavily templated code (e.g., binary.cpp) that exceeds
+  # the default 65,535 section limit in COFF object files.
+  target_compile_options(
+    mlx PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>)
+  # Use modern preprocessor, otherwise CCCL would complain.
+  target_compile_options(
+    mlx PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
