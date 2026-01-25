@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
 #pragma once
 
@@ -22,6 +22,7 @@ int device_count();
  *
  * Returns a map with basic CPU device properties.
  */
-const std::unordered_map<std::string, std::variant<std::string, size_t>>& device_info(int device_index = 0);
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
+device_info(int device_index = 0);
 
 } // namespace mlx::core::cpu

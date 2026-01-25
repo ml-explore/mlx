@@ -1,20 +1,17 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/cuda/cuda.h"
 
 #include <cuda_runtime.h>
+#include <dlfcn.h>
+
 #include <string>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
-
-namespace mlx::core::cu {
+namespace mlx::core {
 
 namespace {
 
@@ -40,25 +37,17 @@ struct NVMLState {
 
 bool nvml_init(NVMLState& nvml) {
 #ifdef _WIN32
-  nvml.handle = LoadLibraryA("nvml.dll");
+  nvml.handle = dlopen("nvml.dll", RTLD_LAZY);
   if (!nvml.handle) {
-    nvml.handle =
-        LoadLibraryA("C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvml.dll");
+    nvml.handle = dlopen(
+        "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvml.dll", RTLD_LAZY);
   }
-  if (!nvml.handle)
-    return false;
-  nvml.nvmlInit_v2 = (decltype(nvml.nvmlInit_v2))GetProcAddress(
-      (HMODULE)nvml.handle, "nvmlInit_v2");
-  nvml.nvmlDeviceGetHandleByUUID =
-      (decltype(nvml.nvmlDeviceGetHandleByUUID))GetProcAddress(
-          (HMODULE)nvml.handle, "nvmlDeviceGetHandleByUUID");
-  nvml.nvmlDeviceGetMemoryInfo =
-      (decltype(nvml.nvmlDeviceGetMemoryInfo))GetProcAddress(
-          (HMODULE)nvml.handle, "nvmlDeviceGetMemoryInfo");
 #else
   nvml.handle = dlopen("libnvidia-ml.so.1", RTLD_LAZY);
+#endif
   if (!nvml.handle)
     return false;
+
   nvml.nvmlInit_v2 =
       (decltype(nvml.nvmlInit_v2))dlsym(nvml.handle, "nvmlInit_v2");
   nvml.nvmlDeviceGetHandleByUUID =
@@ -66,7 +55,6 @@ bool nvml_init(NVMLState& nvml) {
           nvml.handle, "nvmlDeviceGetHandleByUUID");
   nvml.nvmlDeviceGetMemoryInfo = (decltype(nvml.nvmlDeviceGetMemoryInfo))dlsym(
       nvml.handle, "nvmlDeviceGetMemoryInfo");
-#endif
 
   if (!nvml.nvmlInit_v2 || !nvml.nvmlDeviceGetHandleByUUID ||
       !nvml.nvmlDeviceGetMemoryInfo) {
@@ -118,32 +106,8 @@ std::string format_uuid(const cudaUUID_t& uuid) {
   return buf;
 }
 
-// Helper function to get memory info (NVML or cudaMemGetInfo)
-void get_memory_info(
-    int device_index,
-    const std::string& uuid,
-    NVMLState& nvml,
-    size_t* free_mem,
-    size_t* total_mem) {
-  if (nvml_get_memory(nvml, uuid.c_str(), free_mem, total_mem)) {
-    return;
-  }
-  // Fallback to cudaMemGetInfo
-  int prev_device;
-  cudaGetDevice(&prev_device);
-  cudaSetDevice(device_index);
-  cudaMemGetInfo(free_mem, total_mem);
-  cudaSetDevice(prev_device);
-}
-
-} // anonymous namespace
-
-bool is_available() {
-  return true;
-}
-
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
-device_info(int device_index) {
+device_info_impl(int device_index) {
   // Static cache of device properties including UUID (needed for NVML lookup)
   static auto all_devices = []() {
     // Get device count
@@ -210,7 +174,8 @@ device_info(int device_index) {
 
   device_info_copy = all_devices[device_index].info;
 
-  // Get fresh memory info - try NVML first (system-wide), fallback to cudaMemGetInfo (process-level)
+  // Get fresh memory info - try NVML first (system-wide), fallback to
+  // cudaMemGetInfo (process-level)
   size_t free_mem, total_mem;
 
   if (nvml_initialized &&
@@ -235,4 +200,38 @@ device_info(int device_index) {
   return device_info_copy;
 }
 
-} // namespace mlx::core::cu
+} // anonymous namespace
+
+namespace gpu {
+
+bool is_available() {
+  return true;
+}
+
+int device_count() {
+  int count = 0;
+  cudaGetDeviceCount(&count);
+  return count;
+}
+
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
+device_info(int device_index) {
+  return device_info_impl(device_index);
+}
+
+} // namespace gpu
+
+namespace cu {
+
+bool is_available() {
+  return true;
+}
+
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
+device_info(int device_index) {
+  return device_info_impl(device_index);
+}
+
+} // namespace cu
+
+} // namespace mlx::core

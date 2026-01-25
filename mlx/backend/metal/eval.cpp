@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
 
-#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -9,10 +9,6 @@
 #include "mlx/scheduler.h"
 
 namespace mlx::core::gpu {
-
-bool is_available() {
-  return true;
-}
 
 void new_stream(Stream stream) {
   if (stream.device == mlx::core::Device::gpu) {
