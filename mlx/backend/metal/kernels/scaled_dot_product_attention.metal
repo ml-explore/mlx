@@ -54,16 +54,21 @@ instantiate_sdpa_vector_heads(float16_t)
       group_size,                                                                  \
       bits)
 
+#define instantiate_quant_sdpa_vector_affine(type, head_dim, group_size) \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 2)  \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 3)  \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 4)  \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 5)  \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 6)  \
+  instantiate_quant_sdpa_vector(type, head_dim, Affine, group_size, 8)
+
 #define instantiate_quant_sdpa_vector_all_modes(type, head_dim) \
   instantiate_quant_sdpa_vector(type, head_dim, Mxfp4, 32, 4)   \
   instantiate_quant_sdpa_vector(type, head_dim, Nvfp4, 16, 4)   \
   instantiate_quant_sdpa_vector(type, head_dim, Mxfp8, 32, 8)   \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 32, 4)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 64, 4)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 128, 4) \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 32, 8)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 64, 8)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 128, 8)
+  instantiate_quant_sdpa_vector_affine(type, head_dim, 32)      \
+  instantiate_quant_sdpa_vector_affine(type, head_dim, 64)      \
+  instantiate_quant_sdpa_vector_affine(type, head_dim, 128)
 
 #define instantiate_quant_sdpa_vector_heads(type) \
   instantiate_quant_sdpa_vector_all_modes(type, 64)    \
