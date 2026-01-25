@@ -269,7 +269,7 @@ void sdpa_cudnn(
     bool output_logsumexp,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().cudnn_handle();
+  auto handle = encoder.device().get_cudnn_handle();
 
   malloc_with_same_layout(encoder, o, q);
 
@@ -327,7 +327,7 @@ void sdpa_backward_cudnn(
     array& d_v,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().cudnn_handle();
+  auto handle = encoder.device().get_cudnn_handle();
 
   malloc_with_same_layout(encoder, d_q, q);
   malloc_with_same_layout(encoder, d_k, k);

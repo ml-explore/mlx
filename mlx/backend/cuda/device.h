@@ -142,6 +142,7 @@ class Device {
   explicit Device(int device);
   ~Device();
 
+  Device(Device&&) = default;
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
 
@@ -149,6 +150,8 @@ class Device {
   void make_current();
 
   CommandEncoder& get_command_encoder(Stream s);
+  cublasLtHandle_t get_cublaslt_handle();
+  cudnnHandle_t get_cudnn_handle();
 
   int cuda_device() const {
     return device_;
@@ -159,24 +162,23 @@ class Device {
   int compute_capability_minor() const {
     return compute_capability_minor_;
   }
-  cublasLtHandle_t lt_handle() const {
-    return lt_;
-  }
-  cudnnHandle_t cudnn_handle() const {
-    return cudnn_;
+  bool concurrent_managed_access() const {
+    return concurrent_managed_access_ == 1;
   }
 
  private:
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
+  int concurrent_managed_access_;
   std::string device_name_;
-  cublasLtHandle_t lt_;
-  cudnnHandle_t cudnn_;
+  cublasLtHandle_t cublaslt_handle_{nullptr};
+  cudnnHandle_t cudnn_handle_{nullptr};
   std::unordered_map<int, CommandEncoder> encoders_;
 };
 
-Device& device(mlx::core::Device device);
+Device& device(int cuda_device);
+Device& device(mlx::core::Device d);
 CommandEncoder& get_command_encoder(Stream s);
 
 // Return an execution policy that does not sync for result.
