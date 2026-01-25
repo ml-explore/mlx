@@ -1,9 +1,9 @@
-// Copyright © 2023-2025 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include <stdexcept>
 
-#include "mlx/backend/cpu/available.h"
-#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/cpu/device_info.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/device.h"
 
 namespace mlx::core {

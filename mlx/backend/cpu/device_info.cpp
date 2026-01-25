@@ -1,6 +1,6 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
-#include "mlx/backend/cpu/available.h"
+#include "mlx/backend/cpu/device_info.h"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
