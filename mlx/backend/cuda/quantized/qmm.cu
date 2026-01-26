@@ -34,6 +34,20 @@ inline array ensure_row_contiguous_matrix(
   return x_copy;
 }
 
+// Ensure full row contiguity for an array (all dimensions, not just last two).
+// This is needed when we want to flatten all leading dimensions into M.
+inline array ensure_row_contiguous(
+    const array& x,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  }
+  array x_copy = contiguous_copy_gpu(x, s);
+  enc.add_temporary(x_copy);
+  return x_copy;
+}
+
 } // namespace
 
 namespace cu {
@@ -156,7 +170,7 @@ namespace {
 
 // Local dispatch for power-of-2 bits only (2, 4, 8)
 // Non-power-of-2 bits (3, 5, 6) require multi-byte unpacking which is not yet
-// implemented
+// implemented for CUDA quantized matmul.
 template <typename F>
 void dispatch_qmm_bits(int bits, F&& f) {
   switch (bits) {
@@ -171,8 +185,11 @@ void dispatch_qmm_bits(int bits, F&& f) {
       break;
     default:
       throw std::runtime_error(
-          "[QuantizedMatmul::eval_gpu] bits must be 2, 4, or 8 (got " +
-          std::to_string(bits) + ")");
+          "[QuantizedMatmul::eval_gpu] CUDA quantized matmul currently "
+          "supports only 2-, 4-, or 8-bit weights; got " +
+          std::to_string(bits) +
+          ". Other bit-widths (e.g., 3/5/6) are only supported for "
+          "quantize/dequantize and are not yet implemented for CUDA matmul.");
   }
 }
 
@@ -201,8 +218,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(cu::malloc_async(out.nbytes(), enc));
 
-  // Make sure the last two dims of x and w, s, b are contiguous
-  array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
+  // Ensure x is fully row contiguous so we can flatten all leading dims into M.
+  // For w, scales, biases we only need the last two dims to be contiguous.
+  array x = ensure_row_contiguous(inputs[0], enc, s);
   array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], enc, s);
   std::optional<array> biases = std::nullopt;
