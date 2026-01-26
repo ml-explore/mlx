@@ -960,8 +960,6 @@ MLX_API array sparse_matmul_csr(
     const array& col_indices,
     const array& values,
     const array& dense_b,
-    int n_rows,
-    int n_cols,
     StreamOrDevice s = {});
 
 /** Gather array entries given indices and slices */

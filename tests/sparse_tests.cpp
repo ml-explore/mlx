@@ -42,12 +42,12 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   auto expected = matmul(dense_a, dense_b);
 
   // Test on default device
-  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, 3, 2, Device::cpu);
+  auto result_cpu =
+      sparse_matmul_csr(row_ptr, col_indices, values, dense_b, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
@@ -78,12 +78,12 @@ TEST_CASE("test sparse matrix-vector multiplication") {
   auto expected = matmul(dense_a, dense_b);
 
   // Test on default device
-  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 1);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, 3, 1, Device::cpu);
+  auto result_cpu =
+      sparse_matmul_csr(row_ptr, col_indices, values, dense_b, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
@@ -127,8 +127,7 @@ TEST_CASE("test random sparse matrix") {
 
   auto dense_b = ones({n_cols, dense_cols});
 
-  auto result = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, n_rows, dense_cols);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK_EQ(result.shape(0), n_rows);
   CHECK_EQ(result.shape(1), dense_cols);
 }
