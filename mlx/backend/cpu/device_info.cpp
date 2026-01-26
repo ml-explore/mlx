@@ -11,8 +11,7 @@
 #include <windows.h>
 #else
 #include <sys/utsname.h>
-#include <cstdio>
-#include <cstring>
+#include <fstream>
 #endif
 
 namespace mlx::core::cpu {
@@ -79,24 +78,16 @@ std::string get_cpu_name() {
   }
 #else
   // Try reading from /proc/cpuinfo on Linux
-  FILE* fp = fopen("/proc/cpuinfo", "r");
-  if (fp) {
-    char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-      if (strncmp(line, "model name", 10) == 0) {
-        char* colon = strchr(line, ':');
-        if (colon) {
-          // Skip ": " and trim newline
-          char* name = colon + 2;
-          char* newline = strchr(name, '\n');
-          if (newline)
-            *newline = '\0';
-          fclose(fp);
-          return std::string(name);
+  std::ifstream cpuinfo("/proc/cpuinfo");
+  if (cpuinfo.is_open()) {
+    std::string line;
+    while (std::getline(cpuinfo, line)) {
+      if (line.starts_with("model name")) {
+        if (auto n = line.find(": "); n != std::string::npos) {
+          return line.substr(n + 2);
         }
       }
     }
-    fclose(fp);
   }
 #endif
   return get_cpu_architecture();
