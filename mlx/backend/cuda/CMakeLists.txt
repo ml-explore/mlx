@@ -69,11 +69,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
-  target_sources(
-    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/no_cublas_qqmm.cpp)
-else()
   target_sources(mlx
-                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/no_qqmm_impl.cpp)
+else()
+  target_sources(
+    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_impl.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
