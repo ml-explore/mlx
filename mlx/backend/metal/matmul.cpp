@@ -270,21 +270,20 @@ void steel_matmul_regular_axpby_nax(
   int swizzle_log = tm <= 3 ? 0 : 1;
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ ldd,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_stride,
-      /* const int64_t batch_stride_b = */ B_batch_stride,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ ldd,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_stride,
+                    /* const int64_t batch_stride_b = */ B_batch_stride,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -310,12 +309,11 @@ void steel_matmul_regular_axpby_nax(
     int ldc = c.strides()[c.ndim() - 2];
     int fdc = c.strides()[c.ndim() - 1];
 
-    GEMMAddMMParams params{
-        /* const int ldc = */ ldc,
-        /* const int fdc = */ fdc,
-        /* const int64_t batch_stride_c = */ C_batch_stride,
-        /* const float alpha = */ alpha,
-        /* const float beta = */ beta};
+    GEMMAddMMParams params{/* const int ldc = */ ldc,
+                           /* const int fdc = */ fdc,
+                           /* const int64_t batch_stride_c = */ C_batch_stride,
+                           /* const float alpha = */ alpha,
+                           /* const float beta = */ beta};
 
     compute_encoder.set_input_array(c, 2);
     compute_encoder.set_bytes(params, 5);
@@ -457,21 +455,20 @@ void steel_matmul_regular_axpby(
   int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ ldd,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_stride,
-      /* const int64_t batch_stride_b = */ B_batch_stride,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ ldd,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_stride,
+                    /* const int64_t batch_stride_b = */ B_batch_stride,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -497,12 +494,11 @@ void steel_matmul_regular_axpby(
     int ldc = c.strides()[c.ndim() - 2];
     int fdc = c.strides()[c.ndim() - 1];
 
-    GEMMAddMMParams params{
-        /* const int ldc = */ ldc,
-        /* const int fdc = */ fdc,
-        /* const int64_t batch_stride_c = */ C_batch_stride,
-        /* const float alpha = */ alpha,
-        /* const float beta = */ beta};
+    GEMMAddMMParams params{/* const int ldc = */ ldc,
+                           /* const int fdc = */ fdc,
+                           /* const int64_t batch_stride_c = */ C_batch_stride,
+                           /* const float alpha = */ alpha,
+                           /* const float beta = */ beta};
 
     compute_encoder.set_input_array(c, 2);
     compute_encoder.set_bytes(params, 5);
@@ -1554,21 +1550,20 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_str,
-      /* const int64_t batch_stride_b = */ B_batch_str,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ N,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_str,
+                    /* const int64_t batch_stride_b = */ B_batch_str,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -2113,23 +2108,22 @@ void gather_mm(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
-  steel::GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ static_cast<int>(lda),
-      /* const int ldb = */ static_cast<int>(ldb),
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ (N + bn - 1) / bn,
-      /* const int tiles_m = */ (M + bm - 1) / bm,
-      /* const int64_t batch_stride_a = */
-      (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
-      /* const int64_t batch_stride_b = */
-      (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
-      /* const int64_t batch_stride_d = */ M * N,
-      /* const int swizzle_log = */ 0,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ batch_ndim};
+  steel::GEMMParams params{/* const int M = */ M,
+                           /* const int N = */ N,
+                           /* const int K = */ K,
+                           /* const int lda = */ static_cast<int>(lda),
+                           /* const int ldb = */ static_cast<int>(ldb),
+                           /* const int ldd = */ N,
+                           /* const int tiles_n = */ (N + bn - 1) / bn,
+                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int64_t batch_stride_a = */
+                           (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
+                           /* const int64_t batch_stride_b = */
+                           (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
+                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int swizzle_log = */ 0,
+                           /* const int gemm_k_iterations_aligned = */ (K / bk),
+                           /* const int batch_ndim = */ batch_ndim};
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);
@@ -2317,21 +2311,20 @@ void segmented_mm(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
-  steel::GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ static_cast<int>(lda),
-      /* const int ldb = */ static_cast<int>(ldb),
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ (N + bn - 1) / bn,
-      /* const int tiles_m = */ (M + bm - 1) / bm,
-      /* const int64_t batch_stride_a = */ 0,
-      /* const int64_t batch_stride_b = */ 0,
-      /* const int64_t batch_stride_d = */ M * N,
-      /* const int swizzle_log = */ 0,
-      /* const int gemm_k_iterations_aligned = */ 0,
-      /* const int batch_ndim = */ 0};
+  steel::GEMMParams params{/* const int M = */ M,
+                           /* const int N = */ N,
+                           /* const int K = */ K,
+                           /* const int lda = */ static_cast<int>(lda),
+                           /* const int ldb = */ static_cast<int>(ldb),
+                           /* const int ldd = */ N,
+                           /* const int tiles_n = */ (N + bn - 1) / bn,
+                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int64_t batch_stride_a = */ 0,
+                           /* const int64_t batch_stride_b = */ 0,
+                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int swizzle_log = */ 0,
+                           /* const int gemm_k_iterations_aligned = */ 0,
+                           /* const int batch_ndim = */ 0};
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);

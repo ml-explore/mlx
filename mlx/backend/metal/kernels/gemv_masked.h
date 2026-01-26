@@ -641,7 +641,7 @@ template <
     const int TM, /* Thread rows (in elements) */
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch> /* Batch ndim > 1 */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_masked(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_masked(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     device T* out_vec [[buffer(3)]],
@@ -741,7 +741,7 @@ template <
     const int TM, /* Thread rows (in elements) */
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch> /* Batch ndim > 1 */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_t_masked(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_t_masked(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     device T* out_vec [[buffer(3)]],

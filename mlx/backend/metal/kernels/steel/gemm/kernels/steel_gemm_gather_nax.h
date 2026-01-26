@@ -16,7 +16,7 @@ template <
     bool transpose_a,
     bool transpose_b,
     typename AccumType = float>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 gather_mm_rhs_nax(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
