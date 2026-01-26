@@ -3094,6 +3094,9 @@ TEST_CASE("test quantize dequantize") {
 }
 
 TEST_CASE("test quantized matmul") {
+  // Seed RNG for reproducibility
+  random::seed(42);
+
   // Test quantized matrix-vector multiplication
   int M = 4;
   int N = 128;
@@ -3121,17 +3124,35 @@ TEST_CASE("test quantized matmul") {
   auto max_diff = max(abs(y_q - y_hat)).item<float>();
   CHECK(max_diff < 1e-2);
 
-  // Test different bit widths
+  // Test different bit widths with accuracy assertions
   for (int b : {2, 4, 8}) {
     auto res_b = quantize(w, group_size, b);
     auto w_q_b = res_b[0];
     auto scales_b = res_b[1];
     auto biases_b = res_b[2];
     auto w_hat_b = dequantize(w_q_b, scales_b, biases_b, group_size, b);
-    auto y_q_b = quantized_matmul(x, w_q_b, scales_b, biases_b, true, group_size, b);
+    auto y_q_b =
+        quantized_matmul(x, w_q_b, scales_b, biases_b, true, group_size, b);
     auto y_hat_b = matmul(x, transpose(w_hat_b, {1, 0}));
     CHECK_EQ(y_q_b.shape(), y_hat_b.shape());
+    // Verify numerical accuracy against dequantized reference
+    auto max_diff_b = max(abs(y_q_b - y_hat_b)).item<float>();
+    CHECK(max_diff_b < 1e-2);
   }
+
+  // Test non-transposed case (x @ w)
+  auto w_nt = random::normal({K, N}); // Non-transposed weight
+  auto res_nt = quantize(w_nt, group_size, bits);
+  auto w_q_nt = res_nt[0];
+  auto scales_nt = res_nt[1];
+  auto biases_nt = res_nt[2];
+  auto w_hat_nt = dequantize(w_q_nt, scales_nt, biases_nt, group_size, bits);
+  auto y_q_nt = quantized_matmul(
+      x, w_q_nt, scales_nt, biases_nt, false, group_size, bits);
+  auto y_hat_nt = matmul(x, w_hat_nt);
+  CHECK_EQ(y_q_nt.shape(), y_hat_nt.shape());
+  auto max_diff_nt = max(abs(y_q_nt - y_hat_nt)).item<float>();
+  CHECK(max_diff_nt < 1e-2);
 }
 
 TEST_CASE("test repeat") {

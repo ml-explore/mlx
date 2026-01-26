@@ -40,24 +40,26 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-// Quantized matrix-vector multiply kernel for affine quantization
-// Performs: out = x @ dequantize(w, scales, biases)
-// where w is quantized weights, scales and biases are per-group parameters
+// Transposed quantized matrix-vector multiply kernel for affine quantization
+// Performs: out = x @ dequantize(w, scales, biases).T
+// where w is stored as [N, K/pack_factor] (weights stored with output dim
+// first) scales/biases are stored as [N, K/GROUP_SIZE]
 template <typename T, int BITS, int GROUP_SIZE, bool HAS_BIAS>
-__global__ void qmv_kernel(
-    const T* __restrict__ x,           // [M, K]
-    const uint8_t* __restrict__ w,     // [N, K/pack_factor] packed
-    const T* __restrict__ scales,      // [N, K/GROUP_SIZE]
-    const T* __restrict__ biases,      // [N, K/GROUP_SIZE] or nullptr
-    T* __restrict__ out,               // [M, N]
+__global__ void qmv_t_kernel(
+    const T* __restrict__ x, // [M, K]
+    const uint8_t* __restrict__ w, // [N, K/pack_factor] packed
+    const T* __restrict__ scales, // [N, K/GROUP_SIZE]
+    const T* __restrict__ biases, // [N, K/GROUP_SIZE] or nullptr
+    T* __restrict__ out, // [M, N]
     int M,
     int N,
     int K) {
   constexpr int pack_factor = get_pack_factor<BITS, 8>();
   constexpr uint8_t mask = (1 << BITS) - 1;
 
-  const int row = blockIdx.x;  // output row (M dimension)
-  const int col = blockIdx.y * blockDim.x + threadIdx.x;  // output col (N dimension)
+  const int row = blockIdx.x; // output row (M dimension)
+  const int col =
+      blockIdx.y * blockDim.x + threadIdx.x; // output col (N dimension)
 
   if (row >= M || col >= N)
     return;
@@ -69,7 +71,8 @@ __global__ void qmv_kernel(
 
   for (int g = 0; g < num_groups; ++g) {
     float scale = static_cast<float>(scales[col * num_groups + g]);
-    float bias = HAS_BIAS ? static_cast<float>(biases[col * num_groups + g]) : 0.0f;
+    float bias =
+        HAS_BIAS ? static_cast<float>(biases[col * num_groups + g]) : 0.0f;
 
     int k_start = g * GROUP_SIZE;
     int k_end = min(k_start + GROUP_SIZE, K);
@@ -92,23 +95,26 @@ __global__ void qmv_kernel(
   out[row * N + col] = static_cast<T>(acc);
 }
 
-// Transposed quantized matrix-vector multiply kernel
-// Performs: out = x @ dequantize(w, scales, biases).T
+// Non-transposed quantized matrix-vector multiply kernel
+// Performs: out = x @ dequantize(w, scales, biases)
+// where w is stored as [K/pack_factor, N] (K along first dimension)
+// scales/biases are stored as [K/GROUP_SIZE, N]
 template <typename T, int BITS, int GROUP_SIZE, bool HAS_BIAS>
-__global__ void qmv_t_kernel(
-    const T* __restrict__ x,           // [M, K]
-    const uint8_t* __restrict__ w,     // [N, K/pack_factor] packed
-    const T* __restrict__ scales,      // [N, K/GROUP_SIZE]
-    const T* __restrict__ biases,      // [N, K/GROUP_SIZE] or nullptr
-    T* __restrict__ out,               // [M, N]
+__global__ void qmv_n_kernel(
+    const T* __restrict__ x, // [M, K]
+    const uint8_t* __restrict__ w, // [K/pack_factor, N] packed
+    const T* __restrict__ scales, // [K/GROUP_SIZE, N]
+    const T* __restrict__ biases, // [K/GROUP_SIZE, N] or nullptr
+    T* __restrict__ out, // [M, N]
     int M,
     int N,
     int K) {
   constexpr int pack_factor = get_pack_factor<BITS, 8>();
   constexpr uint8_t mask = (1 << BITS) - 1;
 
-  const int row = blockIdx.x;  // output row (M dimension)
-  const int col = blockIdx.y * blockDim.x + threadIdx.x;  // output col (N dimension)
+  const int row = blockIdx.x; // output row (M dimension)
+  const int col =
+      blockIdx.y * blockDim.x + threadIdx.x; // output col (N dimension)
 
   if (row >= M || col >= N)
     return;
@@ -119,18 +125,18 @@ __global__ void qmv_t_kernel(
   int packed_K = (K + pack_factor - 1) / pack_factor;
 
   for (int g = 0; g < num_groups; ++g) {
-    float scale = static_cast<float>(scales[col * num_groups + g]);
-    float bias = HAS_BIAS ? static_cast<float>(biases[col * num_groups + g]) : 0.0f;
+    // For non-transposed, scales/biases are [K/GROUP_SIZE, N]
+    float scale = static_cast<float>(scales[g * N + col]);
+    float bias = HAS_BIAS ? static_cast<float>(biases[g * N + col]) : 0.0f;
 
     int k_start = g * GROUP_SIZE;
     int k_end = min(k_start + GROUP_SIZE, K);
 
     for (int k = k_start; k < k_end; ++k) {
-      // Get packed weight - same access pattern as non-transposed
-      // since weights are stored as [N, K/pack_factor]
+      // For non-transposed, weights are stored as [K/pack_factor, N]
       int pack_idx = k / pack_factor;
       int bit_offset = (k % pack_factor) * BITS;
-      uint8_t packed = w[col * packed_K + pack_idx];
+      uint8_t packed = w[pack_idx * N + col];
       uint8_t quant_val = (packed >> bit_offset) & mask;
 
       // Dequantize
@@ -145,6 +151,32 @@ __global__ void qmv_t_kernel(
 }
 
 } // namespace cu
+
+namespace {
+
+// Local dispatch for power-of-2 bits only (2, 4, 8)
+// Non-power-of-2 bits (3, 5, 6) require multi-byte unpacking which is not yet
+// implemented
+template <typename F>
+void dispatch_qmm_bits(int bits, F&& f) {
+  switch (bits) {
+    case 2:
+      f(std::integral_constant<int, 2>{});
+      break;
+    case 4:
+      f(std::integral_constant<int, 4>{});
+      break;
+    case 8:
+      f(std::integral_constant<int, 8>{});
+      break;
+    default:
+      throw std::runtime_error(
+          "[QuantizedMatmul::eval_gpu] bits must be 2, 4, or 8 (got " +
+          std::to_string(bits) + ")");
+  }
+}
+
+} // namespace
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
@@ -184,7 +216,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   dispatch_float_types(x.dtype(), "QuantizedMatmul", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_groups(group_size_, [&](auto group_size) {
-      dispatch_bits(bits_, [&](auto bits) {
+      dispatch_qmm_bits(bits_, [&](auto bits) {
         constexpr int GROUP_SIZE = group_size.value;
         constexpr int BITS = bits.value;
 
@@ -205,7 +237,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                 N,
                 K);
           } else {
-            auto kernel = cu::qmv_kernel<T, BITS, GROUP_SIZE, true>;
+            auto kernel = cu::qmv_n_kernel<T, BITS, GROUP_SIZE, true>;
             enc.add_kernel_node(
                 kernel,
                 grid,
@@ -237,7 +269,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                 N,
                 K);
           } else {
-            auto kernel = cu::qmv_kernel<T, BITS, GROUP_SIZE, false>;
+            auto kernel = cu::qmv_n_kernel<T, BITS, GROUP_SIZE, false>;
             enc.add_kernel_node(
                 kernel,
                 grid,
