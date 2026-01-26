@@ -207,6 +207,19 @@ elem_to_loc(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
   return loc;
 }
 
+// Elem to loc conversion with compile-time ndim
+template <int NDIM, typename IdxT = int64_t>
+__device__ IdxT
+elem_to_loc_nd(IdxT elem, const int32_t* shape, const int64_t* strides) {
+  IdxT loc = 0;
+#pragma unroll
+  for (int i = NDIM - 1; i >= 0; --i) {
+    loc += (elem % shape[i]) * strides[i];
+    elem /= shape[i];
+  }
+  return loc;
+}
+
 // Get the thread index in the block
 __device__ inline int thread_index() {
   return threadIdx.x + threadIdx.y * blockDim.x +
