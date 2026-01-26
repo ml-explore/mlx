@@ -721,7 +721,7 @@ array scaled_dot_product_attention(
           int kL = k.shape(-2);
           int qL = q.shape(-2);
           int offset = kL - qL;
-          auto q_idx = add(arange(0, qL, s), array(offset, int32), s);
+          auto q_idx = arange(offset, qL + offset, s);
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);
