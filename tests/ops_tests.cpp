@@ -3094,7 +3094,8 @@ TEST_CASE("test quantize dequantize") {
 }
 
 TEST_CASE("test quantized matmul") {
-  // Use explicit random keys for reproducibility without mutating global RNG state
+  // Use explicit random keys for reproducibility without mutating global RNG
+  // state
   auto key = random::key(42);
   auto [key1, k1] = random::split(key);
   auto [key2, k2] = random::split(key1);

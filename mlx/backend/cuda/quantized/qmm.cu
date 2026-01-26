@@ -145,8 +145,9 @@ __global__ void qmv_n_kernel(
   for (int k = 0; k < K; ++k) {
     // scales/biases are [K, N/GROUP_SIZE], indexed by [k, n_group]
     float scale = static_cast<float>(scales[k * num_n_groups + n_group]);
-    float bias =
-        HAS_BIAS ? static_cast<float>(biases[k * num_n_groups + n_group]) : 0.0f;
+    float bias = HAS_BIAS
+        ? static_cast<float>(biases[k * num_n_groups + n_group])
+        : 0.0f;
 
     // w is [K, N_packed], packed along N
     int pack_idx = col / pack_factor;
@@ -246,7 +247,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Extract the matmul shapes
   // Flatten all leading dimensions of x into the row dimension M.
-  // This matches the kernel's assumption that x is laid out as a single [M, K] matrix.
+  // This matches the kernel's assumption that x is laid out as a single [M, K]
+  // matrix.
   int K = x.shape(-1);
   int M = x.size() / K;
   int N = out.shape(-1);
