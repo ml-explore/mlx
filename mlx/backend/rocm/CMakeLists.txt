@@ -191,16 +191,20 @@ endif()
 find_library(AMDHIP64_LIB amdhip64 PATHS ${ROCM_PATH}/lib /opt/rocm/lib
                                          /opt/rocm-6.0.0/lib)
 
+# Find hiprtc library (needed for JIT compilation)
+find_library(HIPRTC_LIB hiprtc PATHS ${ROCM_PATH}/lib /opt/rocm/lib
+                                     /opt/rocm-6.0.0/lib)
+
 message(
   STATUS
-    "ROCm libraries: rocblas=${ROCBLAS_LIB}, hiprand=${HIPRAND_LIB}, amdhip64=${AMDHIP64_LIB}"
+    "ROCm libraries: rocblas=${ROCBLAS_LIB}, hiprand=${HIPRAND_LIB}, amdhip64=${AMDHIP64_LIB}, hiprtc=${HIPRTC_LIB}"
 )
 
 # Link the static library and ROCm libraries to mlx We link directly to the .so
 # files instead of using CMake targets to avoid propagating compile options like
 # -x hip
 target_link_libraries(mlx PRIVATE ${HIP_STATIC_LIB} ${AMDHIP64_LIB}
-                                  ${ROCBLAS_LIB} ${HIPRAND_LIB})
+                                  ${ROCBLAS_LIB} ${HIPRAND_LIB} ${HIPRTC_LIB})
 
 # Include ROCm headers for mlx C++ files Get the HIP include directory from the
 # hip package
