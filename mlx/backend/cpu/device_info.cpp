@@ -4,34 +4,99 @@
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
+#include <sys/utsname.h>
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <sys/utsname.h>
+#include <cstdio>
+#include <cstring>
 #endif
 
 namespace mlx::core::cpu {
 
 namespace {
 
-// Get CPU architecture string
+// Get CPU architecture string at runtime
 std::string get_cpu_architecture() {
-#if defined(__aarch64__) || defined(__arm64__)
-  return "arm64";
-#elif defined(__x86_64__) || defined(_M_X64)
-  return "x86_64";
-#elif defined(__i386__) || defined(__i386) || defined(_M_IX86)
-  return "x86";
-#elif defined(__arm__) || defined(_M_ARM)
-  return "arm";
+#ifdef _WIN32
+  // Use GetNativeSystemInfo to get the actual hardware architecture,
+  // even when running under WoW64 emulation
+  SYSTEM_INFO sysInfo;
+  GetNativeSystemInfo(&sysInfo);
+  switch (sysInfo.wProcessorArchitecture) {
+    case PROCESSOR_ARCHITECTURE_AMD64:
+      return "x86_64";
+    case PROCESSOR_ARCHITECTURE_ARM64:
+      return "arm64";
+    case PROCESSOR_ARCHITECTURE_INTEL:
+      return "x86";
+    case PROCESSOR_ARCHITECTURE_ARM:
+      return "arm";
+    default:
+      return "unknown";
+  }
 #else
+  // Use uname() for runtime detection on Unix-like systems.
+  // This returns the actual hardware architecture (e.g., "arm64" on Apple
+  // Silicon even when running x86_64 binaries via Rosetta 2)
+  struct utsname info;
+  if (uname(&info) == 0) {
+    return std::string(info.machine);
+  }
   return "unknown";
 #endif
 }
 
-// Get CPU device name
+// Get CPU device name (brand string)
 std::string get_cpu_name() {
 #ifdef __APPLE__
   char model[256];
   size_t len = sizeof(model);
   if (sysctlbyname("machdep.cpu.brand_string", &model, &len, NULL, 0) == 0) {
     return std::string(model);
+  }
+#elif defined(_WIN32)
+  // Read CPU brand string from registry
+  HKEY hKey;
+  if (RegOpenKeyExA(
+          HKEY_LOCAL_MACHINE,
+          "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+          0,
+          KEY_READ,
+          &hKey) == ERROR_SUCCESS) {
+    char brand[256];
+    DWORD size = sizeof(brand);
+    if (RegQueryValueExA(
+            hKey, "ProcessorNameString", NULL, NULL, (LPBYTE)brand, &size) ==
+        ERROR_SUCCESS) {
+      RegCloseKey(hKey);
+      return std::string(brand);
+    }
+    RegCloseKey(hKey);
+  }
+#else
+  // Try reading from /proc/cpuinfo on Linux
+  FILE* fp = fopen("/proc/cpuinfo", "r");
+  if (fp) {
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+      if (strncmp(line, "model name", 10) == 0) {
+        char* colon = strchr(line, ':');
+        if (colon) {
+          // Skip ": " and trim newline
+          char* name = colon + 2;
+          char* newline = strchr(name, '\n');
+          if (newline)
+            *newline = '\0';
+          fclose(fp);
+          return std::string(name);
+        }
+      }
+    }
+    fclose(fp);
   }
 #endif
   return get_cpu_architecture();
