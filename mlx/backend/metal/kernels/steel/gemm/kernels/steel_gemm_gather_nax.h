@@ -106,7 +106,14 @@ gather_mm_rhs_nax(
               UK,
               AccumType>;
           Ctile = do_gemm(
-              A, B + index * params->batch_stride_b, params, sgp_sm, sgp_sn);
+              A,
+              B + index * params->batch_stride_b,
+              params->lda,
+              params->ldb,
+              params->K,
+              params->gemm_k_iterations_aligned,
+              sgp_sm,
+              sgp_sn);
 
           if constexpr (kAlignedN.value) {
             if (offset_next - offset == SM) {
