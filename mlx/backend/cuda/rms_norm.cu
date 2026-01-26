@@ -281,6 +281,285 @@ bool RMSNorm::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+// Helper template functions to work around MSVC template function pointer
+// issues. BLOCK_DIM = n_groups * GROUP_DIM
+template <typename DataType, int BLOCK_DIM, int GROUP_DIM, int N_READS>
+void launch_rms_norm_small_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    array& out,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride,
+    int groups_per_block) {
+  auto kernel = &cu::rms_norm_small<DataType, BLOCK_DIM, GROUP_DIM, N_READS>;
+  auto n_blocks = (n_rows + groups_per_block - 1) / groups_per_block;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  float eps_val = eps;
+  uint32_t axis_size_val = axis_size;
+  uint32_t n_rows_val = n_rows;
+  int64_t w_stride_val = w_stride;
+  void* params[] = {
+      &x_ptr,
+      &w_ptr,
+      &out_ptr,
+      &eps_val,
+      &axis_size_val,
+      &n_rows_val,
+      &w_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel),
+      n_blocks,
+      dim3{
+          static_cast<unsigned>(BLOCK_DIM),
+          static_cast<unsigned>(groups_per_block)},
+      0,
+      params);
+}
+
+template <typename DataType, int N_READS>
+void dispatch_rms_norm_small(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    array& out,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  // dispatch_group_dim pattern: (group_dim, n_groups, groups_per_block)
+  // block_dim = n_groups * group_dim
+  if (axis_size <= N_READS * 8) {
+    // (8, 1, 16) -> block_dim=8, group_dim=8
+    launch_rms_norm_small_kernel<DataType, 8, 8, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 16);
+  } else if (axis_size <= N_READS * 16) {
+    // (16, 1, 8) -> block_dim=16, group_dim=16
+    launch_rms_norm_small_kernel<DataType, 16, 16, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 8);
+  } else if (axis_size <= N_READS * 32) {
+    // (32, 1, 4) -> block_dim=32, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 32, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 4);
+  } else if (axis_size <= N_READS * 32 * 2) {
+    // (32, 2, 2) -> block_dim=64, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 64, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 2);
+  } else if (axis_size <= N_READS * 32 * 4) {
+    // (32, 4, 1) -> block_dim=128, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 128, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 1);
+  } else if (axis_size <= N_READS * 32 * 8) {
+    // (32, 8, 1) -> block_dim=256, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 256, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 1);
+  } else if (axis_size <= N_READS * 32 * 16) {
+    // (32, 16, 1) -> block_dim=512, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 512, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 1);
+  } else {
+    // (32, 32, 1) -> block_dim=1024, group_dim=32
+    launch_rms_norm_small_kernel<DataType, 1024, 32, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride, 1);
+  }
+}
+
+template <typename DataType, int N_READS>
+void launch_rms_norm_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    array& out,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  auto kernel = cu::rms_norm<DataType, 1024, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  float eps_val = eps;
+  uint32_t axis_size_val = axis_size;
+  int64_t w_stride_val = w_stride;
+  void* params[] = {
+      &x_ptr, &w_ptr, &out_ptr, &eps_val, &axis_size_val, &w_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, 1024, 0, params);
+}
+
+template <typename DataType>
+void dispatch_rms_norm(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    array& out,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  if (axis_size <= N_READS * 1024) {
+    dispatch_rms_norm_small<DataType, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride);
+  } else {
+    launch_rms_norm_kernel<DataType, N_READS>(
+        encoder, x, w, out, eps, axis_size, n_rows, w_stride);
+  }
+}
+
+template <
+    typename DataType,
+    bool HAS_W,
+    int BLOCK_DIM,
+    int GROUP_DIM,
+    int N_READS>
+void launch_rms_norm_vjp_small_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride,
+    int groups_per_block) {
+  auto kernel =
+      cu::rms_norm_vjp_small<DataType, HAS_W, BLOCK_DIM, GROUP_DIM, N_READS>;
+  auto n_blocks = (n_rows + groups_per_block - 1) / groups_per_block;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  const DataType* g_ptr = gpu_ptr<DataType>(g);
+  DataType* gx_ptr = gpu_ptr<DataType>(gx);
+  DataType* gw_ptr = gpu_ptr<DataType>(gw_temp);
+  float eps_val = eps;
+  int32_t axis_size_val = axis_size;
+  int32_t n_rows_val = n_rows;
+  int64_t w_stride_val = w_stride;
+  void* params[] = {
+      &x_ptr,
+      &w_ptr,
+      &g_ptr,
+      &gx_ptr,
+      &gw_ptr,
+      &eps_val,
+      &axis_size_val,
+      &n_rows_val,
+      &w_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel),
+      n_blocks,
+      dim3{
+          static_cast<unsigned>(BLOCK_DIM),
+          static_cast<unsigned>(groups_per_block)},
+      0,
+      params);
+}
+
+template <typename DataType, bool HAS_W, int N_READS>
+void dispatch_rms_norm_vjp_small(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  if (axis_size <= N_READS * 8) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 8, 8, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 16);
+  } else if (axis_size <= N_READS * 16) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 16, 16, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 8);
+  } else if (axis_size <= N_READS * 32) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 32, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 4);
+  } else if (axis_size <= N_READS * 32 * 2) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 64, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 2);
+  } else if (axis_size <= N_READS * 32 * 4) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 128, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 1);
+  } else if (axis_size <= N_READS * 32 * 8) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 256, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 1);
+  } else if (axis_size <= N_READS * 32 * 16) {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 512, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 1);
+  } else {
+    launch_rms_norm_vjp_small_kernel<DataType, HAS_W, 1024, 32, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride, 1);
+  }
+}
+
+template <typename DataType, bool HAS_W, int N_READS>
+void launch_rms_norm_vjp_kernel(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  auto kernel = cu::rms_norm_vjp<DataType, HAS_W, 1024, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const DataType* x_ptr = gpu_ptr<DataType>(x);
+  const DataType* w_ptr = gpu_ptr<DataType>(w);
+  const DataType* g_ptr = gpu_ptr<DataType>(g);
+  DataType* gx_ptr = gpu_ptr<DataType>(gx);
+  DataType* gw_ptr = gpu_ptr<DataType>(gw_temp);
+  float eps_val = eps;
+  int32_t axis_size_val = axis_size;
+  int64_t w_stride_val = w_stride;
+  void* params[] = {
+      &x_ptr,
+      &w_ptr,
+      &g_ptr,
+      &gx_ptr,
+      &gw_ptr,
+      &eps_val,
+      &axis_size_val,
+      &w_stride_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, 1024, 0, params);
+}
+
+template <typename DataType, bool HAS_W>
+void dispatch_rms_norm_vjp(
+    cu::CommandEncoder& encoder,
+    const array& x,
+    const array& w,
+    const array& g,
+    array& gx,
+    array& gw_temp,
+    float eps,
+    int32_t axis_size,
+    int32_t n_rows,
+    int64_t w_stride) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  if (axis_size <= N_READS * 1024) {
+    dispatch_rms_norm_vjp_small<DataType, HAS_W, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride);
+  } else {
+    launch_rms_norm_vjp_kernel<DataType, HAS_W, N_READS>(
+        encoder, x, w, g, gx, gw_temp, eps, axis_size, n_rows, w_stride);
+  }
+}
+
 template <int n_per_thread, typename F>
 void dispatch_group_dim(int axis_size, F&& f) {
   if (axis_size <= n_per_thread * 8) {
@@ -364,42 +643,8 @@ void RMSNorm::eval_gpu(
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "rms_norm", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    constexpr int N_READS = 16 / sizeof(DataType);
-    if (axis_size <= N_READS * 1024) {
-      dispatch_group_dim<N_READS>(
-          axis_size, [&](auto group_dim, auto n_groups, auto groups_per_block) {
-            constexpr int block_dim = n_groups() * group_dim();
-            auto kernel =
-                cu::rms_norm_small<DataType, block_dim, group_dim(), N_READS>;
-            auto n_blocks =
-                (n_rows + groups_per_block() - 1) / groups_per_block();
-            encoder.add_kernel_node(
-                kernel,
-                n_blocks,
-                {block_dim, groups_per_block()},
-                0,
-                gpu_ptr<DataType>(x),
-                gpu_ptr<DataType>(w),
-                gpu_ptr<DataType>(out),
-                eps_,
-                axis_size,
-                n_rows,
-                w_stride);
-          });
-    } else {
-      auto kernel = cu::rms_norm<DataType, 1024, N_READS>;
-      encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          1024,
-          0,
-          gpu_ptr<DataType>(x),
-          gpu_ptr<DataType>(w),
-          gpu_ptr<DataType>(out),
-          eps_,
-          axis_size,
-          w_stride);
-    }
+    dispatch_rms_norm<DataType>(
+        encoder, x, w, out, eps_, axis_size, n_rows, w_stride);
   });
 }
 
@@ -473,54 +718,10 @@ void RMSNormVJP::eval_gpu(
   encoder.set_output_array(gx);
   encoder.set_output_array(gw_temp);
   dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_bool(has_w, [&](auto has_w_constant) {
-      using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-      constexpr int N_READS = 16 / sizeof(DataType);
-      if (axis_size <= N_READS * 1024) {
-        dispatch_group_dim<N_READS>(
-            axis_size,
-            [&](auto group_dim, auto n_groups, auto groups_per_block) {
-              constexpr int block_dim = group_dim() * n_groups();
-              auto kernel = cu::rms_norm_vjp_small<
-                  DataType,
-                  has_w_constant.value,
-                  block_dim,
-                  group_dim(),
-                  N_READS>;
-              auto n_blocks =
-                  (n_rows + groups_per_block() - 1) / groups_per_block();
-              encoder.add_kernel_node(
-                  kernel,
-                  n_blocks,
-                  {block_dim, groups_per_block()},
-                  0,
-                  gpu_ptr<DataType>(x),
-                  gpu_ptr<DataType>(w),
-                  gpu_ptr<DataType>(g),
-                  gpu_ptr<DataType>(gx),
-                  gpu_ptr<DataType>(gw_temp),
-                  eps_,
-                  axis_size,
-                  n_rows,
-                  w_stride);
-            });
-      } else {
-        auto kernel =
-            cu::rms_norm_vjp<DataType, has_w_constant.value, 1024, N_READS>;
-        encoder.add_kernel_node(
-            kernel,
-            n_rows,
-            1024,
-            0,
-            gpu_ptr<DataType>(x),
-            gpu_ptr<DataType>(w),
-            gpu_ptr<DataType>(g),
-            gpu_ptr<DataType>(gx),
-            gpu_ptr<DataType>(gw_temp),
-            eps_,
-            axis_size,
-            w_stride);
-      }
+      dispatch_rms_norm_vjp<DataType, has_w_constant.value>(
+          encoder, x, w, g, gx, gw_temp, eps_, axis_size, n_rows, w_stride);
     });
   });
 

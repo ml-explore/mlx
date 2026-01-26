@@ -521,3 +521,604 @@ TEST_CASE("test memory info") {
   clear_cache();
   CHECK_EQ(get_cache_memory(), 0);
 }
+
+TEST_CASE("test gpu slice update with non-contiguous source") {
+  // This test reproduces a bug where slice_update fails on CUDA when
+  // the source array is non-contiguous (e.g., after transpose).
+  // The bug manifests as "invalid resource handle" error on CUDA.
+
+  // First test: contiguous source should work
+  {
+    auto source = ones({8, 2}, bfloat16);
+    eval(source);
+    synchronize();
+
+    auto cache = zeros({8, 10}, bfloat16);
+    eval(cache);
+    synchronize();
+
+    auto updated = slice_update(
+        cache,
+        source,
+        {0, 0}, // start
+        {8, 2}, // stop
+        {1, 1} // stride
+    );
+    eval(updated);
+    synchronize();
+
+    CHECK_EQ(updated.shape(), Shape({8, 10}));
+  }
+
+  // Second test: transposed source (different stride pattern)
+  {
+    // Create source tensor: shape (2, 8)
+    auto source = ones({2, 8}, bfloat16);
+    eval(source);
+    synchronize();
+
+    // Transpose swaps the dimensions and strides
+    auto transposed = transpose(source, {1, 0});
+    eval(transposed);
+    synchronize();
+
+    // Create buffer: shape (8, 10)
+    auto cache = zeros({8, 10}, bfloat16);
+    eval(cache);
+    synchronize();
+
+    // Slice update with non-contiguous source
+    auto updated = slice_update(
+        cache,
+        transposed,
+        {0, 0}, // start
+        {8, 2}, // stop
+        {1, 1} // stride
+    );
+    eval(updated);
+    synchronize();
+
+    // Verify the shape is correct
+    CHECK_EQ(updated.shape(), Shape({8, 10}));
+  }
+
+  // Test with float16 and ndim=4 (collapses to ndim=3)
+  {
+    auto source = ones({1, 2, 8, 128}, float16);
+    auto transposed = transpose(source, {0, 2, 1, 3});
+    eval(transposed);
+
+    auto cache = zeros({1, 8, 256, 128}, float16);
+    eval(cache);
+
+    auto updated = slice_update(
+        cache, transposed, {0, 0, 0, 0}, {1, 8, 2, 128}, {1, 1, 1, 1});
+    eval(updated);
+
+    CHECK_EQ(updated.shape(), Shape({1, 8, 256, 128}));
+  }
+
+  // Test with bfloat16 and ndim=4
+  {
+    auto source = ones({1, 2, 8, 128}, bfloat16);
+    auto transposed = transpose(source, {0, 2, 1, 3});
+    eval(transposed);
+
+    auto cache = zeros({1, 8, 256, 128}, bfloat16);
+    eval(cache);
+
+    auto updated = slice_update(
+        cache, transposed, {0, 0, 0, 0}, {1, 8, 2, 128}, {1, 1, 1, 1});
+    eval(updated);
+
+    CHECK_EQ(updated.shape(), Shape({1, 8, 256, 128}));
+  }
+
+  // Test that float32 works
+  {
+    auto source = ones({1, 2, 8, 128}, float32);
+    auto transposed = transpose(source, {0, 2, 1, 3});
+    eval(transposed);
+
+    auto cache = zeros({1, 8, 256, 128}, float32);
+    eval(cache);
+
+    auto updated = slice_update(
+        cache, transposed, {0, 0, 0, 0}, {1, 8, 2, 128}, {1, 1, 1, 1});
+    eval(updated);
+
+    CHECK_EQ(updated.shape(), Shape({1, 8, 256, 128}));
+  }
+}
+
+// Comprehensive type conversion tests for all dtype pairs
+// This tests the CUDA copy kernels for astype operations
+TEST_CASE("test gpu astype comprehensive") {
+  // All dtypes to test (excluding complex64 which has different rules)
+  const std::array<Dtype, 12> all_types = {
+      bool_,
+      uint8,
+      uint16,
+      uint32,
+      uint64,
+      int8,
+      int16,
+      int32,
+      int64,
+      float16,
+      float32,
+      bfloat16};
+
+  // Test all type pairs
+  for (auto from_type : all_types) {
+    // Create source array with appropriate values
+    array src = [&]() -> array {
+      if (from_type == bool_) {
+        return array({true, false, true, false});
+      } else {
+        return astype(array({1, 0, 2, 3}), from_type);
+      }
+    }();
+    eval(src);
+
+    for (auto to_type : all_types) {
+      try {
+        // Test GPU astype
+        auto out_gpu = astype(src, to_type, Device::gpu);
+        auto out_cpu = astype(src, to_type, Device::cpu);
+        eval(out_gpu);
+        eval(out_cpu);
+
+        CHECK_MESSAGE(
+            array_equal(out_gpu, out_cpu, Device::cpu).item<bool>(),
+            "astype from " << from_type << " to " << to_type << " failed");
+      } catch (const std::exception& e) {
+        MESSAGE(
+            "Exception converting from " << from_type << " to " << to_type
+                                         << ": " << e.what());
+        CHECK_MESSAGE(
+            false,
+            "astype from " << from_type << " to " << to_type << " threw");
+      }
+    }
+  }
+}
+
+// Test bool to/from all integer types specifically
+// These were problematic on Windows CUDA
+TEST_CASE("test gpu astype bool conversions") {
+  const std::array<Dtype, 8> int_types = {
+      uint8, uint16, uint32, uint64, int8, int16, int32, int64};
+
+  // Test bool -> integer types
+  {
+    array bool_arr = array({true, false, true, true, false});
+    eval(bool_arr);
+
+    for (auto int_type : int_types) {
+      auto out_gpu = astype(bool_arr, int_type, Device::gpu);
+      auto out_cpu = astype(bool_arr, int_type, Device::cpu);
+      eval(out_gpu);
+      eval(out_cpu);
+
+      CHECK_MESSAGE(
+          array_equal(out_gpu, out_cpu, Device::cpu).item<bool>(),
+          "bool -> " << int_type << " failed");
+
+      // Also verify values are correct (1 for true, 0 for false)
+      auto expected = array({1, 0, 1, 1, 0}, int_type);
+      CHECK_MESSAGE(
+          array_equal(out_gpu, expected, Device::cpu).item<bool>(),
+          "bool -> " << int_type << " values incorrect");
+    }
+  }
+
+  // Test integer types -> bool
+  {
+    for (auto int_type : int_types) {
+      array int_arr = astype(array({0, 1, 2, 0, 255}), int_type);
+      eval(int_arr);
+
+      auto out_gpu = astype(int_arr, bool_, Device::gpu);
+      auto out_cpu = astype(int_arr, bool_, Device::cpu);
+      eval(out_gpu);
+      eval(out_cpu);
+
+      CHECK_MESSAGE(
+          array_equal(out_gpu, out_cpu, Device::cpu).item<bool>(),
+          int_type << " -> bool failed");
+
+      // Verify: 0 -> false, non-zero -> true
+      auto expected = array({false, true, true, false, true});
+      CHECK_MESSAGE(
+          array_equal(out_gpu, expected, Device::cpu).item<bool>(),
+          int_type << " -> bool values incorrect");
+    }
+  }
+
+  // Test bool -> float16/bfloat16
+  {
+    array bool_arr = array({true, false, true});
+    eval(bool_arr);
+
+    auto out_f16_gpu = astype(bool_arr, float16, Device::gpu);
+    auto out_f16_cpu = astype(bool_arr, float16, Device::cpu);
+    auto out_bf16_gpu = astype(bool_arr, bfloat16, Device::gpu);
+    auto out_bf16_cpu = astype(bool_arr, bfloat16, Device::cpu);
+    eval(out_f16_gpu);
+    eval(out_f16_cpu);
+    eval(out_bf16_gpu);
+    eval(out_bf16_cpu);
+
+    CHECK(array_equal(out_f16_gpu, out_f16_cpu, Device::cpu).item<bool>());
+    CHECK(array_equal(out_bf16_gpu, out_bf16_cpu, Device::cpu).item<bool>());
+  }
+
+  // Test float16/bfloat16 -> bool
+  {
+    array f16_arr = array({0.0f, 1.0f, 0.5f}, float16);
+    array bf16_arr = array({0.0f, 1.0f, 0.5f}, bfloat16);
+    eval(f16_arr);
+    eval(bf16_arr);
+
+    auto out_f16_gpu = astype(f16_arr, bool_, Device::gpu);
+    auto out_f16_cpu = astype(f16_arr, bool_, Device::cpu);
+    auto out_bf16_gpu = astype(bf16_arr, bool_, Device::gpu);
+    auto out_bf16_cpu = astype(bf16_arr, bool_, Device::cpu);
+    eval(out_f16_gpu);
+    eval(out_f16_cpu);
+    eval(out_bf16_gpu);
+    eval(out_bf16_cpu);
+
+    CHECK(array_equal(out_f16_gpu, out_f16_cpu, Device::cpu).item<bool>());
+    CHECK(array_equal(out_bf16_gpu, out_bf16_cpu, Device::cpu).item<bool>());
+  }
+}
+
+// Test stack with various dtypes
+// This exercises the copy_general kernels
+TEST_CASE("test gpu stack dtypes") {
+  const std::array<Dtype, 13> all_types = {
+      bool_,
+      uint8,
+      uint16,
+      uint32,
+      uint64,
+      int8,
+      int16,
+      int32,
+      int64,
+      float16,
+      float32,
+      bfloat16,
+      complex64};
+
+  for (auto dtype : all_types) {
+    auto [x, y] = [&]() -> std::pair<array, array> {
+      if (dtype == bool_) {
+        return {array({true, false}), array({false, true})};
+      } else if (dtype == complex64) {
+        return {
+            array({complex64_t{1.0f, 0.0f}, complex64_t{2.0f, 0.0f}}),
+            array({complex64_t{3.0f, 0.0f}, complex64_t{4.0f, 0.0f}})};
+      } else {
+        return {astype(array({1, 2}), dtype), astype(array({3, 4}), dtype)};
+      }
+    }();
+    eval(x);
+    eval(y);
+
+    // Test stack on GPU
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_MESSAGE(
+        array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>(),
+        "stack failed for dtype " << dtype);
+
+    // Test stack along axis 1
+    stacked_gpu = stack({x, y}, 1, Device::gpu);
+    stacked_cpu = stack({x, y}, 1, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_MESSAGE(
+        array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>(),
+        "stack axis=1 failed for dtype " << dtype);
+  }
+}
+
+// Test concatenate with various dtypes
+TEST_CASE("test gpu concatenate dtypes") {
+  const std::array<Dtype, 9> test_types = {
+      bool_, uint8, uint16, uint32, uint64, int8, int16, int32, int64};
+
+  for (auto dtype : test_types) {
+    auto [x, y] = [&]() -> std::pair<array, array> {
+      if (dtype == bool_) {
+        return {array({true, false}), array({false, true, true})};
+      } else {
+        return {astype(array({1, 2}), dtype), astype(array({3, 4, 5}), dtype)};
+      }
+    }();
+    eval(x);
+    eval(y);
+
+    // Test concatenate on GPU
+    auto concat_gpu = concatenate({x, y}, 0, Device::gpu);
+    auto concat_cpu = concatenate({x, y}, 0, Device::cpu);
+    eval(concat_gpu);
+    eval(concat_cpu);
+
+    CHECK_MESSAGE(
+        array_equal(concat_gpu, concat_cpu, Device::cpu).item<bool>(),
+        "concatenate failed for dtype " << dtype);
+  }
+}
+
+// Test stack with mixed dtypes (type promotion)
+// This tests the implicit astype during stack
+TEST_CASE("test gpu stack mixed dtypes") {
+  // int32 + float32 -> float32
+  {
+    auto x = array({1, 2}, int32);
+    auto y = array({3.5f, 4.5f}, float32);
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), float32);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // bool + int16 -> int16
+  {
+    auto x = array({true, false});
+    auto y = array({int16_t(3), int16_t(4)});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), int16);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // bool + uint16 -> uint16
+  {
+    auto x = array({true, false});
+    auto y = array({uint16_t(3), uint16_t(4)});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), uint16);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // int64 + float16 -> float16
+  {
+    auto x = array({int64_t(1), int64_t(2)});
+    auto y = array({3.0f, 4.0f}, float16);
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), float16);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // float32 + complex64 -> complex64
+  {
+    auto x = array({1.0f, 2.0f}, float32);
+    auto y = array({complex64_t{3.0f, 0.0f}, complex64_t{4.0f, 0.0f}});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), complex64);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // int32 + complex64 -> complex64
+  {
+    auto x = array({1, 2}, int32);
+    auto y = array({complex64_t{3.0f, 0.0f}, complex64_t{4.0f, 0.0f}});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), complex64);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // bool + complex64 -> complex64
+  {
+    auto x = array({true, false});
+    auto y = array({complex64_t{3.0f, 0.0f}, complex64_t{4.0f, 0.0f}});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK_EQ(stacked_gpu.dtype(), complex64);
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+}
+
+// Test 64-bit integer operations specifically
+// These were problematic on Windows CUDA
+TEST_CASE("test gpu 64bit integers") {
+  // Test int64 stack
+  {
+    auto x = array({int64_t(1), int64_t(2)});
+    auto y = array({int64_t(3), int64_t(4)});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // Test uint64 stack
+  {
+    auto x = array({uint64_t(1), uint64_t(2)});
+    auto y = array({uint64_t(3), uint64_t(4)});
+    eval(x);
+    eval(y);
+
+    auto stacked_gpu = stack({x, y}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, y}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+
+  // Test int64 astype round-trips
+  {
+    auto x = array({int64_t(-1000000), int64_t(0), int64_t(1000000)});
+    eval(x);
+
+    // int64 -> float32 -> int64
+    auto y_gpu = astype(astype(x, float32, Device::gpu), int64, Device::gpu);
+    auto y_cpu = astype(astype(x, float32, Device::cpu), int64, Device::cpu);
+    eval(y_gpu);
+    eval(y_cpu);
+
+    CHECK(array_equal(y_gpu, y_cpu, Device::cpu).item<bool>());
+  }
+
+  // Test uint64 large values
+  {
+    auto x = array({uint64_t(0), uint64_t(1), uint64_t(1000000)});
+    eval(x);
+
+    auto stacked_gpu = stack({x, x}, 0, Device::gpu);
+    auto stacked_cpu = stack({x, x}, 0, Device::cpu);
+    eval(stacked_gpu);
+    eval(stacked_cpu);
+
+    CHECK(array_equal(stacked_gpu, stacked_cpu, Device::cpu).item<bool>());
+  }
+}
+
+// Test complex64 type conversions specifically
+// complex64 has special rules for type promotion
+TEST_CASE("test gpu astype complex64") {
+  // All dtypes that can be converted to/from complex64
+  const std::array<Dtype, 12> all_types = {
+      bool_,
+      uint8,
+      uint16,
+      uint32,
+      uint64,
+      int8,
+      int16,
+      int32,
+      int64,
+      float16,
+      float32,
+      bfloat16};
+
+  // Test X -> complex64 for all types
+  for (auto from_type : all_types) {
+    array src = [&]() -> array {
+      if (from_type == bool_) {
+        return array({true, false, true, false});
+      } else {
+        return astype(array({1, 0, 2, 3}), from_type);
+      }
+    }();
+    eval(src);
+
+    try {
+      auto out_gpu = astype(src, complex64, Device::gpu);
+      auto out_cpu = astype(src, complex64, Device::cpu);
+      eval(out_gpu);
+      eval(out_cpu);
+
+      bool eq = array_equal(out_gpu, out_cpu, Device::cpu).item<bool>();
+      if (!eq && from_type == bool_) {
+        // Debug output for bool case
+        MESSAGE(
+            "GPU output (first 4): ["
+            << out_gpu.data<complex64_t>()[0].real() << "+"
+            << out_gpu.data<complex64_t>()[0].imag() << "i, "
+            << out_gpu.data<complex64_t>()[1].real() << "+"
+            << out_gpu.data<complex64_t>()[1].imag() << "i]");
+        MESSAGE(
+            "CPU output (first 4): ["
+            << out_cpu.data<complex64_t>()[0].real() << "+"
+            << out_cpu.data<complex64_t>()[0].imag() << "i, "
+            << out_cpu.data<complex64_t>()[1].real() << "+"
+            << out_cpu.data<complex64_t>()[1].imag() << "i]");
+      }
+      CHECK_MESSAGE(eq, "astype from " << from_type << " to complex64 failed");
+    } catch (const std::exception& e) {
+      MESSAGE(
+          "Exception converting from " << from_type
+                                       << " to complex64: " << e.what());
+      CHECK_MESSAGE(
+          false, "astype from " << from_type << " to complex64 threw");
+    }
+  }
+
+  // Test complex64 -> X for all types
+  array c64_src = array(
+      {complex64_t{1.0f, 0.0f},
+       complex64_t{0.0f, 0.0f},
+       complex64_t{2.0f, 0.0f},
+       complex64_t{3.0f, 0.0f}});
+  eval(c64_src);
+
+  for (auto to_type : all_types) {
+    try {
+      auto out_gpu = astype(c64_src, to_type, Device::gpu);
+      auto out_cpu = astype(c64_src, to_type, Device::cpu);
+      eval(out_gpu);
+      eval(out_cpu);
+
+      CHECK_MESSAGE(
+          array_equal(out_gpu, out_cpu, Device::cpu).item<bool>(),
+          "astype from complex64 to " << to_type << " failed");
+    } catch (const std::exception& e) {
+      MESSAGE(
+          "Exception converting from complex64 to " << to_type << ": "
+                                                    << e.what());
+      CHECK_MESSAGE(false, "astype from complex64 to " << to_type << " threw");
+    }
+  }
+}

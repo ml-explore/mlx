@@ -40,7 +40,7 @@ add_dependencies(mlx cpu_compiled_preamble)
 
 target_sources(
   mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/available.cpp
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp

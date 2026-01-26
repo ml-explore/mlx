@@ -319,6 +319,148 @@ __global__ void strided_scan(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues. Cast to void* for MSVC compatibility - avoids template deduction
+// issues.
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int N_READS,
+    bool inclusive,
+    bool reverse>
+void launch_contiguous_scan_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int axis_size,
+    int block_dim) {
+  auto kernel = reinterpret_cast<void*>(
+      &cu::contiguous_scan<T, U, Op, N_READS, inclusive, reverse>);
+  // Store params in variables to ensure they remain valid
+  const T* in_ptr = gpu_ptr<T>(in);
+  U* out_ptr = gpu_ptr<U>(out);
+  int axis_size_val = axis_size;
+  void* params[] = {&in_ptr, &out_ptr, &axis_size_val};
+  encoder.add_kernel_node(
+      kernel,
+      static_cast<uint32_t>(in.data_size() / axis_size),
+      block_dim,
+      0,
+      params);
+}
+
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int N_READS,
+    int BM,
+    int BN,
+    bool inclusive,
+    bool reverse>
+void launch_strided_scan_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int axis_size,
+    int64_t stride,
+    int64_t stride_blocks,
+    dim3 num_blocks,
+    int block_dim) {
+  auto kernel = reinterpret_cast<void*>(
+      &cu::strided_scan<T, U, Op, N_READS, BM, BN, inclusive, reverse>);
+  // Store params in variables to ensure they remain valid
+  const T* in_ptr = gpu_ptr<T>(in);
+  U* out_ptr = gpu_ptr<U>(out);
+  int axis_size_val = axis_size;
+  int64_t stride_val = stride;
+  int64_t stride_blocks_val = stride_blocks;
+  void* params[] = {
+      &in_ptr, &out_ptr, &axis_size_val, &stride_val, &stride_blocks_val};
+  encoder.add_kernel_node(kernel, num_blocks, block_dim, 0, params);
+}
+
+// Dispatch helpers for inclusive/reverse combinations
+template <typename T, typename U, typename Op, int N_READS>
+void dispatch_contiguous_scan(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int axis_size,
+    int block_dim,
+    bool inclusive,
+    bool reverse) {
+  if (inclusive && reverse) {
+    launch_contiguous_scan_kernel<T, U, Op, N_READS, true, true>(
+        encoder, in, out, axis_size, block_dim);
+  } else if (inclusive && !reverse) {
+    launch_contiguous_scan_kernel<T, U, Op, N_READS, true, false>(
+        encoder, in, out, axis_size, block_dim);
+  } else if (!inclusive && reverse) {
+    launch_contiguous_scan_kernel<T, U, Op, N_READS, false, true>(
+        encoder, in, out, axis_size, block_dim);
+  } else {
+    launch_contiguous_scan_kernel<T, U, Op, N_READS, false, false>(
+        encoder, in, out, axis_size, block_dim);
+  }
+}
+
+template <typename T, typename U, typename Op, int N_READS, int BM, int BN>
+void dispatch_strided_scan(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int axis_size,
+    int64_t stride,
+    int64_t stride_blocks,
+    dim3 num_blocks,
+    int block_dim,
+    bool inclusive,
+    bool reverse) {
+  if (inclusive && reverse) {
+    launch_strided_scan_kernel<T, U, Op, N_READS, BM, BN, true, true>(
+        encoder,
+        in,
+        out,
+        axis_size,
+        stride,
+        stride_blocks,
+        num_blocks,
+        block_dim);
+  } else if (inclusive && !reverse) {
+    launch_strided_scan_kernel<T, U, Op, N_READS, BM, BN, true, false>(
+        encoder,
+        in,
+        out,
+        axis_size,
+        stride,
+        stride_blocks,
+        num_blocks,
+        block_dim);
+  } else if (!inclusive && reverse) {
+    launch_strided_scan_kernel<T, U, Op, N_READS, BM, BN, false, true>(
+        encoder,
+        in,
+        out,
+        axis_size,
+        stride,
+        stride_blocks,
+        num_blocks,
+        block_dim);
+  } else {
+    launch_strided_scan_kernel<T, U, Op, N_READS, BM, BN, false, false>(
+        encoder,
+        in,
+        out,
+        axis_size,
+        stride,
+        stride_blocks,
+        num_blocks,
+        block_dim);
+  }
+}
+
 template <typename F>
 void dispatch_scan_ops(Scan::ReduceType scan_op, F&& f) {
   if (scan_op == Scan::ReduceType::Max) {
@@ -397,62 +539,37 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       using Op = MLX_GET_TYPE(scan_op_tag);
       if constexpr (supports_scan_op<Op, T>()) {
         using U = typename cu::ScanResult<Op, T>::type;
-        dispatch_bool(inclusive_, [&](auto inclusive) {
-          dispatch_bool(reverse_, [&](auto reverse) {
-            if (contiguous) {
-              auto kernel = cu::contiguous_scan<
-                  T,
-                  U,
-                  Op,
-                  N_READS,
-                  inclusive.value,
-                  reverse.value>;
-              int block_dim = cuda::ceil_div(axis_size, N_READS);
-              block_dim = cuda::ceil_div(block_dim, WARP_SIZE) * WARP_SIZE;
-              block_dim = std::min(block_dim, WARP_SIZE * WARP_SIZE);
-              encoder.add_kernel_node(
-                  kernel,
-                  in.data_size() / axis_size,
-                  block_dim,
-                  0,
-                  gpu_ptr<T>(in),
-                  gpu_ptr<U>(out),
-                  axis_size);
-            } else {
-              constexpr int BM = WARP_SIZE;
-              constexpr int BN = WARP_SIZE;
-              auto kernel = cu::strided_scan<
-                  T,
-                  U,
-                  Op,
-                  N_READS,
-                  BM,
-                  BN,
-                  inclusive.value,
-                  reverse.value>;
-              int64_t stride = in.strides()[axis_];
-              int64_t stride_blocks = cuda::ceil_div(stride, BN);
-              dim3 num_blocks = get_2d_grid_dims(
-                  in.shape(), in.strides(), axis_size * stride);
-              if (num_blocks.x * stride_blocks <= UINT32_MAX) {
-                num_blocks.x *= stride_blocks;
-              } else {
-                num_blocks.y *= stride_blocks;
-              }
-              int block_dim = (BN / N_READS) * WARP_SIZE;
-              encoder.add_kernel_node(
-                  kernel,
-                  num_blocks,
-                  block_dim,
-                  0,
-                  gpu_ptr<T>(in),
-                  gpu_ptr<U>(out),
-                  axis_size,
-                  stride,
-                  stride_blocks);
-            }
-          });
-        });
+        if (contiguous) {
+          int block_dim = cuda::ceil_div(axis_size, N_READS);
+          block_dim = cuda::ceil_div(block_dim, WARP_SIZE) * WARP_SIZE;
+          block_dim = std::min(block_dim, WARP_SIZE * WARP_SIZE);
+          dispatch_contiguous_scan<T, U, Op, N_READS>(
+              encoder, in, out, axis_size, block_dim, inclusive_, reverse_);
+        } else {
+          constexpr int BM = WARP_SIZE;
+          constexpr int BN = WARP_SIZE;
+          int64_t stride = in.strides()[axis_];
+          int64_t stride_blocks = cuda::ceil_div(stride, BN);
+          dim3 num_blocks =
+              get_2d_grid_dims(in.shape(), in.strides(), axis_size * stride);
+          if (num_blocks.x * stride_blocks <= UINT32_MAX) {
+            num_blocks.x *= stride_blocks;
+          } else {
+            num_blocks.y *= stride_blocks;
+          }
+          int block_dim = (BN / N_READS) * WARP_SIZE;
+          dispatch_strided_scan<T, U, Op, N_READS, BM, BN>(
+              encoder,
+              in,
+              out,
+              axis_size,
+              stride,
+              stride_blocks,
+              num_blocks,
+              block_dim,
+              inclusive_,
+              reverse_);
+        }
       } else {
         throw std::runtime_error(fmt::format(
             "Can not do scan op {} on inputs of {} with result of {}.",

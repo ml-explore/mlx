@@ -69,12 +69,13 @@ struct NaNEqual {
     using cuda::std::isnan;
     if constexpr (is_complex_v<T>) {
       return x == y ||
-          (isnan(x.real()) && isnan(y.real()) && isnan(x.imag()) &&
-           isnan(y.imag())) ||
-          (x.real() == y.real() && isnan(x.imag()) && isnan(y.imag())) ||
-          (isnan(x.real()) && isnan(y.real()) && x.imag() == y.imag());
+          (cu::isnan(x.real()) && cu::isnan(y.real()) && cu::isnan(x.imag()) &&
+           cu::isnan(y.imag())) ||
+          (x.real() == y.real() && cu::isnan(x.imag()) &&
+           cu::isnan(y.imag())) ||
+          (cu::isnan(x.real()) && cu::isnan(y.real()) && x.imag() == y.imag());
     } else {
-      return x == y || (isnan(x) && isnan(y));
+      return x == y || (cu::isnan(x) && cu::isnan(y));
     }
   }
 };
@@ -111,8 +112,8 @@ struct LogAddExp {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if constexpr (is_complex_v<T>) {
-      if (cuda::std::isnan(x.real()) || cuda::std::isnan(x.imag()) ||
-          cuda::std::isnan(y.real()) || cuda::std::isnan(y.imag())) {
+      if (cu::isnan(x.real()) || cu::isnan(x.imag()) || cu::isnan(y.real()) ||
+          cu::isnan(y.imag())) {
         return {
             cuda::std::numeric_limits<float>::quiet_NaN(),
             cuda::std::numeric_limits<float>::quiet_NaN()};
@@ -131,7 +132,7 @@ struct LogAddExp {
         return Log1p{}(Exp{}(min - max)) + max;
       }
     } else {
-      if (cuda::std::isnan(x) || cuda::std::isnan(y)) {
+      if (cu::isnan(x) || cu::isnan(y)) {
         return cuda::std::numeric_limits<T>::quiet_NaN();
       }
       T maxval = max(x, y);
@@ -150,12 +151,12 @@ struct Maximum {
     if constexpr (cuda::std::is_integral_v<T>) {
       return max(x, y);
     } else if constexpr (is_complex_v<T>) {
-      if (cuda::std::isnan(x.real()) || cuda::std::isnan(x.imag())) {
+      if (cu::isnan(x.real()) || cu::isnan(x.imag())) {
         return x;
       }
       return x > y ? x : y;
     } else {
-      if (cuda::std::isnan(x)) {
+      if (cu::isnan(x)) {
         return x;
       }
       return x > y ? x : y;
@@ -169,12 +170,12 @@ struct Minimum {
     if constexpr (cuda::std::is_integral_v<T>) {
       return min(x, y);
     } else if constexpr (is_complex_v<T>) {
-      if (cuda::std::isnan(x.real()) || cuda::std::isnan(x.imag())) {
+      if (cu::isnan(x.real()) || cu::isnan(x.imag())) {
         return x;
       }
       return x < y ? x : y;
     } else {
-      if (cuda::std::isnan(x)) {
+      if (cu::isnan(x)) {
         return x;
       }
       return x < y ? x : y;

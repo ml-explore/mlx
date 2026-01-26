@@ -232,32 +232,47 @@ void gemv(
     dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
       if (batch_count == 1) {
         auto kernel = gemv_single<DataType, rows_per_block, n_per_thread()>;
+        // Store params in variables to ensure they remain valid
+        const DataType* mat_ptr = mat;
+        const DataType* vec_ptr = vec;
+        DataType* out_ptr = gpu_ptr<DataType>(out);
+        int rows_val = rows;
+        int cols_val = cols;
+        void* params[] = {&mat_ptr, &vec_ptr, &out_ptr, &rows_val, &cols_val};
         encoder.add_kernel_node(
-            kernel,
+            reinterpret_cast<void*>(kernel),
             num_blocks_x,
             block_dims,
             0,
-            mat,
-            vec,
-            gpu_ptr<DataType>(out),
-            rows,
-            cols);
+            params);
       } else {
         auto kernel = gemv_batched<DataType, rows_per_block, n_per_thread()>;
+        // Store params in variables to ensure they remain valid
+        const DataType* mat_ptr = mat;
+        const DataType* vec_ptr = vec;
+        DataType* out_ptr = gpu_ptr<DataType>(out);
+        int rows_val = rows;
+        int cols_val = cols;
+        auto batch_shape_param = const_param(batch_shape);
+        auto mat_strides_copy = mat_strides;
+        auto vec_strides_copy = vec_strides;
+        int batch_ndim = batch_shape.size();
+        void* params[] = {
+            &mat_ptr,
+            &vec_ptr,
+            &out_ptr,
+            &rows_val,
+            &cols_val,
+            &batch_shape_param,
+            &mat_strides_copy,
+            &vec_strides_copy,
+            &batch_ndim};
         encoder.add_kernel_node(
-            kernel,
+            reinterpret_cast<void*>(kernel),
             dim3{num_blocks_x, batch_count},
             block_dims,
             0,
-            mat,
-            vec,
-            gpu_ptr<DataType>(out),
-            rows,
-            cols,
-            const_param(batch_shape),
-            mat_strides,
-            vec_strides,
-            batch_shape.size());
+            params);
       }
     });
   });

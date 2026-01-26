@@ -17,6 +17,18 @@
 
 namespace mlx::core::cu {
 
+// Macro to wrap CUDA kernel template instantiation for MSVC compatibility.
+// MSVC cannot deduce function pointer types from overloaded template functions
+// when passed to variadic templates. This macro forces instantiation by
+// explicitly taking the address of the fully-instantiated template.
+// Usage: MLX_CUDA_KERNEL(cu::my_kernel<T, U, N>) expands to a void* pointer
+// Note: Uses variadic macro to handle commas in template arguments
+#ifdef _MSC_VER
+#define MLX_CUDA_KERNEL(...) (reinterpret_cast<void*>(&__VA_ARGS__))
+#else
+#define MLX_CUDA_KERNEL(...) (__VA_ARGS__)
+#endif
+
 class CommandEncoder {
  public:
   struct CaptureContext {
@@ -47,20 +59,35 @@ class CommandEncoder {
   void set_input_array(const array& arr);
   void set_output_array(const array& arr);
 
+  // Template for variadic kernel parameters.
+  // Accepts either void* (pre-cast kernel) or a function pointer directly.
+  // On MSVC, function pointers from nested lambdas may need helper functions
+  // to move template instantiation outside the lambda context.
   template <typename F, typename... Params>
   void add_kernel_node(
-      F* func,
+      F func,
       dim3 grid_dim,
       dim3 block_dim,
       uint32_t smem_bytes,
       Params&&... params) {
     constexpr size_t num = sizeof...(Params);
-    void* ptrs[num];
+    void* ptrs[num > 0 ? num : 1];
     size_t i = 0;
-    ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
-         std::forward<Params>(params)),
-     ...);
-    add_kernel_node((void*)func, grid_dim, block_dim, smem_bytes, ptrs);
+    // Use const_cast to handle const references - CUDA's kernel launch API
+    // takes void** but doesn't modify the parameters, so this is safe.
+    (
+        [&](auto&& p) {
+          using T = std::remove_reference_t<decltype(p)>;
+          ptrs[i++] = const_cast<void*>(static_cast<const void*>(&p));
+        }(std::forward<Params>(params)),
+        ...);
+    void* func_ptr;
+    if constexpr (std::is_same_v<F, void*>) {
+      func_ptr = func;
+    } else {
+      func_ptr = reinterpret_cast<void*>(func);
+    }
+    add_kernel_node(func_ptr, grid_dim, block_dim, smem_bytes, ptrs);
   }
 
   void add_kernel_node(
@@ -170,6 +197,7 @@ class Device {
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
+  int concurrent_managed_access_{0};
   std::string device_name_;
   cublasLtHandle_t lt_;
   cudnnHandle_t cudnn_;

@@ -2,14 +2,10 @@
 
 #include <stdexcept>
 
-#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
 
 namespace mlx::core::gpu {
-
-bool is_available() {
-  return false;
-}
 
 void new_stream(Stream) {}
 

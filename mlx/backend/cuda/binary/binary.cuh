@@ -287,37 +287,60 @@ void binary_op_gpu_inplace(
                           dims_constant(),
                           4>;
                     }
+                    // Store params in variables to ensure they remain valid
+                    const InType* a_ptr = gpu_ptr<InType>(a);
+                    const InType* b_ptr = gpu_ptr<InType>(b);
+                    OutType* out_ptr = gpu_ptr<OutType>(out);
+                    IdxT rest_val = rest;
+                    auto shape_param = const_param<dims_constant()>(shape);
+                    auto a_strides_param =
+                        const_param<dims_constant()>(a_strides);
+                    auto b_strides_param =
+                        const_param<dims_constant()>(b_strides);
+                    void* params[] = {
+                        &a_ptr,
+                        &b_ptr,
+                        &out_ptr,
+                        &rest_val,
+                        &shape_param,
+                        &a_strides_param,
+                        &b_strides_param};
                     encoder.add_kernel_node(
-                        kernel,
+                        reinterpret_cast<void*>(kernel),
                         {num_blocks_x, num_blocks_y},
                         block_dims,
                         0,
-                        gpu_ptr<InType>(a),
-                        gpu_ptr<InType>(b),
-                        gpu_ptr<OutType>(out),
-                        rest,
-                        const_param<dims_constant()>(shape),
-                        const_param<dims_constant()>(a_strides),
-                        const_param<dims_constant()>(b_strides));
+                        params);
                   });
                 } else {
                   auto kernel = cu::binary_g<Op, InType, OutType, IdxT, 1>;
                   if (work_per_thread == 4) {
                     kernel = cu::binary_g<Op, InType, OutType, IdxT, 4>;
                   }
+                  // Store params in variables to ensure they remain valid
+                  const InType* a_ptr = gpu_ptr<InType>(a);
+                  const InType* b_ptr = gpu_ptr<InType>(b);
+                  OutType* out_ptr = gpu_ptr<OutType>(out);
+                  IdxT rest_val = rest;
+                  auto shape_param = const_param(shape);
+                  auto a_strides_param = const_param(a_strides);
+                  auto b_strides_param = const_param(b_strides);
+                  int ndim_val = ndim;
+                  void* params[] = {
+                      &a_ptr,
+                      &b_ptr,
+                      &out_ptr,
+                      &rest_val,
+                      &shape_param,
+                      &a_strides_param,
+                      &b_strides_param,
+                      &ndim_val};
                   encoder.add_kernel_node(
-                      kernel,
+                      reinterpret_cast<void*>(kernel),
                       {num_blocks_x, num_blocks_y},
                       block_dims,
                       0,
-                      gpu_ptr<InType>(a),
-                      gpu_ptr<InType>(b),
-                      gpu_ptr<OutType>(out),
-                      rest,
-                      const_param(shape),
-                      const_param(a_strides),
-                      const_param(b_strides),
-                      ndim);
+                      params);
                 }
               });
         } else {
@@ -334,15 +357,18 @@ void binary_op_gpu_inplace(
             }
             auto [num_blocks, block_dims] = get_launch_args(
                 out.data_size(), out.shape(), out.strides(), large(), N_READS);
+            // Store params in variables to ensure they remain valid
+            const InType* a_ptr = gpu_ptr<InType>(a);
+            const InType* b_ptr = gpu_ptr<InType>(b);
+            OutType* out_ptr = gpu_ptr<OutType>(out);
+            IdxT size = out.data_size();
+            void* params[] = {&a_ptr, &b_ptr, &out_ptr, &size};
             encoder.add_kernel_node(
-                kernel,
+                reinterpret_cast<void*>(kernel),
                 num_blocks,
                 block_dims,
                 0,
-                gpu_ptr<InType>(a),
-                gpu_ptr<InType>(b),
-                gpu_ptr<OutType>(out),
-                out.data_size());
+                params);
           });
         }
       } else {

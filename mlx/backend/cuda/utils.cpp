@@ -91,6 +91,11 @@ void CudaGraphExec::instantiate(cudaGraph_t graph) {
 CudaStream::CudaStream(cu::Device& device) {
   device.make_current();
   CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
+  // Debug: verify stream was created successfully
+  if (handle_ == nullptr) {
+    throw std::runtime_error(
+        "CudaStream: stream handle is null after creation");
+  }
 }
 
 void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {

@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 #include <nvtx3/nvtx3.hpp>
+#include <array>
 
 namespace mlx::core {
 

@@ -116,16 +116,21 @@ array grouped_unfold_transpose_inputs_nd(
   encoder.set_output_array(unfolded);
   dispatch_float_types(in.dtype(), "unfold", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    auto kernel = cu::naive_grouped_unfold_transpose_nd<DataType, NDIM>;
+    // Store params in variables to ensure they remain valid
+    const DataType* in_ptr = gpu_ptr<DataType>(in);
+    DataType* out_ptr = gpu_ptr<DataType>(unfolded);
+    int filter_size_val = filter_size;
+    int out_pixels_val = out_pixels;
+    auto params_copy = params;
+    void* kernel_params[] = {
+        &in_ptr, &out_ptr, &filter_size_val, &out_pixels_val, &params_copy};
     encoder.add_kernel_node(
-        cu::naive_grouped_unfold_transpose_nd<DataType, NDIM>,
+        reinterpret_cast<void*>(kernel),
         num_blocks,
         block_dims,
         0,
-        gpu_ptr<DataType>(in),
-        gpu_ptr<DataType>(unfolded),
-        filter_size,
-        out_pixels,
-        params);
+        kernel_params);
   });
 
   return unfolded;

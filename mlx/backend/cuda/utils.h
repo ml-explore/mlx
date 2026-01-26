@@ -8,6 +8,10 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cuda_utils.h"
 
+#if defined(_WIN32)
+typedef unsigned int uint;
+#endif
+
 namespace mlx::core {
 
 template <typename T>
@@ -33,9 +37,13 @@ inline T* gpu_ptr(array& arr) {
 
 // For const array, keep constness in pointer unless it is untyped.
 template <typename T>
-inline std::conditional_t<std::is_same_v<T, void>, void*, const T*> gpu_ptr(
-    const array& arr) {
-  return gpu_ptr<T>(const_cast<array&>(arr));
+inline auto gpu_ptr(const array& arr)
+    -> std::conditional_t<std::is_same_v<T, void>, void*, const T*> {
+  // Split the operation to avoid MSVC ICE with complex template expressions
+  // Initialize to nullptr first to satisfy MSVC's warning
+  T* ptr = nullptr;
+  ptr = gpu_ptr<T>(const_cast<array&>(arr));
+  return ptr;
 }
 
 struct Dtype;

@@ -153,14 +153,18 @@ void unary_op_gpu_inplace(
             constexpr int N_READS = 16 / sizeof(OutType);
             auto [num_blocks, block_dims] = get_launch_args(
                 out.data_size(), out.shape(), out.strides(), large, N_READS);
+            auto kernel = cu::unary_v<Op, InType, OutType, IdxT, N_READS>;
+            // Store params in variables to ensure they remain valid
+            const InType* in_ptr = gpu_ptr<InType>(in);
+            OutType* out_ptr = gpu_ptr<OutType>(out);
+            IdxT size = out.data_size();
+            void* params[] = {&in_ptr, &out_ptr, &size};
             encoder.add_kernel_node(
-                cu::unary_v<Op, InType, OutType, IdxT, N_READS>,
+                reinterpret_cast<void*>(kernel),
                 num_blocks,
                 block_dims,
                 0,
-                gpu_ptr<InType>(in),
-                gpu_ptr<OutType>(out),
-                out.data_size());
+                params);
           } else {
             using IdxT = std::conditional_t<large(), int64_t, int32_t>;
             auto [shape, strides] = collapse_contiguous_dims(in);
@@ -177,17 +181,26 @@ void unary_op_gpu_inplace(
             auto block_dims = get_block_dims(dim0, rest, 1);
             uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
             uint32_t num_blocks_y = cuda::ceil_div(rest, block_dims.y);
+            // Store params in variables to ensure they remain valid
+            const InType* in_ptr = gpu_ptr<InType>(in);
+            OutType* out_ptr = gpu_ptr<OutType>(out);
+            IdxT rest_val = rest;
+            auto shape_param = const_param(shape);
+            auto strides_param = const_param(strides);
+            int ndim_val = ndim;
+            void* params[] = {
+                &in_ptr,
+                &out_ptr,
+                &rest_val,
+                &shape_param,
+                &strides_param,
+                &ndim_val};
             encoder.add_kernel_node(
-                kernel,
+                reinterpret_cast<void*>(kernel),
                 {num_blocks_x, num_blocks_y},
                 block_dims,
                 0,
-                gpu_ptr<InType>(in),
-                gpu_ptr<OutType>(out),
-                rest,
-                const_param(shape),
-                const_param(strides),
-                ndim);
+                params);
           }
         });
       } else {

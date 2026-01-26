@@ -229,6 +229,95 @@ __global__ void row_reduce_looped(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues.
+template <typename T, typename U, typename OP, int N_READS, int M>
+void launch_row_reduce_simple_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    dim3 grid,
+    dim3 block,
+    int size) {
+  auto kernel = cu::row_reduce_simple<T, U, OP, N_READS, M>;
+  // Store params in variables to ensure they remain valid
+  const T* indata = gpu_ptr<T>(in);
+  U* outdata = gpu_ptr<U>(out);
+  size_t n_rows = out.size();
+  int size_val = size;
+  void* params[] = {&indata, &outdata, &n_rows, &size_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
+template <typename T, typename U, typename OP, int N_READS>
+void dispatch_row_reduce_simple(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    dim3 grid,
+    dim3 block,
+    int size,
+    bool use_m2) {
+  if (use_m2) {
+    launch_row_reduce_simple_kernel<T, U, OP, N_READS, 2>(
+        encoder, in, out, grid, block, size);
+  } else {
+    launch_row_reduce_simple_kernel<T, U, OP, N_READS, 1>(
+        encoder, in, out, grid, block, size);
+  }
+}
+
+template <typename T, typename U, typename OP, int NDIM, int N_READS>
+void launch_row_reduce_looped_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    dim3 grid,
+    dim3 block,
+    const cu::RowReduceArgs& args) {
+  auto kernel = cu::row_reduce_looped<T, U, OP, NDIM, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const T* indata = gpu_ptr<T>(in);
+  U* outdata = gpu_ptr<U>(out);
+  cu::RowReduceArgs args_copy = args;
+  void* params[] = {&indata, &outdata, &args_copy};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), grid, block, 0, params);
+}
+
+template <typename T, typename U, typename OP, int N_READS>
+void dispatch_row_reduce_looped_ndim(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    dim3 grid,
+    dim3 block,
+    const cu::RowReduceArgs& args) {
+  switch (args.reduce_ndim) {
+    case 1:
+      launch_row_reduce_looped_kernel<T, U, OP, 1, N_READS>(
+          encoder, in, out, grid, block, args);
+      break;
+    case 2:
+      launch_row_reduce_looped_kernel<T, U, OP, 2, N_READS>(
+          encoder, in, out, grid, block, args);
+      break;
+    case 3:
+      launch_row_reduce_looped_kernel<T, U, OP, 3, N_READS>(
+          encoder, in, out, grid, block, args);
+      break;
+    case 4:
+      launch_row_reduce_looped_kernel<T, U, OP, 4, N_READS>(
+          encoder, in, out, grid, block, args);
+      break;
+    default:
+      launch_row_reduce_looped_kernel<T, U, OP, 5, N_READS>(
+          encoder, in, out, grid, block, args);
+      break;
+  }
+}
+
 void row_reduce_simple(
     cu::CommandEncoder& encoder,
     const array& in,
@@ -262,16 +351,14 @@ void row_reduce_simple(
       dim3 block(threads, 1, 1);
 
       // Pick the kernel
-      auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
-      if (grid.x >= 1024) {
+      bool use_m2 = grid.x >= 1024;
+      if (use_m2) {
         grid.x = (grid.x + 1) / 2;
-        kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
       }
 
-      T* indata = const_cast<T*>(gpu_ptr<T>(in));
       int size = plan.shape.back();
-      encoder.add_kernel_node(
-          kernel, grid, block, 0, indata, gpu_ptr<U>(out), out.size(), size);
+      dispatch_row_reduce_simple<T, U, OP, N_READS>(
+          encoder, in, out, grid, block, size, use_m2);
     });
   });
 }
@@ -308,14 +395,8 @@ void row_reduce_looped(
       int threads = warps * WARP_SIZE;
       dim3 block(threads, 1, 1);
 
-      // Pick the kernel
-      auto kernel = cu::row_reduce_looped<T, U, OP, 1, N_READS>;
-      dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
-        kernel = cu::row_reduce_looped<T, U, OP, reduce_ndim.value, N_READS>;
-      });
-
-      encoder.add_kernel_node(
-          kernel, grid, block, 0, gpu_ptr<T>(in), gpu_ptr<U>(out), args);
+      dispatch_row_reduce_looped_ndim<T, U, OP, N_READS>(
+          encoder, in, out, grid, block, args);
     });
   });
 }
@@ -359,3 +440,7 @@ void row_reduce(
 }
 
 } // namespace mlx::core
+
+// Note: row_reduce kernels have complex template parameters that are
+// instantiated through dispatch functions. Registration is handled differently
+// for these.

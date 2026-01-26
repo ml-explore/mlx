@@ -226,6 +226,191 @@ __global__ void affine_dequantize(
 
 } // namespace cu
 
+// Helper template functions to work around MSVC template function pointer
+// issues.
+template <typename T, int group_size, int bits>
+void launch_affine_quantize_kernel(
+    cu::CommandEncoder& enc,
+    const array& w,
+    array& wq,
+    array& scales,
+    array& biases,
+    size_t size,
+    const Shape& grid_shape,
+    bool large) {
+  auto kernel = &cu::affine_quantize<T, group_size, bits>;
+  auto [num_blocks, block_dims] =
+      get_launch_args(size, grid_shape, w.strides(), large);
+  // Store params in variables to ensure they remain valid
+  const T* w_ptr = gpu_ptr<T>(w);
+  uint8_t* wq_ptr = gpu_ptr<uint8_t>(wq);
+  T* scales_ptr = gpu_ptr<T>(scales);
+  T* biases_ptr = gpu_ptr<T>(biases);
+  size_t w_size = w.size();
+  void* params[] = {&w_ptr, &wq_ptr, &scales_ptr, &biases_ptr, &w_size};
+  enc.add_kernel_node(
+      reinterpret_cast<void*>(kernel), num_blocks, block_dims, 0, params);
+}
+
+template <typename T, int group_size>
+void dispatch_affine_quantize_bits(
+    cu::CommandEncoder& enc,
+    const array& w,
+    array& wq,
+    array& scales,
+    array& biases,
+    size_t size,
+    const Shape& grid_shape,
+    bool large,
+    int bits_) {
+  switch (bits_) {
+    case 2:
+      launch_affine_quantize_kernel<T, group_size, 2>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+    case 3:
+      launch_affine_quantize_kernel<T, group_size, 3>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+    case 4:
+      launch_affine_quantize_kernel<T, group_size, 4>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+    case 5:
+      launch_affine_quantize_kernel<T, group_size, 5>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+    case 6:
+      launch_affine_quantize_kernel<T, group_size, 6>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+    case 8:
+      launch_affine_quantize_kernel<T, group_size, 8>(
+          enc, w, wq, scales, biases, size, grid_shape, large);
+      break;
+  }
+}
+
+template <typename T>
+void dispatch_affine_quantize(
+    cu::CommandEncoder& enc,
+    const array& w,
+    array& wq,
+    array& scales,
+    array& biases,
+    size_t size,
+    const Shape& grid_shape,
+    bool large,
+    int group_size_,
+    int bits_) {
+  switch (group_size_) {
+    case 32:
+      dispatch_affine_quantize_bits<T, 32>(
+          enc, w, wq, scales, biases, size, grid_shape, large, bits_);
+      break;
+    case 64:
+      dispatch_affine_quantize_bits<T, 64>(
+          enc, w, wq, scales, biases, size, grid_shape, large, bits_);
+      break;
+    case 128:
+      dispatch_affine_quantize_bits<T, 128>(
+          enc, w, wq, scales, biases, size, grid_shape, large, bits_);
+      break;
+  }
+}
+
+template <typename T, int group_size, int bits>
+void launch_affine_dequantize_kernel(
+    cu::CommandEncoder& enc,
+    const array& wq,
+    const array& scales,
+    const array& biases,
+    array& w,
+    size_t size,
+    const Shape& grid_shape,
+    bool large) {
+  auto kernel = cu::affine_dequantize<T, group_size, bits>;
+  auto [num_blocks, block_dims] =
+      get_launch_args(size, grid_shape, w.strides(), large);
+  enc.add_kernel_node(
+      kernel,
+      num_blocks,
+      block_dims,
+      0,
+      gpu_ptr<uint8_t>(wq),
+      gpu_ptr<T>(scales),
+      gpu_ptr<T>(biases),
+      gpu_ptr<T>(w),
+      w.size());
+}
+
+template <typename T, int group_size>
+void dispatch_affine_dequantize_bits(
+    cu::CommandEncoder& enc,
+    const array& wq,
+    const array& scales,
+    const array& biases,
+    array& w,
+    size_t size,
+    const Shape& grid_shape,
+    bool large,
+    int bits_) {
+  switch (bits_) {
+    case 2:
+      launch_affine_dequantize_kernel<T, group_size, 2>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+    case 3:
+      launch_affine_dequantize_kernel<T, group_size, 3>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+    case 4:
+      launch_affine_dequantize_kernel<T, group_size, 4>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+    case 5:
+      launch_affine_dequantize_kernel<T, group_size, 5>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+    case 6:
+      launch_affine_dequantize_kernel<T, group_size, 6>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+    case 8:
+      launch_affine_dequantize_kernel<T, group_size, 8>(
+          enc, wq, scales, biases, w, size, grid_shape, large);
+      break;
+  }
+}
+
+template <typename T>
+void dispatch_affine_dequantize(
+    cu::CommandEncoder& enc,
+    const array& wq,
+    const array& scales,
+    const array& biases,
+    array& w,
+    size_t size,
+    const Shape& grid_shape,
+    bool large,
+    int group_size_,
+    int bits_) {
+  switch (group_size_) {
+    case 32:
+      dispatch_affine_dequantize_bits<T, 32>(
+          enc, wq, scales, biases, w, size, grid_shape, large, bits_);
+      break;
+    case 64:
+      dispatch_affine_dequantize_bits<T, 64>(
+          enc, wq, scales, biases, w, size, grid_shape, large, bits_);
+      break;
+    case 128:
+      dispatch_affine_dequantize_bits<T, 128>(
+          enc, wq, scales, biases, w, size, grid_shape, large, bits_);
+      break;
+  }
+}
+
 void affine_quantize(
     const array& w,
     array& wq,
@@ -249,24 +434,18 @@ void affine_quantize(
   enc.set_output_array(scales);
   enc.set_output_array(biases);
   dispatch_float_types(w.dtype(), "affine_quantize", [&](auto type_tag) {
-    dispatch_groups(group_size_, [&](auto group_size) {
-      dispatch_bits(bits_, [&](auto bits) {
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        auto kernel = cu::affine_quantize<T, group_size.value, bits.value>;
-        auto [num_blocks, block_dims] =
-            get_launch_args(size, grid_shape, w.strides(), large);
-        enc.add_kernel_node(
-            kernel,
-            num_blocks,
-            block_dims,
-            0,
-            gpu_ptr<T>(w),
-            gpu_ptr<uint8_t>(wq),
-            gpu_ptr<T>(scales),
-            gpu_ptr<T>(biases),
-            w.size());
-      });
-    });
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    dispatch_affine_quantize<T>(
+        enc,
+        w,
+        wq,
+        scales,
+        biases,
+        size,
+        grid_shape,
+        large,
+        group_size_,
+        bits_);
   });
 }
 
@@ -305,24 +484,18 @@ void affine_dequantize(
   enc.set_input_array(biases);
   enc.set_output_array(w);
   dispatch_float_types(w.dtype(), "affine_dequantize", [&](auto type_tag) {
-    dispatch_groups(group_size_, [&](auto group_size) {
-      dispatch_bits(bits_, [&](auto bits) {
-        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-        auto kernel = cu::affine_dequantize<T, group_size.value, bits.value>;
-        auto [num_blocks, block_dims] =
-            get_launch_args(size, grid_shape, w.strides(), large);
-        enc.add_kernel_node(
-            kernel,
-            num_blocks,
-            block_dims,
-            0,
-            gpu_ptr<uint8_t>(wq),
-            gpu_ptr<T>(scales),
-            gpu_ptr<T>(biases),
-            gpu_ptr<T>(w),
-            w.size());
-      });
-    });
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    dispatch_affine_dequantize<T>(
+        enc,
+        wq,
+        scales,
+        biases,
+        w,
+        size,
+        grid_shape,
+        large,
+        group_size_,
+        bits_);
   });
 }
 

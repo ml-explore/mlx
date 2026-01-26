@@ -25,7 +25,8 @@ struct CastOp<complex_t<T>, bool> {
   static constexpr bool is_castable = true;
 
   __device__ bool operator()(complex_t<T> x) {
-    return x.real() != 0 && x.imag() != 0;
+    // Match CPU behavior: complex is truthy if either real or imag is nonzero
+    return x.real() != 0 || x.imag() != 0;
   }
 };
 
@@ -34,7 +35,8 @@ struct CastOp<bool, complex_t<T>> {
   static constexpr bool is_castable = true;
 
   __device__ complex_t<T> operator()(bool x) {
-    return x ? complex_t<T>{1, 1} : complex_t<T>{0, 0};
+    // Match CPU behavior: true -> (1, 0), false -> (0, 0)
+    return x ? complex_t<T>{1, 0} : complex_t<T>{0, 0};
   }
 };
 

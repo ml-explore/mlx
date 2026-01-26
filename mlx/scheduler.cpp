@@ -1,7 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
-#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
 
 namespace mlx::core {

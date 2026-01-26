@@ -68,8 +68,8 @@ void all_reduce(
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
-  auto get_args = [](int size, int N) {
-    int threads = std::min(512, (size + N - 1) / N);
+  auto get_args = [](size_t size, int N) {
+    int threads = static_cast<int>(std::min<size_t>(512, (size + N - 1) / N));
     threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     int reductions_per_step = threads * N;
     size_t steps_needed =
@@ -116,15 +116,14 @@ void all_reduce(
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename cu::ReduceResult<OP, T>::type;
         auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+        // Store params in variables to ensure they remain valid
+        T* in_ptr = static_cast<T*>(indata);
+        U* out_ptr = gpu_ptr<U>(intermediate);
+        size_t block_step_val = block_step;
+        size_t insize_val = insize;
+        void* params[] = {&in_ptr, &out_ptr, &block_step_val, &insize_val};
         encoder.add_kernel_node(
-            kernel,
-            blocks,
-            threads,
-            0,
-            static_cast<T*>(indata),
-            gpu_ptr<U>(intermediate),
-            block_step,
-            insize);
+            reinterpret_cast<void*>(kernel), blocks, threads, 0, params);
       });
     });
 
@@ -143,17 +142,70 @@ void all_reduce(
       using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename cu::ReduceResult<OP, T>::type;
       auto kernel = cu::all_reduce<T, U, OP, N_READS>;
+      // Store params in variables to ensure they remain valid
+      T* in_ptr = static_cast<T*>(indata);
+      U* out_ptr = gpu_ptr<U>(out);
+      size_t block_step_val = block_step;
+      size_t insize_val = insize;
+      void* params[] = {&in_ptr, &out_ptr, &block_step_val, &insize_val};
       encoder.add_kernel_node(
-          kernel,
-          blocks,
-          threads,
-          0,
-          static_cast<T*>(indata),
-          gpu_ptr<U>(out),
-          block_step,
-          insize);
+          reinterpret_cast<void*>(kernel), blocks, threads, 0, params);
     });
   });
 }
 
 } // namespace mlx::core
+
+// Force instantiation of kernel templates for Windows MSVC/NVCC compatibility.
+// Global volatile pointers force the addresses to be computed at compile time,
+// which triggers NVCC's kernel registration code generation.
+#ifdef _MSC_VER
+using namespace mlx::core::cu;
+
+// And operation (used by all() reduction)
+volatile void* g_all_reduce_and =
+    reinterpret_cast<void*>(&all_reduce<bool, bool, And, 8>);
+// Or operation (used by any() reduction)
+volatile void* g_all_reduce_or =
+    reinterpret_cast<void*>(&all_reduce<bool, bool, Or, 8>);
+// Sum operations
+volatile void* g_all_reduce_sum_bool =
+    reinterpret_cast<void*>(&all_reduce<bool, int32_t, Sum, 8>);
+volatile void* g_all_reduce_sum_i32 =
+    reinterpret_cast<void*>(&all_reduce<int32_t, int32_t, Sum, 8>);
+volatile void* g_all_reduce_sum_i64 =
+    reinterpret_cast<void*>(&all_reduce<int64_t, int64_t, Sum, 8>);
+volatile void* g_all_reduce_sum_u32 =
+    reinterpret_cast<void*>(&all_reduce<uint32_t, uint32_t, Sum, 8>);
+volatile void* g_all_reduce_sum_u64 =
+    reinterpret_cast<void*>(&all_reduce<uint64_t, uint64_t, Sum, 8>);
+volatile void* g_all_reduce_sum_float =
+    reinterpret_cast<void*>(&all_reduce<float, float, Sum, 8>);
+volatile void* g_all_reduce_sum_half =
+    reinterpret_cast<void*>(&all_reduce<__half, float, Sum, 8>);
+volatile void* g_all_reduce_sum_bf16 =
+    reinterpret_cast<void*>(&all_reduce<__nv_bfloat16, float, Sum, 8>);
+// Prod operations
+volatile void* g_all_reduce_prod_i32 =
+    reinterpret_cast<void*>(&all_reduce<int32_t, int32_t, Prod, 8>);
+volatile void* g_all_reduce_prod_float =
+    reinterpret_cast<void*>(&all_reduce<float, float, Prod, 8>);
+// Max operations
+volatile void* g_all_reduce_max_i32 =
+    reinterpret_cast<void*>(&all_reduce<int32_t, int32_t, Max, 8>);
+volatile void* g_all_reduce_max_float =
+    reinterpret_cast<void*>(&all_reduce<float, float, Max, 8>);
+volatile void* g_all_reduce_max_half =
+    reinterpret_cast<void*>(&all_reduce<__half, __half, Max, 8>);
+volatile void* g_all_reduce_max_bf16 =
+    reinterpret_cast<void*>(&all_reduce<__nv_bfloat16, __nv_bfloat16, Max, 8>);
+// Min operations
+volatile void* g_all_reduce_min_i32 =
+    reinterpret_cast<void*>(&all_reduce<int32_t, int32_t, Min, 8>);
+volatile void* g_all_reduce_min_float =
+    reinterpret_cast<void*>(&all_reduce<float, float, Min, 8>);
+volatile void* g_all_reduce_min_half =
+    reinterpret_cast<void*>(&all_reduce<__half, __half, Min, 8>);
+volatile void* g_all_reduce_min_bf16 =
+    reinterpret_cast<void*>(&all_reduce<__nv_bfloat16, __nv_bfloat16, Min, 8>);
+#endif // _MSC_VER

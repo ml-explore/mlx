@@ -150,15 +150,16 @@ void copy_general_input(
         uint32_t num_blocks_y =
             cuda::ceil_div(shape[1], TILE_SIZE * work_per_thread);
         auto kernel = cu::copy_col_row<InType, OutType, work_per_thread>;
+        // Store params in variables to ensure they remain valid
+        int64_t rows = shape[0];
+        int64_t cols = shape[1];
+        void* params[] = {&in_ptr, &out_ptr, &rows, &cols};
         encoder.add_kernel_node(
-            kernel,
+            reinterpret_cast<void*>(kernel),
             {num_blocks_x, num_blocks_y},
             block_dims,
             0,
-            in_ptr,
-            out_ptr,
-            int64_t(shape[0]),
-            int64_t(shape[1]));
+            params);
         return;
       }
 
@@ -191,16 +192,18 @@ void copy_general_input(
                   kernel =
                       cu::copy_g_nd<InType, OutType, IdxT, dims_constant(), 4>;
                 }
+                // Store params in variables to ensure they remain valid
+                IdxT rest_val = rest;
+                auto shape_param = const_param<dims_constant()>(shape);
+                auto strides_param = const_param<dims_constant()>(strides_in);
+                void* params[] = {
+                    &in_ptr, &out_ptr, &rest_val, &shape_param, &strides_param};
                 encoder.add_kernel_node(
-                    kernel,
+                    reinterpret_cast<void*>(kernel),
                     {num_blocks_x, num_blocks_y},
                     block_dims,
                     0,
-                    in_ptr,
-                    out_ptr,
-                    rest,
-                    const_param<dims_constant()>(shape),
-                    const_param<dims_constant()>(strides_in));
+                    params);
               });
             } else { // ndim >= 4
               auto kernel = cu::copy_g<InType, OutType, IdxT, 1>;
@@ -209,17 +212,24 @@ void copy_general_input(
               } else if (work_per_thread == 4) {
                 kernel = cu::copy_g<InType, OutType, IdxT, 4>;
               }
+              // Store params in variables to ensure they remain valid
+              IdxT rest_val = rest;
+              auto shape_param = const_param(shape);
+              auto strides_param = const_param(strides_in);
+              int ndim_val = ndim;
+              void* params[] = {
+                  &in_ptr,
+                  &out_ptr,
+                  &rest_val,
+                  &shape_param,
+                  &strides_param,
+                  &ndim_val};
               encoder.add_kernel_node(
-                  kernel,
+                  reinterpret_cast<void*>(kernel),
                   {num_blocks_x, num_blocks_y},
                   block_dims,
                   0,
-                  in_ptr,
-                  out_ptr,
-                  rest,
-                  const_param(shape),
-                  const_param(strides_in),
-                  ndim);
+                  params);
             }
           });
     });

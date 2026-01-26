@@ -3,6 +3,8 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 
+#include <cuda_runtime.h>
+
 namespace mlx::core {
 
 dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2) {

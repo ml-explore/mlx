@@ -211,6 +211,7 @@ void swizzle_scales(
 
   auto [num_blocks, block_dims] =
       get_swizzle_launch_args(output_rows, output_cols);
+
   enc.add_kernel_node(
       cu::swizzle_scales,
       num_blocks,

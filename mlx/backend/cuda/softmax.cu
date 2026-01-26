@@ -105,6 +105,75 @@ __global__ void softmax(const T* in, T* out, int axis_size) {
 
 } // namespace cu
 
+// Helper template function to work around MSVC template function pointer
+// issues. By making DataType, BLOCK_DIM, and N_READS explicit template
+// parameters, MSVC can resolve the kernel function pointer type correctly.
+template <typename DataType, int BLOCK_DIM, int N_READS>
+void launch_softmax_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size,
+    bool precise) {
+  auto kernel = &cu::softmax<DataType, DataType, BLOCK_DIM, N_READS>;
+  if (precise) {
+    kernel = &cu::softmax<DataType, float, BLOCK_DIM, N_READS>;
+  }
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  int axis_size_val = axis_size;
+  void* params[] = {&in_ptr, &out_ptr, &axis_size_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, BLOCK_DIM, 0, params);
+}
+
+// Dispatch helper that handles BLOCK_DIM selection outside of nested lambdas.
+template <typename DataType, int N_READS>
+void dispatch_softmax_block_dim(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size,
+    bool precise) {
+  int threads = cuda::ceil_div(axis_size, N_READS);
+  if (threads <= WARP_SIZE) {
+    launch_softmax_kernel<DataType, WARP_SIZE, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  } else if (threads <= WARP_SIZE * 2) {
+    launch_softmax_kernel<DataType, WARP_SIZE * 2, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  } else if (threads <= WARP_SIZE * 4) {
+    launch_softmax_kernel<DataType, WARP_SIZE * 4, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  } else if (threads <= WARP_SIZE * 8) {
+    launch_softmax_kernel<DataType, WARP_SIZE * 8, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  } else if (threads <= WARP_SIZE * 16) {
+    launch_softmax_kernel<DataType, WARP_SIZE * 16, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  } else {
+    launch_softmax_kernel<DataType, WARP_SIZE * 32, N_READS>(
+        encoder, in, out, n_rows, axis_size, precise);
+  }
+}
+
+// Top-level dispatch that handles N_READS selection outside of lambdas.
+template <typename DataType>
+void dispatch_softmax(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size,
+    bool precise) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  dispatch_softmax_block_dim<DataType, N_READS>(
+      encoder, in, out, n_rows, axis_size, precise);
+}
+
 void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Softmax::eval_gpu");
   assert(inputs.size() == 1);
@@ -141,21 +210,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "softmax", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    constexpr int N_READS = 16 / sizeof(DataType);
-    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-      auto kernel = cu::softmax<DataType, DataType, block_dim(), N_READS>;
-      if (precise) {
-        kernel = cu::softmax<DataType, float, block_dim(), N_READS>;
-      }
-      encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          block_dim(),
-          0,
-          gpu_ptr<DataType>(in),
-          gpu_ptr<DataType>(out),
-          axis_size);
-    });
+    dispatch_softmax<DataType>(encoder, in, out, n_rows, axis_size, precise);
   });
 }
 

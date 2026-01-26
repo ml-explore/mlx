@@ -153,6 +153,14 @@ target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
 target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
 if(MLX_BUILD_CUDA)
+  # On Windows DLLs, use dynamic CUDA runtime to avoid static initialization
+  # issues. The static CUDA runtime causes kernel registration to fail because
+  # the CUDA context is not available during DLL loading, and we can't
+  # initialize it during static init without deadlocking due to loader lock.
+  if(WIN32 AND BUILD_SHARED_LIBS)
+    message(STATUS "Using dynamic CUDA runtime for Windows DLL compatibility")
+    set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
+  endif()
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   find_package(CUDNN REQUIRED)
@@ -219,6 +227,13 @@ if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
     set(MLX_BUILD_GGUF OFF)
+    # For CUDA builds, NOMINMAX must be defined globally to prevent Windows.h
+    # min/max macros from breaking CCCL headers (cuda::std::min,
+    # cuda::std::max). For CPU-only builds, NOMINMAX is defined locally where
+    # windows.h is included.
+    if(MLX_BUILD_CUDA)
+      target_compile_definitions(mlx PRIVATE NOMINMAX)
+    endif()
   endif()
   # Generate DLL and EXE in the same dir, otherwise EXE will not be able to run.
   # This is only done when MLX is built as the top project.
@@ -265,13 +280,15 @@ if(MLX_BUILD_CPU)
     target_link_libraries(mlx
                           PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.lib")
     target_include_directories(mlx PRIVATE "${openblas_SOURCE_DIR}/include")
-    # Make sure the DLL file is placed in the same dir with executables.
+    # Make sure the DLL file is placed in the same dir with executables. Use
+    # $<TARGET_FILE_DIR:mlx> to handle multi-config generators (MSVC) which
+    # place binaries in config-specific subdirectories (e.g., Release/).
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/libopenblas.dll")
     add_custom_command(
       TARGET mlx
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENBLAS_DLL_FILE}
-              ${CMAKE_BINARY_DIR})
+              $<TARGET_FILE_DIR:mlx>)
   else()
     if(${CMAKE_HOST_APPLE})
       # The blas shipped in macOS SDK is not supported, search homebrew for

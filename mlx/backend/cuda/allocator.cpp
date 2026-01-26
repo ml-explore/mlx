@@ -43,15 +43,13 @@ SmallSizePool::SmallSizePool() {
 
   next_free_ = buffer_;
 
-  CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
+  // Use pinned host memory instead of managed memory for better WDDM
+  // compatibility
+  CHECK_CUDA_ERROR(cudaMallocHost(&data_, small_pool_size));
 
-  int device_count = 0;
-  CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
-  for (int i = 0; i < device_count; ++i) {
-    auto loc = cuda_mem_loc(i);
-    CHECK_CUDA_ERROR(
-        cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
-  }
+  // No need for cudaMemAdvise with pinned host memory - it's already accessible
+  // from all devices and provides better performance than managed memory on
+  // Windows
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {
@@ -62,7 +60,7 @@ SmallSizePool::SmallSizePool() {
 }
 
 SmallSizePool::~SmallSizePool() {
-  CHECK_CUDA_ERROR(cudaFree(data_));
+  CHECK_CUDA_ERROR(cudaFreeHost(data_));
   delete[] buffer_;
 }
 
@@ -107,26 +105,56 @@ CudaAllocator::CudaAllocator()
   CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
   int curr;
   CHECK_CUDA_ERROR(cudaGetDevice(&curr));
+
+  // Check if memory pools are supported (not available on Windows or some VMs)
+  int mem_pool_supported = 0;
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &mem_pool_supported, cudaDevAttrMemoryPoolsSupported, curr));
+  mem_pools_supported_ = (mem_pool_supported != 0);
+
   for (int i = 0; i < device_count; ++i) {
     CHECK_CUDA_ERROR(cudaSetDevice(i));
     cudaStream_t s;
     CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
     free_streams_.push_back(s);
 
-    cudaMemPool_t mem_pool;
-    CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pool, i));
-    mem_pools_.push_back(mem_pool);
+    if (mem_pools_supported_) {
+      cudaMemPool_t mem_pool;
+      CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pool, i));
+      mem_pools_.push_back(mem_pool);
+    }
   }
   CHECK_CUDA_ERROR(cudaSetDevice(curr));
+
+  // Initialize the small size pool for scalar allocations.
+  // This uses cudaMallocManaged which should work on all platforms.
+  try {
+    scalar_pool_ = std::make_unique<SmallSizePool>();
+  } catch (const std::exception& e) {
+    // If small pool initialization fails (e.g., managed memory issues),
+    // we continue without it - allocations will use the regular path.
+    scalar_pool_ = nullptr;
+  }
 }
 
 void copy_to_managed(CudaBuffer& buf) {
-  // TODO maybe make this async on a i/o stream to avoid synchronizing the
-  // device on malloc/and free
+  // Copy GPU buffer to pinned host memory for CPU access
+  // This replaces cudaMallocManaged which doesn't work reliably on Windows WDDM
+
+  // Synchronize device before copying to avoid race conditions
+  cudaError_t err = cudaDeviceSynchronize();
+  if (err != cudaSuccess) {
+    throw std::runtime_error(fmt::format(
+        "copy_to_managed: cudaDeviceSynchronize failed: {}",
+        cudaGetErrorString(err)));
+  }
+
   void* new_data;
-  CHECK_CUDA_ERROR(cudaMallocManaged(&new_data, buf.size));
+  // Use pinned host memory instead of managed memory
+  CHECK_CUDA_ERROR(cudaMallocHost(&new_data, buf.size));
   buf.device = -1;
-  CHECK_CUDA_ERROR(cudaMemcpy(new_data, buf.data, buf.size, cudaMemcpyDefault));
+  CHECK_CUDA_ERROR(
+      cudaMemcpy(new_data, buf.data, buf.size, cudaMemcpyDeviceToHost));
   CHECK_CUDA_ERROR(cudaFree(buf.data));
   buf.data = new_data;
 }
@@ -161,16 +189,23 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     }
 
     // Try the scalar pool first
-    if (size <= small_block_size) {
-      buf = scalar_pool_.malloc();
+    if (size <= small_block_size && scalar_pool_) {
+      buf = scalar_pool_->malloc();
     }
     lock.unlock();
     if (!buf) {
       void* data = nullptr;
       if (device == -1) {
-        CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
-      } else {
+        // Use pinned host memory for device-agnostic allocations
+        // This replaces cudaMallocManaged which doesn't work reliably on
+        // Windows WDDM
+        CHECK_CUDA_ERROR(cudaMallocHost(&data, size));
+      } else if (mem_pools_supported_) {
         CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+      } else {
+        // Fallback to synchronous allocation when memory pools aren't supported
+        // (e.g., on Windows or in VM environments)
+        CHECK_CUDA_ERROR(cudaMalloc(&data, size));
       }
       if (!data) {
         std::ostringstream msg;
@@ -184,7 +219,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     // If any cuda memory pool has too much reserved memory, clear some
     // memory from the cache. This prevents graph / kernel execution failing
     // from OOM
-    if (get_cache_memory() > 0) {
+    if (mem_pools_supported_ && get_cache_memory() > 0) {
       for (auto p : mem_pools_) {
         size_t used = 0;
         CHECK_CUDA_ERROR(cudaMemPoolGetAttribute(
@@ -243,11 +278,14 @@ size_t CudaAllocator::size(Buffer buffer) const {
 
 // This must be called with mutex_ aquired
 void CudaAllocator::cuda_free(CudaBuffer* buf) {
-  if (scalar_pool_.in_pool(buf)) {
-    scalar_pool_.free(buf);
+  if (scalar_pool_ && scalar_pool_->in_pool(buf)) {
+    scalar_pool_->free(buf);
   } else {
-    if (buf->device >= 0) {
+    if (buf->device >= 0 && mem_pools_supported_) {
       CHECK_CUDA_ERROR(cudaFreeAsync(buf->data, free_streams_[buf->device]));
+    } else if (buf->device == -1) {
+      // Free pinned host memory (used for device-agnostic allocations)
+      CHECK_CUDA_ERROR(cudaFreeHost(buf->data));
     } else {
       CHECK_CUDA_ERROR(cudaFree(buf->data));
     }

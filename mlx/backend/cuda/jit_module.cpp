@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 
 #include <fmt/format.h>
 #include <nvrtc.h>
@@ -94,10 +95,30 @@ std::filesystem::path get_ptx_path(
     const std::filesystem::path& cache_dir,
     const std::string& module_name) {
 #ifdef _WIN32
+  // Windows has MAX_PATH limit of 260 chars for traditional APIs.
+  // We need to account for the cache_dir length and leave room for the file.
+  constexpr int max_total_path = 250; // Leave some margin
   constexpr int max_file_name_length = 140;
+
+  // Calculate available space for module name given cache_dir length
+  int cache_dir_len = static_cast<int>(cache_dir.string().size());
+  int available = max_total_path - cache_dir_len - 5; // -5 for "/" and ".ptx"
+
+  // If the module name fits within available space, use it directly
+  if (module_name.size() <= static_cast<size_t>(available) &&
+      module_name.size() <= max_file_name_length) {
+    return cache_dir / (module_name + ".ptx");
+  }
+
+  // For very long names, use a hash to guarantee short paths
+  // Keep a prefix for debugging and append the hash
+  std::hash<std::string> hasher;
+  size_t hash = hasher(module_name);
+  std::string short_name =
+      module_name.substr(0, 40) + "_" + fmt::format("{:016x}", hash);
+  return cache_dir / (short_name + ".ptx");
 #else
   constexpr int max_file_name_length = 245;
-#endif
 
   if (module_name.size() <= max_file_name_length) {
     return cache_dir / (module_name + ".ptx");
@@ -112,6 +133,7 @@ std::filesystem::path get_ptx_path(
   ptx_path /= module_name.substr(offset) + ".ptx";
 
   return ptx_path;
+#endif
 }
 
 // Try to read the cached |ptx| and |ptx_kernels| from |cache_dir|.

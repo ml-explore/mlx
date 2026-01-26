@@ -102,6 +102,7 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
@@ -138,5 +139,5 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/kernels)
 
-target_compile_definitions(mlx
-                           PRIVATE METAL_PATH="${MLX_METAL_PATH}/mlx.metallib")
+target_compile_definitions(
+  mlx PRIVATE METAL_PATH="${MLX_METAL_PATH}/mlx.metallib" MLX_USE_METAL)

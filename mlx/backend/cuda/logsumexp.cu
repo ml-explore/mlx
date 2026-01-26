@@ -96,6 +96,68 @@ __global__ void logsumexp(const T* in, T* out, int axis_size) {
 
 } // namespace cu
 
+// Helper template function to work around MSVC template function pointer
+// issues.
+template <typename DataType, int BLOCK_DIM, int N_READS>
+void launch_logsumexp_kernel(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size) {
+  auto kernel = &cu::logsumexp<DataType, float, BLOCK_DIM, N_READS>;
+  // Store params in variables to ensure they remain valid
+  const DataType* in_ptr = gpu_ptr<DataType>(in);
+  DataType* out_ptr = gpu_ptr<DataType>(out);
+  int axis_size_val = axis_size;
+  void* params[] = {&in_ptr, &out_ptr, &axis_size_val};
+  encoder.add_kernel_node(
+      reinterpret_cast<void*>(kernel), n_rows, BLOCK_DIM, 0, params);
+}
+
+// Dispatch helper that handles BLOCK_DIM selection outside of nested lambdas.
+template <typename DataType, int N_READS>
+void dispatch_logsumexp_block_dim(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size) {
+  int threads = cuda::ceil_div(axis_size, N_READS);
+  if (threads <= WARP_SIZE) {
+    launch_logsumexp_kernel<DataType, WARP_SIZE, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  } else if (threads <= WARP_SIZE * 2) {
+    launch_logsumexp_kernel<DataType, WARP_SIZE * 2, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  } else if (threads <= WARP_SIZE * 4) {
+    launch_logsumexp_kernel<DataType, WARP_SIZE * 4, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  } else if (threads <= WARP_SIZE * 8) {
+    launch_logsumexp_kernel<DataType, WARP_SIZE * 8, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  } else if (threads <= WARP_SIZE * 16) {
+    launch_logsumexp_kernel<DataType, WARP_SIZE * 16, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  } else {
+    launch_logsumexp_kernel<DataType, WARP_SIZE * 32, N_READS>(
+        encoder, in, out, n_rows, axis_size);
+  }
+}
+
+// Top-level dispatch that handles N_READS selection outside of lambdas.
+template <typename DataType>
+void dispatch_logsumexp(
+    cu::CommandEncoder& encoder,
+    const array& in,
+    array& out,
+    int n_rows,
+    int axis_size) {
+  constexpr int N_READS = 16 / sizeof(DataType);
+  dispatch_logsumexp_block_dim<DataType, N_READS>(
+      encoder, in, out, n_rows, axis_size);
+}
+
 void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("LogSumExp::eval_gpu");
   assert(inputs.size() == 1);
@@ -143,18 +205,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "logsumexp", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    constexpr int N_READS = 16 / sizeof(DataType);
-    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
-      auto kernel = cu::logsumexp<DataType, float, block_dim(), N_READS>;
-      encoder.add_kernel_node(
-          kernel,
-          n_rows,
-          block_dim(),
-          0,
-          gpu_ptr<DataType>(in),
-          gpu_ptr<DataType>(out),
-          axis_size);
-    });
+    dispatch_logsumexp<DataType>(encoder, in, out, n_rows, axis_size);
   });
 }
 
