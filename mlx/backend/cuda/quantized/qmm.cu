@@ -97,14 +97,16 @@ __global__ void qmv_t_kernel(
 
 // Non-transposed quantized matrix-vector multiply kernel
 // Performs: out = x @ dequantize(w, scales, biases)
-// where w is stored as [K/pack_factor, N] (K along first dimension)
-// scales/biases are stored as [K/GROUP_SIZE, N]
+// For transpose=false, quantization packs along the N (output) dimension:
+// - w is stored as [K, N_packed] where N_packed = N * bits / 8
+// - scales/biases are stored as [K, N/GROUP_SIZE]
+// - Groups are along the N dimension, not K
 template <typename T, int BITS, int GROUP_SIZE, bool HAS_BIAS>
 __global__ void qmv_n_kernel(
     const T* __restrict__ x, // [M, K]
-    const uint8_t* __restrict__ w, // [K/pack_factor, N] packed
-    const T* __restrict__ scales, // [K/GROUP_SIZE, N]
-    const T* __restrict__ biases, // [K/GROUP_SIZE, N] or nullptr
+    const uint8_t* __restrict__ w, // [K, N_packed] packed along N
+    const T* __restrict__ scales, // [K, N/GROUP_SIZE]
+    const T* __restrict__ biases, // [K, N/GROUP_SIZE] or nullptr
     T* __restrict__ out, // [M, N]
     int M,
     int N,
@@ -121,30 +123,28 @@ __global__ void qmv_n_kernel(
 
   float acc = 0.0f;
 
-  int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
-  int packed_K = (K + pack_factor - 1) / pack_factor;
+  // For non-transposed, groups are along N, not K
+  int num_n_groups = (N + GROUP_SIZE - 1) / GROUP_SIZE;
+  int n_group = col / GROUP_SIZE;
+  int packed_N = (N + pack_factor - 1) / pack_factor;
 
-  for (int g = 0; g < num_groups; ++g) {
-    // For non-transposed, scales/biases are [K/GROUP_SIZE, N]
-    float scale = static_cast<float>(scales[g * N + col]);
-    float bias = HAS_BIAS ? static_cast<float>(biases[g * N + col]) : 0.0f;
+  for (int k = 0; k < K; ++k) {
+    // scales/biases are [K, N/GROUP_SIZE], indexed by [k, n_group]
+    float scale = static_cast<float>(scales[k * num_n_groups + n_group]);
+    float bias =
+        HAS_BIAS ? static_cast<float>(biases[k * num_n_groups + n_group]) : 0.0f;
 
-    int k_start = g * GROUP_SIZE;
-    int k_end = min(k_start + GROUP_SIZE, K);
+    // w is [K, N_packed], packed along N
+    int pack_idx = col / pack_factor;
+    int bit_offset = (col % pack_factor) * BITS;
+    uint8_t packed = w[k * packed_N + pack_idx];
+    uint8_t quant_val = (packed >> bit_offset) & mask;
 
-    for (int k = k_start; k < k_end; ++k) {
-      // For non-transposed, weights are stored as [K/pack_factor, N]
-      int pack_idx = k / pack_factor;
-      int bit_offset = (k % pack_factor) * BITS;
-      uint8_t packed = w[pack_idx * N + col];
-      uint8_t quant_val = (packed >> bit_offset) & mask;
+    // Dequantize
+    float w_val = static_cast<float>(quant_val) * scale + bias;
 
-      // Dequantize
-      float w_val = static_cast<float>(quant_val) * scale + bias;
-
-      // Accumulate
-      acc += static_cast<float>(x[row * K + k]) * w_val;
-    }
+    // Accumulate
+    acc += static_cast<float>(x[row * K + k]) * w_val;
   }
 
   out[row * N + col] = static_cast<T>(acc);
@@ -183,6 +183,21 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = cu::device(s.device);
   auto& enc = d.get_command_encoder(s);
+
+  // Validate: only affine quantization mode is supported
+  if (mode_ != QuantizationMode::Affine) {
+    throw std::runtime_error(
+        "[QuantizedMatmul::eval_gpu] Only affine quantization mode is "
+        "supported on CUDA. Non-affine modes (e.g., fp quantization with "
+        "uint8 scales) are not yet implemented.");
+  }
+
+  // Validate: batched weights are not supported
+  if (inputs[1].ndim() > 2) {
+    throw std::runtime_error(
+        "[QuantizedMatmul::eval_gpu] Batched weights (w.ndim() > 2) are not "
+        "supported on CUDA. Please use 2D weight matrices.");
+  }
 
   out.set_data(cu::malloc_async(out.nbytes(), enc));
 

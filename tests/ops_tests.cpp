@@ -3094,8 +3094,11 @@ TEST_CASE("test quantize dequantize") {
 }
 
 TEST_CASE("test quantized matmul") {
-  // Seed RNG for reproducibility
-  random::seed(42);
+  // Use explicit random keys for reproducibility without mutating global RNG state
+  auto key = random::key(42);
+  auto [key1, k1] = random::split(key);
+  auto [key2, k2] = random::split(key1);
+  auto [key3, k3] = random::split(key2);
 
   // Test quantized matrix-vector multiplication
   int M = 4;
@@ -3105,8 +3108,8 @@ TEST_CASE("test quantized matmul") {
   int bits = 4;
 
   // Create input and weight matrices
-  auto x = random::normal({M, K});
-  auto w = random::normal({N, K}); // Transposed weight
+  auto x = random::normal({M, K}, k1);
+  auto w = random::normal({N, K}, k2); // Transposed weight
 
   // Quantize the weights
   auto res = quantize(w, group_size, bits);
@@ -3141,7 +3144,7 @@ TEST_CASE("test quantized matmul") {
   }
 
   // Test non-transposed case (x @ w)
-  auto w_nt = random::normal({K, N}); // Non-transposed weight
+  auto w_nt = random::normal({K, N}, k3); // Non-transposed weight
   auto res_nt = quantize(w_nt, group_size, bits);
   auto w_q_nt = res_nt[0];
   auto scales_nt = res_nt[1];
