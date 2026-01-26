@@ -3093,6 +3093,47 @@ TEST_CASE("test quantize dequantize") {
   }
 }
 
+TEST_CASE("test quantized matmul") {
+  // Test quantized matrix-vector multiplication
+  int M = 4;
+  int N = 128;
+  int K = 256;
+  int group_size = 64;
+  int bits = 4;
+
+  // Create input and weight matrices
+  auto x = random::normal({M, K});
+  auto w = random::normal({N, K}); // Transposed weight
+
+  // Quantize the weights
+  auto res = quantize(w, group_size, bits);
+  auto w_q = res[0];
+  auto scales = res[1];
+  auto biases = res[2];
+
+  // Dequantize for reference
+  auto w_hat = dequantize(w_q, scales, biases, group_size, bits);
+
+  // Test transposed case (x @ w.T)
+  auto y_q = quantized_matmul(x, w_q, scales, biases, true, group_size, bits);
+  auto y_hat = matmul(x, transpose(w_hat, {1, 0}));
+  CHECK_EQ(y_q.shape(), y_hat.shape());
+  auto max_diff = max(abs(y_q - y_hat)).item<float>();
+  CHECK(max_diff < 1e-2);
+
+  // Test different bit widths
+  for (int b : {2, 4, 8}) {
+    auto res_b = quantize(w, group_size, b);
+    auto w_q_b = res_b[0];
+    auto scales_b = res_b[1];
+    auto biases_b = res_b[2];
+    auto w_hat_b = dequantize(w_q_b, scales_b, biases_b, group_size, b);
+    auto y_q_b = quantized_matmul(x, w_q_b, scales_b, biases_b, true, group_size, b);
+    auto y_hat_b = matmul(x, transpose(w_hat_b, {1, 0}));
+    CHECK_EQ(y_q_b.shape(), y_hat_b.shape());
+  }
+}
+
 TEST_CASE("test repeat") {
   auto data = array({13, 3, 16, 6, 14, 4, 15, 5, 11, 1, 12, 2}, {3, 2, 2});
   auto repeat_axis_0 = repeat(data, 2, 0);
