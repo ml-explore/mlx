@@ -950,8 +950,8 @@ void steel_matmul_axpby(
   if (batch_size_out == 1 && metal::is_nax_available() &&
       !issubdtype(a.dtype(), complexfloating) &&
       (env::enable_tf32() || a.dtype() != float32) &&
-      !env::disable_splitk_nax() && int64_t(M) * N >= min_mn_threshold &&
-      K >= min_k_threshold && K >= (3 * std::max(M, N))) {
+      int64_t(M) * N >= min_mn_threshold && K >= min_k_threshold &&
+      K >= (3 * std::max(M, N))) {
     return steel_gemm_splitk_axpby_nax<CHECK_AB>(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,

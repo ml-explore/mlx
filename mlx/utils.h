@@ -170,11 +170,6 @@ inline int nccl_timeout(int default_value) {
   return nccl_timeout;
 }
 
-inline bool disable_splitk_nax() {
-  static bool disable_splitk_nax_ = get_var("MLX_DISABLE_SPLITK_NAX", 0);
-  return disable_splitk_nax_;
-}
-
 } // namespace env
 
 } // namespace mlx::core
