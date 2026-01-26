@@ -4,9 +4,12 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/jit_module.h"
+#include "mlx/backend/rocm/utils.h"
 #include "mlx/dtype_utils.h"
 
 #include <numeric>
+#include <sstream>
 
 namespace mlx::core {
 
@@ -36,6 +39,100 @@ void concatenate_gpu(
         out, strides, flags, out_slice.size(), data_offset);
     copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, s);
   }
+}
+
+array compute_dynamic_offset(
+    const array& indices,
+    const Strides& strides,
+    const std::vector<int>& axes,
+    const Stream& s) {
+  Dtype dtype = indices.dtype();
+  int nidx = axes.size();
+
+  std::ostringstream module_name_ss;
+  module_name_ss << "compute_dynamic_offset_" << dtype_to_string(dtype) << "_" << nidx;
+  std::string module_name = module_name_ss.str();
+  
+  std::ostringstream kernel_name_ss;
+  kernel_name_ss << "mlx::core::rocm::compute_dynamic_offset<" 
+                 << dtype_to_hip_type(dtype) << ", " << nidx << ">";
+  std::string kernel_name = kernel_name_ss.str();
+
+  rocm::JitModule& mod = rocm::get_jit_module(s.device, module_name, [&]() {
+    std::ostringstream source;
+    source << R"(
+        #include "mlx/backend/rocm/device/utils.hpp"
+        #include <hip/hip_runtime.h>
+
+        namespace mlx::core::rocm {
+
+        template <typename T, int NIDX>
+        __global__ void compute_dynamic_offset(
+            const T* indices,
+            int64_t* offset,
+            const int64_t* strides,
+            const int* axes) {
+          int64_t acc = 0;
+          #pragma unroll
+          for (int i = 0; i < NIDX; ++i) {
+            acc += indices[i] * strides[axes[i]];
+          }
+          *offset = acc;
+        }
+
+        } // namespace mlx::core::rocm
+    )";
+    return std::make_tuple(false, source.str(), std::vector{kernel_name});
+  });
+
+  auto& encoder = rocm::get_command_encoder(s);
+  // Prepare output.
+  array offset({1}, int64, nullptr, {});
+  bool donate = indices.is_donatable() &&
+      (indices.data_size() * indices.itemsize()) >= offset.itemsize();
+  if (donate) {
+    offset.copy_shared_buffer(indices);
+  } else {
+    offset.set_data(allocator::malloc(offset.itemsize()));
+  }
+
+  encoder.add_temporary(offset);
+  encoder.set_input_array(indices);
+  encoder.set_output_array(offset);
+
+  // Copy strides and axes to device
+  array strides_arr({static_cast<int>(strides.size())}, int64);
+  array axes_arr({static_cast<int>(axes.size())}, int32);
+  strides_arr.set_data(allocator::malloc(strides_arr.nbytes()));
+  axes_arr.set_data(allocator::malloc(axes_arr.nbytes()));
+  encoder.add_temporary(strides_arr);
+  encoder.add_temporary(axes_arr);
+
+  encoder.launch_kernel([&](hipStream_t stream) {
+    hipMemcpyAsync(
+        strides_arr.data<int64_t>(),
+        strides.data(),
+        strides.size() * sizeof(int64_t),
+        hipMemcpyHostToDevice,
+        stream);
+    hipMemcpyAsync(
+        axes_arr.data<int32_t>(),
+        axes.data(),
+        axes.size() * sizeof(int32_t),
+        hipMemcpyHostToDevice,
+        stream);
+
+    auto kernel = mod.get_kernel(kernel_name);
+    void* args[] = {
+        const_cast<void*>(indices.data<void>()),
+        offset.data<void>(),
+        strides_arr.data<void>(),
+        axes_arr.data<void>()
+    };
+    hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
+  });
+
+  return offset;
 }
 
 } // namespace mlx::core

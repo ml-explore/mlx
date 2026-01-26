@@ -11,8 +11,8 @@ find_package(rocthrust REQUIRED CONFIG)
 find_package(rocprim REQUIRED CONFIG)
 find_package(hiprand REQUIRED CONFIG)
 
-# Ensure HIP architectures are set
-if(NOT CMAKE_HIP_ARCHITECTURES)
+# Ensure HIP architectures are set - respect user-provided value
+if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
   set(CMAKE_HIP_ARCHITECTURES
       "gfx906;gfx908;gfx90a;gfx1030;gfx1100"
       CACHE STRING "HIP architectures" FORCE)
@@ -65,6 +65,7 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/binary.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/distributed.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/indexing.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.hip
@@ -131,13 +132,17 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/rocm.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)

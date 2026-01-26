@@ -2,8 +2,24 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/copy/copy.hpp"
+#include "mlx/backend/rocm/allocator.h"
 
 namespace mlx::core {
+
+void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
+  auto& encoder = rocm::get_command_encoder(s);
+  bool donated = set_copy_output_data(
+      in, out, ctype, [&](auto n) { return allocator::malloc(n); });
+  if (donated && in.dtype() == out.dtype()) {
+    // If the output has the same type as the input then there is nothing to
+    // copy, just use the buffer.
+    return;
+  }
+  if (ctype == CopyType::GeneralGeneral) {
+    ctype = CopyType::General;
+  }
+  copy_gpu_inplace(in, out, ctype, s);
+}
 
 void copy_gpu_inplace(
     const array& in,
@@ -29,11 +45,32 @@ void copy_gpu_inplace(
     return;
   }
 
-  // For General and GeneralGeneral copy types, we need more complex handling
-  // For now, fall back to a simpler implementation
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    // TODO: Implement general copy with strided access
-    throw std::runtime_error("General copy not yet fully implemented for ROCm.");
+    auto [shape_collapsed, strides_vec] = collapse_contiguous_dims(
+        shape, std::vector{strides_in, strides_out}, INT32_MAX);
+    if (ctype == CopyType::General) {
+      copy_general_input(
+          encoder,
+          ctype,
+          in,
+          out,
+          offset_in,
+          offset_out,
+          shape_collapsed,
+          strides_vec[0]);
+    } else {
+      copy_general(
+          encoder,
+          ctype,
+          in,
+          out,
+          offset_in,
+          offset_out,
+          shape_collapsed,
+          strides_vec[0],
+          strides_vec[1]);
+    }
+    return;
   }
 }
 
@@ -46,6 +83,26 @@ void fill_gpu(const array& in, array& out, const Stream& s) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   copy_contiguous(encoder, CopyType::Scalar, in, out, 0, 0);
+}
+
+void reshape_gpu(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    auto& encoder = rocm::get_command_encoder(s);
+    out.set_data(allocator::malloc(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
 }
 
 } // namespace mlx::core
