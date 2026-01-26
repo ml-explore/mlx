@@ -46,8 +46,8 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, Device::cpu);
+  auto result_cpu =
+      sparse_matmul_csr(row_ptr, col_indices, values, dense_b, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
@@ -82,8 +82,8 @@ TEST_CASE("test sparse matrix-vector multiplication") {
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, Device::cpu);
+  auto result_cpu =
+      sparse_matmul_csr(row_ptr, col_indices, values, dense_b, Device::cpu);
   eval(result_cpu);
   CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
 
