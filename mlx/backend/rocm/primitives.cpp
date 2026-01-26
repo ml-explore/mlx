@@ -25,15 +25,15 @@ namespace mlx::core {
 
 // Note: Convolution is now implemented in conv/conv.cpp
 // Note: GatherMM is now implemented in matmul.cpp
+// Note: QuantizedMatmul is now implemented in quantized/qmm.hip
+// Note: GatherQMM is now implemented in quantized/qmm.hip
 
 NO_GPU(BlockMaskedMM)
 NO_GPU(FFT)
-NO_GPU(GatherQMM)
 NO_GPU(Hadamard)
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU(QQMatmul)
-NO_GPU(QuantizedMatmul)
 NO_GPU(SegmentedMM)
 NO_GPU_MULTI(SVD)
 NO_GPU(Inverse)

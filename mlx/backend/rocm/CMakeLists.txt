@@ -90,7 +90,8 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.hip
-    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.hip)
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm.hip)
 
 # Create output directory for compiled objects
 set(HIP_OBJ_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip_objs")

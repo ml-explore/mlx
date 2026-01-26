@@ -6,6 +6,8 @@
 #include "mlx/fast_primitives.h"
 
 #include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
 
 namespace mlx::core {
 
@@ -114,6 +116,13 @@ void RoPE::eval_gpu(
             dim3(num_blocks), dim3(block_size), 0, stream,
             x.data<__half>(), cos_freq.data<__half>(), sin_freq.data<__half>(),
             out.data<__half>(), 0, scale_, n_heads, head_dim, seq_len, forward_);
+        break;
+      case bfloat16:
+        hipLaunchKernelGGL(
+            rocm::rope_kernel<hip_bfloat16>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            x.data<hip_bfloat16>(), cos_freq.data<hip_bfloat16>(), sin_freq.data<hip_bfloat16>(),
+            out.data<hip_bfloat16>(), 0, scale_, n_heads, head_dim, seq_len, forward_);
         break;
       default:
         throw std::runtime_error("Unsupported type for RoPE");
