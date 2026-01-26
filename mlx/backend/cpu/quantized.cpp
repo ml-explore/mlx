@@ -1344,7 +1344,9 @@ void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto xhat = donate_x
         ? x
         : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-
+    if (!donate_x) {
+      encoder.add_temporary(xhat);
+    }
     encoder.set_input_array(x);
     encoder.set_input_array(w);
     encoder.set_input_array(scales);
