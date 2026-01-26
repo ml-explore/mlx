@@ -3,17 +3,12 @@
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/gpu/available.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
 #include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core::gpu {
-
-bool is_available() {
-  return true;
-}
 
 void new_stream(Stream s) {
   // Force initalization of CUDA, so CUDA runtime get destroyed at last.

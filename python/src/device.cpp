@@ -1,9 +1,11 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2025 Apple Inc.
 
 #include <sstream>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/device.h"
 #include "mlx/utils.h"
@@ -63,4 +65,34 @@ void init_device(nb::module_& m) {
       &mx::is_available,
       "device"_a,
       R"pbdoc(Check if a back-end is available for the given device.)pbdoc");
+  m.def(
+      "device_count",
+      &mx::device_count,
+      "device_type"_a,
+      R"pbdoc(
+      Get the number of available devices for the given device type.
+
+      Args:
+          device_type (DeviceType): The type of device to query (cpu or gpu).
+
+      Returns:
+          int: Number of devices.
+      )pbdoc");
+  m.def(
+      "device_info",
+      &mx::device_info,
+      nb::arg("d") = mx::default_device(),
+      R"pbdoc(
+      Get information about a device.
+
+      Returns a dictionary with device properties. Available keys depend
+      on the backend and device type. Common keys include ``device_name``,
+      ``architecture``, and ``total_memory`` (or ``memory_size``).
+
+      Args:
+          d (Device): The device to query (defaults to the default device).
+
+      Returns:
+          dict: Device information.
+      )pbdoc");
 }
