@@ -12,7 +12,6 @@ __pycache__/
 
 # Metal libraries
 *.metallib
-venv/
 
 # Distribution / packaging
 python/mlx/core
@@ -30,6 +29,8 @@ lib64/
 parts/
 sdist/
 var/
+venv/
+.venv/
 wheels/
 share/python-wheels/
 *.egg-info/
