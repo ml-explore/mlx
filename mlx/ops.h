@@ -955,7 +955,7 @@ inline array round(const array& a, StreamOrDevice s = {}) {
 MLX_API array matmul(const array& a, const array& b, StreamOrDevice s = {});
 
 /** Sparse matrix-dense matrix multiplication using CSR format. */
-array sparse_matmul_csr(
+MLX_API array sparse_matmul_csr(
     const array& row_ptr,
     const array& col_indices,
     const array& values,
