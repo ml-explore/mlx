@@ -15,6 +15,20 @@ else()
                        ${MLX_VERSION})
 endif()
 
+if(NOT DEFINED Python_EXECUTABLE AND DEFINED ENV{VIRTUAL_ENV})
+  if(WIN32)
+    set(_venv_py "$ENV{VIRTUAL_ENV}/Scripts/python.exe")
+  else()
+    set(_venv_py "$ENV{VIRTUAL_ENV}/bin/python")
+  endif()
+  if(EXISTS ${_venv_py})
+    message(STATUS "Using Python from virtualenv: ${_venv_py}")
+    set(Python_EXECUTABLE
+        ${_venv_py}
+        CACHE FILEPATH "Python executable" FORCE)
+  endif()
+endif()
+
 project(
   mlx
   LANGUAGES C CXX
