@@ -86,13 +86,14 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int large = 0; large <= 1; ++large) {
-        kernel_names.push_back(fmt::format(
-            "mlx::core::cu::gather<{}, {}, {}, {}, {}>",
-            dtype_to_cuda_type(out.dtype()),
-            dtype_to_cuda_type(idx_dtype),
-            nidx,
-            ndim,
-            large ? "int64_t" : "int32_t"));
+        kernel_names.push_back(
+            fmt::format(
+                "mlx::core::cu::gather<{}, {}, {}, {}, {}>",
+                dtype_to_cuda_type(out.dtype()),
+                dtype_to_cuda_type(idx_dtype),
+                nidx,
+                ndim,
+                large ? "int64_t" : "int32_t"));
       }
     }
     return std::make_tuple(false, jit_source_gather, std::move(kernel_names));
@@ -179,14 +180,15 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::vector<std::string> kernel_names;
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int large = 0; large <= 1; ++large) {
-        kernel_names.push_back(fmt::format(
-            "mlx::core::cu::scatter<{}, {}, mlx::core::cu::Scatter{}, {}, {}, {}>",
-            dtype_to_cuda_type(out.dtype()),
-            dtype_to_cuda_type(idx_dtype),
-            op,
-            nidx,
-            ndim,
-            large ? "int64_t" : "int32_t"));
+        kernel_names.push_back(
+            fmt::format(
+                "mlx::core::cu::scatter<{}, {}, mlx::core::cu::Scatter{}, {}, {}, {}>",
+                dtype_to_cuda_type(out.dtype()),
+                dtype_to_cuda_type(idx_dtype),
+                op,
+                nidx,
+                ndim,
+                large ? "int64_t" : "int32_t"));
       }
     }
     return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
@@ -258,14 +260,15 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int contiguous = 0; contiguous < 4; ++contiguous) {
         for (int large = 0; large <= 1; ++large) {
-          kernel_names.push_back(fmt::format(
-              "mlx::core::cu::gather_axis<{}, {}, {}, {}, {}, {}>",
-              dtype_to_cuda_type(out.dtype()),
-              dtype_to_cuda_type(idx.dtype()),
-              ndim,
-              contiguous & 1 ? true : false,
-              contiguous & 2 ? true : false,
-              large ? "int64_t" : "int32_t"));
+          kernel_names.push_back(
+              fmt::format(
+                  "mlx::core::cu::gather_axis<{}, {}, {}, {}, {}, {}>",
+                  dtype_to_cuda_type(out.dtype()),
+                  dtype_to_cuda_type(idx.dtype()),
+                  ndim,
+                  contiguous & 1 ? true : false,
+                  contiguous & 2 ? true : false,
+                  large ? "int64_t" : "int32_t"));
         }
       }
     }
@@ -360,15 +363,16 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     for (int ndim = 0; ndim <= MAX_NDIM; ++ndim) {
       for (int contiguous = 0; contiguous < 4; ++contiguous) {
         for (int large = 0; large <= 1; ++large) {
-          kernel_names.push_back(fmt::format(
-              "mlx::core::cu::scatter_axis<{}, {}, mlx::core::cu::Scatter{}, {}, {}, {}, {}>",
-              dtype_to_cuda_type(out.dtype()),
-              dtype_to_cuda_type(idx.dtype()),
-              op,
-              ndim,
-              contiguous & 1 ? true : false,
-              contiguous & 2 ? true : false,
-              large ? "int64_t" : "int32_t"));
+          kernel_names.push_back(
+              fmt::format(
+                  "mlx::core::cu::scatter_axis<{}, {}, mlx::core::cu::Scatter{}, {}, {}, {}, {}>",
+                  dtype_to_cuda_type(out.dtype()),
+                  dtype_to_cuda_type(idx.dtype()),
+                  op,
+                  ndim,
+                  contiguous & 1 ? true : false,
+                  contiguous & 2 ? true : false,
+                  large ? "int64_t" : "int32_t"));
         }
       }
     }

@@ -445,7 +445,7 @@ template <
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch, /* Batch ndim > 1 */
     const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -553,7 +553,7 @@ template <
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
     const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_gather(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_gather(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -666,7 +666,7 @@ template <
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch, /* Batch ndim > 1 */
     const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_t(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_t(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -764,7 +764,7 @@ template <
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
     const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_t_gather(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_t_gather(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],

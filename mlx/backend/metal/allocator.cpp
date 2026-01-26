@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include "mlx/backend/metal/allocator.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/memory.h"
@@ -43,16 +44,17 @@ MetalAllocator::MetalAllocator()
           }),
       residency_set_(device_) {
   auto pool = metal::new_scoped_memory_pool();
-  auto memsize = std::get<size_t>(device_info().at("memory_size"));
+  const auto& info = gpu::device_info(0);
+  auto memsize = std::get<size_t>(info.at("memory_size"));
   auto max_rec_size =
-      std::get<size_t>(device_info().at("max_recommended_working_set_size"));
-  resource_limit_ = std::get<size_t>(device_info().at("resource_limit"));
+      std::get<size_t>(info.at("max_recommended_working_set_size"));
+  resource_limit_ = std::get<size_t>(info.at("resource_limit"));
   block_limit_ = std::min(1.5 * max_rec_size, 0.95 * memsize);
   gc_limit_ = std::min(static_cast<size_t>(0.95 * max_rec_size), block_limit_);
   max_pool_size_ = block_limit_;
   device(mlx::core::Device::gpu)
       .set_residency_set(residency_set_.mtl_residency_set());
-  bool is_vm = std::get<std::string>(device_info().at("device_name")) ==
+  bool is_vm = std::get<std::string>(info.at("device_name")) ==
       "Apple Paravirtual device";
   if (is_vm) {
     return;
@@ -249,8 +251,8 @@ size_t get_memory_limit() {
   return metal::allocator().get_memory_limit();
 }
 size_t set_wired_limit(size_t limit) {
-  if (limit > std::get<size_t>(metal::device_info().at(
-                  "max_recommended_working_set_size"))) {
+  if (limit > std::get<size_t>(
+                  gpu::device_info(0).at("max_recommended_working_set_size"))) {
     throw std::invalid_argument(
         "[metal::set_wired_limit] Setting a wired limit larger than "
         "the maximum working set size is not allowed.");
