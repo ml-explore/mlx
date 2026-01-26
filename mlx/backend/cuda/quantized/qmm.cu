@@ -219,10 +219,18 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   enc.set_output_array(out);
 
+  // Validate: only supported group sizes (32, 64, 128)
+  if (group_size_ != 32 && group_size_ != 64 && group_size_ != 128) {
+    throw std::runtime_error(
+        "[QuantizedMatmul::eval_gpu] group_size must be 32, 64, or 128 (got " +
+        std::to_string(group_size_) + ")");
+  }
+
   // Extract the matmul shapes
-  bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+  // Flatten all leading dimensions of x into the row dimension M.
+  // This matches the kernel's assumption that x is laid out as a single [M, K] matrix.
   int K = x.shape(-1);
-  int M = non_batched ? x.size() / K : x.shape(-2);
+  int M = x.size() / K;
   int N = out.shape(-1);
 
   int block_size = 256;

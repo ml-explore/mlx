@@ -3100,7 +3100,7 @@ TEST_CASE("test quantized matmul") {
   auto [key2, k2] = random::split(key1);
   auto [key3, k3] = random::split(key2);
 
-  // Test quantized matrix-vector multiplication
+  // Test quantized matrix-matrix multiplication (batched vectors)
   int M = 4;
   int N = 128;
   int K = 256;
