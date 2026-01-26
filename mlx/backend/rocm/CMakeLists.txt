@@ -11,24 +11,6 @@ find_package(rocthrust REQUIRED CONFIG)
 find_package(rocprim REQUIRED CONFIG)
 find_package(hiprand REQUIRED CONFIG)
 
-# Try to find MIOpen (optional but recommended)
-find_package(miopen CONFIG QUIET)
-if(miopen_FOUND)
-  message(STATUS "MIOpen found - enabling MIOpen support")
-  set(MLX_USE_MIOPEN ON)
-else()
-  # Try to find MIOpen library directly
-  find_library(MIOPEN_LIB MIOpen PATHS ${ROCM_PATH}/lib /opt/rocm/lib /opt/rocm-6.0.0/lib)
-  find_path(MIOPEN_INCLUDE_DIR miopen/miopen.h PATHS ${ROCM_PATH}/include /opt/rocm/include /opt/rocm-6.0.0/include)
-  if(MIOPEN_LIB AND MIOPEN_INCLUDE_DIR)
-    message(STATUS "MIOpen found at ${MIOPEN_LIB} - enabling MIOpen support")
-    set(MLX_USE_MIOPEN ON)
-  else()
-    message(STATUS "MIOpen not found - convolution and SDPA will use fallback implementations")
-    set(MLX_USE_MIOPEN OFF)
-  endif()
-endif()
-
 # Ensure HIP architectures are set - respect user-provided value
 if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
   set(CMAKE_HIP_ARCHITECTURES
