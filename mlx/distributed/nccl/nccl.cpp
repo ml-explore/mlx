@@ -1,9 +1,14 @@
+// NCCL distributed support currently requires Unix socket APIs
+// TODO: Add Windows Winsock2 support for Windows builds
+#ifndef _WIN32
 #include <arpa/inet.h>
-#include <cuda_runtime.h>
-#include <nccl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
+
+#include <cuda_runtime.h>
+#include <nccl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -93,6 +98,7 @@ void dispatch_dtype(const array& arr, F&& f) {
   });
 }
 
+#ifndef _WIN32
 inline void sendAll(int sock, const void* buf, size_t len) {
   const char* ptr = reinterpret_cast<const char*>(buf);
   while (len > 0) {
@@ -118,7 +124,9 @@ inline void recvAll(int sock, void* buf, size_t len) {
     len -= rec;
   }
 }
+#endif // _WIN32
 
+#ifndef _WIN32
 inline void bootstrap_unique_id(
     ncclUniqueId& id,
     int rank,
@@ -246,6 +254,16 @@ inline void bootstrap_unique_id(
     close(sock);
   }
 }
+#else // _WIN32
+inline void bootstrap_unique_id(
+    ncclUniqueId& id,
+    int rank,
+    int size,
+    const std::string& initMethod) {
+  throw std::runtime_error(
+      "[nccl] Distributed NCCL is not yet supported on Windows");
+}
+#endif // _WIN32
 
 } // namespace detail
 
@@ -296,8 +314,17 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error(
-        "[nccl] All gather not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclAllGather(
+          gpu_ptr<T>(input),
+          gpu_ptr<T>(output),
+          input.size(),
+          dt,
+          comm_,
+          encoder.stream()));
+    });
   }
 
   void send(const array& input, int dst, Stream stream) override {
@@ -309,11 +336,24 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All max not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMax);
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] All min not supported in NCCL backend.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMin);
+    });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      reduce_scatter_impl<T>(input, output, stream, dt, ncclSum);
+    });
   }
 
   template <typename T>
@@ -326,9 +366,28 @@ class NCCLGroup : public GroupImpl {
     auto& encoder = cu::get_command_encoder(stream);
 
     CHECK_NCCL(ncclAllReduce(
-        input.data<T>(),
-        output.data<T>(),
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
         input.size(),
+        dt,
+        op,
+        comm_,
+        encoder.stream()));
+  }
+
+  template <typename T>
+  void reduce_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclReduceScatter(
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
+        output.size(),
         dt,
         op,
         comm_,

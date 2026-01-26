@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include "mlx/array.h"
+#include "mlx/backend/cpu/binary.h"
+#include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/gemm.h"
@@ -135,15 +137,29 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  // Handle empty matrix case (K=0)
+  if (inputs[0].shape(-1) == 0) {
+    auto& c = inputs[2];
+    if (beta_ == 1.0f) {
+      CopyType ctype = c.data_size() == 1
+          ? CopyType::Scalar
+          : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+      copy_cpu(c, out, ctype, stream());
+    } else {
+      array beta_scalar = array(beta_, c.dtype());
+      auto& encoder = cpu::get_command_encoder(stream());
+      binary_float_op_cpu(c, beta_scalar, out, detail::Multiply(), stream());
+      encoder.add_temporary(std::move(beta_scalar));
+    }
+    return;
+  }
+
   // Fill output with C
   auto& c = inputs[2];
   CopyType ctype = c.data_size() == 1
       ? CopyType::Scalar
       : (c.flags().row_contiguous ? CopyType::Vector : CopyType::General);
   copy_cpu(c, out, ctype, stream());
-  if (inputs[0].shape(-1) == 0) {
-    return;
-  }
   matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 

@@ -52,9 +52,25 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "is_available",
-      &mx::distributed::is_available,
+      [](const std::string& backend) {
+        return mx::distributed::is_available(backend);
+      },
+      "backend"_a = "any",
+      nb::sig("def is_available(backend: str = 'any') -> bool"),
       R"pbdoc(
       Check if a communication backend is available.
+
+      Note, this function returns whether MLX has the capability of
+      instantiating that distributed backend not whether it is possible to
+      create a communication group. For that purpose one should use
+      ``init(strict=True)``.
+
+      Args:
+        backend (str, optional): The name of the backend to check for availability.
+          It takes the same values as :func:`init()`. Default: ``"any"``.
+
+      Returns:
+        bool: Whether the distributed backend is available.
       )pbdoc");
 
   m.def(
@@ -79,10 +95,10 @@ void init_distributed(nb::module_& parent_module) {
             in case ``mx.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
           backend (str, optional): Which distributed backend to initialize.
-            Possible values ``mpi``, ``ring``, ``nccl``, ``any``. If set to ``any`` all
-            available backends are tried and the first one that succeeds
-            becomes the global group which will be returned in subsequent
-            calls. Default: ``any``
+            Possible values ``mpi``, ``ring``, ``nccl``, ``jaccl``, ``any``. If
+            set to ``any`` all available backends are tried and the first one
+            that succeeds becomes the global group which will be returned in
+            subsequent calls. Default: ``any``
 
         Returns:
           Group: The group representing all the launched processes.
@@ -229,7 +245,7 @@ void init_distributed(nb::module_& parent_module) {
           x (array): Input array.
           dst (int): Rank of the destination process in the group.
           group (Group): The group of processes that will participate in the
-            sned. If set to ``None`` the global group is used. Default:
+            send. If set to ``None`` the global group is used. Default:
             ``None``.
           stream (Stream, optional): Stream or device. Defaults to ``None``
             in which case the default stream of the default device is used.
@@ -301,4 +317,36 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The array that was received from ``src``.
       )pbdoc");
+
+  m.def(
+      "sum_scatter",
+      [](const ScalarOrArray& x,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::sum_scatter(to_array(x), group, s);
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def sum_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Sum ``x`` across all processes in the group and shard the result along the first axis across ranks.
+      ``x.shape[0]`` must be divisible by the group size.
+
+      The result is equivalent to ``all_sum(x)[rank*chunk_size:(rank+1)*chunk_size]``, where ``chunk_size = x.shape[0] // group.size()`` and ``rank`` is the rank of this process in the group.
+      Note: ``all_sum`` is mentioned only for illustration; the actual implementation does not perform ``all_sum`` and uses a single reduce-scatter collective instead.
+      Currently supported only for the NCCL backend.
+
+      Args:
+        x (array): Input array.
+        group (Group): The group of processes that will participate in the
+          sum scatter. If set to ``None`` the global group is used. Default:
+          ``None``.
+        stream (Stream, optional): Stream or device. Defaults to ``None``
+          in which case the default stream of the default device is used.
+      Returns:
+        array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
+    )pbdoc");
 }

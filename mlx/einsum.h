@@ -5,16 +5,17 @@
 #include <tuple>
 #include <vector>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
 
-std::pair<std::vector<std::vector<int>>, std::string> einsum_path(
+MLX_API std::pair<std::vector<std::vector<int>>, std::string> einsum_path(
     const std::string& subscripts,
     const std::vector<array>& operands);
 
-array einsum(
+MLX_API array einsum(
     const std::string& subscripts,
     const std::vector<array>& operands,
     StreamOrDevice s = {});

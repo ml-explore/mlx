@@ -1317,15 +1317,15 @@ Shape Convolution::conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
+      msg << "[conv] Padding sizes must be non-negative. Got padding "
           << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
     if (strides[i - 1] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive." << " Got strides "
-          << strides << ".";
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -3397,9 +3397,11 @@ std::vector<array> QuantizedMatmul::vjp(
       throw std::runtime_error(
           "[QuantizedMatmul::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == QuantizationMode::Mxfp4) {
-        throw std::invalid_argument(
-            "[QuantizedMatmul::vjp] no gradient wrt scales with mxfp4 quantization.");
+      if (mode_ != QuantizationMode::Affine) {
+        std::ostringstream msg;
+        msg << "[QuantizedMatmul::vjp] no gradient wrt scales in "
+            << quantization_mode_to_string(mode_) << " quantization.";
+        throw std::invalid_argument(msg.str());
       }
       if (!dsb) {
         int ndim = primals[1].ndim();
@@ -3466,6 +3468,67 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   return {std::move(out_shape)};
+}
+
+bool QQMatmul::is_equivalent(const Primitive& other) const {
+  const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_;
+}
+
+std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
+  auto out_shape = inputs[0].shape();
+  int w_outer_dims = inputs[1].shape(-2);
+  out_shape.back() = w_outer_dims;
+  return {std::move(out_shape)};
+}
+
+std::vector<array> QQMatmul::vjp(
+    const std::vector<array>& primals, // non quantized x, non quantized w
+    const std::vector<array>& cotangents, // non quantized upstream grads
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  if (primals.size() != 2) {
+    throw std::runtime_error(
+        "[QQMatmul::vjp] Expected exactly 2 non-quantized primal inputs (x, w).");
+  }
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  auto& s = stream();
+  // primal[1] -- non quantized w (N, K)
+  // primal[0] -- non quantized activations (M, K)
+  // cotan -- non quantized grads (M, N)
+  auto qmode = quantization_mode_to_string(mode_);
+  for (auto arg : argnums) {
+    if (arg == 0) { // gradient wrt to x
+      // We transpose weights -> quantize along N
+      vjps.push_back(qqmm(
+          cotan, //  M X N
+          swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          s));
+    } else if (arg == 1) { // gradient wrt to weights
+      vjps.push_back(qqmm(
+          swapaxes(cotan, -1, -2, s), // (N, M)
+          swapaxes(primals[0], -1, -2, s), // (K, M)
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          s));
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> QQMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QQMM::jvp NYI");
 }
 
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
@@ -3541,9 +3604,11 @@ std::vector<array> GatherQMM::vjp(
       throw std::runtime_error(
           "[GatherQMM::vjp] no gradient wrt the quantized weights.");
     } else {
-      if (mode_ == QuantizationMode::Mxfp4) {
-        throw std::invalid_argument(
-            "[GatherQMM::vjp] no gradient wrt scales with mxfp4 quantization.");
+      if (mode_ != QuantizationMode::Affine) {
+        std::ostringstream msg;
+        msg << "[GatherQMM::vjp] no gradient wrt scales in "
+            << quantization_mode_to_string(mode_) << " quantization.";
+        throw std::invalid_argument(msg.str());
       }
 
       if (!dsb) {
@@ -3648,7 +3713,7 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
 
 bool RandomBits::is_equivalent(const Primitive& other) const {
   const RandomBits& r_other = static_cast<const RandomBits&>(other);
-  return shape_ == r_other.shape_;
+  return shape_ == r_other.shape_ && width_ == r_other.width_;
 }
 
 std::vector<array> Real::vjp(
@@ -3843,6 +3908,62 @@ std::vector<array> Reduce::vjp(
 
   else {
     return {zeros_like(in, stream())};
+  }
+}
+
+std::vector<array> Reduce::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto in = primals[0];
+  auto s = stream();
+
+  auto grad_op = [&s, reduce_type = reduce_type_](
+                     const array& x, const array& tan, int axis) {
+    if (reduce_type == Reduce::Min) {
+      auto idx = argmin(x, axis, true, s);
+      return take_along_axis(tan, idx, axis, s);
+    } else if (reduce_type == Reduce::Max) {
+      auto idx = argmax(x, axis, true, s);
+      return take_along_axis(tan, idx, axis, s);
+    } else {
+      auto p1 = cumprod(x, axis, /*reverse=*/false, /*inclusive=*/false, s);
+      auto p2 = cumprod(x, axis, /*reverse=*/true, /*inclusive=*/false, s);
+      auto out = multiply(multiply(p1, p2, s), tan, s);
+      return sum(out, axis, true, s);
+    }
+  };
+
+  auto tan = tangents[0];
+  if (reduce_type_ == Reduce::Sum) {
+    return {sum(tan, axes_, true, s)};
+  } else {
+    if (axes_.size() > 1) {
+      std::vector<int> transpose_to;
+      {
+        // Find the transpose needed to move axes_ to the back.
+        int j = 0;
+        for (int i = 0; i < in.ndim(); i++) {
+          if (j < axes_.size() && axes_[j] == i) {
+            j++;
+          } else {
+            transpose_to.push_back(i);
+          }
+        }
+        for (auto ax : axes_) {
+          transpose_to.push_back(ax);
+        }
+      }
+
+      int start_ax = in.ndim() - axes_.size();
+      in = flatten(transpose(in, transpose_to, s), start_ax, -1, s);
+      tan = flatten(transpose(tan, transpose_to, s), start_ax, -1, s);
+
+      auto grad = squeeze(grad_op(in, tan, -1), -1, s);
+      return {expand_dims(grad, axes_, s)};
+    } else {
+      return {grad_op(in, tan, axes_[0])};
+    }
   }
 }
 
@@ -4346,6 +4467,145 @@ std::vector<Shape> ScatterAxis::output_shapes(
 bool ScatterAxis::is_equivalent(const Primitive& other) const {
   auto& s_other = static_cast<const ScatterAxis&>(other);
   return reduce_type_ == s_other.reduce_type_ && axis_ == s_other.axis_;
+}
+
+std::vector<array> MaskedScatter::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  const array& src = primals[2];
+  const array mask_b = broadcast_to(mask, dst.shape(), s);
+  const array& cotan = cotangents[0];
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+
+  for (int arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(where(mask_b, zeros_like(cotan, s), cotan, s));
+    } else if (arg == 2) {
+      const array mask_flat = flatten(mask_b, s);
+      const array cotan_flat = flatten(cotan, s);
+
+      const array idx_src =
+          cumsum(astype(mask_flat, int32, s), 0, false, false, s);
+      const array cotan_src =
+          where(mask_flat, cotan_flat, array(0, cotan_flat.dtype()), s);
+
+      array gsrc_flat =
+          zeros({static_cast<int>(src.size())}, cotan_src.dtype(), s);
+      if (src.size() > 0) {
+        const array cotan_updates =
+            reshape(cotan_src, {static_cast<int>(idx_src.size()), 1}, s);
+        gsrc_flat = scatter_add(gsrc_flat, idx_src, cotan_updates, 0, s);
+      }
+
+      vjps.push_back(reshape(gsrc_flat, src.shape(), s));
+    } else {
+      throw std::invalid_argument(
+          "[masked_scatter] Cannot calculate VJP with respect to mask.");
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> MaskedScatter::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto& s = stream();
+  const array& dst = primals[0];
+  const array& mask = primals[1];
+  array mask_b = mask;
+  if (mask_b.ndim() < dst.ndim()) {
+    std::vector<int> axes(dst.ndim() - mask_b.ndim(), 0);
+    std::iota(axes.begin(), axes.end(), mask_b.ndim());
+    mask_b = expand_dims(mask_b, axes, s);
+  }
+
+  array out = zeros_like(dst, s);
+  for (int arg : argnums) {
+    if (arg == 0) {
+      out = where(mask_b, out, tangents[0], s);
+    } else if (arg == 2) {
+      out = array(
+          out.shape(),
+          out.dtype(),
+          std::make_shared<MaskedScatter>(s),
+          {out, mask, tangents[1]});
+    } else {
+      throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
+    }
+  }
+  return {out};
+}
+
+std::pair<std::vector<array>, std::vector<int>> MaskedScatter::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto& s = stream();
+
+  // The inputs all had batching in the 0-th dim. So vectorization amounts to
+  //  - Move the vectorized axis first
+  //  - Expand and broadcast the unvectorized inputs
+  //  - Flatten the first two dims (the new and old batch axes)
+  //  - Masked scatter
+  //  - Unflatten the vectorized axis again
+
+  // Find the batch dim if any
+  int batch_dim = -1;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] >= 0) {
+      batch_dim = inputs[i].shape(axes[i]);
+    }
+  }
+
+  // Early exit if it's not vmapped
+  if (batch_dim < 0) {
+    return {
+        {array(
+            inputs[0].shape(),
+            inputs[0].dtype(),
+            std::make_shared<MaskedScatter>(to_stream(s)),
+            inputs)},
+        {-1}};
+  }
+
+  // Move vmapped axis to 0-th dim and broadcast the non-vectorized ones
+  auto v_in = inputs;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] > 0) {
+      v_in[i] = moveaxis(v_in[i], axes[i], 0, s);
+    } else if (axes[i] < 0) {
+      v_in[i] = expand_dims(v_in[i], 0, s);
+      auto in_shape = v_in[i].shape();
+      in_shape[0] = batch_dim;
+      v_in[i] = broadcast_to(v_in[i], in_shape, s);
+    }
+  }
+
+  // Flatten the first 2 dims
+  for (int i = 0; i < 3; i++) {
+    v_in[i] = flatten(v_in[i], 0, 1, s);
+  }
+
+  // Masked scatter
+  const auto result_shape = v_in[0].shape();
+  const auto result_dtype = v_in[0].dtype();
+  array result(
+      result_shape,
+      result_dtype,
+      std::make_shared<MaskedScatter>(to_stream(s)),
+      std::move(v_in));
+
+  // Now unflatten so the vectorized axis is nice and separate
+  result = unflatten(result, 0, {batch_dim, -1}, s);
+
+  return {{result}, {0}};
 }
 
 std::vector<array> Sigmoid::vjp(
@@ -5111,14 +5371,18 @@ std::vector<array> BlockMaskedMM::vjp(
   //    - dB_m = A_m.T [..., K, M] @ dC [..., M, N]
   //    - dA = dA_m * mask_b_lhs [..., MP, KP]
   //    - dB = dB_m * mask_b_rhs [..., KP, MP]
-  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP, KP]
-  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP, NP]
+  //    - dmask_b_lhs = dA_m [..., M, K] * A [..., M, K] // need [..., MP,
+  //    KP]
+  //    - dmask_b_rhs = dB_m [..., K, N] * B [..., K, N] // need [..., KP,
+  //    NP]
   //
   // Observations:
-  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as a
-  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing to
-  //    materialize the intermediate dA_m. Similar for dB.
-  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and then
+  //  * If dmask_b_lhs is not needed, then dA can be calulated in one go as
+  //  a
+  //    as a block_masked_mm with mask_b_lhs as the out_mask without needing
+  //    to materialize the intermediate dA_m. Similar for dB.
+  //  * If dmask_b_lhs is needed, we need to materialize dA_m directly and
+  //  then
   //    point-wise multiply with A. But the output needs to be padded
 
   std::vector<array> vjps;

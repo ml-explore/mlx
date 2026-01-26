@@ -227,21 +227,21 @@ __global__ void strided_scan(
   // Compute offsets.
   int64_t offset = (grid.block_rank() / stride_blocks) * axis_size * stride;
   int64_t global_index_x = (grid.block_rank() % stride_blocks) * BN;
-  uint read_offset_y = (block.thread_rank() * N_READS) / BN;
-  uint read_offset_x = (block.thread_rank() * N_READS) % BN;
-  uint scan_offset_y = warp.thread_rank();
-  uint scan_offset_x = warp.meta_group_rank() * n_scans;
+  uint32_t read_offset_y = (block.thread_rank() * N_READS) / BN;
+  uint32_t read_offset_x = (block.thread_rank() * N_READS) % BN;
+  uint32_t scan_offset_y = warp.thread_rank();
+  uint32_t scan_offset_x = warp.meta_group_rank() * n_scans;
 
-  uint stride_limit = stride - global_index_x;
+  uint32_t stride_limit = stride - global_index_x;
   in += offset + global_index_x + read_offset_x;
   out += offset + global_index_x + read_offset_x;
   U* read_into = read_buffer + read_offset_y * BN_pad + read_offset_x;
   U* read_from = read_buffer + scan_offset_y * BN_pad + scan_offset_x;
 
-  for (uint j = 0; j < axis_size; j += BM) {
+  for (uint32_t j = 0; j < axis_size; j += BM) {
     // Calculate the indices for the current thread.
-    uint index_y = j + read_offset_y;
-    uint check_index_y = index_y;
+    uint32_t index_y = j + read_offset_y;
+    uint32_t check_index_y = index_y;
     if (reverse) {
       index_y = axis_size - 1 - index_y;
     }
@@ -367,13 +367,14 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto in = inputs[0];
   auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
 
   if (in.flags().contiguous && in.strides()[axis_] != 0) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
+          cu::malloc_async(in.data_size() * out.itemsize(), encoder),
           in.data_size(),
           in.strides(),
           in.flags());
@@ -387,7 +388,6 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   int32_t axis_size = in.shape(axis_);
   bool contiguous = in.strides()[axis_] == 1;
 
-  auto& encoder = cu::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
@@ -395,7 +395,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_scan_ops(reduce_type_, [&](auto scan_op_tag) {
       using Op = MLX_GET_TYPE(scan_op_tag);
-      if constexpr (supports_scan_op<Op, T>) {
+      if constexpr (supports_scan_op<Op, T>()) {
         using U = typename cu::ScanResult<Op, T>::type;
         dispatch_bool(inclusive_, [&](auto inclusive) {
           dispatch_bool(reverse_, [&](auto reverse) {
@@ -415,8 +415,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   in.data_size() / axis_size,
                   block_dim,
                   0,
-                  in.data<T>(),
-                  out.data<U>(),
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
                   axis_size);
             } else {
               constexpr int BM = WARP_SIZE;
@@ -445,8 +445,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   num_blocks,
                   block_dim,
                   0,
-                  in.data<T>(),
-                  out.data<U>(),
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
                   axis_size,
                   stride,
                   stride_blocks);

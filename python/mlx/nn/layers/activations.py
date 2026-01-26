@@ -299,7 +299,7 @@ def hardswish(x):
 def hard_tanh(x, min_val=-1.0, max_val=1.0):
     r"""Applies the HardTanh function.
 
-    Applies :math:`\max(\min(x, \text{max\_val}), \text{min\_val})` element-wise.
+    Applies :math:`\max(\min(x, \mathrm{max\_val}), \mathrm{min\_val})` element-wise.
     """
     return mx.minimum(mx.maximum(x, min_val), max_val)
 

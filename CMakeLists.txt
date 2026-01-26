@@ -22,7 +22,7 @@ project(
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_MESSAGE NEVER)
@@ -40,11 +40,14 @@ option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
-option(MLX_BUILD_BLAS_FROM_SOURCE "Build OpenBLAS from source code" OFF)
+option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
+option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
+option(USE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan)" OFF)
+option(USE_TSAN "Enable ThreadSanitizer (TSan)" OFF)
 
 # --------------------- Processor tests -------------------------
 message(
@@ -74,9 +77,67 @@ endif()
 if(MLX_USE_CCACHE)
   find_program(CCACHE_PROGRAM ccache)
   if(CCACHE_PROGRAM)
+    message(STATUS "Found CCache: ${CCACHE_PROGRAM}")
     set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
     set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  endif()
+endif()
+
+if(USE_ASAN AND USE_TSAN)
+  message(
+    FATAL_ERROR
+      "AddressSanitizer (ASan) and ThreadSanitizer (TSan) are mutually exclusive and cannot be enabled at the same time."
+  )
+endif()
+
+set(SANITIZER_COMPILE_FLAGS "")
+set(SANITIZER_LINK_FLAGS "")
+
+if(USE_ASAN)
+  if(WIN32 AND MSVC)
+    list(APPEND SANITIZER_COMPILE_FLAGS /fsanitize=address)
+    list(APPEND SANITIZER_LINK_FLAGS /fsanitize=address)
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=address)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=address)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      list(APPEND SANITIZER_LINK_FLAGS -lpthread)
+    endif()
+  endif()
+endif()
+
+if(USE_UBSAN)
+  if(WIN32 AND MSVC)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=undefined)
+      list(APPEND SANITIZER_LINK_FLAGS -fsanitize=undefined)
+    else()
+      message(
+        WARNING
+          "UndefinedBehaviorSanitizer (UBSan) is not directly supported via a simple flag in MSVC."
+      )
+    endif()
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=undefined)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=undefined)
+  endif()
+endif()
+
+if(USE_TSAN)
+  if(WIN32 AND MSVC)
+    message(
+      FATAL_ERROR
+        "ThreadSanitizer (TSan) is not supported by the MSVC compiler. Please use Clang or GCC."
+    )
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    message(FATAL_ERROR "ThreadSanitizer (TSan) is not supported on macOS.")
+  else()
+    list(APPEND SANITIZER_COMPILE_FLAGS -fsanitize=thread)
+    list(APPEND SANITIZER_LINK_FLAGS -fsanitize=thread)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      list(APPEND SANITIZER_LINK_FLAGS -lpthread)
+    endif()
   endif()
 endif()
 
@@ -88,13 +149,13 @@ cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
 
-# Supress warnings: note: parameter passing for argument of type
-# ‘std::pair<float, float>’ when C++17 is enabled changed to match C++14 in GCC
-# 10.1
-target_compile_options(mlx PRIVATE -Wno-psabi)
+target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
+target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  find_package(CUDNN REQUIRED)
 endif()
 
 if(MLX_BUILD_METAL)
@@ -127,9 +188,12 @@ if(MLX_BUILD_METAL)
   message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 
   set(METAL_CPP_URL
-      https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18.zip)
+      https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip)
 
   if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+    if(${CMAKE_OSX_DEPLOYMENT_TARGET} LESS 14.0)
+      message(FATAL_ERROR "MLX requires macOS >= 14.0")
+    endif()
     set(XCRUN_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
   execute_process(
@@ -138,7 +202,6 @@ if(MLX_BUILD_METAL)
       "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal ${XCRUN_FLAGS} -E -x metal -P - | tail -1 | tr -d '\n'"
     OUTPUT_VARIABLE MLX_METAL_VERSION COMMAND_ERROR_IS_FATAL ANY)
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
-
   FetchContent_MakeAvailable(metal_cpp)
   target_include_directories(
     mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
@@ -156,14 +219,17 @@ if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
     set(MLX_BUILD_GGUF OFF)
-    # There is no prebuilt OpenBLAS distribution for MSVC.
-    set(MLX_BUILD_BLAS_FROM_SOURCE ON)
+  endif()
+  # Generate DLL and EXE in the same dir, otherwise EXE will not be able to run.
+  # This is only done when MLX is built as the top project.
+  if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   endif()
   # Windows implementation of dlfcn.h APIs.
   FetchContent_Declare(
     dlfcn-win32
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
-    GIT_TAG v1.4.1
+    GIT_TAG v1.4.2
     EXCLUDE_FROM_ALL)
   block()
   set(BUILD_SHARED_LIBS OFF)
@@ -187,20 +253,25 @@ if(MLX_BUILD_CPU)
     target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
     add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
-  elseif(MLX_BUILD_BLAS_FROM_SOURCE)
-    # Download and build OpenBLAS from source code.
+  elseif(WIN32)
+    # Download and link prebuilt binaries of OpenBLAS. Note that we can only
+    # link with the dynamic library, the prebuilt binaries were built with MinGW
+    # so static-linking would require linking with MinGW's runtime.
     FetchContent_Declare(
       openblas
-      GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
-      GIT_TAG v0.3.28
-      EXCLUDE_FROM_ALL)
-    set(BUILD_STATIC_LIBS ON) # link statically
-    set(NOFORTRAN ON) # msvc has no fortran compiler
+      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31-x64.zip"
+    )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(mlx PRIVATE openblas)
-    target_include_directories(
-      mlx PRIVATE "${openblas_SOURCE_DIR}/lapack-netlib/LAPACKE/include"
-                  "${CMAKE_BINARY_DIR}/generated" "${CMAKE_BINARY_DIR}")
+    target_link_libraries(mlx
+                          PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.lib")
+    target_include_directories(mlx PRIVATE "${openblas_SOURCE_DIR}/include")
+    # Make sure the DLL file is placed in the same dir with executables.
+    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/libopenblas.dll")
+    add_custom_command(
+      TARGET mlx
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENBLAS_DLL_FILE}
+              ${CMAKE_BINARY_DIR})
   else()
     if(${CMAKE_HOST_APPLE})
       # The blas shipped in macOS SDK is not supported, search homebrew for
@@ -252,9 +323,6 @@ target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
 
-# Do not add mlx_EXPORTS define for shared library.
-set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
-
 if(USE_SYSTEM_FMT)
   find_package(fmt REQUIRED)
 else()
@@ -270,14 +338,16 @@ target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 if(MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
   find_package(
-    Python 3.8
+    Python 3.10
     COMPONENTS Interpreter Development.Module
     REQUIRED)
-  execute_process(
-    COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    OUTPUT_VARIABLE nanobind_ROOT)
-  find_package(nanobind CONFIG REQUIRED)
+  FetchContent_Declare(
+    nanobind
+    GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+    GIT_TAG v2.10.2
+    GIT_SHALLOW TRUE
+    EXCLUDE_FROM_ALL)
+  FetchContent_MakeAvailable(nanobind)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
 
@@ -296,6 +366,15 @@ endif()
 
 # ----------------------------- Installation -----------------------------
 include(GNUInstallDirs)
+
+if(WIN32)
+  # Install DLLs to the same dir with extension file (core.pyd) on Windows.
+  set(CMAKE_INSTALL_BINDIR ".")
+  if(MLX_BUILD_CPU)
+    # Install OpenBLAS.
+    install(FILES ${OPENBLAS_DLL_FILE} TYPE BIN)
+  endif()
+endif()
 
 # Install library
 install(

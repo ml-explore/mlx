@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/api.h"
 #include "mlx/io/load.h"
 
 #pragma once
@@ -8,7 +9,7 @@ namespace mlx::core {
 
 struct FunctionTable;
 
-struct FunctionExporter {
+struct MLX_API FunctionExporter {
   void operator()(const std::initializer_list<array>& args) {
     this->operator()(Args(args));
   }
@@ -23,32 +24,32 @@ struct FunctionExporter {
   FunctionExporter(FunctionExporter&& other) = default;
 
  private:
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Args&)>&,
       bool shapeless);
 
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Kwargs&)>&,
       bool shapeless);
 
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Args&, const Kwargs&)>&,
       bool shapeless);
 
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const ExportCallback&,
       const std::function<std::vector<array>(const Args&)>&,
       bool shapeless);
 
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const ExportCallback&,
       const std::function<std::vector<array>(const Kwargs&)>&,
       bool shapeless);
 
-  friend FunctionExporter exporter(
+  friend MLX_API FunctionExporter exporter(
       const ExportCallback&,
       const std::function<std::vector<array>(const Args&, const Kwargs&)>&,
       bool shapeless);
@@ -72,13 +73,13 @@ struct FunctionExporter {
       const std::vector<array>& outputs,
       const std::vector<array>& tape,
       const std::vector<std::string>& kwarg_keys);
-  std::set<std::uintptr_t> constants;
+  std::unordered_map<std::uintptr_t, array> constants;
   int count{0};
   bool closed{false};
   std::shared_ptr<FunctionTable> ftable;
 };
 
-struct ImportedFunction {
+struct MLX_API ImportedFunction {
   std::vector<array> operator()(
       const std::initializer_list<array>& args) const {
     return this->operator()(Args(args));
@@ -89,7 +90,7 @@ struct ImportedFunction {
 
  private:
   ImportedFunction(const std::string& file);
-  friend ImportedFunction import_function(const std::string&);
+  friend MLX_API ImportedFunction import_function(const std::string&);
   ImportedFunction();
 
   std::shared_ptr<FunctionTable> ftable;

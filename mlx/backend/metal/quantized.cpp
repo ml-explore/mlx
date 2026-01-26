@@ -33,6 +33,23 @@ auto get_quantized_kernel_wrapped(
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
+template <typename... Args>
+auto get_qmm_nax_kernel_wrapped(
+    metal::Device& d,
+    const std::string& name,
+    const std::string& func,
+    const std::string& mode,
+    const std::string& type,
+    int group_size,
+    int bits,
+    Args... args) {
+  std::string template_def;
+  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  template_def = get_template_definition(
+      name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  return get_qmm_nax_kernel(d, name, template_def, mode);
+}
+
 inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
@@ -298,9 +315,10 @@ void qvm_split_k(
   int B = out.size() / M / N;
   B *= split_k;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims = MTL::Size(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims = MTL::Size(bk, num_simdgroups, 1);
   MTL::Size grid_dims = MTL::Size(M, N / bn, B);
 
   auto x_shape = x.shape();
@@ -414,9 +432,10 @@ void qvm(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims(bk, num_simdgroups, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;
@@ -451,6 +470,213 @@ void qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void qmm_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 64;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 64 == 0;
+  bool batched = B > 1;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode + (transpose ? "_qmm_t_nax_" : "_qmm_n_nax_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
+      batched ? "_batch_1" : "_batch_0");
+  std::string template_def;
+  MTL::ComputePipelineState* kernel;
+  if (transpose) {
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "qmm_t_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        batched,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
+  } else {
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "qmm_n_nax",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        batched,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
+  }
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void gather_qmm_nax(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  int B = out.size() / M / N;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 32;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  std::string kname;
+  kname.reserve(64);
+  bool aligned = N % 64 == 0;
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode + (transpose ? "_gather_qmm_t_nax_" : "_gather_qmm_n_nax_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn,
+      transpose ? (aligned ? "_alN_true" : "_alN_false") : "");
+  MTL::ComputePipelineState* kernel;
+  if (transpose) {
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_t_nax_",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        aligned,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
+  } else {
+    kernel = get_qmm_nax_kernel_wrapped(
+        d,
+        kname,
+        "gather_qmm_n_nax_",
+        mode,
+        type_string,
+        group_size,
+        bits,
+        bm,
+        bk,
+        bn,
+        wm,
+        wn);
+  }
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_input_array(lhs_indices, c++);
+  compute_encoder.set_input_array(rhs_indices, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  c = add_strides_and_shapes(compute_encoder, false, x, w, scales, biases, c);
+  add_gather_strides_and_shapes(compute_encoder, lhs_indices, rhs_indices, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void qmm(
     const array& x,
     const array& w,
@@ -466,6 +692,25 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
+    return qmm_nax(
+        /* const array& x = */ x,
+        /* const array& w = */ w,
+        /* const array& scales = */ scales,
+        /* const std::optional<array>& biases = */ biases,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string& mode = */ mode);
+  }
+
   int B = out.size() / M / N;
 
   int wm = 2;
@@ -543,6 +788,27 @@ void gather_qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
+    return gather_qmm_nax(
+        /* const array& x = */ x,
+        /* const array& w = */ w,
+        /* const array& scales = */ scales,
+        /* const std::optional<array>& biases = */ biases,
+        /* const array& lhs_indices = */ lhs_indices,
+        /* const array& rhs_indices = */ rhs_indices,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string& mode = */ mode);
+  }
+
   int B = out.size() / M / N;
 
   int wm = 2;
@@ -680,9 +946,10 @@ void gather_qvm(
     const std::string& mode) {
   int B = out.size() / M / N;
 
-  int bn = 64;
-  int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
+  constexpr int num_simdgroups = 2;
+  constexpr int bk = 32;
+  int bn = std::min(group_size, 32) * num_simdgroups;
+  MTL::Size group_dims(bk, num_simdgroups, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;
@@ -719,6 +986,137 @@ void gather_qvm(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void gather_qmm_rhs_nax(
+    const array& x_,
+    const array& w_,
+    const array& scales_,
+    const std::optional<array>& biases_,
+    const array& indices_,
+    array& out,
+    bool transpose,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string mode) {
+  // Start by normalizing the indices
+  array indices = ensure_row_contiguous(indices_, d, s);
+
+  // Broadcast x with indices. If we are here that means lhs_indices were not
+  // provided so the lhs_indices are implied to be the shape of x broadcasted
+  // with rhs_indices. We need only broadcast x and copy it as if applying the
+  // lhs_indices.
+  auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
+    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto x_shape = indices.shape();
+    x_shape.push_back(x.shape(-2));
+    x_shape.push_back(x.shape(-1));
+    array new_x(std::move(x_shape), x.dtype(), nullptr, {});
+    broadcast(x, new_x);
+    return ensure_row_contiguous(new_x, d, s);
+  };
+
+  // Normalize the input arrays
+  array x = broadcast_with_indices(x_);
+  array w = ensure_row_contiguous(w_, d, s);
+  array scales = ensure_row_contiguous(scales_, d, s);
+
+  // TODO: Tune the block sizes
+  int bm = 64, bn = 64, bk = 64;
+  int wm = 2, wn = 2;
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Make the kernel name
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode +
+          (transpose ? "_gather_qmm_rhs_nax_nt_" : "_gather_qmm_rhs_nax_nn_"),
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_bm_",
+      bm,
+      "_bn_",
+      bn,
+      "_bk_",
+      bk,
+      "_wm_",
+      wm,
+      "_wn_",
+      wn);
+
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+  };
+
+  // And the kernel hash that includes the function constants
+  std::string hash_name;
+  hash_name.reserve(128);
+  concatenate(
+      hash_name,
+      kname,
+      "_align_M_",
+      align_M ? 't' : 'n',
+      "_align_N_",
+      align_N ? 't' : 'n',
+      "_align_K_",
+      align_K ? 't' : 'n');
+
+  // Get and set the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_gather_qmm_nax_kernel(
+      d,
+      kname,
+      hash_name,
+      func_consts,
+      x,
+      group_size,
+      bits,
+      mode,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      transpose);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
+
+  int c = 0;
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases_) {
+    array biases = ensure_row_contiguous(*biases_, d, s);
+    compute_encoder.set_input_array(biases, c++);
+  }
+  compute_encoder.set_input_array(indices, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(M, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(K, c++);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void gather_qmm_rhs(
     const array& x_,
     const array& w_,
@@ -735,6 +1133,26 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
+  if (metal::is_nax_available() && transpose &&
+      (env::enable_tf32() || x_.dtype() != float32)) {
+    return gather_qmm_rhs_nax(
+        /* const array& x_ = */ x_,
+        /* const array& w_ = */ w_,
+        /* const array& scales_ = */ scales_,
+        /* const std::optional<array>& biases_ = */ biases_,
+        /* const array& indices_ = */ indices_,
+        /* array& out = */ out,
+        /* bool transpose = */ transpose,
+        /* int group_size = */ group_size,
+        /* int bits = */ bits,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* metal::Device& d = */ d,
+        /* const Stream& s = */ s,
+        /* const std::string mode = */ mode);
+  }
+
   // Start by normalizing the indices
   array indices = ensure_row_contiguous(indices_, d, s);
 
@@ -1037,25 +1455,26 @@ void fast::Quantize::eval_gpu(
   auto& compute_encoder = d.get_command_encoder(s.index);
 
   auto w = ensure_row_contiguous(w_pre, d, s);
-  compute_encoder.set_input_array(w, 0);
   if (dequantize_) {
     auto scales = ensure_row_contiguous(inputs[1], d, s);
-    compute_encoder.set_input_array(scales, 1);
-    compute_encoder.set_output_array(out, 3);
     if (mode_ == QuantizationMode::Affine) {
       auto biases = ensure_row_contiguous(inputs[2], d, s);
       compute_encoder.set_input_array(biases, 2);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
+    compute_encoder.set_output_array(out, 3);
   } else {
     auto& scales = outputs[1];
     scales.set_data(allocator::malloc(scales.nbytes()));
-    compute_encoder.set_output_array(out, 1);
-    compute_encoder.set_output_array(scales, 2);
     if (mode_ == QuantizationMode::Affine) {
       auto& biases = outputs[2];
       biases.set_data(allocator::malloc(biases.nbytes()));
       compute_encoder.set_output_array(biases, 3);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_output_array(scales, 2);
   }
 
   auto type_string = dequantize_ ? get_type_string(out.dtype())

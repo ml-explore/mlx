@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 
 namespace mlx::core {
@@ -9,11 +10,11 @@ namespace mlx::core {
 enum class CompileMode { disabled, no_simplify, no_fuse, enabled };
 
 /** Compile takes a function and returns a compiled function. */
-std::function<std::vector<array>(const std::vector<array>&)> compile(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> compile(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     bool shapeless = false);
 
-std::function<std::vector<array>(const std::vector<array>&)> compile(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> compile(
     std::vector<array> (*fun)(const std::vector<array>&),
     bool shapeless = false);
 
@@ -32,13 +33,13 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
  * Setting the environment variable ``MLX_DISABLE_COMPILE`` can also
  * be used to disable compilation.
  */
-void disable_compile();
+MLX_API void disable_compile();
 
 /** Globally enable compilation.
  * This will override the environment variable ``MLX_DISABLE_COMPILE``.
  */
-void enable_compile();
+MLX_API void enable_compile();
 
 /** Set the compiler mode to the given value. */
-void set_compile_mode(CompileMode mode);
+MLX_API void set_compile_mode(CompileMode mode);
 } // namespace mlx::core

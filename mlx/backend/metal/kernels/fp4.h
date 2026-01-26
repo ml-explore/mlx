@@ -1,23 +1,5 @@
 #pragma once
 
-constexpr constant static float FP4_LUT[16] = {
-    +0.0f,
-    +0.5f,
-    +1.0f,
-    +1.5f,
-    +2.0f,
-    +3.0f,
-    +4.0f,
-    +6.0f,
-    -0.0f,
-    -0.5f,
-    -1.0f,
-    -1.5f,
-    -2.0f,
-    -3.0f,
-    -4.0f,
-    -6.0f};
-
 struct fp4_e2m1 {
   fp4_e2m1(float x) {
     if (metal::isnan(x)) {
@@ -48,11 +30,18 @@ struct fp4_e2m1 {
     bits |= sign_bit;
   }
 
-  operator float() {
+  operator float16_t() {
     half converted = as_type<half>(ushort((bits & 7) << 9));
     converted *= 16384.0;
-    converted = bits & 8 ? -converted : converted;
-    return converted;
+    return bits & 8 ? -converted : converted;
+  }
+
+  operator float() {
+    return static_cast<float>(this->operator float16_t());
+  }
+
+  operator bfloat16_t() {
+    return static_cast<bfloat16_t>(this->operator float16_t());
   }
 
   uint8_t bits;

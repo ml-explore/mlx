@@ -210,6 +210,14 @@ class TestReduce(mlx_tests.MLXTestCase):
                     ref = getattr(np, op)(np_arr, axis=axis)
                     self.assertTrue(np.array_equal(out, ref, equal_nan=True))
 
+    def test_long_column(self):
+        a = (np.random.randn(8192, 64) * 32).astype(np.int32)
+        b = mx.array(a)
+
+        c1 = a.sum(0)
+        c2 = b.sum(0)
+        self.assertTrue(np.all(c1 == c2))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

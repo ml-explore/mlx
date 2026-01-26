@@ -157,4 +157,30 @@ array recv_like(
   return recv(x.shape(), x.dtype(), src, group_, s);
 }
 
+array sum_scatter(
+    const array& x,
+    std::optional<Group> group_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto group = to_group(group_);
+  if (group.size() == 1) {
+    return x;
+  }
+  if (x.shape()[0] % group.size() != 0) {
+    std::ostringstream msg;
+    msg << "[sum_scatter] Invalid shape=" << x.shape()
+        << " for a group of size " << group.size()
+        << ". The first dimension (axis 0) must be divisible by the group size.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto result_shape = x.shape();
+  result_shape[0] /= group.size();
+  auto stream = detail::communication_stream(group, s);
+
+  return array(
+      std::move(result_shape),
+      x.dtype(),
+      std::make_shared<ReduceScatter>(stream, group, ReduceScatter::Sum),
+      {x});
+}
 } // namespace mlx::core::distributed

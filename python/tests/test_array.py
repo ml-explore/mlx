@@ -434,6 +434,14 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([0, 4294967295], dtype=mx.float32)
         self.assertTrue(np.array_equal(x, xnp))
 
+    def test_double_keeps_precision(self):
+        x = 39.14223403241
+        out = mx.array(x, dtype=mx.float64).item()
+        self.assertEqual(out, x)
+
+        out = mx.array([x], dtype=mx.float64).item()
+        self.assertEqual(out, x)
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
@@ -1610,6 +1618,11 @@ class TestArray(mlx_tests.MLXTestCase):
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
                 elif np_dtype == np.int64:
                     self.assertEqual(mv_mx.format, "q", f"{mlx_dtype}{np_dtype}")
+                # for windows long is 32bit and numpy returns L/l.
+                elif np_dtype == np.uint32 and platform.system() == "Windows":
+                    self.assertEqual(mv_mx.format, "I", f"{mlx_dtype}{np_dtype}")
+                elif np_dtype == np.int32 and platform.system() == "Windows":
+                    self.assertEqual(mv_mx.format, "i", f"{mlx_dtype}{np_dtype}")
                 else:
                     self.assertEqual(
                         mv_mx.format, mv_np.format, f"{mlx_dtype}{np_dtype}"
@@ -1928,11 +1941,94 @@ class TestArray(mlx_tests.MLXTestCase):
         anp[:, idx] = 4
         self.assertTrue(np.array_equal(a, anp))
 
+    def test_setitem_with_boolean_mask(self):
+        # Python list mask
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = [True, False, True]
+        src = mx.array([5.0, 6.0])
+        expected = mx.array([5.0, 2.0, 6.0])
+        a[mask] = src
+        self.assertTrue(mx.array_equal(a, expected))
+
+        # mx.array scalar mask
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = mx.array(True)
+        expected = mx.array([5.0, 5.0, 5.0])
+        a[mask] = 5.0
+        self.assertTrue(mx.array_equal(a, expected))
+
+        # scalar mask
+        a = mx.array([1.0, 2.0, 3.0])
+        mask = True
+        expected = mx.array([5.0, 5.0, 5.0])
+        a[mask] = 5.0
+        self.assertTrue(mx.array_equal(a, expected))
+
+        mask_np = np.zeros((1, 10, 10), dtype=bool)
+        with self.assertRaises(ValueError):
+            mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
+
+        mask_np = np.zeros((10, 10, 1), dtype=bool)
+        with self.assertRaises(ValueError):
+            mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
+
     def test_array_namespace(self):
         a = mx.array(1.0)
         api = a.__array_namespace__()
         self.assertTrue(hasattr(api, "array"))
         self.assertTrue(hasattr(api, "add"))
+
+    def test_array_namespace_asarray(self):
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "asarray"))
+
+        arr = xp.asarray([1, 2, 3])
+        self.assertEqual(arr.tolist(), [1, 2, 3])
+
+        arr_f32 = xp.asarray([1, 2, 3], dtype=mx.float32)
+        self.assertEqual(arr_f32.dtype, mx.float32)
+
+        existing = mx.array([4, 5, 6])
+        arr_pass = xp.asarray(existing)
+        self.assertEqual(arr_pass.tolist(), [4, 5, 6])
+
+    def test_asarray(self):
+        # List inputs
+        self.assertEqual(mx.asarray([1, 2, 3]).tolist(), [1, 2, 3])
+        self.assertEqual(mx.asarray([[1, 2], [3, 4]]).tolist(), [[1, 2], [3, 4]])
+
+        # Tuple inputs
+        self.assertEqual(mx.asarray((1, 2, 3)).tolist(), [1, 2, 3])
+        self.assertEqual(mx.asarray(((1, 2), (3, 4))).tolist(), [[1, 2], [3, 4]])
+
+        # Mixed nesting
+        self.assertEqual(mx.asarray([(1, 2), (3, 4)]).tolist(), [[1, 2], [3, 4]])
+        self.assertEqual(mx.asarray(([1, 2], [3, 4])).tolist(), [[1, 2], [3, 4]])
+
+        # Scalar inputs
+        self.assertEqual(mx.asarray(42).item(), 42)
+        self.assertEqual(mx.asarray(3.14).item(), 3.140000104904175)
+        self.assertEqual(mx.asarray(True).item(), True)
+        self.assertEqual(mx.asarray(1 + 2j).item(), (1 + 2j))
+
+        # MLX array inputs
+        arr = mx.array([1, 2, 3])
+        self.assertEqual(mx.asarray(arr).tolist(), [1, 2, 3])
+
+        arr_int = mx.array([1, 2, 3], dtype=mx.int32)
+        arr_float = mx.asarray(arr_int, dtype=mx.float32)
+        self.assertEqual(arr_float.dtype, mx.float32)
+        self.assertEqual(arr_float.tolist(), [1.0, 2.0, 3.0])
+
+        # NumPy array inputs
+        np_arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        mx_arr = mx.asarray(np_arr)
+        self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
+        self.assertEqual(mx_arr.dtype, mx.float32)
+
+        # dtype parameter
+        self.assertEqual(mx.asarray([1, 2, 3], dtype=mx.float32).dtype, mx.float32)
+        self.assertEqual(mx.asarray(42, dtype=mx.float16).dtype, mx.float16)
 
     def test_to_scalar(self):
         a = mx.array(1)

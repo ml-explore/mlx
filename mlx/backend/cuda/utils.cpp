@@ -5,6 +5,7 @@
 #include "mlx/dtype_utils.h"
 
 #include <fmt/format.h>
+#include <vector>
 
 namespace mlx::core {
 
@@ -28,6 +29,13 @@ void check_cuda_error(const char* name, CUresult err) {
     const char* err_str = "Unknown error";
     cuGetErrorString(err, &err_str);
     throw std::runtime_error(fmt::format("{} failed: {}", name, err_str));
+  }
+}
+
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
   }
 }
 
@@ -60,7 +68,7 @@ const char* dtype_to_cuda_type(const Dtype& dtype) {
     case float64:
       return "double";
     case complex64:
-      return "complex64_t";
+      return "mlx::core::cu::complex64_t";
     default:
       return "unknown";
   }
@@ -72,7 +80,6 @@ CudaGraph::CudaGraph(cu::Device& device) {
 }
 
 void CudaGraph::end_capture(cudaStream_t stream) {
-  assert(handle_ == nullptr);
   CHECK_CUDA_ERROR(cudaStreamEndCapture(stream, &handle_));
 }
 
@@ -84,6 +91,25 @@ void CudaGraphExec::instantiate(cudaGraph_t graph) {
 CudaStream::CudaStream(cu::Device& device) {
   device.make_current();
   CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&handle_, cudaStreamNonBlocking));
+}
+
+void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
+  if (workspace_size == 0) {
+    return nullptr;
+  }
+
+  // Workspace allocation should not be captured.
+#ifndef NDEBUG
+  cudaStreamCaptureStatus status;
+  CHECK_CUDA_ERROR(cudaStreamIsCapturing(encoder.stream(), &status));
+  assert(status == cudaStreamCaptureStatusNone);
+#endif
+
+  // Ensure workspace is 256-byte aligned.
+  int nbytes = cuda::ceil_div(workspace_size, 256) * 256;
+  array workspace(cu::malloc_async(nbytes, encoder), {nbytes}, int8);
+  encoder.add_temporary(workspace);
+  return gpu_ptr<void>(workspace);
 }
 
 } // namespace mlx::core

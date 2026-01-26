@@ -15,7 +15,7 @@ class Custom : public Primitive {
   explicit Custom(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback)
-      : Primitive(stream), fallback_(fallback) {}
+      : Primitive(stream), fallback_(std::move(fallback)) {}
 
   virtual std::pair<std::vector<array>, std::vector<int>> vmap(
       const std::vector<array>& inputs,
@@ -32,7 +32,7 @@ class Custom : public Primitive {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
- private:
+ protected:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
 };
 
@@ -42,7 +42,7 @@ class RMSNorm : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps) {}
+      : Custom(stream, std::move(fallback)), eps_(eps) {}
 
   static bool use_fallback(Stream stream);
 
@@ -77,7 +77,7 @@ class RMSNormVJP : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps) {}
+      : Custom(stream, std::move(fallback)), eps_(eps) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -102,7 +102,7 @@ class LayerNorm : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps) {}
+      : Custom(stream, std::move(fallback)), eps_(eps) {}
 
   static bool use_fallback(Stream s);
 
@@ -136,7 +136,7 @@ class LayerNormVJP : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps) {}
+      : Custom(stream, std::move(fallback)), eps_(eps) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -165,7 +165,7 @@ class RoPE : public Custom {
       float base,
       float scale,
       bool forward)
-      : Custom(stream, fallback),
+      : Custom(stream, std::move(fallback)),
         dims_(dims),
         traditional_(traditional),
         base_(base),
@@ -205,16 +205,18 @@ class RoPE : public Custom {
 
 class ScaledDotProductAttention : public Custom {
  public:
-  explicit ScaledDotProductAttention(
+  ScaledDotProductAttention(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float scale,
       bool do_causal,
-      bool has_sinks)
-      : Custom(stream, fallback),
+      bool has_sinks,
+      bool output_logsumexp)
+      : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
-        has_sinks_(has_sinks) {}
+        has_sinks_(has_sinks),
+        output_logsumexp_(output_logsumexp) {}
 
   static bool use_fallback(
       const array& q,
@@ -223,7 +225,10 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
+      bool is_training,
+      bool output_logsumexp,
       Stream s);
+  static bool supports_bool_mask();
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -231,15 +236,55 @@ class ScaledDotProductAttention : public Custom {
   }
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-      override {
-    eval_gpu(inputs, outputs[0]);
-  }
+      override;
 
-  void eval_gpu(const std::vector<array>& inputs, array& out);
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
   bool is_equivalent(const Primitive& other) const override;
 
   DEFINE_NAME(ScaledDotProductAttention);
   DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(
+        nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
+  }
+
+ private:
+  float scale_;
+  bool do_causal_;
+  bool has_sinks_;
+  bool output_logsumexp_;
+};
+
+class ScaledDotProductAttentionVJP : public Custom {
+ public:
+  ScaledDotProductAttentionVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale,
+      bool do_causal,
+      bool has_sinks)
+      : Custom(stream, std::move(fallback)),
+        scale_(scale),
+        do_causal_(do_causal),
+        has_sinks_(has_sinks) {}
+
+  static bool use_fallback(const array& q, Stream s);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(ScaledDotProductAttentionVJP);
+  bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_tuple(nullptr, scale_, do_causal_, has_sinks_);
   }
@@ -288,7 +333,7 @@ class Quantize : public Custom {
       int bits,
       QuantizationMode mode,
       bool dequantize)
-      : Custom(stream, fallback),
+      : Custom(stream, std::move(fallback)),
         group_size_(group_size),
         bits_(bits),
         mode_(mode),
@@ -315,12 +360,6 @@ class Quantize : public Custom {
   bool dequantize_;
 };
 
-struct CustomKernelShapeInfo {
-  bool shape = false;
-  bool strides = false;
-  bool ndim = false;
-};
-
 using ScalarArg = std::variant<bool, int, float>;
 
 class CustomKernel : public Primitive {
@@ -331,15 +370,15 @@ class CustomKernel : public Primitive {
       std::string source,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
-      std::vector<CustomKernelShapeInfo> shape_infos,
+      std::vector<std::tuple<bool, bool, bool>> shape_infos,
       bool ensure_row_contiguous,
       std::optional<float> init_value,
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
       int shared_memory)
       : Primitive(stream),
-        source_(std::move(source)),
         name_(std::move(name)),
+        source_(std::move(source)),
         grid_(grid),
         threadgroup_(threadgroup),
         shape_infos_(std::move(shape_infos)),
@@ -358,13 +397,26 @@ class CustomKernel : public Primitive {
       override;
 
   DEFINE_NAME(CustomKernel);
+  auto state() const {
+    return std::make_tuple(
+        name_,
+        source_,
+        grid_,
+        threadgroup_,
+        shape_infos_,
+        ensure_row_contiguous_,
+        init_value_,
+        scalar_arguments_,
+        is_precompiled_,
+        shared_memory_);
+  }
 
  private:
-  std::string source_;
   std::string name_;
+  std::string source_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
-  std::vector<CustomKernelShapeInfo> shape_infos_;
+  std::vector<std::tuple<bool, bool, bool>> shape_infos_;
   bool ensure_row_contiguous_;
   std::optional<float> init_value_;
   std::vector<ScalarArg> scalar_arguments_;

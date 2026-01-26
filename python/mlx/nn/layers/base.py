@@ -407,7 +407,10 @@ class Module(dict):
         instance).
 
         Args:
-            apply_fn (Callable): The function to apply to the modules.
+            apply_fn (Callable): The function to apply to the modules which
+                takes two parameters. The first parameter is the string path of
+                the module (e.g. ``"model.layers.0.linear"``). The second
+                parameter is the module object.
 
         Returns:
             The module instance after updating submodules.
@@ -556,6 +559,9 @@ class Module(dict):
             _unfreeze_impl("", self)
         return self
 
+    def _set_training_mode(self, mode: bool) -> None:
+        self._training = mode
+
     def train(self, mode: bool = True) -> Module:
         """Set the model in or out of training mode.
 
@@ -570,10 +576,8 @@ class Module(dict):
             The module instance after updating the training mode.
         """
 
-        def _set_train(_, m):
-            m._training = mode
+        self.apply_to_modules(lambda _, m: m._set_training_mode(mode))
 
-        self.apply_to_modules(_set_train)
         return self
 
     def eval(self) -> Module:

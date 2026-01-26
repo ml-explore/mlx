@@ -1,10 +1,17 @@
 #pragma once
 
+// Required for using M_LN2 in MSVC.
+#define _USE_MATH_DEFINES
+
+#include <math.h>
 #include <stdint.h>
 #include <algorithm>
-#include <cmath>
 #include <complex>
 #include <functional>
+
+#ifdef _MSC_VER
+#include <intrin.h> // For _BitScanReverse
+#endif
 
 namespace mlx::core::simd {
 template <typename T, int N>
@@ -105,7 +112,7 @@ Simd<T, 1> log1p(Simd<T, 1> in) {
       if (r == 0) { // handle underflow
         return Simd<T, 1>{T{x, theta}};
       }
-      return Simd<T, 1>{T{((typeof(x))(0.5)) * std::log1p(r), theta}};
+      return Simd<T, 1>{T{((decltype(x))(0.5)) * std::log1p(r), theta}};
     } else {
       auto z0 = std::hypot(x + 1, y);
       return Simd<T, 1>{T{std::log(z0), theta}};
@@ -173,7 +180,16 @@ DEFAULT_BINARY(||)
 
 template <typename T>
 Simd<T, 1> clz(Simd<T, 1> x_) {
+#ifdef _MSC_VER
+  // MSVC doesn't have __builtin_clz, use _BitScanReverse instead
+  unsigned long index;
+  if (_BitScanReverse(&index, static_cast<unsigned long>(x_.value))) {
+    return static_cast<T>(31 - index);
+  }
+  return static_cast<T>(32); // All zeros case
+#else
   return __builtin_clz(x_.value);
+#endif
 }
 
 template <typename T>

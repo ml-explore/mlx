@@ -4,6 +4,7 @@
 
 #include <unordered_map>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 
 namespace mlx::core::detail {
@@ -14,24 +15,24 @@ using ArrayFnWithExtra =
 
 // This is not part of the general C++ API as calling with a bad id is a bad
 // idea.
-std::function<std::vector<array>(const std::vector<array>&)> compile(
+MLX_API std::function<std::vector<array>(const std::vector<array>&)> compile(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::uintptr_t fun_id,
     bool shapeless = false,
     std::vector<uint64_t> constants = {});
 
-ArrayFnWithExtra compile(
+MLX_API ArrayFnWithExtra compile(
     ArrayFnWithExtra fun,
     std::uintptr_t fun_id,
     bool shapeless,
     std::vector<uint64_t> constants);
 
 // Erase cached compile functions
-void compile_erase(std::uintptr_t fun_id);
+MLX_API void compile_erase(std::uintptr_t fun_id);
 
 // Clear the compiler cache causing a recompilation of all compiled functions
 // when called again.
-void compile_clear_cache();
+MLX_API void compile_clear_cache();
 
 bool compile_available_for_device(const Device& device);
 
@@ -47,7 +48,7 @@ using ParentsMap =
 // Traverses the graph to build a tape and a map of array ids to their parents
 std::pair<std::vector<array>, ParentsMap> compile_dfs(
     const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
+    std::vector<array>& outputs,
     const std::vector<array>& original_inputs);
 
 // Simplify the tape.

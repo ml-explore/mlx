@@ -21,6 +21,9 @@ class MetalAllocator : public allocator::Allocator {
   virtual Buffer malloc(size_t size) override;
   virtual void free(Buffer buffer) override;
   virtual size_t size(Buffer buffer) const override;
+  virtual Buffer make_buffer(void* ptr, size_t size) override;
+  virtual void release(Buffer buffer) override;
+
   size_t get_active_memory() {
     return active_memory_;
   };

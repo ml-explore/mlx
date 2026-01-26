@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <numeric>
+#include <optional>
 #include <sstream>
 
 #include "python/src/convert.h"
@@ -765,7 +766,7 @@ auto mlx_slice_update(
     const nb::object& obj,
     const ScalarOrArray& v) {
   // Can't route to slice update if not slice, tuple, or int
-  if (src.ndim() == 0 ||
+  if (src.ndim() == 0 || nb::isinstance<nb::bool_>(obj) ||
       (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj) &&
        !nb::isinstance<nb::int_>(obj))) {
     return std::make_pair(false, src);
@@ -885,6 +886,29 @@ auto mlx_slice_update(
   return std::make_pair(true, out);
 }
 
+std::optional<mx::array> extract_boolean_mask(const nb::object& obj) {
+  using NDArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+  if (nb::isinstance<nb::bool_>(obj)) {
+    return mx::array(nb::cast<bool>(obj), mx::bool_);
+  } else if (nb::isinstance<mx::array>(obj)) {
+    auto mask = nb::cast<mx::array>(obj);
+    if (mask.dtype() == mx::bool_) {
+      return mask;
+    }
+  } else if (nb::isinstance<NDArray>(obj)) {
+    auto mask = nb::cast<NDArray>(obj);
+    if (mask.dtype() == nb::dtype<bool>()) {
+      return nd_array_to_mlx(mask, mx::bool_);
+    }
+  } else if (nb::isinstance<nb::list>(obj)) {
+    auto mask = array_from_list(nb::cast<nb::list>(obj), {});
+    if (mask.dtype() == mx::bool_) {
+      return mask;
+    }
+  }
+  return std::nullopt;
+}
+
 void mlx_set_item(
     mx::array& src,
     const nb::object& obj,
@@ -892,6 +916,13 @@ void mlx_set_item(
   auto [success, out] = mlx_slice_update(src, obj, v);
   if (success) {
     src.overwrite_descriptor(out);
+    return;
+  }
+
+  if (auto mask = extract_boolean_mask(obj)) {
+    auto updates = to_array(v, src.dtype());
+    auto result = masked_scatter(src, *mask, updates);
+    src.overwrite_descriptor(result);
     return;
   }
 

@@ -4,12 +4,12 @@ import gc
 import inspect
 import io
 import math
-import unittest
 from functools import partial, wraps
 from io import StringIO
 
 import mlx.core as mx
 import mlx_tests
+import numpy as np
 
 
 class TestCompile(mlx_tests.MLXTestCase):
@@ -482,6 +482,28 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.compile(fun, shapeless=True)(x).shape, (1, 32))
 
+    def test_shapeless_compile_full_like(self):
+        x_shape = (1, 1, 32)
+        x = mx.zeros((x_shape))
+
+        def zeros_fun(x):
+            return mx.zeros_like(x)
+
+        def ones_fun(x):
+            return mx.ones_like(x)
+
+        compiled_zero_like = mx.compile(zeros_fun, shapeless=True)
+        compiled_ones_like = mx.compile(ones_fun, shapeless=True)
+
+        self.assertEqual(compiled_zero_like(x).shape, x_shape)
+        self.assertEqual(compiled_ones_like(x).shape, x_shape)
+
+        y_shape = (2, 2, 16)
+        y = mx.zeros(y_shape)
+
+        self.assertEqual(compiled_zero_like(y).shape, y_shape)
+        self.assertEqual(compiled_ones_like(y).shape, y_shape)
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
@@ -842,7 +864,6 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out, expected))
 
     def test_compile_many_outputs(self):
-
         @mx.compile
         def fun(arr):
             arrs = [arr] * 64
@@ -1133,6 +1154,123 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         a = fun2(mx.array(-1.0))
         self.assertEqual(a.item(), 1.0)
+
+    def test_multiple_compile_same_capture(self):
+        def fun(do_compile):
+            t = mx.ones((10,))
+            u = (1.0 - t) * 0.0 + t * 3.0
+
+            o = mx.ones((6,))
+            b = o[:, None] * u
+
+            c = b * mx.ones_like(u)
+
+            a = mx.ones((6,))
+            if do_compile:
+                d = mx.compile(lambda x: x @ b)(a)
+                e = mx.compile(lambda x: x @ c.T)(d)
+            else:
+                d = a @ b
+                e = d @ c.T
+            return e
+
+        out = fun(True)
+        mx.eval(out)
+        expected = fun(False)
+        self.assertTrue(mx.allclose(out, expected))
+
+    def test_compile_types(self):
+        from typing import NamedTuple
+
+        class Vector(tuple):
+            pass
+
+        class State(NamedTuple):
+            a: mx.array
+            b: mx.array
+
+        def transform(x: State):
+            return State(x.a + 10, x.b * 10)
+
+        def transform_tuple(t):
+            return (t[0] + 10, t[1] * 10)
+
+        def transform_vector(t):
+            return Vector([t[0] + 10, t[1] * 10])
+
+        x = State(mx.array(1), mx.array(2))
+
+        compiled_transform = mx.compile(transform)
+        compiled_transform_tuple = mx.compile(transform_tuple)
+        compiled_transform_vector = mx.compile(transform_vector)
+
+        x_batch_tuple = (mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        out1 = compiled_transform_tuple(x_batch_tuple)
+
+        self.assertTrue(isinstance(out1, tuple))
+        self.assertTrue(mx.array_equal(out1[0], mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out1[1], mx.array([40, 50, 60])))
+
+        x_batch = State(mx.array([1, 2, 3]), mx.array([4, 5, 6]))
+        out2 = compiled_transform(x_batch)
+        self.assertTrue(isinstance(out2, State))
+        self.assertTrue(mx.array_equal(out2.a, mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out2.b, mx.array([40, 50, 60])))
+
+        x_batch_vector = Vector([mx.array([1, 2, 3]), mx.array([4, 5, 6])])
+        out3 = compiled_transform_vector(x_batch_vector)
+        self.assertTrue(isinstance(out3, Vector))
+        self.assertTrue(mx.array_equal(out3[0], mx.array([11, 12, 13])))
+        self.assertTrue(mx.array_equal(out3[1], mx.array([40, 50, 60])))
+
+    def test_compile_output_with_siblings(self):
+        @mx.compile
+        def fun(x, y):
+            return mx.divmod(mx.abs(x), mx.abs(y))[0]
+
+        out = fun(mx.array(1.0), mx.array(1.0))
+        self.assertEqual(out.item(), 1.0)
+
+        # Make sure the following compiles without issue
+        def loss_fn(params, x):
+            emb, w = params
+            return mx.fast.layer_norm(emb[x], w, None, 1e-4).sum()
+
+        emb = mx.zeros((10, 32))
+        w = mx.zeros((32,))
+
+        loss_and_grad_fn = mx.value_and_grad(loss_fn)
+
+        x = mx.zeros(shape=(4, 32), dtype=mx.int32)
+        mx.eval(x, emb, w)
+
+        @mx.compile
+        def step(emb, w, x):
+            loss, grads = loss_and_grad_fn((emb, w), x)
+            return loss, grads
+
+        loss, grads = step(emb, w, x)
+        mx.eval(loss, grads)
+
+    def test_compile_donates_input_buffer(self):
+        mx.set_default_device(mx.cpu)
+
+        def fun(x):
+            return mx.sin(x) + 1
+
+        compiled_fn = mx.compile(fun)
+
+        input = mx.arange(16, dtype=mx.float32)
+        mx.eval(input)
+        in_ptr = np.asarray(input, copy=False).__array_interface__["data"][0]
+
+        out = compiled_fn(input)
+        del input  # Ensure the reference is dropped
+        mx.eval(out)
+
+        self.assertEqual(
+            np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
+        )
 
 
 if __name__ == "__main__":

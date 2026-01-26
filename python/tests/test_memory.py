@@ -18,8 +18,8 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(mx.set_cache_limit(old_limit), old_limit)
 
         old_limit = mx.set_memory_limit(10)
-        self.assertTrue(mx.set_memory_limit(old_limit), 10)
-        self.assertTrue(mx.set_memory_limit(old_limit), old_limit)
+        self.assertEqual(mx.set_memory_limit(old_limit), 10)
+        self.assertEqual(mx.set_memory_limit(old_limit), old_limit)
 
         # Query active and peak memory
         a = mx.zeros((4096,))

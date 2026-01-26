@@ -3,30 +3,9 @@
 #pragma once
 
 #include "mlx/backend/cuda/steel/utils.cuh"
+#include "mlx/backend/cuda/vector_types.cuh"
 
 namespace mlx::core::cu {
-
-// Map types to their vector of 2 type float -> float2, double -> double2 etc
-template <typename T>
-struct Vector2;
-template <>
-struct Vector2<double> {
-  using type = double2;
-};
-template <>
-struct Vector2<float> {
-  using type = float2;
-};
-template <>
-struct Vector2<__half> {
-  using type = __half2;
-};
-template <>
-struct Vector2<__nv_bfloat16> {
-  using type = __nv_bfloat162;
-};
-template <typename T>
-using Vector2_t = typename Vector2<T>::type;
 
 /**
  * The basic building block for Ampere mmas. A 16x16 tile distributed across

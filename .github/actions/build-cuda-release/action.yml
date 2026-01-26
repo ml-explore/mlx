@@ -2,9 +2,13 @@ name: 'Build CUDA wheel'
 description: 'Build CUDA wheel'
 
 inputs:
-  nvcc-location:
-    description: 'Location of nvcc compiler'
+  arch:
+    description: 'Platform architecture tag'
     required: true
+    type: choice
+    options:
+      - x86_64
+      - aarch64
 
 runs:
   using: "composite"
@@ -12,13 +16,16 @@ runs:
     - name: Build package
       shell: bash
       env:
-        MLX_BUILD_STAGE: 2
-        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON -DCMAKE_CUDA_COMPILER=${{ inputs.nvcc-location }}
+        CMAKE_ARGS: -DMLX_BUILD_CUDA=ON
       run: |
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
-        python -m build -w
+        MLX_BUILD_STAGE=2 python -m build -w
 
-        if [ -f "python/scripts/repair_cuda.sh" ]; then
-          bash python/scripts/repair_cuda.sh
-        fi
+        auditwheel repair dist/mlx_cuda*.whl \
+          --plat manylinux_2_35_${{ inputs.arch }} \
+          --exclude libcublas* \
+          --exclude libcuda* \
+          --exclude libcudnn* \
+          --exclude libnccl* \
+          --exclude libnvrtc*

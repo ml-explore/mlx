@@ -768,9 +768,12 @@ void nd_fft_op(
     const Stream& s) {
   // Perform ND FFT on GPU as a series of 1D FFTs
   auto temp_shape = inverse ? in.shape() : out.shape();
-  array temp1(temp_shape, complex64, nullptr, {});
-  array temp2(temp_shape, complex64, nullptr, {});
-  std::vector<array> temp_arrs = {temp1, temp2};
+  std::vector<array> temp_arrs;
+  temp_arrs.emplace_back(temp_shape, complex64, nullptr, std::vector<array>{});
+  if (axes.size() > 2) {
+    temp_arrs.emplace_back(
+        temp_shape, complex64, nullptr, std::vector<array>{});
+  }
   for (int i = axes.size() - 1; i >= 0; i--) {
     int reverse_index = axes.size() - i - 1;
     // For 5D and above, we don't want to reallocate our two temporary arrays
@@ -781,8 +784,8 @@ void nd_fft_op(
     // Mirror np.fft.(i)rfftn and perform a real transform
     // only on the final axis.
     bool step_real = (real && index == axes.size() - 1);
-    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[1 - i % 2];
-    array& out_arr = i == 0 ? out : temp_arrs[i % 2];
+    const array& in_arr = i == axes.size() - 1 ? in : temp_arrs[i % 2];
+    array& out_arr = i == 0 ? out : temp_arrs[1 - i % 2];
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 

@@ -29,24 +29,20 @@ struct fp8_e4m3 {
     bits |= static_cast<uint8_t>(sign >> 24);
   }
 
+  operator float16_t() {
+    uint16_t v = (bits & 127) << 7;
+    half converted = as_type<half>(v);
+    converted *= 256.0;
+    auto sign = bits & 128;
+    return (sign ? -converted : converted);
+  }
+
+  operator bfloat16_t() {
+    return static_cast<bfloat16_t>(this->operator float16_t());
+  }
+
   operator float() {
-    // From PyTorch:
-    // https://github.com/pytorch/pytorch/blob/e3643e1e0e923f0fc063dfab6f45c956d568919d/c10/util/Float8_e4m3fn.h#L46
-    uint32_t w = static_cast<uint32_t>(bits) << 24;
-    uint32_t sign = w & 0x80000000;
-    uint32_t nonsign = w & 0x7FFFFFFF;
-
-    uint32_t renorm_shift = metal::clz(nonsign);
-    renorm_shift = renorm_shift > 4 ? renorm_shift - 4 : 0;
-
-    int32_t inf_nan_mask =
-        (static_cast<int32_t>(nonsign + 0x01000000) >> 8) & 0x7F800000;
-    int32_t zero_mask = static_cast<int32_t>(nonsign - 1) >> 31;
-    uint32_t result = sign |
-        ((((nonsign << renorm_shift >> 4) + ((0x78 - renorm_shift) << 23)) |
-          inf_nan_mask) &
-         ~zero_mask);
-    return as_type<float>(result);
+    return static_cast<float>(this->operator float16_t());
   }
 
   uint8_t bits;
@@ -74,8 +70,10 @@ struct fp8_e8m0 {
     uint16_t out = (bits == 0 ? 0x40 : (static_cast<uint16_t>(bits) << 7));
     return as_type<bfloat16_t>(out);
   }
+
   operator float() {
-    return static_cast<float>(this->operator bfloat16_t());
+    uint32_t out = (bits == 0 ? 0x400000 : (static_cast<uint16_t>(bits) << 23));
+    return as_type<float>(out);
   }
 
   uint8_t bits;

@@ -124,37 +124,53 @@ auto py_value_and_grad(
 
     // Collect the arrays
     std::vector<mx::array> arrays;
+    std::vector<nb::object> array_objects;
+    auto flatten_with_objects = [&arrays, &array_objects](
+                                    auto tree, bool strict) {
+      tree_visit(tree, [&](nb::handle obj) {
+        if (nb::isinstance<mx::array>(obj)) {
+          arrays.push_back(nb::cast<mx::array>(obj));
+          array_objects.push_back(nb::borrow<nb::object>(obj));
+        } else if (strict) {
+          throw std::invalid_argument(
+              "[tree_flatten] The argument should contain only arrays");
+        }
+      });
+    };
+
     std::vector<int> counts(1, 0);
     std::vector<int> gradient_indices;
     for (int i = 0, j = 0; i < args.size(); ++i) {
       bool needs_grad = (j < argnums.size() && argnums[j] == i);
-      auto argsi = tree_flatten(args[i], /* strict = */ needs_grad);
+      auto pre_size = arrays.size();
+      flatten_with_objects(args[i], /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
-        gradient_indices.resize(old_size + argsi.size());
+        auto delta_size = arrays.size() - pre_size;
+        gradient_indices.resize(old_size + delta_size);
         std::iota(
             gradient_indices.begin() + old_size,
             gradient_indices.end(),
-            arrays.size());
+            pre_size);
         j++;
-        counts.push_back(argsi.size());
+        counts.push_back(delta_size);
       }
-      arrays.insert(arrays.end(), argsi.begin(), argsi.end());
     }
     for (auto item : kwargs) {
       bool needs_grad =
           (argnames.find(nb::cast<std::string>(item.first)) != argnames.end());
-      auto argsk = tree_flatten(item.second, /* strict = */ needs_grad);
+      auto pre_size = arrays.size();
+      flatten_with_objects(item.second, /* strict = */ needs_grad);
       if (needs_grad) {
         auto old_size = gradient_indices.size();
-        gradient_indices.resize(old_size + argsk.size());
+        auto delta_size = arrays.size() - pre_size;
+        gradient_indices.resize(old_size + delta_size);
         std::iota(
             gradient_indices.begin() + old_size,
             gradient_indices.end(),
-            arrays.size());
-        counts.push_back(argsk.size());
+            pre_size);
+        counts.push_back(delta_size);
       }
-      arrays.insert(arrays.end(), argsk.begin(), argsk.end());
     }
     std::partial_sum(counts.cbegin(), counts.cend(), counts.begin());
 
@@ -163,7 +179,7 @@ auto py_value_and_grad(
     nb::object py_value_out;
     auto value_and_grads = mx::value_and_grad(
         [&fun,
-         &arrays,
+         &array_objects,
          &args,
          &kwargs,
          &py_value_out,
@@ -183,8 +199,9 @@ auto py_value_and_grad(
           tree_visit_update(tree, [&](nb::handle node) {
             auto replace_arr = nb::cast<mx::array>(node);
             if (replace_arr.id() == a[index].id()) {
-              return nb::cast(arrays[index++]);
+              return array_objects[index++];
             } else {
+              index++;
               return nb::cast(replace_arr);
             }
           });
@@ -1238,8 +1255,18 @@ void init_transforms(nb::module_& m) {
               same in number, shape, and type as the inputs of ``fun`` (i.e. the ``primals``).
 
         Returns:
-            list(array): A list of the Jacobian-vector products which
-            is the same in number, shape, and type of the inputs to ``fun``.
+            tuple(list(array), list(array)): A tuple with the outputs of
+            ``fun`` in the first position and the Jacobian-vector products
+            in the second position.
+
+        Example:
+
+         .. code-block:: python
+
+             import mlx.core as mx
+
+             outs, jvps = mx.jvp(mx.sin, (mx.array(1.0),), (mx.array(1.0),))
+
       )pbdoc");
   m.def(
       "vjp",
@@ -1277,8 +1304,18 @@ void init_transforms(nb::module_& m) {
             same in number, shape, and type as the outputs of ``fun``.
 
         Returns:
-            list(array): A list of the vector-Jacobian products which
-            is the same in number, shape, and type of the outputs of ``fun``.
+            tuple(list(array), list(array)): A tuple with the outputs of
+            ``fun`` in the first position and the vector-Jacobian products
+            in the second position.
+
+        Example:
+
+         .. code-block:: python
+
+             import mlx.core as mx
+
+             outs, vjps = mx.vjp(mx.sin, (mx.array(1.0),), (mx.array(1.0),))
+
       )pbdoc");
   m.def(
       "value_and_grad",
@@ -1296,7 +1333,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def value_and_grad(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable"),
+          "def value_and_grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Tuple[R, Any]]"),
       R"pbdoc(
         Returns a function which computes the value and gradient of ``fun``.
 
@@ -1365,7 +1402,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def grad(fun: Callable, argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable"),
+          "def grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Any]"),
       R"pbdoc(
         Returns a function which computes the gradient of ``fun``.
 
@@ -1398,7 +1435,7 @@ void init_transforms(nb::module_& m) {
       "in_axes"_a = 0,
       "out_axes"_a = 0,
       nb::sig(
-          "def vmap(fun: Callable, in_axes: object = 0, out_axes: object = 0) -> Callable"),
+          "def vmap(fun: Callable[P, R], in_axes: object = 0, out_axes: object = 0) -> Callable[P, R]"),
       R"pbdoc(
         Returns a vectorized version of ``fun``.
 
@@ -1435,7 +1472,7 @@ void init_transforms(nb::module_& m) {
       "outputs"_a = nb::none(),
       "shapeless"_a = false,
       nb::sig(
-          "def compile(fun: Callable, inputs: Optional[object] = None, outputs: Optional[object] = None, shapeless: bool = False) -> Callable"),
+          "def compile(fun: Callable[P, R], inputs: Optional[object] = None, outputs: Optional[object] = None, shapeless: bool = False) -> Callable[P, R]"),
       R"pbdoc(
         Returns a compiled function which produces the same output as ``fun``.
 
@@ -1481,7 +1518,22 @@ void init_transforms(nb::module_& m) {
   m.def(
       "checkpoint",
       [](nb::callable fun) { return mlx_func(PyCheckpointedFun{fun}, fun); },
-      "fun"_a);
+      "fun"_a,
+      nb::sig("def checkpoint(fun: Callable[P, R]) -> Callable[P, R]"),
+      R"pbdoc(
+      Transform the passed callable to one that performs gradient
+      checkpointing with respect to the inputs of the callable.
+
+      Use this to reduce memory use for gradient computations at the expense of
+      increased computation.
+
+      Args:
+          fun (Callable): The function to checkpoint.
+
+      Returns:
+          A callable that recomputes intermediate states during gradient
+          computation.
+      )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");

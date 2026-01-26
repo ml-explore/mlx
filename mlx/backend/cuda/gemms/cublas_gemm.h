@@ -2,13 +2,14 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/device.h"
 
 #include <cublasLt.h>
 
 namespace mlx::core {
 
-class CublasGemm {
+class CublasGemm : public CublasMatmulBase {
  public:
   CublasGemm(
       cu::Device& device,
@@ -42,8 +43,6 @@ class CublasGemm {
       int64_t b_batch_stride,
       int64_t c_batch_stride);
 
-  ~CublasGemm();
-
   // The output's descriptor is inferred from inputs by default, use this method
   // for unusual output.
   void set_out(
@@ -54,8 +53,6 @@ class CublasGemm {
       int64_t ld,
       int32_t batch_count,
       int64_t batch_stride);
-
-  void set_bias(cu::CommandEncoder& encoder, const array& bias);
 
   void run(
       cu::CommandEncoder& encoder,
@@ -112,18 +109,6 @@ class CublasGemm {
       const void* c,
       float alpha = 1,
       float beta = 0);
-
-  uint64_t M_;
-  uint64_t N_;
-  cudaDataType_t scale_type_;
-  cublasLtMatmulPreference_t pref_{nullptr};
-  cublasLtHandle_t handle_{nullptr};
-  cublasLtMatmulDesc_t matmul_desc_{nullptr};
-  cublasLtMatrixLayout_t a_desc_{nullptr};
-  cublasLtMatrixLayout_t b_desc_{nullptr};
-  cublasLtMatrixLayout_t c_desc_{nullptr};
-  cublasLtMatrixLayout_t out_desc_{nullptr};
-  cublasLtMatmulHeuristicResult_t heuristic_;
 };
 
 } // namespace mlx::core

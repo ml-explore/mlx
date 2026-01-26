@@ -36,7 +36,7 @@ void Fence::wait(Stream stream, const array&) {
   }
 }
 
-void Fence::update(Stream stream, const array&) {
+void Fence::update(Stream stream, const array&, bool) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
   f.count++;
   if (stream.device == Device::cpu) {

@@ -13,7 +13,7 @@ bool is_available() {
   return true;
 }
 
-void start_capture(std::string path, id object) {
+void start_capture(std::string path, NS::Object* object) {
   auto pool = new_scoped_memory_pool();
 
   auto descriptor = MTL::CaptureDescriptor::alloc()->init();

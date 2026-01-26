@@ -1,0 +1,69 @@
+name: 'Run Linux tests'
+
+inputs:
+  has-gpu:
+    description: 'Run GPU tests'
+    required: false
+    default: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run MPI tests
+      shell: bash
+      run: |
+        echo "::group::MPI tests"
+        mpirun --bind-to none --allow-run-as-root -host localhost:8 -np 8 python python/tests/mpi_test_distributed.py
+        echo "::endgroup::"
+
+    - name: Run distributed tests
+      if: ${{ inputs.has-gpu == 'false' }}
+      shell: bash
+      run: |
+        echo "::group::Distributed tests"
+        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        if grep -Fq '[WARN]' stderr.log ; then
+          grep -F '[WARN]' stderr.log
+          echo "Distributed ring test failed";
+          exit 1;
+        fi
+        echo "::endgroup::"
+
+    - name: Run Python tests - CPU
+      if: ${{ inputs.has-gpu == 'false' }}
+      shell: bash
+      env:
+        DEVICE: cpu
+      run: |
+        echo "::group::Python tests - CPU"
+        python -m unittest discover python/tests -v
+        echo "::endgroup::"
+
+    - name: Run Python tests - GPU
+      if: ${{ inputs.has-gpu == 'true' }}
+      shell: bash
+      env:
+        DEVICE: gpu
+      run: |
+        echo "::group::Python tests - GPU"
+        python -m tests discover python/tests -v
+        echo "::endgroup::"
+
+    - name: Run CPP tests - CPU
+      shell: bash
+      env:
+        DEVICE: cpu
+      run: |
+        echo "::group::CPP tests - CPU"
+        ./build/tests/tests
+        echo "::endgroup::"
+
+    - name: Run CPP tests - GPU
+      if: ${{ inputs.has-gpu == 'true' }}
+      shell: bash
+      env:
+        DEVICE: gpu
+      run: |
+        echo "::group::CPP tests - GPU"
+        ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
+        echo "::endgroup::"

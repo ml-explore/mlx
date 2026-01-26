@@ -7,6 +7,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -292,7 +293,7 @@ TEST_CASE("test slice") {
 
   out = slice(x, {0}, {4}, {2});
   eval(out);
-  CHECK_EQ(out.data_size(), 4);
+  CHECK_EQ(out.data_size(), 3);
 
   x = ones({4, 4});
   out = slice(x, {0, 0}, {2, 4});
@@ -325,6 +326,20 @@ TEST_CASE("test slice") {
   out = slice(x, {2, 2, 2}, {3, 4, 3});
   eval(out);
   CHECK_EQ(out.data_size(), 5);
+
+  x = ones({8});
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  out = slice(x, {7}, {-9}, {-1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
+
+  x = ones({4, 2});
+  out = slice(x, {3, 0}, {-5, 2}, {-1, 1});
+  eval(out);
+  CHECK_EQ(out.data_size(), 8);
 }
 
 TEST_CASE("test slice update") {
@@ -2421,6 +2436,49 @@ TEST_CASE("test scatter") {
   }
 }
 
+TEST_CASE("test masked_scatter") {
+  if (cu::is_available()) {
+    INFO("Skipping masked_scatter cuda ops tests");
+    return;
+  }
+
+  // Wrong mask dtype
+  CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
+
+  // Mask must be broadcastable to self array
+  CHECK_THROWS(masked_scatter(
+      array({1, 2, 3, 4}, {2, 2}),
+      array({false, true, true, false}, {4, 1}),
+      array({1, 2})));
+
+  // 1D mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({true, true, false, true});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({1, 2, 0, 4})).item<bool>());
+  }
+
+  // Empty mask
+  {
+    auto self = zeros({4}, int32);
+    auto mask = array({false, false, false, false});
+    auto source = array({1, 2, 4});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, self).item<bool>());
+  }
+
+  // Broadcasted mask
+  {
+    auto self = zeros({2, 2}, int32);
+    auto mask = array({true, false});
+    auto source = array({5, 6, 7, 8}, {2, 2});
+    auto out = masked_scatter(self, mask, source);
+    CHECK(array_equal(out, array({5, 6, 0, 0}, {2, 2})).item<bool>());
+  }
+}
+
 TEST_CASE("test is positive infinity") {
   array x(1.0f);
   CHECK_FALSE(isposinf(x).item<bool>());
@@ -2824,6 +2882,32 @@ TEST_CASE("test stack") {
   y = array({4, 5, 6, 7}, {4}, int32);
   CHECK_THROWS_MESSAGE(
       stack({x, y}, 0), "All arrays must have the same shape and dtype");
+}
+
+TEST_CASE("test full_like") {
+  auto base_int = array({1, 2, 3}, {3}, int16);
+
+  auto from_array_with_dtype = full_like(base_int, array(7.5f), float16);
+  auto expected_float16 = array({7.5, 7.5, 7.5}, {3}, float16);
+  CHECK_EQ(from_array_with_dtype.dtype(), float16);
+  CHECK(array_equal(from_array_with_dtype, expected_float16).item<bool>());
+
+  auto from_array_default_dtype = full_like(base_int, array(4.0f));
+  auto expected_int16 = array({4, 4, 4}, {3}, int16);
+  CHECK_EQ(from_array_default_dtype.dtype(), int16);
+  CHECK(array_equal(from_array_default_dtype, expected_int16).item<bool>());
+
+  auto from_scalar_with_dtype = full_like(base_int, 3.25f, float32);
+  auto expected_float32 = array({3.25f, 3.25f, 3.25f}, {3}, float32);
+  CHECK_EQ(from_scalar_with_dtype.dtype(), float32);
+  CHECK(array_equal(from_scalar_with_dtype, expected_float32).item<bool>());
+
+  auto base_float = array({1.0f, 2.0f}, {2}, float32);
+  auto from_scalar_default_dtype = full_like(base_float, 2);
+  auto expected_base_float = array({2.0f, 2.0f}, {2}, float32);
+  CHECK_EQ(from_scalar_default_dtype.dtype(), float32);
+  CHECK(
+      array_equal(from_scalar_default_dtype, expected_base_float).item<bool>());
 }
 
 TEST_CASE("test eye") {
@@ -4051,4 +4135,25 @@ TEST_CASE("test fp8 conversion") {
 
   auto expected = array({-448.0f, 448.0f});
   CHECK(array_equal(out, expected, true).item<bool>());
+}
+
+TEST_CASE("test max min with nan") {
+  // Test maximum and minimum with NaN values
+  auto x = array({0.0f, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto y = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto expected_max = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto expected_min = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto max_result = maximum(x, y);
+  auto min_result = minimum(x, y);
+  CHECK(array_equal(max_result, expected_max, true).item<bool>());
+  CHECK(array_equal(min_result, expected_min, true).item<bool>());
+
+  // Test with all NaN values
+  x = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  y = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  max_result = maximum(x, y);
+  min_result = minimum(x, y);
+  auto expected = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  CHECK(array_equal(max_result, expected, true).item<bool>());
+  CHECK(array_equal(min_result, expected, true).item<bool>());
 }

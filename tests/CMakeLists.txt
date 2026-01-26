@@ -37,14 +37,9 @@ target_sources(
           linalg_tests.cpp
           ${METAL_TEST_SOURCES})
 
-if(MLX_BUILD_CUDA)
-  # Find the CCCL headers in install dir.
-  target_compile_definitions(
-    mlx
-    PRIVATE
-      MLX_CCCL_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/cccl")
-endif()
-
 target_link_libraries(tests PRIVATE mlx doctest)
+target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
+target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
+
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)
