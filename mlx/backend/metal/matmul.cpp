@@ -703,11 +703,7 @@ void steel_gemm_splitk_axpby_nax(
   const int bk_iters_per_partition = split_k_partition_size / bk;
   const int split_k_partition_stride = M * N;
 
-  array C_split(
-      {split_k_partitions, M, N},
-      issubdtype(out.dtype(), complexfloating) ? complex64 : float32,
-      nullptr,
-      {});
+  array C_split({split_k_partitions, M, N}, float32, nullptr, {});
   C_split.set_data(allocator::malloc(C_split.nbytes()));
   copies.push_back(C_split);
 
