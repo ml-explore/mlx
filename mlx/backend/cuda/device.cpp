@@ -42,6 +42,12 @@ Device::Device(int device) : device_(device) {
       &concurrent_managed_access_,
       cudaDevAttrConcurrentManagedAccess,
       device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &host_native_atomic_, cudaDevAttrHostNativeAtomicSupported, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &managed_memory_, cudaDevAttrManagedMemory, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &memory_pools_, cudaDevAttrMemoryPoolsSupported, device_));
 }
 
 Device::~Device() {
