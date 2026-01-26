@@ -1,7 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
 
-#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"

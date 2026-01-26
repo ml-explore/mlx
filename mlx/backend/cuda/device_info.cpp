@@ -227,11 +227,6 @@ bool is_available() {
   return true;
 }
 
-const std::unordered_map<std::string, std::variant<std::string, size_t>>&
-device_info(int device_index) {
-  return device_info_impl(device_index);
-}
-
 } // namespace cu
 
 } // namespace mlx::core

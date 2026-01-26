@@ -139,5 +139,5 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/kernels)
 
-target_compile_definitions(
-  mlx PRIVATE METAL_PATH="${MLX_METAL_PATH}/mlx.metallib" MLX_USE_METAL)
+target_compile_definitions(mlx
+                           PRIVATE METAL_PATH="${MLX_METAL_PATH}/mlx.metallib")
