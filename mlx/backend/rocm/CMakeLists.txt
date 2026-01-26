@@ -80,6 +80,7 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/reduce/init_reduce.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/rope.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/scan.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/softmax.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/sort.hip
@@ -157,6 +158,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/conv.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/rocblas_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
