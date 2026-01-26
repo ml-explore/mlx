@@ -36,55 +36,9 @@ ensure_contiguous(const array& x, rocm::CommandEncoder& enc, const Stream& s) {
 
 } // namespace
 
-void affine_quantize(
-    const array& w,
-    array& wq,
-    array& scales,
-    array& biases,
-    int group_size,
-    int bits,
-    rocm::CommandEncoder& enc,
-    const Stream& s) {
-  throw std::runtime_error(
-      "affine_quantize not yet implemented for ROCm backend");
-}
-
-void affine_dequantize(
-    const array& wq,
-    const array& scales,
-    const array& biases,
-    array& w,
-    int group_size,
-    int bits,
-    rocm::CommandEncoder& enc,
-    const Stream& s) {
-  throw std::runtime_error(
-      "affine_dequantize not yet implemented for ROCm backend");
-}
-
-void fp_quantize(
-    const array& w,
-    array& wq,
-    array& scales,
-    int group_size,
-    int bits,
-    rocm::CommandEncoder& enc,
-    const Stream& s) {
-  throw std::runtime_error(
-      "fp_quantize not yet implemented for ROCm backend");
-}
-
-void fp_dequantize(
-    const array& wq,
-    const array& scales,
-    array& w,
-    int group_size,
-    int bits,
-    rocm::CommandEncoder& enc,
-    const Stream& s) {
-  throw std::runtime_error(
-      "fp_dequantize not yet implemented for ROCm backend");
-}
+// Note: affine_quantize, affine_dequantize, fp_quantize, fp_dequantize
+// are implemented in affine_quantize.hip and fp_quantize.hip
+// ConvertFP8 is implemented in convert_fp8.hip
 
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
@@ -123,11 +77,6 @@ void fast::Quantize::eval_gpu(
   }
 }
 
-void fast::ConvertFP8::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
-  throw std::runtime_error(
-      "ConvertFP8::eval_gpu not yet implemented for ROCm backend");
-}
+// Note: ConvertFP8::eval_gpu is implemented in convert_fp8.hip
 
 } // namespace mlx::core

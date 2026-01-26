@@ -88,3 +88,5 @@ build/
 .cache
 
 /docker
+/.ccache
+/build_rocm

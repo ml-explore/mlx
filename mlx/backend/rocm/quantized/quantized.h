@@ -2,12 +2,12 @@
 
 #pragma once
 
-#include "mlx/backend/rocm/device.h"
 #include "mlx/array.h"
+#include "mlx/backend/rocm/device.h"
 
 namespace mlx::core {
 
-// Forward declarations for quantization operations
+// Affine quantization functions
 void affine_quantize(
     const array& w,
     array& wq,
@@ -28,6 +28,7 @@ void affine_dequantize(
     rocm::CommandEncoder& enc,
     const Stream& s);
 
+// Floating-point quantization functions
 void fp_quantize(
     const array& w,
     array& wq,

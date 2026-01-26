@@ -11,6 +11,24 @@ find_package(rocthrust REQUIRED CONFIG)
 find_package(rocprim REQUIRED CONFIG)
 find_package(hiprand REQUIRED CONFIG)
 
+# Try to find MIOpen (optional but recommended)
+find_package(miopen CONFIG QUIET)
+if(miopen_FOUND)
+  message(STATUS "MIOpen found - enabling MIOpen support")
+  set(MLX_USE_MIOPEN ON)
+else()
+  # Try to find MIOpen library directly
+  find_library(MIOPEN_LIB MIOpen PATHS ${ROCM_PATH}/lib /opt/rocm/lib /opt/rocm-6.0.0/lib)
+  find_path(MIOPEN_INCLUDE_DIR miopen/miopen.h PATHS ${ROCM_PATH}/include /opt/rocm/include /opt/rocm-6.0.0/include)
+  if(MIOPEN_LIB AND MIOPEN_INCLUDE_DIR)
+    message(STATUS "MIOpen found at ${MIOPEN_LIB} - enabling MIOpen support")
+    set(MLX_USE_MIOPEN ON)
+  else()
+    message(STATUS "MIOpen not found - convolution and SDPA will use fallback implementations")
+    set(MLX_USE_MIOPEN OFF)
+  endif()
+endif()
+
 # Ensure HIP architectures are set - respect user-provided value
 if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
   set(CMAKE_HIP_ARCHITECTURES
@@ -63,8 +81,11 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/arange.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/binary.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/binary_two.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/distributed.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/indexing.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.hip
@@ -72,13 +93,20 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/random.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/reduce.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/reduce/all_reduce.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/reduce/init_reduce.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/rope.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/scan.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/softmax.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/sort.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/ternary.hip
-    ${CMAKE_CURRENT_SOURCE_DIR}/unary.hip)
+    ${CMAKE_CURRENT_SOURCE_DIR}/unary.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.hip)
 
 # Create output directory for compiled objects
 set(HIP_OBJ_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip_objs")
@@ -145,7 +173,9 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
+          ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/conv/conv.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/rocblas_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
 

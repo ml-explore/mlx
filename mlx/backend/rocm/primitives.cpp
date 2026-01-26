@@ -23,8 +23,7 @@ namespace mlx::core {
     throw std::runtime_error(#func " has no ROCm implementation.");   \
   }
 
-// Convolution requires MIOpen integration (AMD's equivalent of cuDNN)
-NO_GPU(Convolution)
+// Note: Convolution is now implemented in conv/conv.cpp
 
 NO_GPU(BlockMaskedMM)
 NO_GPU(FFT)
@@ -52,5 +51,6 @@ NO_GPU(MaskedScatter)
 // - AffineQuantize: quantized/quantized.cpp
 // - ConvertFP8: quantized/quantized.cpp
 // - AllGather, AllReduce, ReduceScatter, Send, Recv: distributed.hip
+// - Convolution: conv/conv.cpp
 
 } // namespace mlx::core
