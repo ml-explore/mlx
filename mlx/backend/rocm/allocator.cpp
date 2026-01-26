@@ -23,15 +23,37 @@ constexpr int small_block_size = 8;
 // size and small_block_size.
 constexpr int small_pool_size = 4 * page_size;
 
-SmallSizePool::SmallSizePool() {
+// Check if ROCm device is available
+static bool rocm_available() {
+  static int available = -1;
+  if (available < 0) {
+    int device_count = 0;
+    hipError_t err = hipGetDeviceCount(&device_count);
+    available = (err == hipSuccess && device_count > 0) ? 1 : 0;
+  }
+  return available == 1;
+}
+
+SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nullptr) {
+  if (!rocm_available()) {
+    return;
+  }
+  
   auto num_blocks = small_pool_size / small_block_size;
   buffer_ = new Block[num_blocks];
 
   next_free_ = buffer_;
 
-  CHECK_HIP_ERROR(hipMallocManaged(&data_, small_pool_size));
-  CHECK_HIP_ERROR(
-      hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0));
+  hipError_t err = hipMallocManaged(&data_, small_pool_size);
+  if (err != hipSuccess) {
+    delete[] buffer_;
+    buffer_ = nullptr;
+    next_free_ = nullptr;
+    data_ = nullptr;
+    return;
+  }
+  
+  hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {
@@ -42,8 +64,12 @@ SmallSizePool::SmallSizePool() {
 }
 
 SmallSizePool::~SmallSizePool() {
-  CHECK_HIP_ERROR(hipFree(data_));
-  delete[] buffer_;
+  if (data_) {
+    hipFree(data_);
+  }
+  if (buffer_) {
+    delete[] buffer_;
+  }
 }
 
 RocmBuffer* SmallSizePool::malloc() {
@@ -65,6 +91,9 @@ void SmallSizePool::free(RocmBuffer* buf) {
 }
 
 bool SmallSizePool::in_pool(RocmBuffer* buf) {
+  if (!buffer_) {
+    return false;
+  }
   constexpr int num_blocks = (small_pool_size / small_block_size);
   auto b = reinterpret_cast<Block*>(buf);
   int64_t block_num = b - buffer_;
@@ -75,15 +104,30 @@ RocmAllocator::RocmAllocator()
     : buffer_cache_(
           page_size,
           [](RocmBuffer* buf) { return buf->size; },
-          [this](RocmBuffer* buf) { rocm_free(buf); }) {
-  // TODO: Set memory limit for multi-device.
+          [this](RocmBuffer* buf) { rocm_free(buf); }),
+      memory_limit_(0),
+      max_pool_size_(0),
+      active_memory_(0),
+      peak_memory_(0) {
+  if (!rocm_available()) {
+    return;
+  }
+  
   size_t free, total;
-  CHECK_HIP_ERROR(hipMemGetInfo(&free, &total));
-  memory_limit_ = total * 0.8;
-  max_pool_size_ = memory_limit_;
+  hipError_t err = hipMemGetInfo(&free, &total);
+  if (err == hipSuccess) {
+    memory_limit_ = total * 0.8;
+    max_pool_size_ = memory_limit_;
+  }
 }
 
 Buffer RocmAllocator::malloc(size_t size) {
+  if (!rocm_available()) {
+    throw std::runtime_error(
+        "Cannot allocate ROCm memory: no ROCm-capable device detected. "
+        "Please use CPU backend instead.");
+  }
+  
   // Find available buffer from cache.
   auto orig_size = size;
   std::unique_lock lock(mutex_);

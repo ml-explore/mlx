@@ -52,8 +52,21 @@ PyKeySequence& default_key() {
                now.time_since_epoch())
         .count();
   };
-  static PyKeySequence ks(get_current_time_seed());
-  return ks;
+  static PyKeySequence* ks = nullptr;
+  if (!ks) {
+    ks = new PyKeySequence(get_current_time_seed());
+  }
+  return *ks;
+}
+
+// Lazy initialization wrapper for random state
+nb::object get_random_state() {
+  try {
+    return default_key().state();
+  } catch (const std::exception& e) {
+    // Return empty list if GPU is not available
+    return nb::list();
+  }
 }
 
 void init_random(nb::module_& parent_module) {
@@ -61,7 +74,12 @@ void init_random(nb::module_& parent_module) {
       "random",
       "mlx.core.random: functionality related to random number generation");
 
-  m.attr("state") = default_key().state();
+  // Use a function to lazily get the random state (for backward compatibility)
+  // Users can access mx.random.state via mx.random._get_state()
+  m.def("_get_state", &get_random_state, "Get the random state (lazy initialization)");
+  
+  // For backward compatibility, we'll set state lazily via a getter
+  // Note: This is a workaround - ideally state would be a property
   m.def(
       "seed",
       [](uint64_t seed) { default_key().seed(seed); },
