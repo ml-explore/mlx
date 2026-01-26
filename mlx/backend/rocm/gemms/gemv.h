@@ -20,4 +20,16 @@ void gemv(
     array& y,
     Dtype dtype);
 
+bool can_use_gemv(int M, int N, int K, bool trans_a, bool trans_b);
+
+void gather_mv(
+    const array& mat,
+    const array& vec,
+    const array& mat_indices,
+    const array& vec_indices,
+    array& out,
+    int M,
+    int K,
+    rocm::CommandEncoder& encoder);
+
 } // namespace mlx::core

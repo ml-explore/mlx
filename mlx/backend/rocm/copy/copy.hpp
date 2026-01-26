@@ -72,4 +72,17 @@ void copy_general(
     const Strides& strides_in,
     const Strides& strides_out);
 
+void copy_general_dynamic(
+    rocm::CommandEncoder& encoder,
+    CopyType ctype,
+    const array& in,
+    array& out,
+    int64_t offset_in,
+    int64_t offset_out,
+    const Shape& shape,
+    const Strides& strides_in,
+    const Strides& strides_out,
+    const array& dynamic_offset_in,
+    const array& dynamic_offset_out);
+
 } // namespace mlx::core

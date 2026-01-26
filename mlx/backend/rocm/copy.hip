@@ -40,6 +40,26 @@ void copy_gpu_inplace(
   auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
+  
+  // Handle dynamic offsets
+  if (dynamic_offset_in.has_value() || dynamic_offset_out.has_value()) {
+    auto [shape_collapsed, strides_vec] = collapse_contiguous_dims(
+        shape, std::vector{strides_in, strides_out}, INT32_MAX);
+    copy_general_dynamic(
+        encoder,
+        ctype,
+        in,
+        out,
+        offset_in,
+        offset_out,
+        shape_collapsed,
+        strides_vec[0],
+        strides_vec[1],
+        dynamic_offset_in.value(),
+        dynamic_offset_out.value());
+    return;
+  }
+  
   if (ctype == CopyType::Scalar || ctype == CopyType::Vector) {
     copy_contiguous(encoder, ctype, in, out, offset_in, offset_out);
     return;

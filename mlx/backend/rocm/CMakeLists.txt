@@ -68,6 +68,7 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_input.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_general_dynamic.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/distributed.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/indexing.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.hip

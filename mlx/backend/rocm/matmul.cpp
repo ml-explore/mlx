@@ -3,6 +3,7 @@
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/gemms/gemv.h"
 #include "mlx/primitives.h"
 #include "mlx/types/half_types.h"
 
@@ -249,6 +250,57 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       b,
       alpha_,
       beta_);
+}
+
+void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  assert(inputs.size() == 4);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  // Return 0s if either input is empty.
+  if (a.size() == 0 || b.size() == 0) {
+    array zero(0, a.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // Extract shapes from inputs.
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
+  auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
+  
+  auto use_gemv = can_use_gemv(M, N, K, transposed_a, transposed_b);
+  
+  if (M == 1 && use_gemv) {
+    gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
+    return;
+  }
+
+  if (N == 1 && use_gemv) {
+    gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
+    return;
+  }
+
+  // Fallback: loop over batches
+  int batch_size = lhs_indices.size();
+  for (int i = 0; i < batch_size; ++i) {
+    // For now, use CPU to get indices and dispatch individual GEMMs
+    // This is not optimal but provides correctness
+    throw std::runtime_error(
+        "GatherMM with M > 1 and N > 1 not yet optimized for ROCm. "
+        "Consider using GEMV path (M=1 or N=1).");
+  }
 }
 
 } // namespace mlx::core

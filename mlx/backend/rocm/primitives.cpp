@@ -24,10 +24,10 @@ namespace mlx::core {
   }
 
 // Note: Convolution is now implemented in conv/conv.cpp
+// Note: GatherMM is now implemented in matmul.cpp
 
 NO_GPU(BlockMaskedMM)
 NO_GPU(FFT)
-NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
 NO_GPU(Hadamard)
 NO_GPU_MULTI(LUF)

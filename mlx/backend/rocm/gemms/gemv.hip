@@ -5,6 +5,8 @@
 #include "mlx/backend/rocm/gemms/gemv.h"
 
 #include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
 
 namespace mlx::core {
 
@@ -142,7 +144,97 @@ __global__ void gemv_warp_kernel(
   }
 }
 
+// Gather-based GEMV kernel
+template <typename T>
+__global__ void gemv_gather_kernel(
+    const T* __restrict__ mat,
+    const T* __restrict__ vec,
+    const uint32_t* __restrict__ mat_indices,
+    const uint32_t* __restrict__ vec_indices,
+    T* __restrict__ out,
+    int M,
+    int K,
+    int mat_ld,
+    int batch_size) {
+  constexpr int WARP_SIZE = 64;
+  
+  int batch_idx = blockIdx.x;
+  if (batch_idx >= batch_size) return;
+  
+  uint32_t mat_idx = mat_indices[batch_idx];
+  uint32_t vec_idx = vec_indices[batch_idx];
+  
+  const T* mat_ptr = mat + mat_idx * M * K;
+  const T* vec_ptr = vec + vec_idx * K;
+  T* out_ptr = out + batch_idx * M;
+  
+  // Each block processes one batch, threads process M outputs
+  for (int row = threadIdx.x; row < M; row += blockDim.x) {
+    T acc = T(0);
+    for (int k = 0; k < K; ++k) {
+      acc += mat_ptr[row * mat_ld + k] * vec_ptr[k];
+    }
+    out_ptr[row] = acc;
+  }
+}
+
 } // namespace rocm
+
+bool can_use_gemv(int M, int N, int K, bool trans_a, bool trans_b) {
+  // Simple heuristic for when to use GEMV
+  return (M == 1 || N == 1) && K <= 8192;
+}
+
+void gather_mv(
+    const array& mat,
+    const array& vec,
+    const array& mat_indices,
+    const array& vec_indices,
+    array& out,
+    int M,
+    int K,
+    rocm::CommandEncoder& encoder) {
+  
+  int batch_size = mat_indices.size();
+  int threads = std::min(256, M);
+  
+  encoder.set_input_array(mat);
+  encoder.set_input_array(vec);
+  encoder.set_input_array(mat_indices);
+  encoder.set_input_array(vec_indices);
+  encoder.set_output_array(out);
+  
+  encoder.launch_kernel([&](hipStream_t stream) {
+    switch (mat.dtype()) {
+      case float32:
+        hipLaunchKernelGGL(
+            (rocm::gemv_gather_kernel<float>),
+            dim3(batch_size), dim3(threads), 0, stream,
+            mat.data<float>(), vec.data<float>(),
+            mat_indices.data<uint32_t>(), vec_indices.data<uint32_t>(),
+            out.data<float>(), M, K, K, batch_size);
+        break;
+      case float16:
+        hipLaunchKernelGGL(
+            (rocm::gemv_gather_kernel<__half>),
+            dim3(batch_size), dim3(threads), 0, stream,
+            mat.data<__half>(), vec.data<__half>(),
+            mat_indices.data<uint32_t>(), vec_indices.data<uint32_t>(),
+            out.data<__half>(), M, K, K, batch_size);
+        break;
+      case bfloat16:
+        hipLaunchKernelGGL(
+            (rocm::gemv_gather_kernel<hip_bfloat16>),
+            dim3(batch_size), dim3(threads), 0, stream,
+            mat.data<hip_bfloat16>(), vec.data<hip_bfloat16>(),
+            mat_indices.data<uint32_t>(), vec_indices.data<uint32_t>(),
+            out.data<hip_bfloat16>(), M, K, K, batch_size);
+        break;
+      default:
+        throw std::runtime_error("Unsupported dtype for gather_mv");
+    }
+  });
+}
 
 void gemv(
     rocm::CommandEncoder& encoder,
