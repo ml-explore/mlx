@@ -262,4 +262,4 @@ FetchContent_Declare(
   SOURCE_SUBDIR include EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(cutlass)
 target_include_directories(
-  mlx PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
+  mlx SYSTEM PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
