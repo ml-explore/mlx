@@ -9,6 +9,7 @@ inputs:
 runs:
   using: "composite"
   steps:
+
     - name: Install Python package
       id: python_build
       shell: sh

@@ -11,7 +11,6 @@
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cudnn.h>
-#include <thrust/execution_policy.h>
 
 #include <unordered_map>
 
@@ -180,12 +179,5 @@ class Device {
 Device& device(int cuda_device);
 Device& device(mlx::core::Device d);
 CommandEncoder& get_command_encoder(Stream s);
-
-// Return an execution policy that does not sync for result.
-// Note that not all thrust APIs support async policy, confirm before using.
-inline auto thrust_policy(cudaStream_t stream) {
-  // TODO: Connect thrust's custom allocator with mlx's allocator.
-  return thrust::cuda::par_nosync.on(stream);
-}
 
 } // namespace mlx::core::cu

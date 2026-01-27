@@ -78,7 +78,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     fp_qmv(w, scales, xhat, out, bits_, group_size_, M, N, K, encoder);
     return;
   }
-  std::cout << "RUNNING FULL?" << std::endl;
 
   auto cc = device.compute_capability_major() * 100 +
       device.compute_capability_minor() * 10;
