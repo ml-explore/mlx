@@ -60,4 +60,48 @@ instantiate_radix_select_bn(bfloat16, bfloat16_t)
 
 instantiate_radix_select_long(uint64, uint64_t)
 instantiate_radix_select_long(int64, int64_t)
+
+///////////////////////////////////////////////////////////////////////////////
+// Multi-pass Radix Select Kernel Instantiations
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_radix_histogram(itname, itype, bn) \
+  instantiate_kernel(                                  \
+      "radix_histogram_" #itname "_bn" #bn,            \
+      radix_histogram_kernel,                          \
+      itype,                                           \
+      bn)
+
+#define instantiate_radix_histogram_all(itname, itype) \
+  instantiate_radix_histogram(itname, itype, 256)
+
+instantiate_radix_histogram_all(uint8, uint8_t)
+instantiate_radix_histogram_all(uint16, uint16_t)
+instantiate_radix_histogram_all(uint32, uint32_t)
+instantiate_radix_histogram_all(int8, int8_t)
+instantiate_radix_histogram_all(int16, int16_t)
+instantiate_radix_histogram_all(int32, int32_t)
+instantiate_radix_histogram_all(float16, half)
+instantiate_radix_histogram_all(float32, float)
+instantiate_radix_histogram_all(bfloat16, bfloat16_t)
+instantiate_radix_histogram_all(uint64, uint64_t)
+instantiate_radix_histogram_all(int64, int64_t)
+
+#define instantiate_radix_find_bin(itname, itype) \
+  instantiate_kernel(                             \
+      "radix_find_bin_" #itname,                  \
+      radix_find_bin_kernel,                      \
+      itype)
+
+instantiate_radix_find_bin(uint8, uint8_t)
+instantiate_radix_find_bin(uint16, uint16_t)
+instantiate_radix_find_bin(uint32, uint32_t)
+instantiate_radix_find_bin(int8, int8_t)
+instantiate_radix_find_bin(int16, int16_t)
+instantiate_radix_find_bin(int32, int32_t)
+instantiate_radix_find_bin(float16, half)
+instantiate_radix_find_bin(float32, float)
+instantiate_radix_find_bin(bfloat16, bfloat16_t)
+instantiate_radix_find_bin(uint64, uint64_t)
+instantiate_radix_find_bin(int64, int64_t)
 // clang-format on

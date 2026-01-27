@@ -405,6 +405,198 @@ struct RadixSelectSmall {
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+// Multi-pass Radix Select for large arrays
+//
+// For arrays larger than threadgroup memory, we use multiple kernel launches:
+// 1. Build global histogram (one per row)
+// 2. Find target bin and update k
+// 3. Filter candidates to smaller buffer
+// 4. Repeat until candidates fit in threadgroup memory
+// 5. Use small kernel for final selection
+///////////////////////////////////////////////////////////////////////////////
+
+// Kernel to build histogram for a single radix pass
+template <typename ValT, short BLOCK_THREADS>
+[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
+radix_histogram_kernel(
+    const device ValT* input [[buffer(0)]],
+    device atomic_int* histogram [[buffer(1)]],
+    const constant int& n [[buffer(2)]],
+    const constant int& stride [[buffer(3)]],
+    const constant int& start_bit [[buffer(4)]],
+    const constant int& segment_stride [[buffer(5)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 tgp_dims [[threads_per_threadgroup]]) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  // Shared histogram for this threadgroup
+  threadgroup int shared_hist[RADIX_SIZE];
+
+  // Initialize shared histogram
+  for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+    shared_hist[i] = 0;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Row offset
+  int row = tid.y;
+  const device ValT* row_input = input + row * segment_stride;
+
+  // Build local histogram
+  int block_start = tid.x * BLOCK_THREADS;
+  for (int i = block_start + lid.x; i < n; i += tgp_dims.x * BLOCK_THREADS) {
+    ValT val = row_input[i * stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    int digit = extract_digit(key, start_bit, RADIX_BITS);
+    atomic_fetch_add_explicit(
+        (threadgroup atomic_int*)&shared_hist[digit], 1, memory_order_relaxed);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Reduce to global histogram
+  device atomic_int* row_hist = histogram + row * RADIX_SIZE;
+  for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+    if (shared_hist[i] > 0) {
+      atomic_fetch_add_explicit(&row_hist[i], shared_hist[i], memory_order_relaxed);
+    }
+  }
+}
+
+// Kernel to find target bin and compute new k
+template <typename ValT>
+[[kernel]] void radix_find_bin_kernel(
+    const device int* histogram [[buffer(0)]],
+    device int* target_bin [[buffer(1)]],
+    device int* new_k [[buffer(2)]],
+    const constant int& k [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]]) {
+  int row = tid.y;
+  const device int* row_hist = histogram + row * RADIX_SIZE;
+
+  int cumsum = 0;
+  int bin = 0;
+  for (int i = 0; i < RADIX_SIZE; i++) {
+    int count = row_hist[i];
+    if (cumsum + count >= k) {
+      bin = i;
+      break;
+    }
+    cumsum += count;
+  }
+
+  target_bin[row] = bin;
+  new_k[row] = k - cumsum;
+}
+
+// Kernel to filter candidates based on target bin
+template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
+[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
+radix_filter_kernel(
+    const device ValT* input [[buffer(0)]],
+    device OutT* output [[buffer(1)]],
+    device atomic_int* output_count [[buffer(2)]],
+    const constant int& n [[buffer(3)]],
+    const constant int& stride [[buffer(4)]],
+    const constant int& start_bit [[buffer(5)]],
+    const constant int& target_bin [[buffer(6)]],
+    const constant int& segment_stride [[buffer(7)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]]) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  int row = tid.y;
+  const device ValT* row_input = input + row * segment_stride;
+  device OutT* row_output = output + row * n; // Output buffer sized for worst case
+  device atomic_int* row_count = output_count + row;
+
+  int block_start = tid.x * BLOCK_THREADS;
+  for (int i = block_start + lid.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    int digit = extract_digit(key, start_bit, RADIX_BITS);
+    if (digit == target_bin) {
+      int pos = atomic_fetch_add_explicit(row_count, 1, memory_order_relaxed);
+      if (ARG_PARTITION) {
+        row_output[pos] = i; // Store index
+      } else {
+        row_output[pos] = val; // Store value
+      }
+    }
+  }
+}
+
+// Kernel to collect final partitioned output
+template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
+[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
+radix_collect_kernel(
+    const device ValT* input [[buffer(0)]],
+    device OutT* output [[buffer(1)]],
+    device atomic_int* output_count [[buffer(2)]],
+    const constant int& n [[buffer(3)]],
+    const constant int& in_stride [[buffer(4)]],
+    const constant int& out_stride [[buffer(5)]],
+    const constant int& kth [[buffer(6)]],
+    const constant int& segment_stride [[buffer(7)]],
+    const constant int& out_segment_stride [[buffer(8)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]]) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  int row = tid.y;
+  const device ValT* row_input = input + row * segment_stride;
+  device OutT* row_output = output + row * out_segment_stride;
+
+  // First, find the pivot value (kth smallest)
+  // This is done by sorting a small sample or using the radix select result
+  // For now, we use a simple approach: scan and count
+
+  // Phase 1: Count elements and find pivot
+  threadgroup int less_count;
+  threadgroup int equal_count;
+  threadgroup UnsignedT pivot_key;
+
+  if (lid.x == 0) {
+    less_count = 0;
+    equal_count = 0;
+    pivot_key = 0;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Find kth element by scanning (simplified - for production, use radix select result)
+  // This kernel assumes pivot_key is already known from previous passes
+
+  int block_start = tid.x * BLOCK_THREADS;
+
+  // Output less than pivot
+  for (int i = block_start + lid.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    if (key < pivot_key) {
+      int pos = atomic_fetch_add_explicit(
+          (device atomic_int*)output_count + row, 1, memory_order_relaxed);
+      if (ARG_PARTITION) {
+        row_output[pos * out_stride] = i;
+      } else {
+        row_output[pos * out_stride] = val;
+      }
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Kernel entry points
 ///////////////////////////////////////////////////////////////////////////////
 
