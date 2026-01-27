@@ -138,4 +138,4 @@ instantiate_partition_output_all(float32, float)
 instantiate_partition_output_all(bfloat16, bfloat16_t)
 instantiate_partition_output_all(uint64, uint64_t)
 instantiate_partition_output_all(int64, int64_t)
-// clang-format on
+    // clang-format on

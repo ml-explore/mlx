@@ -362,7 +362,8 @@ void gpu_radix_partition_small(
     int in_stride_segment_axis = INT32_MAX;
     int out_stride_segment_axis = INT32_MAX;
     for (size_t i = 0; i < in_nc_str.size(); i++) {
-      if (nc_shape[i] == 1) continue;
+      if (nc_shape[i] == 1)
+        continue;
       in_stride_segment_axis =
           std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
       out_stride_segment_axis =
@@ -421,9 +422,8 @@ void gpu_radix_partition_large(
 
   // Use the streaming kernel that processes all passes in one dispatch
   std::ostringstream kname;
-  kname << "radix_select_large_" << type_to_name(in) << "_"
-        << type_to_name(out) << "_" << (arg_partition ? "true" : "false")
-        << "_bn" << bn;
+  kname << "radix_select_large_" << type_to_name(in) << "_" << type_to_name(out)
+        << "_" << (arg_partition ? "true" : "false") << "_bn" << bn;
 
   auto kernel = d.get_kernel(kname.str());
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -502,10 +502,21 @@ void gpu_radix_partition(
   // Use single-pass kernel for small arrays that fit in threadgroup memory
   if (size_sorted_axis <= TILE_SIZE) {
     gpu_radix_partition_small(
-        s, d, in, out, axis, kth, arg_partition,
-        n_rows, size_sorted_axis,
-        in_stride_sorted_axis, out_stride_sorted_axis,
-        contiguous, nc_shape, in_nc_str, out_nc_str);
+        s,
+        d,
+        in,
+        out,
+        axis,
+        kth,
+        arg_partition,
+        n_rows,
+        size_sorted_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        contiguous,
+        nc_shape,
+        in_nc_str,
+        out_nc_str);
     return;
   }
 
@@ -513,13 +524,14 @@ void gpu_radix_partition(
   // This performs all radix passes in a single kernel dispatch
   int in_stride_segment_axis = size_sorted_axis;
   int out_stride_segment_axis = size_sorted_axis;
-  
+
   // For contiguous arrays, the segment stride is the product of all dimensions
   // after the sorted axis (or the sorted axis size for the last axis)
   if (!in_nc_str.empty()) {
     // Find the stride that separates rows
     for (size_t i = 0; i < in_nc_str.size(); i++) {
-      if (nc_shape[i] == 1) continue;
+      if (nc_shape[i] == 1)
+        continue;
       in_stride_segment_axis =
           std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
       out_stride_segment_axis =
@@ -528,10 +540,19 @@ void gpu_radix_partition(
   }
 
   gpu_radix_partition_large(
-      s, d, in, out, axis, kth, arg_partition,
-      n_rows, size_sorted_axis,
-      in_stride_sorted_axis, out_stride_sorted_axis,
-      in_stride_segment_axis, out_stride_segment_axis);
+      s,
+      d,
+      in,
+      out,
+      axis,
+      kth,
+      arg_partition,
+      n_rows,
+      size_sorted_axis,
+      in_stride_sorted_axis,
+      out_stride_sorted_axis,
+      in_stride_segment_axis,
+      out_stride_segment_axis);
 }
 
 } // namespace
