@@ -115,6 +115,12 @@
 
 #define instantiate_quantize_dequantize(type, mode, group_size, bits) \
   instantiate_kernel( \
+    #mode "_quantize_dequantize_" #type "_gs_" #group_size "_b_" #bits, \
+    fp_quantize_dequantize, \
+    type, \
+    group_size,  \
+    bits) \
+  instantiate_kernel( \
     #mode "_quantize_" #type "_gs_" #group_size "_b_" #bits, \
     fp_quantize, \
     type, \

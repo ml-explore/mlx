@@ -2,59 +2,47 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/cuda/quantized/qmv.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
 
-namespace {
+void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
+  auto& s = stream();
+  auto& d = cu::device(s.device);
+  auto& enc = d.get_command_encoder(s);
 
-inline array ensure_row_contiguous(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (!x.flags().row_contiguous) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    enc.add_temporary(x_copy);
-    return x_copy;
-  } else {
-    return x;
+  out.set_data(cu::malloc_async(out.nbytes(), enc));
+
+  // Make sure the last two dims of x and w, s, b are contiguous. This should
+  // be relaxed for x.
+  array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], enc, s);
+  std::optional<array> biases = std::nullopt;
+  if (inputs.size() == 4) {
+    biases = ensure_row_contiguous_matrix(inputs[3], enc, s);
+  }
+
+  bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+  int K = x.shape(-1);
+  int M = non_batched ? x.size() / K : x.shape(-2);
+  int N = out.shape(-1);
+
+  if (M > 8 || !transpose_ || mode_ == QuantizationMode::Affine) {
+    throw std::runtime_error("QMM NYI");
+  }
+
+  if (transpose_) {
+    fp_qmv(w, scales, x, out, bits_, group_size_, M, N, K, enc);
+    return;
   }
 }
-
-inline array
-ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
-  if (x.flags().row_contiguous || x.flags().col_contiguous) {
-    return x;
-  }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
-}
-
-inline array ensure_row_contiguous_matrix(
-    const array& x,
-    cu::CommandEncoder& enc,
-    const Stream& s) {
-  if (x.ndim() < 2) {
-    if (x.strides()[0] == 1) {
-      return x;
-    }
-  } else {
-    auto stride_0 = x.strides()[x.ndim() - 2];
-    auto stride_1 = x.strides()[x.ndim() - 1];
-    if (stride_0 == x.shape(-1) && stride_1 == 1) {
-      return x;
-    }
-  }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
-}
-
-} // namespace
 
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,

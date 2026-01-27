@@ -1,8 +1,21 @@
 // Copyright © 2025 Apple Inc.
 
+#include <cuda_fp4.h>
+#include <cuda_fp8.h>
+
 namespace mlx::core {
 
 namespace cu {
+
+inline __device__ float4 dequant_fp8(uint32_t bits) {
+  auto out = *(__nv_fp8x4_e4m3*)(&bits);
+  return out.operator float4();
+}
+
+inline __device__ float4 dequant_fp4(uint16_t bits) {
+  auto out = *(__nv_fp4x4_e2m1*)(&bits);
+  return out.operator float4();
+}
 
 template <int bits, int wsize = 8>
 inline constexpr __device__ short get_pack_factor() {

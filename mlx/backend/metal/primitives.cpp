@@ -239,8 +239,4 @@ void LUF::eval_gpu(
   throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
 }
 
-void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& output) {
-  throw std::runtime_error("[QQMatmul::eval_gpu] Metal QQMatmul NYI.");
-}
-
 } // namespace mlx::core
