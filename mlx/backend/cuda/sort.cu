@@ -14,6 +14,7 @@
 #include <nvtx3/nvtx3.hpp>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cub/cub.cuh>
 
 namespace mlx::core {
 
@@ -1049,6 +1050,256 @@ void gpu_sort(
   gpu_merge_sort(s, in, out, axis, argsort);
 }
 
+// Kernel to fill remaining elements after top-k selection
+template <typename ValT, typename IdxT, bool ARG_PARTITION>
+__global__ void fill_remaining_kernel(
+    const ValT* __restrict__ input,
+    const ValT* __restrict__ topk_keys,
+    const IdxT* __restrict__ topk_indices,
+    ValT* __restrict__ output_vals,
+    IdxT* __restrict__ output_idxs,
+    int n,
+    int k,
+    int in_stride,
+    int out_stride,
+    int in_segment_stride,
+    int out_segment_stride) {
+  int row = blockIdx.y;
+  const ValT* row_input = input + row * in_segment_stride;
+  const ValT* row_topk_keys = topk_keys + row * k;
+  const IdxT* row_topk_indices = topk_indices + row * k;
+
+  // Copy top-k to output first k positions
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < k;
+       i += gridDim.x * blockDim.x) {
+    if constexpr (ARG_PARTITION) {
+      output_idxs[row * out_segment_stride + i * out_stride] =
+          row_topk_indices[i];
+    } else {
+      output_vals[row * out_segment_stride + i * out_stride] = row_topk_keys[i];
+    }
+  }
+
+  // For remaining elements (positions k to n-1), we need elements NOT in top-k
+  // This requires checking each input element
+  __shared__ int write_pos;
+  if (threadIdx.x == 0) {
+    write_pos = k;
+  }
+  __syncthreads();
+
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n;
+       i += gridDim.x * blockDim.x) {
+    ValT val = row_input[i * in_stride];
+
+    // Check if this index is in top-k
+    bool in_topk = false;
+    for (int j = 0; j < k; j++) {
+      if (row_topk_indices[j] == i) {
+        in_topk = true;
+        break;
+      }
+    }
+
+    if (!in_topk) {
+      int pos = atomicAdd(&write_pos, 1);
+      if (pos < n) {
+        if constexpr (ARG_PARTITION) {
+          output_idxs[row * out_segment_stride + pos * out_stride] = i;
+        } else {
+          output_vals[row * out_segment_stride + pos * out_stride] = val;
+        }
+      }
+    }
+  }
+}
+
+// Single-row partition using DeviceTopK for contiguous last-axis case
+template <typename ValT, bool ARG_PARTITION>
+void gpu_topk_partition_single_row(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int k,
+    int n) {
+  using IdxT = uint32_t;
+
+  auto& encoder = cu::get_command_encoder(s);
+  cudaStream_t stream = encoder.stream();
+
+  // Allocate output
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
+  // Allocate temporary arrays for top-k results
+  array topk_keys({k}, in.dtype(), nullptr, {});
+  array topk_indices({k}, uint32, nullptr, {});
+  topk_keys.set_data(cu::malloc_async(topk_keys.nbytes(), encoder));
+  topk_indices.set_data(cu::malloc_async(topk_indices.nbytes(), encoder));
+
+  const ValT* d_keys_in = in.data<ValT>();
+  ValT* d_keys_out = topk_keys.data<ValT>();
+
+  // Create counting iterator for indices
+  cub::CountingInputIterator<IdxT> d_values_in(0);
+  IdxT* d_values_out = topk_indices.data<IdxT>();
+
+  // Query temp storage size
+  size_t temp_storage_bytes = 0;
+  cub::DeviceTopK::MinPairs(
+      nullptr,
+      temp_storage_bytes,
+      d_keys_in,
+      d_keys_out,
+      d_values_in,
+      d_values_out,
+      n,
+      k,
+      stream);
+
+  // Allocate temp storage
+  array temp_storage({static_cast<int>(temp_storage_bytes)}, uint8, nullptr, {});
+  temp_storage.set_data(cu::malloc_async(temp_storage.nbytes(), encoder));
+
+  // Run top-k
+  cub::DeviceTopK::MinPairs(
+      temp_storage.data<void>(),
+      temp_storage_bytes,
+      d_keys_in,
+      d_keys_out,
+      d_values_in,
+      d_values_out,
+      n,
+      k,
+      stream);
+
+  // Now fill the output: first k elements are top-k, rest are remaining
+  constexpr int BLOCK_SIZE = 256;
+  int num_blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  num_blocks = std::min(num_blocks, 128);
+
+  if constexpr (ARG_PARTITION) {
+    fill_remaining_kernel<ValT, IdxT, true><<<dim3(num_blocks, 1), BLOCK_SIZE, 0, stream>>>(
+        d_keys_in,
+        d_keys_out,
+        d_values_out,
+        nullptr,
+        out.data<IdxT>(),
+        n,
+        k,
+        1,
+        1,
+        n,
+        n);
+  } else {
+    fill_remaining_kernel<ValT, IdxT, false><<<dim3(num_blocks, 1), BLOCK_SIZE, 0, stream>>>(
+        d_keys_in,
+        d_keys_out,
+        d_values_out,
+        out.data<ValT>(),
+        nullptr,
+        n,
+        k,
+        1,
+        1,
+        n,
+        n);
+  }
+
+  encoder.add_temporary(topk_keys);
+  encoder.add_temporary(topk_indices);
+  encoder.add_temporary(temp_storage);
+}
+
+// Multi-row partition - process each row with DeviceTopK
+template <typename ValT, bool ARG_PARTITION>
+void gpu_topk_partition_batched(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis,
+    int k) {
+  using IdxT = uint32_t;
+
+  int n_rows = in.size() / in.shape(axis);
+  int n = in.shape(axis);
+
+  // For batched case, we need to process each row separately
+  // CUB's DeviceTopK doesn't support batched operations directly
+  // So we fall back to sort for now if not last axis or non-contiguous
+
+  // Check if we can use a simple strided approach
+  bool is_last_axis = (axis == in.ndim() - 1);
+  bool is_contiguous = in.flags().contiguous;
+
+  if (!is_last_axis || !is_contiguous || n_rows > 1) {
+    // Fall back to sort for complex cases
+    gpu_merge_sort(s, in, out, axis, ARG_PARTITION);
+    return;
+  }
+
+  // Single row, contiguous, last axis - use optimized path
+  gpu_topk_partition_single_row<ValT, ARG_PARTITION>(s, in, out, k, n);
+}
+
+void gpu_partition(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis_,
+    int kth,
+    bool arg_partition) {
+  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  int n = in.shape(axis);
+
+  // Normalize kth (partition finds elements <= kth position)
+  int k = kth + 1;
+  if (k <= 0) {
+    k = 1;
+  }
+  if (k > n) {
+    k = n;
+  }
+
+  // For small arrays or complex memory layouts, fall back to sort
+  // DeviceTopK has overhead that makes it slower for small arrays
+  constexpr int MIN_SIZE_FOR_TOPK = 1024;
+
+  bool is_last_axis = (axis == in.ndim() - 1);
+  bool is_contiguous = in.flags().contiguous;
+  int n_rows = in.size() / n;
+
+  // Use TopK only for:
+  // 1. Large enough arrays
+  // 2. Last axis (contiguous in memory)
+  // 3. Single row (batched TopK not directly supported by CUB)
+  bool use_topk = (n >= MIN_SIZE_FOR_TOPK) && is_last_axis && is_contiguous &&
+                  (n_rows == 1);
+
+  if (!use_topk) {
+    // Fall back to full sort
+    gpu_merge_sort(s, in, out, axis, arg_partition);
+    return;
+  }
+
+  // Use DeviceTopK for optimized partition
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
+      using ValT = cuda_type_t<CTYPE>;
+      if (arg_partition) {
+        gpu_topk_partition_batched<ValT, true>(s, in, out, axis, k);
+      } else {
+        gpu_topk_partition_batched<ValT, false>(s, in, out, axis, k);
+      }
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support partitioning complex numbers");
+    }
+  });
+}
+
 } // namespace
 
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -1065,12 +1316,14 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgPartition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, true);
+  assert(inputs.size() == 1);
+  gpu_partition(stream(), inputs[0], out, axis_, kth_, true);
 }
 
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Partition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, false);
+  assert(inputs.size() == 1);
+  gpu_partition(stream(), inputs[0], out, axis_, kth_, false);
 }
 
 } // namespace mlx::core
