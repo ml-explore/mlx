@@ -67,7 +67,8 @@ struct RadixTraits<half> {
 
   static METAL_FUNC half from_radix(UnsignedT bits) {
     UnsignedT mask = ((bits >> 15) - 1) | 0x8000u;
-    return as_type<half>(bits ^ mask);
+    UnsignedT result = bits ^ mask;
+    return as_type<half>(result);
   }
 };
 
@@ -85,7 +86,8 @@ struct RadixTraits<bfloat16_t> {
 
   static METAL_FUNC bfloat16_t from_radix(UnsignedT bits) {
     UnsignedT mask = ((bits >> 15) - 1) | 0x8000u;
-    return as_type<bfloat16_t>(bits ^ mask);
+    UnsignedT result = bits ^ mask;
+    return as_type<bfloat16_t>(result);
   }
 };
 
@@ -398,66 +400,6 @@ struct RadixSelectSmall {
               row_input[shared_idxs[i] * in_stride_sorted_axis];
         }
       }
-    }
-  }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-// Multi-pass Radix Select for large arrays
-//
-// For arrays larger than threadgroup memory, we use multiple passes:
-// 1. Build global histogram
-// 2. Find target bin
-// 3. Filter candidates
-// 4. Repeat until pivot found
-// 5. Final collection pass
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename ValT, short BLOCK_THREADS>
-struct RadixHistogram {
-  using Traits = RadixTraits<ValT>;
-  using UnsignedT = typename Traits::UnsignedT;
-
-  static METAL_FUNC void build(
-      const device ValT* input,
-      device int* histogram,
-      int n,
-      int stride,
-      int start_bit,
-      threadgroup int* shared_hist,
-      uint3 tid [[threadgroup_position_in_grid]],
-      uint3 lid [[thread_position_in_threadgroup]]) {
-    // Initialize shared histogram
-    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      shared_hist[i] = 0;
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Build histogram
-    int row = tid.y;
-    const device ValT* row_input = input + row * n * stride;
-
-    for (int i = tid.x * BLOCK_THREADS + lid.x; i < n;
-         i += gridDim.x * BLOCK_THREADS) {
-      ValT val = row_input[i * stride];
-      if (!is_nan_value(val)) {
-        UnsignedT radix_val = Traits::to_radix(val);
-        int digit = extract_digit(radix_val, start_bit, RADIX_BITS);
-        atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit],
-            1,
-            memory_order_relaxed);
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Reduce to global histogram
-    device int* row_hist = histogram + row * RADIX_SIZE;
-    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      atomic_fetch_add_explicit(
-          (device atomic_int*)&row_hist[i],
-          shared_hist[i],
-          memory_order_relaxed);
     }
   }
 };
