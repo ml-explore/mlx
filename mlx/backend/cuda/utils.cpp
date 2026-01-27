@@ -5,6 +5,7 @@
 #include "mlx/dtype_utils.h"
 
 #include <fmt/format.h>
+#include <cuda/cmath>
 #include <vector>
 
 namespace mlx::core {
