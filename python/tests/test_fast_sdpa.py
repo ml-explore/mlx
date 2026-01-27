@@ -585,9 +585,6 @@ class TestSDPA(mlx_tests.MLXTestCase):
             for t in transposes:
                 for mask_str in masks:
                     for B, qL, kL, D, qH, kH in shapes:
-                        # Skip causal tests when qL > kL (undefined behavior)
-                        if mask_str == "causal" and qL > kL:
-                            continue
                         with self.subTest(
                             B=B,
                             qsl=qL,
@@ -618,6 +615,13 @@ class TestSDPA(mlx_tests.MLXTestCase):
                                 mask,
                                 t,
                             )
+
+                            # For causal mask when qL > kL, first qL-kL rows are undefined
+                            # Compare only the valid portion
+                            if mask_str == "causal" and qL > kL:
+                                offset = qL - kL
+                                out_ref = out_ref[:, :, offset:, :]
+                                out_fst = out_fst[:, :, offset:, :]
 
                             atol = 2e-5 if dtype == "float32" else 3e-4
 
