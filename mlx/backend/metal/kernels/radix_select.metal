@@ -76,7 +76,7 @@ instantiate_radix_large_streaming_all(uint64, uint64_t, 128)
 instantiate_radix_large_streaming_all(int64, int64_t, 128)
 
 ///////////////////////////////////////////////////////////////////////////////
-// Multi-pass Radix Select Kernel Instantiations (for reference/fallback)
+// Multi-pass Radix Select Kernel Instantiations
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_radix_histogram(itname, itype, bn) \

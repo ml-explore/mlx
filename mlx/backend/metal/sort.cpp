@@ -316,15 +316,9 @@ void gpu_merge_sort(
 ///////////////////////////////////////////////////////////////////////////////
 // Radix Select for Partition Operations
 //
-// Optimized radix-based selection algorithm:
+// Uses radix-based selection for partition operations:
 // - Small arrays (<=2048): Single-pass kernel with threadgroup memory
-// - Large arrays (>2048): Streaming multi-pass kernel with SIMD optimization
-//
-// Key optimizations:
-// - SIMD-level histogram building with simd_sum reduction
-// - Fully GPU-side pivot determination (no CPU-GPU sync)
-// - Coalesced memory access patterns
-// - Hierarchical atomics for minimal contention
+// - Large arrays (>2048): Streaming multi-pass kernel
 ///////////////////////////////////////////////////////////////////////////////
 
 void gpu_radix_partition_small(

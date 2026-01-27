@@ -10,18 +10,14 @@ using namespace metal;
 ///////////////////////////////////////////////////////////////////////////////
 // Radix Select Implementation for Metal
 //
-// Highly optimized radix-based selection algorithm with:
-// - SIMD-optimized histogram building using simd_sum for warp-level reductions
-// - Fully GPU-side pivot determination (no CPU-GPU sync during passes)
-// - Coalesced memory access patterns for maximum bandwidth
-// - Hierarchical atomics: threadgroup-level first, then device-level
-// - Fused multi-pass kernel for large arrays
+// Multi-pass radix-based selection algorithm for partition operations.
+// Uses IEEE 754 bit manipulation for correct floating-point ordering.
 ///////////////////////////////////////////////////////////////////////////////
 
 // Radix configuration
 constant constexpr int RADIX_BITS = 8;
 constant constexpr int RADIX_SIZE = 1 << RADIX_BITS; // 256 bins
-constant constexpr int SIMD_SIZE = 32; // Apple GPU SIMD width
+constant constexpr int SIMD_SIZE = 32;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Bit manipulation for radix sorting
@@ -181,7 +177,7 @@ METAL_FUNC bool is_nan_value(T val) {
 // Multi-pass Radix Select Kernels
 ///////////////////////////////////////////////////////////////////////////////
 
-// Kernel 1: Build histogram across all elements
+// Build histogram across all elements
 template <typename ValT, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_histogram_kernel(
@@ -237,7 +233,7 @@ radix_histogram_kernel(
   }
 }
 
-// Kernel 2: Find target bin from histogram
+// Find target bin from histogram
 template <typename ValT>
 [[kernel]] void radix_find_bin_kernel(
     const device int* histogram [[buffer(0)]],
@@ -266,7 +262,7 @@ template <typename ValT>
   new_k[row] = remaining_k;
 }
 
-// Kernel 3: Final partition output with known pivot
+// Partition output with known pivot
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_partition_output_kernel(
@@ -317,7 +313,7 @@ radix_partition_output_kernel(
   }
 }
 
-// Kernel 4: Output equal elements (second phase)
+// Output equal elements
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_partition_equal_kernel(
@@ -365,7 +361,7 @@ radix_partition_equal_kernel(
   }
 }
 
-// Kernel 5: Output greater elements (third phase)
+// Output greater elements
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_partition_greater_kernel(
@@ -416,16 +412,10 @@ radix_partition_greater_kernel(
 ///////////////////////////////////////////////////////////////////////////////
 // Fused Multi-pass Radix Select for Large Arrays
 //
-// This kernel performs the complete radix select in a single dispatch by:
-// 1. Using multiple threadgroups to build histograms in parallel
-// 2. Reducing histograms and finding pivot within the kernel
-// 3. Outputting partitioned results
-//
-// Key optimizations:
-// - SIMD-level histogram building with simd_sum reduction
-// - Hierarchical reduction: per-thread -> per-SIMD -> per-threadgroup -> global
-// - Coalesced memory access with vectorized loads where possible
-// - Minimal synchronization using device memory fences
+// Performs the complete radix select in a single dispatch:
+// 1. Build histograms in parallel across threadgroups
+// 2. Reduce histograms and find pivot
+// 3. Output partitioned results
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
@@ -669,7 +659,7 @@ radix_select_large_fused(
   }
 }
 
-// Simplified large array kernel using streaming approach
+// Large array streaming kernel
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_select_large_streaming(
@@ -694,11 +684,11 @@ radix_select_large_streaming(
   const device ValT* row_input = input + row * segment_stride;
   device OutT* row_output = output + row * out_segment_stride;
 
-  // Shared memory - use separate arrays to avoid race conditions
+  // Shared memory
   threadgroup int shared_hist[RADIX_SIZE];
-  threadgroup int shared_pivot_info[2]; // [target_bin, k]
-  threadgroup int shared_counts[2];     // [less_count, equal_count]
-  threadgroup int shared_output_counters[3]; // [less, equal, greater]
+  threadgroup int shared_pivot_info[2];
+  threadgroup int shared_counts[2];
+  threadgroup int shared_output_counters[3];
 
   int k = kth + 1;
   UnsignedT target_prefix = 0;
