@@ -32,10 +32,11 @@ set_target_properties(
              CXX_VISIBILITY_PRESET hidden
              CUDA_VISIBILITY_PRESET hidden)
 
-# Define MLX_EXPORT for shared libraries.
-set_target_properties(mlx mlx_version PROPERTIES DEFINE_SYMBOL MLX_EXPORT)
-# Define MLX_STATIC for static libraries.
-if(NOT BUILD_SHARED_LIBS)
+# Define MLX_EXPORT for shared libraries, MLX_STATIC for static libraries.
+set_target_properties(mlx PROPERTIES DEFINE_SYMBOL MLX_EXPORT)
+if(BUILD_SHARED_LIBS)
+  target_compile_definitions(mlx_version PUBLIC MLX_EXPORT)
+else()
   target_compile_definitions(mlx PUBLIC MLX_STATIC)
   target_compile_definitions(mlx_version PUBLIC MLX_STATIC)
 endif()
@@ -49,20 +50,20 @@ endif()
 
 if(MSVC)
   # Some of CUDA's headers include windows.h, which defines min/max macros.
-  target_compile_definitions(mlx PRIVATE NOMINMAX)
+  target_compile_definitions(mlx PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  # Unicode support in fmt does not compile in .cu files.
+  target_compile_definitions(mlx PRIVATE FMT_UNICODE=0)
   # Disable some MSVC warnings to speed up compilation.
   target_compile_options(
     mlx
-    PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/wd4068
-           /wd4244
-           /wd4267
-           /wd4700
-           /wd4804>
-           $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/wd4068
-           -Xcompiler=/wd4244
-           -Xcompiler=/wd4267
-           -Xcompiler=/wd4700
-           -Xcompiler=/wd4804>)
+    PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/wd4244 /wd4267>
+    PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/wd4068
+            /wd4146
+            /wd4700
+            /wd4804
+            /wd4805>
+            $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/wd4244
+            -Xcompiler=/wd4267>)
   # Enable /bigobj for heavily templated code (e.g., binary.cpp) that exceeds
   # the default 65,535 section limit in COFF object files.
   target_compile_options(

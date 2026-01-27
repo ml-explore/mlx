@@ -771,20 +771,6 @@ class TestSDPA(mlx_tests.MLXTestCase):
 
             self.assertTrue(mx.allclose(g1, g2, **tolerance))
 
-        sdpa_mask_slow = lambda q, k, v, mask: mlx_ref_attn(
-            q, k, v, scale=scale, mask=mask
-        )
-        sdpa_mask_fast = lambda q, k, v, mask: mx.fast.scaled_dot_product_attention(
-            q, k, v, scale=scale, mask=mask
-        )
-
-        loss_mask_slow = lambda q, k, v, mask: mlx_ref_attn(
-            q, k, v, scale=scale, mask=mask
-        ).sum()
-        loss_mask_fast = lambda q, k, v, mask: (
-            mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
-        ).sum()
-
         B, N_kv, T, D = (2, 8, 128, 64)
         scale = D**-0.5
 
@@ -796,11 +782,7 @@ class TestSDPA(mlx_tests.MLXTestCase):
             mask_additive = mx.random.normal((B, N_q, T, T), dtype=mx.float16)
             mask_bool = mx.random.uniform(0, 1, (B, N_q, T, T), dtype=mx.float16) < 0.5
 
-            for mask in (mask_additive, mask_bool):
-                test_vjp(sdpa_mask_slow, sdpa_mask_fast, [q, k, v, mask])
-                test_grad(loss_mask_slow, loss_mask_fast, [q, k, v, mask])
-
-            for mask in (None, "causal"):
+            for mask in (None, "causal", mask_additive, mask_bool):
                 sdpa_slow = lambda q, k, v: mlx_ref_attn(
                     q, k, v, scale=scale, mask=mask
                 )
