@@ -31,7 +31,10 @@ const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
     std::vector<std::string> args;
     // Add path to bundled CCCL headers.
-    auto root_dir = current_binary_dir().parent_path();
+    auto root_dir = current_binary_dir();
+#if !defined(_WIN32)
+    root_dir = root_dir.parent_path();
+#endif
     auto path = root_dir / "include" / "cccl";
 #if defined(MLX_CCCL_DIR)
     if (!std::filesystem::exists(path)) {

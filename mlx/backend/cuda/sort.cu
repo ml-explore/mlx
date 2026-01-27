@@ -73,8 +73,8 @@ struct LessThan {
 
   __device__ __forceinline__ bool operator()(T a, T b) const {
     if constexpr (std::is_floating_point_v<T>) {
-      bool an = std::isnan(a);
-      bool bn = std::isnan(b);
+      bool an = cuda::std::isnan(a);
+      bool bn = cuda::std::isnan(b);
       if (an | bn) {
         return (!an) & bn;
       }
