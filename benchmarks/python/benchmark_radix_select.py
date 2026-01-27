@@ -112,29 +112,35 @@ def verify_correctness(b, v, k, dtype=mx.float32):
 
 
 def main():
-    print("=" * 60)
+    print("=" * 70)
     print("MLX Radix Select Benchmark")
-    print("=" * 60)
+    print("=" * 70)
 
-    # Test configurations
+    # Test configurations - including the problematic cases
     configs = [
-        # (batch, vocab, k)
-        (2048, 8192, 32),  # Original benchmark case
+        # (batch, vocab, k) - Standard cases
+        (2048, 8192, 32),  # High batch, large vocab - radix should win
+        (2048, 4096, 32),  # High batch, medium vocab - radix should win
         (1024, 4096, 16),
         (512, 2048, 64),
         (256, 1024, 32),
         (128, 512, 16),
+        # Problematic cases - low batch, large vocab
+        (1, 128000, 64),  # Single row, very large - sort should win
+        (1, 512, 32),  # Single row, small - radix should win
+        (16, 8192, 32),  # Few rows, large - sort should win
+        (32, 8192, 32),  # Boundary case
+        (64, 8192, 32),  # Above threshold - radix should win
     ]
 
     dtypes = [
         (mx.bfloat16, "bfloat16"),
-        (mx.float16, "float16"),
         (mx.float32, "float32"),
     ]
 
     print("\n1. Correctness Verification")
     print("-" * 40)
-    for b, v, k in configs[:2]:
+    for b, v, k in [(2048, 4096, 32), (1, 128000, 64), (16, 8192, 32)]:
         try:
             verify_correctness(b, v, k)
             print(f"  [PASS] b={b}, v={v}, k={k}")
@@ -142,7 +148,7 @@ def main():
             print(f"  [FAIL] b={b}, v={v}, k={k}: {e}")
 
     print("\n2. Performance Benchmarks")
-    print("-" * 40)
+    print("-" * 70)
 
     for dtype, dtype_name in dtypes:
         print(f"\nDtype: {dtype_name}")
@@ -161,15 +167,23 @@ def main():
                 speedup = sort_ms / argpart_ms
 
                 config_str = f"b={b}, v={v}, k={k}"
+                # Mark cases where we expect sort to be used
+                note = ""
+                if b <= 32 and v > 8192:
+                    note = " (sort path)"
                 print(
-                    f"{config_str:<25} {argpart_ms:>12.3f}ms {part_ms:>12.3f}ms {sort_ms:>12.3f}ms {speedup:>8.2f}x"
+                    f"{config_str:<25} {argpart_ms:>12.3f}ms {part_ms:>12.3f}ms {sort_ms:>12.3f}ms {speedup:>8.2f}x{note}"
                 )
             except Exception as e:
                 print(f"b={b}, v={v}, k={k}: Error - {e}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("Benchmark Complete")
-    print("=" * 60)
+    print("=" * 70)
+    print("\nNotes:")
+    print("- Cases with b<=32 and v>8192 use sort (optimal for this workload)")
+    print("- Cases with high batch count use radix select (optimal for parallelism)")
+    print("- Speedup > 1.0 means partition is faster than sort")
 
 
 if __name__ == "__main__":

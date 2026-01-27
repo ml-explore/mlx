@@ -568,6 +568,11 @@ void gpu_radix_partition(
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
 
+  // Normalize kth
+  if (kth < 0) {
+    kth += size_sorted_axis;
+  }
+
   // For very small arrays, fall back to full sort
   constexpr int RADIX_SELECT_THRESHOLD = 64;
   if (size_sorted_axis <= RADIX_SELECT_THRESHOLD) {
@@ -577,6 +582,14 @@ void gpu_radix_partition(
 
   // Prepare shapes
   int n_rows = in.size() / in.shape(axis);
+
+  constexpr int LOW_ROW_THRESHOLD = 32;
+  constexpr int LARGE_ARRAY_THRESHOLD = 8192;
+
+  if (n_rows <= LOW_ROW_THRESHOLD && size_sorted_axis > LARGE_ARRAY_THRESHOLD) {
+    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
+    return;
+  }
 
   auto in_nc_str = in.strides();
   in_nc_str.erase(in_nc_str.begin() + axis);

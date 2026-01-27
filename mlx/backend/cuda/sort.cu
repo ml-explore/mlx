@@ -1226,10 +1226,8 @@ struct RadixTraits<uint64_t> {
 
 // Extract digit from key
 template <typename UnsignedT>
-__device__ __forceinline__ int extract_digit(
-    UnsignedT key,
-    int start_bit,
-    int radix_bits) {
+__device__ __forceinline__ int
+extract_digit(UnsignedT key, int start_bit, int radix_bits) {
   return (key >> start_bit) & ((1 << radix_bits) - 1);
 }
 
@@ -1429,8 +1427,10 @@ __global__ void radix_select_nc_kernel(
   int row = blockIdx.y;
 
   // Compute offsets using elem_to_loc
-  int64_t in_offset = cu::elem_to_loc(row, nc_shape.data(), in_nc_strides.data(), nc_dim);
-  int64_t out_offset = cu::elem_to_loc(row, nc_shape.data(), out_nc_strides.data(), nc_dim);
+  int64_t in_offset =
+      cu::elem_to_loc(row, nc_shape.data(), in_nc_strides.data(), nc_dim);
+  int64_t out_offset =
+      cu::elem_to_loc(row, nc_shape.data(), out_nc_strides.data(), nc_dim);
 
   const ValT* row_input = input + in_offset;
   OutT* row_output = output + out_offset;
@@ -1627,8 +1627,7 @@ void gpu_radix_partition(
     if constexpr (!std::is_same_v<ValT, cu::complex64_t>) {
       dispatch_bool(arg_partition, [&](auto arg_tag) {
         constexpr bool ARG_PART = decltype(arg_tag)::value;
-        using OutT =
-            std::conditional_t<ARG_PART, uint32_t, ValT>;
+        using OutT = std::conditional_t<ARG_PART, uint32_t, ValT>;
 
         encoder.set_input_array(in);
         encoder.set_output_array(out);

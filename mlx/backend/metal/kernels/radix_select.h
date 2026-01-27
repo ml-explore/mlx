@@ -716,6 +716,7 @@ radix_select_large_streaming(
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
   constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
+  constexpr int NUM_SIMD_GROUPS = BLOCK_THREADS / SIMD_SIZE;
 
   int row = tid.y;
   const device ValT* row_input = input + row * segment_stride;
@@ -723,6 +724,7 @@ radix_select_large_streaming(
 
   // Shared memory
   threadgroup int shared_hist[RADIX_SIZE];
+  threadgroup int simd_local_hist[NUM_SIMD_GROUPS][RADIX_SIZE];
   threadgroup int shared_pivot_info[2];
   threadgroup int shared_counts[2];
   threadgroup int shared_output_counters[3];
@@ -735,13 +737,15 @@ radix_select_large_streaming(
   for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
     int start_bit = pass * RADIX_BITS;
 
-    // Clear histogram
-    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      shared_hist[i] = 0;
+    // Clear SIMD-local histograms
+    for (int i = simd_lane; i < RADIX_SIZE; i += SIMD_SIZE) {
+      simd_local_hist[simd_group][i] = 0;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // Build histogram
+    // Build SIMD-local histogram (no atomics needed within SIMD group)
+    int local_counts[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
     for (int i = lid.x; i < n; i += BLOCK_THREADS) {
       ValT val = row_input[i * in_stride];
       UnsignedT key = Traits::to_radix(val);
@@ -751,11 +755,34 @@ radix_select_large_streaming(
 
       if ((key & prefix_mask) == target_prefix) {
         int digit = extract_digit(key, start_bit, RADIX_BITS);
-        atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit],
-            1,
-            memory_order_relaxed);
+        // Use local array for first 8 bins to reduce shared memory pressure
+        if (digit < 8) {
+          local_counts[digit]++;
+        } else {
+          atomic_fetch_add_explicit(
+              (threadgroup atomic_int*)&simd_local_hist[simd_group][digit],
+              1,
+              memory_order_relaxed);
+        }
       }
+    }
+
+    // Reduce local counts to SIMD-local histogram
+    for (int d = 0; d < 8; d++) {
+      int sum = simd_sum(local_counts[d]);
+      if (simd_lane == 0) {
+        simd_local_hist[simd_group][d] = sum;
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Reduce SIMD-local histograms to global histogram
+    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      int sum = 0;
+      for (int s = 0; s < NUM_SIMD_GROUPS; s++) {
+        sum += simd_local_hist[s][i];
+      }
+      shared_hist[i] = sum;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -787,14 +814,13 @@ radix_select_large_streaming(
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
-  // Initialize counters for partition size counting
+  // Count partition sizes with SIMD reduction
   if (lid.x == 0) {
     shared_counts[0] = 0; // less_count
     shared_counts[1] = 0; // equal_count
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // Count partition sizes with SIMD reduction
   int local_less = 0, local_equal = 0;
   for (int i = lid.x; i < n; i += BLOCK_THREADS) {
     ValT val = row_input[i * in_stride];
