@@ -1049,6 +1049,665 @@ void gpu_sort(
   gpu_merge_sort(s, in, out, axis, argsort);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Radix Select Implementation for Partition Operations
+///////////////////////////////////////////////////////////////////////////////
+
+constexpr int RADIX_BITS = 8;
+constexpr int RADIX_SIZE = 1 << RADIX_BITS; // 256 bins
+
+// Radix traits for converting types to unsigned for radix operations
+template <typename T>
+struct RadixTraits;
+
+template <>
+struct RadixTraits<float> {
+  using UnsignedT = uint32_t;
+  static constexpr int BITS = 32;
+
+  __device__ __forceinline__ static UnsignedT to_radix(float val) {
+    UnsignedT bits = __float_as_uint(val);
+    UnsignedT mask = -int32_t(bits >> 31) | 0x80000000u;
+    return bits ^ mask;
+  }
+
+  __device__ __forceinline__ static float from_radix(UnsignedT bits) {
+    UnsignedT mask = ((bits >> 31) - 1) | 0x80000000u;
+    return __uint_as_float(bits ^ mask);
+  }
+};
+
+template <>
+struct RadixTraits<double> {
+  using UnsignedT = uint64_t;
+  static constexpr int BITS = 64;
+
+  __device__ __forceinline__ static UnsignedT to_radix(double val) {
+    UnsignedT bits = __double_as_longlong(val);
+    UnsignedT mask = -int64_t(bits >> 63) | 0x8000000000000000ull;
+    return bits ^ mask;
+  }
+
+  __device__ __forceinline__ static double from_radix(UnsignedT bits) {
+    UnsignedT mask = ((bits >> 63) - 1) | 0x8000000000000000ull;
+    return __longlong_as_double(bits ^ mask);
+  }
+};
+
+template <>
+struct RadixTraits<__half> {
+  using UnsignedT = uint16_t;
+  static constexpr int BITS = 16;
+
+  __device__ __forceinline__ static UnsignedT to_radix(__half val) {
+    UnsignedT bits = __half_as_ushort(val);
+    UnsignedT mask = -int16_t(bits >> 15) | 0x8000u;
+    return bits ^ mask;
+  }
+
+  __device__ __forceinline__ static __half from_radix(UnsignedT bits) {
+    UnsignedT mask = ((bits >> 15) - 1) | 0x8000u;
+    return __ushort_as_half(bits ^ mask);
+  }
+};
+
+template <>
+struct RadixTraits<__nv_bfloat16> {
+  using UnsignedT = uint16_t;
+  static constexpr int BITS = 16;
+
+  __device__ __forceinline__ static UnsignedT to_radix(__nv_bfloat16 val) {
+    UnsignedT bits = __bfloat16_as_ushort(val);
+    UnsignedT mask = -int16_t(bits >> 15) | 0x8000u;
+    return bits ^ mask;
+  }
+
+  __device__ __forceinline__ static __nv_bfloat16 from_radix(UnsignedT bits) {
+    UnsignedT mask = ((bits >> 15) - 1) | 0x8000u;
+    return __ushort_as_bfloat16(bits ^ mask);
+  }
+};
+
+template <>
+struct RadixTraits<int8_t> {
+  using UnsignedT = uint8_t;
+  static constexpr int BITS = 8;
+  __device__ __forceinline__ static UnsignedT to_radix(int8_t val) {
+    return static_cast<UnsignedT>(val) ^ 0x80u;
+  }
+  __device__ __forceinline__ static int8_t from_radix(UnsignedT bits) {
+    return static_cast<int8_t>(bits ^ 0x80u);
+  }
+};
+
+template <>
+struct RadixTraits<int16_t> {
+  using UnsignedT = uint16_t;
+  static constexpr int BITS = 16;
+  __device__ __forceinline__ static UnsignedT to_radix(int16_t val) {
+    return static_cast<UnsignedT>(val) ^ 0x8000u;
+  }
+  __device__ __forceinline__ static int16_t from_radix(UnsignedT bits) {
+    return static_cast<int16_t>(bits ^ 0x8000u);
+  }
+};
+
+template <>
+struct RadixTraits<int32_t> {
+  using UnsignedT = uint32_t;
+  static constexpr int BITS = 32;
+  __device__ __forceinline__ static UnsignedT to_radix(int32_t val) {
+    return static_cast<UnsignedT>(val) ^ 0x80000000u;
+  }
+  __device__ __forceinline__ static int32_t from_radix(UnsignedT bits) {
+    return static_cast<int32_t>(bits ^ 0x80000000u);
+  }
+};
+
+template <>
+struct RadixTraits<int64_t> {
+  using UnsignedT = uint64_t;
+  static constexpr int BITS = 64;
+  __device__ __forceinline__ static UnsignedT to_radix(int64_t val) {
+    return static_cast<UnsignedT>(val) ^ 0x8000000000000000ull;
+  }
+  __device__ __forceinline__ static int64_t from_radix(UnsignedT bits) {
+    return static_cast<int64_t>(bits ^ 0x8000000000000000ull);
+  }
+};
+
+template <>
+struct RadixTraits<uint8_t> {
+  using UnsignedT = uint8_t;
+  static constexpr int BITS = 8;
+  __device__ __forceinline__ static UnsignedT to_radix(uint8_t val) {
+    return val;
+  }
+  __device__ __forceinline__ static uint8_t from_radix(UnsignedT bits) {
+    return bits;
+  }
+};
+
+template <>
+struct RadixTraits<uint16_t> {
+  using UnsignedT = uint16_t;
+  static constexpr int BITS = 16;
+  __device__ __forceinline__ static UnsignedT to_radix(uint16_t val) {
+    return val;
+  }
+  __device__ __forceinline__ static uint16_t from_radix(UnsignedT bits) {
+    return bits;
+  }
+};
+
+template <>
+struct RadixTraits<uint32_t> {
+  using UnsignedT = uint32_t;
+  static constexpr int BITS = 32;
+  __device__ __forceinline__ static UnsignedT to_radix(uint32_t val) {
+    return val;
+  }
+  __device__ __forceinline__ static uint32_t from_radix(UnsignedT bits) {
+    return bits;
+  }
+};
+
+template <>
+struct RadixTraits<uint64_t> {
+  using UnsignedT = uint64_t;
+  static constexpr int BITS = 64;
+  __device__ __forceinline__ static UnsignedT to_radix(uint64_t val) {
+    return val;
+  }
+  __device__ __forceinline__ static uint64_t from_radix(UnsignedT bits) {
+    return bits;
+  }
+};
+
+// Extract digit from key
+template <typename UnsignedT>
+__device__ __forceinline__ int extract_digit(
+    UnsignedT key,
+    int start_bit,
+    int radix_bits) {
+  return (key >> start_bit) & ((1 << radix_bits) - 1);
+}
+
+// Check if value is NaN
+template <typename T>
+__device__ __forceinline__ bool is_nan_value(T val) {
+  if constexpr (cuda::std::is_floating_point_v<T>) {
+    return cuda::std::isnan(val);
+  }
+  return false;
+}
+
+template <>
+__device__ __forceinline__ bool is_nan_value(__half val) {
+  return __hisnan(val);
+}
+
+template <>
+__device__ __forceinline__ bool is_nan_value(__nv_bfloat16 val) {
+  return __hisnan(val);
+}
+
+// Warp-level reduction using shuffle
+__device__ __forceinline__ int warp_reduce_sum(int val) {
+  for (int offset = 16; offset > 0; offset /= 2) {
+    val += __shfl_down_sync(0xffffffff, val, offset);
+  }
+  return val;
+}
+
+// Radix select streaming kernel for large arrays
+template <typename ValT, typename OutT, bool ARG_PARTITION, int BLOCK_THREADS>
+__global__ void radix_select_kernel(
+    const ValT* __restrict__ input,
+    OutT* __restrict__ output,
+    int n,
+    int kth,
+    int64_t in_stride,
+    int64_t out_stride,
+    int64_t segment_stride,
+    int64_t out_segment_stride) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
+
+  int row = blockIdx.y;
+  const ValT* row_input = input + row * segment_stride;
+  OutT* row_output = output + row * out_segment_stride;
+
+  // Shared memory
+  __shared__ int shared_hist[RADIX_SIZE];
+  __shared__ int shared_pivot_info[2];
+  __shared__ int shared_counts[2];
+  __shared__ int shared_output_counters[3];
+
+  int k = kth + 1;
+  UnsignedT target_prefix = 0;
+  UnsignedT prefix_mask = 0;
+
+  // Multi-pass to find pivot
+  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
+    int start_bit = pass * RADIX_BITS;
+
+    // Clear histogram
+    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      shared_hist[i] = 0;
+    }
+    __syncthreads();
+
+    // Build histogram
+    for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = Traits::to_radix(val);
+      if (is_nan_value(val)) {
+        key = ~UnsignedT(0);
+      }
+
+      if ((key & prefix_mask) == target_prefix) {
+        int digit = extract_digit(key, start_bit, RADIX_BITS);
+        atomicAdd(&shared_hist[digit], 1);
+      }
+    }
+    __syncthreads();
+
+    // Find target bin
+    if (threadIdx.x == 0) {
+      int cumsum = 0;
+      int target_bin = 0;
+      for (int bin = 0; bin < RADIX_SIZE; bin++) {
+        int count = shared_hist[bin];
+        if (cumsum + count >= k) {
+          target_bin = bin;
+          k = k - cumsum;
+          break;
+        }
+        cumsum += count;
+      }
+      shared_pivot_info[0] = target_bin;
+      shared_pivot_info[1] = k;
+    }
+    __syncthreads();
+
+    int target_bin = shared_pivot_info[0];
+    k = shared_pivot_info[1];
+
+    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
+    target_prefix |= UnsignedT(target_bin) << start_bit;
+    prefix_mask |= digit_mask;
+
+    __syncthreads();
+  }
+
+  // Count partition sizes with warp reduction
+  if (threadIdx.x == 0) {
+    shared_counts[0] = 0;
+    shared_counts[1] = 0;
+  }
+  __syncthreads();
+
+  int local_less = 0, local_equal = 0;
+  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    if (key < target_prefix)
+      local_less++;
+    else if (key == target_prefix)
+      local_equal++;
+  }
+
+  // Warp reduction
+  local_less = warp_reduce_sum(local_less);
+  local_equal = warp_reduce_sum(local_equal);
+
+  // First lane of each warp contributes
+  if ((threadIdx.x & 31) == 0) {
+    atomicAdd(&shared_counts[0], local_less);
+    atomicAdd(&shared_counts[1], local_equal);
+  }
+  __syncthreads();
+
+  int less_count = shared_counts[0];
+  int equal_count = shared_counts[1];
+
+  // Initialize output counters
+  if (threadIdx.x == 0) {
+    shared_output_counters[0] = 0;
+    shared_output_counters[1] = 0;
+    shared_output_counters[2] = 0;
+  }
+  __syncthreads();
+
+  // Output partitioned elements
+  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+
+    int pos;
+    if (key < target_prefix) {
+      pos = atomicAdd(&shared_output_counters[0], 1);
+    } else if (key == target_prefix) {
+      pos = less_count + atomicAdd(&shared_output_counters[1], 1);
+    } else {
+      pos = less_count + equal_count + atomicAdd(&shared_output_counters[2], 1);
+    }
+
+    if constexpr (ARG_PARTITION) {
+      row_output[pos * out_stride] = i;
+    } else {
+      row_output[pos * out_stride] = val;
+    }
+  }
+}
+
+// Non-contiguous version using elem_to_loc
+template <typename ValT, typename OutT, bool ARG_PARTITION, int BLOCK_THREADS>
+__global__ void radix_select_nc_kernel(
+    const ValT* __restrict__ input,
+    OutT* __restrict__ output,
+    int n,
+    int kth,
+    int64_t in_stride,
+    int64_t out_stride,
+    const cu::Shape nc_shape,
+    const cu::Strides in_nc_strides,
+    const cu::Strides out_nc_strides,
+    int nc_dim) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
+
+  int row = blockIdx.y;
+
+  // Compute offsets using elem_to_loc
+  int64_t in_offset = cu::elem_to_loc(row, nc_shape.data(), in_nc_strides.data(), nc_dim);
+  int64_t out_offset = cu::elem_to_loc(row, nc_shape.data(), out_nc_strides.data(), nc_dim);
+
+  const ValT* row_input = input + in_offset;
+  OutT* row_output = output + out_offset;
+
+  // Shared memory
+  __shared__ int shared_hist[RADIX_SIZE];
+  __shared__ int shared_pivot_info[2];
+  __shared__ int shared_counts[2];
+  __shared__ int shared_output_counters[3];
+
+  int k = kth + 1;
+  UnsignedT target_prefix = 0;
+  UnsignedT prefix_mask = 0;
+
+  // Multi-pass to find pivot
+  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
+    int start_bit = pass * RADIX_BITS;
+
+    // Clear histogram
+    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      shared_hist[i] = 0;
+    }
+    __syncthreads();
+
+    // Build histogram
+    for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = Traits::to_radix(val);
+      if (is_nan_value(val)) {
+        key = ~UnsignedT(0);
+      }
+
+      if ((key & prefix_mask) == target_prefix) {
+        int digit = extract_digit(key, start_bit, RADIX_BITS);
+        atomicAdd(&shared_hist[digit], 1);
+      }
+    }
+    __syncthreads();
+
+    // Find target bin
+    if (threadIdx.x == 0) {
+      int cumsum = 0;
+      int target_bin = 0;
+      for (int bin = 0; bin < RADIX_SIZE; bin++) {
+        int count = shared_hist[bin];
+        if (cumsum + count >= k) {
+          target_bin = bin;
+          k = k - cumsum;
+          break;
+        }
+        cumsum += count;
+      }
+      shared_pivot_info[0] = target_bin;
+      shared_pivot_info[1] = k;
+    }
+    __syncthreads();
+
+    int target_bin = shared_pivot_info[0];
+    k = shared_pivot_info[1];
+
+    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
+    target_prefix |= UnsignedT(target_bin) << start_bit;
+    prefix_mask |= digit_mask;
+
+    __syncthreads();
+  }
+
+  // Count partition sizes
+  if (threadIdx.x == 0) {
+    shared_counts[0] = 0;
+    shared_counts[1] = 0;
+  }
+  __syncthreads();
+
+  int local_less = 0, local_equal = 0;
+  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    if (key < target_prefix)
+      local_less++;
+    else if (key == target_prefix)
+      local_equal++;
+  }
+
+  // Warp reduction
+  local_less = warp_reduce_sum(local_less);
+  local_equal = warp_reduce_sum(local_equal);
+
+  if ((threadIdx.x & 31) == 0) {
+    atomicAdd(&shared_counts[0], local_less);
+    atomicAdd(&shared_counts[1], local_equal);
+  }
+  __syncthreads();
+
+  int less_count = shared_counts[0];
+  int equal_count = shared_counts[1];
+
+  // Initialize output counters
+  if (threadIdx.x == 0) {
+    shared_output_counters[0] = 0;
+    shared_output_counters[1] = 0;
+    shared_output_counters[2] = 0;
+  }
+  __syncthreads();
+
+  // Output partitioned elements
+  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+
+    int pos;
+    if (key < target_prefix) {
+      pos = atomicAdd(&shared_output_counters[0], 1);
+    } else if (key == target_prefix) {
+      pos = less_count + atomicAdd(&shared_output_counters[1], 1);
+    } else {
+      pos = less_count + equal_count + atomicAdd(&shared_output_counters[2], 1);
+    }
+
+    if constexpr (ARG_PARTITION) {
+      row_output[pos * out_stride] = i;
+    } else {
+      row_output[pos * out_stride] = val;
+    }
+  }
+}
+
+void gpu_radix_partition(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis_,
+    int kth,
+    bool arg_partition) {
+  auto& encoder = cu::get_command_encoder(s);
+
+  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  int size_sorted_axis = in.shape(axis);
+
+  // Normalize kth
+  if (kth < 0) {
+    kth += size_sorted_axis;
+  }
+
+  // For very small arrays, fall back to full sort
+  // Radix select has overhead that makes it slower for small arrays
+  constexpr int RADIX_SELECT_THRESHOLD = 256;
+  if (size_sorted_axis <= RADIX_SELECT_THRESHOLD) {
+    gpu_merge_sort(s, in, out, axis_, arg_partition);
+    return;
+  }
+
+  // Prepare shapes
+  int n_rows = in.size() / in.shape(axis);
+
+  auto in_nc_str = in.strides();
+  in_nc_str.erase(in_nc_str.begin() + axis);
+
+  auto out_nc_str = out.strides();
+  out_nc_str.erase(out_nc_str.begin() + axis);
+
+  auto nc_shape = in.shape();
+  nc_shape.erase(nc_shape.begin() + axis);
+
+  int64_t in_stride_sorted_axis = in.strides()[axis];
+  int64_t out_stride_sorted_axis = out.strides()[axis];
+
+  // Check if we can use the contiguous kernel
+  bool contiguous = in.flags().contiguous;
+  auto check_strides = [](const array& x, int64_t sort_stride) {
+    int64_t min_stride =
+        *std::min_element(x.strides().begin(), x.strides().end());
+    int64_t max_stride =
+        *std::max_element(x.strides().begin(), x.strides().end());
+    return sort_stride == min_stride || sort_stride == max_stride;
+  };
+  contiguous &= check_strides(in, in_stride_sorted_axis);
+  contiguous &= check_strides(out, out_stride_sorted_axis);
+
+  constexpr int BLOCK_THREADS = 256;
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    using ValT = cuda_type_t<CTYPE>;
+
+    if constexpr (!std::is_same_v<ValT, cu::complex64_t>) {
+      dispatch_bool(arg_partition, [&](auto arg_tag) {
+        constexpr bool ARG_PART = decltype(arg_tag)::value;
+        using OutT =
+            std::conditional_t<ARG_PART, uint32_t, ValT>;
+
+        encoder.set_input_array(in);
+        encoder.set_output_array(out);
+
+        if (contiguous) {
+          // Compute segment strides
+          int64_t in_stride_segment_axis = size_sorted_axis;
+          int64_t out_stride_segment_axis = size_sorted_axis;
+
+          if (!in_nc_str.empty()) {
+            for (size_t i = 0; i < in_nc_str.size(); i++) {
+              if (nc_shape[i] == 1)
+                continue;
+              in_stride_segment_axis =
+                  std::min(in_stride_segment_axis, in_nc_str[i]);
+              out_stride_segment_axis =
+                  std::min(out_stride_segment_axis, out_nc_str[i]);
+            }
+          }
+
+          auto kernel =
+              radix_select_kernel<ValT, OutT, ARG_PART, BLOCK_THREADS>;
+
+          encoder.add_kernel_node(
+              kernel,
+              dim3(1, n_rows, 1),
+              dim3(BLOCK_THREADS, 1, 1),
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              size_sorted_axis,
+              kth,
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
+              in_stride_segment_axis,
+              out_stride_segment_axis);
+        } else {
+          // Non-contiguous path
+          cu::Shape nc_shape_param;
+          cu::Strides in_nc_strides_param;
+          cu::Strides out_nc_strides_param;
+
+          std::copy(nc_shape.begin(), nc_shape.end(), nc_shape_param.begin());
+          std::copy(
+              in_nc_str.begin(), in_nc_str.end(), in_nc_strides_param.begin());
+          std::copy(
+              out_nc_str.begin(),
+              out_nc_str.end(),
+              out_nc_strides_param.begin());
+
+          int nc_dim = nc_shape.size();
+
+          auto kernel =
+              radix_select_nc_kernel<ValT, OutT, ARG_PART, BLOCK_THREADS>;
+
+          encoder.add_kernel_node(
+              kernel,
+              dim3(1, n_rows, 1),
+              dim3(BLOCK_THREADS, 1, 1),
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              size_sorted_axis,
+              kth,
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
+              nc_shape_param,
+              in_nc_strides_param,
+              out_nc_strides_param,
+              nc_dim);
+        }
+      });
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support partitioning complex numbers");
+    }
+  });
+}
+
 } // namespace
 
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -1065,12 +1724,12 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgPartition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, true);
+  gpu_radix_partition(stream(), inputs[0], out, axis_, kth_, true);
 }
 
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Partition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, false);
+  gpu_radix_partition(stream(), inputs[0], out, axis_, kth_, false);
 }
 
 } // namespace mlx::core
