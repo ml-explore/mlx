@@ -278,7 +278,7 @@ void compile(
   std::vector<const char*> args;
   bool use_sass = compiler_supports_device_sass(device);
   auto cc = device.compute_capability_major();
-  std::string arch_tag = (cc == 90 || cc == 100 || cc == 121) ? "a" : "";
+  std::string arch_tag = (cc >= 9) ? "a" : "";
   std::string compute = fmt::format(
       "--gpu-architecture={}_{}{}{}",
       use_sass ? "sm" : "compute",

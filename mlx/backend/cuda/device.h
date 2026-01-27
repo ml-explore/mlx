@@ -119,7 +119,7 @@ class CommandEncoder {
   CudaStream stream_;
   CudaGraph graph_;
   Worker worker_;
-  char node_count_{0};
+  int node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
   std::vector<cudaGraphNode_t> to_nodes_;
