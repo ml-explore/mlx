@@ -696,7 +696,7 @@ radix_select_large_fused(
   }
 }
 
-// Large array streaming kernel with vectorized loads and SIMD reductions
+// Large array streaming kernel
 template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
 [[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
 radix_select_large_streaming(
@@ -716,296 +716,22 @@ radix_select_large_streaming(
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
   constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
-  constexpr int NUM_SIMD_GROUPS = BLOCK_THREADS / SIMD_SIZE;
 
   int row = tid.y;
   const device ValT* row_input = input + row * segment_stride;
   device OutT* row_output = output + row * out_segment_stride;
 
-  // Shared memory for histogram and synchronization
-  threadgroup int shared_hist[RADIX_SIZE];
-  threadgroup int shared_pivot_info[2];
-  threadgroup int shared_counts[3];
-
-  int k = kth + 1;
-  UnsignedT target_prefix = 0;
-  UnsignedT prefix_mask = 0;
-
-  // Multi-pass radix select to find pivot
-  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
-    int start_bit = pass * RADIX_BITS;
-
-    // Clear histogram using all threads
-    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      shared_hist[i] = 0;
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Build histogram with register-local accumulation
-    int local_hist[16] = {0};
-
-    // Process elements with stride-1 access when possible
-    if (in_stride == 1) {
-      // Vectorized path for contiguous data
-      for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-        ValT val = row_input[i];
-        UnsignedT key = Traits::to_radix(val);
-        if (is_nan_value(val)) {
-          key = ~UnsignedT(0);
-        }
-        if ((key & prefix_mask) == target_prefix) {
-          int digit = extract_digit(key, start_bit, RADIX_BITS);
-          // Accumulate in local histogram for common bins
-          if (digit < 16) {
-            local_hist[digit]++;
-          } else {
-            atomic_fetch_add_explicit(
-                (threadgroup atomic_int*)&shared_hist[digit],
-                1,
-                memory_order_relaxed);
-          }
-        }
-      }
-    } else {
-      // Strided access path
-      for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-        ValT val = row_input[i * in_stride];
-        UnsignedT key = Traits::to_radix(val);
-        if (is_nan_value(val)) {
-          key = ~UnsignedT(0);
-        }
-        if ((key & prefix_mask) == target_prefix) {
-          int digit = extract_digit(key, start_bit, RADIX_BITS);
-          if (digit < 16) {
-            local_hist[digit]++;
-          } else {
-            atomic_fetch_add_explicit(
-                (threadgroup atomic_int*)&shared_hist[digit],
-                1,
-                memory_order_relaxed);
-          }
-        }
-      }
-    }
-
-    // Reduce local histograms using SIMD operations
-    for (int d = 0; d < 16; d++) {
-      int sum = simd_sum(local_hist[d]);
-      if (simd_lane == 0 && sum > 0) {
-        atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[d],
-            sum,
-            memory_order_relaxed);
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Find target bin (single thread)
-    if (lid.x == 0) {
-      int cumsum = 0;
-      int target_bin = 0;
-      for (int bin = 0; bin < RADIX_SIZE; bin++) {
-        int count = shared_hist[bin];
-        if (cumsum + count >= k) {
-          target_bin = bin;
-          k = k - cumsum;
-          break;
-        }
-        cumsum += count;
-      }
-      shared_pivot_info[0] = target_bin;
-      shared_pivot_info[1] = k;
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    int target_bin = shared_pivot_info[0];
-    k = shared_pivot_info[1];
-
-    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
-    target_prefix |= UnsignedT(target_bin) << start_bit;
-    prefix_mask |= digit_mask;
-
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-  }
-
-  // Count partition sizes with SIMD reduction
-  if (lid.x < 3) {
-    shared_counts[lid.x] = 0;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  int local_less = 0, local_equal = 0;
-
-  if (in_stride == 1) {
-    for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-      if (key < target_prefix)
-        local_less++;
-      else if (key == target_prefix)
-        local_equal++;
-    }
-  } else {
-    for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-      if (key < target_prefix)
-        local_less++;
-      else if (key == target_prefix)
-        local_equal++;
-    }
-  }
-
-  // SIMD reduction for counts
-  local_less = simd_sum(local_less);
-  local_equal = simd_sum(local_equal);
-
-  if (simd_lane == 0) {
-    if (local_less > 0) {
-      atomic_fetch_add_explicit(
-          (threadgroup atomic_int*)&shared_counts[0],
-          local_less,
-          memory_order_relaxed);
-    }
-    if (local_equal > 0) {
-      atomic_fetch_add_explicit(
-          (threadgroup atomic_int*)&shared_counts[1],
-          local_equal,
-          memory_order_relaxed);
-    }
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  int less_count = shared_counts[0];
-  int equal_count = shared_counts[1];
-
-  // Reset output counters
-  if (lid.x < 3) {
-    shared_counts[lid.x] = 0;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  // Output partitioned elements
-  if (in_stride == 1 && out_stride == 1) {
-    // Fast path: contiguous input and output
-    for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-
-      int pos;
-      if (key < target_prefix) {
-        pos = atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_counts[0],
-            1,
-            memory_order_relaxed);
-      } else if (key == target_prefix) {
-        pos = less_count +
-            atomic_fetch_add_explicit(
-                  (threadgroup atomic_int*)&shared_counts[1],
-                  1,
-                  memory_order_relaxed);
-      } else {
-        pos = less_count + equal_count +
-            atomic_fetch_add_explicit(
-                  (threadgroup atomic_int*)&shared_counts[2],
-                  1,
-                  memory_order_relaxed);
-      }
-
-      if (ARG_PARTITION) {
-        row_output[pos] = i;
-      } else {
-        row_output[pos] = val;
-      }
-    }
-  } else {
-    // General path: strided access
-    for (int i = lid.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-
-      int pos;
-      if (key < target_prefix) {
-        pos = atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_counts[0],
-            1,
-            memory_order_relaxed);
-      } else if (key == target_prefix) {
-        pos = less_count +
-            atomic_fetch_add_explicit(
-                  (threadgroup atomic_int*)&shared_counts[1],
-                  1,
-                  memory_order_relaxed);
-      } else {
-        pos = less_count + equal_count +
-            atomic_fetch_add_explicit(
-                  (threadgroup atomic_int*)&shared_counts[2],
-                  1,
-                  memory_order_relaxed);
-      }
-
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = i;
-      } else {
-        row_output[pos * out_stride] = val;
-      }
-    }
-  }
-}
-
-// Large array streaming kernel for non-contiguous arrays
-template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
-[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
-radix_select_large_streaming_nc(
-    const device ValT* input [[buffer(0)]],
-    device OutT* output [[buffer(1)]],
-    device atomic_int* counters [[buffer(2)]],
-    const constant int& n [[buffer(3)]],
-    const constant int& kth [[buffer(4)]],
-    const constant int& in_stride [[buffer(5)]],
-    const constant int& out_stride [[buffer(6)]],
-    const constant int& nc_dim [[buffer(7)]],
-    const constant int* nc_shape [[buffer(8)]],
-    const constant int64_t* in_nc_strides [[buffer(9)]],
-    const constant int64_t* out_nc_strides [[buffer(10)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint simd_lane [[thread_index_in_simdgroup]],
-    uint simd_group [[simdgroup_index_in_threadgroup]]) {
-  using Traits = RadixTraits<ValT>;
-  using UnsignedT = typename Traits::UnsignedT;
-  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
-
-  // Compute row offsets using elem_to_loc for non-contiguous arrays
-  int row = tid.y;
-  auto in_offset = elem_to_loc(row, nc_shape, in_nc_strides, nc_dim);
-  auto out_offset = elem_to_loc(row, nc_shape, out_nc_strides, nc_dim);
-
-  const device ValT* row_input = input + in_offset;
-  device OutT* row_output = output + out_offset;
-
   // Shared memory
   threadgroup int shared_hist[RADIX_SIZE];
   threadgroup int shared_pivot_info[2];
-  threadgroup int shared_counts[3];
+  threadgroup int shared_counts[2];
+  threadgroup int shared_output_counters[3];
 
   int k = kth + 1;
   UnsignedT target_prefix = 0;
   UnsignedT prefix_mask = 0;
 
-  // Multi-pass radix select to find pivot
+  // Multi-pass to find pivot
   for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
     int start_bit = pass * RADIX_BITS;
 
@@ -1015,9 +741,7 @@ radix_select_large_streaming_nc(
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // Build histogram with register-local accumulation
-    int local_hist[16] = {0};
-
+    // Build histogram
     for (int i = lid.x; i < n; i += BLOCK_THREADS) {
       ValT val = row_input[i * in_stride];
       UnsignedT key = Traits::to_radix(val);
@@ -1027,24 +751,9 @@ radix_select_large_streaming_nc(
 
       if ((key & prefix_mask) == target_prefix) {
         int digit = extract_digit(key, start_bit, RADIX_BITS);
-        if (digit < 16) {
-          local_hist[digit]++;
-        } else {
-          atomic_fetch_add_explicit(
-              (threadgroup atomic_int*)&shared_hist[digit],
-              1,
-              memory_order_relaxed);
-        }
-      }
-    }
-
-    // Reduce local histograms using SIMD
-    for (int d = 0; d < 16; d++) {
-      int sum = simd_sum(local_hist[d]);
-      if (simd_lane == 0 && sum > 0) {
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[d],
-            sum,
+            (threadgroup atomic_int*)&shared_hist[digit],
+            1,
             memory_order_relaxed);
       }
     }
@@ -1078,12 +787,14 @@ radix_select_large_streaming_nc(
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
-  // Count partition sizes
-  if (lid.x < 3) {
-    shared_counts[lid.x] = 0;
+  // Initialize counters for partition size counting
+  if (lid.x == 0) {
+    shared_counts[0] = 0; // less_count
+    shared_counts[1] = 0; // equal_count
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
+  // Count partition sizes with SIMD reduction
   int local_less = 0, local_equal = 0;
   for (int i = lid.x; i < n; i += BLOCK_THREADS) {
     ValT val = row_input[i * in_stride];
@@ -1101,28 +812,28 @@ radix_select_large_streaming_nc(
   local_less = simd_sum(local_less);
   local_equal = simd_sum(local_equal);
 
+  // Aggregate across SIMD groups (only first lane of each SIMD group)
   if (simd_lane == 0) {
-    if (local_less > 0) {
-      atomic_fetch_add_explicit(
-          (threadgroup atomic_int*)&shared_counts[0],
-          local_less,
-          memory_order_relaxed);
-    }
-    if (local_equal > 0) {
-      atomic_fetch_add_explicit(
-          (threadgroup atomic_int*)&shared_counts[1],
-          local_equal,
-          memory_order_relaxed);
-    }
+    atomic_fetch_add_explicit(
+        (threadgroup atomic_int*)&shared_counts[0],
+        local_less,
+        memory_order_relaxed);
+    atomic_fetch_add_explicit(
+        (threadgroup atomic_int*)&shared_counts[1],
+        local_equal,
+        memory_order_relaxed);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
+  // Read final counts - all threads read the same values
   int less_count = shared_counts[0];
   int equal_count = shared_counts[1];
 
-  // Reset output counters
-  if (lid.x < 3) {
-    shared_counts[lid.x] = 0;
+  // Initialize output counters
+  if (lid.x == 0) {
+    shared_output_counters[0] = 0; // less output counter
+    shared_output_counters[1] = 0; // equal output counter
+    shared_output_counters[2] = 0; // greater output counter
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -1137,17 +848,203 @@ radix_select_large_streaming_nc(
     int pos;
     if (key < target_prefix) {
       pos = atomic_fetch_add_explicit(
-          (threadgroup atomic_int*)&shared_counts[0], 1, memory_order_relaxed);
+          (threadgroup atomic_int*)&shared_output_counters[0],
+          1,
+          memory_order_relaxed);
     } else if (key == target_prefix) {
       pos = less_count +
           atomic_fetch_add_explicit(
-                (threadgroup atomic_int*)&shared_counts[1],
+                (threadgroup atomic_int*)&shared_output_counters[1],
                 1,
                 memory_order_relaxed);
     } else {
       pos = less_count + equal_count +
           atomic_fetch_add_explicit(
-                (threadgroup atomic_int*)&shared_counts[2],
+                (threadgroup atomic_int*)&shared_output_counters[2],
+                1,
+                memory_order_relaxed);
+    }
+
+    if (ARG_PARTITION) {
+      row_output[pos * out_stride] = i;
+    } else {
+      row_output[pos * out_stride] = val;
+    }
+  }
+}
+
+// Large array streaming kernel for non-contiguous arrays
+// Uses elem_to_loc for proper multi-dimensional indexing
+template <typename ValT, typename OutT, bool ARG_PARTITION, short BLOCK_THREADS>
+[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void
+radix_select_large_streaming_nc(
+    const device ValT* input [[buffer(0)]],
+    device OutT* output [[buffer(1)]],
+    device atomic_int* counters [[buffer(2)]],
+    const constant int& n [[buffer(3)]],
+    const constant int& kth [[buffer(4)]],
+    const constant int& in_stride [[buffer(5)]],
+    const constant int& out_stride [[buffer(6)]],
+    const constant int& nc_dim [[buffer(7)]],
+    const constant int* nc_shape [[buffer(8)]],
+    const constant int64_t* in_nc_strides [[buffer(9)]],
+    const constant int64_t* out_nc_strides [[buffer(10)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint simd_lane [[thread_index_in_simdgroup]],
+    uint simd_group [[simdgroup_index_in_threadgroup]]) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
+
+  // Compute row offsets using elem_to_loc for non-contiguous arrays
+  int row = tid.y;
+  auto in_offset = elem_to_loc(row, nc_shape, in_nc_strides, nc_dim);
+  auto out_offset = elem_to_loc(row, nc_shape, out_nc_strides, nc_dim);
+
+  const device ValT* row_input = input + in_offset;
+  device OutT* row_output = output + out_offset;
+
+  // Shared memory
+  threadgroup int shared_hist[RADIX_SIZE];
+  threadgroup int shared_pivot_info[2];
+  threadgroup int shared_counts[2];
+  threadgroup int shared_output_counters[3];
+
+  int k = kth + 1;
+  UnsignedT target_prefix = 0;
+  UnsignedT prefix_mask = 0;
+
+  // Multi-pass to find pivot
+  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
+    int start_bit = pass * RADIX_BITS;
+
+    // Clear histogram
+    for (int i = lid.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      shared_hist[i] = 0;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Build histogram
+    for (int i = lid.x; i < n; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = Traits::to_radix(val);
+      if (is_nan_value(val)) {
+        key = ~UnsignedT(0);
+      }
+
+      if ((key & prefix_mask) == target_prefix) {
+        int digit = extract_digit(key, start_bit, RADIX_BITS);
+        atomic_fetch_add_explicit(
+            (threadgroup atomic_int*)&shared_hist[digit],
+            1,
+            memory_order_relaxed);
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Find target bin
+    if (lid.x == 0) {
+      int cumsum = 0;
+      int target_bin = 0;
+      for (int bin = 0; bin < RADIX_SIZE; bin++) {
+        int count = shared_hist[bin];
+        if (cumsum + count >= k) {
+          target_bin = bin;
+          k = k - cumsum;
+          break;
+        }
+        cumsum += count;
+      }
+      shared_pivot_info[0] = target_bin;
+      shared_pivot_info[1] = k;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    int target_bin = shared_pivot_info[0];
+    k = shared_pivot_info[1];
+
+    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
+    target_prefix |= UnsignedT(target_bin) << start_bit;
+    prefix_mask |= digit_mask;
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  // Initialize counters for partition size counting
+  if (lid.x == 0) {
+    shared_counts[0] = 0; // less_count
+    shared_counts[1] = 0; // equal_count
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Count partition sizes with SIMD reduction
+  int local_less = 0, local_equal = 0;
+  for (int i = lid.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+    if (key < target_prefix)
+      local_less++;
+    else if (key == target_prefix)
+      local_equal++;
+  }
+
+  // SIMD reduction
+  local_less = simd_sum(local_less);
+  local_equal = simd_sum(local_equal);
+
+  // Aggregate across SIMD groups (only first lane of each SIMD group)
+  if (simd_lane == 0) {
+    atomic_fetch_add_explicit(
+        (threadgroup atomic_int*)&shared_counts[0],
+        local_less,
+        memory_order_relaxed);
+    atomic_fetch_add_explicit(
+        (threadgroup atomic_int*)&shared_counts[1],
+        local_equal,
+        memory_order_relaxed);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Read final counts - all threads read the same values
+  int less_count = shared_counts[0];
+  int equal_count = shared_counts[1];
+
+  // Initialize output counters
+  if (lid.x == 0) {
+    shared_output_counters[0] = 0; // less output counter
+    shared_output_counters[1] = 0; // equal output counter
+    shared_output_counters[2] = 0; // greater output counter
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Output partitioned elements
+  for (int i = lid.x; i < n; i += BLOCK_THREADS) {
+    ValT val = row_input[i * in_stride];
+    UnsignedT key = Traits::to_radix(val);
+    if (is_nan_value(val)) {
+      key = ~UnsignedT(0);
+    }
+
+    int pos;
+    if (key < target_prefix) {
+      pos = atomic_fetch_add_explicit(
+          (threadgroup atomic_int*)&shared_output_counters[0],
+          1,
+          memory_order_relaxed);
+    } else if (key == target_prefix) {
+      pos = less_count +
+          atomic_fetch_add_explicit(
+                (threadgroup atomic_int*)&shared_output_counters[1],
+                1,
+                memory_order_relaxed);
+    } else {
+      pos = less_count + equal_count +
+          atomic_fetch_add_explicit(
+                (threadgroup atomic_int*)&shared_output_counters[2],
                 1,
                 memory_order_relaxed);
     }
