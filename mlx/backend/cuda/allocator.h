@@ -77,7 +77,7 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
-  std::vector<cudaStream_t> free_streams_;
+  std::vector<CudaStream> free_streams_;
   std::vector<cudaMemPool_t> mem_pools_;
   SmallSizePool scalar_pool_;
 };
@@ -85,5 +85,9 @@ class CudaAllocator : public allocator::Allocator {
 CudaAllocator& allocator();
 
 Buffer malloc_async(size_t size, CommandEncoder& encoder);
+
+// Replace the memory of |buf| with unified memory (managed memory or pinned
+// host memory), and copy the data over. Pass |stream| to copy asynchronously.
+void move_to_unified_memory(CudaBuffer& buf, cudaStream_t stream = nullptr);
 
 } // namespace mlx::core::cu
