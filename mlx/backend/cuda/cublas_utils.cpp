@@ -98,7 +98,7 @@ void CublasMatmulBase::init_base(
   M_ = a_rows;
   N_ = b_cols;
   scale_type_ = scale_type;
-  handle_ = device.lt_handle();
+  handle_ = device.get_cublaslt_handle();
   pref_ = cublas_utils::get_preference(device);
   heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 

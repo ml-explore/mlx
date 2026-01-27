@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/worker.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/utils.h"
 
 #include <fmt/format.h>
@@ -37,31 +38,19 @@ Device::Device(int device) : device_(device) {
       &compute_capability_major_, cudaDevAttrComputeCapabilityMajor, device_));
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
       &compute_capability_minor_, cudaDevAttrComputeCapabilityMinor, device_));
-  // Validate the requirements of device.
-  int attr = 0;
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
-      &attr, cudaDevAttrConcurrentManagedAccess, device_));
-  if (attr != 1) {
-    throw std::runtime_error(
-        fmt::format(
-            "Device {} does not support synchronization in managed memory.",
-            device_));
-  }
-
-  // The cublasLt handle is used by matmul.
-  make_current();
-  CHECK_CUBLAS_ERROR(cublasLtCreate(&lt_));
-  // The cudnn handle is used by Convolution.
-  CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_));
-
-  // Initialize the jit module cache here ensures it is not
-  // unloaded before any evaluation is done
-  get_jit_module_cache();
+      &concurrent_managed_access_,
+      cudaDevAttrConcurrentManagedAccess,
+      device_));
 }
 
 Device::~Device() {
-  CHECK_CUDNN_ERROR(cudnnDestroy(cudnn_));
-  CHECK_CUBLAS_ERROR(cublasLtDestroy(lt_));
+  if (cudnn_handle_) {
+    CHECK_CUDNN_ERROR(cudnnDestroy(cudnn_handle_));
+  }
+  if (cublaslt_handle_) {
+    CHECK_CUBLAS_ERROR(cublasLtDestroy(cublaslt_handle_));
+  }
 }
 
 void Device::make_current() {
@@ -80,6 +69,22 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
     it = encoders_.try_emplace(s.index, *this).first;
   }
   return it->second;
+}
+
+cublasLtHandle_t Device::get_cublaslt_handle() {
+  if (!cublaslt_handle_) {
+    make_current();
+    CHECK_CUBLAS_ERROR(cublasLtCreate(&cublaslt_handle_));
+  }
+  return cublaslt_handle_;
+}
+
+cudnnHandle_t Device::get_cudnn_handle() {
+  if (!cudnn_handle_) {
+    make_current();
+    CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_handle_));
+  }
+  return cudnn_handle_;
 }
 
 CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
@@ -491,13 +496,23 @@ void CommandEncoder::synchronize() {
   f.wait();
 }
 
-Device& device(mlx::core::Device device) {
-  static std::unordered_map<int, Device> devices;
-  auto it = devices.find(device.index);
-  if (it == devices.end()) {
-    it = devices.try_emplace(device.index, device.index).first;
-  }
-  return it->second;
+Device& device(int cuda_device) {
+  static auto devices = []() {
+    std::vector<Device> devices;
+    int device_count = gpu::device_count();
+    for (int i = 0; i < device_count; ++i) {
+      devices.emplace_back(i);
+    }
+    // Initialize the jit module cache here ensures it is not unloaded before
+    // any evaluation is done.
+    get_jit_module_cache();
+    return devices;
+  }();
+  return devices.at(cuda_device);
+}
+
+Device& device(mlx::core::Device d) {
+  return device(d.index);
 }
 
 CommandEncoder& get_command_encoder(Stream s) {

@@ -103,7 +103,7 @@ std::optional<DnnGraph> build_conv_graph(
     const std::vector<int64_t>& dilation) {
   auto compute_dtype =
       (dtype == float16 || dtype == bfloat16) ? float32 : dtype;
-  DnnGraph graph(encoder.device().cudnn_handle(), dtype, compute_dtype);
+  DnnGraph graph(encoder.device().get_cudnn_handle(), dtype, compute_dtype);
   auto x_ = graph.tensor_nchw("X", 'x', x);
   auto w_ = graph.tensor_nchw("W", 'w', w);
 

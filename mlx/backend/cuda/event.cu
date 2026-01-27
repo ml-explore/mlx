@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/event.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/event.h"
 #include "mlx/scheduler.h"
 
@@ -193,7 +194,24 @@ __global__ void event_signal_kernel(AtomicEvent::Atomic* ac, uint64_t value) {
   event_signal(ac, value);
 }
 
+bool supports_concurrent_managed_access() {
+  static bool concurrent_managed_access = []() {
+    int device_count = gpu::device_count();
+    for (int i = 0; i < device_count; ++i) {
+      if (!cu::device(i).concurrent_managed_access()) {
+        return false;
+      }
+    }
+    return true;
+  }();
+  return concurrent_managed_access;
+}
+
 AtomicEvent::AtomicEvent() {
+  if (!supports_concurrent_managed_access()) {
+    throw std::runtime_error(
+        "Device does not support synchronization in managed memory.");
+  }
   buf_ = std::shared_ptr<Buffer>(
       new Buffer{allocator().malloc(sizeof(Atomic))}, [](Buffer* ptr) {
         allocator().free(*ptr);

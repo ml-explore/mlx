@@ -3,7 +3,9 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/memory.h"
+#include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 #include <cuda_runtime.h>
@@ -45,12 +47,13 @@ SmallSizePool::SmallSizePool() {
 
   CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
 
-  int device_count = 0;
-  CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
+  int device_count = gpu::device_count();
   for (int i = 0; i < device_count; ++i) {
-    auto loc = cuda_mem_loc(i);
-    CHECK_CUDA_ERROR(
-        cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
+    if (cu::device(i).concurrent_managed_access()) {
+      auto loc = cuda_mem_loc(i);
+      CHECK_CUDA_ERROR(cudaMemAdvise(
+          data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
+    }
   }
 
   auto curr = next_free_;
@@ -294,10 +297,14 @@ void CudaAllocator::clear_cache() {
 }
 
 CudaAllocator& allocator() {
-  // By creating the |allocator_| on heap, the destructor of CudaAllocator
-  // will not be called on exit and buffers in the cache will be leaked. This
-  // can save some time at program exit.
-  static CudaAllocator* allocator_ = new CudaAllocator;
+  static auto* allocator_ = []() {
+    // Ensure scheduler is created before allocator.
+    scheduler::scheduler();
+    // By creating the |allocator_| on heap, the destructor of CudaAllocator
+    // will not be called on exit and buffers in the cache will be leaked. This
+    // can save some time at program exit.
+    return new CudaAllocator();
+  }();
   return *allocator_;
 }
 
