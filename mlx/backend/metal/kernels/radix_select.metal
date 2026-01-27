@@ -76,6 +76,32 @@ instantiate_radix_large_streaming_all(uint64, uint64_t, 128)
 instantiate_radix_large_streaming_all(int64, int64_t, 128)
 
 ///////////////////////////////////////////////////////////////////////////////
+// Large Array Non-Contiguous Streaming Radix Select Kernel Instantiations
+///////////////////////////////////////////////////////////////////////////////
+
+#define instantiate_radix_large_streaming_nc(itname, itype, otname, otype, arg_part, bn) \
+  instantiate_kernel(                                                                     \
+      "radix_select_large_nc_" #itname "_" #otname "_" #arg_part "_bn" #bn,               \
+      radix_select_large_streaming_nc,                                                    \
+      itype, otype, arg_part, bn)
+
+#define instantiate_radix_large_streaming_nc_all(itname, itype, bn) \
+  instantiate_radix_large_streaming_nc(itname, itype, uint32, uint32_t, true, bn) \
+  instantiate_radix_large_streaming_nc(itname, itype, itname, itype, false, bn)
+
+instantiate_radix_large_streaming_nc_all(uint8, uint8_t, 256)
+instantiate_radix_large_streaming_nc_all(uint16, uint16_t, 256)
+instantiate_radix_large_streaming_nc_all(uint32, uint32_t, 256)
+instantiate_radix_large_streaming_nc_all(int8, int8_t, 256)
+instantiate_radix_large_streaming_nc_all(int16, int16_t, 256)
+instantiate_radix_large_streaming_nc_all(int32, int32_t, 256)
+instantiate_radix_large_streaming_nc_all(float16, half, 256)
+instantiate_radix_large_streaming_nc_all(float32, float, 256)
+instantiate_radix_large_streaming_nc_all(bfloat16, bfloat16_t, 256)
+instantiate_radix_large_streaming_nc_all(uint64, uint64_t, 128)
+instantiate_radix_large_streaming_nc_all(int64, int64_t, 128)
+
+///////////////////////////////////////////////////////////////////////////////
 // Multi-pass Radix Select Kernel Instantiations
 ///////////////////////////////////////////////////////////////////////////////
 

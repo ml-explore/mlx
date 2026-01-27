@@ -446,6 +446,73 @@ void gpu_radix_partition_large(
   d.add_temporaries(std::move(temps), s.index);
 }
 
+void gpu_radix_partition_large_nc(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    array& out,
+    int axis,
+    int kth,
+    bool arg_partition,
+    int n_rows,
+    int size_sorted_axis,
+    int in_stride_sorted_axis,
+    int out_stride_sorted_axis,
+    const Shape& nc_shape,
+    const Strides& in_nc_str,
+    const Strides& out_nc_str) {
+  constexpr int bn = 256;
+
+  // Allocate counter buffer for streaming kernel
+  array counters({n_rows, 4}, int32, nullptr, {});
+  counters.set_data(allocator::malloc(counters.nbytes()));
+
+  // Zero-initialize counters
+  std::memset(counters.data<int32_t>(), 0, counters.nbytes());
+
+  std::vector<array> temps = {counters};
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  // Use the non-contiguous streaming kernel
+  std::ostringstream kname;
+  kname << "radix_select_large_nc_" << type_to_name(in) << "_"
+        << type_to_name(out) << "_" << (arg_partition ? "true" : "false")
+        << "_bn" << bn;
+
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_output_array(counters, 2);
+  compute_encoder.set_bytes(size_sorted_axis, 3);
+  compute_encoder.set_bytes(kth, 4);
+  compute_encoder.set_bytes(in_stride_sorted_axis, 5);
+  compute_encoder.set_bytes(out_stride_sorted_axis, 6);
+
+  int nc_dim = nc_shape.size();
+  compute_encoder.set_bytes(nc_dim, 7);
+  if (nc_shape.empty()) {
+    int shape = 0;
+    int64_t stride = 0;
+    compute_encoder.set_bytes(shape, 8);
+    compute_encoder.set_bytes(stride, 9);
+    compute_encoder.set_bytes(stride, 10);
+  } else {
+    compute_encoder.set_vector_bytes(nc_shape, 8);
+    compute_encoder.set_vector_bytes(in_nc_str, 9);
+    compute_encoder.set_vector_bytes(out_nc_str, 10);
+  }
+
+  // Single threadgroup per row for streaming approach
+  MTL::Size group_dims = MTL::Size(bn, 1, 1);
+  MTL::Size grid_dims = MTL::Size(1, n_rows, 1);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  d.add_temporaries(std::move(temps), s.index);
+}
+
 void gpu_radix_partition(
     const Stream& s,
     metal::Device& d,
@@ -522,37 +589,57 @@ void gpu_radix_partition(
 
   // For larger arrays, use the streaming radix select kernel
   // This performs all radix passes in a single kernel dispatch
-  int in_stride_segment_axis = size_sorted_axis;
-  int out_stride_segment_axis = size_sorted_axis;
+  if (contiguous) {
+    int in_stride_segment_axis = size_sorted_axis;
+    int out_stride_segment_axis = size_sorted_axis;
 
-  // For contiguous arrays, the segment stride is the product of all dimensions
-  // after the sorted axis (or the sorted axis size for the last axis)
-  if (!in_nc_str.empty()) {
-    // Find the stride that separates rows
-    for (size_t i = 0; i < in_nc_str.size(); i++) {
-      if (nc_shape[i] == 1)
-        continue;
-      in_stride_segment_axis =
-          std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
-      out_stride_segment_axis =
-          std::min(out_stride_segment_axis, static_cast<int>(out_nc_str[i]));
+    // For contiguous arrays, the segment stride is the product of all
+    // dimensions after the sorted axis (or the sorted axis size for the last
+    // axis)
+    if (!in_nc_str.empty()) {
+      // Find the stride that separates rows
+      for (size_t i = 0; i < in_nc_str.size(); i++) {
+        if (nc_shape[i] == 1)
+          continue;
+        in_stride_segment_axis =
+            std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
+        out_stride_segment_axis =
+            std::min(out_stride_segment_axis, static_cast<int>(out_nc_str[i]));
+      }
     }
-  }
 
-  gpu_radix_partition_large(
-      s,
-      d,
-      in,
-      out,
-      axis,
-      kth,
-      arg_partition,
-      n_rows,
-      size_sorted_axis,
-      in_stride_sorted_axis,
-      out_stride_sorted_axis,
-      in_stride_segment_axis,
-      out_stride_segment_axis);
+    gpu_radix_partition_large(
+        s,
+        d,
+        in,
+        out,
+        axis,
+        kth,
+        arg_partition,
+        n_rows,
+        size_sorted_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        in_stride_segment_axis,
+        out_stride_segment_axis);
+  } else {
+    // Use non-contiguous kernel with elem_to_loc indexing
+    gpu_radix_partition_large_nc(
+        s,
+        d,
+        in,
+        out,
+        axis,
+        kth,
+        arg_partition,
+        n_rows,
+        size_sorted_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        nc_shape,
+        in_nc_str,
+        out_nc_str);
+  }
 }
 
 } // namespace
