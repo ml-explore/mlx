@@ -167,10 +167,21 @@ def main():
                 speedup = sort_ms / argpart_ms
 
                 config_str = f"b={b}, v={v}, k={k}"
-                # Mark cases where we expect sort to be used
-                note = ""
-                if b <= 32 and v > 8192:
-                    note = " (sort path)"
+                # Dynamic threshold logic:
+                # 1. Small arrays: merge sort (radix overhead too high)
+                # 2. Large arrays with low batch: merge sort (can't saturate GPU)
+                type_bits = 16 if dtype == mx.bfloat16 else 32
+                num_passes = (type_bits + 7) // 8
+                min_size_for_radix = 1024 * num_passes
+
+                elements_per_thread = (v + 255) // 256
+                work_per_thread = elements_per_thread * (num_passes + 2)
+                active_threads = b * 256
+
+                uses_sort = (v < min_size_for_radix) or (
+                    work_per_thread > 64 and active_threads < 8192
+                )
+                note = " (sort path)" if uses_sort else ""
                 print(
                     f"{config_str:<25} {argpart_ms:>12.3f}ms {part_ms:>12.3f}ms {sort_ms:>12.3f}ms {speedup:>8.2f}x{note}"
                 )
@@ -181,8 +192,12 @@ def main():
     print("Benchmark Complete")
     print("=" * 70)
     print("\nNotes:")
-    print("- Cases with b<=32 and v>8192 use sort (optimal for this workload)")
-    print("- Cases with high batch count use radix select (optimal for parallelism)")
+    print("- Algorithm selection is dynamic based on workload characteristics:")
+    print(
+        "  - Small arrays (< 1024 * num_passes): merge sort (radix overhead too high)"
+    )
+    print("  - Large arrays with low batch: merge sort (can't saturate GPU)")
+    print("  - Otherwise: radix select")
     print("- Speedup > 1.0 means partition is faster than sort")
 
 
