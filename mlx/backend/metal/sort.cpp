@@ -313,6 +313,135 @@ void gpu_merge_sort(
   }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Radix Select for Partition Operations
+///////////////////////////////////////////////////////////////////////////////
+
+void gpu_radix_partition(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    array& out,
+    int axis_,
+    int kth,
+    bool arg_partition) {
+  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  int size_sorted_axis = in.shape(axis);
+
+  // Normalize kth
+  if (kth < 0) {
+    kth += size_sorted_axis;
+  }
+
+  // For very small arrays, fall back to full sort
+  constexpr int RADIX_SELECT_THRESHOLD = 64;
+  if (size_sorted_axis <= RADIX_SELECT_THRESHOLD) {
+    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
+    return;
+  }
+
+  // Radix select configuration
+  constexpr int bn = 256;
+  constexpr int tn = 8;
+  constexpr int TILE_SIZE = bn * tn; // 2048
+
+  // For arrays larger than tile size, fall back to merge sort
+  // TODO: Implement multi-pass radix select for larger arrays
+  if (size_sorted_axis > TILE_SIZE) {
+    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
+    return;
+  }
+
+  // Prepare shapes
+  int n_rows = in.size() / in.shape(axis);
+
+  auto in_nc_str = in.strides();
+  in_nc_str.erase(in_nc_str.begin() + axis);
+
+  auto out_nc_str = out.strides();
+  out_nc_str.erase(out_nc_str.begin() + axis);
+
+  auto nc_shape = in.shape();
+  nc_shape.erase(nc_shape.begin() + axis);
+
+  int nc_dim = nc_shape.size();
+
+  int in_stride_sorted_axis = in.strides()[axis];
+  int out_stride_sorted_axis = out.strides()[axis];
+
+  // Check if we can use the contiguous kernel
+  bool contiguous = in.flags().contiguous;
+  auto check_strides = [](array x, int sort_stride) {
+    int min_stride = *std::min_element(x.strides().begin(), x.strides().end());
+    int max_stride = *std::max_element(x.strides().begin(), x.strides().end());
+    return sort_stride == min_stride || sort_stride == max_stride;
+  };
+  contiguous &= check_strides(in, in_stride_sorted_axis);
+  contiguous &= check_strides(out, out_stride_sorted_axis);
+
+  // Prepare kernel name
+  std::ostringstream kname;
+  kname << (contiguous ? "c" : "nc");
+  if (arg_partition) {
+    kname << "arg_";
+  } else {
+    kname << "_";
+  }
+  kname << "radix_select_" << type_to_name(in) << "_" << type_to_name(out)
+        << "_bn" << bn << "_tn" << tn;
+
+  auto kernel = get_radix_select_kernel(d, kname.str(), in, out, bn, tn);
+
+  // Prepare command encoder
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set inputs
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_bytes(kth, 2);
+  compute_encoder.set_bytes(size_sorted_axis, 3);
+  compute_encoder.set_bytes(in_stride_sorted_axis, 4);
+  compute_encoder.set_bytes(out_stride_sorted_axis, 5);
+
+  if (contiguous) {
+    int in_stride_segment_axis = INT32_MAX;
+    int out_stride_segment_axis = INT32_MAX;
+    for (int i = 0; i < in_nc_str.size(); i++) {
+      if (nc_shape[i] == 1) {
+        continue;
+      }
+      if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
+        throw std::runtime_error("[Partition::eval_gpu] Stride too large.");
+      }
+      in_stride_segment_axis =
+          std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
+      out_stride_segment_axis =
+          std::min(out_stride_segment_axis, static_cast<int>(out_nc_str[i]));
+    }
+    compute_encoder.set_bytes(in_stride_segment_axis, 6);
+    compute_encoder.set_bytes(out_stride_segment_axis, 7);
+  } else {
+    compute_encoder.set_bytes(nc_dim, 6);
+    if (nc_shape.empty()) {
+      int shape = 0;
+      int64_t stride = 0;
+      compute_encoder.set_bytes(shape, 7);
+      compute_encoder.set_bytes(stride, 8);
+      compute_encoder.set_bytes(stride, 9);
+    } else {
+      compute_encoder.set_vector_bytes(nc_shape, 7);
+      compute_encoder.set_vector_bytes(in_nc_str, 8);
+      compute_encoder.set_vector_bytes(out_nc_str, 9);
+    }
+  }
+
+  MTL::Size group_dims = MTL::Size(bn, 1, 1);
+  MTL::Size grid_dims = MTL::Size(1, n_rows, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 } // namespace
 
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -340,7 +469,6 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
-  // We direct arg partition to sort for now
   assert(inputs.size() == 1);
 
   out.set_data(allocator::malloc(out.nbytes()));
@@ -349,11 +477,10 @@ void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
   auto& in = inputs[0];
 
-  gpu_merge_sort(s, d, in, out, axis_, true);
+  gpu_radix_partition(s, d, in, out, axis_, kth_, true);
 }
 
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
-  // We direct partition to sort for now
   assert(inputs.size() == 1);
 
   out.set_data(allocator::malloc(out.nbytes()));
@@ -362,7 +489,7 @@ void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
   auto& in = inputs[0];
 
-  gpu_merge_sort(s, d, in, out, axis_, false);
+  gpu_radix_partition(s, d, in, out, axis_, kth_, false);
 }
 
 } // namespace mlx::core
