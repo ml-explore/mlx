@@ -16,7 +16,7 @@ inline constexpr __device__ short get_bytes_per_pack() {
 }
 
 template <typename T>
-__device__ __forceinline__ void abs_max_x2(T& out, const T& x1, const T& x2) {
+__device__ __forceinline__ void absmax_x2(T& out, const T& x1, const T& x2) {
   if constexpr (
       (std::is_same<T, __nv_bfloat162>::value) ||
       (std::is_same<T, __half2>::value)) {

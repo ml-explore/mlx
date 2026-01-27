@@ -114,6 +114,9 @@ struct Max {
   }
 };
 
+// AbsMax reuses Max logic; abs is applied inside all_reduce kernel
+struct AbsMax : Max {};
+
 // Traits to get the result type of reduce op.
 template <typename Op, typename T>
 struct ReduceResult;
@@ -151,6 +154,11 @@ struct ReduceResult<Min, T> {
 
 template <typename T>
 struct ReduceResult<Max, T> {
+  using type = T;
+};
+
+template <typename T>
+struct ReduceResult<AbsMax, T> {
   using type = T;
 };
 
@@ -205,6 +213,13 @@ template <typename T>
 struct ReduceInit<Max, T> {
   static constexpr __host__ __device__ T value() {
     return Limits<T>::min();
+  }
+};
+
+template <typename T>
+struct ReduceInit<AbsMax, T> {
+  static constexpr __host__ __device__ auto value() {
+    return typename ReduceResult<AbsMax, T>::type(0); // abs values are >= 0
   }
 };
 

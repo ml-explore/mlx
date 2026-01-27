@@ -320,12 +320,18 @@ class QQLinear(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "nvfp4",
+        use_global_scale: bool = True,
     ):
         super().__init__()
 
         # Quantization config
         self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
         self.mode = mode
+
+        if self.mode != "nvfp4" and use_global_scale:
+            raise ValueError(
+                "Global scale can only be used with 'nvfp4' quantization mode."
+            )
 
         scale = math.sqrt(1 / input_dims)
         self.weight = mx.random.uniform(
@@ -334,6 +340,7 @@ class QQLinear(Module):
             shape=(output_dims, input_dims),
         )
         self._quantized = False
+        self._use_global_scale = use_global_scale
 
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
@@ -346,11 +353,18 @@ class QQLinear(Module):
 
     def quantize(self):
         if not self._quantized:
+
+            self.global_scale_w = (
+                mx.absmax(self.weight).astype(mx.float32)
+                if self._use_global_scale
+                else None
+            )
             self.weight, self.scales = mx.quantize(
                 self.weight,
                 self.group_size,
                 self.bits,
                 mode=self.mode,
+                global_scale=self.global_scale_w,
             )
             self._quantized = True
 
@@ -362,8 +376,11 @@ class QQLinear(Module):
                 group_size=self.group_size,
                 bits=self.bits,
                 mode=self.mode,
+                global_scale=self.global_scale_w,
             )
-            self.__delattr__("scales")
+            del self.scales
+            if self._use_global_scale:
+                del self.global_scale_w
             self._quantized = False
 
     def _set_training_mode(self, mode: bool):
@@ -375,6 +392,15 @@ class QQLinear(Module):
             self.quantize()
 
     def __call__(self, x):
+
+        global_scale_w = (
+            getattr(self, "global_scale_w", mx.absmax(self.weight).astype(mx.float32))
+            if self._use_global_scale
+            else None
+        )
+        global_scale_x = (
+            mx.absmax(x).astype(mx.float32) if self._use_global_scale else None
+        )
         x = mx.qqmm(
             x,
             self["weight"],
@@ -382,6 +408,8 @@ class QQLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_scale_x=global_scale_x,
+            global_scale_w=global_scale_w,
         )
         return x
 

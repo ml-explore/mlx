@@ -105,13 +105,6 @@ void CublasMatmulBase::init_base(
   CHECK_CUBLAS_ERROR(
       cublasLtMatmulDescCreate(&matmul_desc_, compute_type, scale_type));
 
-  int32_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
-  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
-      matmul_desc_,
-      CUBLASLT_MATMUL_DESC_POINTER_MODE,
-      &pointer_mode,
-      sizeof(int32_t)));
-
   // In cublasLt matrices use column-major layout, while it is possible to use
   // the CUBLASLT_ORDER_ROW option to switch to row-major layout, the bias
   // epilogue does not work with the option. So instead we swap A and B to make

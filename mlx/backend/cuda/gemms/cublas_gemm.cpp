@@ -73,6 +73,14 @@ CublasGemm::CublasGemm(
       batch_count,
       a_batch_stride,
       b_batch_stride);
+
+  // alpha and beta are both host pointers
+  cublasLtPointerMode_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
+  CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
+      matmul_desc_,
+      CUBLASLT_MATMUL_DESC_POINTER_MODE,
+      &pointer_mode,
+      sizeof(pointer_mode)));
 }
 
 CublasGemm::CublasGemm(
@@ -215,8 +223,8 @@ void CublasGemm::execute(
     const void* a,
     const void* b,
     const void* c,
-    float alpha /* = 1 */,
-    float beta /* = 0 */) {
+    const float alpha /* = 1 */,
+    const float beta /* = 0 */) {
   const void* alpha_ptr = &alpha;
   const void* beta_ptr = &beta;
   complex64_t alpha_c, beta_c;

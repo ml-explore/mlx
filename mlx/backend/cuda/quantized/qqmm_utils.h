@@ -27,4 +27,14 @@ void swizzle_scales(
     cu::CommandEncoder& enc,
     const Stream& s);
 
+// Compute alpha = tensor_amax_x * tensor_amax_w / (448 * 6)^2
+// Allocate beta zero on device as well
+
+void compute_qqmm_pointers(
+    array& alpha_out,
+    array& beta_out,
+    const array& tensor_amax_x,
+    const array& tensor_amax_w,
+    cu::CommandEncoder& enc);
+
 } // namespace mlx::core
