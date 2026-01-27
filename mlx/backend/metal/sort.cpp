@@ -52,15 +52,20 @@ void single_block_sort(
   contiguous &= check_strides(out, out_stride_sorted_axis);
 
   // Prepare kernel name
-  std::ostringstream kname;
-  kname << (contiguous ? "c" : "nc");
-  if (argsort) {
-    kname << "arg";
-  }
-
-  kname << "_block_sort_" << type_to_name(in) << "_" << type_to_name(out)
-        << "_bn" << bn << "_tn" << tn;
-  auto kernel = get_sort_kernel(d, kname.str(), in, out, bn, tn);
+  std::string kname;
+  concatenate(
+      kname,
+      contiguous ? "c" : "nc",
+      argsort ? "arg" : "",
+      "_block_sort_",
+      type_to_name(in),
+      "_",
+      type_to_name(out),
+      "_bn",
+      bn,
+      "_tn",
+      tn);
+  auto kernel = get_sort_kernel(d, kname, in, out, bn, tn);
 
   // Prepare command encoder
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -164,11 +169,18 @@ void multi_block_sort(
 
   // Do blockwise sort
   {
-    std::ostringstream kname;
-    kname << "sort_mbsort_" << type_to_name(dev_vals_0) << "_"
-          << type_to_name(dev_idxs_0) << "_bn" << bn << "_tn" << tn;
-    auto kernel =
-        get_mb_sort_kernel(d, kname.str(), dev_vals_0, dev_idxs_0, bn, tn);
+    std::string kname;
+    concatenate(
+        kname,
+        "sort_mbsort_",
+        type_to_name(dev_vals_0),
+        "_",
+        type_to_name(dev_idxs_0),
+        "_bn",
+        std::to_string(bn),
+        "_tn",
+        std::to_string(tn));
+    auto kernel = get_mb_sort_kernel(d, kname, dev_vals_0, dev_idxs_0, bn, tn);
     compute_encoder.set_compute_pipeline_state(kernel);
 
     compute_encoder.set_input_array(in, 0);
@@ -204,12 +216,20 @@ void multi_block_sort(
 
     // Do partition
     {
-      std::ostringstream kname;
-      kname << "partition_mbsort_" << type_to_name(dev_vals_in) << "_"
-            << type_to_name(dev_idxs_in) << "_bn" << bn << "_tn" << tn;
+      std::string kname;
+      concatenate(
+          kname,
+          "partition_mbsort_",
+          type_to_name(dev_vals_in),
+          "_",
+          type_to_name(dev_idxs_in),
+          "_bn",
+          std::to_string(bn),
+          "_tn",
+          std::to_string(tn));
 
       auto kernel =
-          get_mb_sort_kernel(d, kname.str(), dev_vals_0, dev_idxs_0, bn, tn);
+          get_mb_sort_kernel(d, kname, dev_vals_0, dev_idxs_0, bn, tn);
       compute_encoder.set_compute_pipeline_state(kernel);
 
       compute_encoder.set_output_array(block_partitions, 0);
@@ -227,12 +247,20 @@ void multi_block_sort(
 
     // Do merge
     {
-      std::ostringstream kname;
-      kname << "merge_mbsort_" << type_to_name(dev_vals_in) << "_"
-            << type_to_name(dev_idxs_in) << "_bn" << bn << "_tn" << tn;
+      std::string kname;
+      concatenate(
+          kname,
+          "merge_mbsort_",
+          type_to_name(dev_vals_in),
+          "_",
+          type_to_name(dev_idxs_in),
+          "_bn",
+          std::to_string(bn),
+          "_tn",
+          std::to_string(tn));
 
       auto kernel =
-          get_mb_sort_kernel(d, kname.str(), dev_vals_0, dev_idxs_0, bn, tn);
+          get_mb_sort_kernel(d, kname, dev_vals_0, dev_idxs_0, bn, tn);
       compute_encoder.set_compute_pipeline_state(kernel);
 
       compute_encoder.set_input_array(block_partitions, 0);
@@ -313,14 +341,6 @@ void gpu_merge_sort(
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Radix Select for Partition Operations
-//
-// Uses radix-based selection for partition operations:
-// - Small arrays (<=2048): Single-pass kernel with threadgroup memory
-// - Large arrays (>2048): Streaming multi-pass kernel
-///////////////////////////////////////////////////////////////////////////////
-
 void gpu_radix_partition_small(
     const Stream& s,
     metal::Device& d,
@@ -340,13 +360,22 @@ void gpu_radix_partition_small(
   constexpr int bn = 256;
   constexpr int tn = 8;
 
-  std::ostringstream kname;
-  kname << (contiguous ? "c" : "nc");
-  kname << (arg_partition ? "arg_" : "_");
-  kname << "radix_select_" << type_to_name(in) << "_" << type_to_name(out)
-        << "_bn" << bn << "_tn" << tn;
+  std::string kname;
+  concatenate(
+      kname,
+      kname,
+      contiguous ? "c" : "nc",
+      arg_partition ? "arg_" : "_",
+      "radix_select_",
+      type_to_name(in),
+      "_",
+      type_to_name(out),
+      "_bn",
+      std::to_string(bn),
+      "_tn",
+      std::to_string(tn));
 
-  auto kernel = get_radix_select_kernel(d, kname.str(), in, out, bn, tn);
+  auto kernel = get_radix_select_kernel(d, kname, in, out, bn, tn);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -421,11 +450,19 @@ void gpu_radix_partition_large(
   auto& compute_encoder = d.get_command_encoder(s.index);
 
   // Use the streaming kernel that processes all passes in one dispatch
-  std::ostringstream kname;
-  kname << "radix_select_large_" << type_to_name(in) << "_" << type_to_name(out)
-        << "_" << (arg_partition ? "true" : "false") << "_bn" << bn;
+  std::string kname;
+  concatenate(
+      kname,
+      "radix_select_large_",
+      type_to_name(in),
+      "_",
+      type_to_name(out),
+      "_",
+      arg_partition ? "true" : "false",
+      "_bn",
+      std::to_string(bn));
 
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(in, 0);
@@ -475,12 +512,19 @@ void gpu_radix_partition_large_nc(
   auto& compute_encoder = d.get_command_encoder(s.index);
 
   // Use the non-contiguous streaming kernel
-  std::ostringstream kname;
-  kname << "radix_select_large_nc_" << type_to_name(in) << "_"
-        << type_to_name(out) << "_" << (arg_partition ? "true" : "false")
-        << "_bn" << bn;
+  std::string kname;
+  concatenate(
+      kname,
+      "radix_select_large_nc_",
+      type_to_name(in),
+      "_",
+      type_to_name(out),
+      "_",
+      arg_partition ? "true" : "false",
+      "_bn",
+      bn);
 
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(in, 0);
@@ -523,11 +567,6 @@ void gpu_radix_partition(
     bool arg_partition) {
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
-
-  // Normalize kth
-  if (kth < 0) {
-    kth += size_sorted_axis;
-  }
 
   // For very small arrays, fall back to full sort
   constexpr int RADIX_SELECT_THRESHOLD = 64;
