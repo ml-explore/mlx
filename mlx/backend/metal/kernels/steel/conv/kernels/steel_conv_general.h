@@ -13,7 +13,7 @@ template <
     int WN,
     typename AccumType = float,
     typename Epilogue = TransformNone<T, AccumType>>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 implicit_gemm_conv_2d_general(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],

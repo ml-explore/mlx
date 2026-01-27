@@ -42,9 +42,10 @@ Device::Device(int device) : device_(device) {
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
       &attr, cudaDevAttrConcurrentManagedAccess, device_));
   if (attr != 1) {
-    throw std::runtime_error(fmt::format(
-        "Device {} does not support synchronization in managed memory.",
-        device_));
+    throw std::runtime_error(
+        fmt::format(
+            "Device {} does not support synchronization in managed memory.",
+            device_));
   }
 
   // The cublasLt handle is used by matmul.
@@ -208,6 +209,10 @@ std::pair<int, int> get_graph_limits(Device& d) {
     case 1000: // B200
       ops = 50;
       mb = 500;
+      break;
+    case 1200: // Consumer Blackwell
+      ops = 100;
+      mb = 1000;
       break;
     case 1210: // DGX Spark
       ops = 20;

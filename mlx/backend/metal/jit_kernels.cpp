@@ -949,6 +949,40 @@ MTL::ComputePipelineState* get_steel_gemm_gather_nax_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::gemm_nax()
+                  << metal::steel_gemm_splitk_nax()
+                  << get_template_definition(
+                         lib_name,
+                         "gemm_splitk_nax",
+                         get_type_string(out.dtype()),
+                         bm,
+                         bn,
+                         bk,
+                         wm,
+                         wn,
+                         transpose_a,
+                         transpose_b);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_qmm_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,

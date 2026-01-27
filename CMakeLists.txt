@@ -156,6 +156,7 @@ target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
+  find_package(CUDNN REQUIRED)
 endif()
 
 if(MLX_BUILD_ROCM)
@@ -354,9 +355,6 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
-
-# Do not add mlx_EXPORTS define for shared library.
-set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
 
 if(USE_SYSTEM_FMT)
   find_package(fmt REQUIRED)
