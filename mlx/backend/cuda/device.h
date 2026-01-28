@@ -164,12 +164,24 @@ class Device {
   bool concurrent_managed_access() const {
     return concurrent_managed_access_ == 1;
   }
+  bool host_native_atomic() const {
+    return host_native_atomic_ == 1;
+  }
+  bool managed_memory() const {
+    return managed_memory_ == 1;
+  }
+  bool memory_pools() const {
+    return memory_pools_ == 1;
+  }
 
  private:
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
   int concurrent_managed_access_;
+  int host_native_atomic_;
+  int managed_memory_;
+  int memory_pools_;
   std::string device_name_;
   cublasLtHandle_t cublaslt_handle_{nullptr};
   cudnnHandle_t cudnn_handle_{nullptr};
