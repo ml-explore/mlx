@@ -620,8 +620,12 @@ class TestSDPA(mlx_tests.MLXTestCase):
                             # Compare only the valid portion
                             if mask_str == "causal" and qL > kL:
                                 offset = qL - kL
-                                out_ref = out_ref[:, :, offset:, :]
-                                out_fst = out_fst[:, :, offset:, :]
+                                if t:  # transpose=True: shape is (B, qL, qH, D)
+                                    out_ref = out_ref[:, offset:, :, :]
+                                    out_fst = out_fst[:, offset:, :, :]
+                                else:  # transpose=False: shape is (B, qH, qL, D)
+                                    out_ref = out_ref[:, :, offset:, :]
+                                    out_fst = out_fst[:, :, offset:, :]
 
                             atol = 2e-5 if dtype == "float32" else 3e-4
 
