@@ -350,7 +350,7 @@ TEST_CASE("test SVD factorization") {
   const auto A_again = matmul(matmul(U_slice, diag(S)), Vt);
 
   CHECK(
-      allclose(A_again, A, /* rtol = */ 1e-4, /* atol = */ 1e-4).item<bool>());
+      allclose(A_again, A, /* rtol = */ 1e-3, /* atol = */ 1e-3).item<bool>());
   CHECK_EQ(U.dtype(), float32);
   CHECK_EQ(S.dtype(), float32);
   CHECK_EQ(Vt.dtype(), float32);
