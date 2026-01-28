@@ -429,6 +429,44 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_radix_select_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out,
+    int bn,
+    int tn) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    auto in_type = get_type_string(in.dtype());
+    auto out_type = get_type_string(out.dtype());
+    kernel_source << metal::utils() << metal::radix_select();
+    for (bool is_arg_partition : {true, false}) {
+      std::string bool_string = is_arg_partition ? "true" : "false";
+      std::string func_string = is_arg_partition ? "carg_" : "c_";
+      kernel_source << get_template_definition(
+          func_string + lib_name,
+          "radix_select_partition",
+          in_type,
+          out_type,
+          bool_string,
+          bn,
+          tn);
+      kernel_source << get_template_definition(
+          "n" + func_string + lib_name,
+          "radix_select_partition_nc",
+          in_type,
+          out_type,
+          bool_string,
+          bn,
+          tn);
+    }
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_reduce_init_kernel(
     metal::Device& d,
     const std::string& kernel_name,
