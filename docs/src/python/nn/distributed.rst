@@ -1,4 +1,4 @@
-.. _distributed:
+.. _nn_distributed:
 
 Distributed
 -----------
@@ -6,7 +6,8 @@ Distributed
 Helper Routines
 ^^^^^^^^^^^^^^^
 
-The :code:`mlx.nn.layers.distributed` package contains helpful routines for creating sharded layers easily from existing :class:`Modules <mlx.nn.Module>`.
+The :code:`mlx.nn.layers.distributed` package contains helpful routines to 
+create sharded layers from existing :class:`Modules <mlx.nn.Module>`.
 
 .. currentmodule:: mlx.nn.layers.distributed
 .. autosummary::
@@ -17,8 +18,6 @@ The :code:`mlx.nn.layers.distributed` package contains helpful routines for crea
 
 Layers
 ^^^^^^
-
-The :code:`mlx.nn` package contains helpful layers for creating distributed models with sharded parameters.
 
 .. currentmodule:: mlx.nn
 .. autosummary::

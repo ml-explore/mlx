@@ -3,7 +3,8 @@
 Data Parallelism
 ================
 
-MLX enables efficient data parallel distributed training through its distributed communication primitives.
+MLX enables efficient data parallel distributed training through its
+distributed communication primitives.
 
 .. _training_example:
 
@@ -15,7 +16,7 @@ distributed training. Namely, we will average the gradients across a set of
 hosts before applying them to the model.
 
 Our training loop looks like the following code snippet if we omit the model,
-dataset and optimizer initialization.
+dataset, and optimizer initialization.
 
 .. code:: python
 
@@ -63,7 +64,7 @@ everything else remaining the same.
         optimizer.update(model, grads)
         return loss
 
-Utilizing ``nn.average_gradients``
+Using ``nn.average_gradients``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Although the code example above works correctly; it performs one communication
