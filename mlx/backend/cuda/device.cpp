@@ -214,13 +214,7 @@ std::pair<int, int> get_graph_limits(Device& d) {
       mb = 400;
       break;
     case 900: // H100
-      ops = 30;
-      mb = 400;
-      break;
     case 1000: // B200
-      ops = 50;
-      mb = 500;
-      break;
     case 1200: // Consumer Blackwell
       ops = 100;
       mb = 1000;
