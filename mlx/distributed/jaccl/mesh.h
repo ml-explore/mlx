@@ -81,8 +81,7 @@ class MeshGroup : public GroupImpl {
 
   void recv_from(int sz, int rank, int buff) {
     connections_[rank].post_recv(
-        buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank],
-        RECV_WR << 16 | buff << 8 | rank);
+        recv_buffer(sz, buff, rank), RECV_WR << 16 | buff << 8 | rank);
   }
 
   SharedBuffer& send_buffer(int sz, int buff) {
