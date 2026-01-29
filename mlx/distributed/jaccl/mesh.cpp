@@ -219,8 +219,8 @@ void MeshGroup::all_gather(const array& input, array& output, Stream stream) {
         // Recv completed. If we have more chunks then post another recv.
         else if (work_type == RECV_WR) {
           std::copy(
-              recv_buffer(sz, rank, buff).begin<char>(),
-              recv_buffer(sz, rank, buff).begin<char>() +
+              recv_buffer(sz, buff, rank).begin<char>(),
+              recv_buffer(sz, buff, rank).begin<char>() +
                   std::min(N, total - write_offset[rank]),
               data + rank * n_bytes + write_offset[rank]);
           write_offset[rank] += N;
@@ -327,8 +327,8 @@ void MeshGroup::recv(array& out, int src, Stream stream) {
         in_flight--;
 
         std::copy(
-            recv_buffer(sz, src, buff).begin<char>(),
-            recv_buffer(sz, src, buff).begin<char>() +
+            recv_buffer(sz, buff, src).begin<char>(),
+            recv_buffer(sz, buff, src).begin<char>() +
                 std::min(n_bytes - write_offset, static_cast<int64_t>(N)),
             data + write_offset);
         write_offset += N;
@@ -447,7 +447,7 @@ void MeshGroup::all_reduce(
         while (w < read_offset && e - s > 0) {
           int buff = s % PIPELINE;
           reduce_op(
-              recv_buffer(sz, r, buff).begin<T>(),
+              recv_buffer(sz, buff, r).begin<T>(),
               data + w,
               std::min(N, total - w));
           w += N;
