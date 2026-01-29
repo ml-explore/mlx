@@ -15,12 +15,20 @@ bool is_none_slice(const nb::slice& in_slice) {
       nb::getattr(in_slice, "step").is_none());
 }
 
+int safe_to_int32(nb::object obj) {
+  auto val = nb::cast<int64_t>(nb::cast<nb::int_>(obj));
+  if (val > INT32_MAX || val < INT32_MIN) {
+    throw std::invalid_argument("Slice indices must be 32-bit integers.");
+  }
+  return static_cast<int>(val);
+}
+
 int get_slice_int(nb::object obj, int default_val) {
   if (!obj.is_none()) {
     if (!nb::isinstance<nb::int_>(obj)) {
       throw std::invalid_argument("Slice indices must be integers or None.");
     }
-    return nb::cast<int>(nb::cast<nb::int_>(obj));
+    return safe_to_int32(obj);
   }
   return default_val;
 }
@@ -45,7 +53,7 @@ void get_slice_params(
 }
 
 mx::array get_int_index(nb::object idx, int axis_size) {
-  int idx_ = nb::cast<int>(idx);
+  int idx_ = safe_to_int32(idx);
   idx_ = (idx_ < 0) ? idx_ + axis_size : idx_;
 
   return mx::array(idx_, mx::uint32);
