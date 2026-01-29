@@ -869,16 +869,17 @@ array quantized_scaled_dot_product_attention(
 
   // Validate mode-specific group_size and bits
   if (is_affine) {
-    if (group_size != 32 && group_size != 64 && group_size != 128) {
+    if (group_size != 32) {
       std::ostringstream msg;
-      msg << "[" << tag << "] Affine mode supports group_size 32, 64, or 128 "
+      msg << "[" << tag << "] Affine mode supports group_size 32 "
           << "but received " << group_size << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (bits < 2 || bits > 8 || bits == 7) {
+    if (bits != 4 && bits != 6 && bits != 8) {
       std::ostringstream msg;
-      msg << "[" << tag << "] Affine mode supports bits 2-6 or 8 but received "
-          << bits << ".";
+      msg << "[" << tag
+          << "] Affine mode supports bits 4, 6, or 8 but received " << bits
+          << ".";
       throw std::invalid_argument(msg.str());
     }
     if (!key_biases.has_value() || !value_biases.has_value()) {
