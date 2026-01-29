@@ -186,7 +186,7 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
   }
 }
 
-constant bool has_affine_bias [[function_constant(26)]];
+constant bool has_affine_bias [[function_constant(27)]];
 
 template <QuantMode mode, int bits>
 struct QuantFastOps {
@@ -369,7 +369,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     const device ScaleTypeT<mode, T>* key_scales [[buffer(2)]],
     const device uint32_t* values [[buffer(3)]],
     const device ScaleTypeT<mode, T>* value_scales [[buffer(4)]],
-    device float* out [[buffer(5)]],
+    device T* out [[buffer(5)]],
     device float* sums [[buffer(6)]],
     device float* maxs [[buffer(7)]],
     const constant int& gqa_factor [[buffer(8)]],
@@ -393,28 +393,23 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     [[buffer(21), function_constant(has_affine_bias)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]],
     uint quad_gid [[quadgroup_index_in_threadgroup]],
     uint quad_lid [[thread_index_in_quadgroup]]) {
+  // Quadgroup approach: BN=8 quads × BD=4 lanes = 32 threads = 1 simdgroup
+  // Each quad processes one key, lanes split D dimension.
+  // elem_per_thread=D/4 is large enough for all pack_factors (max 8).
   using Cfg = QuantConfig<mode>;
 
-  constexpr int BN = 16;
+  constexpr int BN = 8;
   constexpr int BD = 4;
   constexpr int elem_per_thread = D / BD;
-  constexpr int blocks = 32;
-
-  const int stride = BN * D;
 
   typedef float U;
   [[maybe_unused]] Dequant<mode, U> dequant;
 
   thread U q[elem_per_thread];
   thread U o[elem_per_thread] = {0};
-
-  threadgroup U outputs[BN * BD];
-  threadgroup U max_scores[BN];
-  threadgroup U sum_exp_scores[BN];
 
   const int block_idx = tid.z;
   const int q_batch_head_idx = tid.x;
@@ -458,9 +453,15 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
 
   load_queries<T, U, elem_per_thread>(queries, q, static_cast<U>(scale));
 
+  constexpr int stride = BN * D;
+  const int data_step = blocks * stride;
+  const int scale_step = data_step / group_size;
+  const int mask_step = BN * blocks * mask_kv_seq_stride;
+
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
 
+  // Main loop: each quad processes one key at a time
   for (int i = block_idx * BN + quad_gid; i < N; i += blocks * BN) {
     bool use_key = true;
     if (do_causal) {
@@ -472,9 +473,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     }
 
     if (use_key) {
-      U key_scale;
-      U key_bias = 0;
-
+      U key_scale, key_bias = 0;
       if constexpr (Cfg::has_bias) {
         key_scale = U(key_scales[0]);
         key_bias = U(key_biases[0]);
@@ -498,9 +497,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
 
-      U value_scale;
-      U value_bias = 0;
-
+      U value_scale, value_bias = 0;
       if constexpr (Cfg::has_bias) {
         value_scale = U(value_scales[0]);
         value_bias = U(value_biases[0]);
@@ -516,52 +513,46 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
           exp_score * value_bias);
     }
 
-    // Advance pointers by blocks * BN * D elements
-    key_ptr.advance(blocks * stride);
-    value_ptr.advance(blocks * stride);
-    key_scales += blocks * stride / group_size;
-    value_scales += blocks * stride / group_size;
+    // Advance pointers
+    key_ptr.advance(data_step);
+    value_ptr.advance(data_step);
+    key_scales += scale_step;
+    value_scales += scale_step;
     if constexpr (Cfg::has_bias) {
-      key_biases += blocks * stride / group_size;
-      value_biases += blocks * stride / group_size;
+      key_biases += scale_step;
+      value_biases += scale_step;
     }
     if (bool_mask) {
-      bmask += BN * blocks * mask_kv_seq_stride;
+      bmask += mask_step;
     }
     if (float_mask) {
-      fmask += BN * blocks * mask_kv_seq_stride;
+      fmask += mask_step;
     }
   }
 
-  if (quad_lid == 0) {
-    max_scores[quad_gid] = max_score;
-    sum_exp_scores[quad_gid] = sum_exp_score;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  max_score = (simd_lid < BN) ? max_scores[simd_lid] : Limits<U>::finite_min;
-  U new_max = simd_max(max_score);
-  U factor = fast::exp(max_score - new_max);
-  sum_exp_score = (simd_lid < BN) ? sum_exp_scores[simd_lid] : 0;
-  sum_exp_score = simd_sum(sum_exp_score * factor);
+  U sg_max = (quad_lid == 0) ? max_score : Limits<U>::finite_min;
+  U global_max = simd_max(sg_max);
 
-  if (simd_gid == 0) {
-    sums[0] = sum_exp_score;
-    maxs[0] = new_max;
+  U sg_sum =
+      (quad_lid == 0) ? sum_exp_score * fast::exp(max_score - global_max) : 0;
+  U global_sum = simd_sum(sg_sum);
+
+  if (simd_lid == 0) {
+    sums[0] = global_sum;
+    maxs[0] = global_max;
   }
 
+  // Output reduction: sum across quads (same quad_lid only)
+  U rescale = fast::exp(max_score - global_max);
   for (int i = 0; i < elem_per_thread; i++) {
-    outputs[quad_lid * BN + quad_gid] =
-        o[i] * fast::exp(max_scores[quad_gid] - new_max);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
+    U val = o[i] * rescale;
+    val += simd_shuffle_xor(val, 4); // sum quads 0+1, 2+3, 4+5, 6+7
+    val += simd_shuffle_xor(val, 8); // sum quads 0-3, 4-7
+    val += simd_shuffle_xor(val, 16); // sum quads 0-7
+    // All lanes with same quad_lid now have the full sum; quad_gid=0 writes
     if (quad_gid == 0) {
-      U output = outputs[quad_lid * BN];
-      for (int j = 1; j < BN; j++) {
-        output += outputs[quad_lid * BN + j];
-      }
-      out[i] = output;
+      out[i] = static_cast<T>(val);
     }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 

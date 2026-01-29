@@ -631,17 +631,53 @@ void quant_sdpa_vector_2pass(
 
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
-  int blocks = 32;
+  int n_simds = gqa_factor * q.shape(2);
   int B = q.shape(0) * q.shape(1);
 
-  size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
-  size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
+  // TODO: tune block sizes for different devices
+  char devc = d.get_architecture().back();
+  int blocks;
+  if (devc == 's') {
+    blocks = 64;
+    if (N > 1024 && n_simds > 4) {
+      if (N <= 8192) {
+        blocks = 128;
+      } else if (N <= 32768) {
+        blocks = 256;
+      } else if (N <= 65536) {
+        blocks = 512;
+      } else {
+        blocks = 1024;
+      }
+    }
+  } else if (devc == 'd') {
+    blocks = 128;
+    if (n_simds <= 2 && N > 8192) {
+      blocks = 256;
+    } else if (n_simds >= 6) {
+      if (N >= 16384 && N < 65536) {
+        blocks = 512;
+      } else if (N >= 65536) {
+        blocks = 1024;
+      }
+    }
+  } else {
+    if (n_simds >= 4) {
+      blocks = 64;
+    } else {
+      blocks = 32;
+    }
+  }
+
+  // Head strides for quantized data (in uint32 units) and scales
+  size_t k_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
+  size_t v_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t k_group_stride =
       k_scales.shape(1) == 1 ? k_scales.strides(0) : k_scales.strides(1);
   size_t v_group_stride =
       v_scales.shape(1) == 1 ? v_scales.strides(0) : v_scales.strides(1);
 
-  MTL::Size group_dims(16 * 4, 1, 1);
+  MTL::Size group_dims(32, 1, 1); // 1 simdgroup, like non-quant
   MTL::Size grid_dims(B, q.shape(2), blocks);
 
   Shape intermediate_shape;
@@ -650,7 +686,7 @@ void quant_sdpa_vector_2pass(
       intermediate_shape.end(), out.shape().begin(), out.shape().end() - 1);
   intermediate_shape.push_back(blocks);
   intermediate_shape.push_back(out.shape().back());
-  array intermediate(intermediate_shape, float32, nullptr, {});
+  array intermediate(intermediate_shape, q.dtype(), nullptr, {});
   intermediate_shape.pop_back();
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
@@ -674,13 +710,15 @@ void quant_sdpa_vector_2pass(
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
-      {&has_affine_bias, MTL::DataType::DataTypeBool, 26},
+      {&blocks, MTL::DataType::DataTypeInt, 26},
+      {&has_affine_bias, MTL::DataType::DataTypeBool, 27},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
-  hash_name += has_affine_bias ? "_affine" : "_noaffine";
+  hash_name += has_affine_bias ? "_affine_" : "_noaffine_";
+  hash_name += std::to_string(blocks);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
@@ -696,8 +734,8 @@ void quant_sdpa_vector_2pass(
   compute_encoder.set_output_array(maxs, 7);
   compute_encoder.set_bytes(gqa_factor, 8);
   compute_encoder.set_bytes(N, 9);
-  compute_encoder.set_bytes(k_head_stride, 10);
-  compute_encoder.set_bytes(v_head_stride, 11);
+  compute_encoder.set_bytes(k_stride, 10);
+  compute_encoder.set_bytes(v_stride, 11);
   compute_encoder.set_bytes(k_group_stride, 12);
   compute_encoder.set_bytes(v_group_stride, 13);
   compute_encoder.set_bytes(scale, 14);
@@ -721,13 +759,19 @@ void quant_sdpa_vector_2pass(
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
+  // Second pass kernel
   kname.clear();
   kname += "sdpa_vector_2pass_2_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(q.shape(-1));
 
-  kernel = d.get_kernel(kname);
+  func_consts = {
+      {&blocks, MTL::DataType::DataTypeInt, 26},
+  };
+  hash_name = kname + "_" + std::to_string(blocks);
+
+  kernel = d.get_kernel(kname, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(intermediate, 0);
